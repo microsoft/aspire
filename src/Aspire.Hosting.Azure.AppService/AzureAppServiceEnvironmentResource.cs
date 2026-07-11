@@ -3,12 +3,14 @@
 
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREAZURE001
+#pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.AppService;
+using Azure.Core;
 using Aspire.Hosting.Pipelines;
 using Azure.Provisioning;
 using Azure.Provisioning.AppService;
@@ -27,9 +29,13 @@ namespace Aspire.Hosting.Azure;
 public class AzureAppServiceEnvironmentResource :
     AzureProvisioningResource,
     IAzureComputeEnvironmentResource,
-    IAzureContainerRegistry
+    IAzureContainerRegistry,
+    IAzureDelegatedSubnetResource
 #pragma warning restore CS0618 // Type or member is obsolete
 {
+    /// <inheritdoc />
+    string IAzureDelegatedSubnetResource.DelegatedSubnetServiceName => "Microsoft.Web/serverFarms";
+
     /// <summary>
     /// Initializes a new instance of the <see cref="AzureAppServiceEnvironmentResource"/> class.
     /// </summary>
@@ -364,6 +370,19 @@ public class AzureAppServiceEnvironmentResource :
     internal BicepOutputReference WebSiteSuffix => new("webSiteSuffix", this);
 
     /// <summary>
+    /// Gets the delegated subnet ID configured for this environment, if any.
+    /// </summary>
+    internal BicepValue<ResourceIdentifier>? GetDelegatedSubnetId(AzureResourceInfrastructure infra)
+    {
+        if (this.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var subnetAnnotation))
+        {
+            return subnetAnnotation.SubnetId.AsProvisioningParameter(infra);
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// When true, HTTP endpoints are not upgraded to HTTPS. Default is false (HTTP→HTTPS upgrade is enabled).
     /// </summary>
     internal bool PreserveHttpEndpoints { get; set; }
@@ -476,6 +495,7 @@ public class AzureAppServiceEnvironmentResource :
             return azureRegistry;
         }
     }
+    #pragma warning restore ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 #pragma warning disable CS0618 // Type or member is obsolete
     ReferenceExpression IAzureContainerRegistry.ManagedIdentityId => ReferenceExpression.Create($"{ContainerRegistryManagedIdentityId}");

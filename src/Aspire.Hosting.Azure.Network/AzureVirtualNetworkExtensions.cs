@@ -287,7 +287,8 @@ public static class AzureVirtualNetworkExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method automatically configures the subnet with the appropriate service delegation
-    /// for the target resource type (e.g., "Microsoft.App/environments" for Azure Container Apps).
+    /// for the target resource type (for example, "Microsoft.App/environments" for Azure Container Apps
+    /// and "Microsoft.Web/serverFarms" for Azure App Service).
     /// </remarks>
     /// <example>
     /// This example configures an Azure Container App Environment to use a subnet:

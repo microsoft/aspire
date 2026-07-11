@@ -86,6 +86,34 @@ var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
     .WithDashboard(enable: false);
 ```
 
+### Configuring regional virtual network integration
+
+To configure regional virtual network integration for the websites in an Azure App Service environment, add the `Aspire.Hosting.Azure.Network` integration:
+
+```bash
+aspire add Aspire.Hosting.Azure.Network
+```
+
+Then create a subnet and apply it to the environment:
+
+```csharp
+#pragma warning disable ASPIREAZURE003 // Azure Virtual Network APIs are experimental.
+var vnet = builder.AddAzureVirtualNetwork("vnet");
+var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+
+var appServiceEnvironment = builder.AddAzureAppServiceEnvironment("env")
+    .WithDelegatedSubnet(subnet);
+#pragma warning restore ASPIREAZURE003
+```
+
+`WithDelegatedSubnet` delegates the subnet to `Microsoft.Web/serverFarms` and configures every generated
+website, deployment slot, and the default Aspire Dashboard to use it for regional virtual network integration.
+The subnet must meet the [Azure App Service regional virtual network integration requirements](https://learn.microsoft.com/azure/app-service/overview-vnet-integration).
+
+Regional virtual network integration affects outbound traffic only. It does not make website or dashboard ingress
+private, and it does not enable Route All. Configure private endpoints or access restrictions and Route All
+separately when those behaviors are required.
+
 ### Enabling Application Insights
 
 Application Insights can be enabled for the App Service Environment using the `WithAzureApplicationInsights` extension method. A different location can be specified for Application Insights using the optional location parameter:
