@@ -786,4 +786,5 @@
           - definition: 1.9.0
   - region "Empty state":
     - heading "Empty state" [level=2]
-    - text: No incidents All monitored resources are within their configured thresholds.
+    - heading "No incidents" [level=2]
+    - text: All monitored resources are within their configured thresholds.

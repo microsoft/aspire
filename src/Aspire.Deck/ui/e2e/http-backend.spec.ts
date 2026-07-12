@@ -10,6 +10,7 @@ const browserErrors = new WeakMap<Page, string[]>();
 const allowUnavailableResponses = new WeakSet<Page>();
 const allowInterceptedImportAbort = new WeakSet<Page>();
 const allowAuthenticationNavigation = new WeakSet<Page>();
+const allowMetricSeriesAbort = new WeakSet<Page>();
 
 function features(...ids: HttpBackendFeatureId[]): string {
   for (const id of ids) {
@@ -109,9 +110,14 @@ test.afterEach(async ({ page }) => {
     ? filtered.filter((error) =>
         error !== "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
         && !(error.includes("/login?returnUrl=") && error.endsWith("(net::ERR_ABORTED)"))
-        && !(error.includes("/api/deck/config") && error.endsWith("(net::ERR_ABORTED)")))
+        && !(error.includes("/api/deck/config") && error.endsWith("(net::ERR_ABORTED)"))
+        && !(error.includes("/api/deck/interactions") && error.endsWith("(net::ERR_ABORTED)")))
     : filtered;
-  expect(navigationFiltered, "Unexpected browser errors").toEqual([]);
+  const telemetryFiltered = allowMetricSeriesAbort.has(page)
+    ? navigationFiltered.filter((error) =>
+        !(error.includes("/api/deck/telemetry/metrics/series?") && error.endsWith("(net::ERR_ABORTED)")))
+    : navigationFiltered;
+  expect(telemetryFiltered, "Unexpected browser errors").toEqual([]);
 });
 
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {
@@ -201,6 +207,7 @@ test(`${features("HTTP-AUTH-001")} transfers an authentication challenge to the 
 });
 
 test(`${features("HTTP-USER-001")} shows the authenticated user and signs out`, async ({ page }) => {
+  allowAuthenticationNavigation.add(page);
   await page.route("**/api/deck/config", async (route) => route.fulfill({
     json: {
       ...config,
@@ -1539,6 +1546,7 @@ test(`${features("HTTP-EMPTY-TELEMETRY-001")} distinguishes every settled empty 
 });
 
 test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, and clears HTTP metric telemetry`, async ({ page }) => {
+  allowMetricSeriesAbort.add(page);
   let summaries = [
     {
       name: "http.server.request.duration",

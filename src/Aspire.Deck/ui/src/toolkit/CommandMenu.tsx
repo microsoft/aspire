@@ -141,8 +141,11 @@ export function CommandMenu({
     if (entry.disabled) {
       return;
     }
+
+    // The selected command owns the next focus target. Restoring focus to the
+    // trigger races dialogs and drawers that move focus into newly opened UI.
+    close(false);
     entry.onSelect();
-    close(true);
   };
 
   const indexes = actionIndexes();

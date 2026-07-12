@@ -653,9 +653,11 @@ class MockBackend {
     onEvent({ type: "start", content: null, message: null });
     const prompt = request.messages.at(-1)?.content ?? "";
     const chunks = ["I inspected ", "the dashboard context. ", `Your request was: ${prompt}`];
-    for (const content of chunks) {
+    for (const [index, content] of chunks.entries()) {
       await new Promise<void>((resolve, reject) => {
-        const timer = window.setTimeout(resolve, 80);
+        // Keep the first mock chunk pending long enough for the playground to
+        // exercise cancellation reliably under a loaded browser test worker.
+        const timer = window.setTimeout(resolve, index === 0 ? 1_000 : 80);
         signal.addEventListener("abort", () => {
           window.clearTimeout(timer);
           reject(new DOMException("The operation was aborted.", "AbortError"));
