@@ -782,6 +782,7 @@ app.MapGet("/genai-trace", async () =>
     }
 
     // Avoid zero seconds span.
+    app.Logger.LogInformation("GenAI conversation completed.");
     await Task.Delay(100);
 
     activity?.Stop();

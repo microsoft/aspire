@@ -447,6 +447,59 @@ test(`${features("structured-logs")} inventories structured log controls and row
   await attachScreenshot(page, testInfo, "legacy-structured-logs");
 });
 
+test(`${features("structured-log-genai")} opens the GenAI log conversation visualizer`, async ({ page }) => {
+  await page.goto("/");
+  const apiResourceRow = page.getByRole("table").getByRole("row").filter({ hasText: "stress-apiservice" });
+  await apiResourceRow.getByText("stress-apiservice", { exact: true }).click();
+  await page.getByRole("dialog").filter({ hasText: "stress-apiservice" })
+    .getByRole("button", { name: "Gen AI trace", exact: true }).click();
+  await expect(page.getByText('"Gen AI trace" succeeded', { exact: false })).toBeVisible({ timeout: 30_000 });
+
+  await page.goto("/structuredlogs/resource/Stress.ApiService");
+  const genAIDetails = page.getByRole("button", { name: "GenAI details", exact: true });
+  await expect.poll(() => genAIDetails.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+  await genAIDetails.last().click();
+
+  const visualizer = page.locator("fluent-dialog");
+  await expect(visualizer).toContainText("chat gpt");
+  await expect(visualizer).toContainText("Tokens 470");
+  await expect(visualizer).toContainText("This is the input prompt.");
+  await expect(visualizer.getByRole("tab", { name: /^Tools \d+$/ })).toBeVisible();
+  await visualizer.getByRole("button", { name: "Close", exact: true }).click();
+});
+
+test(`${features("structured-log-session")} restores resource, filters, and log deep links`, async ({ page }) => {
+  await page.goto("/structuredlogs/resource/Stress.ApiService?logLevel=information");
+  await expect(page.getByRole("combobox", { name: /^(Resource|Select a resource)$/ }))
+    .toHaveAttribute("current-value", "Stress.ApiService");
+  await expect(page.getByRole("combobox", { name: "Level", exact: true }).locator("option:checked"))
+    .toHaveText("Information");
+
+  await page.getByRole("button", { name: "Add filter", exact: true }).click();
+  await page.getByRole("combobox", { name: "Value", exact: true }).fill("Hosting environment");
+  await page.getByRole("button", { name: "Apply filter", exact: true }).click();
+  await expect(page).toHaveURL(/\/structuredlogs\/resource\/Stress\.ApiService\?[^#]*logLevel=information[^#]*filters=/);
+
+  const startupRow = page.getByRole("table").getByRole("row").filter({ hasText: "Hosting environment" }).first();
+  await expect(startupRow).toBeVisible();
+  const logEntryId = await startupRow.getAttribute("data-log-entry-id");
+  expect(logEntryId).toMatch(/^\d+$/);
+
+  const deepLink = new URL(page.url());
+  deepLink.searchParams.set("logEntryId", logEntryId!);
+  await page.goto(deepLink.toString());
+  await expect(page.locator("aside.drawer[role='dialog']")).toContainText("Hosting environment");
+  await expect.poll(() => new URL(page.url()).searchParams.has("logEntryId")).toBe(false);
+  await expect(page).toHaveURL(/\/structuredlogs\/resource\/Stress\.ApiService\?[^#]*logLevel=information[^#]*filters=/);
+
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: /^(Resource|Select a resource)$/ }))
+    .toHaveAttribute("current-value", "Stress.ApiService");
+  await expect(page.getByRole("combobox", { name: "Level", exact: true }).locator("option:checked"))
+    .toHaveText("Information");
+  await expect(page.locator(".deck-structured-toolbar").getByText("1", { exact: true })).toBeVisible();
+});
+
 test(`${features("structured-log-virtualization")} bounds high-volume structured log rendering`, async ({ page }) => {
   test.setTimeout(90_000);
   await page.goto("/");
@@ -455,7 +508,7 @@ test(`${features("structured-log-virtualization")} bounds high-volume structured
   await page.getByRole("dialog").filter({ hasText: "stress-apiservice" })
     .getByRole("button", { name: "Log message limit", exact: true }).click();
 
-  await page.goto("/structuredlogs/resource/stress-apiservice");
+  await page.goto("/structuredlogs/resource/Stress.ApiService");
   await expect(page.getByRole("strong")).toHaveText("10000 structured logs", { timeout: 30_000 });
   const virtualizedBody = page.locator("#structured-logs-page-body-id");
   const virtualizedTable = virtualizedBody.getByRole("table");

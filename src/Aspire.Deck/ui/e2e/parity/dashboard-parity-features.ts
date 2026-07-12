@@ -20,6 +20,8 @@ export type LegacyScenario =
   | "console-follow"
   | "console-virtualization"
   | "structured-logs"
+  | "structured-log-genai"
+  | "structured-log-session"
   | "structured-log-virtualization"
   | "traces"
   | "trace-details"
@@ -179,9 +181,9 @@ const featureDefinitions = {
     ["LOG-DETAILS-001", "/structuredlogs", "Selecting a log opens complete event, scope, resource, and attribute details.", "structured-logs", "covered", "LOG-DETAILS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001"],
     ["LOG-ACTIONS-001", "/structuredlogs", "Per-log actions expose details, text/JSON visualizers, copy, and related navigation.", "structured-logs", "covered", "LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001"],
     ["LOG-TRACE-LINK-001", "/structuredlogs", "Trace IDs deep-link to the matching trace and span.", "structured-logs", "covered", "LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001"],
-    ["LOG-GENAI-001", "/structuredlogs", "GenAI log records open the dedicated GenAI visualizer.", null, "covered", "LOG-GENAI-001"],
+    ["LOG-GENAI-001", "/structuredlogs", "GenAI log records open the dedicated GenAI visualizer.", "structured-log-genai", "covered", "LOG-GENAI-001"],
     ["LOG-EXPLAIN-001", "/structuredlogs", "Explain errors summarizes current error logs through the assistant.", null, "covered", "LOG-EXPLAIN-001"],
-    ["LOG-ROUTE-001", "/structuredlogs/resource/{name}", "Resource selection, filters, and selected log are deep-linkable and restorable.", null, "covered", "LOG-ROUTE-001"],
+    ["LOG-ROUTE-001", "/structuredlogs/resource/{name}", "Resource selection, filters, and selected log are deep-linkable and restorable.", "structured-log-session", "covered", "LOG-ROUTE-001"],
   ],
   traces: [
     ["TRACE-LIST-001", "/traces", "Traces render timestamp, name, span count, duration, error status, and actions.", "traces", "covered", "TRACE-LIST-001; TRACE-ACTIONS-001; HTTP-TRACES-001; STRESS-TRACES-001"],
