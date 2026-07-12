@@ -79,7 +79,13 @@ internal sealed record DeckExecuteCommandRequest(
 
 internal sealed record DeckCommandResponse(
     string Kind,
-    string? Message);
+    string? Message,
+    DeckCommandResult? Result);
+
+internal sealed record DeckCommandResult(
+    string Value,
+    string Format,
+    bool DisplayImmediately);
 
 internal sealed record DeckConsoleLogEvent(
     string ResourceName,

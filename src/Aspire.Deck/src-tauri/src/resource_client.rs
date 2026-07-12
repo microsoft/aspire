@@ -18,13 +18,14 @@ use tonic::{Request, Status};
 
 use crate::config::AuthMode;
 use crate::model::{
-    CommandResponse, ConnectionStatus, ConsoleLogEvent, ConsoleLogLine, Resource, ResourcesEvent,
+    CommandResponse, CommandResult, ConnectionStatus, ConsoleLogEvent, ConsoleLogLine, Resource,
+    ResourcesEvent,
 };
 use crate::proto::aspire::v1::dashboard_service_client::DashboardServiceClient;
 use crate::proto::aspire::v1::{
     watch_resources_change, watch_resources_update, ApplicationInformationRequest,
-    ResourceCommandRequest, ResourceCommandResponseKind, WatchResourceConsoleLogsRequest,
-    WatchResourcesRequest,
+    CommandResultFormat, ResourceCommandRequest, ResourceCommandResponseKind,
+    ResourceCommandResult, WatchResourceConsoleLogsRequest, WatchResourcesRequest,
 };
 use crate::state::{AppState, Session};
 
@@ -278,6 +279,7 @@ pub async fn execute_command(
             return CommandResponse {
                 kind: "failed".to_string(),
                 message: Some("Not connected to the resource service".to_string()),
+                result: None,
             }
         }
     };
@@ -310,11 +312,50 @@ pub async fn execute_command(
             CommandResponse {
                 kind: kind.to_string(),
                 message: response.message.or(response.error_message),
+                result: response.result.map(map_command_result),
             }
         }
         Err(status) => CommandResponse {
             kind: "failed".to_string(),
             message: Some(status.message().to_string()),
+            result: None,
         },
+    }
+}
+
+fn map_command_result(result: ResourceCommandResult) -> CommandResult {
+    let format = match CommandResultFormat::try_from(result.format) {
+        Ok(CommandResultFormat::Json) => "json",
+        Ok(CommandResultFormat::Markdown) => "markdown",
+        _ => "text",
+    };
+    CommandResult {
+        value: result.value,
+        format: format.to_string(),
+        display_immediately: result.display_immediately,
+    }
+}
+
+#[cfg(test)]
+mod command_result_tests {
+    use super::*;
+
+    #[test]
+    fn maps_every_command_result_format() {
+        for (format, expected) in [
+            (CommandResultFormat::None, "text"),
+            (CommandResultFormat::Text, "text"),
+            (CommandResultFormat::Json, "json"),
+            (CommandResultFormat::Markdown, "markdown"),
+        ] {
+            let actual = map_command_result(ResourceCommandResult {
+                value: "result".to_string(),
+                format: format.into(),
+                display_immediately: true,
+            });
+            assert_eq!(actual.format, expected);
+            assert_eq!(actual.value, "result");
+            assert!(actual.display_immediately);
+        }
     }
 }

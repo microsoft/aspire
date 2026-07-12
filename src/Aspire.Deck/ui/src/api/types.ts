@@ -127,6 +127,15 @@ export type CommandResponseKind =
 export interface CommandResponse {
   kind: CommandResponseKind;
   message: string | null;
+  result: CommandResult | null;
+}
+
+export type CommandResultFormat = "text" | "json" | "markdown";
+
+export interface CommandResult {
+  value: string;
+  format: CommandResultFormat;
+  displayImmediately: boolean;
 }
 
 export interface TelemetryAttribute {

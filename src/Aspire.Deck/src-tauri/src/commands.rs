@@ -174,6 +174,7 @@ pub async fn deck_execute_command(
             return Ok(CommandResponse {
                 kind: "failed".to_string(),
                 message: Some("No AppHost is attached".to_string()),
+                result: None,
             })
         }
     };

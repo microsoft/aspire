@@ -192,7 +192,18 @@ public static class DashboardEndpointsBuilder
                     ResourceCommandResponseKind.InvalidArguments => "invalidArguments",
                     _ => "undefined"
                 },
-                Message: response.Message ?? response.ErrorMessage);
+                Message: response.Message ?? response.ErrorMessage,
+                Result: response.Result is { } commandResult
+                    ? new DeckCommandResult(
+                        Value: commandResult.Value,
+                        Format: commandResult.Format switch
+                        {
+                            CommandResultFormat.Json => "json",
+                            CommandResultFormat.Markdown => "markdown",
+                            _ => "text"
+                        },
+                        DisplayImmediately: commandResult.DisplayImmediately)
+                    : null);
             return Results.Json(result, DeckApiJsonSerializerContext.Default.DeckCommandResponse);
         });
 

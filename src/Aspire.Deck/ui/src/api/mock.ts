@@ -732,7 +732,7 @@ class MockBackend {
   executeCommand(args: ExecuteCommandArgs): CommandResponse {
     const target = this.resources.find((r) => r.name === args.resourceName);
     if (!target) {
-      return { kind: "failed", message: `Resource '${args.resourceName}' not found.` };
+      return { kind: "failed", message: `Resource '${args.resourceName}' not found.`, result: null };
     }
 
     switch (args.commandName) {
@@ -747,22 +747,22 @@ class MockBackend {
         // Custom command that prompts for inputs (demonstrates the interaction pane).
         this.dialog = this.buildScaleDialog([]);
         this.emitInteractions();
-        return { kind: "succeeded", message: "Awaiting input…" };
+        return { kind: "succeeded", message: "Awaiting input…", result: null };
       case "parameter-set":
         this.parameterDialogResourceName = target.name;
         this.dialog = this.buildParameterDialog(target);
         this.emitInteractions();
-        return { kind: "succeeded", message: "Awaiting input…" };
+        return { kind: "succeeded", message: "Awaiting input…", result: null };
       case "many-inputs":
         this.manyInputsResourceName = target.name;
         this.dialog = this.buildManyInputsDialog();
         this.emitInteractions();
-        return { kind: "succeeded", message: "Awaiting input…" };
+        return { kind: "succeeded", message: "Awaiting input…", result: null };
       case "message-box-sample":
         this.messageBoxResourceName = target.name;
         this.dialog = this.buildMessageBox();
         this.emitInteractions();
-        return { kind: "succeeded", message: "Awaiting confirmation…" };
+        return { kind: "succeeded", message: "Awaiting confirmation…", result: null };
       case "notification-samples":
         this.notifications = this.notifications.filter((notification) => ![9101, 9102].includes(notification.interactionId));
         this.notifications.push(
@@ -781,12 +781,12 @@ class MockBackend {
           },
         );
         this.emitInteractions();
-        return { kind: "succeeded", message: "Notifications shown." };
+        return { kind: "succeeded", message: "Notifications shown.", result: null };
       default:
-        return { kind: "undefined", message: `Unknown command '${args.commandName}'.` };
+        return { kind: "undefined", message: `Unknown command '${args.commandName}'.`, result: null };
     }
 
-    return { kind: "succeeded", message: `Command '${args.commandName}' executed on '${args.resourceName}'.` };
+    return { kind: "succeeded", message: `Command '${args.commandName}' executed on '${args.resourceName}'.`, result: null };
   }
 
   // --- Interactions (mock) ---

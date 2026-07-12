@@ -176,8 +176,11 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("/login?returnUrl=%2Fapi%2Fdeck%2Fresources", response.Headers.Location?.PathAndQuery);
     }
 
-    [Fact]
-    public async Task PostExecuteCommand_ExecutesResolvedCommandInteractively()
+    [Theory]
+    [InlineData(CommandResultFormat.Text, "text")]
+    [InlineData(CommandResultFormat.Json, "json")]
+    [InlineData(CommandResultFormat.Markdown, "markdown")]
+    public async Task PostExecuteCommand_ExecutesResolvedCommandInteractively(CommandResultFormat format, string expectedFormat)
     {
         var resource = CreateResource();
         string? actualResourceName = null;
@@ -199,7 +202,13 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                         return Task.FromResult(new ResourceCommandResponseViewModel
                         {
                             Kind = ResourceCommandResponseKind.Succeeded,
-                            Message = "Restarted."
+                            Message = "Restarted.",
+                            Result = new ResourceCommandResultViewModel
+                            {
+                                Value = "Command output",
+                                Format = format,
+                                DisplayImmediately = true
+                            }
                         });
                     })));
         await app.StartAsync().DefaultTimeout();
@@ -221,8 +230,8 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.Null(actualOptions?.Arguments);
         var actual = JsonNode.Parse(await response.Content.ReadAsStringAsync().DefaultTimeout());
         var expected = JsonNode.Parse(
-            """
-            {"kind":"succeeded","message":"Restarted."}
+            $$$"""
+            {"kind":"succeeded","message":"Restarted.","result":{"value":"Command output","format":"{{{expectedFormat}}}","displayImmediately":true}}
             """);
         Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
     }

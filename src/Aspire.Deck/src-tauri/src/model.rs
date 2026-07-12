@@ -403,6 +403,15 @@ pub struct AppHostInfo {
 pub struct CommandResponse {
     pub kind: String,
     pub message: Option<String>,
+    pub result: Option<CommandResult>,
+}
+
+#[derive(Debug, Clone, Serialize)]
+#[serde(rename_all = "camelCase")]
+pub struct CommandResult {
+    pub value: String,
+    pub format: String,
+    pub display_immediately: bool,
 }
 
 // ---------------------------------------------------------------------------
