@@ -119,6 +119,18 @@ test(`${features("resources")} inventories resources, details, and graph behavio
   await expect(table.getByRole("link", { name: "Dashboard (https)", exact: true })).toBeVisible();
   await expect(table.getByText("no-status-resource", { exact: true })).toBeVisible();
 
+  const customIconRow = table.getByRole("row").filter({ hasText: "stress-apiservice" });
+  const defaultIconRow = table.getByRole("row").filter({ hasText: "empty-0000" });
+  await expect(customIconRow).toHaveCount(1);
+  await expect(defaultIconRow).toHaveCount(1);
+  const customIcon = customIconRow.locator("svg.resource-icon");
+  const defaultIcon = defaultIconRow.locator("svg.resource-icon");
+  await expect(customIcon).toHaveCount(1);
+  await expect(defaultIcon).toHaveCount(1);
+  expect(await customIcon.evaluate((element) => element.innerHTML)).not.toBe(
+    await defaultIcon.evaluate((element) => element.innerHTML),
+  );
+
   const filter = page.getByRole("textbox", { name: "Filter...", exact: true });
   await filter.fill("property-stress-resource");
   await expect(table.getByText("property-stress-resource", { exact: true })).toBeVisible();
@@ -169,8 +181,12 @@ test(`${features("commands")} inventories command icons and argument input types
   await expect(iconCommands).toHaveCount(1);
   await iconCommands.click({ force: true });
   let details = page.getByRole("dialog").filter({ hasText: "icon-commands" });
-  await expect(details.getByRole("button", { name: "Icon test", exact: true })).toBeVisible();
-  await expect(details.getByRole("button", { name: "Icon test highlighted", exact: true })).toBeVisible();
+  const iconCommand = details.getByRole("button", { name: "Icon test", exact: true });
+  const highlightedIconCommand = details.getByRole("button", { name: "Icon test highlighted", exact: true });
+  await expect(iconCommand).toBeVisible();
+  await expect(highlightedIconCommand).toBeVisible();
+  await highlightedIconCommand.click();
+  await expect(page.getByText('"Icon test highlighted" succeeded', { exact: false })).toBeVisible();
   await attachScreenshot(page, testInfo, "legacy-icon-commands");
   await details.getByRole("button", { name: "Close", exact: true }).click({ force: true });
 
@@ -194,11 +210,51 @@ test(`${features("commands")} inventories command icons and argument input types
 test(`${features("console")} inventories console streaming controls`, async ({ page }, testInfo) => {
   await page.goto("/consolelogs");
   await expect(page.getByText("Console logs", { exact: true })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Resource", exact: true })).toBeVisible();
-  await expect(page.getByRole("main").getByRole("button", { name: "Settings", exact: true })).toBeVisible();
+  const main = page.getByRole("main");
+  const resource = page.getByRole("combobox", { name: "Resource", exact: true });
+  await expect(resource).toBeVisible();
+  await resource.click();
+  await page.getByRole("option", { name: "empty-0000", exact: true }).click();
+  await expect(page).toHaveURL(/\/consolelogs\/resource\/empty-0000(?:\?.*)?$/);
+  await expect(resource).toHaveAttribute("current-value", "empty-0000");
+  await expect(main.getByRole("log").filter({ hasText: "empty-0001" })).toHaveCount(0);
+  await expect.poll(() => main.getByRole("log").count()).toBeGreaterThan(0);
+
+  const resourceActions = main.getByRole("button", { name: "Resource actions", exact: true });
+  await resourceActions.click();
+  const resourceMenu = page.getByRole("menu");
+  await expect(resourceMenu.getByText("Restart", { exact: true })).toBeVisible();
+  await expect(resourceMenu.getByText("Stop", { exact: true })).toBeVisible();
+  await resourceMenu.getByText("View details", { exact: true }).click();
+  const resourceDetails = page.getByRole("dialog").filter({ hasText: "empty-0000" });
+  await expect(resourceDetails).toBeVisible();
+  await resourceDetails.getByRole("button", { name: "Close", exact: true }).click({ force: true });
+  await page.goBack();
+  await expect(page).toHaveURL(/\/consolelogs\/resource\/empty-0000(?:\?.*)?$/);
+
+  await resource.click();
+  await page.getByRole("option", { name: "empty-0001", exact: true }).click();
+  await expect(page).toHaveURL(/\/consolelogs\/resource\/empty-0001(?:\?.*)?$/);
+  await expect(resource).toHaveAttribute("current-value", "empty-0001");
+  await expect(main.getByRole("log").filter({ hasText: "empty-0000" })).toHaveCount(0);
+  await expect.poll(() => main.getByRole("log").count()).toBeGreaterThan(0);
+
+  const settings = main.getByRole("button", { name: "Settings", exact: true });
+  await settings.click();
+  await page.getByRole("menuitem", { name: "Show timestamps", exact: true }).click();
+  await settings.click();
+  await page.getByRole("menuitem", { name: "UTC timestamps", exact: true }).click();
+  await settings.click();
+  await page.getByRole("menuitem", { name: "Don't wrap log lines", exact: true }).click();
+  await settings.click();
+  await page.getByRole("menuitem", { name: "Wrap log lines", exact: true }).click();
+
+  const download = page.waitForEvent("download");
+  await settings.click();
+  await page.getByRole("menuitem", { name: "Download logs", exact: true }).click();
+  await download;
   await expect(page.getByRole("button", { name: "Pause incoming data", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Remove data", exact: true })).toBeVisible();
-  await expect(page.getByRole("log").first()).toBeVisible();
   await attachScreenshot(page, testInfo, "legacy-console");
 });
 

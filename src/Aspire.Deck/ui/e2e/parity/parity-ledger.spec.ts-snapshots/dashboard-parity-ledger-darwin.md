@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 53
+- Legacy black-box scenarios pending: 46
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -59,7 +59,7 @@
 | RES-RELATIONSHIPS-001 | resources | `/` | resources | covered | RES-DETAILS-001 | Parent, child, wait, reference, and other relationships are visible. |
 | RES-STATE-001 | resources | `/` | resources | covered | HTTP-RESOURCES-001; STRESS-RESOURCES-001 | Running, starting, finished, exited, not-started, and unknown states remain distinguishable. |
 | RES-NO-STATUS-001 | resources | `/` | resources | covered | RES-NO-STATUS-001; STRESS-RESOURCES-001 | Resources without status data render a stable unknown state. |
-| RES-RESOURCE-ICON-001 | resources | `/` | PENDING | covered | RES-ICON-001; HTTP-RESOURCES-001; STRESS-RESOURCE-ICON-001 | Custom Fluent resource icon names override resource-type fallbacks. |
+| RES-RESOURCE-ICON-001 | resources | `/` | resources | covered | RES-ICON-001; HTTP-RESOURCES-001; STRESS-RESOURCE-ICON-001 | Custom Fluent resource icon names override resource-type fallbacks. |
 | RES-RESOURCE-ICON-VARIANT-001 | resources | `/` | PENDING | covered | RES-ICON-001; DeckApiTests.GetResources_ReturnsDeckResourceContract | Regular and filled resource icon variants are preserved. |
 | RES-CONTEXT-MENU-001 | resources | `/` | resources | covered | RES-CONTEXT-MENU-001 | Resource rows expose details, navigation, and commands through a context menu. |
 | RES-SESSION-001 | resources | `/` | resources | covered | RES-SORT-001; RES-STRUCTURED-FILTER-001; RES-VIEW-OPTIONS-001; RES-HIERARCHY-001; RES-DETAILS-LINK-001 | Search, filters, sort, view, expansion, and selection survive navigation and reload. |
@@ -100,19 +100,19 @@
 | CONSOLE-RESOURCE-001 | console | `/consolelogs` | console | covered | CONSOLE-RESOURCE-001; CONSOLE-ALL-001; TK-SELECT-001 | A grouped resource picker selects one resource or all resources. |
 | CONSOLE-BACKLOG-001 | console | `/consolelogs` | console | covered | CONSOLE-STREAM-001; HTTP-CONSOLE-001; STRESS-CONSOLE-001 | Selecting a resource loads the existing console backlog. |
 | CONSOLE-LIVE-001 | console | `/consolelogs` | console | covered | CONSOLE-STREAM-001; STRESS-CONSOLE-001 | New stdout and stderr lines stream without reloading the page. |
-| CONSOLE-SWITCH-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-SWITCH-001 | Switching resources replaces the visible stream and subscription. |
+| CONSOLE-SWITCH-001 | console | `/consolelogs` | console | covered | CONSOLE-SWITCH-001 | Switching resources replaces the visible stream and subscription. |
 | CONSOLE-FOLLOW-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-FOLLOW-001 | Manual scrolling pauses tail-follow and the user can return to the live tail. |
 | CONSOLE-PAUSE-001 | console | `/consolelogs` | console | covered | CONSOLE-PAUSE-001; CONSOLE-ROUTE-001 | Incoming console data can be paused and resumed without losing context. |
 | CONSOLE-CLEAR-001 | console | `/consolelogs` | console | covered | CONSOLE-CLEAR-001 | Console data can be cleared for the selected resource or all resources. |
-| CONSOLE-DOWNLOAD-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001 | The current console log can be downloaded. |
-| CONSOLE-TIMESTAMP-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Timestamp visibility and UTC/local formatting can be toggled. |
-| CONSOLE-WRAP-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Long console lines can wrap or scroll horizontally. |
-| CONSOLE-COMMANDS-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-COMMANDS-001 | Commands for the selected resource are available from the console toolbar. |
+| CONSOLE-DOWNLOAD-001 | console | `/consolelogs` | console | covered | HTTP-CONSOLE-CONTROLS-001 | The current console log can be downloaded. |
+| CONSOLE-TIMESTAMP-001 | console | `/consolelogs` | console | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Timestamp visibility and UTC/local formatting can be toggled. |
+| CONSOLE-WRAP-001 | console | `/consolelogs` | console | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Long console lines can wrap or scroll horizontally. |
+| CONSOLE-COMMANDS-001 | console | `/consolelogs` | console | covered | CONSOLE-COMMANDS-001 | Commands for the selected resource are available from the console toolbar. |
 | CONSOLE-TERMINAL-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-TERMINAL-001; TERMINAL-LIVE-001; DeckApiTests.GetResources_ReturnsTerminalMetadata | Interactive resources render a terminal and can take or release control. |
 | CONSOLE-TERMINAL-FONT-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-TERMINAL-FONT-001 | Interactive terminal font size can be increased, decreased, and reset. |
 | CONSOLE-TERMINAL-SIZE-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-TERMINAL-SIZE-001 | Interactive terminal column and row presets update the remote terminal size. |
 | CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-VIRTUALIZATION-001 | Large console streams remain responsive and preserve stable line numbers. |
-| CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | PENDING | covered | CONSOLE-ROUTE-001 | Selected resource and console options are deep-linkable and restorable. |
+| CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | console | covered | CONSOLE-ROUTE-001 | Selected resource and console options are deep-linkable and restorable. |
 | LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIST-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
 | LOG-LIVE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | New structured logs stream into the list and update totals. |
 | LOG-RESOURCE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-RESOURCE-001; STRESS-STRUCTURED-LOG-RESOURCE-001 | Logs filter through a grouped resource selector. |
