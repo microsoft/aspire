@@ -1012,6 +1012,170 @@ table.data tbody tr.selected {
   border-color: var(--accent-border);
   background: var(--accent-soft);
 }
+
+/* ---------- Force graph ---------- */
+.force-graph {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  min-width: 0;
+  min-height: 320px;
+  overflow: hidden;
+  background: var(--bg-surface);
+}
+.force-graph > svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  cursor: grab;
+  touch-action: none;
+}
+.force-graph > svg:active {
+  cursor: grabbing;
+}
+.force-graph__edge {
+  stroke: var(--border-strong);
+  stroke-width: 1.5;
+}
+#deck-force-graph-arrow path {
+  fill: var(--border-strong);
+}
+.force-graph__node {
+  cursor: pointer;
+  outline: none;
+}
+.force-graph__node-body {
+  fill: var(--bg-surface-2);
+  stroke: var(--border-strong);
+  stroke-width: 2;
+  transition: fill 0.12s ease, stroke 0.12s ease;
+}
+.force-graph__node:hover .force-graph__node-body,
+.force-graph__node:focus-visible .force-graph__node-body {
+  fill: var(--bg-hover);
+  stroke: var(--accent-border);
+}
+.force-graph__node--selected .force-graph__node-body {
+  fill: var(--accent-soft);
+  stroke: var(--accent);
+  stroke-width: 3;
+}
+.force-graph__icon {
+  color: var(--text-secondary);
+  pointer-events: none;
+}
+.force-graph__icon div,
+.force-graph__icon svg {
+  display: block;
+  width: 32px;
+  height: 32px;
+}
+.force-graph__state {
+  stroke: var(--bg-surface);
+  stroke-width: 3;
+  fill: var(--neutral);
+}
+.force-graph__state.success { fill: var(--success); }
+.force-graph__state.info { fill: var(--info); }
+.force-graph__state.warning { fill: var(--warning); }
+.force-graph__state.error { fill: var(--error); }
+.force-graph__label,
+.force-graph__endpoint,
+.force-graph__empty {
+  fill: var(--text);
+  text-anchor: middle;
+  font-family: var(--font-sans);
+  paint-order: stroke;
+  stroke: var(--bg-surface);
+  stroke-width: 5px;
+  stroke-linejoin: round;
+  pointer-events: none;
+}
+
+.context-menu {
+  position: fixed;
+  z-index: 1500;
+  width: 210px;
+  display: grid;
+  gap: 2px;
+  padding: 6px;
+  border: 1px solid var(--border-strong);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-lg);
+}
+.context-menu button {
+  min-height: 32px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  border: 0;
+  border-radius: 4px;
+  padding: 5px 9px;
+  color: var(--text);
+  background: transparent;
+  text-align: start;
+  cursor: pointer;
+}
+.context-menu button:hover,
+.context-menu button:focus-visible {
+  background: var(--bg-hover);
+  outline: none;
+}
+.context-menu button:disabled {
+  color: var(--text-disabled);
+  cursor: default;
+}
+.resource-view-switch {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface-2);
+}
+.resource-view-switch .icon-btn[aria-pressed="true"] {
+  color: var(--accent);
+  background: var(--accent-soft);
+}
+.resources-graph-body {
+  display: flex;
+  min-height: 360px;
+}
+.resources-graph {
+  position: relative;
+  flex: 1;
+  min-width: 0;
+  min-height: 360px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.resources-graph__controls {
+  position: absolute;
+  inset-block-start: 12px;
+  inset-inline-end: 12px;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--bg-elevated) 92%, transparent);
+  box-shadow: var(--shadow-sm);
+}
+.force-graph__label {
+  font-size: 13px;
+  font-weight: 650;
+}
+.force-graph__endpoint {
+  fill: var(--text-muted);
+  font-size: 10px;
+}
+.force-graph__empty {
+  fill: var(--text-muted);
+  font-size: 13px;
+}
 .param-value {
   display: inline-flex;
   align-items: center;
@@ -2808,6 +2972,24 @@ table.data tbody tr.selected {
 .toolkit-section__heading--data > div > span {
   display: block;
   margin-top: 2px;
+}
+.toolkit-graph-sample {
+  position: relative;
+  height: 420px;
+  overflow: hidden;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+}
+.toolkit-graph-sample__controls {
+  position: absolute;
+  inset-block-end: 10px;
+  inset-inline-end: 10px;
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-elevated);
 }
 .toolkit-page-sample {
   height: 320px;

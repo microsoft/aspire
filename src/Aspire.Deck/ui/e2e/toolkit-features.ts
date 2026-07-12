@@ -5,6 +5,7 @@ export const toolkitFeatures = {
   "TK-ACTIONS-001": "Secondary, primary, danger, ghost, and icon buttons expose consistent behavior.",
   "TK-MENU-001": "Command menus expose icons, descriptions, disabled and destructive items, keyboard selection, and focus restoration.",
   "TK-FILTER-MENU-001": "Filter menus expose grouped controlled options, active state, clear, and explicit close behavior.",
+  "TK-GRAPH-001": "Force graphs expose semantic nodes, edges, Fluent icons, selection, zoom, reset, pan, and drag behavior.",
   "TK-DIALOG-001": "Confirmation dialogs support cancel, confirm, and Escape dismissal.",
   "TK-DRAWER-001": "Drawers expose an accessible title, footer actions, close command, and Escape dismissal.",
   "TK-DATA-001": "Data tables retain semantic headers, filtering, row content, and empty results.",

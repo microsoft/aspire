@@ -45,7 +45,7 @@ type FeatureDefinition = readonly [
 const featureDefinitions = {
   shell: [
     ["SHELL-IDENTITY-001", "/", "Application identity and dashboard version are visible.", "shell", "covered", "APP-SHELL-001; STRESS-CONFIG-001"],
-    ["SHELL-NAV-001", "/", "Resources, Parameters, Graph, Console, Structured Logs, Traces, and Metrics are reachable from navigation.", "shell", "partial", "APP-NAV-001"],
+    ["SHELL-NAV-001", "/", "Resources, Parameters, Graph, Console, Structured Logs, Traces, and Metrics are reachable from navigation.", "shell", "covered", "APP-NAV-001; RES-GRAPH-001"],
     ["SHELL-ROUTES-001", "/", "Pages have stable URLs and browser history/deep links restore the selected page.", null, "covered", "APP-ROUTES-001"],
     ["SHELL-REPO-001", "/", "The Aspire repository link is available from the top bar.", "shell", "covered", "APP-REPOSITORY-001"],
     ["SHELL-HELP-001", "/", "Help opens with documentation and keyboard shortcut reference content.", "shell", "covered", "APP-HELP-001"],
@@ -84,9 +84,9 @@ const featureDefinitions = {
     ["RES-LONG-URLS-001", "/", "Large endpoint sets and very long URLs remain usable without breaking layout.", null, "partial", "APP-RESPONSIVE-001"],
     ["RES-NESTING-001", "/", "Parent/child resources render as a hierarchical tree.", "resources", "covered", "RES-HIERARCHY-001"],
     ["RES-EXPAND-001", "/", "Individual branches and all branches can be expanded and collapsed.", "resources", "covered", "RES-HIERARCHY-001; RES-VIEW-OPTIONS-001"],
-    ["RES-GRAPH-001", "/?view=Graph", "Resources and relationships render in the graph view.", "resources", "missing"],
-    ["RES-GRAPH-ZOOM-001", "/?view=Graph", "Graph zoom in, zoom out, and reset controls work.", "resources", "missing"],
-    ["RES-GRAPH-CONTEXT-001", "/?view=Graph", "Graph nodes expose resource actions and details context menus.", null, "missing"],
+    ["RES-GRAPH-001", "/?view=Graph", "Resources and relationships render in the graph view.", "resources", "covered", "RES-GRAPH-001"],
+    ["RES-GRAPH-ZOOM-001", "/?view=Graph", "Graph zoom in, zoom out, and reset controls work.", "resources", "covered", "RES-GRAPH-ZOOM-001"],
+    ["RES-GRAPH-CONTEXT-001", "/?view=Graph", "Graph nodes expose resource actions and details context menus.", "resources", "covered", "RES-GRAPH-CONTEXT-001"],
     ["RES-VIRTUALIZATION-001", "/", "Large resource inventories remain responsive through row virtualization.", null, "missing"],
     ["RES-DETAILS-001", "/", "Selecting a resource opens overview, endpoints, properties, environment, health, and relationships.", "resources", "covered", "RES-DETAILS-001; STRESS-DETAILS-001"],
     ["RES-DETAILS-LINK-001", "/?resource={name}", "A resource details selection is deep-linkable and restorable.", "resources", "covered", "RES-DETAILS-LINK-001"],

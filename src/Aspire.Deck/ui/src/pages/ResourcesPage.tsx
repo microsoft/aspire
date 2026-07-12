@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type { Resource, ResourceCommand } from "../api/types";
 import { PARAMETER_RESOURCE_TYPE } from "../api/types";
 import { executeCommand, openExternal } from "../api/deck";
@@ -9,11 +9,15 @@ import {
   ChevronIcon,
   CommandMenu,
   ConfirmDialog,
+  ContextMenu,
   DataTable,
   ExternalIcon,
   FilterIcon,
   FilterMenu,
+  ForceGraph,
+  IconButton,
   MoreIcon,
+  NamedIcon,
   Page,
   PageBody,
   PageHeader,
@@ -22,10 +26,17 @@ import {
   PageTitle,
   PageToolbar,
   ResourceTypeIcon,
+  ResetViewIcon,
+  ResourcesIcon,
   SearchBox,
   StateDot,
+  ZoomInIcon,
+  ZoomOutIcon,
   type Column,
   type ConfirmRequest,
+  type ForceGraphEdge,
+  type ForceGraphHandle,
+  type ForceGraphNode,
   type SortDirection,
 } from "../toolkit";
 
@@ -43,6 +54,7 @@ export interface ResourceRouteState {
   collapsed: string[];
   sortColumn: string;
   sortDirection: SortDirection;
+  view: "table" | "graph";
 }
 
 interface ResourceRow {
@@ -55,6 +67,12 @@ interface ResourceRow {
 interface Toast {
   message: string;
   tone: "success" | "error";
+}
+
+interface GraphContext {
+  resourceName: string;
+  x: number;
+  y: number;
 }
 
 function propertyValue(resource: Resource, name: string): string | null {
@@ -73,6 +91,31 @@ function resourceSource(resource: Resource): { value: string; title: string } | 
 
 function sortedValues(values: Iterable<string>): string[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+}
+
+function resourceTone(resource: Resource): ForceGraphNode["tone"] {
+  if (resource.stateStyle === "success") return "success";
+  if (resource.stateStyle === "info") return "info";
+  if (resource.stateStyle === "warning") return "warning";
+  if (resource.stateStyle === "error") return "error";
+  const health = resource.health?.toLowerCase();
+  if (health === "healthy") return "success";
+  if (health === "degraded") return "warning";
+  if (health === "unhealthy") return "error";
+  return "neutral";
+}
+
+function graphEndpoint(resource: Resource): string | null {
+  const endpoint = resource.urls
+    .filter((url) => !url.isInternal && !url.isInactive)
+    .sort((left, right) => left.sortOrder - right.sortOrder)[0];
+  if (!endpoint) return null;
+  try {
+    const url = new URL(endpoint.url);
+    return `${url.hostname}${url.port ? `:${url.port}` : ""}`;
+  } catch {
+    return endpoint.displayName || endpoint.name || endpoint.url;
+  }
 }
 
 function updateHidden(values: string[], value: string, visible: boolean): string[] {
@@ -117,6 +160,8 @@ export function ResourcesPage({
   const { resources, ready } = useResources();
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
+  const [graphContext, setGraphContext] = useState<GraphContext | null>(null);
+  const graphRef = useRef<ForceGraphHandle | null>(null);
   const hiddenTypes = useMemo(() => new Set(route.hiddenTypes), [route.hiddenTypes]);
   const hiddenStates = useMemo(() => new Set(route.hiddenStates), [route.hiddenStates]);
   const hiddenHealth = useMemo(() => new Set(route.hiddenHealth), [route.hiddenHealth]);
@@ -126,9 +171,9 @@ export function ResourcesPage({
     () => resources.filter((resource) => resource.resourceType !== PARAMETER_RESOURCE_TYPE),
     [resources],
   );
-  const rows = useMemo(() => {
+  const filteredResources = useMemo(() => {
     const trimmed = route.query.trim().toLowerCase();
-    const filtered = inventory.filter((resource) => {
+    return inventory.filter((resource) => {
       if (resource.isHidden && !route.showHidden) return false;
       if (hiddenTypes.has(resource.resourceType)) return false;
       if (hiddenStates.has(resource.state ?? "")) return false;
@@ -137,8 +182,8 @@ export function ResourcesPage({
         resource.resourceType.toLowerCase().includes(trimmed) ||
         (resource.state ?? "").toLowerCase().includes(trimmed);
     });
-    return flattenResources(filtered, collapsed);
-  }, [collapsed, hiddenHealth, hiddenStates, hiddenTypes, inventory, route.query, route.showHidden]);
+  }, [hiddenHealth, hiddenStates, hiddenTypes, inventory, route.query, route.showHidden]);
+  const rows = useMemo(() => flattenResources(filteredResources, collapsed), [collapsed, filteredResources]);
 
   const selected = useMemo(
     () => resources.find((resource) => resource.name === route.resourceName) ?? null,
@@ -265,6 +310,32 @@ export function ResourcesPage({
   const health = sortedValues(inventory.map((resource) => resource.health ?? ""));
   const filtersActive = route.hiddenTypes.length + route.hiddenStates.length + route.hiddenHealth.length > 0;
   const parentNames = sortedValues(inventory.filter((resource) => inventory.some((candidate) => propertyValue(candidate, PARENT_PROPERTY) === resource.name)).map((resource) => resource.name));
+  const graphNodes: ForceGraphNode[] = filteredResources.map((resource) => ({
+    id: resource.name,
+    label: resource.displayName,
+    description: `${resource.resourceType}, ${resource.state ?? "Unknown"}${resource.health ? `, ${resource.health}` : ""}`,
+    endpoint: graphEndpoint(resource),
+    tone: resourceTone(resource),
+    icon: <ResourceTypeIcon type={resource.resourceType} iconName={resource.iconName} iconVariant={resource.iconVariant} size={32} />,
+  }));
+  const graphResourceNames = new Set(filteredResources.map((resource) => resource.name));
+  const displayNameToName = new Map(filteredResources.map((resource) => [resource.displayName, resource.name]));
+  const graphEdgeKeys = new Set<string>();
+  const graphEdges: ForceGraphEdge[] = [];
+  for (const resource of filteredResources) {
+    const targets = [
+      ...resource.relationships.map((relationship) => displayNameToName.get(relationship.resourceName) ?? relationship.resourceName),
+      propertyValue(resource, PARENT_PROPERTY),
+    ];
+    for (const target of targets) {
+      if (!target || target === resource.name || !graphResourceNames.has(target)) continue;
+      const key = `${resource.name}\0${target}`;
+      if (graphEdgeKeys.has(key)) continue;
+      graphEdgeKeys.add(key);
+      graphEdges.push({ source: resource.name, target });
+    }
+  }
+  const contextResource = graphContext ? resources.find((resource) => resource.name === graphContext.resourceName) ?? null : null;
 
   return (
     <Page aria-labelledby="deck-page-resources-title">
@@ -293,12 +364,54 @@ export function ResourcesPage({
             { id: "branches", label: route.collapsed.length > 0 ? "Expand all children" : "Collapse all children", disabled: parentNames.length === 0, onSelect: () => changeRoute({ collapsed: route.collapsed.length > 0 ? [] : parentNames }) },
           ]}
         />
+        <div className="resource-view-switch" role="group" aria-label="Resource view">
+          <IconButton label="Table view" icon={<ResourcesIcon size={17} />} aria-pressed={route.view === "table"} onClick={() => changeRoute({ view: "table" })} />
+          <IconButton label="Graph view" icon={<NamedIcon name="Graph" size={17} />} aria-pressed={route.view === "graph"} onClick={() => changeRoute({ view: "graph" })} />
+        </div>
       </PageToolbar>
-      <PageBody>
-        <DataTable columns={columns} rows={rows} rowKey={(row) => row.resource.name} onRowClick={(row) => changeRoute({ resourceName: row.resource.name })} isSelected={(row) => row.resource.name === route.resourceName} sort={{ columnKey: route.sortColumn, direction: route.sortDirection }} onSortChange={(sort) => changeRoute({ sortColumn: sort.columnKey, sortDirection: sort.direction })} emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"} />
+      <PageBody className={route.view === "graph" ? "resources-graph-body" : undefined}>
+        {route.view === "graph" ? (
+          <div className="resources-graph">
+            <ForceGraph
+              ref={graphRef}
+              ariaLabel="Resource graph"
+              nodes={graphNodes}
+              edges={graphEdges}
+              selectedId={route.resourceName}
+              emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"}
+              onSelect={(resourceName) => changeRoute({ resourceName })}
+              onContextMenu={(resourceName, x, y) => setGraphContext({ resourceName, x, y })}
+            />
+            <div className="resources-graph__controls" role="toolbar" aria-label="Graph controls">
+              <IconButton label="Zoom in" icon={<ZoomInIcon size={17} />} onClick={() => graphRef.current?.zoomIn()} />
+              <IconButton label="Zoom out" icon={<ZoomOutIcon size={17} />} onClick={() => graphRef.current?.zoomOut()} />
+              <IconButton label="Reset view" icon={<ResetViewIcon size={17} />} onClick={() => graphRef.current?.reset()} />
+            </div>
+          </div>
+        ) : (
+          <DataTable columns={columns} rows={rows} rowKey={(row) => row.resource.name} onRowClick={(row) => changeRoute({ resourceName: row.resource.name })} isSelected={(row) => row.resource.name === route.resourceName} sort={{ columnKey: route.sortColumn, direction: route.sortDirection }} onSortChange={(sort) => changeRoute({ sortColumn: sort.columnKey, sortDirection: sort.direction })} emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"} />
+        )}
       </PageBody>
       {selected ? <DetailsDrawer resource={selected} onClose={() => changeRoute({ resourceName: null })} onExecuteCommand={(resource, command) => void runCommand(resource, command)} requestConfirm={setConfirm} /> : null}
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
+      <ContextMenu
+        open={graphContext !== null}
+        x={graphContext?.x ?? 0}
+        y={graphContext?.y ?? 0}
+        ariaLabel="Resource graph actions"
+        onClose={() => setGraphContext(null)}
+        entries={contextResource ? [
+          { id: "details", label: "View details", onSelect: () => changeRoute({ resourceName: contextResource.name }) },
+          ...contextResource.commands.filter((command) => command.state !== "hidden").map((command) => ({
+            id: command.name,
+            label: command.displayName,
+            disabled: command.state === "disabled",
+            onSelect: () => command.confirmationMessage
+              ? setConfirm({ title: command.displayName, message: command.confirmationMessage, confirmLabel: command.displayName, onConfirm: () => void runCommand(contextResource, command) })
+              : void runCommand(contextResource, command),
+          })),
+        ] : []}
+      />
       {toast ? <div className="toast" role="status" aria-live="polite"><span className={`state__dot ${toast.tone === "success" ? "success" : "error"}`} />{toast.message}</div> : null}
     </Page>
   );

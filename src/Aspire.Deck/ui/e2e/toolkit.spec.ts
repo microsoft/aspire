@@ -279,6 +279,20 @@ test(`${features("TK-FILTER-MENU-001")} composes grouped filter controls`, async
   await expect(trigger).toBeFocused();
 });
 
+test(`${features("TK-GRAPH-001")} renders and controls a force graph`, async ({ page }, testInfo) => {
+  const graph = page.getByRole("group", { name: "Sample force graph" });
+  await expect(graph.locator("[data-node-id]")).toHaveCount(3);
+  await expect(graph.locator(".force-graph__edge")).toHaveCount(2);
+  await expect(graph.locator(".force-graph__icon svg")).toHaveCount(3);
+  await graph.locator('[data-node-id="frontend"]').press("Enter");
+  await expect(page.getByRole("region", { name: "Force graph" }).getByRole("status")).toHaveText("Selected frontend");
+  await page.getByRole("button", { name: "Sample zoom in" }).click();
+  await expect(graph).toHaveAttribute("data-zoom", "1.5");
+  await page.getByRole("button", { name: "Sample reset view" }).click();
+  await expect(graph).toHaveAttribute("data-zoom", "1");
+  await attachScreenshot(page, testInfo, "toolkit-force-graph");
+});
+
 test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, async ({ page }) => {
   await page.getByRole("button", { name: "Open dialog" }).click();
   const toolkitDialog = page.getByRole("dialog", { name: "Toolkit dialog" });

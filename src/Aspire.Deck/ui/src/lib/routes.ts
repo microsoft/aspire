@@ -32,6 +32,7 @@ export interface DashboardRoute {
   resourceCollapsed?: string[];
   resourceSortColumn?: string;
   resourceSortDirection?: "ascending" | "descending";
+  resourceView?: "table" | "graph";
 }
 
 const pagePaths: Record<PageId, string> = {
@@ -161,6 +162,7 @@ export function readDashboardRoute(
       resourceCollapsed: search.getAll("collapsed"),
       resourceSortColumn: search.get("sort") || undefined,
       resourceSortDirection: search.get("sortDirection") === "descending" ? "descending" : undefined,
+      resourceView: search.get("view")?.toLowerCase() === "graph" ? "graph" : undefined,
     };
   }
   return { page: "notFound" };
@@ -264,6 +266,7 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     for (const value of route.resourceCollapsed ?? []) url.searchParams.append("collapsed", value);
     if (route.resourceSortColumn && route.resourceSortColumn !== "name") url.searchParams.set("sort", route.resourceSortColumn);
     if (route.resourceSortDirection === "descending") url.searchParams.set("sortDirection", "descending");
+    if (route.resourceView === "graph") url.searchParams.set("view", "Graph");
   }
   url.hash = "";
   return `${url.pathname}${url.search}`;

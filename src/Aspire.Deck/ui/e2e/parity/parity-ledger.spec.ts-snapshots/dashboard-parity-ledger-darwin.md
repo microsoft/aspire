@@ -1,16 +1,16 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 83
-- React partial: 34
-- React missing: 41
-- Legacy black-box scenarios pending: 78
-- React parity gaps: 75
+- React covered: 87
+- React partial: 33
+- React missing: 38
+- Legacy black-box scenarios pending: 77
+- React parity gaps: 71
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
 | SHELL-IDENTITY-001 | shell | `/` | shell | covered | APP-SHELL-001; STRESS-CONFIG-001 | Application identity and dashboard version are visible. |
-| SHELL-NAV-001 | shell | `/` | shell | partial | APP-NAV-001 | Resources, Parameters, Graph, Console, Structured Logs, Traces, and Metrics are reachable from navigation. |
+| SHELL-NAV-001 | shell | `/` | shell | covered | APP-NAV-001; RES-GRAPH-001 | Resources, Parameters, Graph, Console, Structured Logs, Traces, and Metrics are reachable from navigation. |
 | SHELL-ROUTES-001 | shell | `/` | PENDING | covered | APP-ROUTES-001 | Pages have stable URLs and browser history/deep links restore the selected page. |
 | SHELL-REPO-001 | shell | `/` | shell | covered | APP-REPOSITORY-001 | The Aspire repository link is available from the top bar. |
 | SHELL-HELP-001 | shell | `/` | shell | covered | APP-HELP-001 | Help opens with documentation and keyboard shortcut reference content. |
@@ -47,9 +47,9 @@
 | RES-LONG-URLS-001 | resources | `/` | PENDING | partial | APP-RESPONSIVE-001 | Large endpoint sets and very long URLs remain usable without breaking layout. |
 | RES-NESTING-001 | resources | `/` | resources | covered | RES-HIERARCHY-001 | Parent/child resources render as a hierarchical tree. |
 | RES-EXPAND-001 | resources | `/` | resources | covered | RES-HIERARCHY-001; RES-VIEW-OPTIONS-001 | Individual branches and all branches can be expanded and collapsed. |
-| RES-GRAPH-001 | resources | `/?view=Graph` | resources | missing | - | Resources and relationships render in the graph view. |
-| RES-GRAPH-ZOOM-001 | resources | `/?view=Graph` | resources | missing | - | Graph zoom in, zoom out, and reset controls work. |
-| RES-GRAPH-CONTEXT-001 | resources | `/?view=Graph` | PENDING | missing | - | Graph nodes expose resource actions and details context menus. |
+| RES-GRAPH-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-001 | Resources and relationships render in the graph view. |
+| RES-GRAPH-ZOOM-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-ZOOM-001 | Graph zoom in, zoom out, and reset controls work. |
+| RES-GRAPH-CONTEXT-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-CONTEXT-001 | Graph nodes expose resource actions and details context menus. |
 | RES-VIRTUALIZATION-001 | resources | `/` | PENDING | missing | - | Large resource inventories remain responsive through row virtualization. |
 | RES-DETAILS-001 | resources | `/` | resources | covered | RES-DETAILS-001; STRESS-DETAILS-001 | Selecting a resource opens overview, endpoints, properties, environment, health, and relationships. |
 | RES-DETAILS-LINK-001 | resources | `/?resource={name}` | resources | covered | RES-DETAILS-LINK-001 | A resource details selection is deep-linkable and restorable. |

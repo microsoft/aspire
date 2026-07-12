@@ -175,6 +175,7 @@ export function App({
                   collapsed: route.resourceCollapsed ?? [],
                   sortColumn: route.resourceSortColumn ?? "name",
                   sortDirection: route.resourceSortDirection ?? "ascending",
+                  view: route.resourceView ?? "table",
                 }}
                 onRouteChange={(state) => navigate({
                   page: "resources",
@@ -188,6 +189,7 @@ export function App({
                   resourceCollapsed: state.collapsed.length > 0 ? state.collapsed : undefined,
                   resourceSortColumn: state.sortColumn === "name" ? undefined : state.sortColumn,
                   resourceSortDirection: state.sortDirection === "ascending" ? undefined : state.sortDirection,
+                  resourceView: state.view === "table" ? undefined : state.view,
                 })}
               />
             ) : null}

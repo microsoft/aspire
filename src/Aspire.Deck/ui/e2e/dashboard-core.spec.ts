@@ -372,6 +372,49 @@ test(`${features("RES-ICON-001")} renders resource and command icon contracts`, 
   ).toHaveCount(1);
 });
 
+test(`${features("RES-GRAPH-001", "RES-GRAPH-ZOOM-001", "RES-GRAPH-CONTEXT-001")} explores the resource relationship graph`, async ({ page }, testInfo) => {
+  await page.goto("/?view=Graph");
+  await page.getByRole("alert").getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(page.getByRole("button", { name: "Graph view" })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("table")).toHaveCount(0);
+  const graph = page.getByRole("group", { name: "Resource graph" });
+  await expect(graph).toBeVisible();
+  await expect(graph.locator("[data-node-id]")).toHaveCount(5);
+  await expect(graph.locator(".force-graph__edge")).toHaveCount(5);
+  await expect(graph.locator("[data-icon-name]")).toHaveCount(5);
+  await expect(graph).toHaveAttribute("data-zoom", "1");
+
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await expect(graph).toHaveAttribute("data-zoom", "1.5");
+  await page.getByRole("button", { name: "Zoom out" }).click();
+  await expect(graph).toHaveAttribute("data-zoom", "1");
+  await page.getByRole("button", { name: "Zoom in" }).click();
+  await page.getByRole("button", { name: "Reset view" }).click();
+  await expect(graph).toHaveAttribute("data-zoom", "1");
+
+  const frontend = graph.locator('[data-node-id="frontend"]');
+  await frontend.click();
+  await expect(page).toHaveURL(/view=Graph/);
+  await expect(page).toHaveURL(/resource=frontend/);
+  await expect(page.getByRole("dialog", { name: "frontend" })).toBeVisible();
+  await page.getByRole("dialog", { name: "frontend" }).getByRole("button", { name: "Close" }).click();
+
+  await frontend.click({ button: "right" });
+  const contextMenu = page.getByRole("menu", { name: "Resource graph actions" });
+  await expect(contextMenu.getByRole("menuitem")).toHaveText(["View details", "Start", "Stop", "Restart", "Scale…"]);
+  await expect(contextMenu.getByRole("menuitem", { name: "Start", exact: true })).toBeDisabled();
+  await contextMenu.getByRole("menuitem", { name: "View details" }).click();
+  await expect(page.getByRole("dialog", { name: "frontend" })).toBeVisible();
+  await attachScreenshot(page, testInfo, "dashboard-resource-graph");
+  await page.getByRole("dialog", { name: "frontend" }).getByRole("button", { name: "Close" }).click();
+
+  await page.reload();
+  await expect(page.getByRole("group", { name: "Resource graph" })).toBeVisible();
+  await page.getByRole("button", { name: "Table view" }).click();
+  await expect(page).not.toHaveURL(/view=Graph/);
+  await expect(page.getByRole("table")).toBeVisible();
+});
+
 test(`${features("RES-DETAILS-001", "RES-SECRETS-001")} inspects resource details with secure defaults`, async ({ page }) => {
   await page.getByRole("row", { name: /frontend/ }).click();
   const dialog = page.getByRole("dialog", { name: "frontend" });

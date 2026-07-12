@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import {
   Accordion,
   Badge,
@@ -13,6 +13,7 @@ import {
   EmptyState,
   FilterIcon,
   FilterMenu,
+  ForceGraph,
   IconButton,
   Highlighter,
   MoonIcon,
@@ -32,6 +33,7 @@ import {
   PropertyExplorer,
   PropertyGrid,
   ResourcesIcon,
+  ResetViewIcon,
   ResourceTypeIcon,
   RestartIcon,
   SearchBox,
@@ -43,9 +45,12 @@ import {
   Switch,
   Tabs,
   TextViewerDialog,
+  ZoomInIcon,
+  ZoomOutIcon,
   type Column,
   type ConfirmRequest,
   type DeckTheme,
+  type ForceGraphHandle,
   type TextViewerRequest,
 } from "../toolkit";
 
@@ -115,6 +120,8 @@ export function ToolkitPlayground({
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
   const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
   const [hiddenSampleTypes, setHiddenSampleTypes] = useState<string[]>([]);
+  const [selectedGraphNode, setSelectedGraphNode] = useState<string | null>(null);
+  const graphRef = useRef<ForceGraphHandle | null>(null);
   const iconNames = useMemo(getIconNames, []);
 
   const filteredResources = useMemo(() => {
@@ -191,6 +198,37 @@ export function ToolkitPlayground({
                 </div>
               </PageBody>
             </Page>
+          </div>
+        </section>
+
+        <section className="toolkit-section" aria-labelledby="toolkit-graph-title">
+          <div className="toolkit-section__heading">
+            <h2 id="toolkit-graph-title">Force graph</h2>
+            <span role="status">{selectedGraphNode ? `Selected ${selectedGraphNode}` : "No graph selection"}</span>
+          </div>
+          <div className="toolkit-graph-sample">
+            <ForceGraph
+              ref={graphRef}
+              ariaLabel="Sample force graph"
+              selectedId={selectedGraphNode}
+              onSelect={setSelectedGraphNode}
+              nodes={resources.map((resource) => ({
+                id: resource.name,
+                label: resource.name,
+                description: `${resource.type}, ${resource.state}`,
+                tone: resource.health === "Healthy" ? "success" : resource.health === "Degraded" ? "warning" : "info",
+                icon: <ResourceTypeIcon type={resource.type} size={32} />,
+              }))}
+              edges={[
+                { source: "frontend", target: "catalog-db" },
+                { source: "migration", target: "catalog-db" },
+              ]}
+            />
+            <div className="toolkit-graph-sample__controls" role="toolbar" aria-label="Sample graph controls">
+              <IconButton label="Sample zoom in" icon={<ZoomInIcon size={16} />} onClick={() => graphRef.current?.zoomIn()} />
+              <IconButton label="Sample zoom out" icon={<ZoomOutIcon size={16} />} onClick={() => graphRef.current?.zoomOut()} />
+              <IconButton label="Sample reset view" icon={<ResetViewIcon size={16} />} onClick={() => graphRef.current?.reset()} />
+            </div>
           </div>
         </section>
 
