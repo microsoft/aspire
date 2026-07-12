@@ -172,6 +172,19 @@ test(`${features("parameters")} inventories parameter states and secure reveal`,
   await filter.fill("api-key");
   await expect(table.getByText("api-key", { exact: true })).toBeVisible();
   await expect(table.getByText("db-connection-string", { exact: true })).toHaveCount(0);
+  await filter.fill("");
+
+  const enterValues = page.getByRole("button", { name: "Enter values", exact: true });
+  if (await enterValues.isVisible()) {
+    await enterValues.click();
+    const interaction = page.getByRole("dialog", { name: "Set unresolved parameters", exact: true });
+    await interaction.getByPlaceholder("Enter value for api-key", { exact: true }).fill("legacy-api-key");
+    await interaction.getByPlaceholder("Enter value for db-connection-string", { exact: true }).fill("Server=legacy;Database=stress");
+    await interaction.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(interaction).toHaveCount(0);
+  }
+  await expect(table.getByRole("row").filter({ hasText: "api-key" })).not.toContainText("Value not set");
+  await expect(table.getByRole("row").filter({ hasText: "db-connection-string" })).not.toContainText("Value not set");
   await attachScreenshot(page, testInfo, "legacy-parameters");
 });
 
@@ -259,6 +272,7 @@ test(`${features("console")} inventories console streaming controls`, async ({ p
 });
 
 test(`${features("structured-logs")} inventories structured log controls and rows`, async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   await page.goto("/structuredlogs");
   await expect(page.getByRole("textbox", { name: "Filter...", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add filter", exact: true })).toBeVisible();
@@ -269,7 +283,8 @@ test(`${features("structured-logs")} inventories structured log controls and row
   for (const header of ["Resource", "Level", "Timestamp", "Message", "Trace", "Actions"]) {
     await expect(page.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
   }
-  await expect(page.getByText("No structured logs found", { exact: true })).toBeVisible();
+  const table = page.getByRole("table");
+  await expect(table.getByRole("row").filter({ hasText: "Stress.ApiService" }).first()).toBeVisible({ timeout: 45_000 });
   await attachScreenshot(page, testInfo, "legacy-structured-logs");
 });
 
