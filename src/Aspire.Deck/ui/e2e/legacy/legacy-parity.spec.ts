@@ -540,6 +540,38 @@ test(`${features("trace-details")} verifies error events and linked span navigat
   await expect(page.getByRole("table").getByText("trace-fixture-linked-target", { exact: true })).toBeVisible();
 });
 
+test(`${features("trace-session")} restores trace resource type filters and selection`, async ({ page }) => {
+  await page.goto("/traces");
+  const resource = page.getByRole("combobox", { name: /^(Resource|Select a resource)$/ });
+  await resource.click();
+  await page.getByRole("option", { name: "Stress.ApiService", exact: true }).click();
+  const type = page.getByRole("combobox", { name: "Type", exact: true });
+  await type.selectOption({ label: "(Other)" });
+
+  await page.getByRole("button", { name: "Add filter", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Add filter", exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "Value", exact: true }).fill("trace-fixture-error");
+  await page.getByRole("button", { name: "Apply filter", exact: true }).click();
+  await expect.poll(() => page.url()).toContain("filters=");
+  const traceListUrl = page.url();
+  expect(traceListUrl).toContain("type=other");
+
+  await page.reload();
+  await expect(page).toHaveURL(traceListUrl);
+  await expect(resource).toHaveAttribute("current-value", "Stress.ApiService");
+  await expect(type.locator("option:checked")).toHaveText("(Other)");
+  await expect(page.locator(".traces-toolbar").getByText("1", { exact: true })).toBeVisible();
+
+  const traceRow = page.getByRole("table").getByRole("row").filter({ hasText: "trace-fixture-error" });
+  await expect(traceRow).toBeVisible();
+  await traceRow.getByRole("cell").first().click();
+  await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}$/);
+  await page.goBack();
+  await expect(page).toHaveURL(traceListUrl);
+  await expect(resource).toHaveAttribute("current-value", "Stress.ApiService");
+  await expect(type.locator("option:checked")).toHaveText("(Other)");
+});
+
 test(`${features("metrics")} inventories metric controls and empty state`, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await page.goto("/");

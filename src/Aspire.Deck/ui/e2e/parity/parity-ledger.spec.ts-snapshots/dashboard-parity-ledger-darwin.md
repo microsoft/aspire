@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 23
+- Legacy black-box scenarios pending: 22
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -149,7 +149,7 @@
 | TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | trace-details | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |
 | TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-GENAI-001 | GenAI spans and traces open the dedicated GenAI visualizer. |
 | TRACE-EXPLAIN-001 | traces | `/traces` | PENDING | covered | TRACE-EXPLAIN-001 | Explain errors summarizes current failed traces through the assistant. |
-| TRACE-SESSION-001 | traces | `/traces` | PENDING | covered | TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001 | Resource, type, filters, and selection are deep-linkable and restorable. |
+| TRACE-SESSION-001 | traces | `/traces` | trace-session | covered | TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001 | Resource, type, filters, and selection are deep-linkable and restorable. |
 | METRIC-RESOURCE-001 | metrics | `/metrics` | metrics | covered | METRIC-RESOURCE-001; METRIC-SESSION-001 | Metrics require and preserve a selected telemetry resource. |
 | METRIC-TREE-001 | metrics | `/metrics` | metrics | covered | METRIC-TREE-001 | Meters and instruments render in a hierarchical selector. |
 | METRIC-METADATA-001 | metrics | `/metrics` | metrics | covered | METRIC-METADATA-001 | Instrument name, description, displayed unit, histogram mode, and containing meter are visible. |
