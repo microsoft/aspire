@@ -13,6 +13,22 @@ internal sealed record DeckConfig(
     bool IsTelemetryEndpointUnsecured,
     bool IsApiEndpointUnsecured);
 
+internal sealed record DeckManageDataResponse(
+    DeckManageDataResource[] Resources,
+    bool IsImportEnabled);
+
+internal sealed record DeckManageDataResource(
+    string Name,
+    string DisplayName,
+    string[] DataTypes);
+
+internal sealed record DeckManageDataRequest(
+    DeckManageDataSelection[] Resources);
+
+internal sealed record DeckManageDataSelection(
+    string ResourceName,
+    string[] DataTypes);
+
 internal sealed record DeckResource(
     string Name,
     string ResourceType,

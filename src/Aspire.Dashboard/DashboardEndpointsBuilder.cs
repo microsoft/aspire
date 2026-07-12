@@ -6,6 +6,7 @@ using System.Text.Json;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
 using Aspire.Shared.ConsoleLogs;
@@ -137,6 +138,144 @@ public static class DashboardEndpointsBuilder
                 .ToArray();
 
             return Results.Json(resources, DeckApiJsonSerializerContext.Default.DeckResourceArray);
+        });
+
+        group.MapGet("/manage-data", (
+            HttpContext httpContext,
+            IDashboardClient dashboardClient,
+            TelemetryRepository telemetryRepository,
+            TelemetryImportService telemetryImportService) =>
+        {
+            httpContext.Response.Headers.CacheControl = "no-store";
+            var resources = dashboardClient.GetResources()
+                .ToDictionary(
+                    resource => resource.Name,
+                    resource => new DeckManageDataResource(
+                        resource.Name,
+                        resource.DisplayName,
+                        [nameof(AspireDataType.ResourceDetails), nameof(AspireDataType.ConsoleLogs)]),
+                    StringComparers.ResourceName);
+
+            foreach (var otlpResource in telemetryRepository.GetResources())
+            {
+                var name = otlpResource.ResourceKey.GetCompositeName();
+                var telemetryTypes = new List<string>();
+                if (otlpResource.HasLogs)
+                {
+                    telemetryTypes.Add(nameof(AspireDataType.StructuredLogs));
+                }
+                if (otlpResource.HasTraces)
+                {
+                    telemetryTypes.Add(nameof(AspireDataType.Traces));
+                }
+                if (otlpResource.HasMetrics)
+                {
+                    telemetryTypes.Add(nameof(AspireDataType.Metrics));
+                }
+
+                if (resources.TryGetValue(name, out var resource))
+                {
+                    resources[name] = resource with { DataTypes = [.. resource.DataTypes, .. telemetryTypes] };
+                }
+                else
+                {
+                    resources[name] = new DeckManageDataResource(name, name, [.. telemetryTypes]);
+                }
+            }
+
+            var response = new DeckManageDataResponse(
+                [.. resources.Values.OrderBy(resource => resource.DisplayName, StringComparers.ResourceName)],
+                telemetryImportService.IsImportEnabled);
+            return Results.Json(response, DeckApiJsonSerializerContext.Default.DeckManageDataResponse);
+        });
+
+        group.MapPost("/manage-data/export", async (
+            HttpContext httpContext,
+            TelemetryExportService exportService) =>
+        {
+            var request = await httpContext.Request.ReadFromJsonAsync(
+                DeckApiJsonSerializerContext.Default.DeckManageDataRequest,
+                httpContext.RequestAborted).ConfigureAwait(false);
+            if (request is null)
+            {
+                return Results.BadRequest();
+            }
+
+            var selectedResources = MapManageDataSelections(request);
+            using var export = await exportService.ExportSelectedAsync(selectedResources, httpContext.RequestAborted).ConfigureAwait(false);
+            var fileName = $"aspire-telemetry-export-{DateTime.UtcNow:yyyyMMdd-HHmmss}.zip";
+            return Results.File(export.ToArray(), "application/zip", fileName);
+        });
+
+        group.MapPost("/manage-data/import", async (
+            HttpContext httpContext,
+            TelemetryImportService importService) =>
+        {
+            const long maximumFileSize = 100 * 1024 * 1024;
+            var maximumBodySize = httpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+            if (maximumBodySize is { IsReadOnly: false })
+            {
+                maximumBodySize.MaxRequestBodySize = maximumFileSize;
+            }
+            if (!importService.IsImportEnabled)
+            {
+                return Results.NotFound();
+            }
+            if (httpContext.Request.ContentLength is > maximumFileSize)
+            {
+                return Results.BadRequest("The import file exceeds the 100 MB limit.");
+            }
+            if (!httpContext.Request.Headers.TryGetValue("X-Aspire-File-Name", out var fileName) || string.IsNullOrWhiteSpace(fileName))
+            {
+                return Results.BadRequest("The X-Aspire-File-Name header is required.");
+            }
+
+            var safeFileName = Path.GetFileName(fileName.ToString());
+            var extension = Path.GetExtension(safeFileName).ToLowerInvariant();
+            if (extension is not (".zip" or ".json"))
+            {
+                return Results.BadRequest("Only .zip and .json telemetry imports are supported.");
+            }
+
+            await importService.ImportAsync(safeFileName, httpContext.Request.Body, httpContext.RequestAborted).ConfigureAwait(false);
+            return Results.NoContent();
+        });
+
+        group.MapPost("/manage-data/remove", async (
+            HttpContext httpContext,
+            TelemetryRepository telemetryRepository,
+            ConsoleLogsManager consoleLogsManager,
+            BrowserTimeProvider timeProvider,
+            IDashboardClient dashboardClient) =>
+        {
+            var request = await httpContext.Request.ReadFromJsonAsync(
+                DeckApiJsonSerializerContext.Default.DeckManageDataRequest,
+                httpContext.RequestAborted).ConfigureAwait(false);
+            if (request is null)
+            {
+                return Results.BadRequest();
+            }
+
+            var selectedResources = MapManageDataSelections(request);
+            telemetryRepository.ClearSelectedSignals(selectedResources);
+
+            var consoleResources = selectedResources
+                .Where(selection => selection.Value.Contains(AspireDataType.ConsoleLogs))
+                .Select(selection => selection.Key)
+                .ToArray();
+            if (dashboardClient.IsEnabled && consoleResources.Length > 0)
+            {
+                await consoleLogsManager.EnsureInitializedAsync().ConfigureAwait(false);
+                var filters = consoleLogsManager.Filters;
+                var clearedAt = timeProvider.GetUtcNow().UtcDateTime;
+                foreach (var resourceName in consoleResources)
+                {
+                    filters = filters.WithResourceCleared(resourceName, clearedAt);
+                }
+                await consoleLogsManager.UpdateFiltersAsync(filters).ConfigureAwait(false);
+            }
+
+            return Results.NoContent();
         });
 
         group.MapGet("/interactions", (HttpContext httpContext, DeckInteractionService interactionService) =>
@@ -586,6 +725,32 @@ public static class DashboardEndpointsBuilder
         {
             // Client disconnected - this is expected, exit cleanly
         }
+    }
+
+    private static Dictionary<string, HashSet<AspireDataType>> MapManageDataSelections(DeckManageDataRequest request)
+    {
+        var result = new Dictionary<string, HashSet<AspireDataType>>(StringComparers.ResourceName);
+        foreach (var selection in request.Resources)
+        {
+            if (string.IsNullOrWhiteSpace(selection.ResourceName))
+            {
+                continue;
+            }
+
+            if (!result.TryGetValue(selection.ResourceName, out var dataTypes))
+            {
+                dataTypes = [];
+                result.Add(selection.ResourceName, dataTypes);
+            }
+            foreach (var value in selection.DataTypes)
+            {
+                if (Enum.TryParse<AspireDataType>(value, ignoreCase: false, out var dataType))
+                {
+                    dataTypes.Add(dataType);
+                }
+            }
+        }
+        return result;
     }
 
     private static async Task StreamDeckConsoleLogsAsync(

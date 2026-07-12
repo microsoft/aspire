@@ -9,6 +9,8 @@ namespace Aspire.Dashboard.Api;
 // would make this endpoint harder to move into the standalone dashboard backend later.
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(DeckConfig))]
+[JsonSerializable(typeof(DeckManageDataResponse))]
+[JsonSerializable(typeof(DeckManageDataRequest))]
 [JsonSerializable(typeof(DeckResource[]))]
 [JsonSerializable(typeof(DeckExecuteCommandRequest))]
 [JsonSerializable(typeof(DeckCommandResponse))]

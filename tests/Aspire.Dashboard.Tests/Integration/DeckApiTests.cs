@@ -65,6 +65,63 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ManageData_InventoryExportImportAndRemoveUseDeckContract()
+    {
+        var resource = CreateResource();
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.Services.AddSingleton<IDashboardClient>(
+                new TestDashboardClient(
+                    isEnabled: true,
+                    resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+                    initialResources: [resource])));
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        var inventoryResponse = await httpClient.GetAsync("/api/deck/manage-data").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, inventoryResponse.StatusCode);
+        var inventory = JsonNode.Parse(await inventoryResponse.Content.ReadAsStringAsync().DefaultTimeout());
+        var expectedInventory = JsonNode.Parse(
+            """
+            {
+              "resources": [
+                {
+                  "name": "frontend-abc123",
+                  "displayName": "frontend",
+                  "dataTypes": ["ResourceDetails", "ConsoleLogs"]
+                }
+              ],
+              "isImportEnabled": true
+            }
+            """);
+        Assert.True(JsonNode.DeepEquals(expectedInventory, inventory), $"Expected:{Environment.NewLine}{expectedInventory}{Environment.NewLine}Actual:{Environment.NewLine}{inventory}");
+
+        const string selection =
+            """
+            {"resources":[{"resourceName":"frontend-abc123","dataTypes":["ResourceDetails"]}]}
+            """;
+        using var exportResponse = await httpClient.PostAsync(
+            "/api/deck/manage-data/export",
+            new StringContent(selection, Encoding.UTF8, "application/json")).DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, exportResponse.StatusCode);
+        Assert.Equal("application/zip", exportResponse.Content.Headers.ContentType?.MediaType);
+        Assert.StartsWith("aspire-telemetry-export-", exportResponse.Content.Headers.ContentDisposition?.FileNameStar);
+        var archive = await exportResponse.Content.ReadAsByteArrayAsync().DefaultTimeout();
+        Assert.True(archive.AsSpan().StartsWith("PK"u8));
+
+        using var importContent = new StringContent("{}", Encoding.UTF8, "application/json");
+        importContent.Headers.Add("X-Aspire-File-Name", "telemetry.json");
+        using var importResponse = await httpClient.PostAsync("/api/deck/manage-data/import", importContent).DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NoContent, importResponse.StatusCode);
+
+        using var removeResponse = await httpClient.PostAsync(
+            "/api/deck/manage-data/remove",
+            new StringContent(selection, Encoding.UTF8, "application/json")).DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NoContent, removeResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task GetResources_ReturnsDeckResourceContract()
     {
         var resource = CreateResource();
