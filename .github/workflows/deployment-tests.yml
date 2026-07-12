@@ -410,6 +410,15 @@ jobs:
       pull-requests: write
       actions: read
     steps:
+      - name: Record job start time
+        shell: bash
+        # Anchor the upload budget (below) to job start rather than to the start of the
+        # upload block. timeout-minutes is measured from job start, and the preceding
+        # artifact download / extraction / pip install steps also consume that budget,
+        # so deriving the upload deadline from here guarantees posting time is reserved
+        # regardless of how long those earlier steps take.
+        run: echo "JOB_START_EPOCH=$(date +%s)" >> "$GITHUB_ENV"
+
       - name: Get job results and download recording artifacts
         id: get_results
         uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
@@ -579,14 +588,22 @@ jobs:
             MAX_UPLOAD_RETRIES=5
             RETRY_BASE_DELAY_SECONDS=30
 
-            # Global budget for ALL uploads combined. The job has timeout-minutes: 20,
-            # and a single recording's worst case (5 x 120s timeout + 30+60+90+120s
-            # backoff = 15m) could otherwise consume the whole cap before the results
-            # comment is posted — worse with multiple recordings. Cap total upload time
-            # so the remainder of the job budget is always reserved for comment posting;
-            # any recordings still pending when the deadline passes are marked FAILED.
-            GLOBAL_UPLOAD_BUDGET_SECONDS=720
-            UPLOAD_DEADLINE=$(( $(date +%s) + GLOBAL_UPLOAD_BUDGET_SECONDS ))
+            # Global budget for ALL uploads combined, anchored to the job start so the
+            # time already spent downloading/extracting artifacts and installing asciinema
+            # counts against it. The job has timeout-minutes: 20; we cut uploads off 15
+            # minutes into the job, always reserving ~5 minutes to post the results comment.
+            # Without this, a single recording's worst case (5 x 120s timeout + 30+60+90+120s
+            # backoff = 15m) — worse with multiple recordings — could consume the whole cap
+            # before the comment is posted. Any recordings still pending at the deadline are
+            # marked FAILED. If earlier steps already blew the 15m mark, the deadline is
+            # already in the past and every upload is skipped so posting still happens.
+            UPLOAD_CUTOFF_SECONDS_INTO_JOB=900
+            if [ -n "${JOB_START_EPOCH:-}" ]; then
+              UPLOAD_DEADLINE=$(( JOB_START_EPOCH + UPLOAD_CUTOFF_SECONDS_INTO_JOB ))
+            else
+              # Fallback if the job-start timestamp is unavailable for any reason.
+              UPLOAD_DEADLINE=$(( $(date +%s) + 720 ))
+            fi
 
             UPLOAD_COUNT=0
             for castfile in "$RECORDINGS_DIR"/*.cast; do
