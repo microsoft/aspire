@@ -17,8 +17,9 @@ namespace Aspire.Cli.EndToEnd.Tests;
 /// asserts the container is actually scheduled and serving HTTP.
 ///
 /// This gives per-PR, local coverage of the Radius deploy flow alongside the
-/// live Azure/AKS test (<c>Aspire.Deployment.EndToEnd.Tests</c>), which only
-/// runs on demand.
+/// live Azure/AKS test (<c>Aspire.Deployment.EndToEnd.Tests</c>), which runs on
+/// demand (<c>workflow_dispatch</c>) and nightly (the <c>deployment-tests.yml</c>
+/// schedule), not on every PR.
 ///
 /// A public image (<c>mcr.microsoft.com/dotnet/samples:aspnetapp</c>) is used
 /// so the KinD node pulls it directly from MCR. That intentionally avoids the
@@ -102,8 +103,10 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             // Insert the Radius wiring before `builder.Build().Run();`. AddRadiusEnvironment,
             // WithNamespace, AddContainer, and WithHttpEndpoint are all non-[Experimental],
             // so no ASPIRERADIUS*/ASPIREPIPELINES* suppression is needed. WithHttpEndpoint's
-            // targetPort drives the container port that the Radius publisher emits (and thus
-            // the port of the Service the recipe creates).
+            // targetPort drives the container port the Radius publisher emits on the native
+            // Radius.Compute/containers workload. Radius does not synthesize a Kubernetes Service
+            // for that workload, so Phase 5 reaches it by port-forwarding straight to the
+            // Deployment rather than through a Service.
             var appHostFilePath = Path.Combine(
                 workspace.WorkspaceRoot.FullName,
                 ProjectName,

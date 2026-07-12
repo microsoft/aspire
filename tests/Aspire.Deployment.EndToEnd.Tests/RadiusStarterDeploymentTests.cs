@@ -202,16 +202,20 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // "failed to initialize Kubernetes client config: open ~/.kube/config: no such file or directory".
             // Point the default path at our isolated kubeconfig so `rad` finds the AKS context.
             //
-            // Back up a developer's real ~/.kube/config first (a non-symlink file), then force the
-            // symlink so `rad install` can never read the developer's current-context cluster on a
-            // local run. The RestoreDefaultKubeConfig call in `finally` moves the backup back (or
-            // removes our symlink when none existed, e.g. on the ephemeral CI runner), so the
-            // developer's kube state is never left pointing at the deleted cluster or dangling into
-            // the deleted workspace — even if the test fails.
+            // Before overwriting the path, snapshot whatever was there so cleanup can restore it
+            // exactly. `cp -a` keeps a symlink a symlink (-d/--no-dereference) instead of copying
+            // its target, so a pre-existing link is backed up intact, and the `[ -e ] || [ -L ]`
+            // test also catches a dangling link (`-e` is false for a broken symlink). A marker file
+            // records that this test actually took over the path: provisioning can fail earlier,
+            // before Step 8b runs, and cleanup must not touch the developer's kubeconfig in that
+            // case. RestoreDefaultKubeConfig in `finally` uses the marker + backup to put the
+            // original back (file, symlink, or nothing) so a local run is never left pointing at the
+            // deleted cluster or dangling into the deleted workspace — even if the test fails.
             output.WriteLine("Step 8b: Linking default kubeconfig path for rad install...");
             await auto.TypeAsync(
                 "mkdir -p \"$HOME/.kube\" && " +
-                $"{{ [ -e \"$HOME/.kube/config\" ] && [ ! -L \"$HOME/.kube/config\" ] && cp -a \"$HOME/.kube/config\" \"{wsRoot}/kube-default.bak\" || true; }} && " +
+                $"{{ {{ [ -e \"$HOME/.kube/config\" ] || [ -L \"$HOME/.kube/config\" ]; }} && cp -a \"$HOME/.kube/config\" \"{wsRoot}/kube-default.bak\" || true; }} && " +
+                $"touch \"{wsRoot}/kube-shadowed.marker\" && " +
                 "ln -sf \"$KUBECONFIG\" \"$HOME/.kube/config\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
@@ -518,15 +522,27 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// Reverses the Step 8b default-kubeconfig shadow. If a real <c>~/.kube/config</c> existed
-    /// before the run it was copied to <c>&lt;workspace&gt;/kube-default.bak</c>; move it back.
-    /// Otherwise remove only the symlink we created (never a real file a concurrent process may
-    /// have written). Best-effort: cleanup must not mask a test failure.
+    /// Reverses the Step 8b default-kubeconfig shadow, restoring exactly what was there before.
+    /// Only acts when Step 8b actually ran (its <c>kube-shadowed.marker</c> is present); if
+    /// provisioning failed earlier the developer's <c>~/.kube/config</c> was never touched and is
+    /// left alone. When a backup exists it is moved back verbatim — <c>cp -a</c> preserved a
+    /// regular file as a file and a symlink as a symlink, so a pre-existing link is not turned into
+    /// a copy or dropped. When no backup exists nothing was there before, so only our own symlink
+    /// is removed. Best-effort: cleanup must not mask a test failure.
     /// </summary>
     private void RestoreDefaultKubeConfig(string workspaceRoot)
     {
         try
         {
+            // Provisioning can fail before Step 8b runs. Without this guard the no-backup branch
+            // below would delete a developer's own pre-existing ~/.kube/config symlink that this
+            // test never created.
+            var marker = Path.Combine(workspaceRoot, "kube-shadowed.marker");
+            if (!File.Exists(marker))
+            {
+                return;
+            }
+
             var home = Environment.GetEnvironmentVariable("HOME")
                 ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
             if (string.IsNullOrEmpty(home))
@@ -537,17 +553,20 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             var defaultKubeConfig = Path.Combine(home, ".kube", "config");
             var backup = Path.Combine(workspaceRoot, "kube-default.bak");
 
-            if (File.Exists(backup))
+            // Remove the symlink Step 8b created (Delete on a symlink removes the link, not its
+            // target). LinkTarget is non-null for a symlink even when it dangles, so this also
+            // clears a link left pointing into the about-to-be-deleted workspace.
+            var current = new FileInfo(defaultKubeConfig);
+            if (current.Exists || current.LinkTarget is not null)
             {
-                File.Move(backup, defaultKubeConfig, overwrite: true);
+                current.Delete();
             }
-            else
+
+            // Put the original back verbatim if Step 8b captured one.
+            var backupInfo = new FileInfo(backup);
+            if (backupInfo.Exists || backupInfo.LinkTarget is not null)
             {
-                var info = new FileInfo(defaultKubeConfig);
-                if (info.Exists && info.LinkTarget is not null)
-                {
-                    info.Delete();
-                }
+                File.Move(backup, defaultKubeConfig);
             }
         }
         catch (Exception ex)
