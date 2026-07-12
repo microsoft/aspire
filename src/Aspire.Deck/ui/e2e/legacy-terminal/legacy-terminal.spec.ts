@@ -23,6 +23,24 @@ test.afterEach(async ({ page }) => {
   expect(browserErrors.get(page) ?? [], "Unexpected browser errors").toEqual([]);
 });
 
+test("[SHELL-UNSECURED-001] warns about unsecured endpoints and persists dismissal", async ({ page }) => {
+  await page.goto("/");
+
+  const warning = page.locator(".fluent-messagebar").filter({ hasText: "Endpoint is unsecured" });
+  await expect(warning).toContainText("Untrusted apps can send telemetry to the dashboard.");
+  await expect(warning).toContainText("Untrusted apps can access telemetry data via the API.");
+  await expect(warning.getByRole("link", { name: "More information", exact: true }))
+    .toHaveAttribute("href", "https://aka.ms/aspire/api-endpoint-unsecured");
+
+  await warning.locator(".fluent-messagebar-close").click();
+  await expect(warning).toBeHidden();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("Aspire_Security_UnsecuredEndpointMessageDismissed")))
+    .toBe("true");
+
+  await page.reload();
+  await expect(page.locator(".fluent-messagebar").filter({ hasText: "Endpoint is unsecured" })).toHaveCount(0);
+});
+
 test("[CONSOLE-TERMINAL-001, CONSOLE-TERMINAL-FONT-001, CONSOLE-TERMINAL-SIZE-001] controls a live legacy terminal", async ({ page }, testInfo: TestInfo) => {
   await page.goto(`/consolelogs/resource/${encodeURIComponent(terminalResource)}`);
 

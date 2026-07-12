@@ -6,6 +6,8 @@
 #pragma warning disable ASPIRETERMINAL001
 
 var builder = DistributedApplication.CreateBuilder(args);
+builder.Configuration["AppHost:OtlpApiKey"] = null;
+builder.Configuration["AppHost:DashboardApiKey"] = null;
 
 // A multi-replica project that calls `WithTerminal()` so each replica gets its
 // own pseudo-terminal and the dashboard can attach to any of them via
@@ -66,8 +68,8 @@ else
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard)
+    .WithEnvironment("DASHBOARD__OTLP__AUTHMODE", "Unsecured");
 #endif
 
 builder.Build().Run();
-
