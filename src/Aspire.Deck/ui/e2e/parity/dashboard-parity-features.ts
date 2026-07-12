@@ -209,7 +209,7 @@ const featureDefinitions = {
     ["METRIC-CHART-001", "/metrics", "Instrument samples render as an interactive time-series chart.", null, "covered", "METRIC-CHART-001; METRIC-CURSOR-001; METRIC-ZOOM-001"],
     ["METRIC-TABLE-001", "/metrics", "Metric data can switch between chart and table representations.", null, "covered", "METRIC-TABLE-001; METRIC-SESSION-001"],
     ["METRIC-DIMENSIONS-001", "/metrics", "Dimension filters and multiple attribute series are discoverable and selectable.", null, "covered", "METRIC-DIMENSIONS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries"],
-    ["METRIC-HISTOGRAM-001", "/metrics", "Histogram count, sum, buckets, and percentile views preserve aggregation semantics.", null, "partial", "METRIC-CHART-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries (count and percentiles; raw sum and buckets remain)"],
+    ["METRIC-HISTOGRAM-001", "/metrics", "Histogram count, sum, buckets, and percentile views preserve aggregation semantics.", null, "covered", "METRIC-HISTOGRAM-001; HTTP-METRICS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries; ChartDataCalculatorTests.TryCalculateHistogramAggregatePoint_ReturnsCumulativeDeltas"],
     ["METRIC-EXEMPLARS-001", "/metrics", "Metric exemplars expose values, timestamps, attributes, and related trace navigation.", null, "covered", "METRIC-EXEMPLARS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries"],
     ["METRIC-CURSOR-001", "/metrics", "Hovering charts exposes aligned timestamp and series values.", null, "covered", "METRIC-CURSOR-001"],
     ["METRIC-ZOOM-001", "/metrics", "Dragging to zoom preserves inspection state and pauses live updates.", null, "covered", "METRIC-ZOOM-001"],

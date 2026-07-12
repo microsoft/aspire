@@ -718,7 +718,7 @@ test(`${features("TRACE-CLEAR-001")} clears selected and all trace telemetry`, a
   await expect(tracesPage).toContainText("No traces match your filter.");
 });
 
-test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", "METRIC-TREE-001", "METRIC-METADATA-001", "METRIC-CHART-001", "METRIC-CURSOR-001", "METRIC-PAUSE-001", "METRIC-RANGE-001", "METRIC-TABLE-001", "METRIC-DIMENSIONS-001", "METRIC-EXEMPLARS-001", "METRIC-ROUTES-001", "METRIC-SESSION-001", "METRIC-ZOOM-001")} explores and restores live metric series`, async ({ page }, testInfo) => {
+test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", "METRIC-TREE-001", "METRIC-METADATA-001", "METRIC-CHART-001", "METRIC-HISTOGRAM-001", "METRIC-CURSOR-001", "METRIC-PAUSE-001", "METRIC-RANGE-001", "METRIC-TABLE-001", "METRIC-DIMENSIONS-001", "METRIC-EXEMPLARS-001", "METRIC-ROUTES-001", "METRIC-SESSION-001", "METRIC-ZOOM-001")} explores and restores live metric series`, async ({ page }, testInfo) => {
   await page.getByRole("button", { name: "Dismiss notification" }).click();
   await navigationButton(page, "Metrics").click();
 
@@ -757,14 +757,21 @@ test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", 
   await expect(dimensionFilters.getByRole("checkbox", { name: "GET" })).toBeChecked();
   await dimensionFilters.getByRole("checkbox", { name: "POST" }).uncheck();
 
-  const showCount = detail.getByRole("checkbox", { name: "Show count" });
-  await showCount.check();
+  const aggregation = detail.getByRole("group", { name: "Histogram aggregation" });
+  await aggregation.getByRole("button", { name: "Count" }).click();
   await expect(page).toHaveURL(/histogram=count/);
   await detail.getByRole("tab", { name: "Table" }).click();
   await expect(detail.locator(".metric-series-table").getByRole("columnheader")).toHaveText(["Time", "Count"]);
+  await aggregation.getByRole("button", { name: "Sum" }).click();
+  await expect(page).toHaveURL(/histogram=sum/);
+  await expect(detail.locator(".metric-series-table").getByRole("columnheader")).toHaveText(["Time", "Sum"]);
+  await aggregation.getByRole("button", { name: "Buckets" }).click();
+  await expect(page).toHaveURL(/histogram=buckets/);
+  await expect(detail.locator(".metric-series-table").getByRole("columnheader")).toHaveText(["Time", "≤ 25", "≤ 50", "≤ 100", "+Inf"]);
+  await aggregation.getByRole("button", { name: "Percentiles" }).click();
+  await expect(page).not.toHaveURL(/histogram=/);
+  await expect(detail.locator(".metric-series-table").getByRole("columnheader")).toHaveText(["Time", "p50", "p90", "p99"]);
   await detail.getByRole("tab", { name: "Chart" }).click();
-  await showCount.uncheck();
-  await expect(page).not.toHaveURL(/histogram=count/);
 
   const chart = detail.locator(".metric-chart");
   await expect(chart).toBeVisible();

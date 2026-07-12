@@ -1171,6 +1171,7 @@ test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, an
     const url = new URL(route.request().url());
     seriesRequests.push(Object.fromEntries(url.searchParams));
     const isHistogram = url.searchParams.get("instrument") === "http.server.request.duration";
+    const histogramMode = url.searchParams.get("histogramMode") ?? "percentiles";
     await route.fulfill({
       json: isHistogram
         ? {
@@ -1180,9 +1181,22 @@ test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, an
             unit: "ms",
             kind: "histogram",
             timestampsMs: [1_783_670_400_000, 1_783_670_401_000, 1_783_670_402_000],
-            p50: [30, 35, 40],
-            p90: [45, 50, 55],
-            p99: [60, 65, 70],
+            histogramMode,
+            ...(histogramMode === "count" ? { values: [3, 4, 5], showCount: true } : {}),
+            ...(histogramMode === "sum" ? { sum: [90, 120, 150] } : {}),
+            ...(histogramMode === "buckets" ? {
+              bucketBounds: [25, 50],
+              buckets: [
+                { upperBound: 25, values: [1, 2, 2] },
+                { upperBound: 50, values: [2, 1, 2] },
+                { upperBound: null, values: [0, 1, 1] },
+              ],
+            } : {}),
+            ...(histogramMode === "percentiles" ? {
+              p50: [30, 35, 40],
+              p90: [45, 50, 55],
+              p99: [60, 65, 70],
+            } : {}),
             dimensionFilters: [{ name: "http.method", values: ["GET", "POST"] }],
             dimensions: [],
             exemplars: [],
@@ -1227,7 +1241,14 @@ test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, an
     instrument: "http.server.request.duration",
     windowSeconds: "300",
     maxPoints: "600",
+    histogramMode: "percentiles",
   });
+  const aggregation = metrics.getByRole("group", { name: "Histogram aggregation" });
+  for (const mode of ["Count", "Sum", "Buckets"] as const) {
+    await aggregation.getByRole("button", { name: mode }).click();
+    await expect.poll(() => seriesRequests.some((request) => request.histogramMode === mode.toLowerCase())).toBe(true);
+    await expect(metrics.locator(".metric-chart canvas")).toBeVisible();
+  }
   await page.goto(
     "/metrics/resource/stress-api/meter/OpenTelemetry.Instrumentation.AspNetCore/instrument/http.server.request.duration"
       + `?backend=http&paused=true&dimension=${encodeURIComponent('["http.method",["GET"]]')}`,

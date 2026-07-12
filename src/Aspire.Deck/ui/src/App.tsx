@@ -344,7 +344,7 @@ export function App({
                 routeView={route.metricView ?? "chart"}
                 routePaused={route.metricsPaused ?? false}
                 routeDimensions={route.metricDimensions ?? {}}
-                routeShowCount={route.metricHistogramCount ?? false}
+                routeHistogramMode={route.metricHistogramMode ?? (route.metricHistogramCount ? "count" : "percentiles")}
                 routeZoomStartMs={route.metricZoomStartMs ?? null}
                 routeZoomEndMs={route.metricZoomEndMs ?? null}
                 onRouteChange={(metricRoute) => navigate({
@@ -356,7 +356,7 @@ export function App({
                   metricView: metricRoute.view === "chart" ? undefined : metricRoute.view,
                   metricsPaused: metricRoute.paused || undefined,
                   metricDimensions: Object.keys(metricRoute.dimensions).length > 0 ? metricRoute.dimensions : undefined,
-                  metricHistogramCount: metricRoute.showCount || undefined,
+                  metricHistogramMode: metricRoute.histogramMode === "percentiles" ? undefined : metricRoute.histogramMode,
                   metricZoomStartMs: metricRoute.zoomStartMs ?? undefined,
                   metricZoomEndMs: metricRoute.zoomEndMs ?? undefined,
                 })}

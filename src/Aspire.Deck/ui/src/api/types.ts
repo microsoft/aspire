@@ -210,6 +210,7 @@ export interface SpanSummary {
 }
 
 export type MetricKind = "gauge" | "counter" | "upDownCounter" | "histogram";
+export type HistogramMode = "percentiles" | "count" | "sum" | "buckets";
 
 export interface MetricSummary {
   name: string;
@@ -235,11 +236,20 @@ export interface MetricSeriesResponse {
   p50?: number[];
   p90?: number[];
   p99?: number[];
+  sum?: number[];
+  bucketBounds?: number[];
+  buckets?: MetricBucketSeries[];
   dimensionFilters?: MetricDimensionFilter[];
   dimensions?: MetricDimensionSeries[];
   exemplars?: MetricExemplar[];
   hasOverflow?: boolean;
   showCount?: boolean;
+  histogramMode?: HistogramMode | null;
+}
+
+export interface MetricBucketSeries {
+  upperBound: number | null;
+  values: number[];
 }
 
 export interface MetricAttribute {
@@ -259,6 +269,8 @@ export interface MetricDimensionSeries {
   p50?: number[];
   p90?: number[];
   p99?: number[];
+  sum?: number[];
+  buckets?: MetricBucketSeries[];
 }
 
 export interface MetricExemplar {
@@ -278,6 +290,7 @@ export interface MetricSeriesQuery {
   maxPoints?: number;
   dimensions?: Record<string, Array<string | null>>;
   showCount?: boolean;
+  histogramMode?: HistogramMode;
 }
 
 export interface TelemetrySummary {

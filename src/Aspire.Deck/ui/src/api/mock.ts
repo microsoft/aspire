@@ -715,7 +715,8 @@ class MockBackend {
         : methods?.length === 1 && methods[0] === "POST" ? 1.2
           : methods?.length === 0 ? 0 : 1;
       const scale = (values: number[]) => values.slice(start).map((value) => value * factor);
-      if (query.showCount) {
+      const histogramMode = query.histogramMode ?? (query.showCount ? "count" : "percentiles");
+      if (histogramMode === "count") {
         return {
           ...base,
           values: scale(hist.v),
@@ -724,6 +725,35 @@ class MockBackend {
           exemplars: [],
           hasOverflow: false,
           showCount: true,
+          histogramMode,
+        };
+      }
+      if (histogramMode === "sum") {
+        return {
+          ...base,
+          sum: scale(hist.v).map((value) => value * 10),
+          dimensionFilters: [{ name: "http.method", values: ["GET", "POST"] }],
+          dimensions: [],
+          exemplars: [],
+          hasOverflow: false,
+          histogramMode,
+        };
+      }
+      if (histogramMode === "buckets") {
+        return {
+          ...base,
+          bucketBounds: [25, 50, 100],
+          buckets: [
+            { upperBound: 25, values: scale(hist.v).map((value) => Math.round(value * 0.2)) },
+            { upperBound: 50, values: scale(hist.v).map((value) => Math.round(value * 0.35)) },
+            { upperBound: 100, values: scale(hist.v).map((value) => Math.round(value * 0.3)) },
+            { upperBound: null, values: scale(hist.v).map((value) => Math.round(value * 0.15)) },
+          ],
+          dimensionFilters: [{ name: "http.method", values: ["GET", "POST"] }],
+          dimensions: [],
+          exemplars: [],
+          hasOverflow: false,
+          histogramMode,
         };
       }
       return {
@@ -757,6 +787,7 @@ class MockBackend {
         }],
         hasOverflow: false,
         showCount: false,
+        histogramMode,
       };
     }
     if (def.kind === "counter") {

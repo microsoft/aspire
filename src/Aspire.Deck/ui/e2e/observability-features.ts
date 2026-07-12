@@ -45,6 +45,7 @@ export const observabilityFeatures = {
   "METRIC-TREE-001": "Meters and instruments render in a searchable hierarchical selector.",
   "METRIC-METADATA-001": "Metric details expose instrument name, description, unit, kind, meter, and resource.",
   "METRIC-CHART-001": "Metric samples render a non-empty time-series chart.",
+  "METRIC-HISTOGRAM-001": "Histogram percentiles, count, sum, and bucket aggregations render in chart and table views.",
   "METRIC-CURSOR-001": "Hovering the chart exposes live timestamp and series values.",
   "METRIC-PAUSE-001": "Metric polling can be paused and resumed explicitly.",
   "METRIC-RANGE-001": "Metric history supports each available time-range selection.",

@@ -29,6 +29,7 @@ export interface DashboardRoute {
   metricsPaused?: boolean;
   metricDimensions?: Record<string, Array<string | null>>;
   metricHistogramCount?: boolean;
+  metricHistogramMode?: "percentiles" | "count" | "sum" | "buckets";
   metricZoomStartMs?: number;
   metricZoomEndMs?: number;
   resourceName?: string;
@@ -146,6 +147,7 @@ export function readDashboardRoute(
       ? durationMinutes * 60
       : rangeSeconds;
     const view = search.get("view");
+    const histogram = search.get("histogram");
     const zoomStartValue = search.get("zoomStart");
     const zoomEndValue = search.get("zoomEnd");
     const zoomStart = zoomStartValue === null ? null : Number(zoomStartValue);
@@ -175,6 +177,9 @@ export function readDashboardRoute(
       metricsPaused: search.get("paused") === "true" || undefined,
       metricDimensions: Object.keys(dimensions).length > 0 ? dimensions : undefined,
       metricHistogramCount: search.get("histogram") === "count" || undefined,
+      metricHistogramMode: histogram === "count" || histogram === "sum" || histogram === "buckets"
+        ? histogram
+        : undefined,
       metricZoomStartMs: zoomStart !== null && Number.isFinite(zoomStart) ? zoomStart : undefined,
       metricZoomEndMs: zoomEnd !== null && Number.isFinite(zoomEnd) ? zoomEnd : undefined,
     };
@@ -305,8 +310,9 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     for (const [name, values] of Object.entries(route.metricDimensions ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
       url.searchParams.append("dimension", JSON.stringify([name, values]));
     }
-    if (route.metricHistogramCount) {
-      url.searchParams.set("histogram", "count");
+    const histogramMode = route.metricHistogramMode ?? (route.metricHistogramCount ? "count" : "percentiles");
+    if (histogramMode !== "percentiles") {
+      url.searchParams.set("histogram", histogramMode);
     }
     if (route.metricZoomStartMs !== undefined && route.metricZoomEndMs !== undefined) {
       url.searchParams.set("zoomStart", Math.round(route.metricZoomStartMs).toString());

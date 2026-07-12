@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { MetricSummary, MetricSeriesResponse } from "../api/types";
+import type { HistogramMode, MetricSummary, MetricSeriesResponse } from "../api/types";
 import { clearMetrics, getMetricSeries } from "../api/deck";
 import { MetricChart, type ChartLine } from "../components/MetricChart";
 import { MetricDimensionFilters } from "../components/MetricDimensionFilters";
@@ -9,7 +9,6 @@ import { displayUnit, formatMetricValue, formatTimeWithMillis } from "../lib/for
 import { useResources, useTelemetry } from "../lib/useDeckEvent";
 import {
   CommandMenu,
-  Checkbox,
   EmptyState,
   MetricsIcon,
   NamedIcon,
@@ -46,7 +45,7 @@ export interface MetricRouteState {
   view: "chart" | "table";
   paused: boolean;
   dimensions: Record<string, Array<string | null>>;
-  showCount: boolean;
+  histogramMode: HistogramMode;
   zoomStartMs: number | null;
   zoomEndMs: number | null;
 }
@@ -59,25 +58,36 @@ function cssVar(name: string, fallback: string): string {
 }
 
 function buildLines(series: MetricSeriesResponse): ChartLine[] {
-  if (series.kind === "histogram" && !series.showCount) {
+  if (series.kind === "histogram" && series.histogramMode === "sum") {
+    return [{ label: "sum", color: cssVar("--accent", "#a855f7"), values: series.sum ?? [] }];
+  }
+  if (series.kind === "histogram" && series.histogramMode === "buckets") {
+    const colors = ["--info", "--success", "--accent", "--warning", "--danger"];
+    return (series.buckets ?? []).map((bucket, index) => ({
+      label: bucket.upperBound === null ? "+Inf" : `≤ ${bucket.upperBound}`,
+      color: cssVar(colors[index % colors.length]!, "#60a5fa"),
+      values: bucket.values,
+    }));
+  }
+  if (series.kind === "histogram" && series.histogramMode !== "count" && !series.showCount) {
     return [
       { label: "p50", color: cssVar("--info", "#60a5fa"), values: series.p50 ?? [] },
       { label: "p90", color: cssVar("--accent", "#a855f7"), values: series.p90 ?? [] },
       { label: "p99", color: cssVar("--warning", "#fbbf24"), values: series.p99 ?? [] },
     ];
   }
-  const label = series.kind === "counter" ? "rate" : series.showCount ? "count" : "value";
+  const label = series.kind === "counter" ? "rate" : series.histogramMode === "count" || series.showCount ? "count" : "value";
   return [{ label, color: cssVar("--accent", "#a855f7"), values: series.values ?? [] }];
 }
 
-function kindLabel(kind: string): string {
+function kindLabel(kind: string, histogramMode: HistogramMode): string {
   switch (kind) {
     case "counter":
       return "Counter · rate/s";
     case "upDownCounter":
       return "Up/down counter";
     case "histogram":
-      return "Histogram · percentiles";
+      return `Histogram · ${histogramMode}`;
     default:
       return "Gauge";
   }
@@ -91,7 +101,7 @@ export function MetricsPage({
   routeView,
   routePaused,
   routeDimensions,
-  routeShowCount,
+  routeHistogramMode,
   routeZoomStartMs,
   routeZoomEndMs,
   onRouteChange,
@@ -104,7 +114,7 @@ export function MetricsPage({
   routeView: "chart" | "table";
   routePaused: boolean;
   routeDimensions: Record<string, Array<string | null>>;
-  routeShowCount: boolean;
+  routeHistogramMode: HistogramMode;
   routeZoomStartMs: number | null;
   routeZoomEndMs: number | null;
   onRouteChange: (state: MetricRouteState) => void;
@@ -165,7 +175,7 @@ export function MetricsPage({
       view: routeView,
       paused: routePaused,
       dimensions: routeDimensions,
-      showCount: routeShowCount,
+      histogramMode: routeHistogramMode,
       zoomStartMs: routeZoomStartMs,
       zoomEndMs: routeZoomEndMs,
       ...changes,
@@ -184,10 +194,10 @@ export function MetricsPage({
       windowSeconds: selectedWindowSeconds,
       maxPoints: 600,
       dimensions: routeDimensions,
-      showCount: activeKind === "histogram" && routeShowCount,
+      histogramMode: activeKind === "histogram" ? routeHistogramMode : undefined,
     });
     setSeriesState({ key: activeSeriesKey!, value });
-  }, [activeKind, activeMeterName, activeName, activeResourceName, activeSeriesKey, routeDimensions, routeShowCount, selectedWindowSeconds]);
+  }, [activeKind, activeMeterName, activeName, activeResourceName, activeSeriesKey, routeDimensions, routeHistogramMode, selectedWindowSeconds]);
 
   useEffect(() => {
     void fetchSeries();
@@ -207,7 +217,7 @@ export function MetricsPage({
     try {
       await clearMetrics(resourceName);
       setSeriesState(null);
-      updateRoute({ resourceName: null, meterName: null, metricName: null, paused: false, dimensions: {}, showCount: false, zoomStartMs: null, zoomEndMs: null });
+      updateRoute({ resourceName: null, meterName: null, metricName: null, paused: false, dimensions: {}, histogramMode: "percentiles", zoomStartMs: null, zoomEndMs: null });
       setClearStatus({
         message: resourceName === null ? "Cleared all metrics." : `Cleared metrics for ${resourceName}.`,
         error: false,
@@ -271,7 +281,7 @@ export function MetricsPage({
           value={selectedResource ?? ""}
           placeholder="Select a resource"
           disabled={resourceOptions.length === 0}
-          onValueChange={(resourceName) => updateRoute({ resourceName, meterName: null, metricName: null, dimensions: {}, showCount: false, zoomStartMs: null, zoomEndMs: null })}
+          onValueChange={(resourceName) => updateRoute({ resourceName, meterName: null, metricName: null, dimensions: {}, histogramMode: "percentiles", zoomStartMs: null, zoomEndMs: null })}
         />
         <div className="seg" role="group" aria-label="Time range">
           {TIME_RANGES.map((range) => (
@@ -327,7 +337,7 @@ export function MetricsPage({
               <MetricTreeSelector
                 metrics={metrics}
                 active={active}
-                onSelect={(metric) => updateRoute({ meterName: metric.meterName ?? null, metricName: metric.name, dimensions: {}, showCount: false, zoomStartMs: null, zoomEndMs: null })}
+                onSelect={(metric) => updateRoute({ meterName: metric.meterName ?? null, metricName: metric.name, dimensions: {}, histogramMode: "percentiles", zoomStartMs: null, zoomEndMs: null })}
               />
             </div>
 
@@ -346,7 +356,7 @@ export function MetricsPage({
                     </div>
                   </div>
                   <div className="cell-muted metric-detail__sub">
-                    {kindLabel(active.kind)} · {active.resourceName ?? "—"} · {active.meterName ?? "Unknown meter"} · {active.pointCount.toLocaleString()} points
+                    {kindLabel(active.kind, routeHistogramMode)} · {active.resourceName ?? "—"} · {active.meterName ?? "Unknown meter"} · {active.pointCount.toLocaleString()} points
                   </div>
                   {active.description ? <div className="metric-detail__description">{active.description}</div> : null}
                   {series?.hasOverflow ? <div className="metric-overflow" role="status">Some metric dimensions exceeded the dashboard limit.</div> : null}
@@ -356,12 +366,18 @@ export function MetricsPage({
                     onChange={(dimensions) => updateRoute({ dimensions, zoomStartMs: null, zoomEndMs: null })}
                   />
                   {active.kind === "histogram" ? (
-                    <div className="metric-histogram-options">
-                      <Checkbox
-                        checked={routeShowCount}
-                        label="Show count"
-                        onCheckedChange={(showCount) => updateRoute({ showCount, zoomStartMs: null, zoomEndMs: null })}
-                      />
+                    <div className="metric-histogram-options seg" role="group" aria-label="Histogram aggregation">
+                      {(["percentiles", "count", "sum", "buckets"] as const).map((mode) => (
+                        <button
+                          key={mode}
+                          type="button"
+                          className={`seg__btn ${routeHistogramMode === mode ? "active" : ""}`}
+                          aria-pressed={routeHistogramMode === mode}
+                          onClick={() => updateRoute({ histogramMode: mode, zoomStartMs: null, zoomEndMs: null })}
+                        >
+                          {mode[0]!.toUpperCase() + mode.slice(1)}
+                        </button>
+                      ))}
                     </div>
                   ) : null}
                   <Tabs
@@ -414,10 +430,14 @@ function MetricSeriesTable({ series }: { series: MetricSeriesResponse | null }) 
     return <div className="center-fill cell-muted metric-series-empty">No samples in this window yet.</div>;
   }
 
-  const lines = series.kind === "histogram" && !series.showCount
-    ? [series.p50 ?? [], series.p90 ?? [], series.p99 ?? []]
-    : [series.values ?? []];
-  const headers = series.kind === "histogram" && !series.showCount ? ["p50", "p90", "p99"] : [series.showCount ? "Count" : "Value"];
+  const histogramMode = series.histogramMode ?? (series.showCount ? "count" : "percentiles");
+  const [lines, headers] = series.kind !== "histogram" || histogramMode === "count"
+    ? [[series.values ?? []], [histogramMode === "count" ? "Count" : "Value"]]
+    : histogramMode === "sum"
+      ? [[series.sum ?? []], ["Sum"]]
+      : histogramMode === "buckets"
+        ? [(series.buckets ?? []).map((bucket) => bucket.values), (series.buckets ?? []).map((bucket) => bucket.upperBound === null ? "+Inf" : `≤ ${bucket.upperBound}`)]
+        : [[series.p50 ?? [], series.p90 ?? [], series.p99 ?? []], ["p50", "p90", "p99"]];
   return (
     <div className="table-wrap metric-series-table">
       <table className="data">

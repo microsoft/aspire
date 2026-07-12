@@ -581,6 +581,7 @@ export const httpBackend = {
       windowSeconds: String(query.windowSeconds ?? 300),
       maxPoints: String(query.maxPoints ?? 400),
       showCount: String(query.showCount ?? false),
+      histogramMode: query.histogramMode ?? (query.showCount ? "count" : "percentiles"),
     });
     for (const [name, values] of Object.entries(query.dimensions ?? {})) {
       if (values.length === 0) {

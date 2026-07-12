@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 135
-- React partial: 7
+- React covered: 136
+- React partial: 6
 - React missing: 16
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 23
+- React parity gaps: 22
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -160,7 +160,7 @@
 | METRIC-CHART-001 | metrics | `/metrics` | PENDING | covered | METRIC-CHART-001; METRIC-CURSOR-001; METRIC-ZOOM-001 | Instrument samples render as an interactive time-series chart. |
 | METRIC-TABLE-001 | metrics | `/metrics` | PENDING | covered | METRIC-TABLE-001; METRIC-SESSION-001 | Metric data can switch between chart and table representations. |
 | METRIC-DIMENSIONS-001 | metrics | `/metrics` | PENDING | covered | METRIC-DIMENSIONS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries | Dimension filters and multiple attribute series are discoverable and selectable. |
-| METRIC-HISTOGRAM-001 | metrics | `/metrics` | PENDING | partial | METRIC-CHART-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries (count and percentiles; raw sum and buckets remain) | Histogram count, sum, buckets, and percentile views preserve aggregation semantics. |
+| METRIC-HISTOGRAM-001 | metrics | `/metrics` | PENDING | covered | METRIC-HISTOGRAM-001; HTTP-METRICS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries; ChartDataCalculatorTests.TryCalculateHistogramAggregatePoint_ReturnsCumulativeDeltas | Histogram count, sum, buckets, and percentile views preserve aggregation semantics. |
 | METRIC-EXEMPLARS-001 | metrics | `/metrics` | PENDING | covered | METRIC-EXEMPLARS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries | Metric exemplars expose values, timestamps, attributes, and related trace navigation. |
 | METRIC-CURSOR-001 | metrics | `/metrics` | PENDING | covered | METRIC-CURSOR-001 | Hovering charts exposes aligned timestamp and series values. |
 | METRIC-ZOOM-001 | metrics | `/metrics` | PENDING | covered | METRIC-ZOOM-001 | Dragging to zoom preserves inspection state and pauses live updates. |
