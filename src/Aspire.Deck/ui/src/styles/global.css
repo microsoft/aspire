@@ -669,6 +669,17 @@ a:focus-visible {
   outline: none;
   transition: border-color 0.14s ease, box-shadow 0.14s ease;
 }
+
+.deck-combobox {
+  width: 100%;
+  min-width: 0;
+}
+
+.deck-combobox-field {
+  display: grid;
+  gap: 6px;
+  min-width: 0;
+}
 .select:focus {
   border-color: var(--border-focus);
   box-shadow: 0 0 0 3px var(--accent-soft);

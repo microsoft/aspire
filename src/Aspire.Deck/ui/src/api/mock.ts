@@ -732,7 +732,7 @@ class MockBackend {
         name: "tier", label: "Tier", placeholder: "", inputType: "choice", required: true,
         options: [["standard", "Standard"], ["premium", "Premium"]], value: "standard",
         validationErrors: errs("tier"), description: "Compute tier for the replicas.",
-        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: true, disabled: false, updateStateOnChange: false,
       },
       {
         name: "drain", label: "Drain connections before scaling down", placeholder: "", inputType: "boolean",

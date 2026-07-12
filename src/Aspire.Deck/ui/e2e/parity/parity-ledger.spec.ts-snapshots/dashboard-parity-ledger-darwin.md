@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 95
+- React covered: 96
 - React partial: 29
-- React missing: 34
-- Legacy black-box scenarios pending: 71
-- React parity gaps: 63
+- React missing: 33
+- Legacy black-box scenarios pending: 70
+- React parity gaps: 62
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -84,7 +84,7 @@
 | CMD-NUMBER-001 | commands | `/` | commands | partial | HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Number arguments preserve numeric values and validation. |
 | CMD-BOOLEAN-001 | commands | `/` | commands | partial | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Boolean arguments preserve checked state and disabled state. |
 | CMD-CHOICE-001 | commands | `/` | commands | partial | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Choice arguments preserve options, display names, placeholders, and defaults. |
-| CMD-CUSTOM-CHOICE-001 | commands | `/` | PENDING | missing | - | Choice arguments can allow a searchable custom value. |
+| CMD-CUSTOM-CHOICE-001 | commands | `/` | commands | covered | TK-COMBOBOX-001; CMD-CUSTOM-CHOICE-001 | Choice arguments can allow a searchable custom value. |
 | CMD-SECRET-001 | commands | `/` | commands | partial | HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Secret text arguments mask values, disable password saving, and support explicit reveal. |
 | CMD-DYNAMIC-001 | commands | `/` | PENDING | missing | - | Dependent argument choices load asynchronously when prerequisite values change. |
 | CMD-LIVE-VALIDATION-001 | commands | `/` | PENDING | partial | RES-INTERACTION-001 | Inputs can request server validation while values change. |

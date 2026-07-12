@@ -15,6 +15,7 @@ export const toolkitFeatures = {
   "TK-EMPTY-001": "Empty states expose an icon, title, and supporting content.",
   "TK-NOTIFICATION-001": "Notifications expose semantic intent, actions, links, and explicit dismissal.",
   "TK-SELECT-001": "Select controls expose labels, placeholders, native option groups, disabled options, and controlled values.",
+  "TK-COMBOBOX-001": "Comboboxes support searchable options and controlled custom values.",
   "TK-CHECKBOX-001": "Checkboxes support checked, unchecked, mixed, and disabled states.",
   "TK-SWITCH-001": "Switches expose an accessible binary state and controlled updates.",
   "TK-SECRET-001": "Sensitive values are masked by default and can be explicitly revealed and hidden.",

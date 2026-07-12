@@ -386,7 +386,7 @@ test(`${features("TK-NOTIFICATION-001")} exercises reusable notification actions
   await expect(status).toHaveText("Notification dismissed");
 });
 
-test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET-001", "TK-COPY-001")} exercises input and sensitive-value controls`, async ({ page }) => {
+test(`${features("TK-SELECT-001", "TK-COMBOBOX-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET-001", "TK-COPY-001")} exercises input and sensitive-value controls`, async ({ page }) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   const inputs = page.getByRole("region", { name: "Inputs" });
   const environment = inputs.getByRole("combobox", { name: "Environment" });
@@ -426,6 +426,15 @@ test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET
   await expect(inputs.getByText("API key copied", { exact: true })).toBeAttached();
   await inputs.getByRole("button", { name: "Hide API key" }).click();
   await expect(inputs.getByText("deck-secret-123", { exact: true })).toHaveCount(0);
+
+  const region = inputs.getByRole("combobox", { name: "Region" });
+  await expect(region).toHaveValue("Central");
+  await region.click();
+  await region.press("ArrowDown");
+  await page.getByRole("option", { name: "East", exact: true }).click();
+  await expect(region).toHaveValue("East");
+  await region.fill("private-edge");
+  await expect(region).toHaveValue("private-edge");
 });
 
 test(`${features("TK-TABS-001", "TK-ACCORDION-001", "TK-DIVIDER-001", "TK-HIGHLIGHT-001")} exercises navigation and disclosure controls`, async ({ page }) => {

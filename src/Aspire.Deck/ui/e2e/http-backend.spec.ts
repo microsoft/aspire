@@ -279,14 +279,17 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
   await expect(dialog.getByText("Text value to echo.", { exact: true })).toBeVisible();
   await expect(repeat).toHaveValue("1");
   await expect(shout).not.toBeChecked();
-  await expect(flavor).toHaveValue("vanilla");
-  await expect(flavor.locator("option")).toHaveText(["Vanilla", "Chocolate"]);
+  await expect(flavor).toHaveValue("Vanilla");
   await expect(secret).toHaveAttribute("type", "password");
 
   await message.fill("Hello from React");
   await repeat.fill("3");
   await shout.check();
-  await flavor.selectOption("chocolate");
+  await flavor.click();
+  await flavor.press("ArrowDown");
+  await expect(page.getByRole("option")).toHaveText(["Vanilla", "Chocolate"]);
+  await page.getByRole("option", { name: "Chocolate", exact: true }).click();
+  await expect(flavor).toHaveValue("Chocolate");
   await secret.fill("s3cr3t");
   await testInfo.attach("http-command-inputs.png", {
     body: await page.screenshot({ animations: "disabled", fullPage: true }),

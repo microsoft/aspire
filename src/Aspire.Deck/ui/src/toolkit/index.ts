@@ -3,6 +3,7 @@ export * from "./Accordion";
 export * from "./Button";
 export * from "./CanvasHost";
 export * from "./Checkbox";
+export * from "./ComboBox";
 export * from "./CommandMenu";
 export * from "./ConfirmDialog";
 export * from "./ContextMenu";

@@ -4,6 +4,7 @@ import {
   Badge,
   Button,
   Checkbox,
+  ComboBox,
   CommandMenu,
   ConfirmDialog,
   DataTable,
@@ -112,6 +113,7 @@ export function ToolkitPlayground({
   const [lastAction, setLastAction] = useState("No action selected");
   const [notificationVisible, setNotificationVisible] = useState(false);
   const [environment, setEnvironment] = useState("development");
+  const [region, setRegion] = useState("central");
   const [includeHidden, setIncludeHidden] = useState(false);
   const [pauseIncoming, setPauseIncoming] = useState(false);
   const [selectedTab, setSelectedTab] = useState("overview");
@@ -403,6 +405,18 @@ export function ToolkitPlayground({
                 { value: "retired", label: "Retired", group: "Archived", disabled: true },
               ]}
               onValueChange={setEnvironment}
+            />
+            <ComboBox
+              label="Region"
+              value={region}
+              allowCustomValue
+              placeholder="Choose or enter a region"
+              options={[
+                { value: "central", label: "Central" },
+                { value: "east", label: "East" },
+                { value: "west", label: "West" },
+              ]}
+              onValueChange={setRegion}
             />
             <Checkbox
               label="Include hidden resources"

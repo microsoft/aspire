@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { InteractionInfo, InteractionInputInfo } from "../api/types";
 import { respondInteraction } from "../api/deck";
-import { CloseIcon } from "../toolkit";
+import { CloseIcon, ComboBox } from "../toolkit";
 
 // Side pane (like the resource details drawer) that renders a blocking interaction
 // from the AppHost: a command-input dialog with per-field validation, or a message
@@ -138,22 +138,15 @@ function InputField({
             {input.required ? <span className="field__required"> *</span> : null}
           </label>
           {input.inputType === "choice" ? (
-            <select
+            <ComboBox
               id={fieldId}
-              className="select"
               value={value}
               disabled={input.disabled}
-              onChange={(e) => onChange(e.target.value)}
-            >
-              {input.allowCustomChoice && !input.options.some(([v]) => v === value) ? (
-                <option value={value}>{value || "—"}</option>
-              ) : null}
-              {input.options.map(([v, display]) => (
-                <option key={v} value={v}>
-                  {display}
-                </option>
-              ))}
-            </select>
+              allowCustomValue={input.allowCustomChoice}
+              placeholder={input.placeholder}
+              options={input.options.map(([optionValue, label]) => ({ value: optionValue, label }))}
+              onValueChange={(nextValue) => onChange(nextValue)}
+            />
           ) : (
             <input
               id={fieldId}

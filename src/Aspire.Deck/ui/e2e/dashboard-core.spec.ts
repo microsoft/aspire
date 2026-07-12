@@ -520,7 +520,7 @@ test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001")} 
   await expect(details).toContainText("Running");
 });
 
-test(`${features("RES-INTERACTION-001")} validates and submits an input command`, async ({ page }) => {
+test(`${features("RES-INTERACTION-001", "CMD-CUSTOM-CHOICE-001")} validates and submits an input command`, async ({ page }) => {
   await page.getByRole("row", { name: /frontend/ }).click();
   await page.getByRole("dialog", { name: "frontend" }).getByRole("button", { name: "Resource commands" }).click();
   await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: /Scale/ }).click();
@@ -530,16 +530,19 @@ test(`${features("RES-INTERACTION-001")} validates and submits an input command`
   const drain = interaction.getByRole("checkbox", { name: "Drain connections before scaling down" });
 
   await expect(replicas).toHaveValue("1");
-  await expect(tier).toHaveValue("standard");
+  await expect(tier).toHaveValue("Standard");
   await expect(drain).toBeChecked();
   await replicas.fill("0");
   await expect(interaction).toContainText("Replicas must be a whole number between 1 and 10.");
   await expect(replicas).toHaveValue("0");
 
   await replicas.fill("3");
-  await tier.selectOption("premium");
   await drain.uncheck();
-  await interaction.getByRole("button", { name: "Scale", exact: true }).click();
+  await tier.fill("private-tier");
+  await expect(tier).toHaveValue("private-tier");
+  const submit = interaction.getByRole("button", { name: "Scale", exact: true });
+  await submit.focus();
+  await page.keyboard.press("Enter");
   await expect(interaction).toHaveCount(0);
 });
 

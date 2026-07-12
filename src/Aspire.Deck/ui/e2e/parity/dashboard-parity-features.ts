@@ -125,7 +125,7 @@ const featureDefinitions = {
     ["CMD-NUMBER-001", "/", "Number arguments preserve numeric values and validation.", "commands", "partial", "HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001"],
     ["CMD-BOOLEAN-001", "/", "Boolean arguments preserve checked state and disabled state.", "commands", "partial", "RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001"],
     ["CMD-CHOICE-001", "/", "Choice arguments preserve options, display names, placeholders, and defaults.", "commands", "partial", "RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001"],
-    ["CMD-CUSTOM-CHOICE-001", "/", "Choice arguments can allow a searchable custom value.", null, "missing"],
+    ["CMD-CUSTOM-CHOICE-001", "/", "Choice arguments can allow a searchable custom value.", "commands", "covered", "TK-COMBOBOX-001; CMD-CUSTOM-CHOICE-001"],
     ["CMD-SECRET-001", "/", "Secret text arguments mask values, disable password saving, and support explicit reveal.", "commands", "partial", "HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001"],
     ["CMD-DYNAMIC-001", "/", "Dependent argument choices load asynchronously when prerequisite values change.", null, "missing"],
     ["CMD-LIVE-VALIDATION-001", "/", "Inputs can request server validation while values change.", null, "partial", "RES-INTERACTION-001"],

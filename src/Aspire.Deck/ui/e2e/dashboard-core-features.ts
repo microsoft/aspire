@@ -39,6 +39,7 @@ export const dashboardCoreFeatures = {
   "RES-ACTION-MENU-001": "Highlighted resource commands stay directly available while remaining commands use the shared overflow menu.",
   "RES-CONFIRM-001": "Destructive resource commands require confirmation and report their result.",
   "RES-INTERACTION-001": "Input commands support text, choice, boolean, live validation, and submission.",
+  "CMD-CUSTOM-CHOICE-001": "Command choice arguments support searchable custom values.",
   "PARAM-LIST-001": "Parameters distinguish plain, secret, and unresolved values.",
   "PARAM-SORT-001": "Parameters sort by supported columns in ascending and descending order.",
   "PARAM-FILTER-001": "Parameters filter by name and state.",
