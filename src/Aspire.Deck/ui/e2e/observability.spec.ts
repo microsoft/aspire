@@ -613,19 +613,21 @@ test(`${features("TRACE-CLEAR-001")} clears selected and all trace telemetry`, a
   await expect(tracesPage).toContainText("No traces match your filter.");
 });
 
-test(`${features("METRIC-LIST-001", "METRIC-SELECT-001", "METRIC-CHART-001", "METRIC-CURSOR-001", "METRIC-PAUSE-001", "METRIC-RANGE-001", "METRIC-ZOOM-001")} explores live metric series`, async ({ page }, testInfo) => {
+test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", "METRIC-CHART-001", "METRIC-CURSOR-001", "METRIC-PAUSE-001", "METRIC-RANGE-001", "METRIC-TABLE-001", "METRIC-SESSION-001", "METRIC-ZOOM-001")} explores and restores live metric series`, async ({ page }, testInfo) => {
   await navigationButton(page, "Metrics").click();
 
+  const metricsPage = page.getByRole("main").getByRole("region", { name: "Metrics" });
+  const resource = metricsPage.getByRole("combobox", { name: "Resource" });
+  await expect(resource.locator("option")).toHaveText(["Select a resource", "apiservice", "frontend", "cache", "postgres"]);
+  await expect(resource).toHaveValue("apiservice");
+  await resource.selectOption("frontend");
+
   const metricItems = page.locator(".metric-item");
-  await expect(metricItems).toHaveCount(7);
+  await expect(metricItems).toHaveCount(3);
   await expect(metricItems.locator(".metric-item__name")).toHaveText([
-    "cache.hit_ratio",
-    "db.client.connections.usage",
-    "http.client.request.duration",
     "http.server.active_requests",
     "http.server.request.duration",
     "http.server.requests",
-    "process.runtime.dotnet.gc.heap.size",
   ]);
   await expect(metricItems.first()).toHaveClass(/active/);
 
@@ -671,19 +673,49 @@ test(`${features("METRIC-LIST-001", "METRIC-SELECT-001", "METRIC-CHART-001", "ME
     .poll(async () => (await chart.locator(".u-value").allTextContents()).some((value) => value !== "—"))
     .toBe(true);
 
-  const pause = page.getByTitle("Pause live updates");
-  await pause.click();
-  await expect(page.getByTitle("Resume live updates")).toBeVisible();
-  await expect(detail).toContainText("paused");
+  const pause = metricsPage.getByRole("switch", { name: "Pause incoming data" });
+  await pause.check();
+  await expect(metricsPage.locator(".page__subtitle")).toContainText("paused");
 
   const timeRange = page.getByRole("group", { name: "Time range" });
+  await expect(timeRange.getByRole("button")).toHaveText(["1m", "5m", "15m", "30m", "1h", "3h", "6h", "12h"]);
   await timeRange.getByRole("button", { name: "1m", exact: true }).click();
   await expect(timeRange.getByRole("button", { name: "1m", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(timeRange.getByRole("button", { name: "5m", exact: true })).toHaveAttribute("aria-pressed", "false");
 
-  await page.getByTitle("Resume live updates").click();
-  await expect(page.getByTitle("Pause live updates")).toBeVisible();
-  const zoomBounds = await chartOverlay.boundingBox();
+  await metricsPage.getByRole("tab", { name: "Table" }).click();
+  const metricTable = metricsPage.locator(".metric-series-table");
+  await expect(metricTable.getByRole("row")).not.toHaveCount(1);
+  await expect(metricTable.getByRole("columnheader")).toHaveText(["Time", "p50", "p90", "p99"]);
+
+  await timeRange.getByRole("button", { name: "12h", exact: true }).click();
+  const route = await page.evaluate(() => ({
+    pathname: window.location.pathname,
+    search: Object.fromEntries(new URLSearchParams(window.location.search)),
+  }));
+  expect(route).toEqual({
+    pathname: "/metrics/resource/frontend",
+    search: {
+      metric: "http.server.request.duration",
+      range: "43200",
+      view: "table",
+      paused: "true",
+    },
+  });
+
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Resource" })).toHaveValue("frontend");
+  await expect(page.getByRole("tab", { name: "Table" })).toHaveAttribute("aria-selected", "true");
+  await expect(page.getByRole("button", { name: "12h", exact: true })).toHaveAttribute("aria-pressed", "true");
+  await expect(page.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
+  await expect(page.locator(".metric-item.active")).toContainText("http.server.request.duration");
+
+  await page.getByRole("tab", { name: "Chart" }).click();
+  await page.getByRole("switch", { name: "Pause incoming data" }).uncheck();
+  await expect(page.getByRole("switch", { name: "Pause incoming data" })).not.toBeChecked();
+  const restoredChartOverlay = page.locator(".metric-chart .u-over");
+  await expect(restoredChartOverlay).toBeVisible();
+  const zoomBounds = await restoredChartOverlay.boundingBox();
   expect(zoomBounds).not.toBeNull();
   await page.mouse.move(
     zoomBounds!.x + zoomBounds!.width * 0.2,
@@ -696,9 +728,28 @@ test(`${features("METRIC-LIST-001", "METRIC-SELECT-001", "METRIC-CHART-001", "ME
     { steps: 8 },
   );
   await page.mouse.up();
-  await expect(page.getByTitle("Resume live updates")).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
 
   await attachScreenshot(page, testInfo, "dashboard-metrics");
+});
+
+test(`${features("METRIC-CLEAR-001")} clears selected and all metric telemetry`, async ({ page }) => {
+  await navigationButton(page, "Metrics").click();
+  const metricsPage = page.getByRole("main").getByRole("region", { name: "Metrics" });
+  await metricsPage.getByRole("combobox", { name: "Resource" }).selectOption("frontend");
+  await expect(metricsPage.locator(".metric-item")).toHaveCount(3);
+
+  await metricsPage.getByRole("button", { name: "Clear metrics" }).click();
+  await page.getByRole("menuitem", { name: "Clear frontend" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared metrics for frontend.");
+  await expect(metricsPage.getByRole("combobox", { name: "Resource" })).toHaveValue("apiservice");
+  await expect(metricsPage.locator(".metric-item")).toHaveCount(2);
+
+  await metricsPage.getByRole("button", { name: "Clear metrics" }).click();
+  await page.getByRole("menuitem", { name: "Clear all resources" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared all metrics.");
+  await expect(metricsPage.locator(".page__subtitle")).toHaveText("Select a resource");
+  await expect(metricsPage).toContainText("No metrics for this resource");
 });
 
 test(`${features("OBS-RESPONSIVE-001")} keeps every observability surface contained on mobile`, async ({ page }, testInfo) => {

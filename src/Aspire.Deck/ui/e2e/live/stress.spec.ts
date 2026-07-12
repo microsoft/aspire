@@ -422,7 +422,8 @@ test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-METRICS-001")} reaches e
 
     if (name === "Metrics") {
       const metrics = page.getByRole("main").getByRole("region", { name: "Metrics" });
-      await expect(metrics.locator(".page__subtitle")).toHaveText("0 instruments");
+      await expect(metrics.locator(".page__subtitle")).toHaveText("Select a resource");
+      await expect(metrics).toContainText("No metrics for this resource");
       await expect(metrics).not.toContainText("Loading…");
     }
   }

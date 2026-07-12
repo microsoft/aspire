@@ -14,6 +14,11 @@ export interface DashboardRoute {
   traceQuery?: string;
   traceMinDurationMs?: number;
   tracePaused?: boolean;
+  metricResourceName?: string;
+  metricName?: string;
+  metricWindowSeconds?: number;
+  metricView?: "chart" | "table";
+  metricsPaused?: boolean;
 }
 
 const pagePaths: Record<PageId, string> = {
@@ -84,7 +89,18 @@ export function readDashboardRoute(
     return { page: "traces", ...traceState };
   }
   if (path === "/metrics" || path.startsWith("/metrics/")) {
-    return { page: "metrics" };
+    const resourceMatch = /^\/metrics\/resource\/([^/]+)\/?$/i.exec(location.pathname);
+    const search = new URLSearchParams(location.search);
+    const windowSeconds = Number(search.get("range"));
+    const view = search.get("view");
+    return {
+      page: "metrics",
+      metricResourceName: resourceMatch ? decodeRoutePart(resourceMatch[1]!) : undefined,
+      metricName: search.get("metric") || undefined,
+      metricWindowSeconds: Number.isFinite(windowSeconds) && windowSeconds > 0 ? windowSeconds : undefined,
+      metricView: view === "table" ? "table" : undefined,
+      metricsPaused: search.get("paused") === "true" || undefined,
+    };
   }
   if (path === "/canvases" || path.startsWith("/canvases/")) {
     return { page: "canvases" };
@@ -98,7 +114,9 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     ? `/traces/detail/${encodeURIComponent(route.traceId)}`
     : route.page === "console" && route.consoleResourceName
       ? `/consolelogs/resource/${encodeURIComponent(route.consoleResourceName)}`
-      : pagePath(route.page);
+      : route.page === "metrics" && route.metricResourceName
+        ? `/metrics/resource/${encodeURIComponent(route.metricResourceName)}`
+        : pagePath(route.page);
   url.searchParams.delete("span");
   url.searchParams.delete("timestamps");
   url.searchParams.delete("utc");
@@ -108,6 +126,9 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
   url.searchParams.delete("type");
   url.searchParams.delete("q");
   url.searchParams.delete("minDuration");
+  url.searchParams.delete("metric");
+  url.searchParams.delete("range");
+  url.searchParams.delete("view");
   if (route.spanId) {
     url.searchParams.set("span", route.spanId);
   }
@@ -139,6 +160,20 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
       url.searchParams.set("minDuration", route.traceMinDurationMs.toString());
     }
     if (route.tracePaused) {
+      url.searchParams.set("paused", "true");
+    }
+  }
+  if (route.page === "metrics") {
+    if (route.metricName) {
+      url.searchParams.set("metric", route.metricName);
+    }
+    if (route.metricWindowSeconds && route.metricWindowSeconds !== 300) {
+      url.searchParams.set("range", route.metricWindowSeconds.toString());
+    }
+    if (route.metricView === "table") {
+      url.searchParams.set("view", "table");
+    }
+    if (route.metricsPaused) {
       url.searchParams.set("paused", "true");
     }
   }

@@ -174,7 +174,23 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
                 })}
               />
             ) : null}
-            {page === "metrics" ? <MetricsPage /> : null}
+            {page === "metrics" ? (
+              <MetricsPage
+                routeResourceName={route.metricResourceName ?? null}
+                routeMetricName={route.metricName ?? null}
+                routeWindowSeconds={route.metricWindowSeconds ?? 300}
+                routeView={route.metricView ?? "chart"}
+                routePaused={route.metricsPaused ?? false}
+                onRouteChange={(metricRoute) => navigate({
+                  page: "metrics",
+                  metricResourceName: metricRoute.resourceName ?? undefined,
+                  metricName: metricRoute.metricName ?? undefined,
+                  metricWindowSeconds: metricRoute.windowSeconds === 300 ? undefined : metricRoute.windowSeconds,
+                  metricView: metricRoute.view === "chart" ? undefined : metricRoute.view,
+                  metricsPaused: metricRoute.paused || undefined,
+                })}
+              />
+            ) : null}
             {page === "canvases" ? <CanvasesPage /> : null}
           </>
         )}

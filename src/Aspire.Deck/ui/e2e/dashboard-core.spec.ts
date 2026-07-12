@@ -130,7 +130,7 @@ test(`${features("APP-PAGE-001")} composes every route from the page toolkit`, a
     { navigation: "Console", title: "Console", toolbar: "Console tools" },
     { navigation: "Structured Logs", title: "Structured Logs", toolbar: "Structured log tools" },
     { navigation: "Traces", title: "Traces", toolbar: "Trace tools" },
-    { navigation: "Metrics", title: "Metrics" },
+    { navigation: "Metrics", title: "Metrics", toolbar: "Metric tools" },
     { navigation: "Canvases", title: "Canvases" },
   ] as const;
 

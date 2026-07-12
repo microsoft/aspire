@@ -1316,6 +1316,28 @@ table.data tbody tr.selected {
   min-height: 240px;
   margin-top: 14px;
 }
+.metric-detail > .deck-tabs-host {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+  margin-top: 14px;
+}
+.metric-detail > .deck-tabs-host .deck-tab-panel:not([hidden]) {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+}
+.metric-detail > .deck-tabs-host .metric-detail__chart,
+.metric-series-table {
+  flex: 1;
+  min-height: 0;
+  margin-top: 0;
+  overflow: auto;
+}
+.metric-series-empty {
+  min-height: 240px;
+}
 
 /* Metric chart toolbar: pause + time-range segmented control. Both controls
    share an explicit height so they align cleanly on the same row. */

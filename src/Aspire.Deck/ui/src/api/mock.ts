@@ -983,8 +983,8 @@ class MockBackend {
     // Advance each metric's last value with bounded jitter, and append a
     // timestamped sample to its history so the chart shows a real time series.
     const now = timestampMs;
-    this.telemetry.metrics = this.telemetry.metrics.map((metric, i) => {
-      const def = metricDefs[i]!;
+    this.telemetry.metrics = this.telemetry.metrics.map((metric) => {
+      const def = metricDefs.find((candidate) => candidate.name === metric.name)!;
       const prev = metric.lastValue ?? def.base;
       let next: number;
       if (def.kind === "counter") {
