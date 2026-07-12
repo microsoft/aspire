@@ -155,6 +155,35 @@ test(`${features("HTTP-RESOURCE-VIRTUALIZATION-001")} virtualizes a 1000-resourc
   await expect(page.getByRole("dialog", { name: "stress-api-0999" })).toBeVisible();
 });
 
+test(`${features("HTTP-RESOURCES-001")} distinguishes the complete resource lifecycle`, async ({ page }) => {
+  const lifecycle = [
+    ["running", "Running", "success"],
+    ["starting", "Starting", "info"],
+    ["finished", "Finished", "success"],
+    ["exited", "Exited", "warning"],
+    ["not-started", "NotStarted", "neutral"],
+    ["unknown", null, null],
+  ] as const;
+  const resources = lifecycle.map(([name, state, stateStyle], index): Resource => ({
+    ...resource,
+    name,
+    displayName: name,
+    uid: `lifecycle-${index}`,
+    state,
+    stateStyle,
+    health: null,
+  }));
+  await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: resources }));
+  await page.goto("/?backend=http");
+
+  const table = page.getByRole("table");
+  for (const [name, state] of lifecycle) {
+    const row = table.getByRole("row", { name: new RegExp(name) });
+    await expect(row).toContainText(state ?? "Unknown");
+  }
+});
+
 test(`${features("HTTP-FAILURE-001")} reports an unavailable HTTP backend`, async ({ page }, testInfo: TestInfo) => {
   allowUnavailableResponses.add(page);
   await page.route("**/api/deck/**", async (route) => {
@@ -970,6 +999,46 @@ test(`${features("HTTP-TRACE-VIRTUALIZATION-001")} virtualizes 1000 trace waterf
   await expect(tail).toBeVisible();
   await tail.locator(".wf__span-open").press("Enter");
   await expect(page.getByRole("dialog", { name: "trace operation 0000" })).toBeVisible();
+});
+
+test(`${features("HTTP-TRACES-001")} formats trace durations consistently across scales`, async ({ page }) => {
+  const durations = [
+    ["micro trace", 500_000n, "500µs"],
+    ["small trace", 5_000_000n, "5.0ms"],
+    ["medium trace", 250_000_000n, "250ms"],
+    ["seconds trace", 2_500_000_000n, "2.50s"],
+    ["minute trace", 65_000_000_000n, "1m 5s"],
+  ] as const;
+  const start = 1_783_670_400_000_000_000n;
+  await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.unroute("**/api/deck/telemetry/spans?*");
+  await page.route("**/api/deck/telemetry/spans?*", async (route) => route.fulfill({
+    contentType: "application/x-ndjson",
+    body: `${JSON.stringify({
+      resourceSpans: [{
+        resource: { attributes: [{ key: "service.name", value: { stringValue: "stress-api" } }] },
+        scopeSpans: [{
+          scope: { name: "Stress.Duration" },
+          spans: durations.map(([name, duration], index) => ({
+            traceId: (index + 1).toString(16).padStart(32, "0"),
+            spanId: (index + 1).toString(16).padStart(16, "0"),
+            name,
+            kind: 2,
+            startTimeUnixNano: (start + BigInt(index) * 100_000_000_000n).toString(),
+            endTimeUnixNano: (start + BigInt(index) * 100_000_000_000n + duration).toString(),
+            status: { code: 1 },
+          })),
+        }],
+      }],
+    })}\n`,
+  }));
+  await page.goto("/traces?backend=http");
+
+  for (const [name, , expected] of durations) {
+    const trace = page.locator(".wf__trace").filter({ hasText: name });
+    await expect(trace.locator(".wf__head-dur")).toHaveText(expected);
+  }
 });
 
 test(`${features("HTTP-TRACE-CLEAR-001")} clears selected and all traces through the HTTP backend`, async ({ page }) => {

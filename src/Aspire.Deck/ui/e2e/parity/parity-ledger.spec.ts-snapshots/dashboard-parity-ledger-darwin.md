@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 141
-- React partial: 6
+- React covered: 143
+- React partial: 4
 - React missing: 11
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 17
+- React parity gaps: 15
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -58,7 +58,7 @@
 | RES-COPY-001 | resources | `/` | resources | covered | RES-COPY-001 | Resource property and environment values can be copied without accidental disclosure. |
 | RES-HEALTH-001 | resources | `/` | resources | covered | RES-DETAILS-001 | Health summaries and individual health reports preserve status and descriptions. |
 | RES-RELATIONSHIPS-001 | resources | `/` | resources | covered | RES-DETAILS-001 | Parent, child, wait, reference, and other relationships are visible. |
-| RES-STATE-001 | resources | `/` | resources | partial | STRESS-RESOURCES-001 | Running, starting, finished, exited, not-started, and unknown states remain distinguishable. |
+| RES-STATE-001 | resources | `/` | resources | covered | HTTP-RESOURCES-001; STRESS-RESOURCES-001 | Running, starting, finished, exited, not-started, and unknown states remain distinguishable. |
 | RES-NO-STATUS-001 | resources | `/` | resources | covered | RES-NO-STATUS-001; STRESS-RESOURCES-001 | Resources without status data render a stable unknown state. |
 | RES-RESOURCE-ICON-001 | resources | `/` | PENDING | covered | RES-ICON-001; HTTP-RESOURCES-001; STRESS-RESOURCE-ICON-001 | Custom Fluent resource icon names override resource-type fallbacks. |
 | RES-RESOURCE-ICON-VARIANT-001 | resources | `/` | PENDING | covered | RES-ICON-001; DeckApiTests.GetResources_ReturnsDeckResourceContract | Regular and filled resource icon variants are preserved. |
@@ -136,7 +136,7 @@
 | TRACE-TYPE-001 | traces | `/traces` | traces | covered | TRACE-TYPE-001 | HTTP, database, messaging, RPC, GenAI, cloud, and other span types can be selected. |
 | TRACE-TEXT-FILTER-001 | traces | `/traces` | traces | covered | TRACE-FILTER-001 | Traces filter by operation, resource, and trace identifiers. |
 | TRACE-STRUCTURED-FILTER-001 | traces | `/traces` | traces | covered | TRACE-STRUCTURED-FILTER-001; TK-STRUCTURED-FILTER-001 | Structured trace and span filters can be composed and managed. |
-| TRACE-DURATION-001 | traces | `/traces` | traces | partial | TRACE-DURATION-001 | Trace and span duration is represented consistently at different scales. |
+| TRACE-DURATION-001 | traces | `/traces` | traces | covered | TRACE-DURATION-001; HTTP-TRACES-001 | Trace and span duration is represented consistently at different scales. |
 | TRACE-ERROR-001 | traces | `/traces` | PENDING | covered | TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001 | Failed traces and spans expose status, tags, and error styling. |
 | TRACE-PAUSE-001 | traces | `/traces` | traces | covered | TRACE-PAUSE-001 | Incoming traces can be paused and resumed. |
 | TRACE-CLEAR-001 | traces | `/traces` | traces | covered | TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001 | Trace data can be cleared for the selected resource or all resources. |
