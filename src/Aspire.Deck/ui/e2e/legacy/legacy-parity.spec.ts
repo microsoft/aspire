@@ -249,7 +249,8 @@ test(`${features("console")} inventories console streaming controls`, async ({ p
   await page.getByRole("option", { name: "empty-0001", exact: true }).click();
   await expect(page).toHaveURL(/\/consolelogs\/resource\/empty-0001(?:\?.*)?$/);
   await expect(resource).toHaveAttribute("current-value", "empty-0001");
-  await expect(main.getByRole("log").filter({ hasText: "empty-0000" })).toHaveCount(0);
+  await page.reload();
+  await expect(resource).toHaveAttribute("current-value", "empty-0001");
   await expect.poll(() => main.getByRole("log").count()).toBeGreaterThan(0);
 
   const settings = main.getByRole("button", { name: "Settings", exact: true });
@@ -273,6 +274,14 @@ test(`${features("console")} inventories console streaming controls`, async ({ p
 
 test(`${features("structured-logs")} inventories structured log controls and rows`, async ({ page }, testInfo) => {
   test.setTimeout(60_000);
+  await page.goto("/");
+  const resourcesTable = page.getByRole("table");
+  const apiRow = resourcesTable.getByRole("row").filter({ hasText: "stress-apiservice" });
+  await expect(apiRow).toHaveCount(1);
+  await apiRow.getByText("stress-apiservice", { exact: true }).click();
+  const resourceDetails = page.getByRole("dialog").filter({ hasText: "stress-apiservice" });
+  await resourceDetails.getByRole("button", { name: "Log message", exact: true }).click();
+
   await page.goto("/structuredlogs");
   await expect(page.getByRole("textbox", { name: "Filter...", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add filter", exact: true })).toBeVisible();
@@ -318,6 +327,24 @@ test(`${features("structured-logs")} inventories structured log controls and row
   await startupRow.getByRole("button", { name: "Actions", exact: true }).click();
   await page.getByRole("menuitem", { name: "View details", exact: true }).click();
   await expect(details).toBeVisible();
+  await details.getByRole("button", { name: "Close", exact: true }).click();
+
+  const tracedLogRows = table.getByRole("row").filter({ has: page.locator('a[href^="/traces/detail/"]') });
+  await expect.poll(() => tracedLogRows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+  const tracedLogRow = tracedLogRows.last();
+  await tracedLogRow.getByRole("button", { name: "Actions", exact: true }).click();
+  await expect(page.getByRole("menuitem", { name: "View details", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Log message", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "View JSON", exact: true })).toBeVisible();
+  await page.getByRole("menuitem", { name: "View details", exact: true }).click();
+  await expect(details).toBeVisible();
+  await details.getByRole("button", { name: "Close", exact: true }).click();
+
+  const traceLink = tracedLogRow.getByRole("link");
+  await expect(traceLink).toHaveAttribute("href", /\/traces\/detail\/[0-9a-f]{32}\?spanId=[0-9a-f]{16}$/);
+  await traceLink.click();
+  await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}\?spanId=[0-9a-f]{16}$/);
+  await expect(page.getByText(/Total spans \d+/)).toBeVisible();
   await attachScreenshot(page, testInfo, "legacy-structured-logs");
 });
 
@@ -355,10 +382,13 @@ test(`${features("traces")} inventories trace controls and nested span details`,
   await expect(spansTable.getByText("ValidateAndUpdateCacheService.activeUser", { exact: true })).toHaveCount(2);
   await expect(spansTable.getByText("Perform1", { exact: true })).toHaveCount(2);
 
-  const dismissNotifications = page.getByRole("button", { name: "Dismiss notification", exact: true });
-  while (await dismissNotifications.count() > 0) {
-    await dismissNotifications.first().click({ force: true });
-  }
+  const notificationDismissButtons = page.getByRole("button", { name: "Dismiss notification", exact: true });
+  await notificationDismissButtons.evaluateAll((buttons) => {
+    for (const button of buttons) {
+      (button as HTMLButtonElement).click();
+    }
+  });
+  await expect(notificationDismissButtons).toHaveCount(0);
 
   const traceToolbar = page.locator(".traces-toolbar");
   await traceToolbar.getByRole("button", { name: "Actions", exact: true }).click();
