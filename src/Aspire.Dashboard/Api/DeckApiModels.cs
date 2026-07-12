@@ -15,7 +15,9 @@ internal sealed record DeckConfig(
     string FrontendAuthMode,
     DeckUser? User,
     string Culture,
-    DeckCulture[] Cultures);
+    DeckCulture[] Cultures,
+    bool IsAgentHelpEnabled,
+    string? AgentHelpMarkdown);
 
 internal sealed record DeckUser(
     string Name,

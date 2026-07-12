@@ -110,7 +110,8 @@ public static class DashboardEndpointsBuilder
             HttpContext httpContext,
             IDashboardClient dashboardClient,
             IOptionsMonitor<DashboardOptions> options,
-            IStringLocalizer<Resources.Login> loginLocalizer) =>
+            IStringLocalizer<Resources.Login> loginLocalizer,
+            IStringLocalizer<Resources.Dialogs> dialogsLocalizer) =>
         {
             var dashboardOptions = options.CurrentValue;
             DeckUser? user = null;
@@ -128,6 +129,26 @@ public static class DashboardEndpointsBuilder
             var currentCulture = GlobalizationHelpers.TryGetKnownParentCulture(CultureInfo.CurrentUICulture, out var matchedCulture)
                 ? matchedCulture
                 : CultureInfo.CurrentUICulture;
+            var isAgentHelpEnabled = dashboardOptions.UI.DisableAgentHelp != true;
+            string? agentHelpMarkdown = null;
+            if (isAgentHelpEnabled)
+            {
+                const string appHostLearnMoreUrl = "https://aka.ms/aspire/ai-agents-apphost";
+                const string standaloneLearnMoreUrl = "https://aka.ms/aspire/dashboard-ai-standalone";
+                const string installCliUrl = "https://aka.ms/aspire/install-cli";
+                agentHelpMarkdown = dashboardClient.IsEnabled
+                    ? string.Format(
+                        CultureInfo.CurrentCulture,
+                        dialogsLocalizer[nameof(Resources.Dialogs.AIAgentsDialogAppHostDescription)],
+                        appHostLearnMoreUrl,
+                        installCliUrl)
+                    : string.Format(
+                        CultureInfo.CurrentCulture,
+                        dialogsLocalizer[nameof(Resources.Dialogs.AIAgentsDialogStandaloneDescription)],
+                        GetAgentDashboardUrl(dashboardOptions),
+                        standaloneLearnMoreUrl,
+                        installCliUrl);
+            }
             var config = new DeckConfig(
                 ApplicationName: dashboardClient.ApplicationName,
                 ResourceServiceUrl: null,
@@ -145,7 +166,9 @@ public static class DashboardEndpointsBuilder
                 FrontendAuthMode: dashboardOptions.Frontend.AuthMode?.ToString() ?? "Unknown",
                 User: user,
                 Culture: currentCulture.Name,
-                Cultures: [.. GlobalizationHelpers.OrderedLocalizedCultures.Select(culture => new DeckCulture(culture.Name, culture.NativeName.Humanize()))]);
+                Cultures: [.. GlobalizationHelpers.OrderedLocalizedCultures.Select(culture => new DeckCulture(culture.Name, culture.NativeName.Humanize()))],
+                IsAgentHelpEnabled: isAgentHelpEnabled,
+                AgentHelpMarkdown: agentHelpMarkdown);
 
             return Results.Json(config, DeckApiJsonSerializerContext.Default.DeckConfig);
         });
@@ -777,6 +800,16 @@ public static class DashboardEndpointsBuilder
             }
         }
         return result;
+    }
+
+    private static string GetAgentDashboardUrl(DashboardOptions options)
+    {
+        var baseUrl = Aspire.Dashboard.Model.Assistant.AIHelpers.GetDashboardUrl(options)?.TrimEnd('/') ?? "http://localhost:18888";
+        return options.Api.AuthMode is ApiAuthMode.ApiKey &&
+               options.Frontend.AuthMode is FrontendAuthMode.BrowserToken &&
+               options.Frontend.BrowserToken is { } token
+            ? $"{baseUrl}/login?t={token}"
+            : baseUrl;
     }
 
     private static async Task StreamDeckConsoleLogsAsync(

@@ -71,7 +71,13 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                     ["name"] = culture.Name,
                     ["displayName"] = culture.NativeName.Humanize()
                 })
-                .ToArray<JsonNode?>())
+                .ToArray<JsonNode?>()),
+            ["isAgentHelpEnabled"] = true,
+            ["agentHelpMarkdown"] = string.Format(
+                System.Globalization.CultureInfo.CurrentCulture,
+                Aspire.Dashboard.Resources.Dialogs.AIAgentsDialogAppHostDescription,
+                "https://aka.ms/aspire/ai-agents-apphost",
+                "https://aka.ms/aspire/install-cli")
         };
 
         Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
