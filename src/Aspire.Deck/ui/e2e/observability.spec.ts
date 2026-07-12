@@ -896,7 +896,7 @@ test(`${features("METRIC-CLEAR-001")} clears selected and all metric telemetry`,
   await page.getByRole("menuitem", { name: "Clear all resources" }).click();
   await expect(page.getByRole("status")).toHaveText("Cleared all metrics.");
   await expect(metricsPage.locator(".page__subtitle")).toHaveText("Select a resource");
-  await expect(metricsPage).toContainText("No metrics for this resource");
+  await expect(metricsPage).toContainText("No metric resources");
 });
 
 test(`${features("OBS-RESPONSIVE-001")} keeps every observability surface contained on mobile`, async ({ page }, testInfo) => {

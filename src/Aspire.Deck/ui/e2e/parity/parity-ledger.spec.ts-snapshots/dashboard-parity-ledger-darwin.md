@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 133
-- React partial: 9
+- React covered: 135
+- React partial: 7
 - React missing: 16
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 25
+- React parity gaps: 23
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -165,5 +165,5 @@
 | METRIC-CURSOR-001 | metrics | `/metrics` | PENDING | covered | METRIC-CURSOR-001 | Hovering charts exposes aligned timestamp and series values. |
 | METRIC-ZOOM-001 | metrics | `/metrics` | PENDING | covered | METRIC-ZOOM-001 | Dragging to zoom preserves inspection state and pauses live updates. |
 | METRIC-ROUTES-001 | metrics | `/metrics/resource/{resource}/meter/{meter}/instrument/{instrument}` | PENDING | covered | METRIC-ROUTES-001; METRIC-SESSION-001 | Resource, meter, instrument, duration, and view are deep-linkable. |
-| METRIC-EMPTY-001 | metrics | `/metrics` | metrics | partial | HTTP-EMPTY-TELEMETRY-001; STRESS-EMPTY-TELEMETRY-001 | Loading, no-resource, no-meter, no-instrument, and no-data states are distinct. |
-| METRIC-SESSION-001 | metrics | `/metrics` | PENDING | partial | METRIC-SESSION-001 | Metric selection, duration, view, dimensions, and zoom are restorable. |
+| METRIC-EMPTY-001 | metrics | `/metrics` | metrics | covered | HTTP-EMPTY-TELEMETRY-001; STRESS-EMPTY-TELEMETRY-001 | Loading, no-resource, no-meter, no-instrument, and no-data states are distinct. |
+| METRIC-SESSION-001 | metrics | `/metrics` | PENDING | covered | METRIC-SESSION-001 | Metric selection, duration, view, dimensions, and zoom are restorable. |

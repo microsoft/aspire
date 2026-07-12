@@ -214,8 +214,8 @@ const featureDefinitions = {
     ["METRIC-CURSOR-001", "/metrics", "Hovering charts exposes aligned timestamp and series values.", null, "covered", "METRIC-CURSOR-001"],
     ["METRIC-ZOOM-001", "/metrics", "Dragging to zoom preserves inspection state and pauses live updates.", null, "covered", "METRIC-ZOOM-001"],
     ["METRIC-ROUTES-001", "/metrics/resource/{resource}/meter/{meter}/instrument/{instrument}", "Resource, meter, instrument, duration, and view are deep-linkable.", null, "covered", "METRIC-ROUTES-001; METRIC-SESSION-001"],
-    ["METRIC-EMPTY-001", "/metrics", "Loading, no-resource, no-meter, no-instrument, and no-data states are distinct.", "metrics", "partial", "HTTP-EMPTY-TELEMETRY-001; STRESS-EMPTY-TELEMETRY-001"],
-    ["METRIC-SESSION-001", "/metrics", "Metric selection, duration, view, dimensions, and zoom are restorable.", null, "partial", "METRIC-SESSION-001"],
+    ["METRIC-EMPTY-001", "/metrics", "Loading, no-resource, no-meter, no-instrument, and no-data states are distinct.", "metrics", "covered", "HTTP-EMPTY-TELEMETRY-001; STRESS-EMPTY-TELEMETRY-001"],
+    ["METRIC-SESSION-001", "/metrics", "Metric selection, duration, view, dimensions, and zoom are restorable.", null, "covered", "METRIC-SESSION-001"],
   ],
 } as const satisfies Record<DashboardArea, readonly FeatureDefinition[]>;
 

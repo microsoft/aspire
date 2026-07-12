@@ -122,10 +122,14 @@ export function MetricsPage({
   );
   const resourceOptions = useMemo(() => {
     const resourceTypes = new Map(resources.map((resource) => [resource.name, resource.resourceType]));
-    return [...new Set(allMetrics.flatMap((metric) => metric.resourceName === null ? [] : [metric.resourceName]))]
+    const metricResources = new Set(allMetrics.flatMap((metric) => metric.resourceName === null ? [] : [metric.resourceName]));
+    if (routeResourceName !== null && resources.some((resource) => resource.name === routeResourceName)) {
+      metricResources.add(routeResourceName);
+    }
+    return [...metricResources]
       .sort((left, right) => left.localeCompare(right))
       .map((name) => ({ value: name, label: name, group: resourceTypes.get(name) ?? "Telemetry" }));
-  }, [allMetrics, resources]);
+  }, [allMetrics, resources, routeResourceName]);
   const selectedResource = routeResourceName !== null
     && resourceOptions.some((option) => option.value === routeResourceName)
     ? routeResourceName
@@ -134,10 +138,12 @@ export function MetricsPage({
     () => allMetrics.filter((metric) => metric.resourceName === selectedResource),
     [allMetrics, selectedResource],
   );
-  const active: MetricSummary | null = metrics.find((metric) =>
-    metric.name === routeMetricName && (routeMeterName === null || metric.meterName === routeMeterName))
-    ?? metrics[0]
-    ?? null;
+  const meterExists = routeMeterName === null || metrics.some((metric) => metric.meterName === routeMeterName);
+  const active: MetricSummary | null = routeMetricName !== null
+    ? metrics.find((metric) => metric.name === routeMetricName && (routeMeterName === null || metric.meterName === routeMeterName)) ?? null
+    : routeMeterName !== null
+      ? metrics.find((metric) => metric.meterName === routeMeterName) ?? null
+      : metrics[0] ?? null;
   const selectedWindowSeconds = TIME_RANGES.some((range) => range.seconds === routeWindowSeconds)
     ? routeWindowSeconds
     : 300;
@@ -231,6 +237,18 @@ export function MetricsPage({
     </div>
   );
 
+  const emptyState = telemetry === null
+    ? { title: "Loading metrics", content: "Waiting for the telemetry snapshot." }
+    : selectedResource === null
+      ? { title: "No metric resources", content: "Metrics will appear here as OTLP data arrives." }
+      : metrics.length === 0
+        ? { title: "No meters for this resource", content: "This resource has not reported any metric instruments." }
+        : !meterExists
+          ? { title: "Meter not found", content: `The meter ${routeMeterName} is not available for this resource.` }
+          : routeMetricName !== null && active === null
+            ? { title: "Instrument not found", content: `The instrument ${routeMetricName} is not available in this meter.` }
+            : null;
+
   return (
     <Page aria-labelledby="deck-page-metrics-title">
       <PageHeader>
@@ -303,7 +321,7 @@ export function MetricsPage({
       </PageToolbar>
 
       <PageBody>
-        {telemetry !== null && selectedResource !== null && metrics.length > 0 ? (
+        {emptyState === null ? (
           <div className="metrics-layout">
             <div className="metric-list">
               <MetricTreeSelector
@@ -375,8 +393,8 @@ export function MetricsPage({
             </div>
           </div>
         ) : (
-          <EmptyState icon={<MetricsIcon size={26} />} title={telemetry === null ? "Loading metrics" : "No metrics for this resource"}>
-            {telemetry === null ? "Waiting for the telemetry snapshot." : "Metrics will appear here as OTLP data arrives."}
+          <EmptyState icon={<MetricsIcon size={26} />} title={emptyState.title}>
+            {emptyState.content}
           </EmptyState>
         )}
       </PageBody>

@@ -20,7 +20,7 @@ export const httpBackendFeatures = {
   "HTTP-TRACE-CLEAR-001": "HTTP mode clears one trace resource or all trace resources and refreshes its snapshot.",
   "HTTP-METRICS-001": "HTTP mode loads real metric summaries and requests an exact resource, meter, and instrument series.",
   "HTTP-METRIC-CLEAR-001": "HTTP mode clears one metric resource or all metric resources and refreshes its snapshot.",
-  "HTTP-EMPTY-TELEMETRY-001": "HTTP mode distinguishes a settled empty telemetry snapshot from loading.",
+  "HTTP-EMPTY-TELEMETRY-001": "HTTP mode distinguishes loading, no-resource, no-meter, missing-meter, missing-instrument, and no-sample metric states.",
 } as const;
 
 export type HttpBackendFeatureId = keyof typeof httpBackendFeatures;

@@ -1079,21 +1079,59 @@ test(`${features("HTTP-TRACE-CLEAR-001")} clears selected and all traces through
   expect(clearRequests).toEqual(["stress-api", null]);
 });
 
-test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics state`, async ({ page }) => {
+test(`${features("HTTP-EMPTY-TELEMETRY-001")} distinguishes every settled empty metrics state`, async ({ page }) => {
+  let summaries: Array<Record<string, unknown>> = [];
   await page.route("**/api/deck/config", async (route) => {
     await route.fulfill({ json: config });
   });
   await page.route("**/api/deck/resources", async (route) => {
     await route.fulfill({ json: [resource] });
   });
+  await page.unroute("**/api/deck/telemetry/metrics");
+  await page.route("**/api/deck/telemetry/metrics", async (route) => {
+    await route.fulfill({ json: summaries });
+  });
+  await page.route("**/api/deck/telemetry/metrics/series?*", async (route) => {
+    await route.fulfill({
+      json: {
+        name: "requests",
+        resourceName: resource.name,
+        meterName: "Stress.Api",
+        unit: "{request}",
+        kind: "counter",
+        timestampsMs: [],
+        values: [],
+      },
+    });
+  });
 
-  await page.goto("/?backend=http");
-  await page.getByRole("navigation").getByRole("button", { name: "Metrics 0" }).click();
-
+  await page.goto("/metrics?backend=http");
   const metrics = page.getByRole("main").getByRole("region", { name: "Metrics" });
   await expect(metrics.locator(".page__subtitle")).toHaveText("Select a resource");
-  await expect(metrics).toContainText("No metrics for this resource");
+  await expect(metrics.getByRole("heading", { name: "No metric resources" })).toBeVisible();
   await expect(metrics).not.toContainText("Loading…");
+
+  await page.goto(`/metrics/resource/${resource.name}?backend=http`);
+  await expect(metrics.getByRole("heading", { name: "No meters for this resource" })).toBeVisible();
+
+  summaries = [{
+    name: "requests",
+    description: "Handled requests.",
+    unit: "{request}",
+    resourceName: resource.name,
+    meterName: "Stress.Api",
+    kind: "counter",
+    lastValue: 0,
+    pointCount: 0,
+  }];
+  await page.goto(`/metrics/resource/${resource.name}/meter/Missing?backend=http`);
+  await expect(metrics.getByRole("heading", { name: "Meter not found" })).toBeVisible();
+
+  await page.goto(`/metrics/resource/${resource.name}/meter/Stress.Api/instrument/missing?backend=http`);
+  await expect(metrics.getByRole("heading", { name: "Instrument not found" })).toBeVisible();
+
+  await page.goto(`/metrics/resource/${resource.name}/meter/Stress.Api/instrument/requests?backend=http`);
+  await expect(metrics.getByText("No samples in this window yet.", { exact: true }).first()).toBeVisible();
 });
 
 test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, and clears HTTP metric telemetry`, async ({ page }) => {
@@ -1205,7 +1243,7 @@ test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, an
   await metrics.getByRole("button", { name: "Clear metrics" }).click();
   await page.getByRole("menuitem", { name: "Clear all resources" }).click();
   await expect(page.getByRole("status")).toHaveText("Cleared all metrics.");
-  await expect(metrics).toContainText("No metrics for this resource");
+  await expect(metrics).toContainText("No metric resources");
   expect(clearRequests).toEqual(["stress-api", null]);
 });
 
