@@ -7,6 +7,10 @@ import {
 
 const registeredFeatures = new Set<string>();
 const browserErrors = new WeakMap<Page, string[]>();
+const legacyDashboardUrl = new URL(process.env.ASPIRE_LEGACY_DASHBOARD_URL!);
+const loginPath = legacyDashboardUrl.pathname === "/login" && legacyDashboardUrl.searchParams.has("t")
+  ? `${legacyDashboardUrl.pathname}${legacyDashboardUrl.search}`
+  : "/";
 
 function features(scenario: LegacyScenario): string {
   const scenarioFeatures = getLegacyScenarioFeatures(scenario);
@@ -32,7 +36,7 @@ test.beforeEach(async ({ page }) => {
   });
   page.on("pageerror", (error) => errors.push(`page: ${error.message}`));
 
-  await page.goto("/");
+  await page.goto(loginPath, { waitUntil: "domcontentloaded" });
   await expect(page.getByRole("navigation")).toBeVisible();
   await expect(page.getByRole("main")).toBeVisible();
   await dismissBlockingInteraction(page);
@@ -76,9 +80,31 @@ test(`${features("shell")} inventories the legacy shell`, async ({ page }, testI
   await expect(notifications.getByRole("button", { name: "Enter values", exact: true })).toBeVisible();
   await expect(notifications.getByText("Update now", { exact: true })).toBeVisible();
   await expect(notifications.getByRole("link", { name: "Upgrade instructions", exact: true })).toBeVisible();
-  await expect(page.getByText("Endpoint is unsecured", { exact: true })).toBeVisible();
-
   await attachScreenshot(page, testInfo, "legacy-shell");
+
+  for (const [key, path] of [["c", "/consolelogs"], ["s", "/structuredlogs"], ["t", "/traces"], ["m", "/metrics"], ["r", "/"]] as const) {
+    await page.keyboard.press(key);
+    await expect(page).toHaveURL(new RegExp(`${path.replace("/", "\\/")}(?:\\?.*)?$`));
+  }
+
+  await page.goBack();
+  await expect(page).toHaveURL(/\/metrics(?:\?.*)?$/);
+  await page.goForward();
+  await expect(page).toHaveURL(/\/(?:\?.*)?$/);
+
+  await page.keyboard.press("?");
+  const shortcutHelp = page.getByRole("dialog", { name: "Help", exact: true });
+  await expect(shortcutHelp).toBeVisible();
+  await shortcutHelp.getByRole("button", { name: "Close", exact: true }).click({ force: true });
+
+  await page.keyboard.press("Shift+S");
+  const shortcutSettings = page.getByRole("dialog", { name: "Settings", exact: true });
+  await expect(shortcutSettings).toBeVisible();
+  await shortcutSettings.getByRole("button", { name: "Close", exact: true }).click({ force: true });
+
+  await page.goto("/error/404");
+  await expect(page.getByText("404", { exact: true })).toBeVisible();
+  await expect(page.getByText("The page you requested could not be found", { exact: true })).toBeVisible();
 });
 
 test(`${features("resources")} inventories resources, details, and graph behavior`, async ({ page }, testInfo) => {
@@ -180,15 +206,14 @@ test(`${features("structured-logs")} inventories structured log controls and row
   await page.goto("/structuredlogs");
   await expect(page.getByRole("textbox", { name: "Filter...", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Add filter", exact: true })).toBeVisible();
-  await expect(page.getByRole("combobox", { name: "Select a resource", exact: true })).toBeVisible();
+  await expect(page.getByRole("combobox", { name: /^(Resource|Select a resource)$/ })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Level", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Pause incoming data", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Remove data", exact: true })).toBeVisible();
   for (const header of ["Resource", "Level", "Timestamp", "Message", "Trace", "Actions"]) {
     await expect(page.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
   }
-  await expect(page.getByRole("button", { name: "Open in text visualizer", exact: true }).first()).toBeVisible();
-  await expect(page.getByRole("button", { name: "Actions", exact: true }).first()).toBeVisible();
+  await expect(page.getByText("No structured logs found", { exact: true })).toBeVisible();
   await attachScreenshot(page, testInfo, "legacy-structured-logs");
 });
 

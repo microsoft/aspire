@@ -177,9 +177,12 @@ Run the legacy black-box inventory against the same Stress AppHost before changi
 surface:
 
 ```bash
-ASPIRE_LEGACY_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
+ASPIRE_LEGACY_DASHBOARD_URL='https://Stress.dev.localhost:49985/login?t=<token>' \
   npm exec -- playwright test --config=playwright.legacy.config.ts
 ```
+
+Pass the login URL printed by the AppHost for a clean, isolated browser run. A bare dashboard
+origin also works when the browser context is authenticated by the surrounding environment.
 
 This run records screenshots, video, and traces for the legacy shell, resource list/details/graph,
 parameters, command argument inputs, console, structured logs, traces, and metrics. Features that

@@ -6,6 +6,8 @@ if (!dashboardUrl) {
   throw new Error("ASPIRE_LEGACY_DASHBOARD_URL must point to a running legacy Stress dashboard.");
 }
 
+const dashboardOrigin = new URL(dashboardUrl).origin;
+
 export default defineConfig({
   testDir: "./e2e/legacy",
   outputDir: "./test-results-legacy",
@@ -18,7 +20,7 @@ export default defineConfig({
     ["html", { open: "never", outputFolder: "playwright-report-legacy" }],
   ],
   use: {
-    baseURL: dashboardUrl,
+    baseURL: dashboardOrigin,
     browserName: "chromium",
     ignoreHTTPSErrors: true,
     viewport: { width: 1440, height: 1000 },

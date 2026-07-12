@@ -4,17 +4,17 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 54
+- Legacy black-box scenarios pending: 53
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
 | SHELL-IDENTITY-001 | shell | `/` | shell | covered | APP-SHELL-001; STRESS-CONFIG-001 | Application identity and dashboard version are visible. |
 | SHELL-NAV-001 | shell | `/` | shell | covered | APP-NAV-001; RES-GRAPH-001 | Resources, Parameters, Graph, Console, Structured Logs, Traces, and Metrics are reachable from navigation. |
-| SHELL-ROUTES-001 | shell | `/` | PENDING | covered | APP-ROUTES-001 | Pages have stable URLs and browser history/deep links restore the selected page. |
+| SHELL-ROUTES-001 | shell | `/` | shell | covered | APP-ROUTES-001 | Pages have stable URLs and browser history/deep links restore the selected page. |
 | SHELL-REPO-001 | shell | `/` | shell | covered | APP-REPOSITORY-001 | The Aspire repository link is available from the top bar. |
 | SHELL-HELP-001 | shell | `/` | shell | covered | APP-HELP-001 | Help opens with documentation and keyboard shortcut reference content. |
-| SHELL-KEYBOARD-001 | shell | `/` | PENDING | covered | APP-KEYBOARD-001 | Page navigation, panel, help, and settings keyboard shortcuts work. |
+| SHELL-KEYBOARD-001 | shell | `/` | shell | covered | APP-KEYBOARD-001 | Page navigation, panel, help, and settings keyboard shortcuts work. |
 | SHELL-AGENTS-001 | shell | `/` | shell | covered | HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | The AI agents entry point appears when enabled. |
 | SHELL-ASSISTANT-001 | shell | `/` | PENDING | covered | APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
 | SHELL-NOTIFICATIONS-001 | shell | `/` | shell | covered | APP-NOTIFICATION-001; CMD-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |
@@ -27,8 +27,8 @@
 | SHELL-USER-001 | shell | `/` | PENDING | covered | HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Authenticated user profile and sign-out behavior are available when configured. |
 | SHELL-AUTH-001 | shell | `/login` | PENDING | covered | HTTP-AUTH-001; DeckApiTests.GetResources_BrowserTokenAuthWithoutCookie_RedirectsToLogin; BrowserTokenAuthenticationTests; FrontendOpenIdConnectAuthTests | Browser-token and OpenID Connect login flows protect the frontend. |
 | SHELL-RECONNECT-001 | shell | `/` | PENDING | covered | HTTP-RECOVERY-001; HTTP-RECONNECT-001 | A lost dashboard circuit or backend connection exposes reconnect and recovery UI. |
-| SHELL-UNSECURED-001 | shell | `/` | shell | covered | HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
-| SHELL-NOTFOUND-001 | shell | `/error/404` | PENDING | covered | APP-NOTFOUND-001 | Unknown routes render a dedicated not-found experience. |
+| SHELL-UNSECURED-001 | shell | `/` | PENDING | covered | HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
+| SHELL-NOTFOUND-001 | shell | `/error/404` | shell | covered | APP-NOTFOUND-001 | Unknown routes render a dedicated not-found experience. |
 | SHELL-ERROR-001 | shell | `/error` | shell | covered | APP-ERROR-001 | Unhandled errors render a recoverable error experience. |
 | SHELL-RESPONSIVE-001 | shell | `/` | shell | covered | APP-RESPONSIVE-001; OBS-RESPONSIVE-001; STRESS-RESPONSIVE-001 | Navigation, header actions, pages, and overlays remain usable on mobile. |
 | SHELL-ACCESSIBILITY-001 | shell | `/` | shell | covered | APP-PAGE-001; APP-ACCESSIBILITY-001; toolkit.aria.yml | Landmarks, names, focus order, dialogs, and keyboard interaction remain accessible. |
@@ -124,7 +124,7 @@
 | LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | covered | HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001 | Structured logs can be cleared for the selected resource or all resources. |
 | LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | PENDING | covered | HTTP-STRUCTURED-LOG-VIRTUALIZATION-001 | Large log volumes remain responsive through row virtualization. |
 | LOG-DETAILS-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-DETAILS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Selecting a log opens complete event, scope, resource, and attribute details. |
-| LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |
+| LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |
 | LOG-TRACE-LINK-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001 | Trace IDs deep-link to the matching trace and span. |
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-GENAI-001 | GenAI log records open the dedicated GenAI visualizer. |
 | LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-EXPLAIN-001 | Explain errors summarizes current error logs through the assistant. |
