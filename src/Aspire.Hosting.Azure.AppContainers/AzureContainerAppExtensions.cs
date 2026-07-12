@@ -700,6 +700,7 @@ public static class AzureContainerAppExtensions
     /// </summary>
     /// <param name="builder">The <see cref="AzureContainerAppEnvironmentResource"/> to configure.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// <para>
     /// By default, the managed environment's <c>name</c> now incorporates the resource name so that multiple
