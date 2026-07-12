@@ -60,6 +60,7 @@ const telemetrySpanKeys = new Set<string>();
 
 let configPromise: Promise<DeckConfig> | null = null;
 let retryResourceConnection: (() => void) | null = null;
+let authenticationRedirectStarted = false;
 
 async function requestJson<T>(path: string): Promise<T> {
   const response = await fetch(`/api/deck/${path}`, {
@@ -67,6 +68,16 @@ async function requestJson<T>(path: string): Promise<T> {
     credentials: "same-origin",
     headers: { Accept: "application/json" },
   });
+  if (response.redirected) {
+    const redirectUrl = new URL(response.url);
+    if (redirectUrl.origin === window.location.origin && (redirectUrl.pathname === "/login" || redirectUrl.pathname.startsWith("/authentication/"))) {
+      if (!authenticationRedirectStarted) {
+        authenticationRedirectStarted = true;
+        window.location.assign(`${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`);
+      }
+      throw new Error("Dashboard authentication is required.");
+    }
+  }
   if (!response.ok) {
     throw new Error(`Deck API request failed with ${response.status} ${response.statusText}.`);
   }

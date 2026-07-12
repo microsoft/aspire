@@ -9,6 +9,7 @@ const coveredFeatures = new Set<HttpBackendFeatureId>();
 const browserErrors = new WeakMap<Page, string[]>();
 const allowUnavailableResponses = new WeakSet<Page>();
 const allowInterceptedImportAbort = new WeakSet<Page>();
+const allowAuthenticationNavigation = new WeakSet<Page>();
 
 function features(...ids: HttpBackendFeatureId[]): string {
   for (const id of ids) {
@@ -104,7 +105,13 @@ test.afterEach(async ({ page }) => {
   const filtered = allowInterceptedImportAbort.has(page)
     ? unexpected.filter((error) => !error.includes("/api/deck/manage-data/import (net::ERR_ABORTED)"))
     : unexpected;
-  expect(filtered, "Unexpected browser errors").toEqual([]);
+  const navigationFiltered = allowAuthenticationNavigation.has(page)
+    ? filtered.filter((error) =>
+        error !== "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+        && !(error.includes("/login?returnUrl=") && error.endsWith("(net::ERR_ABORTED)"))
+        && !(error.includes("/api/deck/config") && error.endsWith("(net::ERR_ABORTED)")))
+    : filtered;
+  expect(navigationFiltered, "Unexpected browser errors").toEqual([]);
 });
 
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {
@@ -168,6 +175,29 @@ test(`${features("HTTP-SHELL-UNSECURED-001")} warns about unsecured endpoints an
 
   await page.reload();
   await expect(page.getByRole("region", { name: "System notifications" })).toBeHidden();
+});
+
+test(`${features("HTTP-AUTH-001")} transfers an authentication challenge to the dashboard login flow`, async ({ page }) => {
+  // Full-page login navigation intentionally cancels in-flight startup requests.
+  allowAuthenticationNavigation.add(page);
+  await page.route("**/api/deck/config", async (route) => route.fulfill({
+    status: 302,
+    headers: { Location: "/login?returnUrl=%2Fapi%2Fdeck%2Fconfig" },
+  }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({
+    status: 302,
+    headers: { Location: "/login?returnUrl=%2Fapi%2Fdeck%2Fresources" },
+  }));
+  await page.route("**/login?*", async (route) => route.fulfill({
+    contentType: "text/html",
+    body: "<!doctype html><title>Dashboard login</title><h1>Log in to Aspire</h1>",
+  }));
+
+  await page.goto("/?backend=http");
+
+  await expect(page).toHaveURL(/\/login\?returnUrl=/);
+  await expect(page.getByRole("heading", { name: "Log in to Aspire" })).toBeVisible();
+  await expect(page.getByRole("heading", { name: "Can't reach the AppHost" })).toHaveCount(0);
 });
 
 test(`${features("HTTP-MANAGE-DATA-001")} manages dashboard data through the HTTP backend`, async ({ page }) => {
