@@ -213,10 +213,16 @@ app.MapDefaultEndpoints();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
             output.WriteLine("Step 12: Verifying the deployed network infrastructure...");
-            await VerifyNetworkInfrastructureAsync(auto, counter, resourceGroupName);
+            await auto.RunCommandAsync(
+                BuildNetworkInfrastructureVerificationCommand(resourceGroupName),
+                counter,
+                TimeSpan.FromMinutes(4));
 
             output.WriteLine("Step 13: Verifying Blob access and private DNS from App Service...");
-            await VerifyBlobConnectivityAsync(auto, counter, resourceGroupName);
+            await auto.RunCommandAsync(
+                BuildBlobConnectivityVerificationCommand(resourceGroupName),
+                counter,
+                TimeSpan.FromMinutes(8));
 
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
@@ -246,65 +252,135 @@ app.MapDefaultEndpoints();
         }
     }
 
-    private static async Task VerifyNetworkInfrastructureAsync(
-        Hex1bTerminalAutomator auto,
-        SequenceCounter counter,
-        string resourceGroupName)
+    private static string BuildNetworkInfrastructureVerificationCommand(string resourceGroupName)
     {
-        await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
-            "if ! vnet_name=$(az network vnet list -g \"$RG_NAME\" --query \"[?subnets[?name == 'app-service-subnet']].name | [0]\" -o tsv); then echo \"ERROR: Failed to query virtual network\"; exit 1; fi; " +
-            "if [ -z \"$vnet_name\" ]; then echo \"ERROR: Virtual network was not found\"; exit 1; fi && " +
-            "if ! app_service_subnet_id=$(az network vnet subnet show -g \"$RG_NAME\" --vnet-name \"$vnet_name\" --name app-service-subnet --query id -o tsv); then echo \"ERROR: Failed to query App Service subnet\"; exit 1; fi; " +
-            "if ! private_endpoint_subnet_id=$(az network vnet subnet show -g \"$RG_NAME\" --vnet-name \"$vnet_name\" --name private-endpoint-subnet --query id -o tsv); then echo \"ERROR: Failed to query private endpoint subnet\"; exit 1; fi; " +
-            "if [ -z \"$app_service_subnet_id\" ] || [ -z \"$private_endpoint_subnet_id\" ] || [ \"$app_service_subnet_id\" = \"$private_endpoint_subnet_id\" ]; then echo \"ERROR: Expected distinct App Service and private endpoint subnets\"; exit 1; fi && " +
-            "if ! delegation=$(az network vnet subnet show --ids \"$app_service_subnet_id\" --query \"delegations[?serviceName == 'Microsoft.Web/serverFarms'].serviceName | [0]\" -o tsv); then echo \"ERROR: Failed to query App Service subnet delegation\"; exit 1; fi; " +
-            "if [ \"$delegation\" != \"Microsoft.Web/serverFarms\" ]; then echo \"ERROR: App Service subnet is not delegated to Microsoft.Web/serverFarms\"; exit 1; fi && " +
-            "if ! private_endpoint_delegation=$(az network vnet subnet show --ids \"$private_endpoint_subnet_id\" --query \"delegations[0].serviceName\" -o tsv); then echo \"ERROR: Failed to query private endpoint subnet delegation\"; exit 1; fi; " +
-            "if [ -n \"$private_endpoint_delegation\" ]; then echo \"ERROR: Private endpoint subnet must not be delegated\"; exit 1; fi && " +
-            "if ! server_app_name=$(az webapp list -g \"$RG_NAME\" --query \"[?contains(name, 'server')].name | [0]\" -o tsv); then echo \"ERROR: Failed to query App Service workload\"; exit 1; fi; " +
-            "if [ -z \"$server_app_name\" ]; then echo \"ERROR: Server App Service workload was not found\"; exit 1; fi && " +
-            "if ! server_subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$server_app_name\" --query virtualNetworkSubnetId -o tsv); then echo \"ERROR: Failed to query App Service VNet integration\"; exit 1; fi; " +
-            "if [ \"$server_subnet_id\" != \"$app_service_subnet_id\" ]; then echo \"ERROR: App Service workload is not integrated with the delegated subnet\"; exit 1; fi && " +
-            "if ! storage_name=$(az storage account list -g \"$RG_NAME\" --query \"[0].name\" -o tsv); then echo \"ERROR: Failed to query Storage account\"; exit 1; fi; " +
-            "if [ -z \"$storage_name\" ]; then echo \"ERROR: Storage account was not found\"; exit 1; fi && " +
-            "if ! public_network_access=$(az storage account show -g \"$RG_NAME\" -n \"$storage_name\" --query publicNetworkAccess -o tsv); then echo \"ERROR: Failed to query Storage public network access\"; exit 1; fi; " +
-            "if [ \"$public_network_access\" != \"Disabled\" ]; then echo \"ERROR: Storage public network access must be disabled\"; exit 1; fi && " +
-            "if ! private_endpoint_count=$(az network private-endpoint list -g \"$RG_NAME\" --query \"length([])\" -o tsv); then echo \"ERROR: Failed to query private endpoints\"; exit 1; fi; " +
-            "if [ \"$private_endpoint_count\" != \"1\" ]; then echo \"ERROR: Expected exactly one private endpoint\"; exit 1; fi && " +
-            "if ! private_endpoint_id=$(az network private-endpoint list -g \"$RG_NAME\" --query \"[0].id\" -o tsv); then echo \"ERROR: Failed to query private endpoint ID\"; exit 1; fi; " +
-            "if ! private_endpoint_nic_id=$(az network private-endpoint show --ids \"$private_endpoint_id\" --query \"networkInterfaces[0].id\" -o tsv); then echo \"ERROR: Failed to query private endpoint NIC\"; exit 1; fi; " +
-            "if ! private_endpoint_ip=$(az network nic show --ids \"$private_endpoint_nic_id\" --query \"ipConfigurations[0].privateIPAddress\" -o tsv); then echo \"ERROR: Failed to query private endpoint IP\"; exit 1; fi; " +
-            "if [ -z \"$private_endpoint_ip\" ]; then echo \"ERROR: Private endpoint IP was not found\"; exit 1; fi && " +
-            "if ! az network private-dns zone show -g \"$RG_NAME\" -n privatelink.blob.core.windows.net &>/dev/null; then echo \"ERROR: Blob private DNS zone was not found\"; exit 1; fi && " +
-            "if ! dns_record_ip=$(az network private-dns record-set a show -g \"$RG_NAME\" -z privatelink.blob.core.windows.net -n \"$storage_name\" --query \"aRecords[0].ipv4Address\" -o tsv); then echo \"ERROR: Failed to query Blob private DNS record\"; exit 1; fi; " +
-            "if [ \"$dns_record_ip\" != \"$private_endpoint_ip\" ]; then echo \"ERROR: Blob private DNS record does not point to the private endpoint\"; exit 1; fi && " +
-            "echo \"Verified App Service VNet integration, Blob private endpoint, and private DNS infrastructure\"");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(4));
+        return BuildBashCommand($$"""
+            set -euo pipefail
+
+            fail() {
+                echo "ERROR: $1"
+                exit 1
+            }
+
+            require_value() {
+                [ -n "$1" ] || fail "$2"
+            }
+
+            require_equal() {
+                [ "$1" = "$2" ] || fail "$3"
+            }
+
+            resource_group={{AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}}
+
+            vnet_name=$(az network vnet list -g "$resource_group" --query "[?subnets[?name == 'app-service-subnet']].name | [0]" -o tsv) ||
+                fail "Failed to query virtual network"
+            require_value "$vnet_name" "Virtual network was not found"
+
+            app_service_subnet_id=$(az network vnet subnet show -g "$resource_group" --vnet-name "$vnet_name" --name app-service-subnet --query id -o tsv) ||
+                fail "Failed to query App Service subnet"
+            private_endpoint_subnet_id=$(az network vnet subnet show -g "$resource_group" --vnet-name "$vnet_name" --name private-endpoint-subnet --query id -o tsv) ||
+                fail "Failed to query private endpoint subnet"
+            require_value "$app_service_subnet_id" "App Service subnet was not found"
+            require_value "$private_endpoint_subnet_id" "Private endpoint subnet was not found"
+            [ "$app_service_subnet_id" != "$private_endpoint_subnet_id" ] ||
+                fail "Expected distinct App Service and private endpoint subnets"
+
+            delegation=$(az network vnet subnet show --ids "$app_service_subnet_id" --query "delegations[?serviceName == 'Microsoft.Web/serverFarms'].serviceName | [0]" -o tsv) ||
+                fail "Failed to query App Service subnet delegation"
+            require_equal "$delegation" "Microsoft.Web/serverFarms" "App Service subnet is not delegated to Microsoft.Web/serverFarms"
+
+            private_endpoint_delegation=$(az network vnet subnet show --ids "$private_endpoint_subnet_id" --query "delegations[0].serviceName" -o tsv) ||
+                fail "Failed to query private endpoint subnet delegation"
+            [ -z "$private_endpoint_delegation" ] ||
+                fail "Private endpoint subnet must not be delegated"
+
+            server_app_name=$(az webapp list -g "$resource_group" --query "[?contains(name, 'server')].name | [0]" -o tsv) ||
+                fail "Failed to query App Service workload"
+            require_value "$server_app_name" "Server App Service workload was not found"
+            server_subnet_id=$(az webapp show -g "$resource_group" -n "$server_app_name" --query virtualNetworkSubnetId -o tsv) ||
+                fail "Failed to query App Service VNet integration"
+            require_equal "$server_subnet_id" "$app_service_subnet_id" "App Service workload is not integrated with the delegated subnet"
+
+            storage_name=$(az storage account list -g "$resource_group" --query "[0].name" -o tsv) ||
+                fail "Failed to query Storage account"
+            require_value "$storage_name" "Storage account was not found"
+            public_network_access=$(az storage account show -g "$resource_group" -n "$storage_name" --query publicNetworkAccess -o tsv) ||
+                fail "Failed to query Storage public network access"
+            require_equal "$public_network_access" "Disabled" "Storage public network access must be disabled"
+
+            private_endpoint_count=$(az network private-endpoint list -g "$resource_group" --query "length([])" -o tsv) ||
+                fail "Failed to query private endpoints"
+            require_equal "$private_endpoint_count" "1" "Expected exactly one private endpoint"
+            private_endpoint_id=$(az network private-endpoint list -g "$resource_group" --query "[0].id" -o tsv) ||
+                fail "Failed to query private endpoint ID"
+            private_endpoint_nic_id=$(az network private-endpoint show --ids "$private_endpoint_id" --query "networkInterfaces[0].id" -o tsv) ||
+                fail "Failed to query private endpoint NIC"
+            private_endpoint_ip=$(az network nic show --ids "$private_endpoint_nic_id" --query "ipConfigurations[0].privateIPAddress" -o tsv) ||
+                fail "Failed to query private endpoint IP"
+            require_value "$private_endpoint_ip" "Private endpoint IP was not found"
+
+            az network private-dns zone show -g "$resource_group" -n privatelink.blob.core.windows.net >/dev/null ||
+                fail "Blob private DNS zone was not found"
+            dns_record_ip=$(az network private-dns record-set a show -g "$resource_group" -z privatelink.blob.core.windows.net -n "$storage_name" --query "aRecords[0].ipv4Address" -o tsv) ||
+                fail "Failed to query Blob private DNS record"
+            require_equal "$dns_record_ip" "$private_endpoint_ip" "Blob private DNS record does not point to the private endpoint"
+
+            echo "Verified App Service VNet integration, Blob private endpoint, and private DNS infrastructure"
+            """);
     }
 
-    private static async Task VerifyBlobConnectivityAsync(
-        Hex1bTerminalAutomator auto,
-        SequenceCounter counter,
-        string resourceGroupName)
+    private static string BuildBlobConnectivityVerificationCommand(string resourceGroupName)
     {
-        await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
-            "if ! server_app_name=$(az webapp list -g \"$RG_NAME\" --query \"[?contains(name, 'server')].name | [0]\" -o tsv); then echo \"ERROR: Failed to query App Service workload\"; exit 1; fi; " +
-            "if [ -z \"$server_app_name\" ]; then echo \"ERROR: Server App Service workload was not found\"; exit 1; fi && " +
-            "if ! server_host_name=$(az webapp show -g \"$RG_NAME\" -n \"$server_app_name\" --query defaultHostName -o tsv); then echo \"ERROR: Failed to query App Service hostname\"; exit 1; fi; " +
-            "if [ -z \"$server_host_name\" ]; then echo \"ERROR: App Service hostname was not found\"; exit 1; fi && " +
-            "if ! private_endpoint_id=$(az network private-endpoint list -g \"$RG_NAME\" --query \"[0].id\" -o tsv); then echo \"ERROR: Failed to query private endpoint ID\"; exit 1; fi; " +
-            "if ! private_endpoint_nic_id=$(az network private-endpoint show --ids \"$private_endpoint_id\" --query \"networkInterfaces[0].id\" -o tsv); then echo \"ERROR: Failed to query private endpoint NIC\"; exit 1; fi; " +
-            "if ! private_endpoint_ip=$(az network nic show --ids \"$private_endpoint_nic_id\" --query \"ipConfigurations[0].privateIPAddress\" -o tsv); then echo \"ERROR: Failed to query private endpoint IP\"; exit 1; fi; " +
-            "probe_succeeded=0 && " +
-            "for attempt in $(seq 1 18); do " +
-            "probe_result=$(curl -sS \"https://$server_host_name/api/verify-blobs\" --max-time 60 2>&1) || probe_result=\"\"; " +
-            "if echo \"$probe_result\" | grep -q '\"status\":\"ok\"' && echo \"$probe_result\" | grep -q '\"contentMatches\":true' && echo \"$probe_result\" | grep -Fq \"$private_endpoint_ip\"; then echo \"Verified Blob access through private endpoint on attempt $attempt\"; probe_succeeded=1; break; fi; " +
-            "echo \"Blob probe attempt $attempt did not succeed; retrying in 10 seconds...\"; sleep 10; " +
-            "done && " +
-            "if [ \"$probe_succeeded\" -ne 1 ]; then echo \"ERROR: Blob probe did not report private endpoint connectivity\"; exit 1; fi");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(8));
+        return BuildBashCommand($$"""
+            set -euo pipefail
+
+            fail() {
+                echo "ERROR: $1"
+                exit 1
+            }
+
+            require_value() {
+                [ -n "$1" ] || fail "$2"
+            }
+
+            resource_group={{AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}}
+
+            server_app_name=$(az webapp list -g "$resource_group" --query "[?contains(name, 'server')].name | [0]" -o tsv) ||
+                fail "Failed to query App Service workload"
+            require_value "$server_app_name" "Server App Service workload was not found"
+            server_host_name=$(az webapp show -g "$resource_group" -n "$server_app_name" --query defaultHostName -o tsv) ||
+                fail "Failed to query App Service hostname"
+            require_value "$server_host_name" "App Service hostname was not found"
+
+            private_endpoint_id=$(az network private-endpoint list -g "$resource_group" --query "[0].id" -o tsv) ||
+                fail "Failed to query private endpoint ID"
+            private_endpoint_nic_id=$(az network private-endpoint show --ids "$private_endpoint_id" --query "networkInterfaces[0].id" -o tsv) ||
+                fail "Failed to query private endpoint NIC"
+            private_endpoint_ip=$(az network nic show --ids "$private_endpoint_nic_id" --query "ipConfigurations[0].privateIPAddress" -o tsv) ||
+                fail "Failed to query private endpoint IP"
+
+            for attempt in $(seq 1 18)
+            do
+                probe_result=$(curl -sS "https://$server_host_name/api/verify-blobs" --max-time 60 2>&1) || probe_result=""
+                if echo "$probe_result" | grep -q '"status":"ok"' &&
+                   echo "$probe_result" | grep -q '"contentMatches":true' &&
+                   echo "$probe_result" | grep -Fq "$private_endpoint_ip"
+                then
+                    echo "Verified Blob access through private endpoint on attempt $attempt"
+                    exit 0
+                fi
+
+                echo "Blob probe attempt $attempt did not succeed; retrying in 10 seconds..."
+                sleep 10
+            done
+
+            fail "Blob probe did not report private endpoint connectivity"
+            """);
+    }
+
+    private static string BuildBashCommand(string script)
+    {
+        return $"bash -c {AspireCliShellCommandHelpers.QuoteBashArg(script)}";
     }
 
     private static void TriggerCleanupResourceGroup(string resourceGroupName, ITestOutputHelper output)
