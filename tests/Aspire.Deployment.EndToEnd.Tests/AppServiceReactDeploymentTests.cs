@@ -346,7 +346,7 @@ builder.AddAzureAppServiceEnvironment("infra")
         SequenceCounter counter,
         string resourceGroupName)
     {
-        await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
+        await auto.TypeAsync($"RG_NAME={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)} && " +
             "webapps=$(az webapp list -g \"$RG_NAME\" --query \"[].name\" -o tsv 2>/dev/null) && " +
             "if [ -z \"$webapps\" ]; then echo \"ERROR: No App Service sites found\"; exit 1; fi && " +
             "webapp_count=0 && slot_count=0 && " +
@@ -372,7 +372,7 @@ builder.AddAzureAppServiceEnvironment("infra")
         SequenceCounter counter,
         string resourceGroupName)
     {
-        await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
+        await auto.TypeAsync($"RG_NAME={AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)} && " +
             "vnet_name=$(az network vnet list -g \"$RG_NAME\" --query \"[?subnets[?name == 'app-service-subnet']].name | [0]\" -o tsv 2>/dev/null) && " +
             "expected_subnet_id=$(az network vnet subnet show -g \"$RG_NAME\" --vnet-name \"$vnet_name\" --name app-service-subnet --query \"id\" -o tsv 2>/dev/null) && " +
             "if [ -z \"$expected_subnet_id\" ]; then echo \"ERROR: Delegated subnet not found\"; exit 1; fi && " +
