@@ -31,9 +31,8 @@ internal static class DashboardUrlsHelper
         ILogger logger,
         CancellationToken cancellationToken = default)
     {
-        // Check whether the dashboard resource is registered at all. If it isn't (e.g. the user
-        // called DisableDashboard()), return immediately rather than waiting forever for a resource
-        // event that will never arrive.
+        // Check whether the dashboard resource is registered at all. If it isn't, return
+        // immediately rather than waiting forever for a resource event that will never arrive.
         var appModel = serviceProvider.GetService<DistributedApplicationModel>();
         var dashboardResource = appModel?.Resources.SingleOrDefault(
             r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName)) as IResourceWithEndpoints;

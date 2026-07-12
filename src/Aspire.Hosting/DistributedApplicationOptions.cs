@@ -58,7 +58,7 @@ public sealed class DistributedApplicationOptions
     public string? AssemblyName { get; set; }
 
     /// <summary>
-    /// Determines whether the dashboard is disabled.
+    /// Determines whether the dashboard should be disabled at app host startup.
     /// </summary>
     public bool DisableDashboard { get; set; }
 

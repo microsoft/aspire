@@ -778,6 +778,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             distributedApplicationLogger ?? NullLogger<DistributedApplication>.Instance,
             new TestDashboardEndpointProvider(),
             executionContext,
+            new DistributedApplicationOptions(),
             resourceNotificationService,
             resourceLoggerService,
             loggerFactory ?? NullLoggerFactory.Instance,

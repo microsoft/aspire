@@ -252,7 +252,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
-        var snapshot = Assert.Single(result);
+        var snapshot = Assert.Single(result, s => s.Name == "myresource");
 
         // State
         Assert.Equal("Running", snapshot.State);
@@ -614,7 +614,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
-        var snapshot = Assert.Single(result);
+        var snapshot = Assert.Single(result, s => s.Name == "myresource");
         Assert.Equal("42", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["number"]).GetValue<string>());
         Assert.Equal(bool.TrueString, Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["flag"]).GetValue<string>());
         Assert.Equal("one,two", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["list"]).GetValue<string>());
@@ -656,7 +656,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             ClientCapabilities = [AuxiliaryBackchannelCapabilities.V3]
         }).DefaultTimeout();
 
-        var snapshot = Assert.Single(response.Resources);
+        var snapshot = Assert.Single(response.Resources, s => s.Name == "myresource");
         Assert.Equal(42, Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["number"]).GetValue<int>());
         Assert.True(Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["flag"]).GetValue<bool>());
         var list = Assert.IsAssignableFrom<JsonArray>(snapshot.Properties["list"]);
@@ -698,7 +698,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
-        var snapshot = Assert.Single(result);
+        var snapshot = Assert.Single(result, s => s.Name == "myapp");
         Assert.Equal("true", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.enabled"]).GetValue<string>());
         Assert.Equal("0", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.replicaIndex"]).GetValue<string>());
         Assert.Equal("1", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.replicaCount"]).GetValue<string>());
@@ -734,7 +734,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
-        var snapshot = Assert.Single(result);
+        var snapshot = Assert.Single(result, s => s.Name == "myapp");
         Assert.DoesNotContain(snapshot.Properties.Keys, k => k.StartsWith("terminal.", StringComparison.Ordinal));
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
@@ -2051,11 +2051,10 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetDashboardUrlsAsync_ReturnsUnhealthy_WhenDashboardResourceIsAbsent()
+    public async Task GetDashboardUrlsAsync_ReturnsUnhealthy_WhenDashboardIsExplicitStart()
     {
-        // When the dashboard is disabled, there is no dashboard resource in the app model.
-        // The method must return promptly rather than waiting forever for a resource event
-        // that will never arrive.
+        // When the dashboard auto-start is disabled, the dashboard resource is present but not started.
+        // URL lookup should still return promptly as unhealthy.
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = true,
             outputHelper);

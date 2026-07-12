@@ -34,6 +34,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                                              ILogger<DistributedApplication> distributedApplicationLogger,
                                              IDashboardEndpointProvider dashboardEndpointProvider,
                                              DistributedApplicationExecutionContext executionContext,
+                                             DistributedApplicationOptions distributedApplicationOptions,
                                              ResourceNotificationService resourceNotificationService,
                                              ResourceLoggerService resourceLoggerService,
                                              ILoggerFactory loggerFactory,
@@ -343,6 +344,12 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
     private void ConfigureAspireDashboardResource(IResource dashboardResource)
     {
+        if (distributedApplicationOptions.DisableDashboard &&
+            !dashboardResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+        {
+            dashboardResource.Annotations.Add(new ExplicitStartupAnnotation());
+        }
+
         // The dashboard resource can be visible during development. We don't want people to be able to stop the dashboard from inside the dashboard.
         // Exclude the lifecycle commands from the dashboard resource so they're not accidently clicked during development.
         dashboardResource.Annotations.Add(new ExcludeLifecycleCommandsAnnotation());
