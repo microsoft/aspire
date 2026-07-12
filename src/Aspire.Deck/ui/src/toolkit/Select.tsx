@@ -4,6 +4,7 @@ import { Select as FluentSelect } from "@fluentui/react-components";
 export interface SelectOption<T = unknown> {
   value: string;
   label: string;
+  group?: string;
   data?: T;
   disabled?: boolean;
   title?: string;
@@ -40,6 +41,27 @@ export function Select<T>({
   const controlId = id ?? generatedId;
   const classes = ["select", className].filter(Boolean).join(" ");
   const fieldClasses = ["deck-select-field", fieldClassName].filter(Boolean).join(" ");
+  const groups = new Map<string | null, SelectOption<T>[]>();
+  for (const option of options) {
+    const group = option.group ?? null;
+    const groupOptions = groups.get(group);
+    if (groupOptions) {
+      groupOptions.push(option);
+    } else {
+      groups.set(group, [option]);
+    }
+  }
+
+  const renderOption = (option: SelectOption<T>) => (
+    <option
+      key={option.value}
+      value={option.value}
+      disabled={option.disabled}
+      title={option.title}
+    >
+      {option.label}
+    </option>
+  );
 
   return (
     <div className={fieldClasses}>
@@ -65,16 +87,11 @@ export function Select<T>({
             {placeholder}
           </option>
         ) : null}
-        {options.map((option) => (
-          <option
-            key={option.value}
-            value={option.value}
-            disabled={option.disabled}
-            title={option.title}
-          >
-            {option.label}
-          </option>
-        ))}
+        {[...groups].map(([group, groupOptions]) => group ? (
+          <optgroup key={group} label={group}>
+            {groupOptions.map(renderOption)}
+          </optgroup>
+        ) : groupOptions.map(renderOption))}
       </FluentSelect>
     </div>
   );

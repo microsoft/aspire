@@ -5,6 +5,7 @@ export interface PropertyGridItem {
   label: ReactNode;
   value: ReactNode;
   highlighted?: boolean;
+  valueClassName?: string;
 }
 
 export function PropertyGrid({
@@ -23,7 +24,12 @@ export function PropertyGrid({
       {items.map((item) => (
         <Fragment key={item.id}>
           <dt className="kv__key">{item.label}</dt>
-          <dd className={`kv__val ${item.highlighted ? "highlight" : ""}`.trim()}>{item.value}</dd>
+          <dd className={["kv__val", item.highlighted ? "highlight" : "", item.valueClassName]
+            .filter(Boolean)
+            .join(" ")}
+          >
+            {item.value}
+          </dd>
         </Fragment>
       ))}
     </dl>

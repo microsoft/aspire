@@ -295,8 +295,11 @@ test(`${features("TK-PROPERTY-GRID-001", "TK-PROPERTY-EXPLORER-001", "TK-TEXT-VI
   await expect(properties.getByRole("definition")).toContainText(["Running", "frontend", "0123456789abcdef0123456789abcdef"]);
 
   const explorer = page.getByRole("region", { name: "Sample property explorer" });
-  await expect(explorer.getByRole("group", { name: "Sample span properties" }).getByRole("term"))
+  const spanProperties = explorer.getByRole("group", { name: "Sample span properties" });
+  await expect(spanProperties.getByRole("term"))
     .toHaveText(["Name", "Kind", "Trace ID"]);
+  await expect(spanProperties.getByRole("definition").filter({ hasText: "0123456789abcdef" }))
+    .toHaveClass(/cell-mono/);
   await explorer.getByRole("textbox", { name: "Filter sample details…" }).fill("trace");
   await expect(explorer.getByRole("group", { name: "Sample span properties" }).getByRole("term"))
     .toHaveText(["Trace ID"]);
@@ -355,6 +358,9 @@ test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET
     "Retired",
   ]);
   await expect(environment.locator("option", { hasText: "Retired" })).toBeDisabled();
+  await expect(environment.locator("optgroup")).toHaveCount(2);
+  await expect(environment.locator("optgroup").nth(0)).toHaveAttribute("label", "Active");
+  await expect(environment.locator("optgroup").nth(1)).toHaveAttribute("label", "Archived");
   await environment.selectOption("production");
   await expect(environment).toHaveValue("production");
 

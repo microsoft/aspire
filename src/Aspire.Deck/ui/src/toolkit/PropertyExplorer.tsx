@@ -9,6 +9,7 @@ export interface PropertyExplorerItem {
   label: string;
   value: ReactNode;
   searchableText?: string;
+  valueClassName?: string;
 }
 
 export interface PropertyExplorerSection {
@@ -55,6 +56,7 @@ export function PropertyExplorer({
         value: typeof item.value === "string"
           ? <Highlighter text={item.value} highlightedText={query} />
           : item.value,
+        valueClassName: item.valueClassName,
       }));
 
       return {

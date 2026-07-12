@@ -335,10 +335,10 @@ export function ToolkitPlayground({
               value={environment}
               placeholder="Choose an environment"
               options={[
-                { value: "development", label: "Development" },
-                { value: "staging", label: "Staging" },
-                { value: "production", label: "Production" },
-                { value: "retired", label: "Retired", disabled: true },
+                { value: "development", label: "Development", group: "Active" },
+                { value: "staging", label: "Staging", group: "Active" },
+                { value: "production", label: "Production", group: "Active" },
+                { value: "retired", label: "Retired", group: "Archived", disabled: true },
               ]}
               onValueChange={setEnvironment}
             />
@@ -468,7 +468,12 @@ export function ToolkitPlayground({
                 items: [
                   { id: "span-name", label: "Name", value: "GET /catalog" },
                   { id: "span-kind", label: "Kind", value: "Server" },
-                  { id: "span-trace", label: "Trace ID", value: "0123456789abcdef0123456789abcdef" },
+                  {
+                    id: "span-trace",
+                    label: "Trace ID",
+                    value: "0123456789abcdef0123456789abcdef",
+                    valueClassName: "cell-mono",
+                  },
                 ],
               },
               {

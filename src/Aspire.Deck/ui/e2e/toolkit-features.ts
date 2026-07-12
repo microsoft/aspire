@@ -12,7 +12,7 @@ export const toolkitFeatures = {
   "TK-ICON-001": "Named Aspire icons expose their Fluent regular/filled component mapping and fallback behavior.",
   "TK-EMPTY-001": "Empty states expose an icon, title, and supporting content.",
   "TK-NOTIFICATION-001": "Notifications expose semantic intent, actions, links, and explicit dismissal.",
-  "TK-SELECT-001": "Select controls expose labels, placeholders, disabled options, and controlled values.",
+  "TK-SELECT-001": "Select controls expose labels, placeholders, native option groups, disabled options, and controlled values.",
   "TK-CHECKBOX-001": "Checkboxes support checked, unchecked, mixed, and disabled states.",
   "TK-SWITCH-001": "Switches expose an accessible binary state and controlled updates.",
   "TK-SECRET-001": "Sensitive values are masked by default and can be explicitly revealed and hidden.",
