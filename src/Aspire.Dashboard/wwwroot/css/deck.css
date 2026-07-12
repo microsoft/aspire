@@ -2232,6 +2232,12 @@ table.data tbody tr.selected {
 table.data.deck-logs-table {
   table-layout: fixed;
 }
+/* `overflow: hidden` makes the wrapper Virtualize's scroll root even though its height is not
+   constrained. Keep this wrapper out of scroll-root discovery so Virtualize observes the
+   surrounding `.page__body` instead. */
+.deck-logs-table-wrap {
+  overflow: visible;
+}
 table.data.deck-logs-table tbody td {
   overflow: hidden;
   text-overflow: ellipsis;

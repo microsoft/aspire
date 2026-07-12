@@ -382,6 +382,29 @@ test(`${features("structured-logs")} inventories structured log controls and row
   await attachScreenshot(page, testInfo, "legacy-structured-logs");
 });
 
+test(`${features("structured-log-virtualization")} bounds high-volume structured log rendering`, async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/");
+  const apiResourceRow = page.getByRole("table").getByRole("row").filter({ hasText: "stress-apiservice" });
+  await apiResourceRow.getByText("stress-apiservice", { exact: true }).click();
+  await page.getByRole("dialog").filter({ hasText: "stress-apiservice" })
+    .getByRole("button", { name: "Log message limit", exact: true }).click();
+
+  await page.goto("/structuredlogs/resource/stress-apiservice");
+  await expect(page.getByRole("strong")).toHaveText("10000 structured logs", { timeout: 30_000 });
+  const virtualizedBody = page.locator("#structured-logs-page-body-id");
+  const virtualizedTable = virtualizedBody.getByRole("table");
+  expect(await virtualizedTable.locator("tbody tr").count()).toBeLessThan(100);
+
+  await virtualizedBody.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  const lastGeneratedLog = virtualizedTable.getByRole("row").filter({ hasText: "Log entry 99-99" });
+  await expect(lastGeneratedLog).toBeVisible({ timeout: 10_000 });
+  expect(await virtualizedTable.locator("tbody tr").count()).toBeLessThan(100);
+});
+
 test(`${features("traces")} inventories trace controls and nested span details`, async ({ page }, testInfo) => {
   test.setTimeout(75_000);
   await page.goto("/");
