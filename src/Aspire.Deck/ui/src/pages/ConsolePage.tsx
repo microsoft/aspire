@@ -3,6 +3,7 @@ import type { ConsoleLogLine, Resource, ResourceCommand } from "../api/types";
 import { subscribeConsoleLogs } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
 import { useCommandExecution } from "../components/useCommandExecution";
+import { InteractiveTerminal } from "../components/InteractiveTerminal";
 import { formatConsoleTimestamp, parseConsoleLine } from "../lib/consoleLogs";
 import { partitionResourceCommands } from "../lib/resourceCommands";
 import {
@@ -128,7 +129,9 @@ export function ConsolePage({
     });
   }, []);
 
-  const subscriptionNames = selected === ALL_RESOURCES
+  const subscriptionNames = selectedResource?.hasTerminal
+    ? []
+    : selected === ALL_RESOURCES
     ? visibleResources.map((resource) => resource.name)
     : selected === "" ? [] : [selected];
   const subscriptionKey = subscriptionNames.join("\0");
@@ -371,7 +374,7 @@ export function ConsolePage({
             });
           }}
         />
-        <Switch
+        {!selectedResource?.hasTerminal ? <><Switch
           ariaLabel="Pause incoming data"
           label="Pause"
           checked={paused}
@@ -395,7 +398,7 @@ export function ConsolePage({
               onSelect: () => clearLines(null),
             },
           ]}
-        />
+        /></> : null}
         {selectedResource ? highlightedCommands.map((command) => (
           <Button
             key={command.name}
@@ -428,6 +431,8 @@ export function ConsolePage({
           <button className="btn btn--sm" onClick={scrollToBottom}>
             Scroll to bottom
           </button>
+        ) : selectedResource?.hasTerminal ? (
+          <InteractiveTerminal resourceName={selectedResource.displayName} replicaIndex={selectedResource.terminalReplicaIndex ?? 0} />
         ) : (
           <span className="badge accent">Live · following</span>
         )}

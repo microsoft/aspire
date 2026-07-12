@@ -1951,6 +1951,51 @@ table.data tbody tr.selected {
   font-weight: 500;
 }
 
+/* ---------- Interactive terminal ---------- */
+.interactive-terminal {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: #0d1117;
+  color: #c9d1d9;
+}
+.interactive-terminal__toolbar {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 6px;
+  padding: 5px 8px;
+  border-bottom: 1px solid #30363d;
+  background: #161b22;
+}
+.interactive-terminal__font,
+.interactive-terminal__dimensions {
+  min-width: 42px;
+  text-align: center;
+  font: 12px ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+.interactive-terminal__host,
+.interactive-terminal__mock-screen {
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+  margin: 0;
+}
+.interactive-terminal__mock-screen {
+  padding: 16px;
+  overflow: auto;
+  color: #d1fae5;
+  background: #0d1117;
+  font: 13px/1.5 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+@media (max-width: 700px) {
+  .interactive-terminal__toolbar {
+    flex-wrap: wrap;
+  }
+}
+
 /* ---------- Empty state ---------- */
 .empty {
   display: flex;

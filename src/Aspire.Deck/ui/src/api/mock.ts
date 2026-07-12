@@ -211,6 +211,8 @@ function makeResources(): Resource[] {
       supportsDetailedTelemetry: false,
       iconName: "Code",
       iconVariant: "regular",
+      hasTerminal: true,
+      terminalReplicaIndex: 0,
     },
     {
       name: "hiddenContainer",

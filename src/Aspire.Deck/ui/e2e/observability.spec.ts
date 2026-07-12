@@ -131,6 +131,32 @@ test(`${features("CONSOLE-PAUSE-001", "CONSOLE-CLEAR-001")} pauses, catches up, 
   await expect.poll(() => lineText.count(), { timeout: 4_000 }).toBeGreaterThan(0);
 });
 
+test(`${features("CONSOLE-TERMINAL-001", "CONSOLE-TERMINAL-FONT-001", "CONSOLE-TERMINAL-SIZE-001")} controls an interactive terminal session`, async ({ page }) => {
+  await navigationButton(page, "Console").click();
+  await page.getByRole("combobox", { name: "Resource" }).selectOption("migration");
+
+  const terminal = page.getByLabel("migration terminal");
+  await expect(terminal).toBeVisible();
+  await expect(terminal.getByText("Watching for file changes.")).toBeVisible();
+  await expect(page.getByRole("switch", { name: "Pause incoming data" })).toHaveCount(0);
+
+  await terminal.getByRole("button", { name: "Take control" }).click();
+  await expect(terminal.getByText("In control", { exact: true })).toBeVisible();
+  await terminal.getByTitle("Increase font size").click();
+  await expect(terminal.getByLabel("Terminal font size")).toHaveText("14px");
+  await terminal.getByTitle("Reset font size").click();
+  await expect(terminal.getByLabel("Terminal font size")).toHaveText("13px");
+  await terminal.getByTitle("Decrease font size").click();
+  await expect(terminal.getByLabel("Terminal font size")).toHaveText("12px");
+  await terminal.getByTitle("Increase font size").click();
+
+  await terminal.getByRole("combobox", { name: "Terminal grid size" }).selectOption("100x30");
+  await expect(terminal.getByLabel("Terminal dimensions")).toHaveText("100 × 30");
+  await terminal.getByRole("button", { name: "Release control" }).click();
+  await expect(terminal.getByText("View only", { exact: true })).toBeVisible();
+  await expect(page).toHaveURL(/\/consolelogs\/resource\/migration$/);
+});
+
 test(`${features("CONSOLE-COMMANDS-001")} executes selected resource commands with confirmation`, async ({ page }) => {
   await navigationButton(page, "Console").click();
   await page.getByRole("combobox").selectOption("frontend");

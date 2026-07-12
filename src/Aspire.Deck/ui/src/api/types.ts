@@ -97,6 +97,8 @@ export interface Resource {
   supportsDetailedTelemetry: boolean;
   iconName: string | null;
   iconVariant: IconVariant | null;
+  hasTerminal?: boolean;
+  terminalReplicaIndex?: number | null;
 }
 
 export interface ResourcesEvent {
