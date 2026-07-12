@@ -9,6 +9,7 @@ import type {
   ExecuteCommandArgs,
   InteractionInfo,
   LogRecordSummary,
+  MetricSummary,
   MetricSeriesQuery,
   MetricSeriesResponse,
   Resource,
@@ -50,6 +51,7 @@ let telemetrySummary: TelemetrySummary = { ...emptyTelemetry, recentLogs: [] };
 let telemetryController: AbortController | null = null;
 let telemetryStarted = false;
 let telemetryStopTimer: number | undefined;
+let telemetryMetricTimer: number | undefined;
 const telemetryLogKeys = new Set<string>();
 const telemetrySpanKeys = new Set<string>();
 
@@ -395,6 +397,7 @@ function summaryFromStructuredLogs(response: TelemetryApiResponse): TelemetrySum
 function summaryFromResponses(
   logsResponse: TelemetryApiResponse,
   spansResponse: TelemetryApiResponse,
+  metrics: MetricSummary[],
 ): TelemetrySummary {
   return {
     ...summaryFromStructuredLogs(logsResponse),
@@ -402,7 +405,19 @@ function summaryFromResponses(
     recentSpans: getSpanSummaries(spansResponse.data)
       .map(({ recordKey: _, ...span }) => span)
       .sort(compareSpansNewestFirst),
+    metricCount: metrics.reduce((total, metric) => total + metric.pointCount, 0),
+    metrics,
   };
+}
+
+async function refreshMetrics(): Promise<void> {
+  const metrics = await requestJson<MetricSummary[]>("telemetry/metrics");
+  telemetrySummary = {
+    ...telemetrySummary,
+    metricCount: metrics.reduce((total, metric) => total + metric.pointCount, 0),
+    metrics,
+  };
+  notifyTelemetry();
 }
 
 async function clearStructuredLogs(resourceName: string | null): Promise<void> {
@@ -451,15 +466,7 @@ async function clearMetrics(resourceName: string | null): Promise<void> {
   const resourceQuery = resourceName === null ? "" : `?resource=${encodeURIComponent(resourceName)}`;
   await deleteNoContent(`telemetry/metrics${resourceQuery}`);
 
-  const retainedMetrics = resourceName === null
-    ? []
-    : telemetrySummary.metrics.filter((metric) => metric.resourceName !== resourceName);
-  telemetrySummary = {
-    ...telemetrySummary,
-    metricCount: retainedMetrics.reduce((total, metric) => total + metric.pointCount, 0),
-    metrics: retainedMetrics,
-  };
-  notifyTelemetry();
+  await refreshMetrics();
 }
 
 function ensureTelemetryStream(): void {
@@ -478,6 +485,8 @@ function ensureTelemetryStream(): void {
     // A span stream failure must not tear down structured-log updates. Resource
     // polling owns the shared backend connection state and reports outages.
   });
+  void refreshMetrics().catch(() => undefined);
+  telemetryMetricTimer = window.setInterval(() => void refreshMetrics().catch(() => undefined), 1500);
 }
 
 function subscribeTelemetry(callback: (summary: TelemetrySummary) => void): Unsubscribe {
@@ -501,6 +510,10 @@ function subscribeTelemetry(callback: (summary: TelemetrySummary) => void): Unsu
           return;
         }
         telemetryController?.abort();
+        if (telemetryMetricTimer !== undefined) {
+          window.clearInterval(telemetryMetricTimer);
+          telemetryMetricTimer = undefined;
+        }
         telemetryController = null;
         telemetryStarted = false;
         telemetrySummary = { ...emptyTelemetry, recentLogs: [] };
@@ -543,17 +556,39 @@ export const httpBackend = {
     void postNoContent("interactions/respond", { interactionId, action, values }).catch(() => undefined);
   },
   async getTelemetrySummary(): Promise<TelemetrySummary> {
-    const [logsResponse, spansResponse] = await Promise.all([
+    const [logsResponse, spansResponse, metrics] = await Promise.all([
       requestJson<TelemetryApiResponse>("telemetry/logs?limit=200"),
       requestJson<TelemetryApiResponse>("telemetry/spans?limit=200"),
+      requestJson<MetricSummary[]>("telemetry/metrics"),
     ]);
-    return summaryFromResponses(logsResponse, spansResponse);
+    return summaryFromResponses(logsResponse, spansResponse, metrics);
   },
   clearStructuredLogs,
   clearTraces,
   clearMetrics,
-  getMetricSeries(_query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {
-    return Promise.resolve(null);
+  async getMetricSeries(query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {
+    if (!query.resourceName || !query.meterName) {
+      return null;
+    }
+    const search = new URLSearchParams({
+      resource: query.resourceName,
+      meter: query.meterName,
+      instrument: query.name,
+      windowSeconds: String(query.windowSeconds ?? 300),
+      maxPoints: String(query.maxPoints ?? 400),
+    });
+    const response = await fetch(`/api/deck/telemetry/metrics/series?${search}`, {
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: { Accept: "application/json" },
+    });
+    if (response.status === 404) {
+      return null;
+    }
+    if (!response.ok) {
+      throw new Error(`Deck API request failed with ${response.status} ${response.statusText}.`);
+    }
+    return await response.json() as MetricSeriesResponse;
   },
   executeCommand(args: ExecuteCommandArgs): Promise<CommandResponse> {
     return postJson("commands/execute", {

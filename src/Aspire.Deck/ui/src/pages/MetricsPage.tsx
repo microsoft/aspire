@@ -138,6 +138,7 @@ export function MetricsPage({
     }
     setSeries(await getMetricSeries({
       name: active.name,
+      meterName: active.meterName,
       resourceName: active.resourceName,
       windowSeconds: selectedWindowSeconds,
       maxPoints: 600,

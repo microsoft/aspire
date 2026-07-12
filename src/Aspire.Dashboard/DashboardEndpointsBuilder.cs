@@ -335,6 +335,37 @@ public static class DashboardEndpointsBuilder
 
             return Results.NoContent();
         });
+
+        group.MapGet("/telemetry/metrics", (TelemetryApiService service, HttpContext httpContext) =>
+        {
+            httpContext.Response.Headers.CacheControl = "no-store";
+            return Results.Json(
+                service.GetMetricSummaries(),
+                DeckApiJsonSerializerContext.Default.DeckMetricSummaryArray);
+        });
+
+        group.MapGet("/telemetry/metrics/series", (
+            TelemetryApiService service,
+            HttpContext httpContext,
+            [FromQuery] string? resource,
+            [FromQuery] string? meter,
+            [FromQuery] string? instrument,
+            [FromQuery] int? windowSeconds,
+            [FromQuery] int? maxPoints) =>
+        {
+            if (string.IsNullOrWhiteSpace(resource)
+                || string.IsNullOrWhiteSpace(meter)
+                || string.IsNullOrWhiteSpace(instrument))
+            {
+                return Results.BadRequest();
+            }
+
+            httpContext.Response.Headers.CacheControl = "no-store";
+            var response = service.GetMetricSeries(resource, meter, instrument, windowSeconds, maxPoints);
+            return response is null
+                ? Results.NotFound()
+                : Results.Json(response, DeckApiJsonSerializerContext.Default.DeckMetricSeriesResponse);
+        });
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)

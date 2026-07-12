@@ -124,3 +124,25 @@ internal sealed record DeckRespondInteractionRequest(
     int InteractionId,
     string Action,
     Dictionary<string, string>? Values);
+
+internal sealed record DeckMetricSummary(
+    string Name,
+    string Description,
+    string Unit,
+    string ResourceName,
+    string MeterName,
+    string Kind,
+    double? LastValue,
+    ulong PointCount);
+
+internal sealed record DeckMetricSeriesResponse(
+    string Name,
+    string ResourceName,
+    string MeterName,
+    string Unit,
+    string Kind,
+    double[] TimestampsMs,
+    double[]? Values,
+    double[]? P50,
+    double[]? P90,
+    double[]? P99);

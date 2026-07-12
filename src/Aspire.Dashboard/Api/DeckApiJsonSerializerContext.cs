@@ -15,4 +15,6 @@ namespace Aspire.Dashboard.Api;
 [JsonSerializable(typeof(DeckConsoleLogEvent))]
 [JsonSerializable(typeof(DeckInteraction[]))]
 [JsonSerializable(typeof(DeckRespondInteractionRequest))]
+[JsonSerializable(typeof(DeckMetricSummary[]))]
+[JsonSerializable(typeof(DeckMetricSeriesResponse))]
 internal sealed partial class DeckApiJsonSerializerContext : JsonSerializerContext;

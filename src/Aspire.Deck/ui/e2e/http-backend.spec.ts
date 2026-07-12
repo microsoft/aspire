@@ -90,6 +90,9 @@ test.beforeEach(async ({ page }) => {
   await page.route("**/api/deck/telemetry/spans?*", async (route) => {
     await route.fulfill({ contentType: "application/x-ndjson", body: "" });
   });
+  await page.route("**/api/deck/telemetry/metrics", async (route) => {
+    await route.fulfill({ json: [] });
+  });
 });
 
 test.afterEach(async ({ page }) => {
@@ -888,6 +891,110 @@ test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics st
   await expect(metrics.locator(".page__subtitle")).toHaveText("Select a resource");
   await expect(metrics).toContainText("No metrics for this resource");
   await expect(metrics).not.toContainText("Loading…");
+});
+
+test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, and clears HTTP metric telemetry`, async ({ page }) => {
+  let summaries = [
+    {
+      name: "http.server.request.duration",
+      description: "Server request duration.",
+      unit: "ms",
+      resourceName: "stress-api",
+      meterName: "OpenTelemetry.Instrumentation.AspNetCore",
+      kind: "histogram",
+      lastValue: 42,
+      pointCount: 3,
+    },
+    {
+      name: "worker.jobs",
+      description: "Completed jobs.",
+      unit: "{job}",
+      resourceName: "stress-worker",
+      meterName: "Stress.Worker",
+      kind: "counter",
+      lastValue: 7,
+      pointCount: 3,
+    },
+  ];
+  const seriesRequests: Array<Record<string, string>> = [];
+  const clearRequests: Array<string | null> = [];
+
+  await page.route("**/api/deck/config", async (route) => {
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.unroute("**/api/deck/telemetry/metrics");
+  await page.route("**/api/deck/telemetry/metrics/series?*", async (route) => {
+    const url = new URL(route.request().url());
+    seriesRequests.push(Object.fromEntries(url.searchParams));
+    const isHistogram = url.searchParams.get("instrument") === "http.server.request.duration";
+    await route.fulfill({
+      json: isHistogram
+        ? {
+            name: "http.server.request.duration",
+            resourceName: "stress-api",
+            meterName: "OpenTelemetry.Instrumentation.AspNetCore",
+            unit: "ms",
+            kind: "histogram",
+            timestampsMs: [1_783_670_400_000, 1_783_670_401_000, 1_783_670_402_000],
+            p50: [30, 35, 40],
+            p90: [45, 50, 55],
+            p99: [60, 65, 70],
+          }
+        : {
+            name: "worker.jobs",
+            resourceName: "stress-worker",
+            meterName: "Stress.Worker",
+            unit: "{job}",
+            kind: "counter",
+            timestampsMs: [1_783_670_400_000, 1_783_670_401_000, 1_783_670_402_000],
+            values: [1, 2, 3],
+          },
+    });
+  });
+  await page.route("**/api/deck/telemetry/metrics*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "DELETE") {
+      const resourceName = url.searchParams.get("resource");
+      clearRequests.push(resourceName);
+      summaries = resourceName === null
+        ? []
+        : summaries.filter((summary) => summary.resourceName !== resourceName);
+      await route.fulfill({ status: 204 });
+      return;
+    }
+    await route.fulfill({ json: summaries });
+  });
+
+  await page.goto("/metrics?backend=http");
+
+  const metrics = page.getByRole("main").getByRole("region", { name: "Metrics" });
+  await expect(metrics.getByRole("combobox", { name: "Resource" })).toHaveValue("stress-api");
+  await expect(metrics.locator(".metric-item")).toHaveCount(1);
+  await expect(metrics.locator(".metric-chart canvas")).toBeVisible();
+  await expect.poll(() => seriesRequests.length).toBeGreaterThan(0);
+  expect(seriesRequests[0]).toMatchObject({
+    resource: "stress-api",
+    meter: "OpenTelemetry.Instrumentation.AspNetCore",
+    instrument: "http.server.request.duration",
+    windowSeconds: "300",
+    maxPoints: "600",
+  });
+
+  await metrics.getByRole("button", { name: "Clear metrics" }).click();
+  await page.getByRole("menuitem", { name: "Clear stress-api" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared metrics for stress-api.");
+  await expect(metrics.getByRole("combobox", { name: "Resource" })).toHaveValue("stress-worker");
+  await expect(metrics).toContainText("worker.jobs");
+
+  await metrics.getByRole("button", { name: "Clear metrics" }).click();
+  await page.getByRole("menuitem", { name: "Clear all resources" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared all metrics.");
+  await expect(metrics).toContainText("No metrics for this resource");
+  expect(clearRequests).toEqual(["stress-api", null]);
 });
 
 const missingFeatures = getMissingHttpBackendFeatures(coveredFeatures);

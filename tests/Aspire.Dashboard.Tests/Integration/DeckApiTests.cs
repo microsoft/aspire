@@ -614,6 +614,56 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task GetMetrics_ReturnsSummariesAndSeries()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        var repository = app.Services.GetRequiredService<TelemetryRepository>();
+        var now = DateTime.UtcNow;
+        AddMetric(repository, "frontend.requests", "frontend", startTime: now.AddSeconds(-2), value: 1);
+        AddMetric(repository, "frontend.requests", "frontend", startTime: now.AddSeconds(-1), value: 3);
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var summariesResponse = await httpClient.GetAsync("/api/deck/telemetry/metrics").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, summariesResponse.StatusCode);
+        Assert.Equal("no-store", summariesResponse.Headers.CacheControl?.ToString());
+        var summaries = JsonNode.Parse(await summariesResponse.Content.ReadAsStringAsync().DefaultTimeout())!.AsArray();
+        var summary = Assert.IsType<JsonObject>(Assert.Single(summaries));
+        Assert.Equal("frontend.requests", (string?)summary["name"]);
+        Assert.Equal("Test metric description", (string?)summary["description"]);
+        Assert.Equal("widget", (string?)summary["unit"]);
+        Assert.Equal("frontend", (string?)summary["resourceName"]);
+        Assert.Equal("Stress.Telemetry", (string?)summary["meterName"]);
+        Assert.Equal("counter", (string?)summary["kind"]);
+        Assert.Equal(3, (double?)summary["lastValue"]);
+        Assert.Equal(2UL, (ulong?)summary["pointCount"]);
+
+        using var seriesResponse = await httpClient.GetAsync(
+            "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=frontend.requests&windowSeconds=60&maxPoints=20").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, seriesResponse.StatusCode);
+        Assert.Equal("no-store", seriesResponse.Headers.CacheControl?.ToString());
+        var series = JsonNode.Parse(await seriesResponse.Content.ReadAsStringAsync().DefaultTimeout())!.AsObject();
+        Assert.Equal("frontend.requests", (string?)series["name"]);
+        Assert.Equal("frontend", (string?)series["resourceName"]);
+        Assert.Equal("Stress.Telemetry", (string?)series["meterName"]);
+        Assert.Equal("counter", (string?)series["kind"]);
+        var timestamps = Assert.IsType<JsonArray>(series["timestampsMs"]);
+        var values = Assert.IsType<JsonArray>(series["values"]);
+        Assert.NotEmpty(timestamps);
+        Assert.Equal(timestamps.Count, values.Count);
+        Assert.Null(series["p50"]);
+
+        using var missingResponse = await httpClient.GetAsync(
+            "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=missing").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NotFound, missingResponse.StatusCode);
+
+        using var invalidResponse = await httpClient.GetAsync("/api/deck/telemetry/metrics/series").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.BadRequest, invalidResponse.StatusCode);
+    }
+
+    [Fact]
     public async Task Interactions_RoundTripInputsDialog()
     {
         var interactions = Channel.CreateUnbounded<DashboardProto.WatchInteractionsResponseUpdate>();
@@ -850,7 +900,12 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         });
     }
 
-    private static void AddMetric(TelemetryRepository repository, string metricName, string resourceName)
+    private static void AddMetric(
+        TelemetryRepository repository,
+        string metricName,
+        string resourceName,
+        DateTime? startTime = null,
+        int value = 1)
     {
         repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
@@ -866,8 +921,8 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                         {
                             TelemetryTestHelpers.CreateSumMetric(
                                 metricName: metricName,
-                                startTime: new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
-                                value: 1)
+                                startTime: startTime ?? new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
+                                value: value)
                         }
                     }
                 }

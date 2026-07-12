@@ -7,7 +7,9 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
+using Aspire.Dashboard.Components.Controls.Chart;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Otlp.Serialization;
 
@@ -327,6 +329,125 @@ internal sealed class TelemetryApiService(
 
         telemetryRepository.ClearMetrics(resourceKey);
         return true;
+    }
+
+    public DeckMetricSummary[] GetMetricSummaries()
+    {
+        return telemetryRepository.GetResources()
+            .Select(resource => resource.ResourceName)
+            .Distinct(StringComparers.ResourceName)
+            .SelectMany(resourceName => telemetryRepository
+                .GetInstrumentsSummaries(new ResourceKey(resourceName, InstanceId: null))
+                .Select(summary => CreateMetricSummary(resourceName, summary)))
+            .OrderBy(summary => summary.ResourceName, StringComparer.Ordinal)
+            .ThenBy(summary => summary.MeterName, StringComparer.Ordinal)
+            .ThenBy(summary => summary.Name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public DeckMetricSeriesResponse? GetMetricSeries(
+        string resourceName,
+        string meterName,
+        string instrumentName,
+        int? windowSeconds,
+        int? maxPoints)
+    {
+        var duration = TimeSpan.FromSeconds(Math.Clamp(windowSeconds ?? 300, 1, 12 * 60 * 60));
+        var pointCount = Math.Clamp(maxPoints ?? 400, 2, 4_000);
+        var endTime = DateTime.UtcNow;
+        var instrument = telemetryRepository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey(resourceName, InstanceId: null),
+            MeterName = meterName,
+            InstrumentName = instrumentName,
+            StartTime = endTime - duration,
+            EndTime = endTime
+        });
+        if (instrument is null)
+        {
+            return null;
+        }
+
+        var calculator = new ChartDataCalculator(pointCount, duration);
+        var chart = instrument.Summary.Type == OtlpInstrumentType.Histogram
+            ? calculator.CalculateHistogramValues(instrument.Dimensions, endTime, static value => value, instrument.Summary.Unit)
+            : calculator.CalculateChartValues(instrument.Dimensions, endTime, static value => value, instrument.Summary.Unit);
+        var populatedIndexes = Enumerable.Range(0, chart.XValues.Count)
+            .Where(index => chart.Traces.All(trace => trace.Values[index].HasValue))
+            .ToArray();
+        var timestamps = populatedIndexes
+            .Select(index => (double)chart.XValues[index].ToUnixTimeMilliseconds())
+            .ToArray();
+
+        double[]? values = null;
+        double[]? p50 = null;
+        double[]? p90 = null;
+        double[]? p99 = null;
+        if (instrument.Summary.Type == OtlpInstrumentType.Histogram)
+        {
+            p50 = SelectTraceValues(chart, populatedIndexes, percentile: 50);
+            p90 = SelectTraceValues(chart, populatedIndexes, percentile: 90);
+            p99 = SelectTraceValues(chart, populatedIndexes, percentile: 99);
+        }
+        else
+        {
+            values = populatedIndexes.Select(index => chart.Traces[0].Values[index]!.Value).ToArray();
+        }
+
+        return new DeckMetricSeriesResponse(
+            Name: instrument.Summary.Name,
+            ResourceName: resourceName,
+            MeterName: instrument.Summary.Parent.Name,
+            Unit: instrument.Summary.Unit,
+            Kind: GetMetricKind(instrument.Summary),
+            TimestampsMs: timestamps,
+            Values: values,
+            P50: p50,
+            P90: p90,
+            P99: p99);
+    }
+
+    private DeckMetricSummary CreateMetricSummary(string resourceName, OtlpInstrumentSummary summary)
+    {
+        var instrument = telemetryRepository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey(resourceName, InstanceId: null),
+            MeterName = summary.Parent.Name,
+            InstrumentName = summary.Name,
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+        var values = instrument?.Dimensions.SelectMany(dimension => dimension.Values).ToArray() ?? [];
+        var lastValue = values.MaxBy(value => value.End) switch
+        {
+            MetricValue<long> value => value.Value,
+            MetricValue<double> value => value.Value,
+            HistogramValue { Count: > 0 } value => value.Sum / value.Count,
+            _ => (double?)null
+        };
+
+        return new DeckMetricSummary(
+            Name: summary.Name,
+            Description: summary.Description,
+            Unit: summary.Unit,
+            ResourceName: resourceName,
+            MeterName: summary.Parent.Name,
+            Kind: GetMetricKind(summary),
+            LastValue: lastValue,
+            PointCount: values.Aggregate(0UL, static (count, value) => count + value.Count));
+    }
+
+    private static string GetMetricKind(OtlpInstrumentSummary summary) => summary.Type switch
+    {
+        OtlpInstrumentType.Histogram => "histogram",
+        OtlpInstrumentType.Sum => "counter",
+        _ => "gauge"
+    };
+
+    private static double[] SelectTraceValues(ChartData chart, int[] indexes, int percentile)
+    {
+        var trace = chart.Traces.Single(trace => trace.Percentile == percentile);
+        return indexes.Select(index => trace.Values[index]!.Value).ToArray();
     }
 
     /// <summary>

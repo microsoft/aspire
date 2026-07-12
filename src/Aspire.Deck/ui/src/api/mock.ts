@@ -400,6 +400,8 @@ class MockBackend {
     recentSpans: [],
     metrics: metricDefs.map<MetricSummary>((m) => ({
       name: m.name,
+      description: `Synthetic ${m.name} telemetry.`,
+      meterName: "Aspire.Mock",
       unit: m.unit,
       resourceName: m.resource,
       kind: m.kind,

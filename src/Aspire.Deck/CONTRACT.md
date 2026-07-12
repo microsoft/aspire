@@ -14,6 +14,11 @@ shapes through `GET /api/deck/config`, `GET /api/deck/resources`,
 `GET /api/deck/telemetry/logs?follow=true` and cleared through
 `DELETE /api/deck/telemetry/logs` with an optional `resource` query parameter. Traces use
 the equivalent `GET`/`DELETE /api/deck/telemetry/spans` routes.
+
+Metric summaries are read from `GET /api/deck/telemetry/metrics`. A selected time series is
+read from `GET /api/deck/telemetry/metrics/series` with `resource`, `meter`, `instrument`,
+`windowSeconds`, and `maxPoints` query parameters. Metrics are cleared through
+`DELETE /api/deck/telemetry/metrics` with an optional `resource` query parameter.
 Command execution accepts
 `{ resourceName, commandName }` and returns `CommandResponse`. The interactions GET returns the
 current `InteractionInfo[]`; the response POST accepts `{ interactionId, action, values }`.

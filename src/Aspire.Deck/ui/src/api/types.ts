@@ -203,6 +203,8 @@ export type MetricKind = "gauge" | "counter" | "upDownCounter" | "histogram";
 
 export interface MetricSummary {
   name: string;
+  description?: string | null;
+  meterName?: string | null;
   unit: string | null;
   resourceName: string | null;
   kind: MetricKind;
@@ -214,6 +216,7 @@ export interface MetricSummary {
 // histograms fill `p50`/`p90`/`p99`. All y-arrays align with `timestampsMs`.
 export interface MetricSeriesResponse {
   name: string;
+  meterName?: string | null;
   resourceName: string | null;
   unit: string | null;
   kind: MetricKind;
@@ -227,6 +230,7 @@ export interface MetricSeriesResponse {
 // Options for a metric series query.
 export interface MetricSeriesQuery {
   name: string;
+  meterName?: string | null;
   resourceName?: string | null;
   windowSeconds?: number;
   maxPoints?: number;
