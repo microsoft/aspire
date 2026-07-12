@@ -288,6 +288,7 @@ test(`${features("traces")} inventories trace controls and empty state`, async (
 });
 
 test(`${features("metrics")} inventories metric controls and empty state`, async ({ page }, testInfo) => {
+  test.setTimeout(60_000);
   await page.goto("/metrics");
   await expect(page.getByRole("button", { name: "Pause incoming data", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Remove data", exact: true })).toBeVisible();
@@ -296,6 +297,31 @@ test(`${features("metrics")} inventories metric controls and empty state`, async
     await expect(duration.getByRole("button", { name: value, exact: true })).toBeVisible();
   }
   await expect(page.getByText("Select a resource to view metrics", { exact: true }).first()).toBeVisible();
+
+  const resource = page.getByRole("combobox", { name: /^(Resource|Select a resource)$/ });
+  await resource.click();
+  await page.getByRole("option", { name: "TestResource", exact: true }).click();
+  await expect(resource).toHaveAttribute("current-value", "TestResource");
+
+  const meter = page.getByRole("treeitem", { name: "TestScope-<b>Bold</b>", exact: true });
+  const instrument = meter.getByRole("treeitem", { name: "Test-<b>Bold</b>", exact: true });
+  await expect(meter).toBeVisible();
+  await expect(instrument).toBeVisible();
+  await instrument.click();
+  await expect(page).toHaveURL(/\/metrics\/resource\/TestResource\?meter=TestScope-%3Cb%3EBold%3C%2Fb%3E&instrument=Test-%3Cb%3EBold%3C%2Fb%3E&duration=5/);
+
+  await expect(page.locator(".js-plotly-plot")).toBeVisible();
+  await expect.poll(() => page.locator(".scatterlayer .trace").count()).toBeGreaterThan(0);
+  await page.getByRole("tab", { name: "Table", exact: true }).click();
+  const metricTable = page.getByRole("table");
+  await expect(metricTable).toBeVisible();
+  await expect.poll(() => metricTable.getByRole("row").count()).toBeGreaterThan(1);
+  await expect(page).toHaveURL(/view=Table/);
+
+  await page.reload();
+  await expect(resource).toHaveAttribute("current-value", "TestResource");
+  await expect(page.getByRole("tab", { name: "Table", exact: true })).toHaveAttribute("aria-selected", "true");
+  await expect.poll(() => page.getByRole("table").getByRole("row").count()).toBeGreaterThan(1);
   await attachScreenshot(page, testInfo, "legacy-metrics");
 });
 
