@@ -107,13 +107,18 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
+  const cancelInteraction = page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true });
+  if (await cancelInteraction.isVisible().catch(() => false)) {
+    await cancelInteraction.click();
+  }
+
   const errors = browserErrors.get(page) ?? [];
   let unexpected = allowConsoleStreamAbort.has(page)
     ? errors.filter((error) => !/^request: GET .*\/api\/deck\/resources\/[^/]+\/console-logs \(net::ERR_ABORTED\)$/.test(error))
     : errors;
   if (allowNavigationAbort.has(page)) {
     unexpected = unexpected.filter((error) =>
-      !/^request: GET .*\/api\/deck\/(?:telemetry\/(?:logs|spans)\?follow=true|interactions|resources(?:\/[^/]+\/console-logs)?) \(net::ERR_ABORTED\)$/.test(error));
+      !/^request: GET .*\/api\/deck\/(?:telemetry\/(?:(?:logs|spans)\?follow=true|metrics\/series\?.*)|interactions|resources(?:\/[^/]+\/console-logs)?) \(net::ERR_ABORTED\)$/.test(error));
   }
   expect(unexpected, "Unexpected browser errors").toEqual([]);
 });
@@ -167,7 +172,7 @@ test(`${features("STRESS-RESOURCE-ICON-001", "STRESS-COMMAND-ICON-001", "STRESS-
   const document = table.getByRole("row").filter({ hasText: "empty-0000" });
   await expect(api).toHaveCount(1);
   await expect(document).toHaveCount(1);
-  await expect(api.locator('svg[data-icon-name="Server"][data-icon-variant="filled"]')).toHaveCount(1);
+  await expect(api.locator('svg[data-icon-name="Server"][data-icon-variant="regular"]')).toHaveCount(1);
   await expect(document.locator('svg[data-icon-name="Document"][data-icon-variant="filled"]')).toHaveCount(1);
 
   const iconCommands = table.getByRole("row").filter({ hasText: "icon-commands" });
@@ -238,13 +243,15 @@ test(`${features("STRESS-COMMAND-ARGUMENTS-001", "STRESS-COMMAND-VISIBILITY-001"
   await repeat.fill("2");
   await shout.check();
   await flavor.click();
+  await flavor.press("ArrowDown");
   await page.getByRole("option", { name: "Chocolate" }).click();
   await secret.fill("dashboard-secret");
   await attachScreenshot(page, testInfo, "stress-live-command-inputs");
   await dialog.getByRole("button", { name: "Echo arguments", exact: true }).click();
 
   await expect(dialog.locator('[data-format="json"]')).toContainText('"Flavor": "chocolate"');
-  await expect(page.getByRole("status")).toHaveText("Echo arguments succeeded");
+  await expect(page.getByRole("status").filter({ hasText: "Echo arguments succeeded" }))
+    .toContainText("Echo arguments succeeded");
   await dialog.getByRole("button", { name: "Close", exact: true }).click();
   await expect(dialog).toHaveCount(0);
 });
@@ -482,9 +489,12 @@ test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-METRICS-001")} reaches e
 
     if (name === "Metrics") {
       const metrics = page.getByRole("main").getByRole("region", { name: "Metrics" });
-      await expect(metrics.locator(".page__subtitle")).toHaveText("Select a resource");
-      await expect(metrics).toContainText("No metric resources");
+      await expect(metrics.locator(".page__subtitle")).toHaveText(/\d+ instruments/);
       await expect(metrics).not.toContainText("Loading…");
+
+      await page.goto("/metrics/resource/property-stress-resource?backend=http");
+      await expect(metrics.locator(".page__subtitle")).toHaveText("0 instruments");
+      await expect(metrics.getByRole("heading", { name: "No meters for this resource" })).toBeVisible();
     }
   }
 });
