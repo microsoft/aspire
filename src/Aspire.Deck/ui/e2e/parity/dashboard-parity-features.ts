@@ -13,6 +13,8 @@ export type LegacyCoverage = LegacyScenario | "not-applicable";
 
 export type LegacyScenario =
   | "shell"
+  | "user"
+  | "unsecured"
   | "auth"
   | "assistant"
   | "explain-errors"
@@ -76,10 +78,10 @@ const featureDefinitions = {
     ["SHELL-LANGUAGE-001", "/", "The dashboard language can be selected and applied.", "shell", "covered", "HTTP-LANGUAGE-001; GlobalizationHelpersTests.ResolveSetCultureToAcceptedCultureAsync_MatchRequestToResult"],
     ["SHELL-TIME-FORMAT-001", "/", "System, 12-hour, and 24-hour time formatting can be selected.", "shell", "covered", "APP-TIME-FORMAT-001"],
     ["SHELL-MANAGE-DATA-001", "/", "Resource logs and telemetry can be inspected, exported, imported, and cleared.", "manage-data", "covered", "HTTP-MANAGE-DATA-001; DeckApiTests.ManageData_InventoryExportImportAndRemoveUseDeckContract"],
-    ["SHELL-USER-001", "/", "Authenticated user profile and sign-out behavior are available when configured.", null, "covered", "HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
+    ["SHELL-USER-001", "/", "Authenticated user profile and sign-out behavior are available when configured.", "user", "covered", "HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
     ["SHELL-AUTH-001", "/login", "Browser-token and OpenID Connect login flows protect the frontend.", "auth", "covered", "HTTP-AUTH-001; DeckApiTests.GetResources_BrowserTokenAuthWithoutCookie_RedirectsToLogin; BrowserTokenAuthenticationTests; FrontendOpenIdConnectAuthTests"],
     ["SHELL-RECONNECT-001", "/", "A lost dashboard circuit or backend connection exposes reconnect and recovery UI.", "reconnect", "covered", "HTTP-RECOVERY-001; HTTP-RECONNECT-001"],
-    ["SHELL-UNSECURED-001", "/", "An unsecured telemetry/API endpoint warning is visible with supporting guidance.", null, "covered", "HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
+    ["SHELL-UNSECURED-001", "/", "An unsecured telemetry/API endpoint warning is visible with supporting guidance.", "unsecured", "covered", "HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
     ["SHELL-NOTFOUND-001", "/error/404", "Unknown routes render a dedicated not-found experience.", "shell", "covered", "APP-NOTFOUND-001"],
     ["SHELL-ERROR-001", "/error", "Unhandled errors render a recoverable error experience.", "shell", "covered", "APP-ERROR-001"],
     ["SHELL-RESPONSIVE-001", "/", "Navigation, header actions, pages, and overlays remain usable on mobile.", "shell", "covered", "APP-RESPONSIVE-001; OBS-RESPONSIVE-001; STRESS-RESPONSIVE-001"],

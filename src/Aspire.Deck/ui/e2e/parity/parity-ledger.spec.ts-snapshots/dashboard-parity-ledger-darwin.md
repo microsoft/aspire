@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 2
+- Legacy black-box scenarios pending: 0
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -24,10 +24,10 @@
 | SHELL-LANGUAGE-001 | shell | `/` | shell | covered | HTTP-LANGUAGE-001; GlobalizationHelpersTests.ResolveSetCultureToAcceptedCultureAsync_MatchRequestToResult | The dashboard language can be selected and applied. |
 | SHELL-TIME-FORMAT-001 | shell | `/` | shell | covered | APP-TIME-FORMAT-001 | System, 12-hour, and 24-hour time formatting can be selected. |
 | SHELL-MANAGE-DATA-001 | shell | `/` | manage-data | covered | HTTP-MANAGE-DATA-001; DeckApiTests.ManageData_InventoryExportImportAndRemoveUseDeckContract | Resource logs and telemetry can be inspected, exported, imported, and cleared. |
-| SHELL-USER-001 | shell | `/` | PENDING | covered | HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Authenticated user profile and sign-out behavior are available when configured. |
+| SHELL-USER-001 | shell | `/` | user | covered | HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Authenticated user profile and sign-out behavior are available when configured. |
 | SHELL-AUTH-001 | shell | `/login` | auth | covered | HTTP-AUTH-001; DeckApiTests.GetResources_BrowserTokenAuthWithoutCookie_RedirectsToLogin; BrowserTokenAuthenticationTests; FrontendOpenIdConnectAuthTests | Browser-token and OpenID Connect login flows protect the frontend. |
 | SHELL-RECONNECT-001 | shell | `/` | reconnect | covered | HTTP-RECOVERY-001; HTTP-RECONNECT-001 | A lost dashboard circuit or backend connection exposes reconnect and recovery UI. |
-| SHELL-UNSECURED-001 | shell | `/` | PENDING | covered | HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
+| SHELL-UNSECURED-001 | shell | `/` | unsecured | covered | HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
 | SHELL-NOTFOUND-001 | shell | `/error/404` | shell | covered | APP-NOTFOUND-001 | Unknown routes render a dedicated not-found experience. |
 | SHELL-ERROR-001 | shell | `/error` | shell | covered | APP-ERROR-001 | Unhandled errors render a recoverable error experience. |
 | SHELL-RESPONSIVE-001 | shell | `/` | shell | covered | APP-RESPONSIVE-001; OBS-RESPONSIVE-001; STRESS-RESPONSIVE-001 | Navigation, header actions, pages, and overlays remain usable on mobile. |
