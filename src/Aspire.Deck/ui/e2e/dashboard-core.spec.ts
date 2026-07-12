@@ -1,4 +1,4 @@
-import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { expect, test, type Locator, type Page, type TestInfo } from "@playwright/test";
 import {
   getMissingDashboardCoreFeatures,
   type DashboardCoreFeatureId,
@@ -19,6 +19,17 @@ function navigationButton(page: Page, name: string) {
   return page.getByRole("navigation").getByRole("button", {
     name: new RegExp(`^${name}(?: \\d+)?$`),
   });
+}
+
+async function openResourceCommand(page: Page, resourceName: string, commandName: RegExp): Promise<Locator> {
+  let details = page.getByRole("dialog", { name: resourceName });
+  if (await details.count() === 0) {
+    await page.getByRole("row", { name: new RegExp(resourceName) }).click();
+    details = page.getByRole("dialog", { name: resourceName });
+  }
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: commandName }).click();
+  return details;
 }
 
 async function attachScreenshot(page: Page, testInfo: TestInfo, name: string): Promise<void> {
@@ -532,6 +543,8 @@ test(`${features("RES-INTERACTION-001", "CMD-CUSTOM-CHOICE-001", "CMD-DYNAMIC-00
 
   await expect(replicas).toHaveValue("1");
   await expect(tier).toHaveValue("Standard");
+  await expect(interaction.locator("#int-tier-description strong")).toHaveText("tier");
+  await expect(interaction.getByRole("link", { name: "scaling guide" })).toHaveAttribute("href", "https://example.com/scaling");
   await expect(region).toHaveValue("US East");
   await expect(drain).toBeChecked();
   await replicas.fill("0");
@@ -583,6 +596,63 @@ test(`${features("CMD-MANY-INPUTS-001")} scrolls and submits a 50-field command 
   await expect(details).toContainText("50");
   await expect(details).toContainText("Last input value");
   await expect(details).toContainText("final-value");
+});
+
+test(`${features("CMD-MESSAGEBOX-001", "CMD-MARKDOWN-001")} completes every message-box action with safe Markdown`, async ({ page }) => {
+  const details = await openResourceCommand(page, "apiservice", /Review deployment/);
+  let messageBox = page.getByRole("dialog", { name: "Review deployment" });
+  await expect(messageBox).toHaveAttribute("data-intent", "warning");
+  await expect(messageBox).toHaveClass(/interaction-pane--warning/);
+  await expect(messageBox.locator("strong")).toHaveText("Deployment warning");
+  await expect(messageBox.getByRole("link", { name: "review guide" })).toHaveAttribute("href", "https://example.com/review");
+  await expect(messageBox.locator("script")).toHaveCount(0);
+  await expect(messageBox).toContainText("<script>alert('unsafe')</script>");
+
+  await messageBox.getByRole("button", { name: "Continue", exact: true }).click();
+  await expect(messageBox).toHaveCount(0);
+  await expect(details.getByText("primary", { exact: true })).toBeVisible();
+
+  await openResourceCommand(page, "apiservice", /Review deployment/);
+  messageBox = page.getByRole("dialog", { name: "Review deployment" });
+  await messageBox.getByRole("button", { name: "Go back", exact: true }).click();
+  await expect(details.getByText("secondary", { exact: true })).toBeVisible();
+
+  await openResourceCommand(page, "apiservice", /Review deployment/);
+  messageBox = page.getByRole("dialog", { name: "Review deployment" });
+  await messageBox.getByRole("button", { name: "Dismiss", exact: true }).click();
+  await expect(details.getByText("dismissed", { exact: true })).toBeVisible();
+});
+
+test(`${features("CMD-NOTIFICATION-001")} exercises complete interaction notification variants`, async ({ page }) => {
+  await page.getByRole("button", { name: "Dismiss notification" }).click();
+  const details = await openResourceCommand(page, "apiservice", /Show notification samples/);
+  await expect(details).toBeVisible();
+
+  let success = page.getByRole("alert").filter({ hasText: "Deployment complete" });
+  let error = page.getByRole("alert").filter({ hasText: "Deployment warning" });
+  await expect(success).toHaveClass(/notif--success/);
+  await expect(success.locator("strong")).toHaveText("Deployment complete");
+  await expect(success.getByRole("link", { name: "release notes" })).toHaveAttribute("href", "https://example.com/release");
+  await expect(success.getByRole("link", { name: "unsafe" })).toHaveCount(0);
+  await expect(success).toContainText("unsafe (javascript:alert(1))");
+  await expect(success.getByRole("button", { name: "Dismiss notification" })).toHaveCount(0);
+  await expect(error).toHaveClass(/notif--error/);
+
+  const popupPromise = page.waitForEvent("popup");
+  await success.getByRole("button", { name: "Open runbook" }).click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL("https://example.com/runbook");
+  await popup.close();
+
+  await success.getByRole("button", { name: "Review", exact: true }).click();
+  await expect(success).toHaveCount(0);
+  await openResourceCommand(page, "apiservice", /Show notification samples/);
+  success = page.getByRole("alert").filter({ hasText: "Deployment complete" });
+  error = page.getByRole("alert").filter({ hasText: "Deployment warning" });
+  await success.getByRole("button", { name: "Later", exact: true }).click();
+  await expect(success).toHaveCount(0);
+  await error.getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
 test(`${features("PARAM-LIST-001", "PARAM-SORT-001", "PARAM-FILTER-001", "PARAM-SECRET-001")} sorts, filters, and reveals parameter values`, async ({ page }) => {

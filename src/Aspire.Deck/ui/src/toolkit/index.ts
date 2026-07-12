@@ -18,6 +18,7 @@ export * from "./FilterMenu";
 export * from "./ForceGraph";
 export * from "./Highlighter";
 export * from "./Icons";
+export * from "./MarkdownContent";
 export * from "./NotificationStack";
 export * from "./Page";
 export * from "./PropertyGrid";

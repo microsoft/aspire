@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 100
-- React partial: 27
-- React missing: 31
-- Legacy black-box scenarios pending: 66
-- React parity gaps: 58
+- React covered: 104
+- React partial: 24
+- React missing: 30
+- Legacy black-box scenarios pending: 63
+- React parity gaps: 54
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -17,7 +17,7 @@
 | SHELL-KEYBOARD-001 | shell | `/` | PENDING | partial | APP-KEYBOARD-001 (page, help, and settings shortcuts; panel shortcuts await a shared panel host) | Page navigation, panel, help, and settings keyboard shortcuts work. |
 | SHELL-AGENTS-001 | shell | `/` | shell | missing | - | The AI agents entry point appears when enabled. |
 | SHELL-ASSISTANT-001 | shell | `/` | PENDING | missing | - | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
-| SHELL-NOTIFICATIONS-001 | shell | `/` | shell | partial | APP-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |
+| SHELL-NOTIFICATIONS-001 | shell | `/` | shell | covered | APP-NOTIFICATION-001; CMD-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |
 | SHELL-NOTIFICATION-CENTER-001 | shell | `/` | PENDING | missing | - | The notification center opens and preserves notification history. |
 | SHELL-SETTINGS-001 | shell | `/` | shell | covered | APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Settings opens from the top bar and reports dashboard/runtime versions. |
 | SHELL-THEME-001 | shell | `/` | shell | covered | APP-THEME-001; APP-SETTINGS-001 | System, light, and dark theme selection is persisted. |
@@ -90,9 +90,9 @@
 | CMD-LIVE-VALIDATION-001 | commands | `/` | commands | covered | CMD-LIVE-VALIDATION-001 | Inputs can request server validation while values change. |
 | CMD-VALIDATION-001 | commands | `/` | commands | covered | CMD-VALIDATION-001 | Field-level and form-level validation errors are announced and rendered. |
 | CMD-MANY-INPUTS-001 | commands | `/` | commands | covered | CMD-MANY-INPUTS-001 | Large command forms remain scrollable and submit every input value. |
-| CMD-MESSAGEBOX-001 | commands | `/` | PENDING | partial | APP-NOTIFICATION-001 | Confirmation and message-box interactions support primary, secondary, dismiss, and intent. |
-| CMD-NOTIFICATION-001 | commands | `/` | PENDING | partial | APP-NOTIFICATION-001 | Interaction notifications support semantic intent, links, actions, and non-dismissible state. |
-| CMD-MARKDOWN-001 | commands | `/` | PENDING | missing | - | Interaction messages and field descriptions opt into sanitized Markdown rendering. |
+| CMD-MESSAGEBOX-001 | commands | `/` | commands | covered | CMD-MESSAGEBOX-001 | Confirmation and message-box interactions support primary, secondary, dismiss, and intent. |
+| CMD-NOTIFICATION-001 | commands | `/` | commands | covered | CMD-NOTIFICATION-001 | Interaction notifications support semantic intent, links, actions, and non-dismissible state. |
+| CMD-MARKDOWN-001 | commands | `/` | commands | covered | TK-MARKDOWN-001; CMD-MARKDOWN-001 | Interaction messages and field descriptions opt into sanitized Markdown rendering. |
 | CMD-RESULT-TEXT-001 | commands | `/` | PENDING | missing | - | Plain-text command results open in a readable visualizer and can be downloaded. |
 | CMD-RESULT-JSON-001 | commands | `/` | PENDING | missing | - | JSON command results preserve formatting, masking, copy, and download behavior. |
 | CMD-RESULT-MARKDOWN-001 | commands | `/` | PENDING | missing | - | Markdown command results render tables and rich content safely. |

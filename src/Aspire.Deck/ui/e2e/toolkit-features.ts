@@ -27,6 +27,7 @@ export const toolkitFeatures = {
   "TK-PROPERTY-GRID-001": "Property grids expose semantic names and values for telemetry and resource details.",
   "TK-PROPERTY-EXPLORER-001": "Property explorers filter counted accordion sections while preserving semantic names and values.",
   "TK-TEXT-VIEWER-001": "Text and JSON values open in a readable dialog and can be copied.",
+  "TK-MARKDOWN-001": "Markdown renders semantic content without HTML injection or unsafe links.",
   "TK-A11Y-001": "The playground has a reviewed accessibility-tree contract.",
   "TK-RESPONSIVE-001": "Toolkit controls remain contained and usable at desktop and mobile widths.",
 } as const;

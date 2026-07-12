@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { InteractionInfo, InteractionInputInfo } from "../api/types";
-import { respondInteraction } from "../api/deck";
-import { CloseIcon, ComboBox } from "../toolkit";
+import { openExternal, respondInteraction } from "../api/deck";
+import { CloseIcon, ComboBox, MarkdownContent } from "../toolkit";
 
 // Side pane (like the resource details drawer) that renders a blocking interaction
 // from the AppHost: a command-input dialog with per-field validation, or a message
@@ -55,11 +55,10 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
   return (
     <>
       <div className="drawer-overlay" onClick={close} />
-      <aside className="drawer interaction-pane" role="dialog" aria-modal="true" aria-label={interaction.title}>
+      <aside className={`drawer interaction-pane interaction-pane--${toIntent(interaction.intent)}`} data-intent={interaction.intent} role="dialog" aria-modal="true" aria-label={interaction.title}>
         <div className="drawer__header">
           <div>
             <div className="drawer__title">{interaction.title || "Input required"}</div>
-            {interaction.message ? <div className="drawer__subtitle">{interaction.message}</div> : null}
           </div>
           {interaction.showDismiss !== false ? (
             <button className="icon-btn" onClick={close} aria-label="Dismiss">
@@ -69,6 +68,14 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
         </div>
 
         <div className="drawer__body">
+          {interaction.message ? (
+            <MarkdownContent
+              markdown={interaction.message}
+              enabled={interaction.enableMessageMarkdown}
+              className="interaction-message"
+              onLinkClick={(url) => void openExternal(url)}
+            />
+          ) : null}
           {isInputs ? (
             <form
               className="interaction-form"
@@ -200,7 +207,15 @@ function InputField({
         </>
       )}
 
-      {input.description ? <div id={descriptionId} className="field__desc">{input.description}</div> : null}
+      {input.description ? (
+        <MarkdownContent
+          id={descriptionId}
+          markdown={input.description}
+          enabled={input.enableDescriptionMarkdown}
+          className="field__desc"
+          onLinkClick={(url) => void openExternal(url)}
+        />
+      ) : null}
       {hasErrors ? (
         <div id={errorId} className="field__errors">
           {input.validationErrors.map((err, i) => <div key={i} className="field__error">{err}</div>)}
@@ -208,6 +223,15 @@ function InputField({
       ) : null}
     </div>
   );
+}
+
+function toIntent(intent: InteractionInfo["intent"]): "error" | "warning" | "success" | "info" {
+  switch (intent) {
+    case "error": return "error";
+    case "warning": return "warning";
+    case "success": return "success";
+    default: return "info";
+  }
 }
 
 function initValues(interaction: InteractionInfo): Record<string, string> {

@@ -201,18 +201,18 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
     interactionId: 42,
     kind: "inputsDialog",
     title: "Echo arguments",
-    message: "Provide command values.",
+    message: "Provide **command** values.",
     primaryButtonText: "Run",
     secondaryButtonText: "Cancel",
     showSecondaryButton: true,
     showDismiss: true,
-    enableMessageMarkdown: false,
+    enableMessageMarkdown: true,
     intent: "none",
     inputs: [
       {
         name: "message", label: "Message", placeholder: "Hello", inputType: "text", required: true,
-        options: [], value: "", validationErrors: [], description: "Text value to echo.",
-        enableDescriptionMarkdown: false, maxLength: 80, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        options: [], value: "", validationErrors: [], description: "Text **value** to echo.",
+        enableDescriptionMarkdown: true, maxLength: 80, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
       },
       {
         name: "repeat", label: "Repeat", placeholder: "", inputType: "number", required: true,
@@ -274,8 +274,10 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
   const shout = dialog.getByRole("checkbox", { name: "Shout" });
   const flavor = dialog.getByRole("combobox", { name: "Flavor" });
   const secret = dialog.getByLabel("Secret");
+  await expect(dialog.locator(".interaction-message strong")).toHaveText("command");
   await expect(message).toHaveAttribute("placeholder", "Hello");
   await expect(message).toHaveAttribute("maxlength", "80");
+  await expect(dialog.locator("#int-message-description strong")).toHaveText("value");
   await expect(dialog.getByText("Text value to echo.", { exact: true })).toBeVisible();
   await expect(repeat).toHaveValue("1");
   await expect(shout).not.toBeChecked();

@@ -359,6 +359,17 @@ test(`${features("TK-PROPERTY-GRID-001", "TK-PROPERTY-EXPLORER-001", "TK-TEXT-VI
   await expect(viewer).toHaveCount(0);
 });
 
+test(`${features("TK-MARKDOWN-001")} renders safe semantic Markdown`, async ({ page }) => {
+  const markdown = page.getByTestId("toolkit-markdown");
+  await expect(markdown.locator("strong")).toHaveText("Safe Markdown");
+  await expect(markdown.locator("code")).toHaveText("code");
+  await expect(markdown.getByRole("listitem")).toHaveText(["First item", "Second item"]);
+  await expect(markdown.getByRole("link", { name: "documentation" })).toHaveAttribute("href", "https://example.com/docs");
+  await expect(markdown.getByRole("link", { name: "unsafe" })).toHaveCount(0);
+  await expect(markdown).toContainText("unsafe (javascript:alert(1))");
+  await expect(markdown.locator("script")).toHaveCount(0);
+});
+
 test(`${features("TK-NOTIFICATION-001")} exercises reusable notification actions`, async ({ page }) => {
   const showNotification = page.getByRole("button", { name: "Show notification" });
   const status = page.getByRole("region", { name: "Actions" }).getByRole("status");

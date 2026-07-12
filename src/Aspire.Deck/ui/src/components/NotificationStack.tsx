@@ -2,6 +2,7 @@ import type { InteractionInfo } from "../api/types";
 import { respondInteraction, openExternal } from "../api/deck";
 import {
   NotificationStack as DeckNotificationStack,
+  MarkdownContent,
   type NotificationIntent,
   type NotificationItem,
 } from "../toolkit";
@@ -22,7 +23,13 @@ export function NotificationStack({
     id: notification.interactionId,
     intent: toIntent(notification.intent),
     title: notification.title,
-    message: notification.message,
+    message: (
+      <MarkdownContent
+        markdown={notification.message}
+        enabled={notification.enableMessageMarkdown}
+        onLinkClick={(url) => void openExternal(url)}
+      />
+    ),
     link: notification.linkUrl
       ? {
           label: notification.linkText || notification.linkUrl,

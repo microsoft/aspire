@@ -115,7 +115,7 @@ function makeResources(): Resource[] {
         { name: "ConnectionStrings__postgres", value: "Host=localhost;Port=5432;Username=postgres;Password=p@ssw0rd-pg", isFromSpec: false },
       ],
       healthReports: [{ status: "Healthy", key: "self", description: "Liveness probe succeeded." }],
-      commands: [...defaultCommands("Running"), manyInputsCommand()],
+      commands: [...defaultCommands("Running"), manyInputsCommand(), ...interactionContentCommands()],
       relationships: [{ resourceName: "postgres", type: "Reference" }],
       isHidden: false,
       supportsDetailedTelemetry: true,
@@ -382,6 +382,31 @@ function manyInputsCommand(): ResourceCommand {
   };
 }
 
+function interactionContentCommands(): ResourceCommand[] {
+  return [
+    {
+      name: "message-box-sample",
+      displayName: "Review deployment…",
+      displayDescription: "Open a warning message box with Markdown content.",
+      confirmationMessage: null,
+      iconName: "Warning",
+      iconVariant: "regular",
+      isHighlighted: false,
+      state: "enabled",
+    },
+    {
+      name: "notification-samples",
+      displayName: "Show notification samples",
+      displayDescription: "Show complete success and error notification variants.",
+      confirmationMessage: null,
+      iconName: "Info",
+      iconVariant: "regular",
+      isHighlighted: false,
+      state: "enabled",
+    },
+  ];
+}
+
 const canvases: CanvasManifest[] = [
   {
     id: "resource-radar",
@@ -476,6 +501,7 @@ class MockBackend {
   private parameterDialogResourceName: string | null = null;
   private scaleUpdateVersion = 0;
   private manyInputsResourceName: string | null = null;
+  private messageBoxResourceName: string | null = null;
   private notifications: InteractionInfo[] = [
     {
       interactionId: 9001, kind: "notification", title: "Unresolved parameters",
@@ -732,6 +758,30 @@ class MockBackend {
         this.dialog = this.buildManyInputsDialog();
         this.emitInteractions();
         return { kind: "succeeded", message: "Awaiting input…" };
+      case "message-box-sample":
+        this.messageBoxResourceName = target.name;
+        this.dialog = this.buildMessageBox();
+        this.emitInteractions();
+        return { kind: "succeeded", message: "Awaiting confirmation…" };
+      case "notification-samples":
+        this.notifications = this.notifications.filter((notification) => ![9101, 9102].includes(notification.interactionId));
+        this.notifications.push(
+          {
+            interactionId: 9101, kind: "notification", title: "Deployment complete",
+            message: "**Deployment complete** for `apiservice`. Read the [release notes](https://example.com/release) or [unsafe](javascript:alert(1)).",
+            primaryButtonText: "Review", secondaryButtonText: "Later", showSecondaryButton: true,
+            showDismiss: false, enableMessageMarkdown: true, intent: "success", inputs: [],
+            linkText: "Open runbook", linkUrl: "https://example.com/runbook",
+          },
+          {
+            interactionId: 9102, kind: "notification", title: "Deployment warning",
+            message: "A deployment health check needs attention.", primaryButtonText: "",
+            secondaryButtonText: "", showSecondaryButton: false, showDismiss: true,
+            enableMessageMarkdown: false, intent: "error", inputs: [], linkText: "", linkUrl: "",
+          },
+        );
+        this.emitInteractions();
+        return { kind: "succeeded", message: "Notifications shown." };
       default:
         return { kind: "undefined", message: `Unknown command '${args.commandName}'.` };
     }
@@ -764,8 +814,8 @@ class MockBackend {
       {
         name: "tier", label: "Tier", placeholder: "", inputType: "choice", required: true,
         options: [["standard", "Standard"], ["premium", "Premium"]], value: tier,
-        validationErrors: errs("tier"), description: "Compute tier for the replicas.",
-        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: true, disabled: false, updateStateOnChange: true,
+        validationErrors: errs("tier"), description: "Compute **tier** for the replicas. See the [scaling guide](https://example.com/scaling).",
+        enableDescriptionMarkdown: true, maxLength: 0, allowCustomChoice: true, disabled: false, updateStateOnChange: true,
       },
       {
         name: "region", label: "Region", placeholder: regionLoading ? "Loading regions…" : "Select a region",
@@ -856,6 +906,24 @@ class MockBackend {
     };
   }
 
+  private buildMessageBox(): InteractionInfo {
+    return {
+      interactionId: 4,
+      kind: "messageBox",
+      title: "Review deployment",
+      message: "**Deployment warning**\n\nContinue only after reading the [review guide](https://example.com/review). HTML stays text: <script>alert('unsafe')</script>.",
+      primaryButtonText: "Continue",
+      secondaryButtonText: "Go back",
+      showSecondaryButton: true,
+      showDismiss: true,
+      enableMessageMarkdown: true,
+      intent: "warning",
+      inputs: [],
+      linkText: "",
+      linkUrl: "",
+    };
+  }
+
   // Notifications stack alongside (and outlive) the one-at-a-time dialog.
   private interactionList(): InteractionInfo[] {
     return [...this.notifications, ...(this.dialog ? [this.dialog] : [])];
@@ -922,6 +990,26 @@ class MockBackend {
         this.dialog = null;
         this.emitInteractions();
       }
+      return;
+    }
+
+    if (interactionId === 4 && this.messageBoxResourceName) {
+      const target = this.resources.find((resource) => resource.name === this.messageBoxResourceName);
+      if (target) {
+        target.properties = target.properties.filter((property) => property.name !== "command.messageBox.result");
+        target.properties.push({
+          name: "command.messageBox.result",
+          displayName: "Message box result",
+          value: action === "primary" ? "primary" : action === "secondary" ? "secondary" : "dismissed",
+          isSensitive: false,
+          isHighlighted: false,
+          sortOrder: 92,
+        });
+        this.emitResources({ type: "change", upserts: [structuredClone(target)] });
+      }
+      this.messageBoxResourceName = null;
+      this.dialog = null;
+      this.emitInteractions();
       return;
     }
 

@@ -2586,6 +2586,25 @@ table.data tbody tr.selected {
   width: 420px;
 }
 
+.interaction-pane--warning {
+  border-left: 3px solid var(--warning);
+}
+
+.interaction-pane--error {
+  border-left: 3px solid var(--error);
+}
+
+.interaction-pane--success {
+  border-left: 3px solid var(--success);
+}
+
+.interaction-message {
+  display: block;
+  color: var(--text-secondary);
+  font-size: 13px;
+  margin-bottom: 16px;
+}
+
 .interaction-form {
   display: flex;
   flex-direction: column;
@@ -2644,6 +2663,59 @@ table.data tbody tr.selected {
 .field__errors {
   display: grid;
   gap: 3px;
+}
+
+.markdown-content {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.markdown-content p,
+.markdown-content ul,
+.markdown-content ol,
+.markdown-content pre,
+.markdown-content blockquote {
+  margin: 0 0 10px;
+}
+
+.markdown-content > :last-child {
+  margin-bottom: 0;
+}
+
+.markdown-content ul,
+.markdown-content ol {
+  padding-left: 20px;
+}
+
+.markdown-content a {
+  color: var(--accent);
+  text-decoration: underline;
+}
+
+.markdown-content code {
+  font-family: var(--font-mono);
+  background: var(--bg-input);
+  border-radius: 3px;
+  padding: 1px 4px;
+}
+
+.markdown-content pre {
+  overflow: auto;
+  background: var(--bg-input);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-sm);
+  padding: 10px;
+}
+
+.markdown-content pre code {
+  background: none;
+  padding: 0;
+}
+
+.markdown-content blockquote {
+  border-left: 3px solid var(--border-strong);
+  color: var(--text-secondary);
+  padding-left: 10px;
 }
 
 .input {

@@ -21,6 +21,7 @@ import {
   MoreIcon,
   NamedIcon,
   namedIconMappings,
+  MarkdownContent,
   NotificationStack,
   Page,
   PageActions,
@@ -534,6 +535,9 @@ export function ToolkitPlayground({
               { id: "trace", label: "Trace ID", value: "0123456789abcdef0123456789abcdef" },
             ]}
           />
+          <div data-testid="toolkit-markdown">
+            <MarkdownContent markdown={"**Safe Markdown** with `code`, [documentation](https://example.com/docs), and [unsafe](javascript:alert(1)).\n\n- First item\n- Second item"} />
+          </div>
           <PropertyExplorer
             ariaLabel="Sample property explorer"
             searchPlaceholder="Filter sample details…"
