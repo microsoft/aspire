@@ -288,6 +288,27 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     }
 
     [Fact]
+    public async Task CrossSubscriptionRegistry_RoleModulePreservesSubscriptionAndResourceGroupScope()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExistingInResourceGroup("myacr", "my-existing-resource-group", "00000000-0000-0000-0000-000000000001");
+
+        builder.AddAzureContainerAppEnvironment("env")
+            .WithAzureContainerRegistry(registry);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var roles = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), resource => resource.Name == "env-mi-roles-registry");
+        var (rolesManifest, _) = await AzureManifestUtils.GetManifestWithBicep(roles, skipPreparer: true);
+
+        await Verify(rolesManifest.ToString(), "json");
+    }
+
+    [Fact]
     public async Task CrossResourceGroupRegistry_ThrowsTargetedErrorWhenGeneratedIdentityNameAlreadyExists()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
