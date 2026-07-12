@@ -12,6 +12,7 @@ export type ReactParityStatus = "covered" | "partial" | "missing";
 
 export type LegacyScenario =
   | "shell"
+  | "auth"
   | "manage-data"
   | "resources"
   | "resource-virtualization"
@@ -71,7 +72,7 @@ const featureDefinitions = {
     ["SHELL-TIME-FORMAT-001", "/", "System, 12-hour, and 24-hour time formatting can be selected.", "shell", "covered", "APP-TIME-FORMAT-001"],
     ["SHELL-MANAGE-DATA-001", "/", "Resource logs and telemetry can be inspected, exported, imported, and cleared.", "manage-data", "covered", "HTTP-MANAGE-DATA-001; DeckApiTests.ManageData_InventoryExportImportAndRemoveUseDeckContract"],
     ["SHELL-USER-001", "/", "Authenticated user profile and sign-out behavior are available when configured.", null, "covered", "HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
-    ["SHELL-AUTH-001", "/login", "Browser-token and OpenID Connect login flows protect the frontend.", null, "covered", "HTTP-AUTH-001; DeckApiTests.GetResources_BrowserTokenAuthWithoutCookie_RedirectsToLogin; BrowserTokenAuthenticationTests; FrontendOpenIdConnectAuthTests"],
+    ["SHELL-AUTH-001", "/login", "Browser-token and OpenID Connect login flows protect the frontend.", "auth", "covered", "HTTP-AUTH-001; DeckApiTests.GetResources_BrowserTokenAuthWithoutCookie_RedirectsToLogin; BrowserTokenAuthenticationTests; FrontendOpenIdConnectAuthTests"],
     ["SHELL-RECONNECT-001", "/", "A lost dashboard circuit or backend connection exposes reconnect and recovery UI.", null, "covered", "HTTP-RECOVERY-001; HTTP-RECONNECT-001"],
     ["SHELL-UNSECURED-001", "/", "An unsecured telemetry/API endpoint warning is visible with supporting guidance.", null, "covered", "HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
     ["SHELL-NOTFOUND-001", "/error/404", "Unknown routes render a dedicated not-found experience.", "shell", "covered", "APP-NOTFOUND-001"],

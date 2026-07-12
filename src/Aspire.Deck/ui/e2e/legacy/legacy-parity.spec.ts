@@ -108,6 +108,21 @@ test(`${features("shell")} inventories the legacy shell`, async ({ page }, testI
   await expect(page.getByText("The page you requested could not be found", { exact: true })).toBeVisible();
 });
 
+test(`${features("auth")} protects dashboard routes with browser-token authentication`, async ({ page }) => {
+  await page.context().clearCookies();
+  await page.goto("/");
+  await expect(page).toHaveURL(/\/login\?returnUrl=%2F$/);
+  await expect(page.locator("#token-text-field")).toBeVisible();
+  await expect(page.getByRole("button", { name: "Log in", exact: true })).toBeVisible();
+
+  await page.goto(loginPath);
+  await expect(page).toHaveURL("/");
+  await expect(page.getByRole("navigation")).toBeVisible();
+
+  const response = await page.request.get("/api/deck/resources");
+  expect(response.ok()).toBe(true);
+});
+
 test(`${features("resources")} inventories resources, details, and graph behavior`, async ({ page }, testInfo) => {
   const table = page.getByRole("table");
   for (const header of ["Name", "State", "Source", "URLs", "Start time"]) {
