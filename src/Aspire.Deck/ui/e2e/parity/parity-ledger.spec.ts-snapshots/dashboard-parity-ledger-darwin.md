@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 27
+- Legacy black-box scenarios pending: 26
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -101,7 +101,7 @@
 | CONSOLE-BACKLOG-001 | console | `/consolelogs` | console | covered | CONSOLE-STREAM-001; HTTP-CONSOLE-001; STRESS-CONSOLE-001 | Selecting a resource loads the existing console backlog. |
 | CONSOLE-LIVE-001 | console | `/consolelogs` | console | covered | CONSOLE-STREAM-001; STRESS-CONSOLE-001 | New stdout and stderr lines stream without reloading the page. |
 | CONSOLE-SWITCH-001 | console | `/consolelogs` | console | covered | CONSOLE-SWITCH-001 | Switching resources replaces the visible stream and subscription. |
-| CONSOLE-FOLLOW-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-FOLLOW-001 | Manual scrolling pauses tail-follow and the user can return to the live tail. |
+| CONSOLE-FOLLOW-001 | console | `/consolelogs` | console-follow | covered | CONSOLE-FOLLOW-001 | Manual scrolling pauses tail-follow and the user can return to the live tail. |
 | CONSOLE-PAUSE-001 | console | `/consolelogs` | console | covered | CONSOLE-PAUSE-001; CONSOLE-ROUTE-001 | Incoming console data can be paused and resumed without losing context. |
 | CONSOLE-CLEAR-001 | console | `/consolelogs` | console | covered | CONSOLE-CLEAR-001 | Console data can be cleared for the selected resource or all resources. |
 | CONSOLE-DOWNLOAD-001 | console | `/consolelogs` | console | covered | HTTP-CONSOLE-CONTROLS-001 | The current console log can be downloaded. |

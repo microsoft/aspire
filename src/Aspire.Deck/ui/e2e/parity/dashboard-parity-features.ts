@@ -16,6 +16,7 @@ export type LegacyScenario =
   | "parameters"
   | "commands"
   | "console"
+  | "console-follow"
   | "console-virtualization"
   | "structured-logs"
   | "structured-log-virtualization"
@@ -146,7 +147,7 @@ const featureDefinitions = {
     ["CONSOLE-BACKLOG-001", "/consolelogs", "Selecting a resource loads the existing console backlog.", "console", "covered", "CONSOLE-STREAM-001; HTTP-CONSOLE-001; STRESS-CONSOLE-001"],
     ["CONSOLE-LIVE-001", "/consolelogs", "New stdout and stderr lines stream without reloading the page.", "console", "covered", "CONSOLE-STREAM-001; STRESS-CONSOLE-001"],
     ["CONSOLE-SWITCH-001", "/consolelogs", "Switching resources replaces the visible stream and subscription.", "console", "covered", "CONSOLE-SWITCH-001"],
-    ["CONSOLE-FOLLOW-001", "/consolelogs", "Manual scrolling pauses tail-follow and the user can return to the live tail.", null, "covered", "CONSOLE-FOLLOW-001"],
+    ["CONSOLE-FOLLOW-001", "/consolelogs", "Manual scrolling pauses tail-follow and the user can return to the live tail.", "console-follow", "covered", "CONSOLE-FOLLOW-001"],
     ["CONSOLE-PAUSE-001", "/consolelogs", "Incoming console data can be paused and resumed without losing context.", "console", "covered", "CONSOLE-PAUSE-001; CONSOLE-ROUTE-001"],
     ["CONSOLE-CLEAR-001", "/consolelogs", "Console data can be cleared for the selected resource or all resources.", "console", "covered", "CONSOLE-CLEAR-001"],
     ["CONSOLE-DOWNLOAD-001", "/consolelogs", "The current console log can be downloaded.", "console", "covered", "HTTP-CONSOLE-CONTROLS-001"],

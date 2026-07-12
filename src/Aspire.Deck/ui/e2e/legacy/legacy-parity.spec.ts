@@ -597,6 +597,47 @@ test(`${features("metrics")} inventories metric controls and empty state`, async
   await attachScreenshot(page, testInfo, "legacy-metrics");
 });
 
+test(`${features("console-follow")} preserves manual console position and restores tail-follow`, async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/consolelogs/resource/stress-apiservice");
+  const consoleScroller = page.locator(".console-overflow");
+  await page.getByRole("button", { name: "Remove data", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Remove telemetry for stress-apiservice", exact: true }).click();
+  await expect(consoleScroller.locator(".log-line-row-container")).toHaveCount(0, { timeout: 10_000 });
+
+  await page.goto("/");
+  const apiResourceRow = page.getByRole("table").getByRole("row").filter({ hasText: "stress-apiservice" });
+  await apiResourceRow.getByText("stress-apiservice", { exact: true }).click();
+  await page.getByRole("dialog").filter({ hasText: "stress-apiservice" })
+    .getByRole("button", { name: "Write to console", exact: true }).click();
+  await page.goto("/consolelogs/resource/stress-apiservice");
+
+  await expect.poll(() => consoleScroller.evaluate((element) => element.scrollHeight - element.clientHeight), {
+    timeout: 30_000,
+  }).toBeGreaterThan(1_000);
+
+  await expect.poll(() => consoleScroller.evaluate((element) => {
+    element.scrollTop = 0;
+    element.dispatchEvent(new Event("scroll"));
+    return Boolean((window as Window & { getIsScrolledToContent?: () => boolean }).getIsScrolledToContent?.());
+  })).toBe(true);
+  const heightBeforeManualBurst = await consoleScroller.evaluate((element) => element.scrollHeight);
+  await page.getByRole("main").getByRole("button", { name: "Stop", exact: true }).click();
+  await expect.poll(() => consoleScroller.evaluate((element) => element.scrollHeight), { timeout: 30_000 })
+    .toBeGreaterThan(heightBeforeManualBurst);
+  expect(await consoleScroller.evaluate((element) => element.scrollTop)).toBeLessThan(100);
+
+  await expect.poll(() => consoleScroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+    return Boolean((window as Window & { getIsScrolledToContent?: () => boolean }).getIsScrolledToContent?.());
+  })).toBe(false);
+  await page.getByRole("main").getByRole("button", { name: "Start", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("button", { name: "Stop", exact: true })).toBeVisible({ timeout: 30_000 });
+  await expect.poll(() => consoleScroller.evaluate((element) =>
+    element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(10);
+});
+
 const expectedRegisteredFeatures = getRegisteredFeatures();
 const missingRegisteredFeatures = expectedRegisteredFeatures.filter((feature) => !registeredFeatures.has(feature.id));
 if (missingRegisteredFeatures.length > 0) {
