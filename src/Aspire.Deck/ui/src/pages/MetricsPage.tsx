@@ -106,7 +106,7 @@ export function MetricsPage({
 }) {
   const telemetry = useTelemetry();
   const { resources } = useResources();
-  const [series, setSeries] = useState<MetricSeriesResponse | null>(null);
+  const [seriesState, setSeriesState] = useState<{ key: string; value: MetricSeriesResponse | null } | null>(null);
   const [clearing, setClearing] = useState(false);
   const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
 
@@ -135,6 +135,14 @@ export function MetricsPage({
   const selectedWindowSeconds = TIME_RANGES.some((range) => range.seconds === routeWindowSeconds)
     ? routeWindowSeconds
     : 300;
+  const activeName = active?.name ?? null;
+  const activeMeterName = active?.meterName ?? null;
+  const activeResourceName = active?.resourceName ?? null;
+  const activeKind = active?.kind ?? null;
+  const activeSeriesKey = activeName === null
+    ? null
+    : `${activeResourceName ?? ""}\u0000${activeMeterName ?? ""}\u0000${activeName}`;
+  const series = activeSeriesKey !== null && seriesState?.key === activeSeriesKey ? seriesState.value : null;
 
   const updateRoute = (changes: Partial<MetricRouteState>): void => {
     onRouteChange({
@@ -151,40 +159,40 @@ export function MetricsPage({
   };
 
   const fetchSeries = useCallback(async () => {
-    if (active === null) {
-      setSeries(null);
+    if (activeName === null) {
+      setSeriesState(null);
       return;
     }
-    setSeries(await getMetricSeries({
-      name: active.name,
-      meterName: active.meterName,
-      resourceName: active.resourceName,
+    const value = await getMetricSeries({
+      name: activeName,
+      meterName: activeMeterName,
+      resourceName: activeResourceName,
       windowSeconds: selectedWindowSeconds,
       maxPoints: 600,
       dimensions: routeDimensions,
-      showCount: active.kind === "histogram" && routeShowCount,
-    }));
-  }, [active, routeDimensions, routeShowCount, selectedWindowSeconds]);
+      showCount: activeKind === "histogram" && routeShowCount,
+    });
+    setSeriesState({ key: activeSeriesKey!, value });
+  }, [activeKind, activeMeterName, activeName, activeResourceName, activeSeriesKey, routeDimensions, routeShowCount, selectedWindowSeconds]);
 
   useEffect(() => {
-    setSeries(null);
     void fetchSeries();
   }, [fetchSeries]);
 
   useEffect(() => {
-    if (routePaused || active === null) {
+    if (routePaused || activeName === null) {
       return;
     }
     const id = window.setInterval(() => void fetchSeries(), POLL_MS);
     return () => window.clearInterval(id);
-  }, [active, fetchSeries, routePaused]);
+  }, [activeName, fetchSeries, routePaused]);
 
   const clearMetricData = async (resourceName: string | null): Promise<void> => {
     setClearing(true);
     setClearStatus(null);
     try {
       await clearMetrics(resourceName);
-      setSeries(null);
+      setSeriesState(null);
       updateRoute({ resourceName: null, meterName: null, metricName: null, paused: false, dimensions: {}, showCount: false });
       setClearStatus({
         message: resourceName === null ? "Cleared all metrics." : `Cleared metrics for ${resourceName}.`,
