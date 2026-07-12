@@ -365,11 +365,17 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? instrument,
             [FromQuery] int? windowSeconds,
             [FromQuery] int? maxPoints,
-            [FromQuery] bool? showCount) =>
+            [FromQuery] bool? showCount,
+            [FromQuery] string? histogramMode) =>
         {
             if (string.IsNullOrWhiteSpace(resource)
                 || string.IsNullOrWhiteSpace(meter)
                 || string.IsNullOrWhiteSpace(instrument))
+            {
+                return Results.BadRequest();
+            }
+            if (histogramMode is not null
+                && histogramMode is not ("percentiles" or "count" or "sum" or "buckets"))
             {
                 return Results.BadRequest();
             }
@@ -383,7 +389,7 @@ public static class DashboardEndpointsBuilder
                         ? []
                         : item.Value.Select(static value => value == "n:" ? null : value?[2..]).ToArray(),
                     StringComparer.Ordinal);
-            var response = service.GetMetricSeries(resource, meter, instrument, windowSeconds, maxPoints, dimensionFilters, showCount);
+            var response = service.GetMetricSeries(resource, meter, instrument, windowSeconds, maxPoints, dimensionFilters, showCount, histogramMode);
             return response is null
                 ? Results.NotFound()
                 : Results.Json(response, DeckApiJsonSerializerContext.Default.DeckMetricSeriesResponse);

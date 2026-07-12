@@ -326,6 +326,43 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
+    public void TryCalculateHistogramAggregatePoint_ReturnsCumulativeDeltas()
+    {
+        var context = CreateContext();
+        var dimension = new DimensionScope(capacity: 100, []);
+        var first = new HistogramDataPoint
+        {
+            TimeUnixNano = (ulong)s_startTime.AddSeconds(-2).ToUnixTimeMilliseconds() * 1_000_000,
+            Count = 3,
+            Sum = 30,
+        };
+        first.ExplicitBounds.AddRange([10.0, 50.0]);
+        first.BucketCounts.AddRange([1UL, 2UL, 0UL]);
+        dimension.AddHistogramValue(first, context);
+
+        var second = new HistogramDataPoint
+        {
+            TimeUnixNano = (ulong)s_startTime.AddSeconds(-1).ToUnixTimeMilliseconds() * 1_000_000,
+            Count = 8,
+            Sum = 105,
+        };
+        second.ExplicitBounds.AddRange([10.0, 50.0]);
+        second.BucketCounts.AddRange([2UL, 5UL, 1UL]);
+        dimension.AddHistogramValue(second, context);
+
+        var result = ChartDataCalculator.TryCalculateHistogramAggregatePoint(
+            [dimension],
+            s_startTime.AddSeconds(-0.5),
+            s_startTime,
+            out var point);
+
+        Assert.True(result);
+        Assert.Equal(75, point.Sum);
+        Assert.Equal([10.0, 50.0], point.ExplicitBounds);
+        Assert.Equal([1UL, 3UL, 1UL], point.BucketCounts);
+    }
+
+    [Fact]
     public void CalculateChartValues_ToLocalApplied()
     {
         var context = CreateContext();

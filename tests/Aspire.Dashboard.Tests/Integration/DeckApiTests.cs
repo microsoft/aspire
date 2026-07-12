@@ -735,6 +735,28 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.NotEmpty(Assert.IsType<JsonArray>(histogramCountSeries["values"]));
         Assert.Null(histogramCountSeries["p50"]);
 
+        using var histogramSumResponse = await httpClient.GetAsync(
+            "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=frontend.duration&windowSeconds=60&maxPoints=20&histogramMode=sum").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, histogramSumResponse.StatusCode);
+        var histogramSumSeries = JsonNode.Parse(await histogramSumResponse.Content.ReadAsStringAsync().DefaultTimeout())!.AsObject();
+        Assert.Equal("sum", (string?)histogramSumSeries["histogramMode"]);
+        Assert.NotEmpty(Assert.IsType<JsonArray>(histogramSumSeries["sum"]));
+        Assert.Null(histogramSumSeries["values"]);
+
+        using var histogramBucketsResponse = await httpClient.GetAsync(
+            "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=frontend.duration&windowSeconds=60&maxPoints=20&histogramMode=buckets").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, histogramBucketsResponse.StatusCode);
+        var histogramBucketsSeries = JsonNode.Parse(await histogramBucketsResponse.Content.ReadAsStringAsync().DefaultTimeout())!.AsObject();
+        Assert.Equal("buckets", (string?)histogramBucketsSeries["histogramMode"]);
+        Assert.NotEmpty(Assert.IsType<JsonArray>(histogramBucketsSeries["bucketBounds"]));
+        var buckets = Assert.IsType<JsonArray>(histogramBucketsSeries["buckets"]);
+        Assert.Equal(4, buckets.Count);
+        Assert.All(buckets, bucket => Assert.NotEmpty(Assert.IsType<JsonArray>(bucket!["values"])));
+
+        using var invalidHistogramModeResponse = await httpClient.GetAsync(
+            "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=frontend.duration&histogramMode=invalid").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.BadRequest, invalidHistogramModeResponse.StatusCode);
+
         using var missingResponse = await httpClient.GetAsync(
             "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=missing").DefaultTimeout();
         Assert.Equal(HttpStatusCode.NotFound, missingResponse.StatusCode);
@@ -1020,6 +1042,11 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         string resourceName,
         DateTime startTime)
     {
+        var metric = TelemetryTestHelpers.CreateHistogramMetric(metricName, startTime);
+        // The raw histogram API requires a valid cumulative baseline. Keep Count equal
+        // to the total of the helper's bucket counts so sum and bucket deltas are defined.
+        metric.Histogram.DataPoints[0].Count = 6;
+        metric.Histogram.DataPoints[0].BucketCounts.Add(0);
         repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
@@ -1030,7 +1057,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                     new ScopeMetrics
                     {
                         Scope = TelemetryTestHelpers.CreateScope("Stress.Telemetry"),
-                        Metrics = { TelemetryTestHelpers.CreateHistogramMetric(metricName, startTime) }
+                        Metrics = { metric }
                     }
                 }
             }

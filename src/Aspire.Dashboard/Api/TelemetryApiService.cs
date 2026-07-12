@@ -352,7 +352,8 @@ internal sealed class TelemetryApiService(
         int? windowSeconds,
         int? maxPoints,
         IReadOnlyDictionary<string, string?[]>? dimensionFilters = null,
-        bool? showCount = null)
+        bool? showCount = null,
+        string? histogramMode = null)
     {
         var duration = TimeSpan.FromSeconds(Math.Clamp(windowSeconds ?? 300, 1, 12 * 60 * 60));
         var pointCount = Math.Clamp(maxPoints ?? 400, 2, 4_000);
@@ -374,25 +375,37 @@ internal sealed class TelemetryApiService(
             ? instrument.Dimensions.Where(dimension => MatchesDimensionFilters(dimension, dimensionFilters)).ToList()
             : instrument.Dimensions;
         var calculator = new ChartDataCalculator(pointCount, duration);
-        var histogramCount = instrument.Summary.Type == OtlpInstrumentType.Histogram && showCount == true;
-        var chart = instrument.Summary.Type == OtlpInstrumentType.Histogram && !histogramCount
+        var selectedHistogramMode = instrument.Summary.Type == OtlpInstrumentType.Histogram
+            ? histogramMode ?? (showCount == true ? "count" : "percentiles")
+            : null;
+        var histogramCount = selectedHistogramMode == "count";
+        var rawHistogram = selectedHistogramMode is "sum" or "buckets";
+        var chart = instrument.Summary.Type == OtlpInstrumentType.Histogram && !histogramCount && !rawHistogram
             ? calculator.CalculateHistogramValues(matchedDimensions, endTime, static value => value, instrument.Summary.Unit)
             : calculator.CalculateChartValues(matchedDimensions, endTime, static value => value, instrument.Summary.Unit);
-        var aggregate = CreateMetricSeries(chart, instrument.Summary.Type, histogramCount);
+        var aggregate = CreateMetricSeries(chart, instrument.Summary.Type, histogramCount || rawHistogram);
+        var aggregateHistogram = rawHistogram
+            ? CreateHistogramAggregateSeries(calculator.CalculateHistogramAggregateValues(matchedDimensions, endTime, static value => value))
+            : default;
         var dimensions = instrument.Dimensions
             .Select(dimension =>
             {
-                var dimensionChart = instrument.Summary.Type == OtlpInstrumentType.Histogram && !histogramCount
+                var dimensionChart = instrument.Summary.Type == OtlpInstrumentType.Histogram && !histogramCount && !rawHistogram
                     ? calculator.CalculateHistogramValues([dimension], endTime, static value => value, instrument.Summary.Unit)
                     : calculator.CalculateChartValues([dimension], endTime, static value => value, instrument.Summary.Unit);
-                var series = CreateMetricSeries(dimensionChart, instrument.Summary.Type, histogramCount);
+                var series = CreateMetricSeries(dimensionChart, instrument.Summary.Type, histogramCount || rawHistogram);
+                var histogramSeries = rawHistogram
+                    ? CreateHistogramAggregateSeries(calculator.CalculateHistogramAggregateValues([dimension], endTime, static value => value))
+                    : default;
                 return new DeckMetricDimensionSeries(
                     Attributes: dimension.Attributes.Select(static attribute => new DeckMetricAttribute(attribute.Key, attribute.Value)).ToArray(),
-                    TimestampsMs: series.Timestamps,
-                    Values: series.Values,
+                    TimestampsMs: rawHistogram ? histogramSeries.Timestamps : series.Timestamps,
+                    Values: rawHistogram ? null : series.Values,
                     P50: series.P50,
                     P90: series.P90,
-                    P99: series.P99);
+                    P99: series.P99,
+                    Sum: selectedHistogramMode == "sum" ? histogramSeries.Sums : null,
+                    Buckets: selectedHistogramMode == "buckets" ? histogramSeries.Buckets : null);
             })
             .ToArray();
         var knownDimensionFilters = instrument.KnownAttributeValues
@@ -419,16 +432,20 @@ internal sealed class TelemetryApiService(
             MeterName: instrument.Summary.Parent.Name,
             Unit: instrument.Summary.Unit,
             Kind: GetMetricKind(instrument.Summary),
-            TimestampsMs: aggregate.Timestamps,
-            Values: aggregate.Values,
+            TimestampsMs: rawHistogram ? aggregateHistogram.Timestamps : aggregate.Timestamps,
+            Values: rawHistogram ? null : aggregate.Values,
             P50: aggregate.P50,
             P90: aggregate.P90,
             P99: aggregate.P99,
+            Sum: selectedHistogramMode == "sum" ? aggregateHistogram.Sums : null,
+            BucketBounds: selectedHistogramMode == "buckets" ? aggregateHistogram.Bounds : null,
+            Buckets: selectedHistogramMode == "buckets" ? aggregateHistogram.Buckets : null,
             DimensionFilters: knownDimensionFilters,
             Dimensions: dimensions,
             Exemplars: exemplars,
             HasOverflow: instrument.HasOverflow,
-            ShowCount: histogramCount);
+            ShowCount: histogramCount,
+            HistogramMode: selectedHistogramMode);
     }
 
     private DeckMetricSummary CreateMetricSummary(string resourceName, OtlpInstrumentSummary summary)
@@ -518,6 +535,30 @@ internal sealed class TelemetryApiService(
             null,
             null,
             null);
+    }
+
+    private static (double[] Timestamps, double[] Sums, double[] Bounds, DeckMetricBucketSeries[] Buckets) CreateHistogramAggregateSeries(
+        HistogramAggregateChartData chart)
+    {
+        var populatedIndexes = Enumerable.Range(0, chart.Points.Count)
+            .Where(index => chart.Points[index] is not null)
+            .ToArray();
+        if (populatedIndexes.Length == 0)
+        {
+            return ([], [], [], []);
+        }
+
+        var firstPoint = chart.Points[populatedIndexes[0]]!;
+        var buckets = Enumerable.Range(0, firstPoint.BucketCounts.Length)
+            .Select(bucketIndex => new DeckMetricBucketSeries(
+                UpperBound: bucketIndex < firstPoint.ExplicitBounds.Length ? firstPoint.ExplicitBounds[bucketIndex] : null,
+                Values: populatedIndexes.Select(index => (double)chart.Points[index]!.BucketCounts[bucketIndex]).ToArray()))
+            .ToArray();
+        return (
+            populatedIndexes.Select(index => (double)chart.XValues[index].ToUnixTimeMilliseconds()).ToArray(),
+            populatedIndexes.Select(index => chart.Points[index]!.Sum).ToArray(),
+            firstPoint.ExplicitBounds,
+            buckets);
     }
 
     /// <summary>

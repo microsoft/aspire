@@ -153,11 +153,15 @@ internal sealed record DeckMetricSeriesResponse(
     double[]? P50,
     double[]? P90,
     double[]? P99,
+    double[]? Sum,
+    double[]? BucketBounds,
+    DeckMetricBucketSeries[]? Buckets,
     DeckMetricDimensionFilter[] DimensionFilters,
     DeckMetricDimensionSeries[] Dimensions,
     DeckMetricExemplar[] Exemplars,
     bool HasOverflow,
-    bool ShowCount);
+    bool ShowCount,
+    string? HistogramMode);
 
 internal sealed record DeckMetricDimensionFilter(
     string Name,
@@ -169,7 +173,13 @@ internal sealed record DeckMetricDimensionSeries(
     double[]? Values,
     double[]? P50,
     double[]? P90,
-    double[]? P99);
+    double[]? P99,
+    double[]? Sum,
+    DeckMetricBucketSeries[]? Buckets);
+
+internal sealed record DeckMetricBucketSeries(
+    double? UpperBound,
+    double[] Values);
 
 internal sealed record DeckMetricExemplar(
     double TimestampMs,
