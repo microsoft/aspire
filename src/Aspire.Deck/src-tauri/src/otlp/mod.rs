@@ -178,6 +178,7 @@ pub struct TelemetryStore {
     log_count: u64,
     log_count_by_resource: HashMap<Option<String>, u64>,
     span_count: u64,
+    span_count_by_resource: HashMap<Option<String>, u64>,
     metric_count: u64,
     recent_logs: VecDeque<LogRecordSummary>,
     recent_spans: VecDeque<SpanSummary>,
@@ -190,6 +191,7 @@ impl TelemetryStore {
             log_count: 0,
             log_count_by_resource: HashMap::new(),
             span_count: 0,
+            span_count_by_resource: HashMap::new(),
             metric_count: 0,
             recent_logs: VecDeque::with_capacity(RECENT_CAP),
             recent_spans: VecDeque::with_capacity(RECENT_CAP),
@@ -225,10 +227,28 @@ impl TelemetryStore {
 
     fn push_span(&mut self, span: SpanSummary) {
         self.span_count += 1;
+        *self
+            .span_count_by_resource
+            .entry(span.resource_name.clone())
+            .or_default() += 1;
         if self.recent_spans.len() >= RECENT_CAP {
             self.recent_spans.pop_back();
         }
         self.recent_spans.push_front(span);
+    }
+
+    pub fn clear_spans(&mut self, resource_name: Option<&str>) {
+        if let Some(resource_name) = resource_name {
+            let key = Some(resource_name.to_string());
+            let removed_count = self.span_count_by_resource.remove(&key).unwrap_or_default();
+            self.span_count = self.span_count.saturating_sub(removed_count);
+            self.recent_spans
+                .retain(|span| span.resource_name.as_deref() != Some(resource_name));
+        } else {
+            self.span_count = 0;
+            self.span_count_by_resource.clear();
+            self.recent_spans.clear();
+        }
     }
 
     /// Records one numeric (gauge/sum) data point into its series.
@@ -312,7 +332,7 @@ impl Default for TelemetryStore {
 mod tests {
     use super::{
         summarize_log_record, summarize_span, LogRecordSummary, SpanEventSummary,
-        SpanLinkSummary, TelemetryAttribute, TelemetryStore,
+        SpanLinkSummary, SpanSummary, TelemetryAttribute, TelemetryStore,
     };
     use crate::proto::opentelemetry::proto::common::v1::{
         any_value, AnyValue, InstrumentationScope, KeyValue,
@@ -359,6 +379,35 @@ mod tests {
         }
     }
 
+    fn span(resource_name: &str) -> SpanSummary {
+        SpanSummary {
+            trace_id: "trace".to_string(),
+            span_id: "span".to_string(),
+            trace_state: None,
+            parent_span_id: None,
+            flags: 0,
+            name: "Test span".to_string(),
+            kind: "Internal".to_string(),
+            resource_name: Some(resource_name.to_string()),
+            start_unix_nano: "1".to_string(),
+            duration_nanos: "1".to_string(),
+            status_code: None,
+            status_message: None,
+            scope_name: "unknown".to_string(),
+            scope_version: None,
+            attributes: Vec::new(),
+            scope_attributes: Vec::new(),
+            resource_attributes: Vec::new(),
+            dropped_attributes_count: 0,
+            scope_dropped_attributes_count: 0,
+            resource_dropped_attributes_count: 0,
+            events: Vec::new(),
+            dropped_events_count: 0,
+            links: Vec::new(),
+            dropped_links_count: 0,
+        }
+    }
+
     #[test]
     fn clear_logs_removes_selected_resource_or_all_logs() {
         let mut store = TelemetryStore::new();
@@ -381,6 +430,30 @@ mod tests {
         let empty_summary = store.summary();
         assert_eq!(empty_summary.log_count, 0);
         assert!(empty_summary.recent_logs.is_empty());
+    }
+
+    #[test]
+    fn clear_spans_removes_selected_resource_or_all_spans() {
+        let mut store = TelemetryStore::new();
+        store.push_span(span("frontend"));
+        store.push_span(span("frontend"));
+        store.push_span(span("backend"));
+
+        store.clear_spans(Some("frontend"));
+
+        let selected_summary = store.summary();
+        assert_eq!(selected_summary.span_count, 1);
+        assert_eq!(selected_summary.recent_spans.len(), 1);
+        assert_eq!(
+            selected_summary.recent_spans[0].resource_name.as_deref(),
+            Some("backend")
+        );
+
+        store.clear_spans(None);
+
+        let empty_summary = store.summary();
+        assert_eq!(empty_summary.span_count, 0);
+        assert!(empty_summary.recent_spans.is_empty());
     }
 
     #[test]

@@ -274,6 +274,34 @@ internal sealed class TelemetryApiService(
     }
 
     /// <summary>
+    /// Clears traces for all resources or for the selected resource group.
+    /// Returns false when a requested resource is unknown.
+    /// </summary>
+    public bool ClearTraces(string? resourceName)
+    {
+        if (string.IsNullOrWhiteSpace(resourceName))
+        {
+            telemetryRepository.ClearTraces();
+            return true;
+        }
+
+        var resources = telemetryRepository.GetResources();
+        if (resources.Any(resource => string.Equals(resource.ResourceName, resourceName, StringComparison.Ordinal)))
+        {
+            telemetryRepository.ClearTraces(new ResourceKey(resourceName, InstanceId: null));
+            return true;
+        }
+
+        if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey) || resourceKey is null)
+        {
+            return false;
+        }
+
+        telemetryRepository.ClearTraces(resourceKey);
+        return true;
+    }
+
+    /// <summary>
     /// Streams span updates as they arrive in OTLP JSON format.
     /// Supports multiple resource names.
     /// </summary>

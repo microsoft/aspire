@@ -543,6 +543,49 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task DeleteSpans_ClearsSelectedOrAllResources()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        var repository = app.Services.GetRequiredService<TelemetryRepository>();
+        AddSpan(
+            repository,
+            startTime: new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
+            spanId: "span-frontend",
+            resourceName: "frontend");
+        AddSpan(
+            repository,
+            startTime: new DateTime(2026, 7, 10, 8, 0, 1, DateTimeKind.Utc),
+            spanId: "span-backend",
+            traceId: "fedcba9876543210",
+            resourceName: "backend");
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+
+        using var missingResponse = await httpClient.DeleteAsync("/api/deck/telemetry/spans?resource=missing").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NotFound, missingResponse.StatusCode);
+
+        using var selectedResponse = await httpClient.DeleteAsync("/api/deck/telemetry/spans?resource=frontend").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NoContent, selectedResponse.StatusCode);
+
+        using var selectedSnapshotResponse = await httpClient.GetAsync("/api/deck/telemetry/spans").DefaultTimeout();
+        var selectedSnapshot = await selectedSnapshotResponse.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        Assert.NotNull(selectedSnapshot);
+        Assert.Equal(1, selectedSnapshot.TotalCount);
+        Assert.Equal("backend", Assert.Single(selectedSnapshot.Data?.ResourceSpans ?? []).Resource?.GetServiceName());
+
+        using var allResponse = await httpClient.DeleteAsync("/api/deck/telemetry/spans").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NoContent, allResponse.StatusCode);
+
+        using var emptySnapshotResponse = await httpClient.GetAsync("/api/deck/telemetry/spans").DefaultTimeout();
+        var emptySnapshot = await emptySnapshotResponse.Content.ReadFromJsonAsync(OtlpJsonSerializerContext.Default.TelemetryApiResponse);
+        Assert.NotNull(emptySnapshot);
+        Assert.Equal(0, emptySnapshot.TotalCount);
+        Assert.Empty(emptySnapshot.Data?.ResourceSpans ?? []);
+    }
+
+    [Fact]
     public async Task Interactions_RoundTripInputsDialog()
     {
         var interactions = Channel.CreateUnbounded<DashboardProto.WatchInteractionsResponseUpdate>();
@@ -750,6 +793,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         DateTime startTime,
         string spanId,
         string? parentSpanId = null,
+        string traceId = "0123456789abcdef",
         string resourceName = "frontend")
     {
         repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
@@ -765,7 +809,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                         Spans =
                         {
                             TelemetryTestHelpers.CreateSpan(
-                                traceId: "0123456789abcdef",
+                                traceId: traceId,
                                 spanId: spanId,
                                 startTime: startTime,
                                 endTime: startTime.AddMilliseconds(50),

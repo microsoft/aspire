@@ -301,6 +301,23 @@ public static class DashboardEndpointsBuilder
 
             return Results.NoContent();
         });
+
+        group.MapDelete("/telemetry/spans", (
+            TelemetryApiService service,
+            [FromQuery] string? resource) =>
+        {
+            if (!service.ClearTraces(resource))
+            {
+                return Results.NotFound(new ProblemDetails
+                {
+                    Title = "Resource not found",
+                    Detail = "No resource with the specified name was found.",
+                    Status = StatusCodes.Status404NotFound
+                });
+            }
+
+            return Results.NoContent();
+        });
     }
 
     public static void MapTelemetryApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)

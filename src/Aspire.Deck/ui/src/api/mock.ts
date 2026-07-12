@@ -432,6 +432,7 @@ class MockBackend {
   ];
   private consoleSubs = new Map<string, Set<(e: ConsoleLogEvent) => void>>();
   private consoleLineCounters = new Map<string, number>();
+  private spanCountByResource = new Map<string, number>();
 
   private timers: ReturnType<typeof setInterval>[] = [];
   private started = false;
@@ -507,6 +508,28 @@ class MockBackend {
         (log) => log.resourceName !== resourceName,
       );
       this.logCountByResource.delete(resourceName);
+    }
+
+    const snapshot = this.getTelemetrySummary();
+    for (const callback of this.telemetrySubs) {
+      callback(snapshot);
+    }
+  }
+
+  clearTraces(resourceName: string | null): void {
+    if (resourceName === null) {
+      this.telemetry.spanCount = 0;
+      this.telemetry.recentSpans = [];
+      this.spanCountByResource.clear();
+    } else {
+      this.telemetry.spanCount = Math.max(
+        0,
+        this.telemetry.spanCount - (this.spanCountByResource.get(resourceName) ?? 0),
+      );
+      this.telemetry.recentSpans = this.telemetry.recentSpans.filter(
+        (span) => span.resourceName !== resourceName,
+      );
+      this.spanCountByResource.delete(resourceName);
     }
 
     const snapshot = this.getTelemetrySummary();
@@ -919,6 +942,14 @@ class MockBackend {
     }));
     this.telemetry.recentSpans = [...newSpans, ...this.telemetry.recentSpans].slice(0, 200);
     this.telemetry.spanCount += newSpans.length;
+    for (const span of newSpans) {
+      if (span.resourceName !== null) {
+        this.spanCountByResource.set(
+          span.resourceName,
+          (this.spanCountByResource.get(span.resourceName) ?? 0) + 1,
+        );
+      }
+    }
 
     // Advance each metric's last value with bounded jitter, and append a
     // timestamped sample to its history so the chart shows a real time series.

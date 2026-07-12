@@ -425,6 +425,28 @@ async function clearStructuredLogs(resourceName: string | null): Promise<void> {
   notifyTelemetry();
 }
 
+async function clearTraces(resourceName: string | null): Promise<void> {
+  const resourceQuery = resourceName === null ? "" : `?resource=${encodeURIComponent(resourceName)}`;
+  await deleteNoContent(`telemetry/spans${resourceQuery}`);
+
+  // Span streams only carry additions, so replace the local snapshot and dedupe
+  // keys after the server removes traces.
+  const response = await requestJson<TelemetryApiResponse>("telemetry/spans?limit=200");
+  const records = getSpanSummaries(response.data);
+  telemetrySpanKeys.clear();
+  for (const record of records) {
+    telemetrySpanKeys.add(record.recordKey);
+  }
+  telemetrySummary = {
+    ...telemetrySummary,
+    spanCount: response.totalCount,
+    recentSpans: records
+      .map(({ recordKey: _, ...span }) => span)
+      .sort(compareSpansNewestFirst),
+  };
+  notifyTelemetry();
+}
+
 function ensureTelemetryStream(): void {
   if (telemetryStarted) {
     return;
@@ -513,6 +535,7 @@ export const httpBackend = {
     return summaryFromResponses(logsResponse, spansResponse);
   },
   clearStructuredLogs,
+  clearTraces,
   getMetricSeries(_query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {
     return Promise.resolve(null);
   },
