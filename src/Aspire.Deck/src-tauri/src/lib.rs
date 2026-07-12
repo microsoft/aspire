@@ -134,6 +134,7 @@ pub fn run() {
             commands::deck_get_telemetry_summary,
             commands::deck_clear_structured_logs,
             commands::deck_clear_traces,
+            commands::deck_clear_metrics,
             commands::deck_get_metric_series,
             commands::deck_subscribe_console_logs,
             commands::deck_unsubscribe_console_logs,

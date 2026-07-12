@@ -84,6 +84,18 @@ pub fn deck_clear_traces(state: State<'_, Arc<AppState>>, resource_name: Option<
     }
 }
 
+#[tauri::command]
+pub fn deck_clear_metrics(state: State<'_, Arc<AppState>>, resource_name: Option<String>) {
+    if let Some(session) = state.active_session() {
+        session
+            .telemetry
+            .lock()
+            .unwrap()
+            .clear_metrics(resource_name.as_deref());
+        state.emit_active_telemetry();
+    }
+}
+
 /// Returns the downsampled time series for a metric within the requested window.
 /// `resourceName` disambiguates when several resources emit the same metric name;
 /// when omitted, the first matching series is returned. Reads the active AppHost's

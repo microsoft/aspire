@@ -31,6 +31,7 @@ current `InteractionInfo[]`; the response POST accepts `{ interactionId, action,
 | `deck_get_telemetry_summary` | – | `TelemetrySummary` |
 | `deck_clear_structured_logs` | `{ resourceName?: string \| null }` | `void` |
 | `deck_clear_traces` | `{ resourceName?: string \| null }` | `void` |
+| `deck_clear_metrics` | `{ resourceName?: string \| null }` | `void` |
 | `deck_get_metric_series` | `{ name, resourceName?, windowSeconds?, maxPoints? }` | `MetricSeriesResponse \| null` (downsampled time series) |
 | `deck_list_apphosts` | – | `AppHostInfo[]` (attached AppHosts) |
 | `deck_select_apphost` | `{ id: string }` | `void` (switches the active AppHost) |

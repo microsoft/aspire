@@ -447,6 +447,21 @@ async function clearTraces(resourceName: string | null): Promise<void> {
   notifyTelemetry();
 }
 
+async function clearMetrics(resourceName: string | null): Promise<void> {
+  const resourceQuery = resourceName === null ? "" : `?resource=${encodeURIComponent(resourceName)}`;
+  await deleteNoContent(`telemetry/metrics${resourceQuery}`);
+
+  const retainedMetrics = resourceName === null
+    ? []
+    : telemetrySummary.metrics.filter((metric) => metric.resourceName !== resourceName);
+  telemetrySummary = {
+    ...telemetrySummary,
+    metricCount: retainedMetrics.reduce((total, metric) => total + metric.pointCount, 0),
+    metrics: retainedMetrics,
+  };
+  notifyTelemetry();
+}
+
 function ensureTelemetryStream(): void {
   if (telemetryStarted) {
     return;
@@ -536,6 +551,7 @@ export const httpBackend = {
   },
   clearStructuredLogs,
   clearTraces,
+  clearMetrics,
   getMetricSeries(_query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {
     return Promise.resolve(null);
   },

@@ -538,6 +538,28 @@ class MockBackend {
     }
   }
 
+  clearMetrics(resourceName: string | null): void {
+    const removed = resourceName === null
+      ? this.telemetry.metrics
+      : this.telemetry.metrics.filter((metric) => metric.resourceName === resourceName);
+    const removedNames = new Set(removed.map((metric) => metric.name));
+    this.telemetry.metrics = resourceName === null
+      ? []
+      : this.telemetry.metrics.filter((metric) => metric.resourceName !== resourceName);
+    this.telemetry.metricCount = this.telemetry.metrics.reduce(
+      (total, metric) => total + metric.pointCount,
+      0,
+    );
+    for (const name of removedNames) {
+      this.metricHistory.delete(name);
+    }
+
+    const snapshot = this.getTelemetrySummary();
+    for (const callback of this.telemetrySubs) {
+      callback(snapshot);
+    }
+  }
+
   getMetricSeries(query: MetricSeriesQuery): MetricSeriesResponse | null {
     const def = metricDefs.find((m) => m.name === query.name);
     const hist = this.metricHistory.get(query.name);

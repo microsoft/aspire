@@ -24,6 +24,7 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using DashboardProto = global::Aspire.DashboardService.Proto.V1;
@@ -586,6 +587,33 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task DeleteMetrics_ClearsSelectedOrAllResources()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        var repository = app.Services.GetRequiredService<TelemetryRepository>();
+        AddMetric(repository, "frontend.requests", "frontend");
+        AddMetric(repository, "backend.jobs", "backend");
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+
+        using var missingResponse = await httpClient.DeleteAsync("/api/deck/telemetry/metrics?resource=missing").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NotFound, missingResponse.StatusCode);
+
+        using var selectedResponse = await httpClient.DeleteAsync("/api/deck/telemetry/metrics?resource=frontend").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NoContent, selectedResponse.StatusCode);
+        Assert.Empty(repository.GetInstrumentsSummaries(new ResourceKey("frontend", "instance-1")));
+        Assert.Equal(
+            "backend.jobs",
+            Assert.Single(repository.GetInstrumentsSummaries(new ResourceKey("backend", "instance-1"))).Name);
+
+        using var allResponse = await httpClient.DeleteAsync("/api/deck/telemetry/metrics").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.NoContent, allResponse.StatusCode);
+        Assert.Empty(repository.GetInstrumentsSummaries(new ResourceKey("backend", "instance-1")));
+    }
+
+    [Fact]
     public async Task Interactions_RoundTripInputsDialog()
     {
         var interactions = Channel.CreateUnbounded<DashboardProto.WatchInteractionsResponseUpdate>();
@@ -815,6 +843,31 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                                 endTime: startTime.AddMilliseconds(50),
                                 parentSpanId: parentSpanId,
                                 kind: Span.Types.SpanKind.Server)
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    private static void AddMetric(TelemetryRepository repository, string metricName, string resourceName)
+    {
+        repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = TelemetryTestHelpers.CreateResource(name: resourceName, instanceId: "instance-1"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope("Stress.Telemetry"),
+                        Metrics =
+                        {
+                            TelemetryTestHelpers.CreateSumMetric(
+                                metricName: metricName,
+                                startTime: new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
+                                value: 1)
                         }
                     }
                 }

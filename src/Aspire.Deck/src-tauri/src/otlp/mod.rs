@@ -179,6 +179,7 @@ pub struct TelemetryStore {
     log_count_by_resource: HashMap<Option<String>, u64>,
     span_count: u64,
     span_count_by_resource: HashMap<Option<String>, u64>,
+    metric_count_by_resource: HashMap<Option<String>, u64>,
     metric_count: u64,
     recent_logs: VecDeque<LogRecordSummary>,
     recent_spans: VecDeque<SpanSummary>,
@@ -192,6 +193,7 @@ impl TelemetryStore {
             log_count_by_resource: HashMap::new(),
             span_count: 0,
             span_count_by_resource: HashMap::new(),
+            metric_count_by_resource: HashMap::new(),
             metric_count: 0,
             recent_logs: VecDeque::with_capacity(RECENT_CAP),
             recent_spans: VecDeque::with_capacity(RECENT_CAP),
@@ -251,6 +253,18 @@ impl TelemetryStore {
         }
     }
 
+    pub fn clear_metrics(&mut self, resource_name: Option<&str>) {
+        if let Some(resource_name) = resource_name {
+            let key = Some(resource_name.to_string());
+            let removed_count = self.metric_count_by_resource.remove(&key).unwrap_or_default();
+            self.metric_count = self.metric_count.saturating_sub(removed_count);
+        } else {
+            self.metric_count = 0;
+            self.metric_count_by_resource.clear();
+        }
+        self.metrics.clear(resource_name);
+    }
+
     /// Records one numeric (gauge/sum) data point into its series.
     fn record_number_point(
         &mut self,
@@ -263,6 +277,10 @@ impl TelemetryStore {
         is_delta: bool,
     ) {
         self.metric_count += 1;
+        *self
+            .metric_count_by_resource
+            .entry(resource.map(str::to_string))
+            .or_default() += 1;
         self.metrics.point_count += 1;
         self.metrics
             .series_mut(name, resource, unit, kind)
@@ -281,6 +299,10 @@ impl TelemetryStore {
         is_delta: bool,
     ) {
         self.metric_count += 1;
+        *self
+            .metric_count_by_resource
+            .entry(resource.map(str::to_string))
+            .or_default() += 1;
         self.metrics.point_count += 1;
         self.metrics
             .series_mut(name, resource, unit, MetricKind::Histogram)
@@ -331,7 +353,7 @@ impl Default for TelemetryStore {
 #[cfg(test)]
 mod tests {
     use super::{
-        summarize_log_record, summarize_span, LogRecordSummary, SpanEventSummary,
+        summarize_log_record, summarize_span, LogRecordSummary, MetricKind, SpanEventSummary,
         SpanLinkSummary, SpanSummary, TelemetryAttribute, TelemetryStore,
     };
     use crate::proto::opentelemetry::proto::common::v1::{
@@ -454,6 +476,27 @@ mod tests {
         let empty_summary = store.summary();
         assert_eq!(empty_summary.span_count, 0);
         assert!(empty_summary.recent_spans.is_empty());
+    }
+
+    #[test]
+    fn clear_metrics_removes_selected_resource_or_all_metrics() {
+        let mut store = TelemetryStore::new();
+        store.record_number_point("requests", None, Some("frontend"), MetricKind::Gauge, 1, 1.0, false);
+        store.record_number_point("requests", None, Some("frontend"), MetricKind::Gauge, 2, 2.0, false);
+        store.record_number_point("jobs", None, Some("backend"), MetricKind::Gauge, 1, 3.0, false);
+
+        store.clear_metrics(Some("frontend"));
+
+        let selected_summary = store.summary();
+        assert_eq!(selected_summary.metric_count, 1);
+        assert_eq!(selected_summary.metrics.len(), 1);
+        assert_eq!(selected_summary.metrics[0].resource_name.as_deref(), Some("backend"));
+
+        store.clear_metrics(None);
+
+        let empty_summary = store.summary();
+        assert_eq!(empty_summary.metric_count, 0);
+        assert!(empty_summary.metrics.is_empty());
     }
 
     #[test]
