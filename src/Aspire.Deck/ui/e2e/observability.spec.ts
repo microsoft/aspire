@@ -371,6 +371,41 @@ test(`${features("LOG-RESOURCE-001", "LOG-PAUSE-001")} filters resources and pau
   await expect.poll(readPageTotal).toBeGreaterThan(pausedTotal);
 });
 
+test(`${features("LOG-STRUCTURED-FILTER-001", "LOG-FILTER-COUNT-001", "LOG-ROUTE-001")} manages and restores structured log filters`, async ({ page }) => {
+  await navigationButton(page, "Structured Logs").click();
+  const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
+  await expect.poll(() => logs.getByRole("table").locator("tbody tr").count()).toBeGreaterThanOrEqual(4);
+  await logs.getByRole("switch", { name: "Pause incoming data" }).check();
+  await logs.getByRole("combobox", { name: "Resource" }).selectOption("frontend");
+  await logs.getByRole("combobox", { name: "Severity" }).selectOption("Error");
+
+  await logs.getByRole("button", { name: "Add filter" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add filter" });
+  await dialog.getByRole("combobox", { name: "Field" }).selectOption("http.request.method");
+  await dialog.getByRole("combobox", { name: "Condition" }).selectOption("equals");
+  await dialog.getByRole("textbox", { name: "Value" }).fill("POST");
+  await dialog.getByRole("button", { name: "Apply" }).click();
+
+  const filterMenuButton = logs.getByRole("button", { name: "Filters, 1 enabled" });
+  await expect(filterMenuButton).toBeVisible();
+  await expect(page).toHaveURL(/\/structuredlogs\/resource\/frontend\?.*severity=Error.*filters=/);
+  await page.reload();
+  await expect(logs.getByRole("combobox", { name: "Resource" })).toHaveValue("frontend");
+  await expect(logs.getByRole("combobox", { name: "Severity" })).toHaveValue("Error");
+  await expect(logs.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
+  await expect(logs.getByRole("button", { name: "Filters, 1 enabled" })).toBeVisible();
+
+  await logs.getByRole("button", { name: "Filters, 1 enabled" }).click();
+  await page.getByRole("menuitem", { name: /http\.request\.method equals POST/ }).click();
+  const editDialog = page.getByRole("dialog", { name: "Edit filter" });
+  await editDialog.getByRole("checkbox", { name: "Enabled" }).uncheck();
+  await editDialog.getByRole("button", { name: "Apply" }).click();
+  await expect(logs.getByRole("button", { name: "Filters, 0 enabled" })).toBeVisible();
+  await logs.getByRole("button", { name: "Filters, 0 enabled" }).click();
+  await page.getByRole("menuitem", { name: "Remove all" }).click();
+  await expect(logs.getByRole("button", { name: /^Filters/ })).toHaveCount(0);
+});
+
 test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRACE-DETAILS-001", "TRACE-ERROR-001")} explores trace waterfalls and span details`, async ({ page }) => {
   await navigationButton(page, "Traces").click();
 
@@ -528,6 +563,26 @@ test(`${features("TRACE-FILTER-001", "TRACE-DURATION-001")} filters traces by co
   await minDuration.selectOption("0");
   await query.fill("this-trace-value-does-not-exist");
   await expect(page.getByText("No traces match your filter.", { exact: true })).toBeVisible();
+});
+
+test(`${features("TRACE-STRUCTURED-FILTER-001")} composes and restores structured trace filters`, async ({ page }) => {
+  await navigationButton(page, "Traces").click();
+  const tracesPage = page.getByRole("main").getByRole("region", { name: "Traces" });
+  const traces = tracesPage.locator(".wf__trace");
+  await expect.poll(() => traces.count()).toBeGreaterThanOrEqual(4);
+  await tracesPage.getByRole("switch", { name: "Pause incoming data" }).check();
+  await tracesPage.getByRole("button", { name: "Add filter" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add filter" });
+  await dialog.getByRole("combobox", { name: "Field" }).selectOption("db.system.name");
+  await dialog.getByRole("combobox", { name: "Condition" }).selectOption("equals");
+  await dialog.getByRole("textbox", { name: "Value" }).fill("redis");
+  await dialog.getByRole("button", { name: "Apply" }).click();
+  await expect.poll(() => traces.count()).toBeGreaterThan(0);
+  await expect.poll(async () => (await traces.allTextContents()).every((trace) => trace.includes("redis GET"))).toBe(true);
+  await expect(page).toHaveURL(/\/traces\?.*filters=/);
+  await page.reload();
+  await expect(tracesPage.getByRole("button", { name: "Filters, 1 enabled" })).toBeVisible();
+  await expect.poll(() => traces.count()).toBeGreaterThan(0);
 });
 
 test(`${features("TRACE-RESOURCE-001", "TRACE-TYPE-001", "TRACE-PAUSE-001", "TRACE-SESSION-001")} filters, pauses, and restores trace inventory state`, async ({ page }) => {

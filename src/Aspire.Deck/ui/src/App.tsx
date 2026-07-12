@@ -13,6 +13,7 @@ import { ParametersPage } from "./pages/ParametersPage";
 import { ConsolePage } from "./pages/ConsolePage";
 import { StructuredLogsPage } from "./pages/StructuredLogsPage";
 import { TracesPage } from "./pages/TracesPage";
+import { serializeTelemetryFilters } from "./lib/telemetryFilters";
 import { MetricsPage } from "./pages/MetricsPage";
 import { CanvasesPage } from "./pages/CanvasesPage";
 import { RouteErrorPage } from "./pages/RouteErrorPage";
@@ -267,7 +268,20 @@ export function App({
             {page === "logs" ? (
               <StructuredLogsPage
                 routeSpanId={route.spanId ?? null}
+                routeResourceName={route.logResourceName ?? null}
+                routeQuery={route.logQuery ?? ""}
+                routeSeverity={route.logSeverity ?? "All"}
+                routePaused={route.logPaused ?? false}
+                routeFilters={route.logFilters ?? null}
                 onClearRoute={() => navigate({ page: "logs" })}
+                onFilterRouteChange={(logState) => navigate({
+                  page: "logs",
+                  logResourceName: logState.resourceName ?? undefined,
+                  logQuery: logState.query || undefined,
+                  logSeverity: logState.severity === "All" ? undefined : logState.severity,
+                  logPaused: logState.paused || undefined,
+                  logFilters: serializeTelemetryFilters(logState.filters),
+                })}
                 onNavigateToTrace={(traceId, spanId) => navigate({
                   page: "traces",
                   traceId,
@@ -284,6 +298,7 @@ export function App({
                 routeQuery={route.traceQuery ?? ""}
                 routeMinDurationMs={route.traceMinDurationMs ?? 0}
                 routePaused={route.tracePaused ?? false}
+                routeFilters={route.traceFilters ?? null}
                 onFilterRouteChange={(traceState) => navigate({
                   ...route,
                   page: "traces",
@@ -294,6 +309,7 @@ export function App({
                   traceQuery: traceState.query || undefined,
                   traceMinDurationMs: traceState.minDurationMs || undefined,
                   tracePaused: traceState.paused || undefined,
+                  traceFilters: serializeTelemetryFilters(traceState.filters),
                 })}
                 onSelectSpan={(span) => navigate({
                   ...route,

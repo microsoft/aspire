@@ -27,6 +27,7 @@ export * from "./SearchBox";
 export * from "./SecretValue";
 export * from "./Select";
 export * from "./StateDot";
+export * from "./StructuredFilterControl";
 export * from "./Switch";
 export * from "./Tabs";
 export * from "./TextViewerDialog";

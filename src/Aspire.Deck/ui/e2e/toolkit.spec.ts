@@ -279,6 +279,18 @@ test(`${features("TK-FILTER-MENU-001")} composes grouped filter controls`, async
   await expect(trigger).toBeFocused();
 });
 
+test(`${features("TK-STRUCTURED-FILTER-001")} composes structured telemetry filters`, async ({ page }) => {
+  await page.getByRole("button", { name: "Add filter" }).click();
+  const dialog = page.getByRole("dialog", { name: "Add filter" });
+  await dialog.getByRole("combobox", { name: "Field" }).selectOption("http.response.status_code");
+  await dialog.getByRole("combobox", { name: "Condition" }).selectOption("gte");
+  await dialog.getByRole("textbox", { name: "Value" }).fill("500");
+  await dialog.getByRole("button", { name: "Apply" }).click();
+  await expect(page.getByRole("button", { name: "Filters, 1 enabled" })).toBeVisible();
+  await page.getByRole("button", { name: "Filters, 1 enabled" }).click();
+  await expect(page.getByRole("menuitem", { name: /http\.response\.status_code greater than or equal 500/ })).toBeVisible();
+});
+
 test(`${features("TK-GRAPH-001")} renders and controls a force graph`, async ({ page }, testInfo) => {
   const graph = page.getByRole("group", { name: "Sample force graph" });
   await expect(graph.locator("[data-node-id]")).toHaveCount(3);

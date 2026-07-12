@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 116
-- React partial: 19
-- React missing: 23
+- React covered: 119
+- React partial: 20
+- React missing: 19
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 42
+- React parity gaps: 39
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -119,8 +119,8 @@
 | LOG-RESOURCE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-RESOURCE-001; STRESS-STRUCTURED-LOG-RESOURCE-001 | Logs filter through a grouped resource selector. |
 | LOG-LEVEL-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-SEVERITY-001 | All supported severity levels can be selected. |
 | LOG-TEXT-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-FILTER-001 | Logs filter across resource and message content. |
-| LOG-STRUCTURED-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | missing | - | Structured attribute filters can be added, edited, enabled, disabled, and removed. |
-| LOG-FILTER-COUNT-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Enabled structured filters expose a count and management menu. |
+| LOG-STRUCTURED-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-STRUCTURED-FILTER-001; TK-STRUCTURED-FILTER-001 | Structured attribute filters can be added, edited, enabled, disabled, and removed. |
+| LOG-FILTER-COUNT-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-FILTER-COUNT-001 | Enabled structured filters expose a count and management menu. |
 | LOG-PAUSE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001 | Incoming structured logs can be paused and resumed. |
 | LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | covered | HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001 | Structured logs can be cleared for the selected resource or all resources. |
 | LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Large log volumes remain responsive through row virtualization. |
@@ -129,13 +129,13 @@
 | LOG-TRACE-LINK-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001 | Trace IDs deep-link to the matching trace and span. |
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | GenAI log records open the dedicated GenAI visualizer. |
 | LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Explain errors summarizes current error logs through the assistant. |
-| LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | PENDING | missing | - | Resource selection, filters, and selected log are deep-linkable and restorable. |
+| LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | PENDING | partial | LOG-ROUTE-001 (resource, text, severity, pause, and filters; selected log remains) | Resource selection, filters, and selected log are deep-linkable and restorable. |
 | TRACE-LIST-001 | traces | `/traces` | traces | partial | TRACE-LIST-001; HTTP-TRACES-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
 | TRACE-LIVE-001 | traces | `/traces` | traces | covered | TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001 | Incoming spans update trace groups and totals without reloading the page. |
 | TRACE-RESOURCE-001 | traces | `/traces` | traces | covered | TRACE-RESOURCE-001 | Traces filter through a grouped resource selector. |
 | TRACE-TYPE-001 | traces | `/traces` | traces | covered | TRACE-TYPE-001 | HTTP, database, messaging, RPC, GenAI, cloud, and other span types can be selected. |
 | TRACE-TEXT-FILTER-001 | traces | `/traces` | traces | covered | TRACE-FILTER-001 | Traces filter by operation, resource, and trace identifiers. |
-| TRACE-STRUCTURED-FILTER-001 | traces | `/traces` | traces | missing | - | Structured trace and span filters can be composed and managed. |
+| TRACE-STRUCTURED-FILTER-001 | traces | `/traces` | traces | covered | TRACE-STRUCTURED-FILTER-001; TK-STRUCTURED-FILTER-001 | Structured trace and span filters can be composed and managed. |
 | TRACE-DURATION-001 | traces | `/traces` | traces | partial | TRACE-DURATION-001 | Trace and span duration is represented consistently at different scales. |
 | TRACE-ERROR-001 | traces | `/traces` | PENDING | covered | TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001 | Failed traces and spans expose status, tags, and error styling. |
 | TRACE-PAUSE-001 | traces | `/traces` | traces | covered | TRACE-PAUSE-001 | Incoming traces can be paused and resumed. |

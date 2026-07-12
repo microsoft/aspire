@@ -4,6 +4,7 @@ import type { SpanSummary, TelemetrySummary } from "../api/types";
 import { useResources, useTelemetry } from "../lib/useDeckEvent";
 import { formatDurationNanos } from "../lib/format";
 import { buildResourceColorMap, colorFor } from "../lib/colors";
+import { matchesTelemetryFilters, parseTelemetryFilters, spanFilterFields, telemetryFieldNames, type TelemetryFilter } from "../lib/telemetryFilters";
 import { SPAN_TYPE_OPTIONS, spanMatchesType, type SpanTypeId } from "../lib/spans";
 import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
 import { formatSpanJson } from "../components/SpanActions";
@@ -20,6 +21,7 @@ import {
   PageToolbar,
   SearchBox,
   Select,
+  StructuredFilterControl,
   Switch,
   TextViewerDialog,
   type TextViewerRequest,
@@ -66,6 +68,7 @@ export interface TraceFilterRouteState {
   query: string;
   minDurationMs: number;
   paused: boolean;
+  filters: TelemetryFilter[];
 }
 
 function toBig(value: string): bigint {
@@ -196,6 +199,7 @@ export function TracesPage({
   routeQuery,
   routeMinDurationMs,
   routePaused,
+  routeFilters,
   onFilterRouteChange,
   onSelectSpan,
   onNavigateToSpan,
@@ -209,6 +213,7 @@ export function TracesPage({
   routeQuery: string;
   routeMinDurationMs: number;
   routePaused: boolean;
+  routeFilters: string | null;
   onFilterRouteChange: (state: TraceFilterRouteState) => void;
   onSelectSpan: (span: SpanSummary) => void;
   onNavigateToSpan: (traceId: string, spanId: string | null) => void;
@@ -225,6 +230,8 @@ export function TracesPage({
 
   const displayedTelemetry = pausedSnapshot ?? telemetry;
   const spans = displayedTelemetry?.recentSpans ?? [];
+  const filters = useMemo(() => parseTelemetryFilters(routeFilters), [routeFilters]);
+  const filterFields = useMemo(() => telemetryFieldNames(spans.map(spanFilterFields), ["Name", "Kind", "Resource", "TraceId", "SpanId", "Status", "Duration", "ScopeName"]), [spans]);
   const selectedType = SPAN_TYPE_OPTIONS.some((option) => option.value === routeType)
     ? routeType as SpanTypeId
     : "all";
@@ -272,7 +279,8 @@ export function TracesPage({
 
   const traces = useMemo(() => {
     const minNano = BigInt(selectedMinDurationMs) * NANOS_PER_MS;
-    const significant = minNano > 0n ? spans.filter((s) => toBig(s.durationNanos) >= minNano) : spans;
+    const significant = (minNano > 0n ? spans.filter((s) => toBig(s.durationNanos) >= minNano) : spans)
+      .filter((span) => matchesTelemetryFilters(spanFilterFields(span), filters));
 
     const groups = buildTraceGroups(significant).filter((trace) => {
       if (selectedResource !== "all" && !trace.rows.some((row) => row.span.resourceName === selectedResource)) {
@@ -295,7 +303,7 @@ export function TracesPage({
             (r.span.resourceName ?? "").toLowerCase().includes(trimmed),
         ),
     );
-  }, [routeQuery, routeTraceId, selectedMinDurationMs, selectedResource, selectedType, spans]);
+  }, [filters, routeQuery, routeTraceId, selectedMinDurationMs, selectedResource, selectedType, spans]);
 
   const toggle = (traceId: string) => {
     setCollapsed((prev) => {
@@ -318,6 +326,7 @@ export function TracesPage({
       query: routeQuery,
       minDurationMs: selectedMinDurationMs,
       paused: routePaused,
+      filters,
       ...changes,
     });
   };
@@ -370,6 +379,7 @@ export function TracesPage({
           value={selectedResource}
           onValueChange={(value) => updateRoute({ resourceName: value === "all" ? null : value })}
         />
+        <StructuredFilterControl filters={filters} fields={filterFields} onChange={(next) => updateRoute({ filters: next })} />
         <Select
           ariaLabel="Span type"
           options={SPAN_TYPE_OPTIONS}

@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { clearStructuredLogs } from "../api/deck";
 import type { LogRecordSummary, TelemetrySummary } from "../api/types";
 import { StructuredLogActions, formatStructuredLogJson } from "../components/StructuredLogActions";
@@ -6,6 +6,7 @@ import { StructuredLogDetailsDrawer } from "../components/StructuredLogDetailsDr
 import { TraceLink } from "../components/TraceLink";
 import { useTelemetry } from "../lib/useDeckEvent";
 import { dateFromUnixNano, formatTimeWithMillis, shortId } from "../lib/format";
+import { logFilterFields, matchesTelemetryFilters, parseTelemetryFilters, telemetryFieldNames, type TelemetryFilter } from "../lib/telemetryFilters";
 import {
   Badge,
   CommandMenu,
@@ -20,11 +21,20 @@ import {
   PageToolbar,
   SearchBox,
   Select,
+  StructuredFilterControl,
   Switch,
   TextViewerDialog,
   type Column,
   type TextViewerRequest,
 } from "../toolkit";
+
+export interface LogFilterRouteState {
+  resourceName: string | null;
+  query: string;
+  severity: string;
+  paused: boolean;
+  filters: TelemetryFilter[];
+}
 
 const SEVERITIES = ["All", "Trace", "Debug", "Information", "Warning", "Error", "Critical"];
 const SEVERITY_OPTIONS = SEVERITIES.map((value) => ({ value, label: value }));
@@ -57,17 +67,26 @@ function logKey(log: LogRecordSummary): string {
 
 export function StructuredLogsPage({
   routeSpanId,
+  routeResourceName,
+  routeQuery,
+  routeSeverity,
+  routePaused,
+  routeFilters,
   onClearRoute,
+  onFilterRouteChange,
   onNavigateToTrace,
 }: {
   routeSpanId: string | null;
+  routeResourceName: string | null;
+  routeQuery: string;
+  routeSeverity: string;
+  routePaused: boolean;
+  routeFilters: string | null;
   onClearRoute: () => void;
+  onFilterRouteChange: (state: LogFilterRouteState) => void;
   onNavigateToTrace: (traceId: string, spanId: string | null) => void;
 }) {
   const telemetry = useTelemetry();
-  const [query, setQuery] = useState("");
-  const [severity, setSeverity] = useState("All");
-  const [resource, setResource] = useState("all");
   const [pausedSnapshot, setPausedSnapshot] = useState<TelemetrySummary | null>(null);
   const [clearing, setClearing] = useState(false);
   const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
@@ -76,6 +95,8 @@ export function StructuredLogsPage({
 
   const displayedTelemetry = pausedSnapshot ?? telemetry;
   const logs = displayedTelemetry?.recentLogs ?? [];
+  const filters = useMemo(() => parseTelemetryFilters(routeFilters), [routeFilters]);
+  const filterFields = useMemo(() => telemetryFieldNames(logs.map(logFilterFields), ["Message", "Severity", "Resource", "TraceId", "SpanId", "EventName", "ScopeName"]), [logs]);
   const availableTraceIds = useMemo(
     () => new Set((displayedTelemetry?.recentSpans ?? []).map((span) => span.traceId)),
     [displayedTelemetry?.recentSpans],
@@ -86,14 +107,29 @@ export function StructuredLogsPage({
       .sort((left, right) => left.localeCompare(right))
       .map((value) => ({ value, label: value })),
   ], [logs]);
-  const selectedResource = resource === "all" || resourceOptions.some((option) => option.value === resource)
-    ? resource
+  const selectedResource = routeResourceName === null || resourceOptions.some((option) => option.value === routeResourceName)
+    ? routeResourceName ?? "all"
     : "all";
-  const effectiveQuery = routeSpanId ?? query;
+  const selectedSeverity = SEVERITIES.includes(routeSeverity) ? routeSeverity : "All";
+  const effectiveQuery = routeSpanId ?? routeQuery;
+
+  useEffect(() => {
+    if (!routePaused) setPausedSnapshot(null);
+    else if (pausedSnapshot === null && telemetry !== null) setPausedSnapshot(telemetry);
+  }, [pausedSnapshot, routePaused, telemetry]);
+
+  const updateRoute = (changes: Partial<LogFilterRouteState>): void => onFilterRouteChange({
+    resourceName: selectedResource === "all" ? null : selectedResource,
+    query: routeQuery,
+    severity: selectedSeverity,
+    paused: routePaused,
+    filters,
+    ...changes,
+  });
 
   const filtered = useMemo(() => {
     const trimmed = effectiveQuery.trim().toLowerCase();
-    const minimumSeverity = SEVERITY_MINIMUMS[severity];
+    const minimumSeverity = SEVERITY_MINIMUMS[selectedSeverity];
     return logs.filter((log) => {
       if (selectedResource !== "all" && log.resourceName !== selectedResource) {
         return false;
@@ -101,6 +137,7 @@ export function StructuredLogsPage({
       if (minimumSeverity !== undefined && log.severityNumber < minimumSeverity) {
         return false;
       }
+      if (!matchesTelemetryFilters(logFilterFields(log), filters)) return false;
       if (trimmed) {
         return (
           log.body.toLowerCase().includes(trimmed) ||
@@ -116,7 +153,7 @@ export function StructuredLogsPage({
       }
       return true;
     });
-  }, [effectiveQuery, logs, selectedResource, severity]);
+  }, [effectiveQuery, filters, logs, selectedResource, selectedSeverity]);
 
   const columns: Column<LogRecordSummary>[] = [
     {
@@ -198,7 +235,7 @@ export function StructuredLogsPage({
     try {
       await clearStructuredLogs(resourceName);
       setPausedSnapshot(null);
-      setResource("all");
+      updateRoute({ resourceName: null, paused: false });
       setClearStatus({
         message: resourceName === null
           ? "Cleared all structured logs."
@@ -219,7 +256,7 @@ export function StructuredLogsPage({
           <PageTitle id="deck-page-structured-logs-title">Structured Logs</PageTitle>
           <PageSubtitle>
             {displayedTelemetry
-              ? `${displayedTelemetry.logCount.toLocaleString()} total · showing ${filtered.length}${pausedSnapshot === null ? "" : " · paused"}`
+              ? `${displayedTelemetry.logCount.toLocaleString()} total · showing ${filtered.length}${routePaused ? " · paused" : ""}`
               : "Loading…"}
           </PageSubtitle>
         </PageHeading>
@@ -232,7 +269,7 @@ export function StructuredLogsPage({
             if (routeSpanId !== null) {
               onClearRoute();
             }
-            setQuery(value);
+            updateRoute({ query: value });
           }}
           placeholder="Filter messages…"
         />
@@ -242,23 +279,27 @@ export function StructuredLogsPage({
           fieldClassName="structured-logs__resource-field"
           options={resourceOptions}
           value={selectedResource}
-          onValueChange={setResource}
+          onValueChange={(value) => updateRoute({ resourceName: value === "all" ? null : value })}
         />
         <Select
           ariaLabel="Severity"
           className="structured-logs__severity-select"
           fieldClassName="structured-logs__severity-field"
           options={SEVERITY_OPTIONS}
-          value={severity}
-          onValueChange={setSeverity}
+          value={selectedSeverity}
+          onValueChange={(value) => updateRoute({ severity: value })}
         />
+        <StructuredFilterControl filters={filters} fields={filterFields} onChange={(next) => updateRoute({ filters: next })} />
         <div className="page__header-spacer" />
         <Switch
           className="structured-logs__pause"
           label="Pause incoming data"
-          checked={pausedSnapshot !== null}
+          checked={routePaused}
           disabled={telemetry === null}
-          onCheckedChange={(checked) => setPausedSnapshot(checked ? telemetry : null)}
+          onCheckedChange={(checked) => {
+            setPausedSnapshot(checked ? telemetry : null);
+            updateRoute({ paused: checked });
+          }}
         />
         <CommandMenu
           ariaLabel="Clear structured logs"

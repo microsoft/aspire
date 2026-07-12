@@ -14,6 +14,12 @@ export interface DashboardRoute {
   traceQuery?: string;
   traceMinDurationMs?: number;
   tracePaused?: boolean;
+  traceFilters?: string;
+  logResourceName?: string;
+  logQuery?: string;
+  logSeverity?: string;
+  logPaused?: boolean;
+  logFilters?: string;
   metricResourceName?: string;
   metricMeterName?: string;
   metricName?: string;
@@ -90,8 +96,17 @@ export function readDashboardRoute(
     };
   }
   if (path === "/structuredlogs" || path.startsWith("/structuredlogs/")) {
-    const spanId = new URLSearchParams(location.search).get("span") || undefined;
-    return { page: "logs", spanId };
+    const resourceMatch = /^\/structuredlogs\/resource\/([^/]+)\/?$/i.exec(location.pathname);
+    const search = new URLSearchParams(location.search);
+    return {
+      page: "logs",
+      spanId: search.get("span") || undefined,
+      logResourceName: resourceMatch ? decodeRoutePart(resourceMatch[1]!) : undefined,
+      logQuery: search.get("q") || undefined,
+      logSeverity: search.get("severity") || undefined,
+      logPaused: search.get("paused") === "true" || undefined,
+      logFilters: search.get("filters") || undefined,
+    };
   }
   if (path === "/traces" || path.startsWith("/traces/")) {
     const search = new URLSearchParams(location.search);
@@ -102,6 +117,7 @@ export function readDashboardRoute(
       traceQuery: search.get("q") || undefined,
       traceMinDurationMs: Number.isFinite(minDuration) && minDuration > 0 ? minDuration : undefined,
       tracePaused: search.get("paused") === "true" || undefined,
+      traceFilters: search.get("filters") || undefined,
     };
     const detailMatch = /^\/traces\/detail\/([^/]+)\/?$/i.exec(location.pathname);
     if (detailMatch) {
@@ -183,6 +199,8 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
   const url = new URL(location.href);
   url.pathname = route.page === "traces" && route.traceId
     ? `/traces/detail/${encodeURIComponent(route.traceId)}`
+    : route.page === "logs" && route.logResourceName
+      ? `/structuredlogs/resource/${encodeURIComponent(route.logResourceName)}`
     : route.page === "console" && route.consoleResourceName
       ? `/consolelogs/resource/${encodeURIComponent(route.consoleResourceName)}`
       : route.page === "metrics" && route.metricResourceName && route.metricMeterName && route.metricName
@@ -215,6 +233,8 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
   url.searchParams.delete("collapsed");
   url.searchParams.delete("sort");
   url.searchParams.delete("sortDirection");
+  url.searchParams.delete("severity");
+  url.searchParams.delete("filters");
   if (route.spanId) {
     url.searchParams.set("span", route.spanId);
   }
@@ -248,6 +268,15 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     if (route.tracePaused) {
       url.searchParams.set("paused", "true");
     }
+    if (route.traceFilters) {
+      url.searchParams.set("filters", route.traceFilters);
+    }
+  }
+  if (route.page === "logs") {
+    if (route.logQuery) url.searchParams.set("q", route.logQuery);
+    if (route.logSeverity && route.logSeverity !== "All") url.searchParams.set("severity", route.logSeverity);
+    if (route.logPaused) url.searchParams.set("paused", "true");
+    if (route.logFilters) url.searchParams.set("filters", route.logFilters);
   }
   if (route.page === "metrics") {
     if (route.metricWindowSeconds && route.metricWindowSeconds !== 300) {

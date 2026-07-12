@@ -43,6 +43,7 @@ import {
   Select,
   StateDot,
   StopIcon,
+  StructuredFilterControl,
   SunIcon,
   Switch,
   Tabs,
@@ -55,6 +56,7 @@ import {
   type ForceGraphHandle,
   type TextViewerRequest,
 } from "../toolkit";
+import type { TelemetryFilter } from "../lib/telemetryFilters";
 
 interface SampleResource {
   name: string;
@@ -123,6 +125,7 @@ export function ToolkitPlayground({
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
   const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
   const [hiddenSampleTypes, setHiddenSampleTypes] = useState<string[]>([]);
+  const [structuredFilters, setStructuredFilters] = useState<TelemetryFilter[]>([]);
   const [selectedGraphNode, setSelectedGraphNode] = useState<string | null>(null);
   const graphRef = useRef<ForceGraphHandle | null>(null);
   const iconNames = useMemo(getIconNames, []);
@@ -306,6 +309,11 @@ export function ToolkitPlayground({
                   ? current.filter((value) => value !== type)
                   : [...current, type]),
               }]}
+            />
+            <StructuredFilterControl
+              filters={structuredFilters}
+              fields={["Message", "Resource", "http.request.method", "http.response.status_code"]}
+              onChange={setStructuredFilters}
             />
           </div>
         </section>
