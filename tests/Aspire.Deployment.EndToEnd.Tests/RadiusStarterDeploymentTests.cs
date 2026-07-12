@@ -414,22 +414,21 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(6));
 
-            // Show labels too: the endpoint verification below resolves Services by the Radius
-            // platform label radapp.io/resource=<name>. Printing --show-labels here makes a
-            // label-schema mismatch (e.g. a different key/casing in a future control plane)
-            // immediately visible in the recording instead of surfacing as an empty jsonpath.
+            // Print the deployed workloads (with labels) for diagnostics. Radius labels every
+            // container Deployment/pod with radapp.io/resource=<name>, so this makes a label-schema
+            // change in a future control plane immediately visible in the recording.
             output.WriteLine("Step 25: Listing deployed pods and services...");
             await auto.TypeAsync($"kubectl get pods,svc -n {appNamespace} -l radapp.io/application=app --show-labels");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Resolve the apiservice Service by Radius resource label rather than a hardcoded
-            // name (Radius names container services "<resource>-<container>").
+            // Port-forward directly to the Deployment. Radius does not synthesize a Kubernetes
+            // Service for Radius.Compute/containers workloads (only recipe-backed resources such as
+            // the Redis cache get one), so there is no Service to target. kubectl port-forward
+            // resolves a ready pod in the Deployment; 8080 is the container port Aspire assigns to
+            // published containers (ASPNETCORE_HTTP_PORTS=8080).
             output.WriteLine("Step 26: Verifying apiservice endpoint via port-forward...");
-            await auto.TypeAsync($"APISVC=$(kubectl get svc -n {appNamespace} -l radapp.io/resource=apiservice -o jsonpath='{{.items[0].metadata.name}}')");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
-            await auto.TypeAsync($"kubectl port-forward -n {appNamespace} svc/$APISVC 18080:8080 &");
+            await auto.TypeAsync($"kubectl port-forward -n {appNamespace} deployment/apiservice 18080:8080 &");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
             await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18080/weatherforecast -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
@@ -445,10 +444,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // render in the forecasts != null branch, i.e. after WeatherApiClient returns) so the probe
             // proves the API + output-cache path end-to-end. curl reads the full streamed response.
             output.WriteLine("Step 27: Verifying webfrontend /weather endpoint (Redis output cache) via port-forward...");
-            await auto.TypeAsync($"WEBSVC=$(kubectl get svc -n {appNamespace} -l radapp.io/resource=webfrontend -o jsonpath='{{.items[0].metadata.name}}')");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
-            await auto.TypeAsync($"kubectl port-forward -n {appNamespace} svc/$WEBSVC 18081:8080 &");
+            await auto.TypeAsync($"kubectl port-forward -n {appNamespace} deployment/webfrontend 18081:8080 &");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
             await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/weather | grep -q Temp && echo ' OK' && break; done");

@@ -169,14 +169,16 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            // Resolve the Service by the radapp.io/resource label rather than a
-            // hardcoded name: Radius derives the Service name from the container's
-            // internal name (e.g. `web-web`), which is an implementation detail.
-            await auto.TypeAsync($"RADIUS_SVC=$(kubectl get svc -n {radiusNamespace} -l radapp.io/resource=web -o jsonpath='{{.items[0].metadata.name}}') && echo \"Resolved service: $RADIUS_SVC\"");
+            // Resolve the Deployment by the radapp.io/resource label and port-forward to it
+            // directly. Radius does not synthesize a Kubernetes Service for a container workload
+            // (the HTTP endpoint is modeled at the Radius layer, not as a k8s Service), so there
+            // is no Service to target; only the Deployment/pods exist. Resolving by label avoids
+            // depending on the generated Deployment name.
+            await auto.TypeAsync($"RADIUS_DEPLOY=$(kubectl get deployment -n {radiusNamespace} -l radapp.io/resource=web -o jsonpath='{{.items[0].metadata.name}}') && echo \"Resolved deployment: $RADIUS_DEPLOY\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
-            await auto.TypeAsync($"kubectl port-forward -n {radiusNamespace} svc/$RADIUS_SVC 18080:{ContainerPort} &");
+            await auto.TypeAsync($"kubectl port-forward -n {radiusNamespace} deployment/$RADIUS_DEPLOY 18080:{ContainerPort} &");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
