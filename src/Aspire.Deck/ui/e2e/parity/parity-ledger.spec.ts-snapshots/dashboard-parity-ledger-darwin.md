@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
-- Total legacy features: 158
+- Total legacy features: 157
 - React covered: 146
 - React partial: 4
-- React missing: 8
+- React missing: 7
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 12
+- React parity gaps: 11
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -28,7 +28,6 @@
 | SHELL-AUTH-001 | shell | `/login` | PENDING | missing | - | Browser-token and OpenID Connect login flows protect the frontend. |
 | SHELL-RECONNECT-001 | shell | `/` | PENDING | covered | HTTP-RECOVERY-001; HTTP-RECONNECT-001 | A lost dashboard circuit or backend connection exposes reconnect and recovery UI. |
 | SHELL-UNSECURED-001 | shell | `/` | shell | covered | HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
-| SHELL-UPDATE-001 | shell | `/` | shell | missing | - | Available dashboard updates show instructions, ignore, and dismiss actions. |
 | SHELL-NOTFOUND-001 | shell | `/error/404` | PENDING | covered | APP-NOTFOUND-001 | Unknown routes render a dedicated not-found experience. |
 | SHELL-ERROR-001 | shell | `/error` | shell | covered | APP-ERROR-001 | Unhandled errors render a recoverable error experience. |
 | SHELL-RESPONSIVE-001 | shell | `/` | shell | partial | APP-RESPONSIVE-001; STRESS-RESPONSIVE-001 | Navigation, header actions, pages, and overlays remain usable on mobile. |

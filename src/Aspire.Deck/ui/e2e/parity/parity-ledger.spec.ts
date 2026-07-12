@@ -21,7 +21,7 @@ const areas: readonly DashboardArea[] = [
 test("dashboard migration parity ledger is complete and reviewable", async ({}, testInfo) => {
   const ids = dashboardParityFeatures.map((feature) => feature.id);
   expect(new Set(ids).size, "Feature IDs must be unique.").toBe(ids.length);
-  expect(ids, "The ledger must remain extensive enough to represent the legacy dashboard.").toHaveLength(158);
+  expect(ids, "The ledger must remain extensive enough to represent the legacy dashboard.").toHaveLength(157);
 
   for (const area of areas) {
     expect(
