@@ -207,7 +207,7 @@ Rust app; otherwise links still open in a new tab.
 
 ## Structure
 
-```
+```text
 src/
   api/      types.ts (mirrors CONTRACT.md), deck.ts (transport router), http.ts (ASP.NET),
             mock.ts (standalone data)
