@@ -239,6 +239,48 @@ test(`${features("HTTP-USER-001")} shows the authenticated user and signs out`, 
   expect(logoutMethod).toBe("POST");
 });
 
+test(`${features("HTTP-LANGUAGE-001")} selects and applies a dashboard language`, async ({ page }) => {
+  let culture = "en";
+  let requestedLanguage: string | null = null;
+  await page.route("**/api/deck/config", async (route) => route.fulfill({
+    json: {
+      ...config,
+      culture,
+      cultures: [
+        { name: "en", displayName: "English" },
+        { name: "fr", displayName: "Français" },
+      ],
+    } satisfies DeckConfig,
+  }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/set-language?*", async (route) => {
+    const url = new URL(route.request().url());
+    requestedLanguage = url.searchParams.get("language");
+    culture = requestedLanguage ?? culture;
+    await route.fulfill({
+      status: 302,
+      headers: {
+        Location: url.searchParams.get("redirectUrl") ?? "/",
+        "Set-Cookie": `.AspNetCore.Culture=c%3D${culture}%7Cuic%3D${culture}; Path=/; SameSite=Lax`,
+      },
+    });
+  });
+
+  await page.goto("/?backend=http");
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  let settings = page.getByRole("dialog", { name: "Settings" });
+  const language = settings.getByLabel("Language");
+  await expect(language).toHaveValue("en");
+  await language.selectOption("fr");
+
+  await expect.poll(() => requestedLanguage).toBe("fr");
+  await expect(page).toHaveURL(/\?backend=http$/);
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  settings = page.getByRole("dialog", { name: "Settings" });
+  await expect(settings.getByLabel("Language")).toHaveValue("fr");
+  await expect.poll(async () => (await page.context().cookies()).find((cookie) => cookie.name === ".AspNetCore.Culture")?.value).toBe("c%3Dfr%7Cuic%3Dfr");
+});
+
 test(`${features("HTTP-MANAGE-DATA-001")} manages dashboard data through the HTTP backend`, async ({ page }) => {
   // Chromium reports an intercepted file upload as aborted after Playwright fulfills
   // it, even though the response and payload complete. The real 204 endpoint is

@@ -53,6 +53,11 @@ const config: DeckConfig = {
   runtimeVersion: "Browser mock runtime",
   frontendAuthMode: "Unsecured",
   user: null,
+  culture: "en",
+  cultures: [
+    { name: "en", displayName: "English" },
+    { name: "fr", displayName: "Français" },
+  ],
 };
 
 function makeResources(): Resource[] {

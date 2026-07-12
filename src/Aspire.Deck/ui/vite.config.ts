@@ -42,6 +42,11 @@ export default defineConfig({
             changeOrigin: true,
             secure: false,
           },
+          "/api/set-language": {
+            target: dashboardUrl,
+            changeOrigin: true,
+            secure: false,
+          },
         }
       : undefined,
   },

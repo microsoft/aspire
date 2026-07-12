@@ -1,7 +1,7 @@
 import type { DeckConfig } from "../api/types";
 import type { ThemeChoice } from "../lib/theme";
 import type { TimeFormatChoice } from "../lib/timeFormat";
-import { Button, Dialog, NamedIcon } from "../toolkit";
+import { Button, Dialog, NamedIcon, Select } from "../toolkit";
 
 const choices: Array<{ value: ThemeChoice; label: string }> = [
   { value: "system", label: "System" },
@@ -76,6 +76,21 @@ export function SettingsDialog({
           ))}
         </div>
       </fieldset>
+      {config?.culture && config.cultures && config.cultures.length > 0 ? (
+        <div className="settings-language">
+          <Select
+            label="Language"
+            value={config.culture}
+            options={config.cultures.map((culture) => ({ value: culture.name, label: culture.displayName }))}
+            onValueChange={(culture) => {
+              if (culture === config.culture) return;
+              const redirectUrl = `${window.location.pathname}${window.location.search}`;
+              window.location.assign(`/api/set-language?language=${encodeURIComponent(culture)}&redirectUrl=${encodeURIComponent(redirectUrl)}`);
+            }}
+          />
+          <div className="settings-subtext">The page reloads when the language changes.</div>
+        </div>
+      ) : null}
       <div className="settings-actions">
         <Button onClick={onManageData}><NamedIcon name="Database" size={16} /> Manage data</Button>
       </div>

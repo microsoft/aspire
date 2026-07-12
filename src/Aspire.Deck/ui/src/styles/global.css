@@ -423,6 +423,14 @@ a:focus-visible {
 .settings-actions {
   margin-top: 16px;
 }
+.settings-language {
+  margin-top: 16px;
+}
+.settings-subtext {
+  margin-top: 5px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
 .deck-radio {
   display: inline-flex;
   align-items: center;

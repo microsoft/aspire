@@ -12,11 +12,18 @@ export interface DeckConfig {
   isApiEndpointUnsecured?: boolean;
   frontendAuthMode?: string;
   user?: DeckUser | null;
+  culture?: string;
+  cultures?: DeckCulture[];
 }
 
 export interface DeckUser {
   name: string;
   username: string | null;
+}
+
+export interface DeckCulture {
+  name: string;
+  displayName: string;
 }
 
 export type ManageDataType = "ResourceDetails" | "ConsoleLogs" | "StructuredLogs" | "Traces" | "Metrics" | "Resource";
