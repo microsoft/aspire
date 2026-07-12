@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 109
-- React partial: 24
+- React covered: 110
+- React partial: 23
 - React missing: 25
-- Legacy black-box scenarios pending: 58
-- React parity gaps: 49
+- Legacy black-box scenarios pending: 57
+- React parity gaps: 48
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -30,7 +30,7 @@
 | SHELL-UNSECURED-001 | shell | `/` | shell | missing | - | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
 | SHELL-UPDATE-001 | shell | `/` | shell | missing | - | Available dashboard updates show instructions, ignore, and dismiss actions. |
 | SHELL-NOTFOUND-001 | shell | `/error/404` | PENDING | covered | APP-NOTFOUND-001 | Unknown routes render a dedicated not-found experience. |
-| SHELL-ERROR-001 | shell | `/error` | PENDING | partial | APP-ERROR-001 (error route; a tested React render-error boundary remains) | Unhandled errors render a recoverable error experience. |
+| SHELL-ERROR-001 | shell | `/error` | shell | covered | APP-ERROR-001 | Unhandled errors render a recoverable error experience. |
 | SHELL-RESPONSIVE-001 | shell | `/` | shell | partial | APP-RESPONSIVE-001; STRESS-RESPONSIVE-001 | Navigation, header actions, pages, and overlays remain usable on mobile. |
 | SHELL-ACCESSIBILITY-001 | shell | `/` | shell | partial | APP-PAGE-001; toolkit.aria.yml | Landmarks, names, focus order, dialogs, and keyboard interaction remain accessible. |
 | SHELL-BROWSER-ERRORS-001 | shell | `/` | shell | covered | APP-BROWSER-001 | Normal navigation and interaction produce no page or console errors. |

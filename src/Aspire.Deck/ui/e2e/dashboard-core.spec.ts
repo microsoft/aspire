@@ -6,6 +6,7 @@ import {
 
 const coveredFeatures = new Set<DashboardCoreFeatureId>();
 const browserErrors = new WeakMap<Page, string[]>();
+const allowRenderError = new WeakSet<Page>();
 
 function features(...ids: DashboardCoreFeatureId[]): string {
   for (const id of ids) {
@@ -56,7 +57,13 @@ test.beforeEach(async ({ page }) => {
 });
 
 test.afterEach(async ({ page }) => {
-  expect(browserErrors.get(page) ?? [], "Unexpected browser errors").toEqual([]);
+  const errors = browserErrors.get(page) ?? [];
+  const unexpected = allowRenderError.has(page)
+    ? errors.filter((error) =>
+        !error.includes("Intentional one-shot render error for black-box verification.")
+        && !error.includes("The above error occurred in the <RenderErrorTrigger> component:"))
+    : errors;
+  expect(unexpected, "Unexpected browser errors").toEqual([]);
 });
 
 test(`${features("APP-BROWSER-001", "APP-SHELL-001", "APP-CONNECTION-001")} renders the connected dashboard shell`, async ({ page }) => {
@@ -196,6 +203,19 @@ test(`${features("APP-NOTFOUND-001", "APP-ERROR-001")} renders recoverable error
   await expect(error).toContainText("Something went wrongThe dashboard could not complete this request.");
   await expect(error.getByRole("button")).toHaveText(["Go to resources", "Reload dashboard"]);
   await attachScreenshot(page, testInfo, "dashboard-error");
+});
+
+test("[APP-ERROR-001] recovers from an unhandled React render error", async ({ page }, testInfo) => {
+  allowRenderError.add(page);
+  await page.goto("/?renderError=1");
+  const error = page.getByRole("main").getByRole("region", { name: "Dashboard error" });
+  await expect(error).toContainText("Something went wrongThe dashboard could not complete this request.");
+  await expect(error.getByRole("button")).toHaveText(["Go to resources", "Reload dashboard"]);
+  await attachScreenshot(page, testInfo, "dashboard-render-error-boundary");
+
+  await error.getByRole("button", { name: "Reload dashboard" }).click();
+  await expect(page.getByRole("main").locator(".page__title")).toHaveText("Resources");
+  await expect(page.getByRole("table")).toBeVisible();
 });
 
 test(`${features("APP-PAGE-001")} composes every route from the page toolkit`, async ({ page }) => {

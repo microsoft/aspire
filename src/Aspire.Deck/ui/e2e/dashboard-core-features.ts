@@ -12,7 +12,7 @@ export const dashboardCoreFeatures = {
   "APP-SETTINGS-001": "Settings reports dashboard/runtime versions and controls theme selection.",
   "APP-KEYBOARD-001": "Page, Help, and Settings shortcuts work outside editable controls.",
   "APP-NOTFOUND-001": "Unknown paths render a dedicated 404 experience and recover to Resources.",
-  "APP-ERROR-001": "The error route exposes recovery and reload actions.",
+  "APP-ERROR-001": "The error route and React render boundary expose recovery and reload actions.",
   "APP-NOTIFICATION-001": "Notifications expose primary, secondary, and dismiss actions.",
   "APP-RESPONSIVE-001": "The shell, navigation, resource table, and drawer remain usable on mobile.",
   "RES-LIST-001": "Resources exclude hidden and parameter resources and retain stable ordering.",

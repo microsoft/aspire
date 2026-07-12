@@ -21,6 +21,12 @@ body {
   text-rendering: optimizeLegibility;
 }
 
+.app-error-boundary {
+  min-height: 100vh;
+  padding: 24px;
+  background: var(--bg-app);
+}
+
 .deck-provider {
   height: 100%;
   background: var(--bg-app);

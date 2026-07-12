@@ -4,11 +4,24 @@ import { App } from "./App";
 import { useTheme } from "./lib/theme";
 import { ToolkitPlayground } from "./playground/ToolkitPlayground";
 import { DeckProvider } from "./toolkit";
+import { AppErrorBoundary } from "./components/AppErrorBoundary";
 import "./styles/global.css";
 
 const container = document.getElementById("root");
 if (!container) {
   throw new Error("Root container #root not found");
+}
+
+const renderErrorMarker = "aspire-deck-render-error-triggered";
+const triggerRenderError = import.meta.env.DEV
+  && new URLSearchParams(window.location.search).get("renderError") === "1"
+  && window.sessionStorage.getItem(renderErrorMarker) !== "1";
+if (triggerRenderError) {
+  window.sessionStorage.setItem(renderErrorMarker, "1");
+}
+
+function RenderErrorTrigger(): never {
+  throw new Error("Intentional one-shot render error for black-box verification.");
 }
 
 function Root() {
@@ -17,7 +30,9 @@ function Root() {
 
   return (
     <DeckProvider theme={theme}>
-      {view === "toolkit" ? (
+      {triggerRenderError ? (
+        <RenderErrorTrigger />
+      ) : view === "toolkit" ? (
         <ToolkitPlayground theme={theme} onToggleTheme={toggleTheme} />
       ) : (
         <App theme={theme} themeChoice={themeChoice} onThemeChoiceChange={setThemeChoice} onToggleTheme={toggleTheme} />
@@ -28,6 +43,8 @@ function Root() {
 
 createRoot(container).render(
   <StrictMode>
-    <Root />
+    <AppErrorBoundary>
+      <Root />
+    </AppErrorBoundary>
   </StrictMode>,
 );
