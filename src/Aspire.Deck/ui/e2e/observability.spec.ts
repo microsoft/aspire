@@ -415,7 +415,7 @@ test(`${features("LOG-STRUCTURED-FILTER-001", "LOG-FILTER-COUNT-001", "LOG-ROUTE
   await expect(logs.getByRole("button", { name: /^Filters/ })).toHaveCount(0);
 });
 
-test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRACE-DETAILS-001", "TRACE-ERROR-001")} explores trace waterfalls and span details`, async ({ page }) => {
+test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRACE-TREE-001", "TRACE-EXPAND-001", "TRACE-DETAILS-001", "TRACE-ERROR-001")} explores trace waterfalls and span details`, async ({ page }) => {
   await navigationButton(page, "Traces").click();
 
   const traces = page.locator(".wf__trace");
@@ -425,7 +425,7 @@ test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRAC
   const initialTrace = traces.first();
   await expect(initialTrace.locator(".wf__head-time")).toHaveText(/^\d{2}:\d{2}:\d{2}\.\d{3} (?:AM|PM)$/);
   const initialRedisSpan = initialTrace.locator(".wf__span").nth(1);
-  await initialRedisSpan.press("Enter");
+  await initialRedisSpan.locator(".wf__span-open").press("Enter");
   const keyboardDialog = page.getByRole("dialog", { name: "redis GET" });
   const spanProperties = keyboardDialog.getByRole("group", { name: "Span properties" });
   const contextProperties = keyboardDialog.getByRole("group", { name: "Context properties" });
@@ -453,6 +453,25 @@ test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRAC
   await expect(traceHeader).toHaveAttribute("aria-expanded", "false");
   await expect(traceSpans).toHaveCount(0);
   await traceHeader.click();
+  await expect(traceSpans).toHaveCount(5);
+
+  const rootToggle = traceSpans.first().getByRole("button", { name: /^Collapse children of / });
+  await rootToggle.click();
+  await expect(traceSpans).toHaveCount(1);
+  await traceSpans.first().getByRole("button", { name: /^Expand children of / }).click();
+  await expect(traceSpans).toHaveCount(5);
+
+  const nestedToggle = traceSpans.nth(2).getByRole("button", { name: /^Collapse children of / });
+  await nestedToggle.click();
+  await expect(traceSpans).toHaveCount(4);
+  await traceSpans.nth(2).getByRole("button", { name: /^Expand children of / }).click();
+  await expect(traceSpans).toHaveCount(5);
+
+  await page.getByRole("button", { name: "Span expansion" }).click();
+  await page.getByRole("menuitem", { name: "Collapse all spans" }).click();
+  await expect(traceSpans).toHaveCount(1);
+  await page.getByRole("button", { name: "Span expansion" }).click();
+  await page.getByRole("menuitem", { name: "Expand all spans" }).click();
   await expect(traceSpans).toHaveCount(5);
 
   const redisSpan = traceSpans.nth(1);

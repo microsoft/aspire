@@ -2329,6 +2329,35 @@ table.data tbody tr.selected {
   outline: 2px solid var(--accent-border);
   outline-offset: -2px;
 }
+.wf__span-toggle,
+.wf__span-open {
+  display: inline-flex;
+  align-items: center;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  background: transparent;
+  border: 0;
+}
+.wf__span-toggle {
+  flex: 0 0 18px;
+  justify-content: center;
+  height: 24px;
+}
+.wf__span-toggle-placeholder {
+  flex: 0 0 18px;
+}
+.wf__span-open {
+  flex: 1;
+  gap: 7px;
+  overflow: hidden;
+  text-align: left;
+}
+.wf__span-toggle:focus-visible,
+.wf__span-open:focus-visible {
+  outline: 2px solid var(--accent-border);
+  outline-offset: 1px;
+}
 
 .wf__name {
   display: flex;

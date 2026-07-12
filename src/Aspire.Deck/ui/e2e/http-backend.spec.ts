@@ -968,7 +968,7 @@ test(`${features("HTTP-TRACE-VIRTUALIZATION-001")} virtualizes 1000 trace waterf
   await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event("scroll")); });
   const tail = traces.locator(".wf__trace").filter({ hasText: "trace operation 0000" });
   await expect(tail).toBeVisible();
-  await tail.locator(".wf__span").press("Enter");
+  await tail.locator(".wf__span-open").press("Enter");
   await expect(page.getByRole("dialog", { name: "trace operation 0000" })).toBeVisible();
 });
 

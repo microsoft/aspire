@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 131
-- React partial: 11
+- React covered: 133
+- React partial: 9
 - React missing: 16
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 27
+- React parity gaps: 25
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -143,8 +143,8 @@
 | TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | covered | HTTP-TRACE-VIRTUALIZATION-001 | Large trace inventories remain responsive through virtualization. |
 | TRACE-ACTIONS-001 | traces | `/traces` | traces | covered | TRACE-ACTIONS-001 | Per-trace actions expose detail, copy, and related telemetry navigation. |
 | TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |
-| TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-LIST-001; TRACE-COLLAPSE-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |
-| TRACE-EXPAND-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-COLLAPSE-001 | Trace detail supports individual and expand-all/collapse-all span control. |
+| TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-TREE-001; HTTP-TRACES-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |
+| TRACE-EXPAND-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-EXPAND-001 | Trace detail supports individual and expand-all/collapse-all span control. |
 | TRACE-SPAN-DETAILS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAILS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Span details include identifiers, timing, status, attributes, resource, and instrumentation scope. |
 | TRACE-EVENTS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-EVENTS-001; HTTP-TRACES-001 | Span events and exception details preserve timestamps and attributes. |
 | TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |

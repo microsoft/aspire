@@ -96,6 +96,32 @@ function formatTraceJson(trace: TraceGroup): string {
   }, null, 2);
 }
 
+function spanTreeKey(traceId: string, spanId: string): string {
+  return `${traceId}:${spanId}`;
+}
+
+function collapsibleSpanKeys(traces: TraceGroup[]): Set<string> {
+  const keys = new Set<string>();
+  for (const trace of traces) {
+    for (const row of trace.rows) {
+      if (row.span.parentSpanId) keys.add(spanTreeKey(trace.traceId, row.span.parentSpanId));
+    }
+  }
+  return keys;
+}
+
+function visibleTraceRows(trace: TraceGroup, collapsedSpanKeys: Set<string>): WaterfallRow[] {
+  const byId = new Map(trace.rows.map((row) => [row.span.spanId, row.span]));
+  return trace.rows.filter((row) => {
+    let parentId = row.span.parentSpanId;
+    while (parentId) {
+      if (collapsedSpanKeys.has(spanTreeKey(trace.traceId, parentId))) return false;
+      parentId = byId.get(parentId)?.parentSpanId ?? null;
+    }
+    return true;
+  });
+}
+
 // Percentage of `part` within `total`, clamped to [0, 100] with two-decimal precision.
 function pct(part: bigint, total: bigint): number {
   if (total <= 0n) {
@@ -243,6 +269,7 @@ export function TracesPage({
   const [clearing, setClearing] = useState(false);
   const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [collapsedSpanKeys, setCollapsedSpanKeys] = useState<Set<string>>(new Set());
   const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
   const traceScrollRef = useRef<HTMLDivElement | null>(null);
   const [traceScrollTop, setTraceScrollTop] = useState(0);
@@ -338,6 +365,15 @@ export function TracesPage({
   };
 
   const traceCount = useMemo(() => new Set(spans.map((s) => s.traceId)).size, [spans]);
+  const spanParents = useMemo(() => collapsibleSpanKeys(traces), [traces]);
+  const toggleSpan = (traceId: string, spanId: string): void => {
+    const key = spanTreeKey(traceId, spanId);
+    setCollapsedSpanKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
   const virtualizeTraces = traces.length > TRACE_VIRTUALIZATION_THRESHOLD;
   useLayoutEffect(() => {
     const scroller = traceScrollRef.current;
@@ -351,15 +387,16 @@ export function TracesPage({
   const traceLayout = useMemo(() => {
     let top = 0;
     const items = traces.map((trace) => {
+      const rows = visibleTraceRows(trace, collapsedSpanKeys);
       const height = collapsed.has(trace.traceId)
         ? TRACE_HEADER_HEIGHT + TRACE_BORDER_HEIGHT
-        : TRACE_HEADER_HEIGHT + TRACE_AXIS_HEIGHT + trace.rows.length * TRACE_ROW_HEIGHT + TRACE_BORDER_HEIGHT;
-      const item = { trace, top, height };
+        : TRACE_HEADER_HEIGHT + TRACE_AXIS_HEIGHT + rows.length * TRACE_ROW_HEIGHT + TRACE_BORDER_HEIGHT;
+      const item = { trace, rows, top, height };
       top += height + TRACE_GAP;
       return item;
     });
     return { items, totalHeight: Math.max(0, top - TRACE_GAP) };
-  }, [collapsed, traces]);
+  }, [collapsed, collapsedSpanKeys, traces]);
   const visibleTraceLayout = useMemo(() => {
     if (!virtualizeTraces) return traceLayout.items;
     const start = Math.max(0, traceScrollTop - TRACE_OVERSCAN_PX);
@@ -427,6 +464,15 @@ export function TracesPage({
           value={selectedResource}
           onValueChange={(value) => updateRoute({ resourceName: value === "all" ? null : value })}
         />
+        <CommandMenu
+          ariaLabel="Span expansion"
+          triggerContent={null}
+          triggerIcon={<NamedIcon name="Branch" size={16} />}
+          entries={[
+            { id: "expand", label: "Expand all spans", disabled: collapsedSpanKeys.size === 0, onSelect: () => setCollapsedSpanKeys(new Set()) },
+            { id: "collapse", label: "Collapse all spans", disabled: spanParents.size === 0, onSelect: () => setCollapsedSpanKeys(new Set(spanParents)) },
+          ]}
+        />
         <StructuredFilterControl filters={filters} fields={filterFields} onChange={(next) => updateRoute({ filters: next })} />
         <Select
           ariaLabel="Span type"
@@ -490,7 +536,7 @@ export function TracesPage({
         ) : (
           virtualizeTraces ? (
             <div className="wf__virtual-space" style={{ height: traceLayout.totalHeight }}>
-              {visibleTraceLayout.map(({ trace, top }) => (
+              {visibleTraceLayout.map(({ trace, rows, top }) => (
                 <div key={trace.traceId} className="wf__virtual-item" style={{ top }}>
                   <TraceBlock
                     trace={trace}
@@ -500,6 +546,9 @@ export function TracesPage({
                     onSelect={onSelectSpan}
                     onViewLogs={onNavigateToLogs}
                     onViewJson={(trace) => setTextViewer({ title: `${trace.traceId}.json`, value: formatTraceJson(trace), format: "json" })}
+                    rows={rows}
+                    collapsedSpanKeys={collapsedSpanKeys}
+                    onToggleSpan={toggleSpan}
                   />
                 </div>
               ))}
@@ -514,6 +563,9 @@ export function TracesPage({
               onSelect={onSelectSpan}
               onViewLogs={onNavigateToLogs}
               onViewJson={(trace) => setTextViewer({ title: `${trace.traceId}.json`, value: formatTraceJson(trace), format: "json" })}
+              rows={visibleTraceRows(trace, collapsedSpanKeys)}
+              collapsedSpanKeys={collapsedSpanKeys}
+              onToggleSpan={toggleSpan}
             />
           ))
         )}
@@ -555,6 +607,9 @@ function TraceBlock({
   onSelect,
   onViewLogs,
   onViewJson,
+  rows,
+  collapsedSpanKeys,
+  onToggleSpan,
 }: {
   trace: TraceGroup;
   colorMap: Map<string, string>;
@@ -563,6 +618,9 @@ function TraceBlock({
   onSelect: (span: SpanSummary) => void;
   onViewLogs: (spanId: string) => void;
   onViewJson: (trace: TraceGroup) => void;
+  rows: WaterfallRow[];
+  collapsedSpanKeys: Set<string>;
+  onToggleSpan: (traceId: string, spanId: string) => void;
 }) {
   const headColor = colorFor(colorMap, trace.resourceName);
   // Axis ticks at 0/25/50/75/100% of the trace duration.
@@ -617,30 +675,37 @@ function TraceBlock({
           </div>
 
           <div className="wf__rows">
-            {trace.rows.map((row) => {
+            {rows.map((row) => {
               const color = colorFor(colorMap, row.span.resourceName);
               const isError = row.span.statusCode === "Error";
               const dur = formatDurationNanos(row.span.durationNanos);
+              const hasChildren = trace.rows.some((candidate) => candidate.span.parentSpanId === row.span.spanId);
+              const spanCollapsed = collapsedSpanKeys.has(spanTreeKey(trace.traceId, row.span.spanId));
               return (
                 <div
                   key={row.span.spanId}
                   className="wf__row wf__span"
                   onClick={() => onSelect(row.span)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect(row.span);
-                    }
-                  }}
                 >
                   <div
                     className="wf__name"
                     style={{ paddingLeft: row.depth * 16 + 4, borderLeftColor: color }}
                   >
-                    {isError ? <span className="wf__error-dot" /> : null}
-                    <span className="cell-mono wf__name-text">{row.span.name}</span>
+                    {hasChildren ? (
+                      <button
+                        type="button"
+                        className="wf__span-toggle"
+                        aria-label={`${spanCollapsed ? "Expand" : "Collapse"} children of ${row.span.name}`}
+                        aria-expanded={!spanCollapsed}
+                        onClick={(event) => { event.stopPropagation(); onToggleSpan(trace.traceId, row.span.spanId); }}
+                      >
+                        <ChevronIcon size={12} className={`wf__chevron ${spanCollapsed ? "" : "wf__chevron--open"}`} />
+                      </button>
+                    ) : <span className="wf__span-toggle-placeholder" />}
+                    <button type="button" className="wf__span-open" onClick={(event) => { event.stopPropagation(); onSelect(row.span); }}>
+                      {isError ? <span className="wf__error-dot" /> : null}
+                      <span className="cell-mono wf__name-text">{row.span.name}</span>
+                    </button>
                   </div>
                   <div className="wf__track">
                     <span

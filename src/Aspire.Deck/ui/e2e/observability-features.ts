@@ -28,6 +28,8 @@ export const observabilityFeatures = {
   "TRACE-CLEAR-001": "Trace telemetry can be cleared for one selected resource or every resource.",
   "TRACE-SESSION-001": "Trace resource, type, text, duration, and pause state restore from the URL.",
   "TRACE-COLLAPSE-001": "A trace waterfall can be collapsed and expanded without losing its spans.",
+  "TRACE-TREE-001": "Trace waterfalls preserve parent-child depth and chronological sibling placement.",
+  "TRACE-EXPAND-001": "Individual span subtrees and all span branches can be collapsed and expanded.",
   "TRACE-DETAILS-001": "Pointer and keyboard activation open complete span, context, scope, and resource details.",
   "TRACE-EVENTS-001": "Span details preserve event timestamps, exception data, attributes, and dropped counts.",
   "TRACE-LINKS-001": "Span links and backlinks preserve attributes and navigate to the exact related span.",
