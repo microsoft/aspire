@@ -357,6 +357,7 @@ app.MapDefaultEndpoints();
                 fail "Failed to query private endpoint NIC"
             private_endpoint_ip=$(az network nic show --ids "$private_endpoint_nic_id" --query "ipConfigurations[0].privateIPAddress" -o tsv) ||
                 fail "Failed to query private endpoint IP"
+            require_value "$private_endpoint_ip" "Private endpoint IP was not found"
 
             for attempt in $(seq 1 18)
             do
