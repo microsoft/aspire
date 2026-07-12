@@ -20,6 +20,7 @@ using Aspire.Tests.Shared.Telemetry;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
+using Humanizer;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
@@ -60,7 +61,17 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             ["isTelemetryEndpointUnsecured"] = true,
             ["isApiEndpointUnsecured"] = true,
             ["frontendAuthMode"] = "Unsecured",
-            ["user"] = null
+            ["user"] = null,
+            ["culture"] = GlobalizationHelpers.TryGetKnownParentCulture(System.Globalization.CultureInfo.CurrentUICulture, out var matchedCulture)
+                ? matchedCulture.Name
+                : System.Globalization.CultureInfo.CurrentUICulture.Name,
+            ["cultures"] = new JsonArray(GlobalizationHelpers.OrderedLocalizedCultures
+                .Select(culture => new JsonObject
+                {
+                    ["name"] = culture.Name,
+                    ["displayName"] = culture.NativeName.Humanize()
+                })
+                .ToArray<JsonNode?>())
         };
 
         Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");

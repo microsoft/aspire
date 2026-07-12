@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Aspire.Dashboard.Api;
@@ -11,6 +12,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
 using Aspire.Shared.ConsoleLogs;
+using Humanizer;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
 using Microsoft.AspNetCore.Localization;
@@ -123,6 +125,9 @@ public static class DashboardEndpointsBuilder
                 var username = identity.FindFirst(dashboardOptions.Frontend.OpenIdConnect.GetUsernameClaimTypes());
                 user = new DeckUser(name, username);
             }
+            var currentCulture = GlobalizationHelpers.TryGetKnownParentCulture(CultureInfo.CurrentUICulture, out var matchedCulture)
+                ? matchedCulture
+                : CultureInfo.CurrentUICulture;
             var config = new DeckConfig(
                 ApplicationName: dashboardClient.ApplicationName,
                 ResourceServiceUrl: null,
@@ -138,7 +143,9 @@ public static class DashboardEndpointsBuilder
                     !dashboardOptions.Api.Disabled.GetValueOrDefault() &&
                     dashboardOptions.Api.AuthMode == ApiAuthMode.Unsecured,
                 FrontendAuthMode: dashboardOptions.Frontend.AuthMode?.ToString() ?? "Unknown",
-                User: user);
+                User: user,
+                Culture: currentCulture.Name,
+                Cultures: [.. GlobalizationHelpers.OrderedLocalizedCultures.Select(culture => new DeckCulture(culture.Name, culture.NativeName.Humanize()))]);
 
             return Results.Json(config, DeckApiJsonSerializerContext.Default.DeckConfig);
         });
