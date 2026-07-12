@@ -60,6 +60,7 @@ export function App({
   const [manageDataOpen, setManageDataOpen] = useState(false);
   const [aiAgentsOpen, setAIAgentsOpen] = useState(false);
   const [assistantOpen, setAssistantOpen] = useState(false);
+  const [assistantPrompt, setAssistantPrompt] = useState<string | null>(null);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() => {
     try {
@@ -198,7 +199,10 @@ export function App({
           onToggleTheme={onToggleTheme}
           onHelp={() => setHelpOpen(true)}
           onAIAgents={() => setAIAgentsOpen(true)}
-          onAssistant={() => setAssistantOpen((current) => !current)}
+          onAssistant={() => {
+            setAssistantPrompt(null);
+            setAssistantOpen((current) => !current);
+          }}
           onNotifications={() => setNotificationCenterOpen(true)}
           notificationCount={notificationHistory.length}
           onSettings={() => setSettingsOpen(true)}
@@ -303,6 +307,10 @@ export function App({
                   traceId,
                   spanId: spanId ?? undefined,
                 })}
+                onExplainErrors={config?.isAssistantEnabled ? (prompt) => {
+                  setAssistantPrompt(prompt);
+                  setAssistantOpen(true);
+                } : undefined}
               />
             ) : null}
             {page === "traces" ? (
@@ -346,6 +354,10 @@ export function App({
                   traceId: undefined,
                   spanId: undefined,
                 })}
+                onExplainErrors={config?.isAssistantEnabled ? (prompt) => {
+                  setAssistantPrompt(prompt);
+                  setAssistantOpen(true);
+                } : undefined}
               />
             ) : null}
             {page === "metrics" ? (
@@ -426,7 +438,10 @@ export function App({
       {aiAgentsOpen && config?.agentHelpMarkdown ? (
         <AIAgentsDrawer markdown={config.agentHelpMarkdown} onClose={() => setAIAgentsOpen(false)} />
       ) : null}
-      {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} /> : null}
+      {assistantOpen ? <AssistantPanel initialPrompt={assistantPrompt} onClose={() => {
+        setAssistantOpen(false);
+        setAssistantPrompt(null);
+      }} /> : null}
     </div>
   );
 }

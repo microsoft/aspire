@@ -172,7 +172,7 @@ const featureDefinitions = {
     ["LOG-ACTIONS-001", "/structuredlogs", "Per-log actions expose details, text/JSON visualizers, copy, and related navigation.", "structured-logs", "covered", "LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001"],
     ["LOG-TRACE-LINK-001", "/structuredlogs", "Trace IDs deep-link to the matching trace and span.", null, "covered", "LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001"],
     ["LOG-GENAI-001", "/structuredlogs", "GenAI log records open the dedicated GenAI visualizer.", null, "covered", "LOG-GENAI-001"],
-    ["LOG-EXPLAIN-001", "/structuredlogs", "Explain errors summarizes current error logs through the assistant.", null, "missing"],
+    ["LOG-EXPLAIN-001", "/structuredlogs", "Explain errors summarizes current error logs through the assistant.", null, "covered", "LOG-EXPLAIN-001"],
     ["LOG-ROUTE-001", "/structuredlogs/resource/{name}", "Resource selection, filters, and selected log are deep-linkable and restorable.", null, "covered", "LOG-ROUTE-001"],
   ],
   traces: [
@@ -195,7 +195,7 @@ const featureDefinitions = {
     ["TRACE-EVENTS-001", "/traces/detail/{traceId}", "Span events and exception details preserve timestamps and attributes.", null, "covered", "TRACE-EVENTS-001; HTTP-TRACES-001"],
     ["TRACE-LINKS-001", "/traces/detail/{traceId}", "Span links navigate to related traces and preserve link attributes.", null, "covered", "TRACE-LINKS-001; HTTP-TRACES-001"],
     ["TRACE-GENAI-001", "/traces/detail/{traceId}", "GenAI spans and traces open the dedicated GenAI visualizer.", null, "covered", "TRACE-GENAI-001"],
-    ["TRACE-EXPLAIN-001", "/traces", "Explain errors summarizes current failed traces through the assistant.", null, "missing"],
+    ["TRACE-EXPLAIN-001", "/traces", "Explain errors summarizes current failed traces through the assistant.", null, "covered", "TRACE-EXPLAIN-001"],
     ["TRACE-SESSION-001", "/traces", "Resource, type, filters, and selection are deep-linkable and restorable.", null, "covered", "TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001"],
   ],
   metrics: [

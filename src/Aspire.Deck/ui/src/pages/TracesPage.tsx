@@ -10,6 +10,7 @@ import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
 import { formatSpanJson } from "../components/SpanActions";
 import { GenAIVisualizerDialog, hasGenAIAttributes } from "../components/GenAIVisualizerDialog";
 import {
+  Button,
   ChevronIcon,
   CommandMenu,
   NamedIcon,
@@ -249,6 +250,7 @@ export function TracesPage({
   onNavigateToSpan,
   onNavigateToLogs,
   onCloseDetails,
+  onExplainErrors,
 }: {
   routeTraceId: string | null;
   routeSpanId: string | null;
@@ -263,6 +265,7 @@ export function TracesPage({
   onNavigateToSpan: (traceId: string, spanId: string | null) => void;
   onNavigateToLogs: (spanId: string) => void;
   onCloseDetails: () => void;
+  onExplainErrors?: (prompt: string) => void;
 }) {
   const telemetry = useTelemetry();
   const { resources } = useResources();
@@ -353,6 +356,21 @@ export function TracesPage({
         ),
     );
   }, [filters, routeQuery, routeTraceId, selectedMinDurationMs, selectedResource, selectedType, spans]);
+  const failedTraces = useMemo(() => traces.filter((trace) => trace.hasError), [traces]);
+
+  const explainErrors = (): void => {
+    if (onExplainErrors === undefined || failedTraces.length === 0) return;
+    const context = failedTraces.slice(0, 20).map((trace) => ({
+      traceId: trace.traceId,
+      operation: trace.rootName,
+      resourceName: trace.resourceName,
+      durationNanos: trace.durationNano.toString(),
+      failedSpans: trace.rows
+        .filter((row) => row.span.statusCode === "Error")
+        .map((row) => ({ spanId: row.span.spanId, name: row.span.name, resourceName: row.span.resourceName, statusMessage: row.span.statusMessage })),
+    }));
+    onExplainErrors(`Explain the failures in the currently filtered traces. Identify likely causes and concrete next steps.\n\n${JSON.stringify(context, null, 2)}`);
+  };
 
   const toggle = (traceId: string) => {
     setCollapsed((prev) => {
@@ -488,6 +506,9 @@ export function TracesPage({
           value={selectedMinDurationMs.toString()}
           onValueChange={(value) => updateRoute({ minDurationMs: Number(value) })}
         />
+        <Button disabled={onExplainErrors === undefined || failedTraces.length === 0} onClick={explainErrors}>
+          <NamedIcon name="BrainCircuit" size={16} /> Explain errors
+        </Button>
         <div className="page__header-spacer" />
         <Switch
           label="Pause incoming data"

@@ -3,7 +3,7 @@ import type { AssistantMessage, AssistantModel } from "../api/types";
 import { getAssistantInfo, streamAssistantChat } from "../api/deck";
 import { Button, Drawer, IconButton, MarkdownContent, NamedIcon, Select } from "../toolkit";
 
-export function AssistantPanel({ onClose }: { onClose: () => void }) {
+export function AssistantPanel({ initialPrompt, onClose }: { initialPrompt?: string | null; onClose: () => void }) {
   const [messages, setMessages] = useState<AssistantMessage[]>([]);
   const [models, setModels] = useState<AssistantModel[]>([]);
   const [model, setModel] = useState("");
@@ -12,6 +12,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
   const [responding, setResponding] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const responseController = useRef<AbortController | null>(null);
+  const submittedInitialPrompt = useRef<string | null>(null);
 
   useEffect(() => {
     void getAssistantInfo()
@@ -32,8 +33,8 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     setError(null);
   };
 
-  const send = async (): Promise<void> => {
-    const prompt = draft.trim();
+  const sendPrompt = async (promptValue: string): Promise<void> => {
+    const prompt = promptValue.trim();
     if (!prompt || responding) return;
     const userMessage: AssistantMessage = { role: "user", content: prompt };
     const requestMessages = [...messages, userMessage];
@@ -70,6 +71,12 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
     }
   };
 
+  useEffect(() => {
+    if (!initialPrompt || !model || submittedInitialPrompt.current === initialPrompt) return;
+    submittedInitialPrompt.current = initialPrompt;
+    void sendPrompt(initialPrompt);
+  }, [initialPrompt, model]);
+
   return (
     <Drawer
       title="Assistant"
@@ -95,7 +102,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
-                void send();
+                void sendPrompt(draft);
               }
             }}
           />
@@ -104,7 +111,7 @@ export function AssistantPanel({ onClose }: { onClose: () => void }) {
             {responding ? (
               <Button onClick={() => responseController.current?.abort()}><NamedIcon name="Stop" size={16} /> Stop</Button>
             ) : (
-              <Button variant="primary" disabled={!draft.trim() || models.length === 0} onClick={() => void send()}><NamedIcon name="Send" size={16} /> Send</Button>
+              <Button variant="primary" disabled={!draft.trim() || models.length === 0} onClick={() => void sendPrompt(draft)}><NamedIcon name="Send" size={16} /> Send</Button>
             )}
           </div>
         </div>

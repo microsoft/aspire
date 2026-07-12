@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 151
+- React covered: 153
 - React partial: 4
-- React missing: 2
+- React missing: 0
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 6
+- React parity gaps: 4
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -127,7 +127,7 @@
 | LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |
 | LOG-TRACE-LINK-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001 | Trace IDs deep-link to the matching trace and span. |
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-GENAI-001 | GenAI log records open the dedicated GenAI visualizer. |
-| LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Explain errors summarizes current error logs through the assistant. |
+| LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-EXPLAIN-001 | Explain errors summarizes current error logs through the assistant. |
 | LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | PENDING | covered | LOG-ROUTE-001 | Resource selection, filters, and selected log are deep-linkable and restorable. |
 | TRACE-LIST-001 | traces | `/traces` | traces | covered | TRACE-LIST-001; TRACE-ACTIONS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
 | TRACE-LIVE-001 | traces | `/traces` | traces | covered | TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001 | Incoming spans update trace groups and totals without reloading the page. |
@@ -148,7 +148,7 @@
 | TRACE-EVENTS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-EVENTS-001; HTTP-TRACES-001 | Span events and exception details preserve timestamps and attributes. |
 | TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |
 | TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-GENAI-001 | GenAI spans and traces open the dedicated GenAI visualizer. |
-| TRACE-EXPLAIN-001 | traces | `/traces` | PENDING | missing | - | Explain errors summarizes current failed traces through the assistant. |
+| TRACE-EXPLAIN-001 | traces | `/traces` | PENDING | covered | TRACE-EXPLAIN-001 | Explain errors summarizes current failed traces through the assistant. |
 | TRACE-SESSION-001 | traces | `/traces` | PENDING | covered | TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001 | Resource, type, filters, and selection are deep-linkable and restorable. |
 | METRIC-RESOURCE-001 | metrics | `/metrics` | metrics | covered | METRIC-RESOURCE-001; METRIC-SESSION-001 | Metrics require and preserve a selected telemetry resource. |
 | METRIC-TREE-001 | metrics | `/metrics` | PENDING | covered | METRIC-TREE-001 | Meters and instruments render in a searchable hierarchical selector. |

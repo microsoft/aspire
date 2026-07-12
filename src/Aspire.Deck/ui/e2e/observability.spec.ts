@@ -406,6 +406,23 @@ test(`${features("LOG-TRACE-LINK-001", "TRACE-DETAIL-ROUTE-001")} opens and rest
   await expect(page).toHaveURL(/\/structuredlogs$/);
 });
 
+test(`${features("LOG-EXPLAIN-001")} explains errors from the filtered structured logs`, async ({ page }) => {
+  await navigationButton(page, "Structured Logs").click();
+  await page.getByRole("switch", { name: "Pause incoming data" }).check();
+  await page.getByRole("combobox", { name: "Severity" }).selectOption("Error");
+
+  const errorRows = page.getByRole("table").locator("tbody tr");
+  await expect.poll(() => errorRows.count()).toBeGreaterThan(0);
+  const visibleMessage = (await errorRows.first().locator("td").nth(3).innerText()).trim();
+
+  await page.getByRole("button", { name: "Explain errors" }).click();
+  const assistant = page.getByRole("dialog", { name: "Assistant" });
+  const conversation = assistant.getByRole("log", { name: "Assistant conversation" });
+  await expect(conversation).toContainText("Explain the errors in the currently filtered structured logs.");
+  await expect(conversation).toContainText(visibleMessage);
+  await expect(conversation).toContainText("concrete next steps");
+});
+
 test(`${features("LOG-RESOURCE-001", "LOG-PAUSE-001")} filters resources and pauses incoming structured logs`, async ({ page }) => {
   await navigationButton(page, "Structured Logs").click();
 
@@ -557,6 +574,19 @@ test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRAC
   await expect(errorSpan).toHaveCount(1);
   await errorSpan.click();
   await expect(page.getByRole("dialog")).toContainText("StatusError");
+});
+
+test(`${features("TRACE-EXPLAIN-001")} explains failures from the filtered traces`, async ({ page }) => {
+  await navigationButton(page, "Traces").click();
+  await page.getByRole("switch", { name: "Pause incoming data" }).check();
+  await expect.poll(() => page.locator(".wf__trace--error").count()).toBeGreaterThan(0);
+
+  await page.getByRole("button", { name: "Explain errors" }).click();
+  const assistant = page.getByRole("dialog", { name: "Assistant" });
+  const conversation = assistant.getByRole("log", { name: "Assistant conversation" });
+  await expect(conversation).toContainText("Explain the failures in the currently filtered traces.");
+  await expect(conversation).toContainText("products.query");
+  await expect(conversation).toContainText("The simulated dependency failed.");
 });
 
 test(`${features("TRACE-EVENTS-001", "TRACE-LINKS-001", "TRACE-ACTIONS-001")} explores span events, links, backlinks, and actions`, async ({ page }, testInfo) => {
