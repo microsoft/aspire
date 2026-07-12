@@ -401,6 +401,10 @@ jobs:
     name: Post PR Comment
     needs: [deploy-test]
     runs-on: ubuntu-latest
+    # Backstop so this reporting job can never hold the concurrency slot for hours.
+    # A hung asciinema upload once wedged this job past an hour, and because the
+    # workflow uses cancel-in-progress concurrency, that blocked newer queued runs.
+    timeout-minutes: 20
     if: ${{ always() && inputs.pr_number != '' }}
     permissions:
       pull-requests: write
@@ -584,7 +588,13 @@ jobs:
                 # Upload to asciinema with retry logic for transient failures
                 ASCIINEMA_URL=""
                 for attempt in $(seq 1 "$MAX_UPLOAD_RETRIES"); do
-                  UPLOAD_OUTPUT=$(asciinema upload "$castfile" 2>&1) || true
+                  # Wrap in `timeout` because `asciinema upload` has no built-in network
+                  # timeout and can hang indefinitely on a read from asciinema.org. A real
+                  # run once wedged here for over an hour, holding the cancel-in-progress
+                  # concurrency slot and blocking newer queued deployment runs. `timeout`
+                  # exits 124 on a hang, which `|| true` treats like any other failed
+                  # attempt so the retry loop advances (and eventually records FAILED).
+                  UPLOAD_OUTPUT=$(timeout 120 asciinema upload "$castfile" 2>&1) || true
                   ASCIINEMA_URL=$(echo "$UPLOAD_OUTPUT" | grep -oP 'https://asciinema\.org/a/[a-zA-Z0-9_-]+' | head -1) || true
                   if [ -n "$ASCIINEMA_URL" ]; then
                     break
