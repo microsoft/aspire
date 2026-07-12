@@ -579,10 +579,28 @@ jobs:
             MAX_UPLOAD_RETRIES=5
             RETRY_BASE_DELAY_SECONDS=30
 
+            # Global budget for ALL uploads combined. The job has timeout-minutes: 20,
+            # and a single recording's worst case (5 x 120s timeout + 30+60+90+120s
+            # backoff = 15m) could otherwise consume the whole cap before the results
+            # comment is posted — worse with multiple recordings. Cap total upload time
+            # so the remainder of the job budget is always reserved for comment posting;
+            # any recordings still pending when the deadline passes are marked FAILED.
+            GLOBAL_UPLOAD_BUDGET_SECONDS=720
+            UPLOAD_DEADLINE=$(( $(date +%s) + GLOBAL_UPLOAD_BUDGET_SECONDS ))
+
             UPLOAD_COUNT=0
             for castfile in "$RECORDINGS_DIR"/*.cast; do
               if [ -f "$castfile" ]; then
                 filename=$(basename "$castfile" .cast)
+
+                # Stop uploading once the global budget is exhausted so we always
+                # leave time to post the results comment within the job timeout.
+                if [ "$(date +%s)" -ge "$UPLOAD_DEADLINE" ]; then
+                  RECORDING_URLS["$filename"]="FAILED"
+                  echo "Skipping upload of $castfile: global upload budget exhausted"
+                  continue
+                fi
+
                 echo "Uploading $castfile..."
 
                 # Upload to asciinema with retry logic for transient failures
@@ -599,7 +617,9 @@ jobs:
                   if [ -n "$ASCIINEMA_URL" ]; then
                     break
                   fi
-                  if [ "$attempt" -lt "$MAX_UPLOAD_RETRIES" ]; then
+                  # Don't sleep/retry past the global deadline — bail out so remaining
+                  # recordings and the comment step still fit inside the job timeout.
+                  if [ "$attempt" -lt "$MAX_UPLOAD_RETRIES" ] && [ "$(date +%s)" -lt "$UPLOAD_DEADLINE" ]; then
                     DELAY=$((attempt * RETRY_BASE_DELAY_SECONDS))
                     echo "Upload attempt $attempt failed, retrying in ${DELAY}s..."
                     sleep "$DELAY"
