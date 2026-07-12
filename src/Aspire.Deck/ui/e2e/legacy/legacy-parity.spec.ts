@@ -1,4 +1,5 @@
 import { expect, test, type Page, type TestInfo } from "@playwright/test";
+import { readFile } from "node:fs/promises";
 import {
   getLegacyScenarioFeatures,
   type DashboardParityFeature,
@@ -821,6 +822,61 @@ test(`${features("metrics")} inventories metric controls and empty state`, async
   await expect(page.getByRole("tab", { name: "Table", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect.poll(() => page.getByRole("table").getByRole("row").count()).toBeGreaterThan(1);
   await attachScreenshot(page, testInfo, "legacy-metrics");
+});
+
+test(`${features("manage-data")} exports, removes, and imports selected telemetry`, async ({ page }) => {
+  test.setTimeout(90_000);
+  await page.goto("/");
+  const dismissNotification = page.getByRole("button", { name: "Dismiss notification", exact: true });
+  if (await dismissNotification.isVisible()) {
+    await dismissNotification.click({ force: true });
+  }
+  await page.getByRole("button", { name: "Settings", exact: true }).click();
+  const settings = page.getByRole("dialog", { name: "Settings", exact: true });
+  await settings.getByRole("button", { name: "Manage", exact: true }).click();
+
+  const manageData = page.getByRole("dialog", { name: "Manage logs and telemetry", exact: true });
+  const allData = manageData.getByRole("checkbox", { name: "All data", exact: true });
+  await expect(allData).toHaveAttribute("aria-checked", "true");
+  await page.waitForTimeout(500);
+  while (await dismissNotification.count()) {
+    await dismissNotification.first().click({ force: true });
+  }
+  await allData.dispatchEvent("click");
+  await expect(allData).toHaveAttribute("aria-checked", "false");
+
+  const resourceRow = manageData.getByRole("button", { name: "Structured logs", exact: true })
+    .first()
+    .locator("xpath=ancestor::*[@role='row'][1]");
+  const resourceName = await resourceRow.getByRole("checkbox").getAttribute("aria-label");
+  expect(resourceName).not.toBeNull();
+  await resourceRow.getByRole("button", { name: "Toggle nesting", exact: true }).dispatchEvent("click");
+  const selectedTelemetry = manageData.getByRole("checkbox", { name: `Structured logs for ${resourceName}`, exact: true });
+  await expect(selectedTelemetry).toHaveAttribute("aria-checked", "false");
+  await selectedTelemetry.dispatchEvent("click");
+  await expect(selectedTelemetry).toHaveAttribute("aria-checked", "true");
+
+  const downloadPromise = page.waitForEvent("download");
+  await manageData.getByRole("button", { name: "Export selected", exact: true }).click();
+  const download = await downloadPromise;
+  const downloadPath = await download.path();
+  expect(downloadPath).not.toBeNull();
+
+  await manageData.getByRole("button", { name: "Remove selected", exact: true }).click();
+  await expect(selectedTelemetry).toHaveCount(0);
+
+  const fileChooserPromise = page.waitForEvent("filechooser");
+  const importButton = manageData.getByRole("button", { name: "Import logs and telemetry", exact: true });
+  await importButton.click();
+  const fileChooser = await fileChooserPromise;
+  await fileChooser.setFiles({
+    name: download.suggestedFilename(),
+    mimeType: "application/zip",
+    buffer: await readFile(downloadPath!),
+  });
+  await expect(importButton).toBeEnabled({ timeout: 30_000 });
+  await expect(manageData.locator(".error-message")).toHaveCount(0);
+  await manageData.getByRole("button", { name: "Close", exact: true }).click();
 });
 
 test(`${features("console-follow")} preserves manual console position and restores tail-follow`, async ({ page }) => {
