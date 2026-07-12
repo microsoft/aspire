@@ -44,7 +44,7 @@ public sealed class AppServiceStoragePrivateEndpointDeploymentTests(ITestOutputH
             }
         }
 
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
         var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("appservice-blob-pe");
         const string projectName = "AppServiceBlobPe";
@@ -361,7 +361,7 @@ app.MapDefaultEndpoints();
 
             for attempt in $(seq 1 18)
             do
-                probe_result=$(curl -sS "https://$server_host_name/api/verify-blobs" --max-time 60 2>&1) || probe_result=""
+                probe_result=$(curl -sS "https://$server_host_name/api/verify-blobs" --max-time 10 2>&1) || probe_result=""
                 if echo "$probe_result" | grep -q '"status":"ok"' &&
                    echo "$probe_result" | grep -q '"contentMatches":true' &&
                    echo "$probe_result" | grep -Fq "$private_endpoint_ip"
