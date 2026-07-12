@@ -105,9 +105,27 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
           <>
             {page === "resources" ? <ResourcesPage /> : null}
             {page === "parameters" ? <ParametersPage /> : null}
-            {page === "console" ? <ConsolePage /> : null}
+            {page === "console" ? (
+              <ConsolePage
+                routeResourceName={route.consoleResourceName ?? null}
+                routeShowTimestamps={route.consoleShowTimestamps ?? false}
+                routeTimestampsUtc={route.consoleTimestampsUtc ?? false}
+                routeWrapLines={route.consoleWrapLines ?? false}
+                routePaused={route.consolePaused ?? false}
+                onRouteChange={(consoleRoute) => navigate({
+                  page: "console",
+                  consoleResourceName: consoleRoute.resourceName ?? undefined,
+                  consoleShowTimestamps: consoleRoute.showTimestamps || undefined,
+                  consoleTimestampsUtc: consoleRoute.timestampsUtc || undefined,
+                  consoleWrapLines: consoleRoute.wrapLines || undefined,
+                  consolePaused: consoleRoute.paused || undefined,
+                })}
+              />
+            ) : null}
             {page === "logs" ? (
               <StructuredLogsPage
+                routeSpanId={route.spanId ?? null}
+                onClearRoute={() => navigate({ page: "logs" })}
                 onNavigateToTrace={(traceId, spanId) => navigate({
                   page: "traces",
                   traceId,
@@ -124,6 +142,12 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
                   traceId: span.traceId,
                   spanId: span.spanId,
                 })}
+                onNavigateToSpan={(traceId, spanId) => navigate({
+                  page: "traces",
+                  traceId,
+                  spanId: spanId ?? undefined,
+                })}
+                onNavigateToLogs={(spanId) => navigate({ page: "logs", spanId })}
                 onCloseDetails={() => navigate({ page: "traces" })}
               />
             ) : null}

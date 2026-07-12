@@ -697,7 +697,7 @@ class MockBackend {
     for (let i = 0; i < 6; i++) {
       backlog.lines.push({
         lineNumber: this.nextConsoleLine(resourceName),
-        text: `[${new Date().toISOString()}] ${resourceName}: ${logBodies[i % logBodies.length]}`,
+        text: `${new Date().toISOString()} ${logBodies[i % logBodies.length]}`,
         isStdErr: false,
       });
     }
@@ -774,7 +774,7 @@ class MockBackend {
         lines: [
           {
             lineNumber: this.nextConsoleLine(resourceName),
-            text: `[${new Date().toISOString()}] ${resourceName}: ${body}`,
+            text: `${new Date().toISOString()} ${body}`,
             isStdErr: isErr,
           },
         ],

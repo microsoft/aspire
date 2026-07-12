@@ -56,8 +56,12 @@ function logKey(log: LogRecordSummary): string {
 }
 
 export function StructuredLogsPage({
+  routeSpanId,
+  onClearRoute,
   onNavigateToTrace,
 }: {
+  routeSpanId: string | null;
+  onClearRoute: () => void;
   onNavigateToTrace: (traceId: string, spanId: string | null) => void;
 }) {
   const telemetry = useTelemetry();
@@ -85,9 +89,10 @@ export function StructuredLogsPage({
   const selectedResource = resource === "all" || resourceOptions.some((option) => option.value === resource)
     ? resource
     : "all";
+  const effectiveQuery = routeSpanId ?? query;
 
   const filtered = useMemo(() => {
-    const trimmed = query.trim().toLowerCase();
+    const trimmed = effectiveQuery.trim().toLowerCase();
     const minimumSeverity = SEVERITY_MINIMUMS[severity];
     return logs.filter((log) => {
       if (selectedResource !== "all" && log.resourceName !== selectedResource) {
@@ -101,6 +106,9 @@ export function StructuredLogsPage({
           log.body.toLowerCase().includes(trimmed) ||
           (log.resourceName ?? "").toLowerCase().includes(trimmed) ||
           (log.eventName ?? "").toLowerCase().includes(trimmed) ||
+          (log.traceId ?? "").toLowerCase().includes(trimmed) ||
+          (log.spanId ?? "").toLowerCase().includes(trimmed) ||
+          (log.parentId ?? "").toLowerCase().includes(trimmed) ||
           log.scopeName.toLowerCase().includes(trimmed) ||
           [...log.attributes, ...log.scopeAttributes, ...log.resourceAttributes].some((attribute) =>
             attribute.key.toLowerCase().includes(trimmed) || attribute.value.toLowerCase().includes(trimmed))
@@ -108,7 +116,7 @@ export function StructuredLogsPage({
       }
       return true;
     });
-  }, [logs, query, selectedResource, severity]);
+  }, [effectiveQuery, logs, selectedResource, severity]);
 
   const columns: Column<LogRecordSummary>[] = [
     {
@@ -218,7 +226,16 @@ export function StructuredLogsPage({
       </PageHeader>
 
       <PageToolbar ariaLabel="Structured log tools" className="structured-logs__toolbar">
-        <SearchBox value={query} onChange={setQuery} placeholder="Filter messages…" />
+        <SearchBox
+          value={effectiveQuery}
+          onChange={(value) => {
+            if (routeSpanId !== null) {
+              onClearRoute();
+            }
+            setQuery(value);
+          }}
+          placeholder="Filter messages…"
+        />
         <Select
           ariaLabel="Resource"
           className="structured-logs__resource-select"

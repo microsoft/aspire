@@ -1191,6 +1191,34 @@ table.data tbody tr.selected {
   min-width: max-content;
   color: var(--text-secondary);
 }
+
+.log-line__timestamp {
+  flex: 0 0 auto;
+  color: var(--deck-color-text-tertiary);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.log-line__resource {
+  flex: 0 0 auto;
+  max-width: 180px;
+  overflow: hidden;
+  color: var(--deck-color-text-accent);
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.console--wrap .log-line {
+  height: auto !important;
+  min-height: 21px;
+  align-items: start;
+}
+
+.console--wrap .log-line__text {
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
 .log-line.stderr .log-line__text {
   color: var(--error);
 }
@@ -1769,17 +1797,50 @@ table.data tbody tr.selected {
 }
 
 /* ---------- Span detail drawer ---------- */
-.span-detail__heading {
+.span-detail .deck-property-explorer__toolbar .command-menu-root {
+  flex: none;
+}
+.span-detail__metadata {
   display: flex;
+  flex: 1 0 100%;
   align-items: center;
+  flex-wrap: wrap;
   gap: 10px;
-  min-width: 0;
+}
+.span-detail__meta {
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.span-detail__meta strong {
+  color: var(--text);
+  font-weight: 600;
 }
 .span-detail__swatch {
   width: 10px;
   height: 10px;
   border-radius: 3px;
   flex-shrink: 0;
+}
+.span-detail__record {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.span-detail__record-heading {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 4px 12px;
+}
+.span-detail__record-heading span,
+.span-detail__record-meta {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.span-detail__nested-properties {
+  margin-top: 8px;
+  grid-template-columns: minmax(110px, 38%) minmax(0, 1fr);
 }
 
 /* ---------- Misc ---------- */

@@ -4,6 +4,7 @@ import { useTelemetry } from "../lib/useDeckEvent";
 import { formatDurationNanos } from "../lib/format";
 import { buildResourceColorMap, colorFor } from "../lib/colors";
 import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
+import { formatSpanJson } from "../components/SpanActions";
 import {
   ChevronIcon,
   Page,
@@ -14,6 +15,8 @@ import {
   PageTitle,
   PageToolbar,
   SearchBox,
+  TextViewerDialog,
+  type TextViewerRequest,
 } from "../toolkit";
 
 // Minimum-duration filter options. Spans shorter than the selected threshold are
@@ -175,17 +178,22 @@ export function TracesPage({
   routeTraceId,
   routeSpanId,
   onSelectSpan,
+  onNavigateToSpan,
+  onNavigateToLogs,
   onCloseDetails,
 }: {
   routeTraceId: string | null;
   routeSpanId: string | null;
   onSelectSpan: (span: SpanSummary) => void;
+  onNavigateToSpan: (traceId: string, spanId: string | null) => void;
+  onNavigateToLogs: (spanId: string) => void;
   onCloseDetails: () => void;
 }) {
   const telemetry = useTelemetry();
   const [query, setQuery] = useState("");
   const [minMs, setMinMs] = useState(0);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
+  const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
 
   const spans = telemetry?.recentSpans ?? [];
   const selected = useMemo(() => {
@@ -295,10 +303,20 @@ export function TracesPage({
       {selected ? (
         <SpanDetailDrawer
           span={selected}
+          allSpans={spans}
           color={colorFor(colorMap, selected.resourceName)}
           onClose={onCloseDetails}
+          onNavigateToSpan={onNavigateToSpan}
+          onViewLogs={() => onNavigateToLogs(selected.spanId)}
+          onViewJson={() => setTextViewer({
+            title: `${selected.name}.json`,
+            value: formatSpanJson(selected),
+            format: "json",
+          })}
         />
       ) : null}
+
+      <TextViewerDialog request={textViewer} onClose={() => setTextViewer(null)} />
     </Page>
   );
 }
