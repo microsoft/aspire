@@ -372,27 +372,40 @@ internal sealed class TelemetryApiService(
         var chart = instrument.Summary.Type == OtlpInstrumentType.Histogram
             ? calculator.CalculateHistogramValues(instrument.Dimensions, endTime, static value => value, instrument.Summary.Unit)
             : calculator.CalculateChartValues(instrument.Dimensions, endTime, static value => value, instrument.Summary.Unit);
-        var populatedIndexes = Enumerable.Range(0, chart.XValues.Count)
-            .Where(index => chart.Traces.All(trace => trace.Values[index].HasValue))
+        var aggregate = CreateMetricSeries(chart, instrument.Summary.Type);
+        var dimensions = instrument.Dimensions
+            .Select(dimension =>
+            {
+                var dimensionChart = instrument.Summary.Type == OtlpInstrumentType.Histogram
+                    ? calculator.CalculateHistogramValues([dimension], endTime, static value => value, instrument.Summary.Unit)
+                    : calculator.CalculateChartValues([dimension], endTime, static value => value, instrument.Summary.Unit);
+                var series = CreateMetricSeries(dimensionChart, instrument.Summary.Type);
+                return new DeckMetricDimensionSeries(
+                    Attributes: dimension.Attributes.Select(static attribute => new DeckMetricAttribute(attribute.Key, attribute.Value)).ToArray(),
+                    TimestampsMs: series.Timestamps,
+                    Values: series.Values,
+                    P50: series.P50,
+                    P90: series.P90,
+                    P99: series.P99);
+            })
             .ToArray();
-        var timestamps = populatedIndexes
-            .Select(index => (double)chart.XValues[index].ToUnixTimeMilliseconds())
+        var dimensionFilters = instrument.KnownAttributeValues
+            .OrderBy(static item => item.Key, StringComparer.Ordinal)
+            .Select(static item => new DeckMetricDimensionFilter(item.Key, item.Value.Order(StringComparer.Ordinal).ToArray()))
             .ToArray();
-
-        double[]? values = null;
-        double[]? p50 = null;
-        double[]? p90 = null;
-        double[]? p99 = null;
-        if (instrument.Summary.Type == OtlpInstrumentType.Histogram)
-        {
-            p50 = SelectTraceValues(chart, populatedIndexes, percentile: 50);
-            p90 = SelectTraceValues(chart, populatedIndexes, percentile: 90);
-            p99 = SelectTraceValues(chart, populatedIndexes, percentile: 99);
-        }
-        else
-        {
-            values = populatedIndexes.Select(index => chart.Traces[0].Values[index]!.Value).ToArray();
-        }
+        var exemplars = instrument.Dimensions
+            .SelectMany(static dimension => dimension.Values)
+            .SelectMany(static value => value.Exemplars)
+            .Where(exemplar => exemplar.Start >= endTime - duration && exemplar.Start <= endTime)
+            .DistinctBy(static exemplar => (exemplar.Start, exemplar.Value, exemplar.TraceId, exemplar.SpanId))
+            .OrderBy(static exemplar => exemplar.Start)
+            .Select(static exemplar => new DeckMetricExemplar(
+                TimestampMs: new DateTimeOffset(exemplar.Start, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Value: exemplar.Value,
+                TraceId: exemplar.TraceId,
+                SpanId: exemplar.SpanId,
+                Attributes: exemplar.Attributes.Select(static attribute => new DeckMetricAttribute(attribute.Key, attribute.Value)).ToArray()))
+            .ToArray();
 
         return new DeckMetricSeriesResponse(
             Name: instrument.Summary.Name,
@@ -400,11 +413,15 @@ internal sealed class TelemetryApiService(
             MeterName: instrument.Summary.Parent.Name,
             Unit: instrument.Summary.Unit,
             Kind: GetMetricKind(instrument.Summary),
-            TimestampsMs: timestamps,
-            Values: values,
-            P50: p50,
-            P90: p90,
-            P99: p99);
+            TimestampsMs: aggregate.Timestamps,
+            Values: aggregate.Values,
+            P50: aggregate.P50,
+            P90: aggregate.P90,
+            P99: aggregate.P99,
+            DimensionFilters: dimensionFilters,
+            Dimensions: dimensions,
+            Exemplars: exemplars,
+            HasOverflow: instrument.HasOverflow);
     }
 
     private DeckMetricSummary CreateMetricSummary(string resourceName, OtlpInstrumentSummary summary)
@@ -448,6 +465,35 @@ internal sealed class TelemetryApiService(
     {
         var trace = chart.Traces.Single(trace => trace.Percentile == percentile);
         return indexes.Select(index => trace.Values[index]!.Value).ToArray();
+    }
+
+    private static (double[] Timestamps, double[]? Values, double[]? P50, double[]? P90, double[]? P99) CreateMetricSeries(
+        ChartData chart,
+        OtlpInstrumentType instrumentType)
+    {
+        var populatedIndexes = Enumerable.Range(0, chart.XValues.Count)
+            .Where(index => chart.Traces.All(trace => trace.Values[index].HasValue))
+            .ToArray();
+        var timestamps = populatedIndexes
+            .Select(index => (double)chart.XValues[index].ToUnixTimeMilliseconds())
+            .ToArray();
+
+        if (instrumentType == OtlpInstrumentType.Histogram)
+        {
+            return (
+                timestamps,
+                null,
+                SelectTraceValues(chart, populatedIndexes, percentile: 50),
+                SelectTraceValues(chart, populatedIndexes, percentile: 90),
+                SelectTraceValues(chart, populatedIndexes, percentile: 99));
+        }
+
+        return (
+            timestamps,
+            populatedIndexes.Select(index => chart.Traces[0].Values[index]!.Value).ToArray(),
+            null,
+            null,
+            null);
     }
 
     /// <summary>

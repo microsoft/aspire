@@ -145,4 +145,31 @@ internal sealed record DeckMetricSeriesResponse(
     double[]? Values,
     double[]? P50,
     double[]? P90,
+    double[]? P99,
+    DeckMetricDimensionFilter[] DimensionFilters,
+    DeckMetricDimensionSeries[] Dimensions,
+    DeckMetricExemplar[] Exemplars,
+    bool HasOverflow);
+
+internal sealed record DeckMetricDimensionFilter(
+    string Name,
+    string?[] Values);
+
+internal sealed record DeckMetricDimensionSeries(
+    DeckMetricAttribute[] Attributes,
+    double[] TimestampsMs,
+    double[]? Values,
+    double[]? P50,
+    double[]? P90,
     double[]? P99);
+
+internal sealed record DeckMetricExemplar(
+    double TimestampMs,
+    double Value,
+    string TraceId,
+    string SpanId,
+    DeckMetricAttribute[] Attributes);
+
+internal sealed record DeckMetricAttribute(
+    string Key,
+    string Value);

@@ -17,12 +17,14 @@ using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Aspire.Otlp.Serialization;
 using Aspire.Tests.Shared.Telemetry;
+using Google.Protobuf;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Trace.V1;
@@ -621,8 +623,31 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
 
         var repository = app.Services.GetRequiredService<TelemetryRepository>();
         var now = DateTime.UtcNow;
-        AddMetric(repository, "frontend.requests", "frontend", startTime: now.AddSeconds(-2), value: 1);
-        AddMetric(repository, "frontend.requests", "frontend", startTime: now.AddSeconds(-1), value: 3);
+        AddMetric(
+            repository,
+            "frontend.requests",
+            "frontend",
+            startTime: now.AddSeconds(-2),
+            value: 1,
+            attributes: [KeyValuePair.Create("http.method", "GET")],
+            exemplars:
+            [
+                new Exemplar
+                {
+                    TimeUnixNano = TelemetryTestHelpers.DateTimeToUnixNanoseconds(now.AddSeconds(-2)),
+                    AsDouble = 1,
+                    TraceId = ByteString.CopyFromUtf8("trace-id"),
+                    SpanId = ByteString.CopyFromUtf8("span-id"),
+                    FilteredAttributes = { new KeyValue { Key = "sampled", Value = new AnyValue { StringValue = "true" } } }
+                }
+            ]);
+        AddMetric(
+            repository,
+            "frontend.requests",
+            "frontend",
+            startTime: now.AddSeconds(-1),
+            value: 3,
+            attributes: [KeyValuePair.Create("http.method", "POST")]);
 
         using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
         using var summariesResponse = await httpClient.GetAsync("/api/deck/telemetry/metrics").DefaultTimeout();
@@ -654,6 +679,30 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.NotEmpty(timestamps);
         Assert.Equal(timestamps.Count, values.Count);
         Assert.Null(series["p50"]);
+        Assert.False((bool?)series["hasOverflow"]);
+
+        var filter = Assert.IsType<JsonObject>(Assert.Single(Assert.IsType<JsonArray>(series["dimensionFilters"])));
+        Assert.Equal("http.method", (string?)filter["name"]);
+        Assert.Equal(["GET", "POST"], Assert.IsType<JsonArray>(filter["values"]).Select(static value => value!.GetValue<string>()).ToArray());
+
+        var dimensions = Assert.IsType<JsonArray>(series["dimensions"]);
+        Assert.Equal(2, dimensions.Count);
+        Assert.All(dimensions, dimensionNode =>
+        {
+            var dimension = Assert.IsType<JsonObject>(dimensionNode);
+            Assert.Single(Assert.IsType<JsonArray>(dimension["attributes"]));
+            Assert.Equal(
+                Assert.IsType<JsonArray>(dimension["timestampsMs"]).Count,
+                Assert.IsType<JsonArray>(dimension["values"]).Count);
+        });
+
+        var exemplar = Assert.IsType<JsonObject>(Assert.Single(Assert.IsType<JsonArray>(series["exemplars"])));
+        Assert.Equal(1, (double?)exemplar["value"]);
+        Assert.NotEmpty(exemplar["traceId"]!.GetValue<string>());
+        Assert.NotEmpty(exemplar["spanId"]!.GetValue<string>());
+        var exemplarAttribute = Assert.IsType<JsonObject>(Assert.Single(Assert.IsType<JsonArray>(exemplar["attributes"])));
+        Assert.Equal("sampled", (string?)exemplarAttribute["key"]);
+        Assert.Equal("true", (string?)exemplarAttribute["value"]);
 
         using var missingResponse = await httpClient.GetAsync(
             "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=missing").DefaultTimeout();
@@ -905,7 +954,9 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         string metricName,
         string resourceName,
         DateTime? startTime = null,
-        int value = 1)
+        int value = 1,
+        IEnumerable<KeyValuePair<string, string>>? attributes = null,
+        IEnumerable<Exemplar>? exemplars = null)
     {
         repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
@@ -922,7 +973,9 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                             TelemetryTestHelpers.CreateSumMetric(
                                 metricName: metricName,
                                 startTime: startTime ?? new DateTime(2026, 7, 10, 8, 0, 0, DateTimeKind.Utc),
-                                value: value)
+                                value: value,
+                                attributes: attributes,
+                                exemplars: exemplars)
                         }
                     }
                 }
