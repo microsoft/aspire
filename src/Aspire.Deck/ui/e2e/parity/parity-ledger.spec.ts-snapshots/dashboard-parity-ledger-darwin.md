@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 156
-- React partial: 1
+- React covered: 157
+- React partial: 0
 - React missing: 0
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 1
+- React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -108,7 +108,7 @@
 | CONSOLE-TIMESTAMP-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Timestamp visibility and UTC/local formatting can be toggled. |
 | CONSOLE-WRAP-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Long console lines can wrap or scroll horizontally. |
 | CONSOLE-COMMANDS-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-COMMANDS-001 | Commands for the selected resource are available from the console toolbar. |
-| CONSOLE-TERMINAL-001 | console | `/consolelogs` | PENDING | partial | CONSOLE-TERMINAL-001; DeckApiTests.GetResources_ReturnsTerminalMetadata (live HMP verification remains) | Interactive resources render a terminal and can take or release control. |
+| CONSOLE-TERMINAL-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-TERMINAL-001; TERMINAL-LIVE-001; DeckApiTests.GetResources_ReturnsTerminalMetadata | Interactive resources render a terminal and can take or release control. |
 | CONSOLE-TERMINAL-FONT-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-TERMINAL-FONT-001 | Interactive terminal font size can be increased, decreased, and reset. |
 | CONSOLE-TERMINAL-SIZE-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-TERMINAL-SIZE-001 | Interactive terminal column and row presets update the remote terminal size. |
 | CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-VIRTUALIZATION-001 | Large console streams remain responsive and preserve stable line numbers. |

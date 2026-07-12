@@ -159,6 +159,14 @@ ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
   npm exec -- playwright test --config=playwright.stress.config.ts
 ```
 
+The terminal playground has a separate live HMP suite. Start `playground/Terminals`, then run:
+
+```bash
+ASPIRE_DASHBOARD_URL=<dashboard-url> \
+ASPIRE_DASHBOARD_BROWSER_TOKEN=<token> \
+  npm exec -- playwright test --config=playwright.terminal.config.ts
+```
+
 The migration parity ledger in `e2e/parity/dashboard-parity-features.ts` is derived from the
 legacy dashboard and Stress AppHost rather than from the React implementation. It records every
 known behavior, its legacy route and black-box scenario, current React status, and existing test

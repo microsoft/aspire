@@ -34,6 +34,23 @@ export default defineConfig({
             changeOrigin: true,
             secure: false,
           },
+          "/api/terminal": {
+            target: dashboardUrl,
+            changeOrigin: true,
+            secure: false,
+            ws: true,
+            rewriteWsOrigin: true,
+          },
+          "/Components/Controls/TerminalView.razor.js": {
+            target: dashboardUrl,
+            changeOrigin: true,
+            secure: false,
+          },
+          "/js": {
+            target: dashboardUrl,
+            changeOrigin: true,
+            secure: false,
+          },
           // Live dashboard runs commonly use browser-token auth. Proxying the
           // login handshake lets the test browser receive a cookie for the Vite
           // origin without reading or copying authentication cookie material.
