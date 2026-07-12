@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 108
+- React covered: 109
 - React partial: 24
-- React missing: 26
-- Legacy black-box scenarios pending: 59
-- React parity gaps: 50
+- React missing: 25
+- Legacy black-box scenarios pending: 58
+- React parity gaps: 49
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -97,7 +97,7 @@
 | CMD-RESULT-JSON-001 | commands | `/` | commands | covered | CMD-RESULT-JSON-001 | JSON command results preserve formatting, masking, copy, and download behavior. |
 | CMD-RESULT-MARKDOWN-001 | commands | `/` | commands | covered | CMD-RESULT-MARKDOWN-001 | Markdown command results render tables and rich content safely. |
 | CMD-RESULT-IMMEDIATE-001 | commands | `/` | commands | covered | CMD-RESULT-IMMEDIATE-001 | DisplayImmediately command results open without requiring a second action. |
-| CMD-PROCESS-001 | commands | `/` | PENDING | missing | - | Process command stdout, stderr, exit status, line limits, stdin, environment, and working directory are represented. |
+| CMD-PROCESS-001 | commands | `/` | commands | covered | STRESS-PROCESS-COMMAND-001; CMD-RESULT-TEXT-001 | Process command stdout, stderr, exit status, line limits, stdin, environment, and working directory are represented. |
 | CONSOLE-RESOURCE-001 | console | `/consolelogs` | console | covered | CONSOLE-RESOURCE-001; CONSOLE-ALL-001; TK-SELECT-001 | A grouped resource picker selects one resource or all resources. |
 | CONSOLE-BACKLOG-001 | console | `/consolelogs` | console | covered | CONSOLE-STREAM-001; HTTP-CONSOLE-001; STRESS-CONSOLE-001 | Selecting a resource loads the existing console backlog. |
 | CONSOLE-LIVE-001 | console | `/consolelogs` | console | covered | CONSOLE-STREAM-001; STRESS-CONSOLE-001 | New stdout and stderr lines stream without reloading the page. |

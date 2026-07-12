@@ -2377,6 +2377,9 @@ table.data tbody tr.selected {
 }
 
 .command-feedback {
+  left: calc(var(--sidebar-w) + 20px);
+  max-width: min(560px, calc(100vw - var(--sidebar-w) - 40px));
+  transform: none;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -2896,6 +2899,13 @@ table.data tbody tr.selected {
 }
 
 @media (max-width: 820px) {
+  .command-feedback {
+    right: 12px;
+    bottom: 80px;
+    left: 12px;
+    max-width: none;
+  }
+
   .shortcut-grid {
     grid-template-columns: minmax(0, 1fr);
   }

@@ -238,6 +238,55 @@ test(`${features("STRESS-COMMAND-ARGUMENTS-001")} submits every input type to a 
   await expect(page.getByRole("status")).toHaveText("Echo arguments succeeded");
 });
 
+test(`${features("STRESS-PROCESS-COMMAND-001")} preserves live process command behavior`, async ({ page }, testInfo) => {
+  const row = page.getByRole("table").getByRole("row").filter({ hasText: "process-commands" });
+  await expect(row).toHaveCount(1);
+  await row.click();
+  const details = page.getByRole("dialog", { name: "process-commands" });
+
+  const runImmediateCommand = async (commandName: RegExp, dialogName: string): Promise<ReturnType<Page["getByRole"]>> => {
+    await details.getByRole("button", { name: "Resource commands" }).click();
+    await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: commandName }).click();
+    const viewer = page.getByRole("dialog", { name: dialogName });
+    await expect(viewer).toBeVisible();
+    return viewer;
+  };
+
+  let viewer = await runImmediateCommand(/Process environment/, "Process environment");
+  await expect(viewer.locator('[data-format="text"]')).toHaveText("env=from-process-command");
+  await viewer.getByRole("button", { name: "Close", exact: true }).click();
+
+  viewer = await runImmediateCommand(/Process working directory/, "Process working directory");
+  await expect(viewer.locator('[data-format="text"]')).toContainText("Stress.AppHost.csproj");
+  await viewer.getByRole("button", { name: "Close", exact: true }).click();
+
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: /Process stdin/ }).click();
+  const inputs = page.getByRole("dialog", { name: "Process stdin" });
+  await inputs.getByRole("textbox", { name: "Input" }).fill("from-react");
+  await inputs.getByRole("button", { name: "Process stdin", exact: true }).click();
+  viewer = page.getByRole("dialog", { name: "Process stdin" });
+  await expect(viewer.locator('[data-format="text"]')).toHaveText("stdin-from-react");
+  await viewer.getByRole("button", { name: "Close", exact: true }).click();
+
+  viewer = await runImmediateCommand(/Process stderr failure/, "Process stderr failure");
+  await expect(page.getByRole("status").filter({ hasText: "exited with code 3" })).toBeVisible();
+  await expect(viewer.locator('[data-format="text"]')).toContainText("stdout-line");
+  await expect(viewer.locator('[data-format="text"]')).toContainText("stderr-line");
+  await viewer.getByRole("button", { name: "Close", exact: true }).click();
+
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: /Process output limit/ }).click();
+  const feedback = page.getByRole("status").filter({ hasText: "Process output limit succeeded" });
+  await feedback.getByRole("button", { name: "View response" }).click();
+  viewer = page.getByRole("dialog", { name: "Process output limit" });
+  const output = viewer.locator('[data-format="text"]');
+  await expect(output).toContainText("Command output truncated: showing last 5 of 20 lines.");
+  await expect(output).toContainText("line-16\nline-17\nline-18\nline-19\nline-20");
+  await expect(output).not.toContainText("line-15");
+  await attachScreenshot(page, testInfo, "stress-live-process-command-result");
+});
+
 test(`${features("STRESS-PARAMETERS-001")} renders live parameters with secure defaults`, async ({ page }, testInfo) => {
   await navigationButton(page, "Parameters").click();
   const table = page.getByRole("table");

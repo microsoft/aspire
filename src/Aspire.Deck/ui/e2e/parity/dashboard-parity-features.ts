@@ -138,7 +138,7 @@ const featureDefinitions = {
     ["CMD-RESULT-JSON-001", "/", "JSON command results preserve formatting, masking, copy, and download behavior.", "commands", "covered", "CMD-RESULT-JSON-001"],
     ["CMD-RESULT-MARKDOWN-001", "/", "Markdown command results render tables and rich content safely.", "commands", "covered", "CMD-RESULT-MARKDOWN-001"],
     ["CMD-RESULT-IMMEDIATE-001", "/", "DisplayImmediately command results open without requiring a second action.", "commands", "covered", "CMD-RESULT-IMMEDIATE-001"],
-    ["CMD-PROCESS-001", "/", "Process command stdout, stderr, exit status, line limits, stdin, environment, and working directory are represented.", null, "missing"],
+    ["CMD-PROCESS-001", "/", "Process command stdout, stderr, exit status, line limits, stdin, environment, and working directory are represented.", "commands", "covered", "STRESS-PROCESS-COMMAND-001; CMD-RESULT-TEXT-001"],
   ],
   console: [
     ["CONSOLE-RESOURCE-001", "/consolelogs", "A grouped resource picker selects one resource or all resources.", "console", "covered", "CONSOLE-RESOURCE-001; CONSOLE-ALL-001; TK-SELECT-001"],

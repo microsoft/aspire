@@ -7,6 +7,7 @@ export const stressFeatures = {
   "STRESS-COMMAND-ICON-001": "Custom Stress command icon names and filled variants render in command surfaces.",
   "STRESS-COMMAND-EXECUTE-001": "A Stress resource command executes through the dashboard HTTP backend.",
   "STRESS-COMMAND-ARGUMENTS-001": "A live Stress command round-trips text, number, boolean, choice, and secret inputs.",
+  "STRESS-PROCESS-COMMAND-001": "Live process commands preserve stdin, environment, working directory, stdout, stderr, exit status, and output limits.",
   "STRESS-SECRETS-001": "Sensitive Stress resource properties remain masked by default.",
   "STRESS-PARAMETERS-001": "Live Stress parameters render missing values and keep secret values masked.",
   "STRESS-CONSOLE-001": "The React console renders the live backlog streamed by the Stress dashboard backend.",
