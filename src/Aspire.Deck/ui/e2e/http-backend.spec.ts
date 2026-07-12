@@ -309,7 +309,7 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
   });
 });
 
-test(`${features("HTTP-CONSOLE-001")} streams resource console logs through the HTTP backend`, async ({ page }, testInfo) => {
+test(`${features("HTTP-CONSOLE-001", "HTTP-CONSOLE-CONTROLS-001")} streams and controls resource console logs through the HTTP backend`, async ({ page }, testInfo) => {
   let consoleLogRequests = 0;
   await page.route("**/api/deck/config", async (route) => {
     await route.fulfill({ json: config });
@@ -324,7 +324,7 @@ test(`${features("HTTP-CONSOLE-001")} streams resource console logs through the 
       body: [
         JSON.stringify({
           resourceName: resource.name,
-          lines: [{ lineNumber: 41, text: "Listening on https://localhost:7443", isStdErr: false }],
+          lines: [{ lineNumber: 41, text: "2026-07-10T08:01:02.123456789Z Listening on https://localhost:7443", isStdErr: false }],
         }),
         JSON.stringify({
           resourceName: resource.name,
@@ -337,6 +337,7 @@ test(`${features("HTTP-CONSOLE-001")} streams resource console logs through the 
 
   await page.goto("/?backend=http");
   await page.getByRole("navigation").getByRole("button", { name: /^Console(?: \d+)?$/ }).click();
+  await page.getByRole("main").getByRole("combobox", { name: "Resource" }).selectOption(resource.name);
 
   const consoleRegion = page.getByRole("main").getByRole("region", { name: "Console" });
   await expect(consoleRegion.getByText("Listening on https://localhost:7443", { exact: true })).toBeVisible();
@@ -345,6 +346,34 @@ test(`${features("HTTP-CONSOLE-001")} streams resource console logs through the 
   await expect(consoleRegion.locator(".console__footer")).toContainText("2 lines");
   await expect(consoleRegion.locator(".console__footer")).toContainText("1 stderr");
   expect(consoleLogRequests).toBe(1);
+
+  await page.getByRole("button", { name: "Console settings" }).click();
+  await page.getByRole("menuitem", { name: "Show timestamps" }).click();
+  await expect(consoleRegion.locator(".log-line__timestamp")).toHaveCount(1);
+
+  await page.getByRole("button", { name: "Console settings" }).click();
+  await page.getByRole("menuitem", { name: "UTC timestamps" }).click();
+  await expect(consoleRegion.locator(".log-line__timestamp")).toHaveText("2026-07-10T08:01:02Z");
+
+  await page.getByRole("button", { name: "Console settings" }).click();
+  await page.getByRole("menuitem", { name: "Wrap lines" }).click();
+  await expect(consoleRegion.locator(".console")).toHaveClass(/console--wrap/);
+
+  await page.getByRole("button", { name: "Console settings" }).click();
+  const downloadPromise = page.waitForEvent("download");
+  await page.getByRole("menuitem", { name: "Download logs" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toMatch(/^stress-api-abc123-.*\.txt$/);
+  const stream = await download.createReadStream();
+  let downloadedText = "";
+  for await (const chunk of stream) {
+    downloadedText += chunk.toString();
+  }
+  expect(downloadedText).toBe([
+    "2026-07-10T08:01:02.123456789Z Listening on https://localhost:7443",
+    "Transient connection failure",
+    "",
+  ].join("\n"));
 
   await testInfo.attach("http-backend-console.png", {
     body: await page.screenshot({ animations: "disabled", fullPage: true }),
@@ -616,10 +645,20 @@ test(`${features("HTTP-TRACES-001")} streams OTLP spans through the HTTP backend
       body: `${JSON.stringify({
         resourceSpans: [{
           resource: {
-            attributes: [{ key: "service.name", value: { stringValue: "stress-api" } }],
+            attributes: [
+              { key: "service.name", value: { stringValue: "stress-api" } },
+              { key: "service.instance.id", value: { stringValue: "stress-api-1" } },
+              { key: "deployment.environment.name", value: { stringValue: "Development" } },
+            ],
+            droppedAttributesCount: 3,
           },
           scopeSpans: [{
-            scope: { name: "Stress.Telemetry" },
+            scope: {
+              name: "Stress.Telemetry",
+              version: "2.1.0",
+              attributes: [{ key: "scope.attribute", value: { stringValue: "scope value" } }],
+              droppedAttributesCount: 2,
+            },
             spans: [
               {
                 traceId,
@@ -633,11 +672,37 @@ test(`${features("HTTP-TRACES-001")} streams OTLP spans through the HTTP backend
               {
                 traceId,
                 spanId: childSpanId,
+                traceState: "vendor=state",
                 parentSpanId: rootSpanId,
+                flags: 257,
                 name: "SELECT orders",
                 kind: 3,
                 startTimeUnixNano: "1783670400050000000",
                 endTimeUnixNano: "1783670400180000000",
+                attributes: [
+                  { key: "db.system.name", value: { stringValue: "postgresql" } },
+                  { key: "db.operation.name", value: { stringValue: "SELECT" } },
+                ],
+                droppedAttributesCount: 1,
+                events: [{
+                  timeUnixNano: "1783670400100000000",
+                  name: "exception",
+                  attributes: [
+                    { key: "exception.type", value: { stringValue: "NpgsqlException" } },
+                    { key: "exception.message", value: { stringValue: "Database unavailable" } },
+                  ],
+                  droppedAttributesCount: 2,
+                }],
+                droppedEventsCount: 4,
+                links: [{
+                  traceId,
+                  spanId: rootSpanId,
+                  traceState: "linked=state",
+                  attributes: [{ key: "link.reason", value: { stringValue: "retry" } }],
+                  droppedAttributesCount: 3,
+                  flags: 1,
+                }],
+                droppedLinksCount: 5,
                 status: { code: 2, message: "Database unavailable" },
               },
             ],
@@ -660,13 +725,45 @@ test(`${features("HTTP-TRACES-001")} streams OTLP spans through the HTTP backend
 
   await traces.getByRole("button", { name: /SELECT orders/ }).click();
   const details = page.getByRole("dialog", { name: "SELECT orders" });
-  await expect(details.locator(".kv__val.cell-mono")).toHaveText([traceId, childSpanId, rootSpanId]);
+  const spanProperties = details.getByRole("group", { name: "Span properties" });
+  const contextProperties = details.getByRole("group", { name: "Context properties" });
+  const resourceProperties = details.getByRole("group", { name: "Resource properties" });
+  const events = details.getByRole("group", { name: "Span events" });
+  const links = details.getByRole("group", { name: "Span links" });
+  await expect(spanProperties).toContainText(`SpanId${childSpanId}`);
+  await expect(spanProperties).toContainText("StatusMessageDatabase unavailable");
+  await expect(spanProperties).toContainText("db.system.namepostgresql");
+  await expect(spanProperties).toContainText("Dropped attributes1");
+  await expect(spanProperties).toContainText("Dropped events4");
+  await expect(spanProperties).toContainText("Dropped links5");
+  await expect(contextProperties).toContainText("SourceStress.Telemetry");
+  await expect(contextProperties).toContainText("Version2.1.0");
+  await expect(contextProperties).toContainText("TraceStatevendor=state");
+  await expect(contextProperties).toContainText("Flags257");
+  await expect(contextProperties).toContainText("scope.attributescope value");
+  await expect(contextProperties).toContainText("Dropped scope attributes2");
+  await expect(contextProperties.getByRole("link", { name: /^Open parent span / })).toHaveText(rootSpanId);
+  await expect(resourceProperties).toContainText("service.instance.idstress-api-1");
+  await expect(resourceProperties).toContainText("deployment.environment.nameDevelopment");
+  await expect(resourceProperties).toContainText("Dropped resource attributes3");
+  await expect(events).toContainText("exception");
+  await expect(events).toContainText("exception.typeNpgsqlException");
+  await expect(events).toContainText("2 dropped attributes");
+  await expect(links).toContainText("link.reasonretry");
+  await expect(links).toContainText("TraceState linked=state");
+  await expect(links).toContainText("3 dropped attributes");
   await expect(page).toHaveURL(`/traces/detail/${traceId}?backend=http&span=${childSpanId}`);
 
   await testInfo.attach("http-backend-traces.png", {
     body: await page.screenshot({ animations: "disabled", fullPage: true }),
     contentType: "image/png",
   });
+
+  await links.getByRole("link", { name: /^Open linked span / }).click();
+  await expect(page).toHaveURL(`/traces/detail/${traceId}?backend=http&span=${rootSpanId}`);
+  const rootDetails = page.getByRole("dialog", { name: "GET /orders" });
+  await expect(rootDetails.getByRole("button", { name: "Backlinks 1" })).toBeVisible();
+  await expect(rootDetails.getByRole("group", { name: "Span backlinks" })).toContainText("link.reasonretry");
 });
 
 test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics state`, async ({ page }) => {

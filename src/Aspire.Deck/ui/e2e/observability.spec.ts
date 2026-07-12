@@ -47,23 +47,34 @@ test.afterEach(async ({ page }) => {
   expect(browserErrors.get(page) ?? [], "Unexpected browser errors").toEqual([]);
 });
 
-test(`${features("CONSOLE-RESOURCE-001", "CONSOLE-STREAM-001", "CONSOLE-SWITCH-001", "CONSOLE-FOLLOW-001")} streams and follows each resource console`, async ({ page }) => {
+test(`${features("CONSOLE-RESOURCE-001", "CONSOLE-ALL-001", "CONSOLE-STREAM-001", "CONSOLE-SWITCH-001", "CONSOLE-FOLLOW-001")} streams and follows all or one resource console`, async ({ page }) => {
   await navigationButton(page, "Console").click();
 
   const resourceSelect = page.getByRole("combobox");
-  await expect(resourceSelect.locator("option")).toHaveCount(8);
-  await expect(resourceSelect).toHaveValue("frontend");
+  await expect(resourceSelect.locator("option")).toHaveCount(9);
+  await expect(resourceSelect).toHaveValue("__all-resources__");
 
   const consolePanel = page.locator(".console");
   const lineText = consolePanel.locator(".log-line__text");
+  await expect.poll(() => consolePanel.locator(".log-line__resource").count()).toBeGreaterThanOrEqual(12);
+  await expect.poll(async () => new Set(await consolePanel.locator(".log-line__resource").allTextContents()).size).toBeGreaterThan(1);
+
+  const combinedScrollport = consolePanel.locator(".console__scroll");
+  await combinedScrollport.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll", { bubbles: true }));
+  });
+
+  await resourceSelect.selectOption("frontend");
+  await expect(resourceSelect).toHaveValue("frontend");
   await expect.poll(() => lineText.count()).toBeGreaterThanOrEqual(6);
-  await expect(lineText.first()).toContainText("frontend:");
+  await expect.poll(async () => (await lineText.count()) - (await consolePanel.locator('.log-line[data-resource-name="frontend"]').count())).toBe(0);
   await expect(consolePanel.locator(".console__footer")).toContainText("lines");
 
   await resourceSelect.selectOption("cache");
   await expect(resourceSelect).toHaveValue("cache");
-  await expect(lineText.first()).toContainText("cache:");
-  await expect(consolePanel).not.toContainText("frontend:");
+  await expect.poll(() => consolePanel.locator('.log-line[data-resource-name="cache"]').count()).toBeGreaterThanOrEqual(6);
+  await expect(consolePanel.locator('.log-line[data-resource-name="frontend"]')).toHaveCount(0);
 
   await page.setViewportSize({ width: 1000, height: 320 });
   const scrollport = consolePanel.locator(".console__scroll");
@@ -88,6 +99,74 @@ test(`${features("CONSOLE-RESOURCE-001", "CONSOLE-STREAM-001", "CONSOLE-SWITCH-0
       ),
     )
     .toBeLessThan(24);
+});
+
+test(`${features("CONSOLE-PAUSE-001", "CONSOLE-CLEAR-001")} pauses, catches up, and clears console output`, async ({ page }) => {
+  await navigationButton(page, "Console").click();
+  await page.getByRole("combobox").selectOption("frontend");
+
+  const consolePanel = page.locator(".console");
+  const lineText = consolePanel.locator(".log-line__text");
+  await expect.poll(() => lineText.count()).toBeGreaterThanOrEqual(6);
+
+  const pause = page.getByRole("switch", { name: "Pause incoming data" });
+  await pause.check();
+  const pausedCount = await lineText.count();
+  await expect(consolePanel.locator(".console__footer")).toContainText(/\d+ pending/, { timeout: 4_000 });
+  expect(await lineText.count()).toBe(pausedCount);
+
+  await pause.uncheck();
+  await expect.poll(() => lineText.count()).toBeGreaterThan(pausedCount);
+
+  await page.getByRole("button", { name: "Clear" }).click();
+  await expect(consolePanel.locator(".console__footer")).toContainText("0 lines");
+  await expect.poll(() => lineText.count(), { timeout: 4_000 }).toBeGreaterThan(0);
+});
+
+test(`${features("CONSOLE-COMMANDS-001")} executes selected resource commands with confirmation`, async ({ page }) => {
+  await navigationButton(page, "Console").click();
+  await page.getByRole("combobox").selectOption("frontend");
+
+  await page.getByRole("button", { name: "Restart" }).click();
+  const dialog = page.getByRole("dialog", { name: "Restart" });
+  await expect(dialog).toContainText("Are you sure you want to restart this resource?");
+  await dialog.getByRole("button", { name: "Restart" }).click();
+  await expect(page.getByRole("status").filter({ hasText: "Restart succeeded" })).toBeVisible();
+
+  await page.getByRole("button", { name: "Resource actions" }).click();
+  await expect(page.getByRole("menuitem", { name: /Start/ })).toHaveAttribute("aria-disabled", "true");
+  await expect(page.getByRole("menuitem", { name: /Stop/ })).toBeEnabled();
+});
+
+test(`${features("CONSOLE-ROUTE-001")} restores console resource and display options from the URL`, async ({ page }) => {
+  await navigationButton(page, "Console").click();
+  await page.getByRole("combobox", { name: "Resource" }).selectOption("cache");
+  await expect(page).toHaveURL(/\/consolelogs\/resource\/cache$/);
+
+  await page.getByRole("switch", { name: "Pause incoming data" }).check();
+  await page.getByRole("button", { name: "Console settings" }).click();
+  await page.getByRole("menuitem", { name: "Show timestamps" }).click();
+  await page.getByRole("button", { name: "Console settings" }).click();
+  await page.getByRole("menuitem", { name: "UTC timestamps" }).click();
+  await page.getByRole("button", { name: "Console settings" }).click();
+  await page.getByRole("menuitem", { name: "Wrap lines" }).click();
+
+  const routeState = await page.evaluate(() => ({
+    pathname: window.location.pathname,
+    search: Object.fromEntries(new URLSearchParams(window.location.search)),
+  }));
+  expect(routeState).toEqual({
+    pathname: "/consolelogs/resource/cache",
+    search: { timestamps: "true", utc: "true", wrap: "true", paused: "true" },
+  });
+
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Resource" })).toHaveValue("cache");
+  await expect(page.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
+  await expect(page.locator(".console")).toHaveClass(/console--wrap/);
+  await page.getByRole("button", { name: "Console settings" }).click();
+  await expect(page.getByRole("menuitem", { name: "Hide timestamps" })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "UTC timestamps" })).toBeEnabled();
 });
 
 test(`${features("LOG-LIST-001", "LOG-FILTER-001", "LOG-SEVERITY-001", "LOG-LIVE-001")} lists, filters, and updates structured logs`, async ({ page }) => {
@@ -241,11 +320,15 @@ test(`${features("LOG-TRACE-LINK-001", "TRACE-DETAIL-ROUTE-001")} opens and rest
   const details = page.getByRole("dialog");
   await expect(page.getByRole("main").locator(".page__title")).toHaveText("Traces");
   await expect(page.locator(".wf__trace")).toHaveCount(1);
-  await expect(details.locator(".kv__val.cell-mono")).toHaveText([traceId!, spanId!]);
+  await expect(details.getByRole("group", { name: "Span properties" })).toContainText(`SpanId${spanId}`);
+  await expect(details.getByRole("group", { name: "Context properties" })
+    .getByRole("link", { name: /^Open trace / })).toHaveAttribute("title", traceId!);
 
   await page.reload();
   const restoredDetails = page.getByRole("dialog");
-  await expect(restoredDetails.locator(".kv__val.cell-mono")).toHaveText([traceId!, spanId!]);
+  await expect(restoredDetails.getByRole("group", { name: "Span properties" })).toContainText(`SpanId${spanId}`);
+  await expect(restoredDetails.getByRole("group", { name: "Context properties" })
+    .getByRole("link", { name: /^Open trace / })).toHaveAttribute("title", traceId!);
   await expect(page).toHaveURL(detailUrl.toString());
 
   await page.goBack();
@@ -299,15 +382,21 @@ test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRAC
   const initialRedisSpan = initialTrace.locator(".wf__span").nth(1);
   await initialRedisSpan.press("Enter");
   const keyboardDialog = page.getByRole("dialog", { name: "redis GET" });
-  const traceId = (await keyboardDialog.locator(".kv__val.cell-mono").first().innerText()).trim();
+  const spanProperties = keyboardDialog.getByRole("group", { name: "Span properties" });
+  const contextProperties = keyboardDialog.getByRole("group", { name: "Context properties" });
+  const traceId = await contextProperties.getByRole("link", { name: /^Open trace / }).getAttribute("title");
+  expect(traceId).not.toBeNull();
   expect(traceId).toMatch(/^[0-9a-f]{32}$/);
-  await expect(keyboardDialog).toContainText("Duration18msKindClientStatusOk");
-  await expect(keyboardDialog).toContainText("Span ID");
-  await expect(keyboardDialog).toContainText("Parent");
+  await expect(spanProperties).toContainText("Duration18ms");
+  await expect(spanProperties).toContainText("KindClient");
+  await expect(spanProperties).toContainText("StatusOk");
+  await expect(contextProperties).toContainText("SourceAspire.Deck.MockTelemetry");
+  await expect(keyboardDialog.getByRole("group", { name: "Resource properties" })).toContainText("service.name");
+  await expect(contextProperties.getByRole("link", { name: /^Open parent span / })).toBeVisible();
   await keyboardDialog.getByRole("button", { name: "Close" }).click();
 
   const query = page.getByRole("textbox", { name: "Filter traces…" });
-  await query.fill(traceId.slice(0, 8));
+  await query.fill(traceId!.slice(0, 8));
   await expect(traces).toHaveCount(1);
   const firstTrace = traces.first();
   const traceHeader = firstTrace.locator(".wf__head");
@@ -336,6 +425,78 @@ test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRAC
   await expect(page.getByRole("dialog")).toContainText("StatusError");
 });
 
+test(`${features("TRACE-EVENTS-001", "TRACE-LINKS-001", "TRACE-ACTIONS-001")} explores span events, links, backlinks, and actions`, async ({ page }, testInfo) => {
+  await navigationButton(page, "Traces").click();
+
+  const traces = page.locator(".wf__trace");
+  await expect.poll(() => traces.count()).toBeGreaterThanOrEqual(4);
+
+  const errorTraces = page.locator(".wf__trace--error");
+  await expect.poll(() => errorTraces.count()).toBeGreaterThan(0);
+  const errorSpan = errorTraces.first().locator(".wf__span").filter({ has: page.locator(".wf__error-dot") });
+  await expect(errorSpan).toHaveCount(1);
+  await errorSpan.click();
+
+  const errorDetails = page.getByRole("dialog");
+  const events = errorDetails.getByRole("group", { name: "Span events" });
+  await expect(errorDetails.getByRole("button", { name: "Events 1" })).toBeVisible();
+  await expect(events).toContainText("exception");
+  await expect(events).toContainText("exception.typeSystem.InvalidOperationException");
+  await expect(events).toContainText("exception.messageThe simulated dependency failed.");
+
+  const propertyFilter = errorDetails.getByRole("textbox", { name: "Filter properties…" });
+  await propertyFilter.fill("exception.message");
+  await expect(errorDetails.getByRole("button", { name: "Events 1" })).toBeVisible();
+  await expect(events).toContainText("exception.messageThe simulated dependency failed.");
+  await expect(errorDetails.getByRole("button", { name: "Span 0" })).toBeVisible();
+  await propertyFilter.clear();
+
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await errorDetails.getByRole("button", { name: "Span actions" }).click();
+  const errorActions = page.getByRole("menu", { name: "Span actions" });
+  await expect(errorActions.getByRole("menuitem")).toHaveText([
+    "View related structured logs",
+    "View JSON",
+  ]);
+  await errorActions.getByRole("menuitem", { name: "View JSON" }).click();
+  const jsonViewer = page.getByRole("dialog", { name: /\.json$/ });
+  await expect(jsonViewer.locator("pre[data-format='json']")).toContainText('"name": "exception"');
+  await expect(jsonViewer.locator("pre[data-format='json']")).toContainText('"status"');
+  await jsonViewer.getByRole("button", { name: "Copy" }).click();
+  await expect(jsonViewer.getByRole("status")).toHaveText("Copied");
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toContain('"events"');
+  await jsonViewer.getByRole("button", { name: "Close visualizer" }).click();
+  await errorDetails.getByRole("button", { name: "Close" }).click();
+
+  const sourceRoot = traces.first().locator(".wf__span").first();
+  await sourceRoot.click();
+  const sourceDetails = page.getByRole("dialog");
+  const links = sourceDetails.getByRole("group", { name: "Span links" });
+  await expect(sourceDetails.getByRole("button", { name: "Links 1" })).toBeVisible();
+  await expect(links).toContainText("link.reasonprevious request");
+  const linkedSpan = links.getByRole("link", { name: /^Open linked span / });
+  const linkedTraceId = await linkedSpan.getAttribute("title");
+  const linkedSpanId = (await linkedSpan.innerText()).trim();
+  await linkedSpan.click();
+  await expect(page).toHaveURL(new RegExp(`/traces/detail/${linkedTraceId}\\?.*span=${linkedSpanId}`));
+
+  const linkedDetails = page.getByRole("dialog");
+  const backlinks = linkedDetails.getByRole("group", { name: "Span backlinks" });
+  await expect(linkedDetails.getByRole("button", { name: "Backlinks 1" })).toBeVisible();
+  await expect(backlinks).toContainText("link.reasonprevious request");
+  await expect(backlinks.getByRole("link", { name: /^Open backlink span / })).toBeVisible();
+
+  await linkedDetails.getByRole("button", { name: "Span actions" }).click();
+  await page.getByRole("menu", { name: "Span actions" })
+    .getByRole("menuitem", { name: "View related structured logs" }).click();
+  await expect(page).toHaveURL(new RegExp(`/structuredlogs\\?.*span=${linkedSpanId}`));
+  const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
+  await expect(logs.getByRole("textbox", { name: "Filter messages…" })).toHaveValue(linkedSpanId);
+  await expect(logs.getByRole("table").locator("tbody tr")).toHaveCount(1);
+
+  await attachScreenshot(page, testInfo, "span-related-logs");
+});
+
 test(`${features("TRACE-FILTER-001", "TRACE-DURATION-001")} filters traces by content, identifier, and duration`, async ({ page }) => {
   await navigationButton(page, "Traces").click();
 
@@ -344,12 +505,14 @@ test(`${features("TRACE-FILTER-001", "TRACE-DURATION-001")} filters traces by co
   const redisSpan = traces.first().locator(".wf__span").nth(1);
   await redisSpan.click();
   const dialog = page.getByRole("dialog", { name: "redis GET" });
-  const traceId = (await dialog.locator(".kv__val.cell-mono").first().innerText()).trim();
+  const traceId = await dialog.getByRole("group", { name: "Context properties" })
+    .getByRole("link", { name: /^Open trace / }).getAttribute("title");
+  expect(traceId).not.toBeNull();
   expect(traceId).toMatch(/^[0-9a-f]{32}$/);
   await dialog.getByRole("button", { name: "Close" }).click();
 
   const query = page.getByRole("textbox", { name: "Filter traces…" });
-  await query.fill(traceId.slice(0, 8));
+  await query.fill(traceId!.slice(0, 8));
   await expect(traces).toHaveCount(1);
 
   await query.fill("redis GET");

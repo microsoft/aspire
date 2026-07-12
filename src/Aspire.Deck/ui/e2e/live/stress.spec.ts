@@ -434,14 +434,26 @@ test(`${features("STRESS-TRACES-001")} replays live Stress traces and opens span
   const traces = page.getByRole("main").getByRole("region", { name: "Traces" });
   await expect.poll(() => traces.locator(".wf__trace").count(), { timeout: 45_000 }).toBeGreaterThan(0);
   await expect.poll(() => traces.locator(".wf__span").count()).toBeGreaterThan(0);
-  await expect(traces.locator(".page__subtitle")).toContainText(/\d+ traces · \d+ spans/);
+  await expect(traces.locator(".page__subtitle")).toContainText(/[\d,]+ traces · [\d,]+ spans/);
 
   await traces.locator(".wf__span").first().click();
   const details = page.getByRole("dialog");
   await expect(details).toBeVisible();
-  const identifiers = details.locator(".kv__val.cell-mono");
-  await expect(identifiers.nth(0)).toHaveText(/^[0-9a-f]{32}$/);
-  await expect(identifiers.nth(1)).toHaveText(/^[0-9a-f]{16}$/);
+  const spanProperties = details.getByRole("group", { name: "Span properties" });
+  const contextProperties = details.getByRole("group", { name: "Context properties" });
+  const resourceProperties = details.getByRole("group", { name: "Resource properties" });
+  await expect(spanProperties.locator(".kv__val.cell-mono")).toHaveText(/^[0-9a-f]{16}$/);
+  await expect(spanProperties).toContainText("Name");
+  await expect(spanProperties).toContainText("Kind");
+  await expect(spanProperties).toContainText("Duration");
+  await expect(contextProperties.getByRole("link", { name: /^Open trace / })).toHaveAttribute(
+    "title",
+    /^[0-9a-f]{32}$/,
+  );
+  await expect(contextProperties).toContainText("Source");
+  await expect(contextProperties).not.toContainText("Sourceunknown");
+  await expect(resourceProperties).toContainText("service.name");
+  await expect(resourceProperties).toContainText("service.instance.id");
   await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}.*span=[0-9a-f]{16}/);
 
   await attachScreenshot(page, testInfo, "stress-live-traces");

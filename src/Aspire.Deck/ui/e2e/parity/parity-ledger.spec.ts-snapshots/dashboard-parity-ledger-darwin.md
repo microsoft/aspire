@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 39
-- React partial: 42
-- React missing: 77
+- React covered: 52
+- React partial: 39
+- React missing: 67
 - Legacy black-box scenarios pending: 80
-- React parity gaps: 119
+- React parity gaps: 106
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -98,22 +98,22 @@
 | CMD-RESULT-MARKDOWN-001 | commands | `/` | PENDING | missing | - | Markdown command results render tables and rich content safely. |
 | CMD-RESULT-IMMEDIATE-001 | commands | `/` | PENDING | missing | - | DisplayImmediately command results open without requiring a second action. |
 | CMD-PROCESS-001 | commands | `/` | PENDING | missing | - | Process command stdout, stderr, exit status, line limits, stdin, environment, and working directory are represented. |
-| CONSOLE-RESOURCE-001 | console | `/consolelogs` | console | partial | CONSOLE-RESOURCE-001 | A grouped resource picker selects one resource or all resources. |
+| CONSOLE-RESOURCE-001 | console | `/consolelogs` | console | covered | CONSOLE-RESOURCE-001; CONSOLE-ALL-001; TK-SELECT-001 | A grouped resource picker selects one resource or all resources. |
 | CONSOLE-BACKLOG-001 | console | `/consolelogs` | console | covered | CONSOLE-STREAM-001; HTTP-CONSOLE-001; STRESS-CONSOLE-001 | Selecting a resource loads the existing console backlog. |
-| CONSOLE-LIVE-001 | console | `/consolelogs` | console | partial | CONSOLE-STREAM-001 | New stdout and stderr lines stream without reloading the page. |
-| CONSOLE-SWITCH-001 | console | `/consolelogs` | PENDING | partial | CONSOLE-SWITCH-001 | Switching resources replaces the visible stream and subscription. |
+| CONSOLE-LIVE-001 | console | `/consolelogs` | console | covered | CONSOLE-STREAM-001; STRESS-CONSOLE-001 | New stdout and stderr lines stream without reloading the page. |
+| CONSOLE-SWITCH-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-SWITCH-001 | Switching resources replaces the visible stream and subscription. |
 | CONSOLE-FOLLOW-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-FOLLOW-001 | Manual scrolling pauses tail-follow and the user can return to the live tail. |
-| CONSOLE-PAUSE-001 | console | `/consolelogs` | console | missing | - | Incoming console data can be paused and resumed without losing context. |
-| CONSOLE-CLEAR-001 | console | `/consolelogs` | console | missing | - | Console data can be cleared for the selected resource or all resources. |
-| CONSOLE-DOWNLOAD-001 | console | `/consolelogs` | PENDING | missing | - | The current console log can be downloaded. |
-| CONSOLE-TIMESTAMP-001 | console | `/consolelogs` | PENDING | missing | - | Timestamp visibility and UTC/local formatting can be toggled. |
-| CONSOLE-WRAP-001 | console | `/consolelogs` | PENDING | missing | - | Long console lines can wrap or scroll horizontally. |
-| CONSOLE-COMMANDS-001 | console | `/consolelogs` | PENDING | missing | - | Commands for the selected resource are available from the console toolbar. |
+| CONSOLE-PAUSE-001 | console | `/consolelogs` | console | covered | CONSOLE-PAUSE-001; CONSOLE-ROUTE-001 | Incoming console data can be paused and resumed without losing context. |
+| CONSOLE-CLEAR-001 | console | `/consolelogs` | console | partial | CONSOLE-CLEAR-001 | Console data can be cleared for the selected resource or all resources. |
+| CONSOLE-DOWNLOAD-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001 | The current console log can be downloaded. |
+| CONSOLE-TIMESTAMP-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Timestamp visibility and UTC/local formatting can be toggled. |
+| CONSOLE-WRAP-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Long console lines can wrap or scroll horizontally. |
+| CONSOLE-COMMANDS-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-COMMANDS-001 | Commands for the selected resource are available from the console toolbar. |
 | CONSOLE-TERMINAL-001 | console | `/consolelogs` | PENDING | missing | - | Interactive resources render a terminal and can take or release control. |
 | CONSOLE-TERMINAL-FONT-001 | console | `/consolelogs` | PENDING | missing | - | Interactive terminal font size can be increased, decreased, and reset. |
 | CONSOLE-TERMINAL-SIZE-001 | console | `/consolelogs` | PENDING | missing | - | Interactive terminal column and row presets update the remote terminal size. |
 | CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | PENDING | partial | CONSOLE-STREAM-001 | Large console streams remain responsive and preserve stable line numbers. |
-| CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | PENDING | missing | - | Selected resource and console options are deep-linkable and restorable. |
+| CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | PENDING | covered | CONSOLE-ROUTE-001 | Selected resource and console options are deep-linkable and restorable. |
 | LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIST-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
 | LOG-LIVE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | New structured logs stream into the list and update totals. |
 | LOG-RESOURCE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-RESOURCE-001; STRESS-STRUCTURED-LOG-RESOURCE-001 | Logs filter through a grouped resource selector. |
@@ -137,17 +137,17 @@
 | TRACE-TEXT-FILTER-001 | traces | `/traces` | traces | covered | TRACE-FILTER-001 | Traces filter by operation, resource, and trace identifiers. |
 | TRACE-STRUCTURED-FILTER-001 | traces | `/traces` | traces | missing | - | Structured trace and span filters can be composed and managed. |
 | TRACE-DURATION-001 | traces | `/traces` | traces | partial | TRACE-DURATION-001 | Trace and span duration is represented consistently at different scales. |
-| TRACE-ERROR-001 | traces | `/traces` | PENDING | partial | TRACE-ERROR-001 | Failed traces and spans expose status, tags, and error styling. |
+| TRACE-ERROR-001 | traces | `/traces` | PENDING | covered | TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001 | Failed traces and spans expose status, tags, and error styling. |
 | TRACE-PAUSE-001 | traces | `/traces` | traces | missing | - | Incoming traces can be paused and resumed. |
 | TRACE-CLEAR-001 | traces | `/traces` | traces | missing | - | Trace data can be cleared for the selected resource or all resources. |
 | TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | missing | - | Large trace inventories remain responsive through virtualization. |
-| TRACE-ACTIONS-001 | traces | `/traces` | traces | missing | - | Per-trace actions expose detail, copy, and related telemetry navigation. |
+| TRACE-ACTIONS-001 | traces | `/traces` | traces | partial | TRACE-ACTIONS-001 | Per-trace actions expose detail, copy, and related telemetry navigation. |
 | TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |
 | TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-LIST-001; TRACE-COLLAPSE-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |
 | TRACE-EXPAND-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-COLLAPSE-001 | Trace detail supports individual and expand-all/collapse-all span control. |
-| TRACE-SPAN-DETAILS-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-DETAILS-001 | Span details include identifiers, timing, status, attributes, resource, and instrumentation scope. |
-| TRACE-EVENTS-001 | traces | `/traces/detail/{traceId}` | PENDING | missing | - | Span events and exception details preserve timestamps and attributes. |
-| TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | PENDING | missing | - | Span links navigate to related traces and preserve link attributes. |
+| TRACE-SPAN-DETAILS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAILS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Span details include identifiers, timing, status, attributes, resource, and instrumentation scope. |
+| TRACE-EVENTS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-EVENTS-001; HTTP-TRACES-001 | Span events and exception details preserve timestamps and attributes. |
+| TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |
 | TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | PENDING | missing | - | GenAI spans and traces open the dedicated GenAI visualizer. |
 | TRACE-EXPLAIN-001 | traces | `/traces` | PENDING | missing | - | Explain errors summarizes current failed traces through the assistant. |
 | TRACE-SESSION-001 | traces | `/traces` | PENDING | missing | - | Resource, type, filters, and selection are deep-linkable and restorable. |
