@@ -110,16 +110,26 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             //
             // - KUBECONFIG: az/kubectl honor it, so `az aks get-credentials` writes here and every
             //   kube-touching command uses this file. Removed with the workspace on dispose. Note
-            //   `rad install kubernetes` does NOT fully honor KUBECONFIG (its Contour gateway config
-            //   reads the default ~/.kube/config), which is why Step 8b symlinks the default path.
-            // - rad config: `rad` only accepts a `--config` flag (no config env var), and `aspire deploy`
-            //   spawns `rad deploy` internally (FileName="rad", UseShellExecute=false -> PATH lookup;
-            //   see src/Aspire.Hosting.Radius/Publishing/RadiusDeploymentPipelineStep.cs). So we shadow
-            //   `rad` with a workspace-local shim earlier on PATH that injects
-            //   `--config <ws>/.rad/config.yaml` into every invocation (global flag, valid before any
-            //   subcommand). REAL_RAD is resolved BEFORE prepending the shim dir, so the shim never
-            //   recurses. This isolates the config file and its lock without backing up/restoring the
-            //   user's real config (which would race with any concurrent `rad` for the ~55-min run).
+            //   several `rad` subcommands do NOT honor KUBECONFIG (they read the default
+            //   ~/.kube/config), which is handled by the rad shim's workspace-local HOME below.
+            // - rad config + HOME: `rad` only accepts a `--config` flag (no config env var), and
+            //   `aspire deploy` spawns `rad deploy` internally (FileName="rad", UseShellExecute=false
+            //   -> PATH lookup; see src/Aspire.Hosting.Radius/Publishing/RadiusDeploymentPipelineStep.cs).
+            //   Several `rad` subcommands (e.g. `rad install kubernetes`'s Contour gateway config, and
+            //   `rad workspace create kubernetes`) read the DEFAULT kubeconfig at $HOME/.kube/config
+            //   directly and do NOT honor KUBECONFIG, unlike az/kubectl. So we shadow `rad` with a
+            //   workspace-local shim earlier on PATH that (a) injects `--config <ws>/.rad/config.yaml`
+            //   into every invocation (global flag, valid before any subcommand) and (b) exports
+            //   HOME=<ws>/home, whose .kube/config is symlinked to our isolated $KUBECONFIG below.
+            //   Setting HOME in the shim rather than on individual commands ensures EVERY `rad` -
+            //   including the `rad deploy` that `aspire deploy` spawns, which we cannot env-prefix -
+            //   reads the isolated kubeconfig, and it never touches the developer's real ~/.kube/config
+            //   or ~/.rad. az/kubectl/docker/aspire keep the real HOME (they use KUBECONFIG/DOCKER_CONFIG
+            //   env vars). REAL_RAD is resolved BEFORE prepending the shim dir, so the shim never
+            //   recurses. The symlink target ($KUBECONFIG) is written by `az aks get-credentials`
+            //   (Step 7) before the first `rad` runs (Step 9), so creating it here as a dangling link
+            //   is fine. Everything lives under the TemporaryWorkspace and is removed on dispose, so
+            //   there is nothing to back up or restore (avoiding a race with any concurrent `rad`).
             // - DOCKER_CONFIG: the documented override directory for Docker's config.json. `az acr login`
             //   shells out to `docker login`, and `dotnet publish /t:PublishContainer` reads the same
             //   config, so both authenticate against this throwaway dir instead of ~/.docker.
@@ -127,9 +137,10 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1b: Isolating kubeconfig, rad config, and docker credentials to the workspace...");
             await auto.TypeAsync(
                 $"REAL_RAD=\"$(command -v rad)\" && " +
-                $"mkdir -p \"{wsRoot}/bin\" \"{wsRoot}/.rad\" \"{wsRoot}/.kube\" \"{wsRoot}/.docker\" && " +
-                $"printf '#!/usr/bin/env bash\\nexec \"%s\" --config \"%s\" \"$@\"\\n' \"$REAL_RAD\" \"{wsRoot}/.rad/config.yaml\" > \"{wsRoot}/bin/rad\" && " +
+                $"mkdir -p \"{wsRoot}/bin\" \"{wsRoot}/.rad\" \"{wsRoot}/.kube\" \"{wsRoot}/.docker\" \"{wsRoot}/home/.kube\" && " +
+                $"printf '#!/usr/bin/env bash\\nexport HOME=\"%s\"\\nexec \"%s\" --config \"%s\" \"$@\"\\n' \"{wsRoot}/home\" \"$REAL_RAD\" \"{wsRoot}/.rad/config.yaml\" > \"{wsRoot}/bin/rad\" && " +
                 $"chmod +x \"{wsRoot}/bin/rad\" && " +
+                $"ln -sf \"{wsRoot}/.kube/config\" \"{wsRoot}/home/.kube/config\" && " +
                 $"export PATH=\"{wsRoot}/bin:$PATH\" && " +
                 $"export KUBECONFIG=\"{wsRoot}/.kube/config\" && " +
                 $"export DOCKER_CONFIG=\"{wsRoot}/.docker\"");
@@ -194,37 +205,16 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 8b: Stage the isolated kubeconfig under a workspace-local HOME for `rad install`.
-            // `rad install kubernetes` configures the Contour gateway through a code path that reads
-            // the default kubeconfig location ($HOME/.kube/config) directly and does NOT honor the
-            // KUBECONFIG environment variable, unlike az/kubectl. With our isolated $KUBECONFIG
-            // (Step 1b) and no override, that step fails with
-            // "failed to initialize Kubernetes client config: open ~/.kube/config: no such file or directory".
-            //
-            // Rather than shadow (and later restore) the developer's real ~/.kube/config for the
-            // ~55-minute run — which would leak the test cluster into any concurrent kubectl/rad and
-            // risk losing a kubeconfig update made by another process — we create a private HOME under
-            // the TemporaryWorkspace and point its .kube/config at our isolated $KUBECONFIG. Step 9
-            // then runs `rad install` with HOME set to this directory, so the Contour code reads the
-            // isolated config and the developer's real ~/.kube/config is never touched. The workspace
-            // (and this HOME) is removed on dispose, so there is nothing to restore.
-            output.WriteLine("Step 8b: Staging an isolated kubeconfig under a workspace-local HOME for rad install...");
-            await auto.TypeAsync(
-                $"mkdir -p \"{wsRoot}/home/.kube\" && " +
-                $"ln -sf \"$KUBECONFIG\" \"{wsRoot}/home/.kube/config\"");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
-
             // ===== PHASE 2: Install the Radius control plane on the cluster =====
 
-            // Install the Radius control plane. The `rad` CLI version is pinned by the
-            // "Setup Radius" workflow step, and `rad install kubernetes` installs the matching
-            // control plane onto the current kube context. HOME is overridden for this one command
-            // only so Contour's default-path kubeconfig read (Step 8b) resolves to our isolated
-            // config; PATH still routes `rad` through the Step 1b shim, so config writes land in the
-            // workspace-local <ws>/.rad/config.yaml regardless of HOME.
+            // Install the Radius control plane. The `rad` CLI version is pinned by the "Setup Radius"
+            // workflow step, and `rad install kubernetes` installs the matching control plane onto the
+            // current kube context. This (and every other `rad`) runs through the Step 1b shim, so its
+            // Contour gateway config - which reads the default-path kubeconfig ($HOME/.kube/config) and
+            // ignores KUBECONFIG - resolves to our isolated config via the shim's workspace-local HOME,
+            // and config writes land in the workspace-local <ws>/.rad/config.yaml.
             output.WriteLine("Step 9: Installing the Radius control plane onto the cluster...");
-            await auto.TypeAsync($"HOME=\"{wsRoot}/home\" rad install kubernetes");
+            await auto.TypeAsync("rad install kubernetes");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
 
