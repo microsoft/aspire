@@ -284,7 +284,40 @@ test(`${features("structured-logs")} inventories structured log controls and row
     await expect(page.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
   }
   const table = page.getByRole("table");
-  await expect(table.getByRole("row").filter({ hasText: "Stress.ApiService" }).first()).toBeVisible({ timeout: 45_000 });
+  const startupRow = table.getByRole("row").filter({ hasText: "Now listening on:" }).first();
+  await expect(startupRow).toBeVisible({ timeout: 45_000 });
+
+  await startupRow.getByRole("cell").first().click();
+  const details = page.locator("aside.drawer[role='dialog']");
+  await expect(details).toBeVisible();
+  await expect(details).toContainText("ListeningOnAddress");
+  await expect(details).toContainText("Microsoft.Hosting.Lifetime");
+  await expect(details).toContainText("Now listening on:");
+  await expect(details).toContainText("Category");
+  await expect(details).toContainText("service.name");
+  await expect(details).toContainText("Stress.ApiService");
+
+  await details.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Log message", exact: true }).click();
+  let visualizer = page.locator("fluent-dialog");
+  await expect(visualizer).toContainText("Now listening on:");
+  await expect(visualizer.getByRole("button", { name: "Copy to clipboard", exact: true })).toBeVisible();
+  await visualizer.getByRole("button", { name: "Close", exact: true }).click();
+
+  await details.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "View JSON", exact: true }).click();
+  visualizer = page.locator("fluent-dialog");
+  await expect(visualizer).toContainText(/log-\d+\.json/);
+  await expect(visualizer).toContainText('"name": "Microsoft.Hosting.Lifetime"');
+  await expect(visualizer).toContainText('"key": "service.name"');
+  await expect(visualizer).toContainText('"stringValue": "Stress.ApiService"');
+  await expect(visualizer.getByRole("button", { name: "Copy to clipboard", exact: true })).toBeVisible();
+  await visualizer.getByRole("button", { name: "Close", exact: true }).click();
+  await details.getByRole("button", { name: "Close", exact: true }).click();
+
+  await startupRow.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "View details", exact: true }).click();
+  await expect(details).toBeVisible();
   await attachScreenshot(page, testInfo, "legacy-structured-logs");
 });
 

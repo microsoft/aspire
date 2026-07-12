@@ -168,7 +168,7 @@ const featureDefinitions = {
     ["LOG-PAUSE-001", "/structuredlogs", "Incoming structured logs can be paused and resumed.", "structured-logs", "covered", "LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001"],
     ["LOG-CLEAR-001", "/structuredlogs", "Structured logs can be cleared for the selected resource or all resources.", "structured-logs", "covered", "HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001"],
     ["LOG-VIRTUALIZATION-001", "/structuredlogs", "Large log volumes remain responsive through row virtualization.", null, "covered", "HTTP-STRUCTURED-LOG-VIRTUALIZATION-001"],
-    ["LOG-DETAILS-001", "/structuredlogs", "Selecting a log opens complete event, scope, resource, and attribute details.", null, "covered", "LOG-DETAILS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001"],
+    ["LOG-DETAILS-001", "/structuredlogs", "Selecting a log opens complete event, scope, resource, and attribute details.", "structured-logs", "covered", "LOG-DETAILS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001"],
     ["LOG-ACTIONS-001", "/structuredlogs", "Per-log actions expose details, text/JSON visualizers, copy, and related navigation.", null, "covered", "LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001"],
     ["LOG-TRACE-LINK-001", "/structuredlogs", "Trace IDs deep-link to the matching trace and span.", null, "covered", "LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001"],
     ["LOG-GENAI-001", "/structuredlogs", "GenAI log records open the dedicated GenAI visualizer.", null, "covered", "LOG-GENAI-001"],
