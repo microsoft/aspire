@@ -164,7 +164,7 @@ const featureDefinitions = {
     ["LOG-LEVEL-001", "/structuredlogs", "All supported severity levels can be selected.", "structured-logs", "covered", "LOG-SEVERITY-001"],
     ["LOG-TEXT-FILTER-001", "/structuredlogs", "Logs filter across resource and message content.", "structured-logs", "covered", "LOG-FILTER-001"],
     ["LOG-STRUCTURED-FILTER-001", "/structuredlogs", "Structured attribute filters can be added, edited, enabled, disabled, and removed.", "structured-logs", "covered", "LOG-STRUCTURED-FILTER-001; TK-STRUCTURED-FILTER-001"],
-    ["LOG-FILTER-COUNT-001", "/structuredlogs", "Enabled structured filters expose a count and management menu.", null, "covered", "LOG-FILTER-COUNT-001"],
+    ["LOG-FILTER-COUNT-001", "/structuredlogs", "Enabled structured filters expose a count and management menu.", "structured-logs", "covered", "LOG-FILTER-COUNT-001"],
     ["LOG-PAUSE-001", "/structuredlogs", "Incoming structured logs can be paused and resumed.", "structured-logs", "covered", "LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001"],
     ["LOG-CLEAR-001", "/structuredlogs", "Structured logs can be cleared for the selected resource or all resources.", "structured-logs", "covered", "HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001"],
     ["LOG-VIRTUALIZATION-001", "/structuredlogs", "Large log volumes remain responsive through row virtualization.", null, "covered", "HTTP-STRUCTURED-LOG-VIRTUALIZATION-001"],

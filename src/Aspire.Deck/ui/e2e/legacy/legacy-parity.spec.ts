@@ -292,6 +292,40 @@ test(`${features("structured-logs")} inventories structured log controls and row
   for (const header of ["Resource", "Level", "Timestamp", "Message", "Trace", "Actions"]) {
     await expect(page.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
   }
+
+  await page.getByRole("button", { name: "Add filter", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Add filter", exact: true })).toBeVisible();
+  await page.getByRole("combobox", { name: "Value", exact: true }).fill("Hosting environment");
+  await page.getByRole("button", { name: "Apply filter", exact: true }).click();
+
+  const filterToolbar = page.locator(".deck-structured-toolbar");
+  const filtersButton = filterToolbar.getByRole("button", { name: "Filters", exact: true });
+  await expect(filtersButton).toBeVisible();
+  await expect(filterToolbar.getByText("1", { exact: true })).toBeVisible();
+
+  await filtersButton.click();
+  await expect(page.getByRole("menuitem", { name: "Message contains Hosting environment", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Disable all", exact: true })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: "Remove all", exact: true })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Disable all", exact: true }).click();
+  await expect(filterToolbar.getByText("1", { exact: true })).toHaveCount(0);
+
+  await filtersButton.click();
+  await expect(page.getByRole("menuitem", { name: "Enable all", exact: true })).toBeVisible();
+  await page.getByRole("menuitem", { name: "Enable all", exact: true }).click();
+  await expect(filterToolbar.getByText("1", { exact: true })).toBeVisible();
+
+  await filtersButton.click();
+  await page.getByRole("menuitem", { name: "Message contains Hosting environment", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Edit filter", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Disable filter", exact: true })).toBeVisible();
+  await expect(page.getByRole("button", { name: "Remove filter", exact: true })).toBeVisible();
+  await page.getByRole("button", { name: "Cancel", exact: true }).click();
+
+  await filtersButton.click();
+  await page.getByRole("menuitem", { name: "Remove all", exact: true }).click();
+  await expect(filtersButton).toHaveCount(0);
+
   const table = page.getByRole("table");
   const startupRow = table.getByRole("row").filter({ hasText: "Now listening on:" }).first();
   await expect(startupRow).toBeVisible({ timeout: 45_000 });

@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 30
+- Legacy black-box scenarios pending: 29
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -119,7 +119,7 @@
 | LOG-LEVEL-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-SEVERITY-001 | All supported severity levels can be selected. |
 | LOG-TEXT-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-FILTER-001 | Logs filter across resource and message content. |
 | LOG-STRUCTURED-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-STRUCTURED-FILTER-001; TK-STRUCTURED-FILTER-001 | Structured attribute filters can be added, edited, enabled, disabled, and removed. |
-| LOG-FILTER-COUNT-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-FILTER-COUNT-001 | Enabled structured filters expose a count and management menu. |
+| LOG-FILTER-COUNT-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-FILTER-COUNT-001 | Enabled structured filters expose a count and management menu. |
 | LOG-PAUSE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001 | Incoming structured logs can be paused and resumed. |
 | LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | covered | HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001 | Structured logs can be cleared for the selected resource or all resources. |
 | LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | PENDING | covered | HTTP-STRUCTURED-LOG-VIRTUALIZATION-001 | Large log volumes remain responsive through row virtualization. |
