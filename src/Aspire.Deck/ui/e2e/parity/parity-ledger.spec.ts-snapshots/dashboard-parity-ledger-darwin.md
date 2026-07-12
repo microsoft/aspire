@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 52
+- React covered: 57
 - React partial: 39
-- React missing: 67
+- React missing: 62
 - Legacy black-box scenarios pending: 80
-- React parity gaps: 106
+- React parity gaps: 101
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -132,14 +132,14 @@
 | LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | PENDING | missing | - | Resource selection, filters, and selected log are deep-linkable and restorable. |
 | TRACE-LIST-001 | traces | `/traces` | traces | partial | TRACE-LIST-001; HTTP-TRACES-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
 | TRACE-LIVE-001 | traces | `/traces` | traces | covered | TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001 | Incoming spans update trace groups and totals without reloading the page. |
-| TRACE-RESOURCE-001 | traces | `/traces` | traces | missing | - | Traces filter through a grouped resource selector. |
-| TRACE-TYPE-001 | traces | `/traces` | traces | missing | - | HTTP, database, messaging, RPC, GenAI, cloud, and other span types can be selected. |
+| TRACE-RESOURCE-001 | traces | `/traces` | traces | covered | TRACE-RESOURCE-001 | Traces filter through a grouped resource selector. |
+| TRACE-TYPE-001 | traces | `/traces` | traces | covered | TRACE-TYPE-001 | HTTP, database, messaging, RPC, GenAI, cloud, and other span types can be selected. |
 | TRACE-TEXT-FILTER-001 | traces | `/traces` | traces | covered | TRACE-FILTER-001 | Traces filter by operation, resource, and trace identifiers. |
 | TRACE-STRUCTURED-FILTER-001 | traces | `/traces` | traces | missing | - | Structured trace and span filters can be composed and managed. |
 | TRACE-DURATION-001 | traces | `/traces` | traces | partial | TRACE-DURATION-001 | Trace and span duration is represented consistently at different scales. |
 | TRACE-ERROR-001 | traces | `/traces` | PENDING | covered | TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001 | Failed traces and spans expose status, tags, and error styling. |
-| TRACE-PAUSE-001 | traces | `/traces` | traces | missing | - | Incoming traces can be paused and resumed. |
-| TRACE-CLEAR-001 | traces | `/traces` | traces | missing | - | Trace data can be cleared for the selected resource or all resources. |
+| TRACE-PAUSE-001 | traces | `/traces` | traces | covered | TRACE-PAUSE-001 | Incoming traces can be paused and resumed. |
+| TRACE-CLEAR-001 | traces | `/traces` | traces | covered | TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001 | Trace data can be cleared for the selected resource or all resources. |
 | TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | missing | - | Large trace inventories remain responsive through virtualization. |
 | TRACE-ACTIONS-001 | traces | `/traces` | traces | partial | TRACE-ACTIONS-001 | Per-trace actions expose detail, copy, and related telemetry navigation. |
 | TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |
@@ -150,7 +150,7 @@
 | TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |
 | TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | PENDING | missing | - | GenAI spans and traces open the dedicated GenAI visualizer. |
 | TRACE-EXPLAIN-001 | traces | `/traces` | PENDING | missing | - | Explain errors summarizes current failed traces through the assistant. |
-| TRACE-SESSION-001 | traces | `/traces` | PENDING | missing | - | Resource, type, filters, and selection are deep-linkable and restorable. |
+| TRACE-SESSION-001 | traces | `/traces` | PENDING | covered | TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001 | Resource, type, filters, and selection are deep-linkable and restorable. |
 | METRIC-RESOURCE-001 | metrics | `/metrics` | metrics | missing | - | Metrics require and preserve a selected telemetry resource. |
 | METRIC-TREE-001 | metrics | `/metrics` | PENDING | missing | - | Meters and instruments render in a searchable hierarchical selector. |
 | METRIC-METADATA-001 | metrics | `/metrics` | PENDING | partial | METRIC-SELECT-001 | Instrument name, description, unit, type, and meter metadata are visible. |

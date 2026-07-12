@@ -137,18 +137,41 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
               <TracesPage
                 routeTraceId={route.traceId ?? null}
                 routeSpanId={route.spanId ?? null}
+                routeResourceName={route.traceResourceName ?? null}
+                routeType={route.traceType ?? "all"}
+                routeQuery={route.traceQuery ?? ""}
+                routeMinDurationMs={route.traceMinDurationMs ?? 0}
+                routePaused={route.tracePaused ?? false}
+                onFilterRouteChange={(traceState) => navigate({
+                  ...route,
+                  page: "traces",
+                  traceId: undefined,
+                  spanId: undefined,
+                  traceResourceName: traceState.resourceName ?? undefined,
+                  traceType: traceState.type === "all" ? undefined : traceState.type,
+                  traceQuery: traceState.query || undefined,
+                  traceMinDurationMs: traceState.minDurationMs || undefined,
+                  tracePaused: traceState.paused || undefined,
+                })}
                 onSelectSpan={(span) => navigate({
+                  ...route,
                   page: "traces",
                   traceId: span.traceId,
                   spanId: span.spanId,
                 })}
                 onNavigateToSpan={(traceId, spanId) => navigate({
+                  ...route,
                   page: "traces",
                   traceId,
                   spanId: spanId ?? undefined,
                 })}
                 onNavigateToLogs={(spanId) => navigate({ page: "logs", spanId })}
-                onCloseDetails={() => navigate({ page: "traces" })}
+                onCloseDetails={() => navigate({
+                  ...route,
+                  page: "traces",
+                  traceId: undefined,
+                  spanId: undefined,
+                })}
               />
             ) : null}
             {page === "metrics" ? <MetricsPage /> : null}

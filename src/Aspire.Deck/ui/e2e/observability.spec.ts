@@ -530,6 +530,89 @@ test(`${features("TRACE-FILTER-001", "TRACE-DURATION-001")} filters traces by co
   await expect(page.getByText("No traces match your filter.", { exact: true })).toBeVisible();
 });
 
+test(`${features("TRACE-RESOURCE-001", "TRACE-TYPE-001", "TRACE-PAUSE-001", "TRACE-SESSION-001")} filters, pauses, and restores trace inventory state`, async ({ page }) => {
+  await navigationButton(page, "Traces").click();
+
+  const tracesPage = page.getByRole("main").getByRole("region", { name: "Traces" });
+  const traces = tracesPage.locator(".wf__trace");
+  await expect.poll(() => traces.count()).toBeGreaterThanOrEqual(4);
+
+  const pause = tracesPage.getByRole("switch", { name: "Pause incoming data" });
+  await pause.check();
+  const pausedTraceCount = await traces.count();
+  await expect(tracesPage.locator(".page__subtitle")).toContainText("paused");
+
+  const readNavigationCount = async (): Promise<number> =>
+    Number((await navigationButton(page, "Traces").innerText()).match(/(\d+)$/)?.[1]);
+  await expect.poll(readNavigationCount, { timeout: 6_000 }).toBeGreaterThan(pausedTraceCount);
+  expect(await traces.count()).toBe(pausedTraceCount);
+
+  const resource = tracesPage.getByRole("combobox", { name: "Resource" });
+  await expect(resource.locator("optgroup")).toHaveCount(4);
+  await resource.selectOption("frontend");
+  await expect.poll(() => traces.count()).toBeGreaterThan(0);
+  expect(await traces.count()).toBeLessThan(pausedTraceCount);
+
+  const type = tracesPage.getByRole("combobox", { name: "Span type" });
+  await expect(type.locator("option")).toHaveText([
+    "All span types",
+    "HTTP",
+    "Database",
+    "Messaging",
+    "RPC",
+    "Generative AI",
+    "Cloud",
+    "Other",
+  ]);
+  await type.selectOption("genai");
+  await expect(page.getByText("No traces match your filter.", { exact: true })).toBeVisible();
+  await type.selectOption("database");
+  await expect.poll(() => traces.count()).toBeGreaterThan(0);
+
+  await tracesPage.getByRole("textbox", { name: "Filter traces…" }).fill("redis");
+  await tracesPage.getByRole("combobox", { name: "Min duration" }).selectOption("5");
+  const route = await page.evaluate(() => ({
+    pathname: window.location.pathname,
+    search: Object.fromEntries(new URLSearchParams(window.location.search)),
+  }));
+  expect(route).toEqual({
+    pathname: "/traces",
+    search: {
+      resource: "frontend",
+      type: "database",
+      q: "redis",
+      minDuration: "5",
+      paused: "true",
+    },
+  });
+
+  await page.reload();
+  await expect(page.getByRole("combobox", { name: "Resource" })).toHaveValue("frontend");
+  await expect(page.getByRole("combobox", { name: "Span type" })).toHaveValue("database");
+  await expect(page.getByRole("textbox", { name: "Filter traces…" })).toHaveValue("redis");
+  await expect(page.getByRole("combobox", { name: "Min duration" })).toHaveValue("5");
+  await expect(page.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
+  await expect(page.locator(".page__subtitle")).toContainText("paused");
+});
+
+test(`${features("TRACE-CLEAR-001")} clears selected and all trace telemetry`, async ({ page }) => {
+  await navigationButton(page, "Traces").click();
+  const tracesPage = page.getByRole("main").getByRole("region", { name: "Traces" });
+  await expect.poll(() => tracesPage.locator(".wf__trace").count()).toBeGreaterThanOrEqual(4);
+
+  await tracesPage.getByRole("switch", { name: "Pause incoming data" }).check();
+  await tracesPage.getByRole("combobox", { name: "Resource" }).selectOption("frontend");
+  await tracesPage.getByRole("button", { name: "Clear traces" }).click();
+  await page.getByRole("menuitem", { name: "Clear frontend" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared traces for frontend.");
+  await expect(tracesPage.getByRole("combobox", { name: "Resource" })).toHaveValue("all");
+
+  await tracesPage.getByRole("button", { name: "Clear traces" }).click();
+  await page.getByRole("menuitem", { name: "Clear all resources" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared all traces.");
+  await expect(tracesPage).toContainText("No traces match your filter.");
+});
+
 test(`${features("METRIC-LIST-001", "METRIC-SELECT-001", "METRIC-CHART-001", "METRIC-CURSOR-001", "METRIC-PAUSE-001", "METRIC-RANGE-001", "METRIC-ZOOM-001")} explores live metric series`, async ({ page }, testInfo) => {
   await navigationButton(page, "Metrics").click();
 

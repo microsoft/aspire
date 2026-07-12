@@ -814,7 +814,7 @@ class MockBackend {
     // interaction tests always exercise both successful and failed traces.
     const telemetryIndex = this.telemetryTick++;
     const isErr = telemetryIndex % 4 === 0;
-    const resourceName = this.resources[Math.floor(Math.random() * 3)]?.name ?? "frontend";
+    const resourceName = this.resources[telemetryIndex % 3]?.name ?? "frontend";
     const traceId = indexedHex(telemetryIndex + 1, 32);
     const spanIdBase = telemetryIndex * 8 + 1;
     const spanId = indexedHex(spanIdBase, 16);
@@ -906,6 +906,13 @@ class MockBackend {
       attributes: [
         { key: "code.function.name", value: s.name },
         { key: "server.address", value: s.resource },
+        ...(s.name === "redis GET" || s.name === "npgsql SELECT"
+          ? [{ key: "db.system.name", value: s.name === "redis GET" ? "redis" : "postgresql" }]
+          : s.name === "products.query"
+            ? [{ key: "rpc.system", value: "grpc" }]
+            : s.kind === "Server"
+              ? [{ key: "http.request.method", value: "GET" }]
+              : []),
       ],
       scopeAttributes: [{ key: "telemetry.auto.version", value: "1.0.0" }],
       resourceAttributes: [

@@ -1,12 +1,16 @@
-import { useMemo, useState } from "react";
-import type { SpanSummary } from "../api/types";
-import { useTelemetry } from "../lib/useDeckEvent";
+import { useEffect, useMemo, useState } from "react";
+import { clearTraces } from "../api/deck";
+import type { SpanSummary, TelemetrySummary } from "../api/types";
+import { useResources, useTelemetry } from "../lib/useDeckEvent";
 import { formatDurationNanos } from "../lib/format";
 import { buildResourceColorMap, colorFor } from "../lib/colors";
+import { SPAN_TYPE_OPTIONS, spanMatchesType, type SpanTypeId } from "../lib/spans";
 import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
 import { formatSpanJson } from "../components/SpanActions";
 import {
   ChevronIcon,
+  CommandMenu,
+  NamedIcon,
   Page,
   PageBody,
   PageHeader,
@@ -15,6 +19,8 @@ import {
   PageTitle,
   PageToolbar,
   SearchBox,
+  Select,
+  Switch,
   TextViewerDialog,
   type TextViewerRequest,
 } from "../toolkit";
@@ -52,6 +58,14 @@ interface TraceGroup {
   durationNano: bigint;
   rows: WaterfallRow[];
   hasError: boolean;
+}
+
+export interface TraceFilterRouteState {
+  resourceName: string | null;
+  type: SpanTypeId;
+  query: string;
+  minDurationMs: number;
+  paused: boolean;
 }
 
 function toBig(value: string): bigint {
@@ -177,6 +191,12 @@ function buildTraceGroups(spans: SpanSummary[]): TraceGroup[] {
 export function TracesPage({
   routeTraceId,
   routeSpanId,
+  routeResourceName,
+  routeType,
+  routeQuery,
+  routeMinDurationMs,
+  routePaused,
+  onFilterRouteChange,
   onSelectSpan,
   onNavigateToSpan,
   onNavigateToLogs,
@@ -184,18 +204,57 @@ export function TracesPage({
 }: {
   routeTraceId: string | null;
   routeSpanId: string | null;
+  routeResourceName: string | null;
+  routeType: string;
+  routeQuery: string;
+  routeMinDurationMs: number;
+  routePaused: boolean;
+  onFilterRouteChange: (state: TraceFilterRouteState) => void;
   onSelectSpan: (span: SpanSummary) => void;
   onNavigateToSpan: (traceId: string, spanId: string | null) => void;
   onNavigateToLogs: (spanId: string) => void;
   onCloseDetails: () => void;
 }) {
   const telemetry = useTelemetry();
-  const [query, setQuery] = useState("");
-  const [minMs, setMinMs] = useState(0);
+  const { resources } = useResources();
+  const [pausedSnapshot, setPausedSnapshot] = useState<TelemetrySummary | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
 
-  const spans = telemetry?.recentSpans ?? [];
+  const displayedTelemetry = pausedSnapshot ?? telemetry;
+  const spans = displayedTelemetry?.recentSpans ?? [];
+  const selectedType = SPAN_TYPE_OPTIONS.some((option) => option.value === routeType)
+    ? routeType as SpanTypeId
+    : "all";
+  const selectedMinDurationMs = MIN_DURATION_OPTIONS.some((option) => option.ms === routeMinDurationMs)
+    ? routeMinDurationMs
+    : 0;
+  const resourceOptions = useMemo(() => {
+    const resourceTypes = new Map(resources.map((resource) => [resource.name, resource.resourceType]));
+    const names = [...new Set(spans.flatMap((span) => span.resourceName === null ? [] : [span.resourceName]))]
+      .sort((left, right) => left.localeCompare(right));
+    return [
+      { value: "all", label: "All resources", group: "All" },
+      ...names.map((name) => ({
+        value: name,
+        label: name,
+        group: resourceTypes.get(name) ?? "Telemetry",
+      })),
+    ];
+  }, [resources, spans]);
+  const selectedResource = routeResourceName !== null && resourceOptions.some((option) => option.value === routeResourceName)
+    ? routeResourceName
+    : "all";
+
+  useEffect(() => {
+    if (!routePaused) {
+      setPausedSnapshot(null);
+    } else if (pausedSnapshot === null && telemetry !== null) {
+      setPausedSnapshot(telemetry);
+    }
+  }, [pausedSnapshot, routePaused, telemetry]);
   const selected = useMemo(() => {
     if (routeTraceId === null) {
       return null;
@@ -212,12 +271,17 @@ export function TracesPage({
   const colorMap = useMemo(() => buildResourceColorMap(spans.map((s) => s.resourceName)), [spans]);
 
   const traces = useMemo(() => {
-    const minNano = BigInt(minMs) * NANOS_PER_MS;
+    const minNano = BigInt(selectedMinDurationMs) * NANOS_PER_MS;
     const significant = minNano > 0n ? spans.filter((s) => toBig(s.durationNanos) >= minNano) : spans;
 
-    const groups = buildTraceGroups(significant);
+    const groups = buildTraceGroups(significant).filter((trace) => {
+      if (selectedResource !== "all" && !trace.rows.some((row) => row.span.resourceName === selectedResource)) {
+        return false;
+      }
+      return selectedType === "all" || trace.rows.some((row) => spanMatchesType(row.span, selectedType));
+    });
 
-    const trimmed = (routeTraceId ?? query).trim().toLowerCase();
+    const trimmed = (routeTraceId ?? routeQuery).trim().toLowerCase();
     if (!trimmed) {
       return groups;
     }
@@ -231,7 +295,7 @@ export function TracesPage({
             (r.span.resourceName ?? "").toLowerCase().includes(trimmed),
         ),
     );
-  }, [spans, query, minMs, routeTraceId]);
+  }, [routeQuery, routeTraceId, selectedMinDurationMs, selectedResource, selectedType, spans]);
 
   const toggle = (traceId: string) => {
     setCollapsed((prev) => {
@@ -247,38 +311,111 @@ export function TracesPage({
 
   const traceCount = useMemo(() => new Set(spans.map((s) => s.traceId)).size, [spans]);
 
+  const updateRoute = (changes: Partial<TraceFilterRouteState>): void => {
+    onFilterRouteChange({
+      resourceName: selectedResource === "all" ? null : selectedResource,
+      type: selectedType,
+      query: routeQuery,
+      minDurationMs: selectedMinDurationMs,
+      paused: routePaused,
+      ...changes,
+    });
+  };
+
+  const clearTraceData = async (resourceName: string | null): Promise<void> => {
+    setClearing(true);
+    setClearStatus(null);
+    try {
+      await clearTraces(resourceName);
+      setPausedSnapshot(null);
+      updateRoute({ resourceName: null, paused: false });
+      setClearStatus({
+        message: resourceName === null ? "Cleared all traces." : `Cleared traces for ${resourceName}.`,
+        error: false,
+      });
+    } catch (error) {
+      setClearStatus({ message: `Could not clear traces: ${String(error)}`, error: true });
+    } finally {
+      setClearing(false);
+    }
+  };
+
   return (
     <Page aria-labelledby="deck-page-traces-title">
       <PageHeader>
         <PageHeading>
           <PageTitle id="deck-page-traces-title">Traces</PageTitle>
           <PageSubtitle>
-            {telemetry ? `${traceCount} traces \u00b7 ${telemetry.spanCount.toLocaleString()} spans` : "Loading\u2026"}
+            {displayedTelemetry
+              ? `${traceCount} traces \u00b7 ${displayedTelemetry.spanCount.toLocaleString()} spans${routePaused ? " \u00b7 paused" : ""}`
+              : "Loading\u2026"}
           </PageSubtitle>
         </PageHeading>
       </PageHeader>
 
       <PageToolbar ariaLabel="Trace tools">
         <SearchBox
-          value={routeTraceId ?? query}
+          value={routeTraceId ?? routeQuery}
           onChange={(value) => {
             if (routeTraceId !== null) {
               onCloseDetails();
             }
-            setQuery(value);
+            updateRoute({ query: value });
           }}
           placeholder="Filter traces…"
         />
-        <label className="min-duration">
-          <span className="min-duration__label">Min duration</span>
-          <select className="select" value={minMs} onChange={(e) => setMinMs(Number(e.target.value))}>
-            {MIN_DURATION_OPTIONS.map((opt) => (
-              <option key={opt.ms} value={opt.ms}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
+        <Select
+          ariaLabel="Resource"
+          options={resourceOptions}
+          value={selectedResource}
+          onValueChange={(value) => updateRoute({ resourceName: value === "all" ? null : value })}
+        />
+        <Select
+          ariaLabel="Span type"
+          options={SPAN_TYPE_OPTIONS}
+          value={selectedType}
+          onValueChange={(value) => updateRoute({ type: value as SpanTypeId })}
+        />
+        <Select
+          ariaLabel="Min duration"
+          options={MIN_DURATION_OPTIONS.map((option) => ({ value: option.ms.toString(), label: option.label }))}
+          value={selectedMinDurationMs.toString()}
+          onValueChange={(value) => updateRoute({ minDurationMs: Number(value) })}
+        />
+        <div className="page__header-spacer" />
+        <Switch
+          label="Pause incoming data"
+          checked={routePaused}
+          disabled={telemetry === null}
+          onCheckedChange={(checked) => {
+            setPausedSnapshot(checked ? telemetry : null);
+            updateRoute({ paused: checked });
+          }}
+        />
+        <CommandMenu
+          ariaLabel="Clear traces"
+          triggerContent="Clear"
+          triggerIcon={<NamedIcon name="Delete" size={16} />}
+          placement="below-start"
+          entries={[
+            {
+              id: "clear-all",
+              label: "Clear all resources",
+              icon: <NamedIcon name="BoxMultiple" size={16} />,
+              tone: "danger",
+              disabled: clearing || displayedTelemetry === null || displayedTelemetry.spanCount === 0,
+              onSelect: () => void clearTraceData(null),
+            },
+            {
+              id: "clear-resource",
+              label: selectedResource === "all" ? "Clear selected resource" : `Clear ${selectedResource}`,
+              icon: <NamedIcon name="CheckmarkCircle" size={16} />,
+              tone: "danger",
+              disabled: clearing || selectedResource === "all",
+              onSelect: () => void clearTraceData(selectedResource),
+            },
+          ]}
+        />
       </PageToolbar>
 
       <PageBody className="wf">
@@ -299,6 +436,13 @@ export function TracesPage({
           ))
         )}
       </PageBody>
+
+      {clearStatus ? (
+        <div className="toast" role="status" aria-live="polite">
+          <span className={`state__dot ${clearStatus.error ? "error" : "success"}`} />
+          {clearStatus.message}
+        </div>
+      ) : null}
 
       {selected ? (
         <SpanDetailDrawer

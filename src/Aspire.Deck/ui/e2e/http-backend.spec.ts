@@ -766,6 +766,113 @@ test(`${features("HTTP-TRACES-001")} streams OTLP spans through the HTTP backend
   await expect(rootDetails.getByRole("group", { name: "Span backlinks" })).toContainText("link.reasonretry");
 });
 
+test(`${features("HTTP-TRACE-CLEAR-001")} clears selected and all traces through the HTTP backend`, async ({ page }) => {
+  interface TestSpan {
+    resourceName: string;
+    traceId: string;
+    spanId: string;
+    name: string;
+    startUnixNano: string;
+  }
+
+  let records: TestSpan[] = [
+    {
+      resourceName: "stress-api",
+      traceId: "11111111111111111111111111111111",
+      spanId: "1111111111111111",
+      name: "GET /orders",
+      startUnixNano: "1783670400000000000",
+    },
+    {
+      resourceName: "stress-worker",
+      traceId: "22222222222222222222222222222222",
+      spanId: "2222222222222222",
+      name: "process order",
+      startUnixNano: "1783670401000000000",
+    },
+  ];
+  const clearRequests: Array<string | null> = [];
+  const toOtlpData = () => ({
+    resourceSpans: records.map((record) => ({
+      resource: {
+        attributes: [{ key: "service.name", value: { stringValue: record.resourceName } }],
+      },
+      scopeSpans: [{
+        scope: { name: "Stress.Telemetry" },
+        spans: [{
+          traceId: record.traceId,
+          spanId: record.spanId,
+          name: record.name,
+          kind: 2,
+          startTimeUnixNano: record.startUnixNano,
+          endTimeUnixNano: (BigInt(record.startUnixNano) + 10_000_000n).toString(),
+          status: { code: 1 },
+          attributes: [{ key: "http.request.method", value: { stringValue: "GET" } }],
+        }],
+      }],
+    })),
+  });
+
+  await page.route("**/api/deck/config", async (route) => {
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.unroute("**/api/deck/telemetry/spans?*");
+  await page.route("**/api/deck/telemetry/spans*", async (route) => {
+    const request = route.request();
+    const url = new URL(request.url());
+    if (request.method() === "DELETE") {
+      const resourceName = url.searchParams.get("resource");
+      clearRequests.push(resourceName);
+      records = resourceName === null
+        ? []
+        : records.filter((record) => record.resourceName !== resourceName);
+      await route.fulfill({ status: 204 });
+      return;
+    }
+
+    if (url.searchParams.get("follow") === "true") {
+      await route.fulfill({
+        contentType: "application/x-ndjson",
+        body: `${JSON.stringify(toOtlpData())}\n`,
+      });
+      return;
+    }
+
+    await route.fulfill({
+      json: {
+        data: toOtlpData(),
+        totalCount: records.length,
+        returnedCount: records.length,
+      },
+    });
+  });
+
+  await page.goto("/traces?backend=http");
+
+  const traces = page.getByRole("main").getByRole("region", { name: "Traces" });
+  await expect(traces.locator(".wf__trace")).toHaveCount(2);
+  await traces.getByRole("combobox", { name: "Resource" }).selectOption("stress-api");
+  await traces.getByRole("button", { name: "Clear traces" }).click();
+  await page.getByRole("menuitem", { name: "Clear stress-api" }).click();
+
+  await expect(page.getByRole("status")).toHaveText("Cleared traces for stress-api.");
+  await expect(traces.locator(".wf__trace")).toHaveCount(1);
+  await expect(traces).toContainText("process order");
+  await expect(traces).not.toContainText("GET /orders");
+  await expect(traces.locator(".page__subtitle")).toHaveText("1 traces · 1 spans");
+
+  await traces.getByRole("button", { name: "Clear traces" }).click();
+  await page.getByRole("menuitem", { name: "Clear all resources" }).click();
+
+  await expect(page.getByRole("status")).toHaveText("Cleared all traces.");
+  await expect(traces.locator(".page__subtitle")).toHaveText("0 traces · 0 spans");
+  await expect(traces).toContainText("No traces match your filter.");
+  expect(clearRequests).toEqual(["stress-api", null]);
+});
+
 test(`${features("HTTP-EMPTY-TELEMETRY-001")} renders a settled empty metrics state`, async ({ page }) => {
   await page.route("**/api/deck/config", async (route) => {
     await route.fulfill({ json: config });

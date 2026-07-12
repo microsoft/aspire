@@ -9,6 +9,11 @@ export interface DashboardRoute {
   consoleTimestampsUtc?: boolean;
   consoleWrapLines?: boolean;
   consolePaused?: boolean;
+  traceResourceName?: string;
+  traceType?: string;
+  traceQuery?: string;
+  traceMinDurationMs?: number;
+  tracePaused?: boolean;
 }
 
 const pagePaths: Record<PageId, string> = {
@@ -57,16 +62,26 @@ export function readDashboardRoute(
     return { page: "logs", spanId };
   }
   if (path === "/traces" || path.startsWith("/traces/")) {
+    const search = new URLSearchParams(location.search);
+    const minDuration = Number(search.get("minDuration"));
+    const traceState = {
+      traceResourceName: search.get("resource") || undefined,
+      traceType: search.get("type") || undefined,
+      traceQuery: search.get("q") || undefined,
+      traceMinDurationMs: Number.isFinite(minDuration) && minDuration > 0 ? minDuration : undefined,
+      tracePaused: search.get("paused") === "true" || undefined,
+    };
     const detailMatch = /^\/traces\/detail\/([^/]+)\/?$/i.exec(location.pathname);
     if (detailMatch) {
-      const spanId = new URLSearchParams(location.search).get("span") || undefined;
+      const spanId = search.get("span") || undefined;
       return {
         page: "traces",
         traceId: decodeRoutePart(detailMatch[1]!),
         spanId,
+        ...traceState,
       };
     }
-    return { page: "traces" };
+    return { page: "traces", ...traceState };
   }
   if (path === "/metrics" || path.startsWith("/metrics/")) {
     return { page: "metrics" };
@@ -89,6 +104,10 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
   url.searchParams.delete("utc");
   url.searchParams.delete("wrap");
   url.searchParams.delete("paused");
+  url.searchParams.delete("resource");
+  url.searchParams.delete("type");
+  url.searchParams.delete("q");
+  url.searchParams.delete("minDuration");
   if (route.spanId) {
     url.searchParams.set("span", route.spanId);
   }
@@ -103,6 +122,23 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
       url.searchParams.set("wrap", "true");
     }
     if (route.consolePaused) {
+      url.searchParams.set("paused", "true");
+    }
+  }
+  if (route.page === "traces") {
+    if (route.traceResourceName) {
+      url.searchParams.set("resource", route.traceResourceName);
+    }
+    if (route.traceType && route.traceType !== "all") {
+      url.searchParams.set("type", route.traceType);
+    }
+    if (route.traceQuery) {
+      url.searchParams.set("q", route.traceQuery);
+    }
+    if (route.traceMinDurationMs) {
+      url.searchParams.set("minDuration", route.traceMinDurationMs.toString());
+    }
+    if (route.tracePaused) {
       url.searchParams.set("paused", "true");
     }
   }

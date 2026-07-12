@@ -12,6 +12,7 @@ export const httpBackendFeatures = {
   "HTTP-STRUCTURED-LOG-DETAILS-001": "HTTP mode preserves event, scope, exception, resource, and correlation details for structured logs.",
   "HTTP-STRUCTURED-LOG-CLEAR-001": "HTTP mode clears one structured-log resource or all resources and refreshes its snapshot.",
   "HTTP-TRACES-001": "HTTP mode replays and streams OTLP spans into trace waterfalls and exact span details.",
+  "HTTP-TRACE-CLEAR-001": "HTTP mode clears one trace resource or all trace resources and refreshes its snapshot.",
   "HTTP-EMPTY-TELEMETRY-001": "HTTP mode distinguishes a settled empty telemetry snapshot from loading.",
 } as const;
 
