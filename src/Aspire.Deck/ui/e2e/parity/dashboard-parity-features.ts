@@ -65,7 +65,7 @@ const featureDefinitions = {
     ["SHELL-UNSECURED-001", "/", "An unsecured telemetry/API endpoint warning is visible with supporting guidance.", "shell", "covered", "HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
     ["SHELL-NOTFOUND-001", "/error/404", "Unknown routes render a dedicated not-found experience.", null, "covered", "APP-NOTFOUND-001"],
     ["SHELL-ERROR-001", "/error", "Unhandled errors render a recoverable error experience.", "shell", "covered", "APP-ERROR-001"],
-    ["SHELL-RESPONSIVE-001", "/", "Navigation, header actions, pages, and overlays remain usable on mobile.", "shell", "partial", "APP-RESPONSIVE-001; STRESS-RESPONSIVE-001"],
+    ["SHELL-RESPONSIVE-001", "/", "Navigation, header actions, pages, and overlays remain usable on mobile.", "shell", "covered", "APP-RESPONSIVE-001; OBS-RESPONSIVE-001; STRESS-RESPONSIVE-001"],
     ["SHELL-ACCESSIBILITY-001", "/", "Landmarks, names, focus order, dialogs, and keyboard interaction remain accessible.", "shell", "covered", "APP-PAGE-001; APP-ACCESSIBILITY-001; toolkit.aria.yml"],
     ["SHELL-BROWSER-ERRORS-001", "/", "Normal navigation and interaction produce no page or console errors.", "shell", "covered", "APP-BROWSER-001"],
   ],

@@ -3398,13 +3398,12 @@ table.data tbody tr.selected {
   }
 
   .topbar {
-    gap: 8px;
-    padding: 0 12px;
+    gap: 4px;
+    padding: 0 8px;
   }
 
   .topbar__title {
-    min-width: 72px;
-    max-width: 120px;
+    display: none;
   }
 
   .topbar__app {

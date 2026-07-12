@@ -972,6 +972,52 @@ test(`${features("APP-RESPONSIVE-001")} keeps core workflows usable on mobile`, 
   expect(geometry.main).toEqual({ x: 0, width: 390 });
   await expect(page.getByRole("main").locator(".table-wrap")).toBeVisible();
 
+  const banner = page.getByRole("banner");
+  const headerActions = ["Help", "AI agents", "Assistant", "Notifications 1", "Toggle theme", "Settings"];
+  for (const name of headerActions) {
+    const action = banner.getByRole("button", { name });
+    await expect(action).toBeVisible();
+    const box = (await action.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(0);
+    expect(box.x + box.width).toBeLessThanOrEqual(390);
+  }
+  await expect(banner.getByRole("link", { name: "Aspire repository" })).toBeVisible();
+
+  const assertMobileOverlay = async (overlay: Locator): Promise<void> => {
+    await expect(overlay).toBeVisible();
+    const box = (await overlay.boundingBox())!;
+    expect(box.x).toBeGreaterThanOrEqual(-1);
+    expect(box.x + box.width).toBeLessThanOrEqual(391);
+    expect(box.y).toBeGreaterThanOrEqual(-1);
+    expect(box.y + box.height).toBeLessThanOrEqual(845);
+  };
+
+  await banner.getByRole("button", { name: "Help" }).click();
+  let overlay = page.getByRole("dialog", { name: "Help" });
+  await assertMobileOverlay(overlay);
+  await overlay.getByRole("button", { name: "Close" }).click();
+
+  await banner.getByRole("button", { name: "AI agents" }).click();
+  overlay = page.getByRole("dialog", { name: "AI agents" });
+  await assertMobileOverlay(overlay);
+  await overlay.getByRole("button", { name: "Close AI agents" }).click();
+
+  await banner.getByRole("button", { name: "Assistant" }).click();
+  overlay = page.getByRole("dialog", { name: "Assistant" });
+  await assertMobileOverlay(overlay);
+  await expect(overlay.getByLabel("Message the assistant")).toBeVisible();
+  await overlay.getByRole("button", { name: "Close assistant" }).click();
+
+  await banner.getByRole("button", { name: "Notifications 1" }).click();
+  overlay = page.getByRole("dialog", { name: "Notification center" });
+  await assertMobileOverlay(overlay);
+  await overlay.getByRole("button", { name: "Close" }).click();
+
+  await banner.getByRole("button", { name: "Settings" }).click();
+  overlay = page.getByRole("dialog", { name: "Settings" });
+  await assertMobileOverlay(overlay);
+  await overlay.getByRole("button", { name: "Close" }).click();
+
   await page.getByRole("row", { name: /frontend/ }).click();
   const drawer = page.getByRole("dialog", { name: "frontend" });
   await expect.poll(async () => (await drawer.boundingBox())?.x).toBe(0);
