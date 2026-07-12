@@ -272,6 +272,29 @@ test(`${features("console")} inventories console streaming controls`, async ({ p
   await attachScreenshot(page, testInfo, "legacy-console");
 });
 
+test(`${features("console-virtualization")} bounds high-volume console rendering`, async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/");
+  const apiResourceRow = page.getByRole("table").getByRole("row").filter({ hasText: "stress-apiservice" });
+  await apiResourceRow.getByText("stress-apiservice", { exact: true }).click();
+  await page.getByRole("dialog").filter({ hasText: "stress-apiservice" })
+    .getByRole("button", { name: "Write to console", exact: true }).click();
+
+  await page.goto("/consolelogs/resource/stress-apiservice");
+  const consoleScroller = page.locator(".console-overflow");
+  const renderedLines = consoleScroller.locator(".log-line-row-container");
+  await expect.poll(() => renderedLines.count(), { timeout: 30_000 }).toBeGreaterThan(200);
+  expect(await renderedLines.count()).toBeLessThan(600);
+
+  await consoleScroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  await expect(consoleScroller.getByText("4999 Out", { exact: true })).toBeVisible({ timeout: 10_000 });
+  expect(await renderedLines.count()).toBeLessThan(600);
+  await expect(consoleScroller.locator(".log-line-number").filter({ hasText: /^\d+$/ }).last()).not.toHaveText("");
+});
+
 test(`${features("structured-logs")} inventories structured log controls and rows`, async ({ page }, testInfo) => {
   test.setTimeout(60_000);
   await page.goto("/");

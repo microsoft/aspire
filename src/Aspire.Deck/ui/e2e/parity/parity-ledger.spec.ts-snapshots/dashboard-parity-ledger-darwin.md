@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 28
+- Legacy black-box scenarios pending: 27
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -111,7 +111,7 @@
 | CONSOLE-TERMINAL-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-TERMINAL-001; TERMINAL-LIVE-001; DeckApiTests.GetResources_ReturnsTerminalMetadata | Interactive resources render a terminal and can take or release control. |
 | CONSOLE-TERMINAL-FONT-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-TERMINAL-FONT-001 | Interactive terminal font size can be increased, decreased, and reset. |
 | CONSOLE-TERMINAL-SIZE-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-TERMINAL-SIZE-001 | Interactive terminal column and row presets update the remote terminal size. |
-| CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-VIRTUALIZATION-001 | Large console streams remain responsive and preserve stable line numbers. |
+| CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | console-virtualization | covered | HTTP-CONSOLE-VIRTUALIZATION-001 | Large console streams remain responsive and preserve stable line numbers. |
 | CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | console | covered | CONSOLE-ROUTE-001 | Selected resource and console options are deep-linkable and restorable. |
 | LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIST-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
 | LOG-LIVE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | New structured logs stream into the list and update totals. |
