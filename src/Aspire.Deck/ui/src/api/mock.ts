@@ -58,6 +58,8 @@ const config: DeckConfig = {
     { name: "en", displayName: "English" },
     { name: "fr", displayName: "Français" },
   ],
+  isAgentHelpEnabled: true,
+  agentHelpMarkdown: "Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence.\n\n- Resource state, health checks, and relationships\n- Console logs\n- Distributed traces\n- Structured logs\n\nInitialize AI agent support in your project with:\n\n```bash\naspire agent init\n```\n\nFor more information, see [AI coding agents](https://aka.ms/aspire/ai-agents-apphost).",
 };
 
 function makeResources(): Resource[] {

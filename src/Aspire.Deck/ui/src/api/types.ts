@@ -14,6 +14,8 @@ export interface DeckConfig {
   user?: DeckUser | null;
   culture?: string;
   cultures?: DeckCulture[];
+  isAgentHelpEnabled?: boolean;
+  agentHelpMarkdown?: string | null;
 }
 
 export interface DeckUser {

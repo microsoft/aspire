@@ -14,6 +14,7 @@ export function TopBar({
   theme,
   onToggleTheme,
   onHelp,
+  onAIAgents,
   onNotifications,
   notificationCount,
   onSettings,
@@ -24,6 +25,7 @@ export function TopBar({
   theme: Theme;
   onToggleTheme: () => void;
   onHelp: () => void;
+  onAIAgents: () => void;
   onNotifications: () => void;
   notificationCount: number;
   onSettings: () => void;
@@ -64,6 +66,11 @@ export function TopBar({
       <button className="icon-btn" type="button" onClick={onHelp} title="Help" aria-label="Help">
         <NamedIcon name="QuestionCircle" size={17} />
       </button>
+      {config?.isAgentHelpEnabled && config.agentHelpMarkdown ? (
+        <button className="icon-btn" type="button" onClick={onAIAgents} title="AI agents" aria-label="AI agents">
+          <NamedIcon name="ChatSparkle" size={17} />
+        </button>
+      ) : null}
       <button className="icon-btn topbar__notification-button" type="button" onClick={onNotifications} title="Notifications" aria-label={`Notifications ${notificationCount}`}>
         <NamedIcon name="Info" size={17} />
         {notificationCount > 0 ? <span className="topbar__notification-count" aria-hidden="true">{notificationCount}</span> : null}

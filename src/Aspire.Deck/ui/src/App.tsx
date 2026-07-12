@@ -24,6 +24,7 @@ import { SettingsDialog } from "./components/SettingsDialog";
 import { NotificationCenter, type NotificationHistoryItem } from "./components/NotificationCenter";
 import { SystemNotifications } from "./components/SystemNotifications";
 import { ManageDataDrawer } from "./components/ManageDataDrawer";
+import { AIAgentsDrawer } from "./components/AIAgentsDrawer";
 import {
   dashboardRouteHref,
   readDashboardRoute,
@@ -56,6 +57,7 @@ export function App({
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [manageDataOpen, setManageDataOpen] = useState(false);
+  const [aiAgentsOpen, setAIAgentsOpen] = useState(false);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() => {
     try {
@@ -193,6 +195,7 @@ export function App({
           theme={theme}
           onToggleTheme={onToggleTheme}
           onHelp={() => setHelpOpen(true)}
+          onAIAgents={() => setAIAgentsOpen(true)}
           onNotifications={() => setNotificationCenterOpen(true)}
           notificationCount={notificationHistory.length}
           onSettings={() => setSettingsOpen(true)}
@@ -417,6 +420,9 @@ export function App({
         onClose={() => setSettingsOpen(false)}
       />
       {manageDataOpen ? <ManageDataDrawer onClose={() => setManageDataOpen(false)} /> : null}
+      {aiAgentsOpen && config?.agentHelpMarkdown ? (
+        <AIAgentsDrawer markdown={config.agentHelpMarkdown} onClose={() => setAIAgentsOpen(false)} />
+      ) : null}
     </div>
   );
 }

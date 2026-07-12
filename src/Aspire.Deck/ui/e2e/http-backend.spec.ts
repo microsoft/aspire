@@ -281,6 +281,35 @@ test(`${features("HTTP-LANGUAGE-001")} selects and applies a dashboard language`
   await expect.poll(async () => (await page.context().cookies()).find((cookie) => cookie.name === ".AspNetCore.Culture")?.value).toBe("c%3Dfr%7Cuic%3Dfr");
 });
 
+test(`${features("HTTP-AI-AGENTS-001")} opens backend-controlled AI agent guidance`, async ({ page }) => {
+  await page.route("**/api/deck/config", async (route) => route.fulfill({
+    json: {
+      ...config,
+      isAgentHelpEnabled: true,
+      agentHelpMarkdown: "Give AI agents deep observability.\n\n- Resource state\n- Structured logs\n\n```bash\naspire agent init\n```\n\nSee [AI coding agents](https://aka.ms/aspire/ai-agents-apphost).",
+    } satisfies DeckConfig,
+  }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+
+  await page.goto("/?backend=http");
+  await page.getByRole("banner").getByRole("button", { name: "AI agents" }).click();
+
+  const drawer = page.getByRole("dialog", { name: "AI agents" });
+  await expect(drawer).toContainText("Give AI agents deep observability.");
+  await expect(drawer.getByRole("listitem")).toHaveText(["Resource state", "Structured logs"]);
+  await expect(drawer.locator("code")).toHaveText("aspire agent init");
+  await page.evaluate(() => {
+    window.open = (url) => {
+      document.body.dataset.openedUrl = String(url);
+      return null;
+    };
+  });
+  await drawer.getByRole("link", { name: "AI coding agents" }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-opened-url", "https://aka.ms/aspire/ai-agents-apphost");
+  await drawer.getByRole("button", { name: "Close AI agents" }).click();
+  await expect(drawer).toBeHidden();
+});
+
 test(`${features("HTTP-MANAGE-DATA-001")} manages dashboard data through the HTTP backend`, async ({ page }) => {
   // Chromium reports an intercepted file upload as aborted after Playwright fulfills
   // it, even though the response and payload complete. The real 204 endpoint is
