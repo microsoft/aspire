@@ -108,8 +108,10 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // real ~/.kube/config, ~/.rad/config.yaml, or ~/.docker/config.json (test-isolation
             // requirement, .github/instructions/test-review-guidelines).
             //
-            // - KUBECONFIG: az/kubectl/rad all honor it, so `az aks get-credentials` writes here and
-            //   every kube-touching command uses this file. Removed with the workspace on dispose.
+            // - KUBECONFIG: az/kubectl honor it, so `az aks get-credentials` writes here and every
+            //   kube-touching command uses this file. Removed with the workspace on dispose. Note
+            //   `rad install kubernetes` does NOT fully honor KUBECONFIG (its Contour gateway config
+            //   reads the default ~/.kube/config), which is why Step 8b symlinks the default path.
             // - rad config: `rad` only accepts a `--config` flag (no config env var), and `aspire deploy`
             //   spawns `rad deploy` internally (FileName="rad", UseShellExecute=false -> PATH lookup;
             //   see src/Aspire.Hosting.Radius/Publishing/RadiusDeploymentPipelineStep.cs). So we shadow
@@ -189,6 +191,20 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
 
             output.WriteLine("Step 8: Verifying kubectl connectivity...");
             await auto.TypeAsync("kubectl get nodes");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
+            // Step 8b: Expose the isolated kubeconfig at the default path for `rad install`.
+            // `rad install kubernetes` configures the Contour gateway through a code path that
+            // reads the default kubeconfig location (~/.kube/config) directly and does NOT honor
+            // the KUBECONFIG environment variable, unlike az/kubectl. With our isolated
+            // $KUBECONFIG (Step 1b), that step fails with
+            // "failed to initialize Kubernetes client config: open ~/.kube/config: no such file or directory".
+            // Symlink the default path to our isolated kubeconfig so `rad` finds the AKS context.
+            // Only create it when absent so a developer's real ~/.kube/config is never clobbered on
+            // a local run (on the ephemeral CI runner the file does not exist, so the symlink is used).
+            output.WriteLine("Step 8b: Linking default kubeconfig path for rad install...");
+            await auto.TypeAsync("mkdir -p \"$HOME/.kube\" && { [ -e \"$HOME/.kube/config\" ] || ln -s \"$KUBECONFIG\" \"$HOME/.kube/config\"; }");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
