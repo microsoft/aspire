@@ -303,6 +303,42 @@ test(`${features("APP-NOTIFICATION-001", "PARAM-NOTIFICATION-001")} completes ev
   await expect(page.getByRole("alert")).toHaveCount(0);
 });
 
+test(`${features("APP-NOTIFICATION-CENTER-001")} preserves completed notification history`, async ({ page }, testInfo) => {
+  await page.getByRole("button", { name: "Dismiss notification" }).click();
+  await page.getByRole("banner").getByRole("button", { name: "Notifications 1" }).click();
+  let center = page.getByRole("dialog", { name: "Notification center" });
+  await expect(center.getByRole("listitem")).toHaveCount(1);
+  await expect(center).toContainText("Unresolved parameters");
+  await center.getByRole("button", { name: "Close" }).click();
+
+  await page.getByRole("row", { name: /apiservice/ }).click();
+  const details = page.getByRole("dialog", { name: "apiservice" });
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: /Show notification samples/ }).click();
+  const warning = page.getByRole("alert").filter({ hasText: "Deployment warning" });
+  await warning.getByRole("button", { name: "Dismiss notification" }).click();
+
+  await page.getByRole("banner").getByRole("button", { name: "Notifications 3" }).click();
+  center = page.getByRole("dialog", { name: "Notification center" });
+  await expect(center.getByRole("listitem")).toHaveCount(3);
+  await expect(center).toContainText("Unresolved parameters");
+  await expect(center).toContainText("Deployment complete");
+  await expect(center).toContainText("Deployment warning");
+  await expect(center.getByRole("link", { name: "release notes" })).toHaveAttribute("href", "https://example.com/release");
+  await expect(center.getByRole("link", { name: "unsafe" })).toHaveCount(0);
+  await attachScreenshot(page, testInfo, "dashboard-notification-center");
+
+  await center.getByRole("button", { name: "Close" }).click();
+  await page.reload();
+  await page.getByRole("banner").getByRole("button", { name: "Notifications 3" }).click();
+  center = page.getByRole("dialog", { name: "Notification center" });
+  await expect(center.getByRole("listitem")).toHaveCount(3);
+  await center.getByRole("button", { name: "Clear history" }).click();
+  await expect(center).toContainText("No notifications.");
+  await center.getByRole("button", { name: "Close" }).click();
+  await expect(page.getByRole("banner").getByRole("button", { name: "Notifications 0" })).toBeVisible();
+});
+
 test(`${features("RES-LIST-001", "RES-SORT-001", "RES-FILTER-001", "RES-ENDPOINT-001")} lists, sorts, and filters resource endpoints`, async ({ page }) => {
   const table = page.getByRole("table");
   const rows = table.getByRole("row");

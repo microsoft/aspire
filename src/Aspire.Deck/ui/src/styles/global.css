@@ -266,6 +266,58 @@ a:focus-visible {
   gap: 8px;
 }
 
+.topbar__notification-button {
+  position: relative;
+}
+
+.topbar__notification-count {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  color: white;
+  background: var(--accent);
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 16px;
+}
+
+.notification-center__list {
+  display: grid;
+  gap: 10px;
+  max-height: min(520px, 60vh);
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.notification-center__item {
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-inline-start: 3px solid var(--info);
+  border-radius: var(--radius-sm);
+  background: var(--bg-surface);
+}
+
+.notification-center__item--success { border-inline-start-color: var(--success); }
+.notification-center__item--warning { border-inline-start-color: var(--warning); }
+.notification-center__item--error { border-inline-start-color: var(--error); }
+
+.notification-center__heading {
+  display: flex;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.notification-center__heading time,
+.notification-center__empty {
+  color: var(--text-muted);
+}
+
 /* ---------- Shell dialogs ---------- */
 .shell-dialog {
   width: min(680px, calc(100vw - 32px));

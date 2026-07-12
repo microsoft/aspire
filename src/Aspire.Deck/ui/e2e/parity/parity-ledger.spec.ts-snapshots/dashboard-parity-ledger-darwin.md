@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 111
+- React covered: 112
 - React partial: 23
-- React missing: 24
-- Legacy black-box scenarios pending: 57
-- React parity gaps: 47
+- React missing: 23
+- Legacy black-box scenarios pending: 56
+- React parity gaps: 46
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -18,7 +18,7 @@
 | SHELL-AGENTS-001 | shell | `/` | shell | missing | - | The AI agents entry point appears when enabled. |
 | SHELL-ASSISTANT-001 | shell | `/` | PENDING | missing | - | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
 | SHELL-NOTIFICATIONS-001 | shell | `/` | shell | covered | APP-NOTIFICATION-001; CMD-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |
-| SHELL-NOTIFICATION-CENTER-001 | shell | `/` | PENDING | missing | - | The notification center opens and preserves notification history. |
+| SHELL-NOTIFICATION-CENTER-001 | shell | `/` | shell | covered | APP-NOTIFICATION-CENTER-001 | The notification center opens and preserves notification history. |
 | SHELL-SETTINGS-001 | shell | `/` | shell | covered | APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Settings opens from the top bar and reports dashboard/runtime versions. |
 | SHELL-THEME-001 | shell | `/` | shell | covered | APP-THEME-001; APP-SETTINGS-001 | System, light, and dark theme selection is persisted. |
 | SHELL-LANGUAGE-001 | shell | `/` | shell | missing | - | The dashboard language can be selected and applied. |

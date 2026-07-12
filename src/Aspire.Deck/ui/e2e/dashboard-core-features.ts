@@ -15,6 +15,7 @@ export const dashboardCoreFeatures = {
   "APP-NOTFOUND-001": "Unknown paths render a dedicated 404 experience and recover to Resources.",
   "APP-ERROR-001": "The error route and React render boundary expose recovery and reload actions.",
   "APP-NOTIFICATION-001": "Notifications expose primary, secondary, and dismiss actions.",
+  "APP-NOTIFICATION-CENTER-001": "The notification center preserves completed notification history for the browser session.",
   "APP-RESPONSIVE-001": "The shell, navigation, resource table, and drawer remain usable on mobile.",
   "RES-LIST-001": "Resources exclude hidden and parameter resources and retain stable ordering.",
   "RES-SORT-001": "Resources sort by supported columns in ascending and descending order.",

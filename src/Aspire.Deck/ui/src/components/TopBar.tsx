@@ -13,6 +13,8 @@ export function TopBar({
   theme,
   onToggleTheme,
   onHelp,
+  onNotifications,
+  notificationCount,
   onSettings,
 }: {
   config: DeckConfig | null;
@@ -21,6 +23,8 @@ export function TopBar({
   theme: Theme;
   onToggleTheme: () => void;
   onHelp: () => void;
+  onNotifications: () => void;
+  notificationCount: number;
   onSettings: () => void;
 }) {
   const active = apphosts.find((a) => a.active);
@@ -58,6 +62,10 @@ export function TopBar({
       </a>
       <button className="icon-btn" type="button" onClick={onHelp} title="Help" aria-label="Help">
         <NamedIcon name="QuestionCircle" size={17} />
+      </button>
+      <button className="icon-btn topbar__notification-button" type="button" onClick={onNotifications} title="Notifications" aria-label={`Notifications ${notificationCount}`}>
+        <NamedIcon name="Info" size={17} />
+        {notificationCount > 0 ? <span className="topbar__notification-count" aria-hidden="true">{notificationCount}</span> : null}
       </button>
 
       <button

@@ -53,7 +53,7 @@ const featureDefinitions = {
     ["SHELL-AGENTS-001", "/", "The AI agents entry point appears when enabled.", "shell", "missing"],
     ["SHELL-ASSISTANT-001", "/", "The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses.", null, "missing"],
     ["SHELL-NOTIFICATIONS-001", "/", "Active notifications render intent, actions, links, and dismiss behavior.", "shell", "covered", "APP-NOTIFICATION-001; CMD-NOTIFICATION-001"],
-    ["SHELL-NOTIFICATION-CENTER-001", "/", "The notification center opens and preserves notification history.", null, "missing"],
+    ["SHELL-NOTIFICATION-CENTER-001", "/", "The notification center opens and preserves notification history.", "shell", "covered", "APP-NOTIFICATION-CENTER-001"],
     ["SHELL-SETTINGS-001", "/", "Settings opens from the top bar and reports dashboard/runtime versions.", "shell", "covered", "APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
     ["SHELL-THEME-001", "/", "System, light, and dark theme selection is persisted.", "shell", "covered", "APP-THEME-001; APP-SETTINGS-001"],
     ["SHELL-LANGUAGE-001", "/", "The dashboard language can be selected and applied.", "shell", "missing"],

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DeckConfig } from "./api/types";
 import { PARAMETER_RESOURCE_TYPE } from "./api/types";
 import { getConfig } from "./api/deck";
@@ -20,6 +20,7 @@ import { InteractionPane } from "./components/InteractionPane";
 import { NotificationStack } from "./components/NotificationStack";
 import { HelpDialog } from "./components/HelpDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
+import { NotificationCenter, type NotificationHistoryItem } from "./components/NotificationCenter";
 import {
   dashboardRouteHref,
   readDashboardRoute,
@@ -51,6 +52,15 @@ export function App({
   const [route, setRoute] = useState<DashboardRoute>(readDashboardRoute);
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
+  const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() => {
+    try {
+      return JSON.parse(window.sessionStorage.getItem("aspire-deck-notification-history") ?? "[]") as NotificationHistoryItem[];
+    } catch {
+      return [];
+    }
+  });
+  const notificationIdsSeen = useRef(new Set(notificationHistory.map((item) => item.interactionId)));
   const page = route.page;
 
   useEffect(() => {
@@ -141,6 +151,26 @@ export function App({
   const dialog = interactions.find((i) => i.kind === "inputsDialog" || i.kind === "messageBox") ?? null;
   const notifications = interactions.filter((i) => i.kind === "notification");
 
+  useLayoutEffect(() => {
+    const additions = notifications
+      .filter((notification) => !notificationIdsSeen.current.has(notification.interactionId))
+      .map<NotificationHistoryItem>((notification) => ({
+        interactionId: notification.interactionId,
+        title: notification.title,
+        message: notification.message,
+        intent: notification.intent,
+        enableMessageMarkdown: notification.enableMessageMarkdown,
+        receivedAt: new Date().toISOString(),
+      }));
+    if (additions.length === 0) return;
+    additions.forEach((notification) => notificationIdsSeen.current.add(notification.interactionId));
+    setNotificationHistory((current) => {
+      const next = [...current, ...additions];
+      window.sessionStorage.setItem("aspire-deck-notification-history", JSON.stringify(next));
+      return next;
+    });
+  }, [notifications]);
+
   return (
     <div className="app">
       <div className="app__sidebar">
@@ -159,6 +189,8 @@ export function App({
           theme={theme}
           onToggleTheme={onToggleTheme}
           onHelp={() => setHelpOpen(true)}
+          onNotifications={() => setNotificationCenterOpen(true)}
+          notificationCount={notificationHistory.length}
           onSettings={() => setSettingsOpen(true)}
         />
       </div>
@@ -327,6 +359,15 @@ export function App({
         }}
       />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <NotificationCenter
+        open={notificationCenterOpen}
+        notifications={notificationHistory}
+        onClear={() => {
+          setNotificationHistory([]);
+          window.sessionStorage.removeItem("aspire-deck-notification-history");
+        }}
+        onClose={() => setNotificationCenterOpen(false)}
+      />
       <SettingsDialog
         open={settingsOpen}
         config={config}
