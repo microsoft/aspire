@@ -39,6 +39,7 @@ import {
   ResourceTypeIcon,
   RestartIcon,
   SearchBox,
+  SecretInput,
   SecretValue,
   Select,
   StateDot,
@@ -119,6 +120,7 @@ export function ToolkitPlayground({
   const [region, setRegion] = useState("central");
   const [includeHidden, setIncludeHidden] = useState(false);
   const [pauseIncoming, setPauseIncoming] = useState(false);
+  const [secretInput, setSecretInput] = useState("");
   const [selectedTab, setSelectedTab] = useState("overview");
   const [openAccordionItems, setOpenAccordionItems] = useState(["environment"]);
   const [pageRefreshCount, setPageRefreshCount] = useState(0);
@@ -451,6 +453,7 @@ export function ToolkitPlayground({
               checked={pauseIncoming}
               onCheckedChange={setPauseIncoming}
             />
+            <SecretInput aria-label="Command secret" value={secretInput} placeholder="Enter a secret" onChange={(event) => setSecretInput(event.target.value)} />
             <div className="toolkit-secret-sample">
               <span>API key</span>
               <SecretValue

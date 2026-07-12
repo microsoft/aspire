@@ -192,16 +192,33 @@ test(`${features("HTTP-RECOVERY-001")} recovers when the HTTP backend returns`, 
   await expect(page.getByTitle("Resources: Connected")).toBeVisible();
 });
 
-test(`${features("HTTP-COMMAND-001")} executes a resource command through the HTTP backend`, async ({ page }) => {
-  let commandRequest: unknown;
+test(`${features("HTTP-COMMAND-001", "HTTP-COMMAND-OUTCOMES-001")} executes resource command outcomes through the HTTP backend`, async ({ page }) => {
+  const requests: unknown[] = [];
+  const commandResource: Resource = {
+    ...resource,
+    commands: [
+      ...resource.commands,
+      { ...resource.commands[0]!, name: "cancel-operation", displayName: "Cancel operation", isHighlighted: false },
+      { ...resource.commands[0]!, name: "fail-operation", displayName: "Fail operation", isHighlighted: false },
+    ],
+  };
   await page.route("**/api/deck/config", async (route) => {
     await route.fulfill({ json: config });
   });
   await page.route("**/api/deck/resources", async (route) => {
-    await route.fulfill({ json: [resource] });
+    await route.fulfill({ json: [commandResource] });
   });
   await page.route("**/api/deck/commands/execute", async (route) => {
-    commandRequest = route.request().postDataJSON();
+    const request = route.request().postDataJSON() as { commandName: string };
+    requests.push(request);
+    if (request.commandName === "cancel-operation") {
+      await route.fulfill({ json: { kind: "cancelled", message: "Cancelled by user.", result: null } });
+      return;
+    }
+    if (request.commandName === "fail-operation") {
+      await route.fulfill({ json: { kind: "failed", message: "Health probe failed.", result: null } });
+      return;
+    }
     await route.fulfill({
       json: {
         kind: "succeeded",
@@ -224,7 +241,21 @@ test(`${features("HTTP-COMMAND-001")} executes a resource command through the HT
   const result = page.getByRole("dialog", { name: "Check health" });
   await expect(result.getByRole("heading", { name: "Health report" })).toBeVisible();
   await expect(result.getByRole("table")).toContainText("CheckStatusAPIHealthy");
-  expect(commandRequest).toEqual({ resourceName: "stress-api-abc123", commandName: "check-health" });
+  await result.getByRole("button", { name: "Close visualizer" }).click();
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menuitem", { name: /Cancel operation/ }).click();
+  await expect(page.getByRole("status")).toContainText("Cancelled by user.");
+  await expect(page.getByRole("status").locator(".state__dot")).toHaveClass(/error/);
+  await page.getByRole("button", { name: "Dismiss command result" }).click();
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menuitem", { name: /Fail operation/ }).click();
+  await expect(page.getByRole("status")).toContainText("Health probe failed.");
+  await expect(page.getByRole("status").locator(".state__dot")).toHaveClass(/error/);
+  expect(requests).toEqual([
+    { resourceName: "stress-api-abc123", commandName: "check-health" },
+    { resourceName: "stress-api-abc123", commandName: "cancel-operation" },
+    { resourceName: "stress-api-abc123", commandName: "fail-operation" },
+  ]);
 });
 
 test(`${features("HTTP-INTERACTION-001")} submits every command input type through the HTTP backend`, async ({ page }, testInfo) => {
@@ -262,7 +293,12 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
       },
       {
-        name: "flavor", label: "Flavor", placeholder: "", inputType: "choice", required: false,
+        name: "locked", label: "Locked option", placeholder: "", inputType: "boolean", required: false,
+        options: [], value: "true", validationErrors: [], description: "Controlled by the AppHost.",
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: true, updateStateOnChange: false,
+      },
+      {
+        name: "flavor", label: "Flavor", placeholder: "Choose a flavor", inputType: "choice", required: false,
         options: [["vanilla", "Vanilla"], ["chocolate", "Chocolate"]], value: "vanilla",
         validationErrors: [], description: "Select a flavor.", enableDescriptionMarkdown: false,
         maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
@@ -309,16 +345,26 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
   const message = dialog.getByRole("textbox", { name: "Message" });
   const repeat = dialog.getByRole("spinbutton", { name: "Repeat" });
   const shout = dialog.getByRole("checkbox", { name: "Shout" });
+  const locked = dialog.getByRole("checkbox", { name: "Locked option" });
   const flavor = dialog.getByRole("combobox", { name: "Flavor" });
-  const secret = dialog.getByLabel("Secret");
+  const secret = dialog.getByLabel("Secret", { exact: true });
   await expect(dialog.locator(".interaction-message strong")).toHaveText("command");
   await expect(message).toHaveAttribute("placeholder", "Hello");
   await expect(message).toHaveAttribute("maxlength", "80");
   await expect(dialog.locator("#int-message-description strong")).toHaveText("value");
   await expect(dialog.getByText("Text value to echo.", { exact: true })).toBeVisible();
   await expect(repeat).toHaveValue("1");
+  await expect(repeat).toHaveAttribute("type", "number");
   await expect(shout).not.toBeChecked();
+  await expect(locked).toBeChecked();
+  await expect(locked).toBeDisabled();
   await expect(flavor).toHaveValue("Vanilla");
+  await expect(flavor).toHaveAttribute("placeholder", "Choose a flavor");
+  await expect(secret).toHaveAttribute("type", "password");
+  await expect(secret).toHaveAttribute("autocomplete", "new-password");
+  await dialog.getByRole("button", { name: "Reveal secret" }).click();
+  await expect(secret).toHaveAttribute("type", "text");
+  await dialog.getByRole("button", { name: "Hide secret" }).click();
   await expect(secret).toHaveAttribute("type", "password");
 
   await message.fill("Hello from React");
@@ -348,6 +394,7 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
       message: "Hello from React",
       repeat: "3",
       shout: "true",
+      locked: "true",
       flavor: "chocolate",
       secret: "s3cr3t",
     },

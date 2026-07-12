@@ -25,6 +25,7 @@ export * from "./PropertyGrid";
 export * from "./PropertyExplorer";
 export * from "./SearchBox";
 export * from "./SecretValue";
+export * from "./SecretInput";
 export * from "./Select";
 export * from "./StateDot";
 export * from "./StructuredFilterControl";

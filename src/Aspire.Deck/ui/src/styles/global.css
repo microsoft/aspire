@@ -1559,6 +1559,21 @@ table.data tbody tr.selected {
   gap: 4px;
   min-width: 0;
 }
+.deck-secret-input {
+  position: relative;
+  display: flex;
+  width: 100%;
+}
+.deck-secret-input .input {
+  width: 100%;
+  padding-right: 38px;
+}
+.deck-secret-input__toggle {
+  position: absolute;
+  top: 50%;
+  right: 4px;
+  transform: translateY(-50%);
+}
 
 /* ---------- Health report ---------- */
 .health-report {

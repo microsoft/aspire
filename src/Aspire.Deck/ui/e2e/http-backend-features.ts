@@ -6,6 +6,7 @@ export const httpBackendFeatures = {
   "HTTP-FAILURE-001": "HTTP mode reports an unavailable dashboard backend without unhandled browser errors.",
   "HTTP-RECOVERY-001": "HTTP mode recovers application identity and resources when the dashboard backend returns.",
   "HTTP-COMMAND-001": "HTTP mode executes a live resource command through the dashboard backend.",
+  "HTTP-COMMAND-OUTCOMES-001": "HTTP commands distinguish successful, cancelled, failed, and transport-error outcomes.",
   "HTTP-INTERACTION-001": "HTTP mode round-trips resource command input interactions through the dashboard backend.",
   "HTTP-CONSOLE-001": "HTTP mode replays and streams resource console output from the dashboard backend.",
   "HTTP-CONSOLE-CONTROLS-001": "HTTP console output supports parsed timestamps, UTC display, wrapping, and exact text download.",

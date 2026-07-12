@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 124
-- React partial: 18
+- React covered: 129
+- React partial: 13
 - React missing: 16
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 34
+- React parity gaps: 29
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -79,13 +79,13 @@
 | CMD-ICON-VARIANT-001 | commands | `/` | PENDING | covered | TK-ICON-001; RES-ICON-001; STRESS-COMMAND-ICON-001 | Regular and filled command icon variants are preserved. |
 | CMD-DESCRIPTION-001 | commands | `/` | commands | covered | CMD-DESCRIPTION-001 | Command display names and descriptions remain visible and accessible. |
 | CMD-CONFIRM-001 | commands | `/` | commands | covered | CMD-CONFIRM-001 | Commands with confirmation messages require explicit confirmation. |
-| CMD-EXECUTE-001 | commands | `/` | PENDING | partial | RES-COMMANDS-001; HTTP-COMMAND-001; STRESS-COMMAND-EXECUTE-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |
+| CMD-EXECUTE-001 | commands | `/` | PENDING | covered | RES-COMMANDS-001; HTTP-COMMAND-001; HTTP-COMMAND-OUTCOMES-001; STRESS-COMMAND-EXECUTE-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |
 | CMD-TEXT-001 | commands | `/` | commands | covered | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Text arguments support label, description, placeholder, required, and maximum length. |
-| CMD-NUMBER-001 | commands | `/` | commands | partial | HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Number arguments preserve numeric values and validation. |
-| CMD-BOOLEAN-001 | commands | `/` | commands | partial | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Boolean arguments preserve checked state and disabled state. |
-| CMD-CHOICE-001 | commands | `/` | commands | partial | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Choice arguments preserve options, display names, placeholders, and defaults. |
+| CMD-NUMBER-001 | commands | `/` | commands | covered | HTTP-INTERACTION-001; CMD-VALIDATION-001; STRESS-COMMAND-ARGUMENTS-001 | Number arguments preserve numeric values and validation. |
+| CMD-BOOLEAN-001 | commands | `/` | commands | covered | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Boolean arguments preserve checked state and disabled state. |
+| CMD-CHOICE-001 | commands | `/` | commands | covered | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Choice arguments preserve options, display names, placeholders, and defaults. |
 | CMD-CUSTOM-CHOICE-001 | commands | `/` | commands | covered | TK-COMBOBOX-001; CMD-CUSTOM-CHOICE-001 | Choice arguments can allow a searchable custom value. |
-| CMD-SECRET-001 | commands | `/` | commands | partial | HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Secret text arguments mask values, disable password saving, and support explicit reveal. |
+| CMD-SECRET-001 | commands | `/` | commands | covered | HTTP-INTERACTION-001; TK-SECRET-INPUT-001; STRESS-COMMAND-ARGUMENTS-001 | Secret text arguments mask values, disable password saving, and support explicit reveal. |
 | CMD-DYNAMIC-001 | commands | `/` | commands | covered | CMD-DYNAMIC-001 | Dependent argument choices load asynchronously when prerequisite values change. |
 | CMD-LIVE-VALIDATION-001 | commands | `/` | commands | covered | CMD-LIVE-VALIDATION-001 | Inputs can request server validation while values change. |
 | CMD-VALIDATION-001 | commands | `/` | commands | covered | CMD-VALIDATION-001 | Field-level and form-level validation errors are announced and rendered. |

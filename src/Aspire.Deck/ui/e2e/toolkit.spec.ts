@@ -409,9 +409,18 @@ test(`${features("TK-NOTIFICATION-001")} exercises reusable notification actions
   await expect(status).toHaveText("Notification dismissed");
 });
 
-test(`${features("TK-SELECT-001", "TK-COMBOBOX-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET-001", "TK-COPY-001")} exercises input and sensitive-value controls`, async ({ page }) => {
+test(`${features("TK-SELECT-001", "TK-COMBOBOX-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET-001", "TK-SECRET-INPUT-001", "TK-COPY-001")} exercises input and sensitive-value controls`, async ({ page }) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   const inputs = page.getByRole("region", { name: "Inputs" });
+  const secretInput = inputs.getByLabel("Command secret");
+  await expect(secretInput).toHaveAttribute("type", "password");
+  await expect(secretInput).toHaveAttribute("autocomplete", "new-password");
+  await secretInput.fill("toolkit-secret");
+  await inputs.getByRole("button", { name: "Reveal secret" }).click();
+  await expect(secretInput).toHaveAttribute("type", "text");
+  await expect(secretInput).toHaveValue("toolkit-secret");
+  await inputs.getByRole("button", { name: "Hide secret" }).click();
+  await expect(secretInput).toHaveAttribute("type", "password");
   const environment = inputs.getByRole("combobox", { name: "Environment" });
   await expect(environment).toHaveValue("development");
   await expect(environment.locator("option")).toHaveText([

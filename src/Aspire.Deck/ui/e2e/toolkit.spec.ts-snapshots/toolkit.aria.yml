@@ -12,6 +12,17 @@
       - toolbar "Sample resource tools":
         - textbox "Filter sample resources…"
       - text: frontend Running · Healthy catalog-db Running · Degraded migration Exited
+  - region "Force graph":
+    - heading "Force graph" [level=2]
+    - status: No graph selection
+    - group "Sample force graph":
+      - button "frontend, Project, Running"
+      - button "catalog-db, Container, Running"
+      - button "migration, Executable, Exited"
+    - toolbar "Sample graph controls":
+      - button "Sample zoom in"
+      - button "Sample zoom out"
+      - button "Sample reset view"
   - region "Actions":
     - heading "Actions" [level=2]
     - status: No action selected
@@ -21,9 +32,12 @@
     - button "Ghost"
     - button "Confirm command"
     - button "Open drawer"
+    - button "Open dialog"
     - button "View sample JSON"
     - button "Show notification"
     - button "Resource commands"
+    - button "Sample filters": Filters
+    - button "Add filter"
   - region "Status":
     - heading "Status" [level=2]
     - text: Neutral Healthy Starting Degraded Failed Selected
@@ -522,6 +536,15 @@
           - cell "PlugConnectedSettings filled PlugConnectedSettingsFilled":
             - img "PlugConnectedSettings filled"
             - code: PlugConnectedSettingsFilled
+        - row "QuestionCircle QuestionCircle regular QuestionCircleRegular QuestionCircle filled QuestionCircleFilled":
+          - cell "QuestionCircle":
+            - code: QuestionCircle
+          - cell "QuestionCircle regular QuestionCircleRegular":
+            - img "QuestionCircle regular"
+            - code: QuestionCircleRegular
+          - cell "QuestionCircle filled QuestionCircleFilled":
+            - img "QuestionCircle filled"
+            - code: QuestionCircleFilled
         - row "Send Send regular SendRegular Send filled SendFilled":
           - cell "Send":
             - code: Send
@@ -664,6 +687,9 @@
     - heading "Inputs" [level=2]
     - text: Environment
     - combobox "Environment"
+    - text: Region
+    - combobox "Region": Central
+    - button "Open"
     - checkbox "Include hidden resources"
     - text: Include hidden resources
     - checkbox "Select all resources" [checked=mixed]
@@ -671,7 +697,11 @@
     - checkbox "Unavailable option" [disabled]
     - text: Unavailable option
     - switch "Pause incoming data"
-    - text: Pause incoming data API key •••••••••••••••
+    - text: Pause incoming data
+    - textbox "Command secret":
+      - /placeholder: Enter a secret
+    - button "Reveal secret"
+    - text: API key •••••••••••••••
     - button "Reveal API key"
   - region "Navigation and disclosure":
     - heading "Navigation and disclosure" [level=2]
@@ -724,6 +754,17 @@
       - definition: frontend
       - term: Trace ID
       - definition: 0123456789abcdef0123456789abcdef
+    - paragraph:
+      - strong: Safe Markdown
+      - text: with
+      - code: code
+      - text: ","
+      - link "documentation":
+        - /url: https://example.com/docs
+      - text: ", and unsafe (javascript:alert(1))."
+    - list:
+      - listitem: First item
+      - listitem: Second item
     - region "Sample property explorer":
       - toolbar "Sample property explorer tools":
         - textbox "Filter sample details…"

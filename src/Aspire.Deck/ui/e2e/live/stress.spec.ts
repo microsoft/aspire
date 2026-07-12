@@ -226,7 +226,7 @@ test(`${features("STRESS-COMMAND-ARGUMENTS-001", "STRESS-COMMAND-VISIBILITY-001"
   const repeat = dialog.getByRole("spinbutton", { name: "Repeat" });
   const shout = dialog.getByRole("checkbox", { name: "Shout" });
   const flavor = dialog.getByRole("combobox", { name: "Flavor" });
-  const secret = dialog.getByLabel("Secret");
+  const secret = dialog.getByLabel("Secret", { exact: true });
   await expect(message).toHaveAttribute("placeholder", "Hello from the Stress playground");
   await expect(message).toHaveAttribute("maxlength", "80");
   await expect(repeat).toHaveValue("1");

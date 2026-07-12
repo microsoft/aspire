@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import type { InteractionInfo, InteractionInputInfo } from "../api/types";
 import { openExternal, respondInteraction } from "../api/deck";
-import { CloseIcon, ComboBox, MarkdownContent } from "../toolkit";
+import { CloseIcon, ComboBox, MarkdownContent, SecretInput } from "../toolkit";
 
 // Side pane (like the resource details drawer) that renders a blocking interaction
 // from the AppHost: a command-input dialog with per-field validation, or a message
@@ -190,11 +190,22 @@ function InputField({
               options={input.options.map(([optionValue, label]) => ({ value: optionValue, label }))}
               onValueChange={(nextValue) => onChange(nextValue)}
             />
+          ) : input.inputType === "secretText" ? (
+            <SecretInput
+              id={fieldId}
+              value={value}
+              placeholder={input.placeholder}
+              disabled={input.disabled}
+              maxLength={input.maxLength > 0 ? input.maxLength : undefined}
+              aria-invalid={hasErrors || undefined}
+              aria-describedby={describedBy}
+              onChange={(event) => onChange(event.target.value)}
+            />
           ) : (
             <input
               id={fieldId}
               className="input"
-              type={input.inputType === "secretText" ? "password" : input.inputType === "number" ? "number" : "text"}
+              type={input.inputType === "number" ? "number" : "text"}
               value={value}
               placeholder={input.placeholder}
               disabled={input.disabled}
