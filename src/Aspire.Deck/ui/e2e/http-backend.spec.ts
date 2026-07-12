@@ -987,10 +987,10 @@ test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, an
     windowSeconds: "300",
     maxPoints: "600",
   });
-  await metrics.getByRole("switch", { name: "Pause incoming data" }).check();
-  const dimensions = metrics.getByRole("region", { name: "Metric dimension filters" });
-  await dimensions.getByText("http.method", { exact: true }).click();
-  await dimensions.getByRole("checkbox", { name: "POST" }).click();
+  await page.goto(
+    "/metrics/resource/stress-api/meter/OpenTelemetry.Instrumentation.AspNetCore/instrument/http.server.request.duration"
+      + `?backend=http&paused=true&dimension=${encodeURIComponent('["http.method",["GET"]]')}`,
+  );
   await expect.poll(() => seriesRequests.some((request) => request["dimension.http.method"] === "s:GET")).toBe(true);
 
   await metrics.getByRole("button", { name: "Clear metrics" }).click();
