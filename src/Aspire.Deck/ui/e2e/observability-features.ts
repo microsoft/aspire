@@ -31,7 +31,7 @@ export const observabilityFeatures = {
   "TRACE-DETAILS-001": "Pointer and keyboard activation open complete span, context, scope, and resource details.",
   "TRACE-EVENTS-001": "Span details preserve event timestamps, exception data, attributes, and dropped counts.",
   "TRACE-LINKS-001": "Span links and backlinks preserve attributes and navigate to the exact related span.",
-  "TRACE-ACTIONS-001": "Span actions open copyable JSON and filter structured logs by the exact span ID.",
+  "TRACE-ACTIONS-001": "Trace and span actions open details, copyable JSON, and related structured logs.",
   "TRACE-DETAIL-ROUTE-001": "Trace and span details restore from a stable URL after reload.",
   "TRACE-FILTER-001": "Traces filter by operation, resource, and trace ID prefix.",
   "TRACE-DURATION-001": "The minimum-duration filter removes spans and empty trace groups.",

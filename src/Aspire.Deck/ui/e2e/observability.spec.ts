@@ -423,6 +423,7 @@ test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRAC
   const initialTraceCount = await traces.count();
   await expect.poll(() => traces.count()).toBeGreaterThan(initialTraceCount);
   const initialTrace = traces.first();
+  await expect(initialTrace.locator(".wf__head-time")).toHaveText(/^\d{2}:\d{2}:\d{2}\.\d{3} (?:AM|PM)$/);
   const initialRedisSpan = initialTrace.locator(".wf__span").nth(1);
   await initialRedisSpan.press("Enter");
   const keyboardDialog = page.getByRole("dialog", { name: "redis GET" });
@@ -443,7 +444,7 @@ test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRAC
   await query.fill(traceId!.slice(0, 8));
   await expect(traces).toHaveCount(1);
   const firstTrace = traces.first();
-  const traceHeader = firstTrace.locator(".wf__head");
+  const traceHeader = firstTrace.locator(".wf__head-toggle");
   const traceSpans = firstTrace.locator(".wf__span");
   await expect(traceHeader).toHaveAttribute("aria-expanded", "true");
   await expect(traceSpans).toHaveCount(5);
@@ -474,6 +475,26 @@ test(`${features("TRACE-EVENTS-001", "TRACE-LINKS-001", "TRACE-ACTIONS-001")} ex
 
   const traces = page.locator(".wf__trace");
   await expect.poll(() => traces.count()).toBeGreaterThanOrEqual(4);
+
+  const firstTrace = traces.first();
+  await firstTrace.getByRole("button", { name: "Trace actions" }).click();
+  const traceActions = page.getByRole("menu", { name: "Trace actions" });
+  await expect(traceActions.getByRole("menuitem")).toHaveText([
+    "View root span details",
+    "View related structured logs",
+    "View trace JSON",
+  ]);
+  await traceActions.getByRole("menuitem", { name: "View trace JSON" }).click();
+  const traceJson = page.getByRole("dialog", { name: /\.json$/ });
+  await expect(traceJson.locator("pre[data-format='json']")).toContainText('"spans"');
+  await expect(traceJson.locator("pre[data-format='json']")).toContainText('"traceId"');
+  await traceJson.getByRole("button", { name: "Close visualizer" }).click();
+
+  await firstTrace.getByRole("button", { name: "Trace actions" }).click();
+  await page.getByRole("menu", { name: "Trace actions" }).getByRole("menuitem", { name: "View root span details" }).click();
+  const rootDetails = page.getByRole("dialog");
+  await expect(rootDetails.getByRole("group", { name: "Span properties" })).toContainText("SpanId");
+  await rootDetails.getByRole("button", { name: "Close" }).click();
 
   const errorTraces = page.locator(".wf__trace--error");
   await expect.poll(() => errorTraces.count()).toBeGreaterThan(0);

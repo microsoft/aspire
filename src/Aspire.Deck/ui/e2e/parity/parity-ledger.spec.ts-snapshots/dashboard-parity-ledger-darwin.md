@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 129
-- React partial: 13
+- React covered: 131
+- React partial: 11
 - React missing: 16
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 29
+- React parity gaps: 27
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -130,7 +130,7 @@
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | GenAI log records open the dedicated GenAI visualizer. |
 | LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Explain errors summarizes current error logs through the assistant. |
 | LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | PENDING | covered | LOG-ROUTE-001 | Resource selection, filters, and selected log are deep-linkable and restorable. |
-| TRACE-LIST-001 | traces | `/traces` | traces | partial | TRACE-LIST-001; HTTP-TRACES-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
+| TRACE-LIST-001 | traces | `/traces` | traces | covered | TRACE-LIST-001; TRACE-ACTIONS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
 | TRACE-LIVE-001 | traces | `/traces` | traces | covered | TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001 | Incoming spans update trace groups and totals without reloading the page. |
 | TRACE-RESOURCE-001 | traces | `/traces` | traces | covered | TRACE-RESOURCE-001 | Traces filter through a grouped resource selector. |
 | TRACE-TYPE-001 | traces | `/traces` | traces | covered | TRACE-TYPE-001 | HTTP, database, messaging, RPC, GenAI, cloud, and other span types can be selected. |
@@ -141,7 +141,7 @@
 | TRACE-PAUSE-001 | traces | `/traces` | traces | covered | TRACE-PAUSE-001 | Incoming traces can be paused and resumed. |
 | TRACE-CLEAR-001 | traces | `/traces` | traces | covered | TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001 | Trace data can be cleared for the selected resource or all resources. |
 | TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | covered | HTTP-TRACE-VIRTUALIZATION-001 | Large trace inventories remain responsive through virtualization. |
-| TRACE-ACTIONS-001 | traces | `/traces` | traces | partial | TRACE-ACTIONS-001 | Per-trace actions expose detail, copy, and related telemetry navigation. |
+| TRACE-ACTIONS-001 | traces | `/traces` | traces | covered | TRACE-ACTIONS-001 | Per-trace actions expose detail, copy, and related telemetry navigation. |
 | TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |
 | TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-LIST-001; TRACE-COLLAPSE-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |
 | TRACE-EXPAND-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-COLLAPSE-001 | Trace detail supports individual and expand-all/collapse-all span control. |

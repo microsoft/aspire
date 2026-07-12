@@ -177,7 +177,7 @@ const featureDefinitions = {
     ["LOG-ROUTE-001", "/structuredlogs/resource/{name}", "Resource selection, filters, and selected log are deep-linkable and restorable.", null, "covered", "LOG-ROUTE-001"],
   ],
   traces: [
-    ["TRACE-LIST-001", "/traces", "Traces render timestamp, name, span count, duration, error status, and actions.", "traces", "partial", "TRACE-LIST-001; HTTP-TRACES-001; STRESS-TRACES-001"],
+    ["TRACE-LIST-001", "/traces", "Traces render timestamp, name, span count, duration, error status, and actions.", "traces", "covered", "TRACE-LIST-001; TRACE-ACTIONS-001; HTTP-TRACES-001; STRESS-TRACES-001"],
     ["TRACE-LIVE-001", "/traces", "Incoming spans update trace groups and totals without reloading the page.", "traces", "covered", "TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001"],
     ["TRACE-RESOURCE-001", "/traces", "Traces filter through a grouped resource selector.", "traces", "covered", "TRACE-RESOURCE-001"],
     ["TRACE-TYPE-001", "/traces", "HTTP, database, messaging, RPC, GenAI, cloud, and other span types can be selected.", "traces", "covered", "TRACE-TYPE-001"],
@@ -188,7 +188,7 @@ const featureDefinitions = {
     ["TRACE-PAUSE-001", "/traces", "Incoming traces can be paused and resumed.", "traces", "covered", "TRACE-PAUSE-001"],
     ["TRACE-CLEAR-001", "/traces", "Trace data can be cleared for the selected resource or all resources.", "traces", "covered", "TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001"],
     ["TRACE-VIRTUALIZATION-001", "/traces", "Large trace inventories remain responsive through virtualization.", null, "covered", "HTTP-TRACE-VIRTUALIZATION-001"],
-    ["TRACE-ACTIONS-001", "/traces", "Per-trace actions expose detail, copy, and related telemetry navigation.", "traces", "partial", "TRACE-ACTIONS-001"],
+    ["TRACE-ACTIONS-001", "/traces", "Per-trace actions expose detail, copy, and related telemetry navigation.", "traces", "covered", "TRACE-ACTIONS-001"],
     ["TRACE-DETAIL-ROUTE-001", "/traces/detail/{traceId}", "A trace opens on a stable deep-linked detail route.", null, "covered", "TRACE-DETAIL-ROUTE-001"],
     ["TRACE-TREE-001", "/traces/detail/{traceId}", "The trace detail preserves parent/child span hierarchy and chronological placement.", null, "partial", "TRACE-LIST-001; TRACE-COLLAPSE-001"],
     ["TRACE-EXPAND-001", "/traces/detail/{traceId}", "Trace detail supports individual and expand-all/collapse-all span control.", null, "partial", "TRACE-COLLAPSE-001"],

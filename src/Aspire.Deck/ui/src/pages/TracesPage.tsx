@@ -2,7 +2,7 @@ import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clearTraces } from "../api/deck";
 import type { SpanSummary, TelemetrySummary } from "../api/types";
 import { useResources, useTelemetry } from "../lib/useDeckEvent";
-import { formatDurationNanos } from "../lib/format";
+import { dateFromUnixNano, formatDurationNanos, formatTimeWithMillis } from "../lib/format";
 import { buildResourceColorMap, colorFor } from "../lib/colors";
 import { matchesTelemetryFilters, parseTelemetryFilters, spanFilterFields, telemetryFieldNames, type TelemetryFilter } from "../lib/telemetryFilters";
 import { SPAN_TYPE_OPTIONS, spanMatchesType, type SpanTypeId } from "../lib/spans";
@@ -84,6 +84,16 @@ function toBig(value: string): bigint {
   } catch {
     return 0n;
   }
+}
+
+function formatTraceJson(trace: TraceGroup): string {
+  return JSON.stringify({
+    traceId: trace.traceId,
+    startTimeUnixNano: trace.startNano.toString(),
+    durationNanos: trace.durationNano.toString(),
+    hasError: trace.hasError,
+    spans: trace.rows.map((row) => JSON.parse(formatSpanJson(row.span)) as unknown),
+  }, null, 2);
 }
 
 // Percentage of `part` within `total`, clamped to [0, 100] with two-decimal precision.
@@ -488,6 +498,8 @@ export function TracesPage({
                     collapsed={collapsed.has(trace.traceId)}
                     onToggle={() => toggle(trace.traceId)}
                     onSelect={onSelectSpan}
+                    onViewLogs={onNavigateToLogs}
+                    onViewJson={(trace) => setTextViewer({ title: `${trace.traceId}.json`, value: formatTraceJson(trace), format: "json" })}
                   />
                 </div>
               ))}
@@ -500,6 +512,8 @@ export function TracesPage({
               collapsed={collapsed.has(trace.traceId)}
               onToggle={() => toggle(trace.traceId)}
               onSelect={onSelectSpan}
+              onViewLogs={onNavigateToLogs}
+              onViewJson={(trace) => setTextViewer({ title: `${trace.traceId}.json`, value: formatTraceJson(trace), format: "json" })}
             />
           ))
         )}
@@ -539,12 +553,16 @@ function TraceBlock({
   collapsed,
   onToggle,
   onSelect,
+  onViewLogs,
+  onViewJson,
 }: {
   trace: TraceGroup;
   colorMap: Map<string, string>;
   collapsed: boolean;
   onToggle: () => void;
   onSelect: (span: SpanSummary) => void;
+  onViewLogs: (spanId: string) => void;
+  onViewJson: (trace: TraceGroup) => void;
 }) {
   const headColor = colorFor(colorMap, trace.resourceName);
   // Axis ticks at 0/25/50/75/100% of the trace duration.
@@ -555,15 +573,31 @@ function TraceBlock({
 
   return (
     <div className={`wf__trace ${trace.hasError ? "wf__trace--error" : ""}`}>
-      <button className="wf__head" onClick={onToggle} aria-expanded={!collapsed}>
-        <ChevronIcon size={14} className={`wf__chevron ${collapsed ? "" : "wf__chevron--open"}`} />
-        <span className="wf__swatch" style={{ background: headColor }} />
-        <span className="wf__head-name">{trace.rootName}</span>
-        {trace.resourceName ? <span className="wf__head-res">{trace.resourceName}</span> : null}
-        <span className="wf__head-spacer" />
-        <span className="wf__head-meta">{trace.rows.length} spans</span>
-        <span className="wf__head-dur">{formatDurationNanos(String(trace.durationNano))}</span>
-      </button>
+      <div className="wf__head">
+        <button className="wf__head-toggle" onClick={onToggle} aria-expanded={!collapsed}>
+          <ChevronIcon size={14} className={`wf__chevron ${collapsed ? "" : "wf__chevron--open"}`} />
+          <span className="wf__swatch" style={{ background: headColor }} />
+          <span className="wf__head-name">{trace.rootName}</span>
+          {trace.resourceName ? <span className="wf__head-res">{trace.resourceName}</span> : null}
+          <span className="wf__head-spacer" />
+          <time className="wf__head-time" dateTime={dateFromUnixNano(trace.startNano.toString()).toISOString()}>
+            {formatTimeWithMillis(dateFromUnixNano(trace.startNano.toString()))}
+          </time>
+          <span className="wf__head-meta">{trace.rows.length} spans</span>
+          <span className="wf__head-dur">{formatDurationNanos(String(trace.durationNano))}</span>
+        </button>
+        <CommandMenu
+          ariaLabel="Trace actions"
+          triggerContent={null}
+          triggerIcon={<NamedIcon name="MoreHorizontal" size={16} />}
+          triggerSize="small"
+          entries={[
+            { id: "details", label: "View root span details", icon: <NamedIcon name="Info" size={16} />, onSelect: () => onSelect(trace.rows[0]!.span) },
+            { id: "logs", label: "View related structured logs", icon: <NamedIcon name="Logs" size={16} />, onSelect: () => onViewLogs(trace.rows[0]!.span.spanId) },
+            { id: "json", label: "View trace JSON", icon: <NamedIcon name="Braces" size={16} />, onSelect: () => onViewJson(trace) },
+          ]}
+        />
+      </div>
 
       {collapsed ? null : (
         <>
