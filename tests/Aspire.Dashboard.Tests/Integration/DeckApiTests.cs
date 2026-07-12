@@ -147,12 +147,33 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                 "isHidden": true,
                 "supportsDetailedTelemetry": true,
                 "iconName": "Code",
-                "iconVariant": "filled"
+                "iconVariant": "filled",
+                "hasTerminal": false,
+                "terminalReplicaIndex": null
               }
             ]
             """);
 
         Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
+    }
+
+    [Fact]
+    public async Task GetResources_ReturnsTerminalMetadata()
+    {
+        var resource = CreateResource(hasTerminal: true);
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.Services.AddSingleton<IDashboardClient>(
+                new TestDashboardClient(isEnabled: true, initialResources: [resource])));
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        var response = await httpClient.GetAsync("/api/deck/resources").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.OK, response.StatusCode);
+        var actual = Assert.IsType<JsonObject>(Assert.Single(JsonNode.Parse(await response.Content.ReadAsStringAsync().DefaultTimeout())!.AsArray()));
+        Assert.True((bool?)actual["hasTerminal"]);
+        Assert.Equal(2, (int?)actual["terminalReplicaIndex"]);
     }
 
     [Fact]
@@ -1073,7 +1094,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         return Assert.Single(Assert.Single(data?.ResourceSpans ?? []).ScopeSpans ?? []).Spans?.Single().Name;
     }
 
-    private static ResourceViewModel CreateResource()
+    private static ResourceViewModel CreateResource(bool hasTerminal = false)
     {
         var property = new ResourcePropertyViewModel(
             name: "connectionString",
@@ -1083,6 +1104,15 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             sortOrder: 20,
             displayName: "Connection string",
             isHighlighted: true);
+
+        var properties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty.Add(property.Name, property);
+        if (hasTerminal)
+        {
+            properties = properties
+                .Add(KnownProperties.Terminal.Enabled, CreateTerminalProperty(KnownProperties.Terminal.Enabled, "true"))
+                .Add(KnownProperties.Terminal.ReplicaIndex, CreateTerminalProperty(KnownProperties.Terminal.ReplicaIndex, "2"))
+                .Add(KnownProperties.Terminal.ReplicaCount, CreateTerminalProperty(KnownProperties.Terminal.ReplicaCount, "3"));
+        }
 
         return new ResourceViewModel
         {
@@ -1108,7 +1138,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             ],
             Volumes = [],
             Relationships = [new RelationshipViewModel("database", "Reference")],
-            Properties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty.Add(property.Name, property),
+            Properties = properties,
             Commands =
             [
                 new CommandViewModel(
@@ -1129,5 +1159,8 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             IconName = "Code",
             IconVariant = IconVariant.Filled
         };
+
+        static ResourcePropertyViewModel CreateTerminalProperty(string name, string value) =>
+            new(name, Value.ForString(value), isValueSensitive: false, knownProperty: null, sortOrder: 0, displayName: null, isHighlighted: false);
     }
 }

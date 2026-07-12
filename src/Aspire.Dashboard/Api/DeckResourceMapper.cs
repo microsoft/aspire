@@ -12,6 +12,9 @@ internal static class DeckResourceMapper
 {
     public static DeckResource Map(ResourceViewModel resource, IStringLocalizer<Resources.Resources> localizer)
     {
+        var terminalReplicaIndex = 0;
+        var hasTerminal = resource.HasTerminal()
+            && resource.TryGetTerminalReplicaInfo(out terminalReplicaIndex, out _);
         return new DeckResource(
             Name: resource.Name,
             ResourceType: resource.ResourceType,
@@ -36,7 +39,9 @@ internal static class DeckResourceMapper
             IsHidden: resource.IsResourceHidden(showHiddenResources: false),
             SupportsDetailedTelemetry: resource.SupportsDetailedTelemetry,
             IconName: resource.IconName,
-            IconVariant: MapIconVariant(resource.IconVariant));
+            IconVariant: MapIconVariant(resource.IconVariant),
+            HasTerminal: hasTerminal,
+            TerminalReplicaIndex: hasTerminal ? terminalReplicaIndex : null);
     }
 
     private static DeckResourceUrl MapUrl(UrlViewModel url)

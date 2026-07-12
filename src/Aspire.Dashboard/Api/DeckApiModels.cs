@@ -31,7 +31,9 @@ internal sealed record DeckResource(
     bool IsHidden,
     bool SupportsDetailedTelemetry,
     string? IconName,
-    string? IconVariant);
+    string? IconVariant,
+    bool HasTerminal,
+    int? TerminalReplicaIndex);
 
 internal sealed record DeckResourceUrl(
     string? Name,
