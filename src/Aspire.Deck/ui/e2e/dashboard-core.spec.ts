@@ -331,6 +331,27 @@ test(`${features("APP-PAGE-001")} composes every route from the page toolkit`, a
   }
 });
 
+test(`${features("APP-ACCESSIBILITY-001")} contains and restores focus for modal panels`, async ({ page }) => {
+  const frontend = page.getByRole("row", { name: /frontend/ });
+  await frontend.focus();
+  await frontend.press("Enter");
+
+  const panel = page.getByRole("dialog", { name: "frontend" });
+  await expect(panel).toBeVisible();
+  await expect.poll(() => panel.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+
+  const focusableCount = await panel.locator("button:not(:disabled), a[href], input:not(:disabled), textarea:not(:disabled), select:not(:disabled), [tabindex]:not([tabindex='-1'])").count();
+  expect(focusableCount).toBeGreaterThan(0);
+  for (let index = 0; index < focusableCount + 2; index++) {
+    await page.keyboard.press("Tab");
+    expect(await panel.evaluate((element) => element.contains(document.activeElement))).toBe(true);
+  }
+
+  await page.keyboard.press("Escape");
+  await expect(panel).toBeHidden();
+  await expect(frontend).toBeFocused();
+});
+
 test(`${features("APP-NOTIFICATION-001", "PARAM-NOTIFICATION-001")} completes every notification action`, async ({ page }) => {
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("Unresolved parameters");

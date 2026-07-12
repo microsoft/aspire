@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 154
-- React partial: 3
+- React covered: 155
+- React partial: 2
 - React missing: 0
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 3
+- React parity gaps: 2
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -31,7 +31,7 @@
 | SHELL-NOTFOUND-001 | shell | `/error/404` | PENDING | covered | APP-NOTFOUND-001 | Unknown routes render a dedicated not-found experience. |
 | SHELL-ERROR-001 | shell | `/error` | shell | covered | APP-ERROR-001 | Unhandled errors render a recoverable error experience. |
 | SHELL-RESPONSIVE-001 | shell | `/` | shell | partial | APP-RESPONSIVE-001; STRESS-RESPONSIVE-001 | Navigation, header actions, pages, and overlays remain usable on mobile. |
-| SHELL-ACCESSIBILITY-001 | shell | `/` | shell | partial | APP-PAGE-001; toolkit.aria.yml | Landmarks, names, focus order, dialogs, and keyboard interaction remain accessible. |
+| SHELL-ACCESSIBILITY-001 | shell | `/` | shell | covered | APP-PAGE-001; APP-ACCESSIBILITY-001; toolkit.aria.yml | Landmarks, names, focus order, dialogs, and keyboard interaction remain accessible. |
 | SHELL-BROWSER-ERRORS-001 | shell | `/` | shell | covered | APP-BROWSER-001 | Normal navigation and interaction produce no page or console errors. |
 | RES-LIST-001 | resources | `/` | resources | covered | RES-LIST-001; STRESS-RESOURCES-001 | The live resource inventory renders and excludes parameter resources. |
 | RES-HIDDEN-001 | resources | `/` | resources | covered | RES-VIEW-OPTIONS-001; STRESS-VISIBILITY-001 | Hidden resources are excluded by default and can be shown through view options. |

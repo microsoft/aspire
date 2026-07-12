@@ -4,6 +4,7 @@ export const dashboardCoreFeatures = {
   "APP-NAV-001": "Every dashboard page is reachable from navigation and reports the active page.",
   "APP-ROUTES-001": "Dashboard pages have stable URLs that restore on reload and support browser back and forward navigation.",
   "APP-PAGE-001": "Every dashboard route uses a named page region, heading, body, and named toolbar where tools are available.",
+  "APP-ACCESSIBILITY-001": "Modal panels move, contain, and restore keyboard focus.",
   "APP-CONNECTION-001": "Resource service and OTLP connection states become connected.",
   "APP-APPHOST-001": "The AppHost switcher lists attached hosts and changes the active host.",
   "APP-THEME-001": "The dashboard selects and persists system, light, and dark themes.",
