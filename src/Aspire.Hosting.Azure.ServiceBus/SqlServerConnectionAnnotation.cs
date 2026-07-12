@@ -10,13 +10,17 @@ namespace Aspire.Hosting.Azure.ServiceBus;
 /// </summary>
 internal sealed class SqlServerConnectionAnnotation : IResourceAnnotation
 {
-    public SqlServerConnectionAnnotation(EndpointReference endpoint, ParameterResource password)
+    private readonly Func<ParameterResource> _passwordResolver;
+
+    // The password is resolved lazily because SqlServerServerResource.PasswordParameter can be replaced
+    // after this annotation is created (e.g. by a later WithPassword call on the SQL Server resource).
+    public SqlServerConnectionAnnotation(EndpointReference endpoint, Func<ParameterResource> passwordResolver)
     {
         Endpoint = endpoint ?? throw new ArgumentNullException(nameof(endpoint));
-        Password = password ?? throw new ArgumentNullException(nameof(password));
+        _passwordResolver = passwordResolver ?? throw new ArgumentNullException(nameof(passwordResolver));
     }
 
     public EndpointReference Endpoint { get; }
 
-    public ParameterResource Password { get; }
+    public ParameterResource Password => _passwordResolver();
 }

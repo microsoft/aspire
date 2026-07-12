@@ -660,6 +660,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator();
 
         var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+        Assert.IsType<SqlServerServerResource>(sql);
         var imageAnnotation = Assert.Single(sql.Annotations.OfType<ContainerImageAnnotation>());
         Assert.Equal("mssql/server", imageAnnotation.Image);
 
@@ -690,6 +691,34 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void WithSqlServerContainer_SupportsSqlServerIntegrationApis()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServerContainer(sql => sql.WithHostPort(12345)));
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+        var endpoint = Assert.Single(sql.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal(12345, endpoint.Port);
+    }
+
+    [Fact]
+    public async Task WithSqlServerContainer_PasswordChangedInCallback_IsUsedByEmulator()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var password = builder.AddParameter("sql-password", "p@ssw0rd1");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServerContainer(sql => sql.WithPassword(password)));
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("p@ssw0rd1", env["MSSQL_SA_PASSWORD"]);
+    }
+
+    [Fact]
     public async Task WithSqlServer_ReusesExistingSqlServerResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
@@ -697,7 +726,43 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var sql = builder.AddSqlServer("sql");
 
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
-            .WithSqlServer(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter));
+            .WithSqlServer(sql));
+
+        Assert.DoesNotContain(builder.Resources, x => x.Name == "sb-mssql");
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("Y", env["ACCEPT_EULA"]);
+        Assert.Equal("sql:1433", env["SQL_SERVER"]);
+        Assert.Equal(await sql.Resource.PasswordParameter.GetValueAsync(CancellationToken.None), env["MSSQL_SA_PASSWORD"]);
+    }
+
+    [Fact]
+    public async Task WithSqlServer_PasswordChangedAfterCall_IsUsedByEmulator()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql = builder.AddSqlServer("sql");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServer(sql));
+
+        sql.WithPassword(builder.AddParameter("new-password", "p@ssw0rd2"));
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("p@ssw0rd2", env["MSSQL_SA_PASSWORD"]);
+    }
+
+    [Fact]
+    public async Task WithSqlServerConnection_UsesProvidedEndpointAndPassword()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql = builder.AddSqlServer("sql");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServerConnection(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter));
 
         Assert.DoesNotContain(builder.Resources, x => x.Name == "sb-mssql");
 
@@ -747,8 +812,8 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var sql2 = builder.AddSqlServer("sql2");
 
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
-            .WithSqlServer(sql1.Resource.PrimaryEndpoint, sql1.Resource.PasswordParameter)
-            .WithSqlServer(sql2.Resource.PrimaryEndpoint, sql2.Resource.PasswordParameter));
+            .WithSqlServer(sql1)
+            .WithSqlServer(sql2));
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
@@ -770,13 +835,40 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
             {
                 if (sqlServerFirst)
                 {
-                    configure.WithSqlServer(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter)
+                    configure.WithSqlServer(sql)
                         .WithSqlServerContainer(container => container.WithImageTag("2019-latest"));
                 }
                 else
                 {
                     configure.WithSqlServerContainer(container => container.WithImageTag("2019-latest"))
-                        .WithSqlServer(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter);
+                        .WithSqlServer(sql);
+                }
+            }));
+
+        Assert.Contains("cannot use both", exception.Message);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithSqlServerConnectionAndWithSqlServerContainer_AreMutuallyExclusive(bool connectionFirst)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var sql = builder.AddSqlServer("sql");
+
+        var exception = Assert.Throws<InvalidOperationException>(() =>
+            builder.AddAzureServiceBus("sb").RunAsEmulator(configure =>
+            {
+                if (connectionFirst)
+                {
+                    configure.WithSqlServerConnection(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter)
+                        .WithSqlServerContainer(container => container.WithImageTag("2019-latest"));
+                }
+                else
+                {
+                    configure.WithSqlServerContainer(container => container.WithImageTag("2019-latest"))
+                        .WithSqlServerConnection(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter);
                 }
             }));
 

@@ -64,27 +64,29 @@ var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator();
 
 When the AppHost starts up, a local container running the Azure Service Bus emulator will be started. By default it is accompanied by a SQL Server container that the emulator uses to store its state, unless an existing SQL Server resource is provided with `WithSqlServer` (see below).
 
-The SQL Server container can be customized, for instance to use a specific image tag or container name:
+The SQL Server container can be customized using the regular SQL Server integration APIs, for instance to persist its state in a data volume or use a specific container name:
 
 ```csharp
 // AppHost
 var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(emulator => emulator
     .WithSqlServerContainer(sql => sql
-        .WithImageTag("2019-latest")
+        .WithDataVolume()
         .WithContainerName("myproject-servicebus-sql")));
 ```
 
-Alternatively, the emulator can reuse an existing SQL Server instance instead of creating a dedicated container by providing its endpoint and administrator password:
+Alternatively, the emulator can reuse an existing SQL Server resource instead of creating a dedicated container:
 
 ```csharp
 // AppHost
 var sql = builder.AddSqlServer("sql");
 
 var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(emulator => emulator
-    .WithSqlServer(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter));
+    .WithSqlServer(sql));
 ```
 
-> NOTE: `WithSqlServerContainer` and `WithSqlServer` are mutually exclusive and throw an exception when combined.
+For SQL Server instances that are not modeled as a SQL Server resource, the lower-level `WithSqlServerConnection(endpoint, saPasswordParameter)` overload accepts an endpoint and administrator password directly.
+
+> NOTE: `WithSqlServerContainer` and `WithSqlServer`/`WithSqlServerConnection` are mutually exclusive and throw an exception when combined.
 
 ## Connection Properties
 
