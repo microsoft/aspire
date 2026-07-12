@@ -118,7 +118,15 @@ test(`${features("CONSOLE-PAUSE-001", "CONSOLE-CLEAR-001")} pauses, catches up, 
   await pause.uncheck();
   await expect.poll(() => lineText.count()).toBeGreaterThan(pausedCount);
 
-  await page.getByRole("button", { name: "Clear" }).click();
+  await page.getByRole("button", { name: "Clear console" }).click();
+  await page.getByRole("menuitem", { name: /Clear frontend/i }).click();
+  await expect(consolePanel.locator(".console__footer")).toContainText("0 lines");
+  await expect.poll(() => lineText.count(), { timeout: 4_000 }).toBeGreaterThan(0);
+
+  await page.getByRole("combobox").selectOption({ label: "All resources" });
+  await expect.poll(() => lineText.count()).toBeGreaterThan(0);
+  await page.getByRole("button", { name: "Clear console" }).click();
+  await page.getByRole("menuitem", { name: "Clear all resources" }).click();
   await expect(consolePanel.locator(".console__footer")).toContainText("0 lines");
   await expect.poll(() => lineText.count(), { timeout: 4_000 }).toBeGreaterThan(0);
 });

@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 136
-- React partial: 6
+- React covered: 137
+- React partial: 5
 - React missing: 16
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 22
+- React parity gaps: 21
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -104,7 +104,7 @@
 | CONSOLE-SWITCH-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-SWITCH-001 | Switching resources replaces the visible stream and subscription. |
 | CONSOLE-FOLLOW-001 | console | `/consolelogs` | PENDING | covered | CONSOLE-FOLLOW-001 | Manual scrolling pauses tail-follow and the user can return to the live tail. |
 | CONSOLE-PAUSE-001 | console | `/consolelogs` | console | covered | CONSOLE-PAUSE-001; CONSOLE-ROUTE-001 | Incoming console data can be paused and resumed without losing context. |
-| CONSOLE-CLEAR-001 | console | `/consolelogs` | console | partial | CONSOLE-CLEAR-001 | Console data can be cleared for the selected resource or all resources. |
+| CONSOLE-CLEAR-001 | console | `/consolelogs` | console | covered | CONSOLE-CLEAR-001 | Console data can be cleared for the selected resource or all resources. |
 | CONSOLE-DOWNLOAD-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001 | The current console log can be downloaded. |
 | CONSOLE-TIMESTAMP-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Timestamp visibility and UTC/local formatting can be toggled. |
 | CONSOLE-WRAP-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001 | Long console lines can wrap or scroll horizontally. |

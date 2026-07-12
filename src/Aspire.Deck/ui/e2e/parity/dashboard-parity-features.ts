@@ -147,7 +147,7 @@ const featureDefinitions = {
     ["CONSOLE-SWITCH-001", "/consolelogs", "Switching resources replaces the visible stream and subscription.", null, "covered", "CONSOLE-SWITCH-001"],
     ["CONSOLE-FOLLOW-001", "/consolelogs", "Manual scrolling pauses tail-follow and the user can return to the live tail.", null, "covered", "CONSOLE-FOLLOW-001"],
     ["CONSOLE-PAUSE-001", "/consolelogs", "Incoming console data can be paused and resumed without losing context.", "console", "covered", "CONSOLE-PAUSE-001; CONSOLE-ROUTE-001"],
-    ["CONSOLE-CLEAR-001", "/consolelogs", "Console data can be cleared for the selected resource or all resources.", "console", "partial", "CONSOLE-CLEAR-001"],
+    ["CONSOLE-CLEAR-001", "/consolelogs", "Console data can be cleared for the selected resource or all resources.", "console", "covered", "CONSOLE-CLEAR-001"],
     ["CONSOLE-DOWNLOAD-001", "/consolelogs", "The current console log can be downloaded.", null, "covered", "HTTP-CONSOLE-CONTROLS-001"],
     ["CONSOLE-TIMESTAMP-001", "/consolelogs", "Timestamp visibility and UTC/local formatting can be toggled.", null, "covered", "HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001"],
     ["CONSOLE-WRAP-001", "/consolelogs", "Long console lines can wrap or scroll horizontally.", null, "covered", "HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001"],

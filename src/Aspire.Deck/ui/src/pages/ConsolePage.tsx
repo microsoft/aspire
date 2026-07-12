@@ -85,6 +85,7 @@ export function ConsolePage({
   const pausedRef = useRef(paused);
   pausedRef.current = paused;
   const pendingLinesRef = useRef<BufferedLine[]>([]);
+  const clearedThroughRef = useRef(new Map<string, number>());
   const visibleResources = useMemo(
     () => resources.filter((resource) => !resource.isHidden),
     [resources],
@@ -147,7 +148,8 @@ export function ConsolePage({
     setPendingCount(0);
     const unsubscribes = subscriptionNames.map((resourceName) =>
       subscribeConsoleLogs(resourceName, (event) => {
-        const incoming = event.lines.map((line: ConsoleLogLine) => {
+        const clearedThrough = clearedThroughRef.current.get(event.resourceName) ?? 0;
+        const incoming = event.lines.filter((line) => line.lineNumber > clearedThrough).map((line: ConsoleLogLine) => {
           const parsed = parseConsoleLine(line.text);
           return {
             resourceName: event.resourceName,
@@ -203,10 +205,20 @@ export function ConsolePage({
     });
   };
 
-  const clearLines = (): void => {
-    setLines([]);
-    pendingLinesRef.current = [];
-    setPendingCount(0);
+  const clearLines = (resourceName: string | null): void => {
+    const candidates = [...lines, ...pendingLinesRef.current];
+    const resourcesToClear = resourceName === null
+      ? new Set(candidates.map((line) => line.resourceName))
+      : new Set([resourceName]);
+    for (const name of resourcesToClear) {
+      const lastLineNumber = candidates
+        .filter((line) => line.resourceName === name)
+        .reduce((maximum, line) => Math.max(maximum, line.lineNumber), clearedThroughRef.current.get(name) ?? 0);
+      clearedThroughRef.current.set(name, lastLineNumber);
+    }
+    setLines((current) => current.filter((line) => !resourcesToClear.has(line.resourceName)));
+    pendingLinesRef.current = pendingLinesRef.current.filter((line) => !resourcesToClear.has(line.resourceName));
+    setPendingCount(pendingLinesRef.current.length);
   };
 
   const downloadLines = (): void => {
@@ -365,10 +377,25 @@ export function ConsolePage({
           checked={paused}
           onCheckedChange={onPausedChanged}
         />
-        <Button size="small" onClick={clearLines} disabled={lines.length === 0 && pendingCount === 0}>
-          <NamedIcon name="Delete" size={16} />
-          Clear
-        </Button>
+        <CommandMenu
+          ariaLabel="Clear console"
+          triggerContent="Clear"
+          triggerIcon={<NamedIcon name="Delete" size={16} />}
+          entries={[
+            {
+              id: "clear-resource",
+              label: selectedResource === null ? "Clear selected resource" : `Clear ${selectedResource.displayName}`,
+              disabled: selectedResource === null || (lines.length === 0 && pendingCount === 0),
+              onSelect: () => clearLines(selectedResource?.name ?? null),
+            },
+            {
+              id: "clear-all",
+              label: "Clear all resources",
+              disabled: lines.length === 0 && pendingCount === 0,
+              onSelect: () => clearLines(null),
+            },
+          ]}
+        />
         {selectedResource ? highlightedCommands.map((command) => (
           <Button
             key={command.name}
