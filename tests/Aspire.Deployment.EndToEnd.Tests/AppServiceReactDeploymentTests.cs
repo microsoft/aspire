@@ -354,7 +354,7 @@ builder.AddAzureAppServiceEnvironment("infra")
             "webapp_count=$((webapp_count + 1)); " +
             "if ! subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query \"virtualNetworkSubnetId\" -o tsv); then echo \"ERROR: Failed to query VNet integration for $webapp\"; exit 1; fi; " +
             "if [ -n \"$subnet_id\" ]; then echo \"ERROR: $webapp unexpectedly has VNet integration\"; exit 1; fi; " +
-            "slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); " +
+            "if ! slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); then echo \"ERROR: Failed to query deployment slots for $webapp\"; exit 1; fi; " +
             "for slot in $slots; do " +
             "slot_count=$((slot_count + 1)); " +
             "if ! subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query \"virtualNetworkSubnetId\" -o tsv); then echo \"ERROR: Failed to query VNet integration for $webapp/$slot\"; exit 1; fi; " +
@@ -388,7 +388,7 @@ builder.AddAzureAppServiceEnvironment("infra")
             "webapp_count=$((webapp_count + 1)); " +
             "subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query \"virtualNetworkSubnetId\" -o tsv 2>/dev/null); " +
             "if [ \"$subnet_id\" != \"$expected_subnet_id\" ]; then all_integrated=0; fi; " +
-            "slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); " +
+            "if ! slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); then echo \"ERROR: Failed to query deployment slots for $webapp\"; all_integrated=0; continue; fi; " +
             "for slot in $slots; do " +
             "slot_count=$((slot_count + 1)); " +
             "subnet_id=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query \"virtualNetworkSubnetId\" -o tsv 2>/dev/null); " +
