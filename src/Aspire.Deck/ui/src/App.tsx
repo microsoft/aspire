@@ -162,7 +162,35 @@ export function App({
           <NotConnected config={config} state={resourceState === "error" ? "error" : "disconnected"} />
         ) : (
           <>
-            {page === "resources" ? <ResourcesPage /> : null}
+            {page === "resources" ? (
+              <ResourcesPage
+                route={{
+                  resourceName: route.resourceName ?? null,
+                  query: route.resourceQuery ?? "",
+                  hiddenTypes: route.resourceHiddenTypes ?? [],
+                  hiddenStates: route.resourceHiddenStates ?? [],
+                  hiddenHealth: route.resourceHiddenHealth ?? [],
+                  showHidden: route.resourceShowHidden ?? false,
+                  showType: route.resourceShowType ?? false,
+                  collapsed: route.resourceCollapsed ?? [],
+                  sortColumn: route.resourceSortColumn ?? "name",
+                  sortDirection: route.resourceSortDirection ?? "ascending",
+                }}
+                onRouteChange={(state) => navigate({
+                  page: "resources",
+                  resourceName: state.resourceName ?? undefined,
+                  resourceQuery: state.query || undefined,
+                  resourceHiddenTypes: state.hiddenTypes.length > 0 ? state.hiddenTypes : undefined,
+                  resourceHiddenStates: state.hiddenStates.length > 0 ? state.hiddenStates : undefined,
+                  resourceHiddenHealth: state.hiddenHealth.length > 0 ? state.hiddenHealth : undefined,
+                  resourceShowHidden: state.showHidden || undefined,
+                  resourceShowType: state.showType || undefined,
+                  resourceCollapsed: state.collapsed.length > 0 ? state.collapsed : undefined,
+                  resourceSortColumn: state.sortColumn === "name" ? undefined : state.sortColumn,
+                  resourceSortDirection: state.sortDirection === "ascending" ? undefined : state.sortDirection,
+                })}
+              />
+            ) : null}
             {page === "parameters" ? <ParametersPage /> : null}
             {page === "console" ? (
               <ConsolePage

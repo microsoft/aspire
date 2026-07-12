@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 73
-- React partial: 37
-- React missing: 48
-- Legacy black-box scenarios pending: 80
-- React parity gaps: 85
+- React covered: 83
+- React partial: 34
+- React missing: 41
+- Legacy black-box scenarios pending: 78
+- React parity gaps: 75
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -35,24 +35,24 @@
 | SHELL-ACCESSIBILITY-001 | shell | `/` | shell | partial | APP-PAGE-001; toolkit.aria.yml | Landmarks, names, focus order, dialogs, and keyboard interaction remain accessible. |
 | SHELL-BROWSER-ERRORS-001 | shell | `/` | shell | covered | APP-BROWSER-001 | Normal navigation and interaction produce no page or console errors. |
 | RES-LIST-001 | resources | `/` | resources | covered | RES-LIST-001; STRESS-RESOURCES-001 | The live resource inventory renders and excludes parameter resources. |
-| RES-HIDDEN-001 | resources | `/` | resources | partial | STRESS-VISIBILITY-001 | Hidden resources are excluded by default and can be shown through view options. |
+| RES-HIDDEN-001 | resources | `/` | resources | covered | RES-VIEW-OPTIONS-001; STRESS-VISIBILITY-001 | Hidden resources are excluded by default and can be shown through view options. |
 | RES-COUNT-001 | resources | `/` | resources | covered | STRESS-RESOURCES-001 | The visible resource count tracks filtering and view options. |
 | RES-TEXT-FILTER-001 | resources | `/` | resources | covered | RES-FILTER-001 | Resources filter by text and expose an empty result state. |
-| RES-STRUCTURED-FILTER-001 | resources | `/` | resources | missing | - | Resource state, type, and health filters can be composed and cleared. |
-| RES-VIEW-OPTIONS-001 | resources | `/` | resources | missing | - | View options control hidden resources, resource type, and hierarchy expansion. |
+| RES-STRUCTURED-FILTER-001 | resources | `/` | resources | covered | RES-STRUCTURED-FILTER-001 | Resource state, type, and health filters can be composed and cleared. |
+| RES-VIEW-OPTIONS-001 | resources | `/` | resources | covered | RES-VIEW-OPTIONS-001 | View options control hidden resources, resource type, and hierarchy expansion. |
 | RES-SORT-001 | resources | `/` | resources | covered | RES-SORT-001 | Supported resource columns sort ascending and descending. |
-| RES-COLUMNS-001 | resources | `/` | resources | partial | RES-LIST-001; RES-ENDPOINT-001 | Name, state, source, URLs, and start time columns render the legacy data model. |
-| RES-SOURCE-001 | resources | `/` | resources | missing | - | Project, executable, container, and custom resource sources are displayed. |
-| RES-URLS-001 | resources | `/` | resources | partial | RES-ENDPOINT-001 | External endpoints use display names and preserve internal/inactive endpoint rules. |
+| RES-COLUMNS-001 | resources | `/` | resources | covered | RES-LIST-001; RES-ENDPOINT-001; RES-SOURCE-001 | Name, state, source, URLs, and start time columns render the legacy data model. |
+| RES-SOURCE-001 | resources | `/` | resources | covered | RES-SOURCE-001 | Project, executable, container, and custom resource sources are displayed. |
+| RES-URLS-001 | resources | `/` | resources | covered | RES-ENDPOINT-001 | External endpoints use display names and preserve internal/inactive endpoint rules. |
 | RES-LONG-URLS-001 | resources | `/` | PENDING | partial | APP-RESPONSIVE-001 | Large endpoint sets and very long URLs remain usable without breaking layout. |
-| RES-NESTING-001 | resources | `/` | resources | missing | - | Parent/child resources render as a hierarchical tree. |
-| RES-EXPAND-001 | resources | `/` | resources | missing | - | Individual branches and all branches can be expanded and collapsed. |
+| RES-NESTING-001 | resources | `/` | resources | covered | RES-HIERARCHY-001 | Parent/child resources render as a hierarchical tree. |
+| RES-EXPAND-001 | resources | `/` | resources | covered | RES-HIERARCHY-001; RES-VIEW-OPTIONS-001 | Individual branches and all branches can be expanded and collapsed. |
 | RES-GRAPH-001 | resources | `/?view=Graph` | resources | missing | - | Resources and relationships render in the graph view. |
 | RES-GRAPH-ZOOM-001 | resources | `/?view=Graph` | resources | missing | - | Graph zoom in, zoom out, and reset controls work. |
 | RES-GRAPH-CONTEXT-001 | resources | `/?view=Graph` | PENDING | missing | - | Graph nodes expose resource actions and details context menus. |
 | RES-VIRTUALIZATION-001 | resources | `/` | PENDING | missing | - | Large resource inventories remain responsive through row virtualization. |
 | RES-DETAILS-001 | resources | `/` | resources | covered | RES-DETAILS-001; STRESS-DETAILS-001 | Selecting a resource opens overview, endpoints, properties, environment, health, and relationships. |
-| RES-DETAILS-LINK-001 | resources | `/?resource={name}` | PENDING | missing | - | A resource details selection is deep-linkable and restorable. |
+| RES-DETAILS-LINK-001 | resources | `/?resource={name}` | resources | covered | RES-DETAILS-LINK-001 | A resource details selection is deep-linkable and restorable. |
 | RES-PROPERTIES-001 | resources | `/` | resources | partial | RES-DETAILS-001 | Known, custom, highlighted, null, array, and object properties render correctly. |
 | RES-SECRETS-001 | resources | `/` | resources | covered | RES-SECRETS-001; STRESS-SECRETS-001 | Sensitive properties and environment values remain masked until explicitly revealed. |
 | RES-COPY-001 | resources | `/` | PENDING | missing | - | Resource property and environment values can be copied without accidental disclosure. |
@@ -63,7 +63,7 @@
 | RES-RESOURCE-ICON-001 | resources | `/` | PENDING | covered | RES-ICON-001; HTTP-RESOURCES-001; STRESS-RESOURCE-ICON-001 | Custom Fluent resource icon names override resource-type fallbacks. |
 | RES-RESOURCE-ICON-VARIANT-001 | resources | `/` | PENDING | covered | RES-ICON-001; DeckApiTests.GetResources_ReturnsDeckResourceContract | Regular and filled resource icon variants are preserved. |
 | RES-CONTEXT-MENU-001 | resources | `/` | PENDING | missing | - | Resource rows expose details, navigation, and commands through a context menu. |
-| RES-SESSION-001 | resources | `/` | PENDING | missing | - | Search, filters, sort, view, expansion, and selection survive navigation and reload. |
+| RES-SESSION-001 | resources | `/` | resources | covered | RES-SORT-001; RES-STRUCTURED-FILTER-001; RES-VIEW-OPTIONS-001; RES-HIERARCHY-001; RES-DETAILS-LINK-001 | Search, filters, sort, view, expansion, and selection survive navigation and reload. |
 | PARAM-LIST-001 | parameters | `/parameters` | parameters | covered | PARAM-LIST-001; STRESS-PARAMETERS-001 | Plain, secret, and unresolved parameters render on a dedicated page. |
 | PARAM-COUNT-001 | parameters | `/parameters` | parameters | covered | STRESS-PARAMETERS-001 | The parameter count tracks the current filter. |
 | PARAM-FILTER-001 | parameters | `/parameters` | parameters | covered | PARAM-FILTER-001 | Parameters filter by name and state. |

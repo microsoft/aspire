@@ -22,6 +22,16 @@ export interface DashboardRoute {
   metricsPaused?: boolean;
   metricDimensions?: Record<string, Array<string | null>>;
   metricHistogramCount?: boolean;
+  resourceName?: string;
+  resourceQuery?: string;
+  resourceHiddenTypes?: string[];
+  resourceHiddenStates?: string[];
+  resourceHiddenHealth?: string[];
+  resourceShowHidden?: boolean;
+  resourceShowType?: boolean;
+  resourceCollapsed?: string[];
+  resourceSortColumn?: string;
+  resourceSortDirection?: "ascending" | "descending";
 }
 
 const pagePaths: Record<PageId, string> = {
@@ -138,7 +148,20 @@ export function readDashboardRoute(
     return { page: "error" };
   }
   if (path === "/" || path === "") {
-    return { page: "resources" };
+    const search = new URLSearchParams(location.search);
+    return {
+      page: "resources",
+      resourceName: search.get("resource") || undefined,
+      resourceQuery: search.get("q") || undefined,
+      resourceHiddenTypes: search.getAll("hiddenType"),
+      resourceHiddenStates: search.getAll("hiddenState"),
+      resourceHiddenHealth: search.getAll("hiddenHealth"),
+      resourceShowHidden: search.get("showHiddenResources") === "true" || undefined,
+      resourceShowType: search.get("showResourceTypes") === "true" || undefined,
+      resourceCollapsed: search.getAll("collapsed"),
+      resourceSortColumn: search.get("sort") || undefined,
+      resourceSortDirection: search.get("sortDirection") === "descending" ? "descending" : undefined,
+    };
   }
   return { page: "notFound" };
 }
@@ -171,6 +194,14 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
   url.searchParams.delete("view");
   url.searchParams.delete("dimension");
   url.searchParams.delete("histogram");
+  url.searchParams.delete("hiddenType");
+  url.searchParams.delete("hiddenState");
+  url.searchParams.delete("hiddenHealth");
+  url.searchParams.delete("showHiddenResources");
+  url.searchParams.delete("showResourceTypes");
+  url.searchParams.delete("collapsed");
+  url.searchParams.delete("sort");
+  url.searchParams.delete("sortDirection");
   if (route.spanId) {
     url.searchParams.set("span", route.spanId);
   }
@@ -221,6 +252,18 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     if (route.metricHistogramCount) {
       url.searchParams.set("histogram", "count");
     }
+  }
+  if (route.page === "resources") {
+    if (route.resourceName) url.searchParams.set("resource", route.resourceName);
+    if (route.resourceQuery) url.searchParams.set("q", route.resourceQuery);
+    for (const value of route.resourceHiddenTypes ?? []) url.searchParams.append("hiddenType", value);
+    for (const value of route.resourceHiddenStates ?? []) url.searchParams.append("hiddenState", value);
+    for (const value of route.resourceHiddenHealth ?? []) url.searchParams.append("hiddenHealth", value);
+    if (route.resourceShowHidden) url.searchParams.set("showHiddenResources", "true");
+    if (route.resourceShowType) url.searchParams.set("showResourceTypes", "true");
+    for (const value of route.resourceCollapsed ?? []) url.searchParams.append("collapsed", value);
+    if (route.resourceSortColumn && route.resourceSortColumn !== "name") url.searchParams.set("sort", route.resourceSortColumn);
+    if (route.resourceSortDirection === "descending") url.searchParams.set("sortDirection", "descending");
   }
   url.hash = "";
   return `${url.pathname}${url.search}`;

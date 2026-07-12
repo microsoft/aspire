@@ -11,6 +11,7 @@ export * from "./Drawer";
 export * from "./Divider";
 export * from "./Dialog";
 export * from "./EmptyState";
+export * from "./FilterMenu";
 export * from "./Highlighter";
 export * from "./Icons";
 export * from "./NotificationStack";

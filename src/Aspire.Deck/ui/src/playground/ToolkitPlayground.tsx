@@ -11,6 +11,8 @@ import {
   Dialog,
   Drawer,
   EmptyState,
+  FilterIcon,
+  FilterMenu,
   IconButton,
   Highlighter,
   MoonIcon,
@@ -112,6 +114,7 @@ export function ToolkitPlayground({
   const [pageRefreshCount, setPageRefreshCount] = useState(0);
   const [selectedResource, setSelectedResource] = useState<string | null>(null);
   const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
+  const [hiddenSampleTypes, setHiddenSampleTypes] = useState<string[]>([]);
   const iconNames = useMemo(getIconNames, []);
 
   const filteredResources = useMemo(() => {
@@ -244,6 +247,24 @@ export function ToolkitPlayground({
                   onSelect: () => setLastAction("Stop selected"),
                 },
               ]}
+            />
+            <FilterMenu
+              ariaLabel="Sample filters"
+              icon={<FilterIcon size={16} />}
+              active={hiddenSampleTypes.length > 0}
+              onClear={() => setHiddenSampleTypes([])}
+              groups={[{
+                id: "sample-types",
+                label: "Type",
+                options: ["Project", "Container", "Executable"].map((type) => ({
+                  value: type,
+                  label: type,
+                  checked: !hiddenSampleTypes.includes(type),
+                })),
+                onChange: (type, checked) => setHiddenSampleTypes((current) => checked
+                  ? current.filter((value) => value !== type)
+                  : [...current, type]),
+              }]}
             />
           </div>
         </section>

@@ -236,10 +236,10 @@ test(`${features("RES-LIST-001", "RES-SORT-001", "RES-FILTER-001", "RES-ENDPOINT
   const rows = table.getByRole("row");
   await expect(rows).toHaveCount(6);
   await expect(rows.nth(1)).toContainText("apiservice");
-  await expect(rows.nth(2)).toContainText("cache");
-  await expect(rows.nth(3)).toContainText("frontend");
-  await expect(rows.nth(4)).toContainText("migration");
-  await expect(rows.nth(5)).toContainText("postgres");
+  await expect(rows.nth(2)).toContainText("frontend");
+  await expect(rows.nth(3)).toContainText("migration");
+  await expect(rows.nth(4)).toContainText("postgres");
+  await expect(rows.nth(5)).toContainText("cache");
   await expect(table).not.toContainText("hiddenContainer");
   await expect(table).not.toContainText("apikey");
 
@@ -248,17 +248,20 @@ test(`${features("RES-LIST-001", "RES-SORT-001", "RES-FILTER-001", "RES-ENDPOINT
   await expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
   await sortByName.click();
   await expect(nameHeader).toHaveAttribute("aria-sort", "descending");
-  await expect(table.locator("tbody td:nth-child(2)")).toHaveText([
+  await expect(page).toHaveURL(/sortDirection=descending/);
+  await expect(table.locator("tbody td:first-child")).toContainText([
     "postgres",
+    "cache",
     "migration",
     "frontend",
-    "cache",
     "apiservice",
   ]);
+  await page.reload();
+  await expect(nameHeader).toHaveAttribute("aria-sort", "descending");
   await sortByName.click();
   await expect(nameHeader).toHaveAttribute("aria-sort", "ascending");
 
-  const endpoint = page.getByRole("link", { name: "https://localhost:7233" });
+  const endpoint = table.getByRole("row", { name: /frontend/ }).getByRole("link", { name: "https", exact: true });
   await expect(endpoint).toHaveAttribute("href", "https://localhost:7233");
   await endpoint.focus();
   await expect(page.getByRole("dialog")).toHaveCount(0);
@@ -277,10 +280,75 @@ test(`${features("RES-LIST-001", "RES-SORT-001", "RES-FILTER-001", "RES-ENDPOINT
   await expect(table).toContainText("No resources match your filter.");
 });
 
+test(`${features("RES-STRUCTURED-FILTER-001", "RES-VIEW-OPTIONS-001", "RES-HIERARCHY-001", "RES-SOURCE-001", "RES-DETAILS-LINK-001")} restores resource filters, hierarchy, view options, sources, and details`, async ({ page }, testInfo) => {
+  test.slow();
+  const table = page.getByRole("table");
+  const rows = table.getByRole("row");
+  await expect(table).toContainText("Frontend.csproj");
+  await expect(table).toContainText("docker.io/library/postgres:17.2");
+
+  const postgres = table.getByRole("row", { name: /postgres/ });
+  await expect(postgres.getByRole("button", { name: "Collapse postgres" })).toHaveAttribute("aria-expanded", "true");
+  const cache = table.getByRole("row", { name: /cache/ });
+  const postgresBox = await postgres.boundingBox();
+  const cacheBox = await cache.boundingBox();
+  expect(postgresBox).not.toBeNull();
+  expect(cacheBox).not.toBeNull();
+  expect(cacheBox!.y).toBeGreaterThan(postgresBox!.y);
+  expect(await cache.locator(".resource-name").evaluate((element) => getComputedStyle(element).paddingInlineStart)).toBe("22px");
+
+  await postgres.getByRole("button", { name: "Collapse postgres" }).click();
+  await expect(page).toHaveURL(/collapsed=postgres/);
+  await expect(table.getByRole("row", { name: /cache/ })).toHaveCount(0);
+  await page.reload();
+  await expect(table.getByRole("row", { name: /cache/ })).toHaveCount(0);
+
+  await page.getByRole("button", { name: "Resource view options" }).click();
+  await page.getByRole("menuitem", { name: "Expand all children" }).click();
+  await expect(table.getByRole("row", { name: /cache/ })).toBeVisible();
+
+  await page.getByRole("button", { name: "Resource view options" }).click();
+  await page.getByRole("menuitem", { name: "Show resource types" }).click();
+  await expect(table.getByRole("columnheader", { name: "Type" })).toBeVisible();
+  await page.getByRole("button", { name: "Resource view options" }).click();
+  await page.getByRole("menuitem", { name: "Show hidden resources" }).click();
+  await expect(table).toContainText("hiddenContainer");
+  await expect(page).toHaveURL(/showHiddenResources=true/);
+
+  await page.getByRole("button", { name: "Resource filters" }).click();
+  const filters = page.locator(".filter-menu");
+  await filters.getByRole("checkbox", { name: "Container" }).uncheck();
+  await filters.getByRole("checkbox", { name: "Running" }).uncheck();
+  await filters.getByRole("checkbox", { name: "Healthy" }).uncheck();
+  await expect(page).toHaveURL(/hiddenType=Container/);
+  await expect(page).toHaveURL(/hiddenState=Running/);
+  await expect(page).toHaveURL(/hiddenHealth=Healthy/);
+  await filters.getByRole("button", { name: "Clear" }).click();
+  await expect(page).not.toHaveURL(/hidden(Type|State|Health)=/);
+  await filters.getByRole("button", { name: "Done" }).click();
+
+  await page.getByRole("row", { name: /frontend/ }).click();
+  await expect(page).toHaveURL(/resource=frontend/);
+  await expect(page.getByRole("dialog", { name: "frontend" })).toBeVisible();
+  await page.reload();
+  const details = page.getByRole("dialog", { name: "frontend" });
+  await expect(details).toBeVisible();
+  await attachScreenshot(page, testInfo, "dashboard-resource-table-state");
+  await details.getByRole("button", { name: "Close" }).click();
+  await expect(page).not.toHaveURL(/resource=frontend/);
+
+  const search = page.getByRole("textbox", { name: "Filter by name, type or state…" });
+  await search.fill("project");
+  await expect(page).toHaveURL(/q=project/);
+  await page.reload();
+  await expect(search).toHaveValue("project");
+  await expect(rows).toHaveCount(3);
+});
+
 test(`${features("RES-ICON-001")} renders resource and command icon contracts`, async ({ page }) => {
   const table = page.getByRole("table");
-  const frontend = table.getByRole("row", { name: /frontend Project/ });
-  const cache = table.getByRole("row", { name: /cache Container/ });
+  const frontend = table.getByRole("row", { name: /frontend/ });
+  const cache = table.getByRole("row", { name: /cache/ });
   await expect(frontend.locator('svg[data-icon-name="Window"][data-icon-variant="regular"]')).toHaveCount(1);
   await expect(cache.locator('svg[data-icon-name="Database"][data-icon-variant="filled"]')).toHaveCount(1);
 
@@ -305,7 +373,7 @@ test(`${features("RES-ICON-001")} renders resource and command icon contracts`, 
 });
 
 test(`${features("RES-DETAILS-001", "RES-SECRETS-001")} inspects resource details with secure defaults`, async ({ page }) => {
-  await page.getByRole("row", { name: /frontend Project/ }).click();
+  await page.getByRole("row", { name: /frontend/ }).click();
   const dialog = page.getByRole("dialog", { name: "frontend" });
   for (const section of ["Overview", "Endpoints", "Properties", "Environment variables", "Health reports", "Relationships"]) {
     await expect(dialog.getByText(section, { exact: true })).toBeVisible();
@@ -322,7 +390,7 @@ test(`${features("RES-DETAILS-001", "RES-SECRETS-001")} inspects resource detail
 });
 
 test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001")} confirms commands and updates live resource state`, async ({ page }) => {
-  await page.getByRole("row", { name: /frontend Project/ }).click();
+  await page.getByRole("row", { name: /frontend/ }).click();
   const details = page.getByRole("dialog", { name: "frontend" });
   await expect(details.getByRole("button", { name: "Restart", exact: true })).toBeEnabled();
   const commands = details.getByRole("button", { name: "Resource commands" });
@@ -356,7 +424,7 @@ test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001")} 
 });
 
 test(`${features("RES-INTERACTION-001")} validates and submits an input command`, async ({ page }) => {
-  await page.getByRole("row", { name: /frontend Project/ }).click();
+  await page.getByRole("row", { name: /frontend/ }).click();
   await page.getByRole("dialog", { name: "frontend" }).getByRole("button", { name: "Resource commands" }).click();
   await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: /Scale/ }).click();
   const interaction = page.getByRole("dialog", { name: "Scale resource" });
@@ -438,7 +506,7 @@ test(`${features("APP-RESPONSIVE-001")} keeps core workflows usable on mobile`, 
   expect(geometry.main).toEqual({ x: 0, width: 390 });
   await expect(page.getByRole("main").locator(".table-wrap")).toBeVisible();
 
-  await page.getByRole("row", { name: /frontend Project/ }).click();
+  await page.getByRole("row", { name: /frontend/ }).click();
   const drawer = page.getByRole("dialog", { name: "frontend" });
   await expect.poll(async () => (await drawer.boundingBox())?.x).toBe(0);
   const bounds = await drawer.boundingBox();

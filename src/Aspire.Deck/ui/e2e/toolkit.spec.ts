@@ -259,6 +259,26 @@ test(`${features("TK-MENU-001")} exercises the command menu with pointer and key
   await expect(page.getByRole("region", { name: "Actions" }).getByRole("status")).toHaveText("Stop selected");
 });
 
+test(`${features("TK-FILTER-MENU-001")} composes grouped filter controls`, async ({ page }, testInfo) => {
+  const trigger = page.getByRole("button", { name: "Sample filters" });
+  await expect(trigger).toHaveAttribute("aria-pressed", "false");
+  await trigger.click();
+  const filters = page.locator(".filter-menu");
+  await expect(filters.getByText("Type", { exact: true })).toBeVisible();
+  await filters.getByRole("checkbox", { name: "Container" }).uncheck();
+  await expect(filters.getByRole("button", { name: "Clear" })).toBeEnabled();
+  await attachScreenshot(page, testInfo, "toolkit-filter-menu");
+  await filters.getByRole("button", { name: "Done" }).click();
+  await expect(trigger).toHaveAttribute("aria-pressed", "true");
+  await trigger.click();
+  await filters.getByRole("button", { name: "Clear" }).click();
+  await expect(filters.getByRole("checkbox", { name: "Container" })).toBeChecked();
+  await filters.getByRole("button", { name: "Done" }).click();
+  await expect(filters).toBeHidden();
+  await expect(trigger).toHaveAttribute("aria-pressed", "false");
+  await expect(trigger).toBeFocused();
+});
+
 test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, async ({ page }) => {
   await page.getByRole("button", { name: "Open dialog" }).click();
   const toolkitDialog = page.getByRole("dialog", { name: "Toolkit dialog" });

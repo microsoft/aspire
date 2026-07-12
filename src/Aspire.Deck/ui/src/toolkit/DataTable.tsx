@@ -23,6 +23,7 @@ export interface Column<T> {
   width?: string;
   minWidth?: string;
   compare?: (left: T, right: T) => number;
+  compareWithDirection?: (left: T, right: T, direction: SortDirection) => number;
 }
 
 function getColumnStyle<T>(column: Column<T>): CSSProperties {
@@ -67,19 +68,22 @@ export function DataTable<T>({
 
     const column = columns.find((candidate) => candidate.key === activeSort.columnKey);
     const compare = column?.compare;
-    if (!compare) {
+    const compareWithDirection = column?.compareWithDirection;
+    if (!compare && !compareWithDirection) {
       return rows;
     }
 
     const direction = activeSort.direction === "ascending" ? 1 : -1;
     return rows
       .map((row, index) => ({ row, index }))
-      .sort((left, right) => direction * compare(left.row, right.row) || left.index - right.index)
+      .sort((left, right) => (compareWithDirection
+        ? compareWithDirection(left.row, right.row, activeSort.direction)
+        : direction * compare!(left.row, right.row)) || left.index - right.index)
       .map((item) => item.row);
   }, [activeSort, columns, rows]);
 
   const changeSort = (column: Column<T>): void => {
-    if (!column.compare) {
+    if (!column.compare && !column.compareWithDirection) {
       return;
     }
 
@@ -109,7 +113,7 @@ export function DataTable<T>({
                   style={getColumnStyle(column)}
                   aria-sort={direction}
                 >
-                  {column.compare ? (
+                  {column.compare || column.compareWithDirection ? (
                     <button className="data__sort" type="button" onClick={() => changeSort(column)}>
                       <span>{column.header}</span>
                       {direction === "ascending" ? <SortAscendingIcon size={14} /> : null}

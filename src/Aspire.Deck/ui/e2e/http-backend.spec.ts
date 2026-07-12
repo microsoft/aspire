@@ -119,7 +119,7 @@ test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-0
 
   await expect(page.getByRole("banner").locator(".topbar__app")).toHaveText("Stress AppHost");
   await expect(page.getByRole("navigation")).toContainText("Aspire Deck 13.5.0-live");
-  const resourceRow = page.getByRole("table").getByRole("row", { name: /stress-api Project/ });
+  const resourceRow = page.getByRole("table").getByRole("row", { name: /stress-api/ });
   await expect(resourceRow).toBeVisible();
   await expect(resourceRow.locator('svg[data-icon-name="Code"][data-icon-variant="filled"]')).toHaveCount(1);
   await expect(page.getByRole("table")).not.toContainText("frontend");
@@ -164,7 +164,7 @@ test(`${features("HTTP-RECOVERY-001")} recovers when the HTTP backend returns`, 
   available = true;
 
   await expect(page.getByRole("banner").locator(".topbar__app")).toHaveText("Stress AppHost");
-  await expect(page.getByRole("table").getByRole("row", { name: /stress-api Project/ })).toBeVisible();
+  await expect(page.getByRole("table").getByRole("row", { name: /stress-api/ })).toBeVisible();
   await expect(page.getByTitle("Resources: Connected")).toBeVisible();
 });
 
@@ -182,7 +182,7 @@ test(`${features("HTTP-COMMAND-001")} executes a resource command through the HT
   });
 
   await page.goto("/?backend=http");
-  await page.getByRole("table").getByRole("row", { name: /stress-api Project/ }).click();
+  await page.getByRole("table").getByRole("row", { name: /stress-api/ }).click();
   const details = page.getByRole("dialog", { name: "stress-api" });
   await details.getByRole("button", { name: "Check health", exact: true }).click();
 
@@ -263,7 +263,7 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
   });
 
   await page.goto("/?backend=http");
-  await page.getByRole("table").getByRole("row", { name: /stress-api Project/ }).click();
+  await page.getByRole("table").getByRole("row", { name: /stress-api/ }).click();
   const details = page.getByRole("dialog", { name: "stress-api" });
   await details.getByRole("button", { name: "Resource commands" }).click();
   await page.getByRole("menuitem", { name: /Echo arguments/ }).click();

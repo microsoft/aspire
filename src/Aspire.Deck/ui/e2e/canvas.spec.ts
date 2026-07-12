@@ -92,8 +92,9 @@ test(`${features("CANVAS-CONFIG-001", "CANVAS-RESOURCES-001", "CANVAS-TELEMETRY-
   expect(config).toMatchObject({ applicationName: "TestShop", version: "9.0.0-dev (mock)" });
 
   const resources = await canvasRequest<Array<{ name: string; state: string | null }>>(frame, "listResources");
-  expect(resources).toHaveLength(8);
+  expect(resources).toHaveLength(9);
   expect(resources.find((resource) => resource.name === "frontend")?.state).toBe("Running");
+  expect(resources.find((resource) => resource.name === "hiddenContainer")).toBeDefined();
 
   const telemetry = await canvasRequest<{ logCount: number; spanCount: number; metricCount: number }>(frame, "getTelemetrySummary");
   expect(telemetry.logCount).toBeGreaterThan(0);

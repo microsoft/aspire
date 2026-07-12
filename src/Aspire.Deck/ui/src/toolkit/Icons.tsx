@@ -100,6 +100,7 @@ import {
   ErrorCircle24Regular,
   Eye24Regular,
   EyeOff24Regular,
+  Filter24Regular,
   FolderFilled,
   FolderRegular,
   GlobeArrowForwardFilled,
@@ -307,6 +308,7 @@ export const CloseIcon = createIcon(Dismiss24Regular);
 export const ExternalIcon = createIcon(Open24Regular);
 export const EyeIcon = createIcon(Eye24Regular);
 export const EyeOffIcon = createIcon(EyeOff24Regular);
+export const FilterIcon = createIcon(Filter24Regular);
 export const SunIcon = createIcon(WeatherSunny24Regular);
 export const MoonIcon = createIcon(WeatherMoon24Regular);
 export const BackIcon = createIcon(ArrowLeft24Regular);
