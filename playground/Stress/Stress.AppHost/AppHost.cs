@@ -100,7 +100,10 @@ builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard)
+    .WithEnvironment("ASPIRE_DASHBOARD_AI_DISABLED", "false")
+    .WithEnvironment("ASPIRE_AI_OPENAI_OPT_IN", "true")
+    .WithEnvironment("ASPIRE_AI_APIKEY", "stress-playground-key");
 #endif
 
 builder.AddExecutable("executableWithSingleArg", "dotnet", Environment.CurrentDirectory, "--version");

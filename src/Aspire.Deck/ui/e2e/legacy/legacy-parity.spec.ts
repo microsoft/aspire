@@ -123,6 +123,31 @@ test(`${features("auth")} protects dashboard routes with browser-token authentic
   expect(response.ok()).toBe(true);
 });
 
+test(`${features("assistant")} controls the AI assistant conversation lifecycle`, async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "Chat with GitHub Copilot", exact: true }).click();
+
+  const sidebar = page.locator(".copilot-chat-panel");
+  await expect(sidebar.getByText("GitHub Copilot chat", { exact: true })).toBeVisible();
+  await sidebar.getByRole("button", { name: "Start new chat", exact: true }).click();
+
+  const message = sidebar.locator("#chat-message");
+  await expect(message).toBeVisible();
+  await message.fill("Explain the current dashboard state.");
+  await message.press("Tab");
+  const submit = sidebar.getByRole("button", { name: "Send message", exact: true });
+  await expect(submit).toBeEnabled();
+  await submit.click();
+  await expect(message).toHaveAttribute("data-response-in-progress", "true");
+  await submit.click();
+  await expect(sidebar.getByText("Request canceled", { exact: true })).toBeVisible({ timeout: 30_000 });
+
+  await sidebar.getByRole("button", { name: "Expand dialog", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "GitHub Copilot chat", exact: true })).toBeVisible();
+  await page.locator("#dialog_close").click();
+  await expect(page.getByRole("heading", { name: "GitHub Copilot chat", exact: true })).toBeHidden();
+});
+
 test(`${features("reconnect")} exposes circuit and AppHost recovery states`, async ({ page }) => {
   await page.goto("/");
   const reconnect = page.locator("#components-reconnect-modal");
@@ -518,6 +543,46 @@ test(`${features("structured-log-genai")} opens the GenAI log conversation visua
   await expect(visualizer).toContainText("This is the input prompt.");
   await expect(visualizer.getByRole("tab", { name: /^Tools \d+$/ })).toBeVisible();
   await visualizer.getByRole("button", { name: "Close", exact: true }).click();
+});
+
+test(`${features("explain-errors")} launches filtered log and trace error analysis`, async ({ page }) => {
+  test.setTimeout(90_000);
+
+  await page.goto("/parameters");
+  const enterValues = page.getByRole("button", { name: "Enter values", exact: true });
+  if (await enterValues.isVisible()) {
+    await enterValues.click();
+    const interaction = page.getByRole("dialog", { name: "Set unresolved parameters", exact: true });
+    await interaction.getByPlaceholder("Enter value for api-key", { exact: true }).fill("legacy-api-key");
+    await interaction.getByPlaceholder("Enter value for db-connection-string", { exact: true }).fill("Server=legacy;Database=stress");
+    await interaction.getByRole("button", { name: "Save", exact: true }).click();
+    await expect(interaction).toHaveCount(0);
+  }
+
+  await page.goto("/");
+  const apiResourceRow = page.getByRole("table").getByRole("row").filter({ hasText: "stress-apiservice" });
+  await apiResourceRow.getByText("stress-apiservice", { exact: true }).click();
+  const resourceDetails = page.getByRole("dialog").filter({ hasText: "stress-apiservice" });
+  const start = resourceDetails.getByRole("button", { name: "Start", exact: true });
+  if (await start.count() > 0 && await start.isEnabled()) {
+    await start.click();
+  }
+  const errorTelemetry = resourceDetails.getByRole("button", { name: "Error telemetry", exact: true });
+  await expect(errorTelemetry).toBeEnabled({ timeout: 60_000 });
+  await errorTelemetry.click();
+  await expect(page.getByText('"Error telemetry" succeeded', { exact: false })).toBeVisible({ timeout: 30_000 });
+
+  await page.goto("/structuredlogs");
+  await page.getByRole("button", { name: "Explain errors", exact: true }).press("Enter");
+  let sidebar = page.locator(".copilot-chat-panel");
+  await expect(sidebar.getByText("Analyze structured log errors", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await sidebar.getByRole("button", { name: "Close", exact: true }).click();
+
+  await page.goto("/traces");
+  await page.getByRole("button", { name: "Explain errors", exact: true }).press("Enter");
+  sidebar = page.locator(".copilot-chat-panel");
+  await expect(sidebar.getByText("Analyze distributed trace errors", { exact: true })).toBeVisible({ timeout: 30_000 });
+  await sidebar.getByRole("button", { name: "Close", exact: true }).click();
 });
 
 test(`${features("structured-log-session")} restores resource, filters, and log deep links`, async ({ page }) => {

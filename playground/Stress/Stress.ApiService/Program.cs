@@ -431,6 +431,17 @@ app.MapGet("/trace-details", async () =>
     return "Created deterministic trace details";
 });
 
+app.MapGet("/error-telemetry", (ILogger<Program> logger) =>
+{
+    logger.LogError("Deterministic structured log fixture failure");
+
+    using var source = new ActivitySource("Services.Api", "1.0.0");
+    using var activity = source.StartActivity("error-telemetry-fixture", ActivityKind.Internal);
+    activity?.SetStatus(ActivityStatusCode.Error, "Deterministic trace fixture failure");
+
+    return "Created deterministic error telemetry";
+});
+
 app.MapGet("/nested-trace-spans", async () =>
     {
         var forecast = Enumerable.Range(1, 5).Select(index =>

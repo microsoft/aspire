@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 8
+- Legacy black-box scenarios pending: 5
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -16,7 +16,7 @@
 | SHELL-HELP-001 | shell | `/` | shell | covered | APP-HELP-001 | Help opens with documentation and keyboard shortcut reference content. |
 | SHELL-KEYBOARD-001 | shell | `/` | shell | covered | APP-KEYBOARD-001 | Page navigation, panel, help, and settings keyboard shortcuts work. |
 | SHELL-AGENTS-001 | shell | `/` | shell | covered | HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | The AI agents entry point appears when enabled. |
-| SHELL-ASSISTANT-001 | shell | `/` | PENDING | covered | APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
+| SHELL-ASSISTANT-001 | shell | `/` | assistant | covered | APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
 | SHELL-NOTIFICATIONS-001 | shell | `/` | shell | covered | APP-NOTIFICATION-001; CMD-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |
 | SHELL-NOTIFICATION-CENTER-001 | shell | `/` | shell | covered | APP-NOTIFICATION-CENTER-001 | The notification center opens and preserves notification history. |
 | SHELL-SETTINGS-001 | shell | `/` | shell | covered | APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Settings opens from the top bar and reports dashboard/runtime versions. |
@@ -127,7 +127,7 @@
 | LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |
 | LOG-TRACE-LINK-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001 | Trace IDs deep-link to the matching trace and span. |
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | structured-log-genai | covered | LOG-GENAI-001 | GenAI log records open the dedicated GenAI visualizer. |
-| LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-EXPLAIN-001 | Explain errors summarizes current error logs through the assistant. |
+| LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | explain-errors | covered | LOG-EXPLAIN-001 | Explain errors summarizes current error logs through the assistant. |
 | LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | structured-log-session | covered | LOG-ROUTE-001 | Resource selection, filters, and selected log are deep-linkable and restorable. |
 | TRACE-LIST-001 | traces | `/traces` | traces | covered | TRACE-LIST-001; TRACE-ACTIONS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
 | TRACE-LIVE-001 | traces | `/traces` | traces | covered | TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001 | Incoming spans update trace groups and totals without reloading the page. |
@@ -148,7 +148,7 @@
 | TRACE-EVENTS-001 | traces | `/traces/detail/{traceId}` | trace-details | covered | TRACE-EVENTS-001; HTTP-TRACES-001 | Span events and exception details preserve timestamps and attributes. |
 | TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | trace-details | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |
 | TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | trace-genai | covered | TRACE-GENAI-001 | GenAI spans and traces open the dedicated GenAI visualizer. |
-| TRACE-EXPLAIN-001 | traces | `/traces` | PENDING | covered | TRACE-EXPLAIN-001 | Explain errors summarizes current failed traces through the assistant. |
+| TRACE-EXPLAIN-001 | traces | `/traces` | explain-errors | covered | TRACE-EXPLAIN-001 | Explain errors summarizes current failed traces through the assistant. |
 | TRACE-SESSION-001 | traces | `/traces` | trace-session | covered | TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001 | Resource, type, filters, and selection are deep-linkable and restorable. |
 | METRIC-RESOURCE-001 | metrics | `/metrics` | metrics | covered | METRIC-RESOURCE-001; METRIC-SESSION-001 | Metrics require and preserve a selected telemetry resource. |
 | METRIC-TREE-001 | metrics | `/metrics` | metrics | covered | METRIC-TREE-001 | Meters and instruments render in a hierarchical selector. |
