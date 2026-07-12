@@ -77,10 +77,32 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                 System.Globalization.CultureInfo.CurrentCulture,
                 Aspire.Dashboard.Resources.Dialogs.AIAgentsDialogAppHostDescription,
                 "https://aka.ms/aspire/ai-agents-apphost",
-                "https://aka.ms/aspire/install-cli")
+                "https://aka.ms/aspire/install-cli"),
+            ["isAssistantEnabled"] = false
         };
 
         Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
+    }
+
+    [Fact]
+    public async Task AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        var infoResponse = await httpClient.GetAsync("/api/deck/assistant/info").DefaultTimeout();
+        using var chatResponse = await httpClient.PostAsync(
+            "/api/deck/assistant/chat",
+            new StringContent(
+                """
+                {"messages":[{"role":"user","content":"Explain the errors."}],"model":null}
+                """,
+                Encoding.UTF8,
+                "application/json")).DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.NotFound, infoResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NotFound, chatResponse.StatusCode);
     }
 
     [Fact]
