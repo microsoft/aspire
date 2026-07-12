@@ -123,6 +123,42 @@ test(`${features("auth")} protects dashboard routes with browser-token authentic
   expect(response.ok()).toBe(true);
 });
 
+test(`${features("reconnect")} exposes circuit and AppHost recovery states`, async ({ page }) => {
+  await page.goto("/");
+  const reconnect = page.locator("#components-reconnect-modal");
+
+  await reconnect.evaluate((element, state) => {
+    element.dispatchEvent(new CustomEvent("components-reconnect-state-changed", { detail: { state } }));
+  }, "show");
+  await expect(reconnect).toBeVisible();
+  await expect(reconnect.getByText("Rejoining the server...", { exact: true })).toBeVisible();
+
+  await reconnect.evaluate((element, state) => {
+    element.dispatchEvent(new CustomEvent("components-reconnect-state-changed", { detail: { state } }));
+  }, "failed");
+  await expect(reconnect.getByText("Failed to rejoin.", { exact: false })).toBeVisible();
+  await expect(reconnect.getByRole("button", { name: "Retry", exact: true })).toBeVisible();
+
+  await reconnect.evaluate((element, state) => {
+    element.dispatchEvent(new CustomEvent("components-reconnect-state-changed", { detail: { state } }));
+  }, "hide");
+  await expect(reconnect).toBeHidden();
+
+  await page.evaluate(() => {
+    (window as unknown as { updateResourceServiceConnectionState(state: string, showRetry: boolean): void })
+      .updateResourceServiceConnectionState("disconnected", true);
+  });
+  await expect(reconnect).toBeVisible();
+  await expect(reconnect.getByText("Lost connection to the AppHost. Attempting to reconnect...", { exact: true })).toBeVisible();
+  await expect(reconnect.locator("#components-reconnect-resource-service-button")).toBeVisible();
+
+  await page.evaluate(() => {
+    (window as unknown as { updateResourceServiceConnectionState(state: string, showRetry: boolean): void })
+      .updateResourceServiceConnectionState("connected", false);
+  });
+  await expect(reconnect).toBeHidden();
+});
+
 test(`${features("resources")} inventories resources, details, and graph behavior`, async ({ page }, testInfo) => {
   const table = page.getByRole("table");
   for (const header of ["Name", "State", "Source", "URLs", "Start time"]) {
