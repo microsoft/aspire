@@ -4,6 +4,7 @@ import { subscribeConsoleLogs } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
 import { useCommandExecution } from "../components/useCommandExecution";
 import { formatConsoleTimestamp, parseConsoleLine } from "../lib/consoleLogs";
+import { partitionResourceCommands } from "../lib/resourceCommands";
 import {
   Button,
   CommandMenu,
@@ -234,9 +235,7 @@ export function ConsolePage({
     }
   };
 
-  const availableCommands = selectedResource?.commands.filter((command) => command.state !== "hidden") ?? [];
-  const highlightedCommands = availableCommands.filter((command) => command.isHighlighted);
-  const menuCommands = availableCommands.filter((command) => !command.isHighlighted);
+  const { highlightedCommands, menuCommands } = partitionResourceCommands(selectedResource?.commands ?? []);
 
   // Keep the viewport pinned to the bottom when auto-scroll is enabled.
   useLayoutEffect(() => {

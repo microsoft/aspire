@@ -293,7 +293,7 @@ internal static class CommandResources
             {
                 Description = "Minor dashboard/API stress command with many dynamically generated inputs to exercise argument metadata and payload handling.",
                 IconName = "TableLightning",
-                Visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
+                Visibility = ResourceCommandVisibility.UI,
                 Arguments = CreateArgumentStressInputs(fieldCount: 20)
             });
         argumentCommands.WithCommand(
@@ -1172,4 +1172,3 @@ internal static class CommandResources
 }
 
 #pragma warning restore ASPIREPROCESSCOMMAND001
-

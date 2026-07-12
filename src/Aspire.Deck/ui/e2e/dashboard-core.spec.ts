@@ -592,11 +592,12 @@ test(`${features("RES-NO-STATUS-001", "RES-LONG-URLS-001")} contains unknown res
   await attachScreenshot(page, testInfo, "dashboard-resource-long-urls");
 });
 
-test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001")} confirms commands and updates live resource state`, async ({ page }) => {
+test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001", "CMD-CONFIRM-001")} confirms commands and updates live resource state`, async ({ page }) => {
   await page.getByRole("row", { name: /frontend/ }).click();
   const details = page.getByRole("dialog", { name: "frontend" });
   await expect(details.getByRole("button", { name: "Restart", exact: true })).toBeEnabled();
   const commands = details.getByRole("button", { name: "Resource commands" });
+  await expect(details.getByRole("button", { name: "Restart", exact: true })).toHaveAttribute("title", "Restart the resource.");
   await commands.click();
   let menu = page.getByRole("menu", { name: "Resource commands" });
   await expect(menu.getByRole("menuitem", { name: /Start/ })).toBeDisabled();
@@ -626,13 +627,25 @@ test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001")} 
   await expect(details).toContainText("Running");
 });
 
-test(`${features("CMD-RESULT-TEXT-001", "CMD-RESULT-JSON-001", "CMD-RESULT-MARKDOWN-001", "CMD-RESULT-IMMEDIATE-001")} visualizes every command result format`, async ({ page }, testInfo) => {
+test(`${features("CMD-RESULT-TEXT-001", "CMD-RESULT-JSON-001", "CMD-RESULT-MARKDOWN-001", "CMD-RESULT-IMMEDIATE-001", "CMD-VISIBILITY-001", "CMD-HIGHLIGHT-001", "CMD-DESCRIPTION-001")} visualizes every command result format`, async ({ page }, testInfo) => {
   await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   await page.getByRole("row", { name: /apiservice/ }).click();
   const details = page.getByRole("dialog", { name: "apiservice" });
 
+  await expect(details.getByRole("button", { name: "Restart", exact: true })).toBeVisible();
+  await expect(details.getByRole("button", { name: "Show text result", exact: true })).toBeVisible();
+  await expect(details.getByRole("button", { name: "Show JSON result", exact: true })).toHaveCount(0);
+  await expect(details.getByRole("button", { name: "Hidden result command" })).toHaveCount(0);
   await details.getByRole("button", { name: "Resource commands" }).click();
-  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: "Show text result" }).click();
+  let commandMenu = page.getByRole("menu", { name: "Resource commands" });
+  const jsonResultCommand = commandMenu.getByRole("menuitem", { name: /Show JSON result/ });
+  const markdownResultCommand = commandMenu.getByRole("menuitem", { name: /Show Markdown result/ });
+  await expect(jsonResultCommand).toContainText("Return a formatted JSON command result.");
+  await expect(markdownResultCommand).toContainText("Open a Markdown command result immediately.");
+  await expect(commandMenu.getByRole("menuitem", { name: /Hidden result command/ })).toHaveCount(0);
+  await page.keyboard.press("Escape");
+
+  await details.getByRole("button", { name: "Show text result", exact: true }).click();
   const feedback = page.getByRole("status").filter({ hasText: "Show text result succeeded" });
   await expect(feedback.getByRole("button", { name: "View response" })).toBeVisible();
   await feedback.getByRole("button", { name: "View response" }).click();
@@ -646,7 +659,8 @@ test(`${features("CMD-RESULT-TEXT-001", "CMD-RESULT-JSON-001", "CMD-RESULT-MARKD
   await viewer.getByRole("button", { name: "Close", exact: true }).click();
 
   await details.getByRole("button", { name: "Resource commands" }).click();
-  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: "Show JSON result" }).click();
+  commandMenu = page.getByRole("menu", { name: "Resource commands" });
+  await commandMenu.getByRole("menuitem", { name: "Show JSON result" }).click();
   await page.getByRole("status").filter({ hasText: "Show JSON result succeeded" }).getByRole("button", { name: "View response" }).click();
   viewer = page.getByRole("dialog", { name: "Show JSON result" });
   await expect(viewer.locator('[data-format="json"]')).toContainText('{\n  "status": "Healthy",\n  "replicas": 3,');

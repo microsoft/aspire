@@ -205,12 +205,20 @@ test(`${features("STRESS-RESOURCE-ICON-001", "STRESS-COMMAND-ICON-001", "STRESS-
   await attachScreenshot(page, testInfo, "stress-live-icon-catalog");
 });
 
-test(`${features("STRESS-COMMAND-ARGUMENTS-001")} submits every input type to a live Stress command`, async ({ page }, testInfo) => {
+test(`${features("STRESS-COMMAND-ARGUMENTS-001", "STRESS-COMMAND-VISIBILITY-001")} submits every input type to a live Stress command`, async ({ page }, testInfo) => {
+  const resources = await getDashboardResources(page);
+  const commandResource = resources.find((resource) => resource.displayName === "argument-commands");
+  expect(commandResource).toBeDefined();
+  expect(commandResource!.commands.map((command) => command.name)).toContain("argument-stress-test");
+  expect(commandResource!.commands.map((command) => command.name)).not.toContain("echo-command-arguments");
+
   const row = page.getByRole("table").getByRole("row").filter({ hasText: "argument-commands" });
   await expect(row).toHaveCount(1);
   await row.click();
   const details = page.getByRole("dialog", { name: "argument-commands" });
   await details.getByRole("button", { name: "Resource commands" }).click();
+  await expect(page.getByRole("menuitem", { name: /Argument stress test/ })).toBeVisible();
+  await expect(page.getByRole("menuitem", { name: /Echo command arguments/ })).toHaveCount(0);
   await page.getByRole("menuitem", { name: /Echo arguments/ }).click();
 
   const dialog = page.getByRole("dialog", { name: "Echo arguments" });
@@ -223,19 +231,22 @@ test(`${features("STRESS-COMMAND-ARGUMENTS-001")} submits every input type to a 
   await expect(message).toHaveAttribute("maxlength", "80");
   await expect(repeat).toHaveValue("1");
   await expect(shout).not.toBeChecked();
-  await expect(flavor).toHaveValue("vanilla");
+  await expect(flavor).toHaveValue("Vanilla");
   await expect(secret).toHaveAttribute("type", "password");
 
   await message.fill("Stress React interaction");
   await repeat.fill("2");
   await shout.check();
-  await flavor.selectOption("chocolate");
+  await flavor.click();
+  await page.getByRole("option", { name: "Chocolate" }).click();
   await secret.fill("dashboard-secret");
   await attachScreenshot(page, testInfo, "stress-live-command-inputs");
   await dialog.getByRole("button", { name: "Echo arguments", exact: true }).click();
 
-  await expect(dialog).toHaveCount(0);
+  await expect(dialog.locator('[data-format="json"]')).toContainText('"Flavor": "chocolate"');
   await expect(page.getByRole("status")).toHaveText("Echo arguments succeeded");
+  await dialog.getByRole("button", { name: "Close", exact: true }).click();
+  await expect(dialog).toHaveCount(0);
 });
 
 test(`${features("STRESS-PROCESS-COMMAND-001")} preserves live process command behavior`, async ({ page }, testInfo) => {

@@ -6,6 +6,7 @@ import type {
 } from "../api/types";
 import { openExternal } from "../api/deck";
 import { formatTime } from "../lib/format";
+import { partitionResourceCommands } from "../lib/resourceCommands";
 import {
   Badge,
   Button,
@@ -93,10 +94,8 @@ export function DetailsDrawer({
   const urls = [...resource.urls]
     .filter((url) => !url.isInactive)
     .sort((left, right) => left.sortOrder - right.sortOrder);
-  const visibleCommands = resource.commands.filter((command) => command.state !== "hidden");
-  const highlightedCommands = visibleCommands.filter((command) => command.isHighlighted);
-  const overflowCommands = visibleCommands.filter((command) => !command.isHighlighted);
-  const footer = visibleCommands.length > 0
+  const { highlightedCommands, menuCommands } = partitionResourceCommands(resource.commands);
+  const footer = highlightedCommands.length > 0 || menuCommands.length > 0
     ? (
         <>
           {highlightedCommands.map((command) => (
@@ -112,14 +111,14 @@ export function DetailsDrawer({
               {command.displayName}
             </Button>
           ))}
-          {overflowCommands.length > 0 ? (
+          {menuCommands.length > 0 ? (
             <CommandMenu
               ariaLabel="Resource commands"
               triggerContent={null}
               triggerIcon={<MoreIcon size={16} />}
               triggerSize="small"
               placement="above-start"
-              entries={overflowCommands.map((command) => ({
+              entries={menuCommands.map((command) => ({
                 id: command.name,
                 label: command.displayName,
                 description: command.displayDescription ?? undefined,

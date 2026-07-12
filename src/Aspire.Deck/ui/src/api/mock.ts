@@ -416,7 +416,7 @@ function commandResultCommands(): ResourceCommand[] {
       confirmationMessage: null,
       iconName: "DocumentText",
       iconVariant: "regular",
-      isHighlighted: false,
+      isHighlighted: true,
       state: "enabled",
     },
     {
@@ -426,7 +426,7 @@ function commandResultCommands(): ResourceCommand[] {
       confirmationMessage: null,
       iconName: "Braces",
       iconVariant: "regular",
-      isHighlighted: false,
+      isHighlighted: true,
       state: "enabled",
     },
     {
@@ -436,8 +436,18 @@ function commandResultCommands(): ResourceCommand[] {
       confirmationMessage: null,
       iconName: "DocumentBulletList",
       iconVariant: "regular",
-      isHighlighted: false,
+      isHighlighted: true,
       state: "enabled",
+    },
+    {
+      name: "result-hidden",
+      displayName: "Hidden result command",
+      displayDescription: "This command must never appear in dashboard command surfaces.",
+      confirmationMessage: null,
+      iconName: "Document",
+      iconVariant: "regular",
+      isHighlighted: true,
+      state: "hidden",
     },
   ];
 }

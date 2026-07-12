@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 112
-- React partial: 23
+- React covered: 116
+- React partial: 19
 - React missing: 23
-- Legacy black-box scenarios pending: 56
-- React parity gaps: 46
+- Legacy black-box scenarios pending: 54
+- React parity gaps: 42
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -73,12 +73,12 @@
 | PARAM-SET-001 | parameters | `/parameters` | parameters | covered | PARAM-SET-001 | Missing and existing parameter values can be set through resource commands. |
 | PARAM-NOTIFICATION-001 | parameters | `/parameters` | parameters | covered | PARAM-NOTIFICATION-001 | The unresolved-parameters notification navigates to parameter entry. |
 | PARAM-SESSION-001 | parameters | `/parameters` | parameters | covered | PARAM-SESSION-001 | Parameter filter, sort, and selected resource state are restorable. |
-| CMD-VISIBILITY-001 | commands | `/` | PENDING | partial | RES-COMMANDS-001 | Enabled, disabled, hidden, UI-only, and API-only command visibility is honored. |
-| CMD-HIGHLIGHT-001 | commands | `/` | commands | partial | RES-ACTION-MENU-001 | Highlighted commands remain directly available and other commands use overflow presentation. |
+| CMD-VISIBILITY-001 | commands | `/` | commands | covered | CMD-VISIBILITY-001; STRESS-COMMAND-VISIBILITY-001 | Enabled, disabled, hidden, UI-only, and API-only command visibility is honored. |
+| CMD-HIGHLIGHT-001 | commands | `/` | commands | covered | CMD-HIGHLIGHT-001 | Highlighted commands remain directly available and other commands use overflow presentation. |
 | CMD-ICON-001 | commands | `/` | PENDING | covered | RES-ICON-001; STRESS-COMMAND-ICON-001 | Custom command icon names render in direct and overflow command surfaces. |
 | CMD-ICON-VARIANT-001 | commands | `/` | PENDING | covered | TK-ICON-001; RES-ICON-001; STRESS-COMMAND-ICON-001 | Regular and filled command icon variants are preserved. |
-| CMD-DESCRIPTION-001 | commands | `/` | commands | partial | RES-ACTION-MENU-001 | Command display names and descriptions remain visible and accessible. |
-| CMD-CONFIRM-001 | commands | `/` | PENDING | partial | RES-CONFIRM-001 | Commands with confirmation messages require explicit confirmation. |
+| CMD-DESCRIPTION-001 | commands | `/` | commands | covered | CMD-DESCRIPTION-001 | Command display names and descriptions remain visible and accessible. |
+| CMD-CONFIRM-001 | commands | `/` | commands | covered | CMD-CONFIRM-001 | Commands with confirmation messages require explicit confirmation. |
 | CMD-EXECUTE-001 | commands | `/` | PENDING | partial | RES-COMMANDS-001; HTTP-COMMAND-001; STRESS-COMMAND-EXECUTE-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |
 | CMD-TEXT-001 | commands | `/` | commands | covered | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Text arguments support label, description, placeholder, required, and maximum length. |
 | CMD-NUMBER-001 | commands | `/` | commands | partial | HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Number arguments preserve numeric values and validation. |
