@@ -139,6 +139,83 @@ internal static class KubernetesDeployTestHelpers
     }
 
     /// <summary>
+    /// Installs the Radius <c>rad</c> CLI into ~/.local/bin (already added to PATH
+    /// by <see cref="InstallKindAndHelmAsync"/>) using the official install script,
+    /// pinned to <see cref="KubernetesE2EVersions.RadiusVersion"/>. Skips the
+    /// download when <c>rad</c> is already on PATH, and retries up to 3 times to
+    /// tolerate transient GitHub CDN failures (mirrors the KinD/Helm downloads).
+    /// </summary>
+    internal static async Task InstallRadCliAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter)
+    {
+        var radiusVersion = KubernetesE2EVersions.RadiusVersion;
+
+        await auto.TypeAsync("mkdir -p ~/.local/bin");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        // The install script is fetched from the matching release tag (which carries
+        // the leading `v`), while its `--version` flag expects the bare number. rad
+        // downloads its companion `bicep` to ~/.rad/bin on the first `rad deploy`.
+        await auto.TypeAsync($"command -v rad >/dev/null 2>&1 || {{ rm -f ~/.local/bin/rad; for i in 1 2 3; do curl -fsSL \"https://raw.githubusercontent.com/radius-project/radius/v{radiusVersion}/deploy/install.sh\" | /bin/bash -s -- --version {radiusVersion} --install-dir \"$HOME/.local/bin\" && test -x \"$HOME/.local/bin/rad\" && break; echo \"Retry $i: rad download failed, retrying in 5s...\"; rm -f ~/.local/bin/rad; sleep 5; done; test -x \"$HOME/.local/bin/rad\"; }}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync("export PATH=\"$HOME/.local/bin:$PATH\" && rad version");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+    }
+
+    /// <summary>
+    /// Installs the Radius control plane onto the KinD cluster and creates the
+    /// resource group, environment, and workspace that <c>rad deploy</c> (driven by
+    /// <c>aspire deploy</c>) resolves against. No Azure is involved.
+    /// </summary>
+    /// <remarks>
+    /// Two non-obvious behaviors this sequence works around, both confirmed against
+    /// rad 0.59.0:
+    /// <list type="bullet">
+    ///   <item><description>
+    ///     <c>rad</c> ignores <c>KUBECONFIG</c> and targets the current-context of
+    ///     <c>~/.kube/config</c>. In this container <c>kind export kubeconfig
+    ///     --internal</c> has already set that to <c>kind-&lt;cluster&gt;</c>, but we
+    ///     still pass <c>--kubecontext</c>/<c>--context</c> explicitly so the
+    ///     control-plane install and workspace are pinned to the intended cluster.
+    ///   </description></item>
+    ///   <item><description>
+    ///     <c>rad install kubernetes</c> does NOT create a default resource group,
+    ///     environment, or workspace, so <c>rad deploy</c> would otherwise fail to
+    ///     resolve a scope. We create <c>default</c>/<c>default</c> and a workspace
+    ///     bound to them explicitly.
+    ///   </description></item>
+    /// </list>
+    /// </remarks>
+    internal static async Task InstallRadiusControlPlaneAsync(
+        this Hex1bTerminalAutomator auto,
+        SequenceCounter counter,
+        string clusterName)
+    {
+        // Installing the control plane pulls several images and waits for the
+        // radius-system pods to become ready, so allow a generous budget.
+        await auto.TypeAsync($"rad install kubernetes --kubecontext kind-{clusterName}");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
+
+        await auto.TypeAsync("rad group create default");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync("rad env create default --group default");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+
+        await auto.TypeAsync($"rad workspace create kubernetes radius-e2e --context kind-{clusterName} --group default --environment default --force");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
+    }
+
+    /// <summary>
     /// Scaffolds an Aspire project using <c>aspire new</c> (Starter template, no Redis),
     /// then adds hosting/client packages and injects custom code into the existing source files.
     /// Asserts the "Using project templates version:" message appears with a prerelease suffix.
