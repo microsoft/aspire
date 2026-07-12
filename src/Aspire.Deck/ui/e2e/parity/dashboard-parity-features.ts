@@ -24,6 +24,7 @@ export type LegacyScenario =
   | "commands"
   | "console"
   | "console-follow"
+  | "terminal"
   | "console-virtualization"
   | "structured-logs"
   | "structured-log-genai"
@@ -167,9 +168,9 @@ const featureDefinitions = {
     ["CONSOLE-TIMESTAMP-001", "/consolelogs", "Timestamp visibility and UTC/local formatting can be toggled.", "console", "covered", "HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001"],
     ["CONSOLE-WRAP-001", "/consolelogs", "Long console lines can wrap or scroll horizontally.", "console", "covered", "HTTP-CONSOLE-CONTROLS-001; CONSOLE-ROUTE-001"],
     ["CONSOLE-COMMANDS-001", "/consolelogs", "Commands for the selected resource are available from the console toolbar.", "console", "covered", "CONSOLE-COMMANDS-001"],
-    ["CONSOLE-TERMINAL-001", "/consolelogs", "Interactive resources render a terminal and can take or release control.", null, "covered", "CONSOLE-TERMINAL-001; TERMINAL-LIVE-001; DeckApiTests.GetResources_ReturnsTerminalMetadata"],
-    ["CONSOLE-TERMINAL-FONT-001", "/consolelogs", "Interactive terminal font size can be increased, decreased, and reset.", null, "covered", "CONSOLE-TERMINAL-FONT-001"],
-    ["CONSOLE-TERMINAL-SIZE-001", "/consolelogs", "Interactive terminal column and row presets update the remote terminal size.", null, "covered", "CONSOLE-TERMINAL-SIZE-001"],
+    ["CONSOLE-TERMINAL-001", "/consolelogs", "Interactive resources render a terminal and can take control of input.", "terminal", "covered", "CONSOLE-TERMINAL-001; TERMINAL-LIVE-001; DeckApiTests.GetResources_ReturnsTerminalMetadata"],
+    ["CONSOLE-TERMINAL-FONT-001", "/consolelogs", "Interactive terminal font size can be increased and decreased.", "terminal", "covered", "CONSOLE-TERMINAL-FONT-001"],
+    ["CONSOLE-TERMINAL-SIZE-001", "/consolelogs", "Interactive terminal column and row presets update the remote terminal size.", "terminal", "covered", "CONSOLE-TERMINAL-SIZE-001"],
     ["CONSOLE-VIRTUALIZATION-001", "/consolelogs", "Large console streams remain responsive and preserve stable line numbers.", "console-virtualization", "covered", "HTTP-CONSOLE-VIRTUALIZATION-001"],
     ["CONSOLE-ROUTE-001", "/consolelogs/resource/{name}", "Selected resource and console options are deep-linkable and restorable.", "console", "covered", "CONSOLE-ROUTE-001"],
   ],
