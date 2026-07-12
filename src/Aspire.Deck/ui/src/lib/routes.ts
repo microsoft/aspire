@@ -33,6 +33,10 @@ export interface DashboardRoute {
   resourceSortColumn?: string;
   resourceSortDirection?: "ascending" | "descending";
   resourceView?: "table" | "graph";
+  parameterName?: string;
+  parameterQuery?: string;
+  parameterSortColumn?: string;
+  parameterSortDirection?: "ascending" | "descending";
 }
 
 const pagePaths: Record<PageId, string> = {
@@ -64,7 +68,14 @@ export function readDashboardRoute(
 ): DashboardRoute {
   const path = location.pathname.toLowerCase();
   if (path === "/parameters" || path.startsWith("/parameters/")) {
-    return { page: "parameters" };
+    const search = new URLSearchParams(location.search);
+    return {
+      page: "parameters",
+      parameterName: search.get("resource") || undefined,
+      parameterQuery: search.get("q") || undefined,
+      parameterSortColumn: search.get("sort") || undefined,
+      parameterSortDirection: search.get("sortDirection") === "descending" ? "descending" : undefined,
+    };
   }
   if (path === "/consolelogs" || path.startsWith("/consolelogs/")) {
     const resourceMatch = /^\/consolelogs\/resource\/([^/]+)\/?$/i.exec(location.pathname);
@@ -267,6 +278,12 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     if (route.resourceSortColumn && route.resourceSortColumn !== "name") url.searchParams.set("sort", route.resourceSortColumn);
     if (route.resourceSortDirection === "descending") url.searchParams.set("sortDirection", "descending");
     if (route.resourceView === "graph") url.searchParams.set("view", "Graph");
+  }
+  if (route.page === "parameters") {
+    if (route.parameterName) url.searchParams.set("resource", route.parameterName);
+    if (route.parameterQuery) url.searchParams.set("q", route.parameterQuery);
+    if (route.parameterSortColumn && route.parameterSortColumn !== "name") url.searchParams.set("sort", route.parameterSortColumn);
+    if (route.parameterSortDirection === "descending") url.searchParams.set("sortDirection", "descending");
   }
   url.hash = "";
   return `${url.pathname}${url.search}`;

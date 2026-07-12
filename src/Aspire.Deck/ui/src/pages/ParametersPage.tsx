@@ -20,6 +20,7 @@ import {
   StateDot,
   type Column,
   type ConfirmRequest,
+  type SortDirection,
 } from "../toolkit";
 
 interface Toast {
@@ -37,16 +38,31 @@ function valueProperty(resource: Resource) {
   return resource.properties.find((p) => p.name === PARAMETER_VALUE_PROPERTY) ?? null;
 }
 
-export function ParametersPage() {
+export interface ParametersRouteState {
+  resourceName: string | null;
+  query: string;
+  sortColumn: string;
+  sortDirection: SortDirection;
+}
+
+export function ParametersPage({
+  route,
+  onRouteChange,
+}: {
+  route: ParametersRouteState;
+  onRouteChange: (route: ParametersRouteState) => void;
+}) {
   const { resources, ready } = useResources();
-  const [query, setQuery] = useState("");
-  const [selectedName, setSelectedName] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
 
+  const changeRoute = (change: Partial<ParametersRouteState>): void => {
+    onRouteChange({ ...route, ...change });
+  };
+
   const visible = useMemo(() => {
     const list = resources.filter((r) => !r.isHidden && r.resourceType === PARAMETER_RESOURCE_TYPE);
-    const trimmed = query.trim().toLowerCase();
+    const trimmed = route.query.trim().toLowerCase();
     const filtered = trimmed
       ? list.filter(
           (r) =>
@@ -55,11 +71,11 @@ export function ParametersPage() {
         )
       : list;
     return filtered;
-  }, [resources, query]);
+  }, [resources, route.query]);
 
   const selected = useMemo(
-    () => resources.find((r) => r.name === selectedName) ?? null,
-    [resources, selectedName],
+    () => resources.find((r) => r.name === route.resourceName) ?? null,
+    [resources, route.resourceName],
   );
 
   const runCommand = async (resource: Resource, command: ResourceCommand): Promise<void> => {
@@ -119,7 +135,7 @@ export function ParametersPage() {
       </PageHeader>
 
       <PageToolbar ariaLabel="Parameter tools">
-        <SearchBox value={query} onChange={setQuery} placeholder="Filter by name or state…" />
+        <SearchBox value={route.query} onChange={(query) => changeRoute({ query })} placeholder="Filter by name or state…" />
       </PageToolbar>
 
       <PageBody>
@@ -127,9 +143,10 @@ export function ParametersPage() {
           columns={columns}
           rows={visible}
           rowKey={(r) => r.name}
-          onRowClick={(r) => setSelectedName(r.name)}
-          isSelected={(r) => r.name === selectedName}
-          defaultSort={{ columnKey: "name", direction: "ascending" }}
+          onRowClick={(r) => changeRoute({ resourceName: r.name })}
+          isSelected={(r) => r.name === route.resourceName}
+          sort={{ columnKey: route.sortColumn, direction: route.sortDirection }}
+          onSortChange={(sort) => changeRoute({ sortColumn: sort.columnKey, sortDirection: sort.direction })}
           emptyMessage={ready ? "This AppHost has no parameters." : "Connecting to resource service…"}
         />
       </PageBody>
@@ -137,7 +154,7 @@ export function ParametersPage() {
       {selected ? (
         <DetailsDrawer
           resource={selected}
-          onClose={() => setSelectedName(null)}
+          onClose={() => changeRoute({ resourceName: null })}
           onExecuteCommand={(resource, command) => void runCommand(resource, command)}
           requestConfirm={setConfirm}
         />

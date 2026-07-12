@@ -2,6 +2,7 @@
 // (browser dev / `npm run preview`). It mirrors the command + event surface
 // defined in CONTRACT.md so that App code is identical in both modes.
 
+import { PARAMETER_VALUE_PROPERTY } from "./types";
 import type {
   AppHostInfo,
   CanvasManifest,
@@ -458,6 +459,7 @@ class MockBackend {
   private apphostSubs = new Set<(a: AppHostInfo[]) => void>();
   private interactionSubs = new Set<(list: InteractionInfo[]) => void>();
   private dialog: InteractionInfo | null = null;
+  private parameterDialogResourceName: string | null = null;
   private notifications: InteractionInfo[] = [
     {
       interactionId: 9001, kind: "notification", title: "Unresolved parameters",
@@ -704,6 +706,11 @@ class MockBackend {
         this.dialog = this.buildScaleDialog([]);
         this.emitInteractions();
         return { kind: "succeeded", message: "Awaiting input…" };
+      case "parameter-set":
+        this.parameterDialogResourceName = target.name;
+        this.dialog = this.buildParameterDialog(target);
+        this.emitInteractions();
+        return { kind: "succeeded", message: "Awaiting input…" };
       default:
         return { kind: "undefined", message: `Unknown command '${args.commandName}'.` };
     }
@@ -741,6 +748,41 @@ class MockBackend {
     };
   }
 
+  private buildParameterDialog(resource: Resource, validationErrors: string[] = []): InteractionInfo {
+    const property = resource.properties.find((candidate) => candidate.name === PARAMETER_VALUE_PROPERTY);
+    const value = resource.state === "ValueMissing" ? "" : String(property?.value ?? "");
+    return {
+      interactionId: 2,
+      kind: "inputsDialog",
+      title: `Set ${resource.displayName}`,
+      message: "Enter the parameter value for this AppHost session.",
+      primaryButtonText: "Set",
+      secondaryButtonText: "Cancel",
+      showSecondaryButton: true,
+      showDismiss: true,
+      enableMessageMarkdown: false,
+      intent: "none",
+      inputs: [{
+        name: "value",
+        label: "Value",
+        placeholder: "Parameter value",
+        inputType: property?.isSensitive ? "secretText" : "text",
+        required: true,
+        options: [],
+        value,
+        validationErrors,
+        description: "",
+        enableDescriptionMarkdown: false,
+        maxLength: 0,
+        allowCustomChoice: false,
+        disabled: false,
+        updateStateOnChange: false,
+      }],
+      linkText: "",
+      linkUrl: "",
+    };
+  }
+
   // Notifications stack alongside (and outlive) the one-at-a-time dialog.
   private interactionList(): InteractionInfo[] {
     return [...this.notifications, ...(this.dialog ? [this.dialog] : [])];
@@ -764,6 +806,31 @@ class MockBackend {
     if (this.notifications.some((n) => n.interactionId === interactionId)) {
       this.notifications = this.notifications.filter((n) => n.interactionId !== interactionId);
       this.emitInteractions();
+      return;
+    }
+
+    if (interactionId === 2 && this.parameterDialogResourceName) {
+      const target = this.resources.find((resource) => resource.name === this.parameterDialogResourceName);
+      if (action === "submit" && target) {
+        if (!values.value) {
+          this.dialog = this.buildParameterDialog(target, ["Value is required."]);
+          this.emitInteractions();
+          return;
+        }
+        const property = target.properties.find((candidate) => candidate.name === PARAMETER_VALUE_PROPERTY);
+        if (property) {
+          property.value = values.value;
+        }
+        target.state = "Running";
+        target.stateStyle = "success";
+        target.startedAt = new Date().toISOString();
+        this.emitResources({ type: "change", upserts: [structuredClone(target)] });
+      }
+      if (action !== "update") {
+        this.parameterDialogResourceName = null;
+        this.dialog = null;
+        this.emitInteractions();
+      }
       return;
     }
 

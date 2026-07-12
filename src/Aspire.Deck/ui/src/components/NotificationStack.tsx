@@ -11,7 +11,13 @@ import {
 // server interaction, so it stays until the user acts on it or dismisses it — there
 // is no auto-dismiss. This mirrors the dashboard, which routes notifications to
 // stacked message bars while keeping dialogs (inputs/message box) modal.
-export function NotificationStack({ notifications }: { notifications: InteractionInfo[] }) {
+export function NotificationStack({
+  notifications,
+  onPrimaryAction,
+}: {
+  notifications: InteractionInfo[];
+  onPrimaryAction?: (notification: InteractionInfo) => void;
+}) {
   const items = notifications.map<NotificationItem>((notification) => ({
     id: notification.interactionId,
     intent: toIntent(notification.intent),
@@ -26,7 +32,10 @@ export function NotificationStack({ notifications }: { notifications: Interactio
     primaryAction: notification.primaryButtonText
       ? {
           label: notification.primaryButtonText,
-          onClick: () => respondInteraction(notification.interactionId, "primary", {}),
+          onClick: () => {
+            respondInteraction(notification.interactionId, "primary", {});
+            onPrimaryAction?.(notification);
+          },
         }
       : undefined,
     secondaryAction: notification.showSecondaryButton

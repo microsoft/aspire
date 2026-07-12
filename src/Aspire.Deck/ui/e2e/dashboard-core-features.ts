@@ -43,6 +43,9 @@ export const dashboardCoreFeatures = {
   "PARAM-SORT-001": "Parameters sort by supported columns in ascending and descending order.",
   "PARAM-FILTER-001": "Parameters filter by name and state.",
   "PARAM-SECRET-001": "Secret parameter values reveal without selecting the resource row.",
+  "PARAM-SET-001": "Missing and existing parameter values can be set through resource commands.",
+  "PARAM-NOTIFICATION-001": "The unresolved-parameters notification navigates to parameter entry.",
+  "PARAM-SESSION-001": "Parameter filter, sort, and selected resource state restore from the URL.",
 } as const;
 
 export type DashboardCoreFeatureId = keyof typeof dashboardCoreFeatures;

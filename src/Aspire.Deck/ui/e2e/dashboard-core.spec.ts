@@ -216,7 +216,7 @@ test(`${features("APP-PAGE-001")} composes every route from the page toolkit`, a
   }
 });
 
-test(`${features("APP-NOTIFICATION-001")} completes every notification action`, async ({ page }) => {
+test(`${features("APP-NOTIFICATION-001", "PARAM-NOTIFICATION-001")} completes every notification action`, async ({ page }) => {
   const alert = page.getByRole("alert");
   await expect(alert).toContainText("Unresolved parameters");
   await alert.getByRole("button", { name: "No", exact: true }).click();
@@ -225,6 +225,8 @@ test(`${features("APP-NOTIFICATION-001")} completes every notification action`, 
   await page.reload();
   await page.getByRole("alert").getByRole("button", { name: "Enter values" }).click();
   await expect(page.getByRole("alert")).toHaveCount(0);
+  await expect(page).toHaveURL(/\/parameters$/);
+  await expect(page.getByRole("heading", { level: 1, name: "Parameters" })).toBeVisible();
 
   await page.reload();
   await page.getByRole("button", { name: "Dismiss notification" }).click();
@@ -567,6 +569,51 @@ test(`${features("PARAM-LIST-001", "PARAM-SORT-001", "PARAM-FILTER-001", "PARAM-
   await search.clear();
   await table.getByRole("row", { name: /greeting Not set/ }).click();
   await expect(page.getByRole("dialog", { name: "greeting" })).toBeVisible();
+});
+
+test(`${features("PARAM-SESSION-001")} restores parameter filter, sort, and selection from the URL`, async ({ page }) => {
+  await page.goto("/parameters?resource=greeting&q=ValueMissing&sort=state&sortDirection=descending");
+
+  const table = page.getByRole("table");
+  await expect(page.getByRole("textbox", { name: "Filter by name or state…" })).toHaveValue("ValueMissing");
+  await expect(table.getByRole("columnheader", { name: "State" })).toHaveAttribute("aria-sort", "descending");
+  await expect(table.getByRole("row")).toHaveCount(2);
+  await expect(page.getByRole("dialog", { name: "greeting" })).toBeVisible();
+
+  await page.reload();
+  await expect(page).toHaveURL(/\/parameters\?resource=greeting&q=ValueMissing&sort=state&sortDirection=descending$/);
+  await expect(page.getByRole("textbox", { name: "Filter by name or state…" })).toHaveValue("ValueMissing");
+  await expect(table.getByRole("columnheader", { name: "State" })).toHaveAttribute("aria-sort", "descending");
+  await expect(page.getByRole("dialog", { name: "greeting" })).toBeVisible();
+});
+
+test(`${features("PARAM-SET-001")} sets missing and existing parameter values through command interactions`, async ({ page }) => {
+  await page.goto("/parameters?resource=greeting");
+  const parameterDetails = page.getByRole("dialog", { name: "greeting" });
+  await parameterDetails.getByRole("button", { name: "Set parameter" }).click();
+
+  const missingValueDialog = page.getByRole("dialog", { name: "Set greeting" });
+  const missingValue = missingValueDialog.getByRole("textbox", { name: "Value" });
+  await expect(missingValue).toHaveValue("");
+  await missingValueDialog.getByRole("button", { name: "Set", exact: true }).click();
+  await expect(missingValueDialog).toContainText("Value is required.");
+  await missingValue.fill("Hello from Playwright");
+  await missingValueDialog.getByRole("button", { name: "Set", exact: true }).click();
+  await expect(missingValueDialog).toHaveCount(0);
+  await expect(parameterDetails).toContainText("Running");
+  await expect(parameterDetails).toContainText("Hello from Playwright");
+
+  await parameterDetails.getByRole("button", { name: "Close" }).click();
+  await page.getByRole("row", { name: /insertionrows/ }).click();
+  const existingDetails = page.getByRole("dialog", { name: "insertionrows" });
+  await existingDetails.getByRole("button", { name: "Set parameter" }).click();
+  const existingValueDialog = page.getByRole("dialog", { name: "Set insertionrows" });
+  const existingValue = existingValueDialog.getByRole("textbox", { name: "Value" });
+  await expect(existingValue).toHaveValue("1000");
+  await existingValue.fill("2000");
+  await existingValueDialog.getByRole("button", { name: "Set", exact: true }).click();
+  await expect(existingValueDialog).toHaveCount(0);
+  await expect(existingDetails).toContainText("2000");
 });
 
 test(`${features("APP-RESPONSIVE-001")} keeps core workflows usable on mobile`, async ({ page }, testInfo) => {

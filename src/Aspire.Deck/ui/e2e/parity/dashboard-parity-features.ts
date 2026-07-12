@@ -109,9 +109,9 @@ const featureDefinitions = {
     ["PARAM-SORT-001", "/parameters", "Supported parameter columns sort ascending and descending.", "parameters", "covered", "PARAM-SORT-001"],
     ["PARAM-MISSING-001", "/parameters", "Unresolved parameters expose the value-missing state and placeholder.", "parameters", "covered", "PARAM-LIST-001; STRESS-PARAMETERS-001"],
     ["PARAM-SECRET-001", "/parameters", "Secret parameter values are masked and reveal only after explicit action.", "parameters", "covered", "PARAM-SECRET-001; STRESS-PARAMETERS-001"],
-    ["PARAM-SET-001", "/parameters", "Missing and existing parameter values can be set through resource commands.", null, "partial", "RES-COMMANDS-001"],
-    ["PARAM-NOTIFICATION-001", "/parameters", "The unresolved-parameters notification navigates to parameter entry.", null, "missing"],
-    ["PARAM-SESSION-001", "/parameters", "Parameter filter, sort, and selected resource state are restorable.", null, "missing"],
+    ["PARAM-SET-001", "/parameters", "Missing and existing parameter values can be set through resource commands.", "parameters", "covered", "PARAM-SET-001"],
+    ["PARAM-NOTIFICATION-001", "/parameters", "The unresolved-parameters notification navigates to parameter entry.", "parameters", "covered", "PARAM-NOTIFICATION-001"],
+    ["PARAM-SESSION-001", "/parameters", "Parameter filter, sort, and selected resource state are restorable.", "parameters", "covered", "PARAM-SESSION-001"],
   ],
   commands: [
     ["CMD-VISIBILITY-001", "/", "Enabled, disabled, hidden, UI-only, and API-only command visibility is honored.", null, "partial", "RES-COMMANDS-001"],

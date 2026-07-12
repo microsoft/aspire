@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 92
-- React partial: 30
-- React missing: 36
-- Legacy black-box scenarios pending: 74
-- React parity gaps: 66
+- React covered: 95
+- React partial: 29
+- React missing: 34
+- Legacy black-box scenarios pending: 71
+- React parity gaps: 63
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -70,9 +70,9 @@
 | PARAM-SORT-001 | parameters | `/parameters` | parameters | covered | PARAM-SORT-001 | Supported parameter columns sort ascending and descending. |
 | PARAM-MISSING-001 | parameters | `/parameters` | parameters | covered | PARAM-LIST-001; STRESS-PARAMETERS-001 | Unresolved parameters expose the value-missing state and placeholder. |
 | PARAM-SECRET-001 | parameters | `/parameters` | parameters | covered | PARAM-SECRET-001; STRESS-PARAMETERS-001 | Secret parameter values are masked and reveal only after explicit action. |
-| PARAM-SET-001 | parameters | `/parameters` | PENDING | partial | RES-COMMANDS-001 | Missing and existing parameter values can be set through resource commands. |
-| PARAM-NOTIFICATION-001 | parameters | `/parameters` | PENDING | missing | - | The unresolved-parameters notification navigates to parameter entry. |
-| PARAM-SESSION-001 | parameters | `/parameters` | PENDING | missing | - | Parameter filter, sort, and selected resource state are restorable. |
+| PARAM-SET-001 | parameters | `/parameters` | parameters | covered | PARAM-SET-001 | Missing and existing parameter values can be set through resource commands. |
+| PARAM-NOTIFICATION-001 | parameters | `/parameters` | parameters | covered | PARAM-NOTIFICATION-001 | The unresolved-parameters notification navigates to parameter entry. |
+| PARAM-SESSION-001 | parameters | `/parameters` | parameters | covered | PARAM-SESSION-001 | Parameter filter, sort, and selected resource state are restorable. |
 | CMD-VISIBILITY-001 | commands | `/` | PENDING | partial | RES-COMMANDS-001 | Enabled, disabled, hidden, UI-only, and API-only command visibility is honored. |
 | CMD-HIGHLIGHT-001 | commands | `/` | commands | partial | RES-ACTION-MENU-001 | Highlighted commands remain directly available and other commands use overflow presentation. |
 | CMD-ICON-001 | commands | `/` | PENDING | covered | RES-ICON-001; STRESS-COMMAND-ICON-001 | Custom command icon names render in direct and overflow command surfaces. |

@@ -193,7 +193,23 @@ export function App({
                 })}
               />
             ) : null}
-            {page === "parameters" ? <ParametersPage /> : null}
+            {page === "parameters" ? (
+              <ParametersPage
+                route={{
+                  resourceName: route.parameterName ?? null,
+                  query: route.parameterQuery ?? "",
+                  sortColumn: route.parameterSortColumn ?? "name",
+                  sortDirection: route.parameterSortDirection ?? "ascending",
+                }}
+                onRouteChange={(parameterRoute) => navigate({
+                  page: "parameters",
+                  parameterName: parameterRoute.resourceName ?? undefined,
+                  parameterQuery: parameterRoute.query || undefined,
+                  parameterSortColumn: parameterRoute.sortColumn === "name" ? undefined : parameterRoute.sortColumn,
+                  parameterSortDirection: parameterRoute.sortDirection === "ascending" ? undefined : parameterRoute.sortDirection,
+                })}
+              />
+            ) : null}
             {page === "console" ? (
               <ConsolePage
                 routeResourceName={route.consoleResourceName ?? null}
@@ -295,7 +311,16 @@ export function App({
         )}
       </main>
       {dialog ? <InteractionPane interaction={dialog} /> : null}
-      <NotificationStack notifications={notifications} />
+      <NotificationStack
+        notifications={notifications}
+        onPrimaryAction={(notification) => {
+          // This interaction is currently identified by its server-provided action text.
+          // The interaction protocol does not expose an action kind or navigation target.
+          if (notification.kind === "notification" && notification.primaryButtonText === "Enter values") {
+            navigate({ page: "parameters" });
+          }
+        }}
+      />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       <SettingsDialog
         open={settingsOpen}
