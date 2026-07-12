@@ -902,6 +902,12 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         }
     }
 
+    private sealed class CustomManagedEnvironmentNameResolver : ResourceNamePropertyResolver
+    {
+        public override BicepValue<string>? ResolveName(ProvisioningBuildOptions options, ProvisionableResource resource, ResourceNameRequirements requirements)
+            => resource is ContainerAppManagedEnvironment ? new BicepValue<string>("customcae") : null;
+    }
+
     [Fact]
     public async Task ExternalEndpointBecomesIngress()
     {
@@ -1959,6 +1965,33 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var name = GetManagedEnvironmentNameExpression(bicep);
 
         Assert.Equal("take('cae${uniqueString(resourceGroup().id)}', 24)", name);
+    }
+
+    [Fact]
+    public async Task ConfiguredNameResolverWinsOverManagedEnvironmentNameFallback()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.Services.Configure<AzureProvisioningOptions>(options =>
+            options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new CustomManagedEnvironmentNameResolver()));
+
+        var env = builder.AddAzureContainerAppEnvironment("cae1");
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var envResource = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+
+        var (_, bicep) = await GetManifestWithBicep(envResource);
+
+        var name = GetManagedEnvironmentNameExpression(bicep);
+
+        Assert.Equal("'customcae'", name);
     }
 
     [Fact]

@@ -15,6 +15,7 @@ using Azure.Provisioning.AppContainers;
 using Azure.Provisioning.ContainerRegistry;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.OperationalInsights;
+using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
@@ -410,30 +411,9 @@ public static class AzureContainerAppExtensions
                 }
             }
 
-            // When not using azd naming, the managed environment name would otherwise be left to
-            // Azure.Provisioning's default. That default only permits lowercase letters
-            // (ContainerAppManagedEnvironment inherits ResourceNameRequirements(1, 24,
-            // ResourceNameCharacters.LowercaseLetters)), so digits are stripped from the bicep
-            // identifier: environments named e.g. "cae1"/"cae2" in the same resource group both
-            // resolve to take('cae${uniqueString(resourceGroup().id)}', 24) and collapse onto a
-            // single physical environment, where concurrent container-app writes race with
-            // ManagedEnvironmentOperationInProgress. Set the name explicitly, preserving digits,
-            // so multiple environments in one resource group get distinct names. Opt out with
-            // WithSingletonResourceNaming() to keep the pre-fix name for already-deployed environments.
-            // See https://github.com/microsoft/aspire/issues/18722.
-            //
-            // Note: uniqueString(resourceGroup().id) is identical for every environment in the same
-            // resource group, so the ONLY differentiator between environments is the name prefix. Because
-            // the whole value is truncated to 24 chars (the managed environment name limit), two
-            // environments whose sanitized names match in their first 24 characters would still collide.
-            // That is a narrow edge case (long, similar names), but it's the same truncation-collision
-            // class already seen for storage account names in #14427.
             if (!appEnvResource.UseAzdNamingConvention && !appEnvResource.UseSingletonResourceNaming)
             {
-                containerAppEnvironment.Name = BicepFunction.Take(
-                    BicepFunction.Interpolate(
-                        $"{GetManagedEnvironmentNamePrefix(appEnvResource)}{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
-                    24);
+                AddManagedEnvironmentNameFallbackResolver(appEnvResource);
             }
 
             // Exposed so that callers reference the LA workspace in other bicep modules
@@ -466,20 +446,47 @@ public static class AzureContainerAppExtensions
     }
 
     /// <summary>
-    /// Builds the prefix used for the managed environment's <c>name</c> in the default (non-azd) naming path.
+    /// Adds the fallback resolver used for the managed environment's <c>name</c> in the default (non-azd) naming path.
     /// </summary>
     /// <remarks>
-    /// Azure.Provisioning's default name for a managed environment is
-    /// <c>take('{sanitizedBicepIdentifier}{uniqueString(resourceGroup().id)}', 24)</c>, but its sanitizer only
-    /// keeps lowercase letters (<c>ResourceNameCharacters.LowercaseLetters</c>),
-    /// which drops digits and causes environments named e.g. <c>cae1</c>/<c>cae2</c> to collapse to the same
-    /// <c>cae…</c> name in a shared resource group. We reproduce that prefix but keep digits (managed environment
-    /// names permit lowercase alphanumerics), so distinct resource names produce distinct environment names.
+    /// Azure.Provisioning's default name resolver only assigns names while the <c>Name</c> property is unset.
+    /// Registering a resolver rather than assigning <c>Name</c> here preserves any caller-supplied resolvers in
+    /// <see cref="ProvisioningBuildOptions.InfrastructureResolvers"/> while still fixing the default fallback.
     /// </remarks>
-    private static string GetManagedEnvironmentNamePrefix(AzureContainerAppEnvironmentResource appEnvResource)
+    private static void AddManagedEnvironmentNameFallbackResolver(AzureContainerAppEnvironmentResource appEnvResource)
     {
-        var identifier = appEnvResource.GetBicepIdentifier();
-        return new string(identifier.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+        var options = appEnvResource.ProvisioningBuildOptions ??= new ProvisioningBuildOptions();
+        var bicepIdentifier = appEnvResource.GetBicepIdentifier();
+
+        if (options.InfrastructureResolvers.OfType<DigitPreservingManagedEnvironmentNameResolver>()
+            .Any(resolver => resolver.BicepIdentifier == bicepIdentifier))
+        {
+            return;
+        }
+
+        var resolver = new DigitPreservingManagedEnvironmentNameResolver(bicepIdentifier);
+
+        // Put Aspire's fallback after caller-configured resolvers but before Azure.Provisioning's default dynamic
+        // resolver. This preserves explicit policies such as AspireV8ResourceNamePropertyResolver while preventing
+        // the built-in lowercase-letters-only fallback from collapsing "cae1" and "cae2" to the same name.
+        var defaultDynamicResolverIndex = -1;
+        for (var i = 0; i < options.InfrastructureResolvers.Count; i++)
+        {
+            if (options.InfrastructureResolvers[i].GetType() == typeof(DynamicResourceNamePropertyResolver))
+            {
+                defaultDynamicResolverIndex = i;
+                break;
+            }
+        }
+
+        if (defaultDynamicResolverIndex >= 0)
+        {
+            options.InfrastructureResolvers.Insert(defaultDynamicResolverIndex, resolver);
+        }
+        else
+        {
+            options.InfrastructureResolvers.Add(resolver);
+        }
     }
 
     /// <summary>
@@ -836,6 +843,27 @@ public static class AzureContainerAppExtensions
         builder.WithAnnotation(new AzureContainerAppEnvironmentAcrPullIdentityAnnotation(identityBuilder.Resource));
 
         return builder;
+    }
+
+    private sealed class DigitPreservingManagedEnvironmentNameResolver(string bicepIdentifier) : ResourceNamePropertyResolver
+    {
+        public string BicepIdentifier { get; } = bicepIdentifier;
+
+        public override BicepValue<string>? ResolveName(ProvisioningBuildOptions options, ProvisionableResource resource, ResourceNameRequirements requirements)
+        {
+            if (resource is not ContainerAppManagedEnvironment || resource.BicepIdentifier != BicepIdentifier)
+            {
+                return null;
+            }
+
+            // uniqueString(resourceGroup().id) is identical for every environment in the same resource group, so
+            // the prefix is the only differentiator. Keep digits that Azure.Provisioning's default requirements
+            // currently drop, otherwise "cae1" and "cae2" both become "cae" and deploy to the same environment.
+            var prefix = new string(resource.BicepIdentifier.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
+            return BicepFunction.Take(
+                BicepFunction.Interpolate($"{prefix}{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
+                24);
+        }
     }
 
     private static AzureContainerRegistryResource CreateDefaultAzureContainerRegistry(IDistributedApplicationBuilder builder, string name, AzureContainerAppEnvironmentResource containerAppEnvironment)
