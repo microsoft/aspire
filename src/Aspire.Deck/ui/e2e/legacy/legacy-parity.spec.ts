@@ -321,7 +321,16 @@ test(`${features("structured-logs")} inventories structured log controls and row
   await attachScreenshot(page, testInfo, "legacy-structured-logs");
 });
 
-test(`${features("traces")} inventories trace controls and empty state`, async ({ page }, testInfo) => {
+test(`${features("traces")} inventories trace controls and nested span details`, async ({ page }, testInfo) => {
+  test.setTimeout(75_000);
+  await page.goto("/");
+  const resourcesTable = page.getByRole("table");
+  const apiRow = resourcesTable.getByRole("row").filter({ hasText: "stress-apiservice" });
+  await expect(apiRow).toHaveCount(1);
+  await apiRow.getByText("stress-apiservice", { exact: true }).click();
+  const resourceDetails = page.getByRole("dialog").filter({ hasText: "stress-apiservice" });
+  await resourceDetails.getByRole("button", { name: "Out of order nested spans", exact: true }).click();
+
   await page.goto("/traces");
   await expect(page.getByRole("combobox", { name: /^(Resource|Select a resource)$/ })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Type", exact: true })).toBeVisible();
@@ -332,6 +341,50 @@ test(`${features("traces")} inventories trace controls and empty state`, async (
   for (const header of ["Timestamp", "Name", "Spans", "Duration", "Actions"]) {
     await expect(page.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
   }
+
+  const matchingTraceRows = page.getByRole("table").getByRole("row").filter({ hasText: "GET /nested-trace-spans" });
+  await expect.poll(() => matchingTraceRows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+  const traceRow = matchingTraceRows.last();
+  await traceRow.getByRole("cell").first().click();
+  await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}$/);
+  await expect(page.getByText(/Depth 4/)).toBeVisible();
+  await expect(page.getByText(/Total spans 10/)).toBeVisible();
+
+  const spansTable = page.getByRole("table");
+  await expect(spansTable.getByText("ValidateAndUpdateCacheService.ExecuteAsync", { exact: true })).toBeVisible();
+  await expect(spansTable.getByText("ValidateAndUpdateCacheService.activeUser", { exact: true })).toHaveCount(2);
+  await expect(spansTable.getByText("Perform1", { exact: true })).toHaveCount(2);
+
+  const dismissNotifications = page.getByRole("button", { name: "Dismiss notification", exact: true });
+  while (await dismissNotifications.count() > 0) {
+    await dismissNotifications.first().click({ force: true });
+  }
+
+  const traceToolbar = page.locator(".traces-toolbar");
+  await traceToolbar.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Collapse all", exact: true }).click();
+  await expect(spansTable.getByText("Perform1", { exact: true })).toHaveCount(0);
+  await traceToolbar.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Expand all", exact: true }).click();
+  await expect(spansTable.getByText("Perform1", { exact: true })).toHaveCount(2);
+
+  const rootSpan = spansTable.getByRole("row").filter({ hasText: "GET /nested-trace-spans" });
+  await rootSpan.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "View details", exact: true }).click();
+  const spanDetails = page.locator("aside.drawer[role='dialog']");
+  await expect(spanDetails).toContainText("SpanId");
+  await expect(spanDetails).toContainText("TraceId");
+  await expect(spanDetails).toContainText("http.request.method");
+  await expect(spanDetails).toContainText("Microsoft.AspNetCore");
+  await expect(spanDetails).toContainText("service.name");
+  await expect(spanDetails).toContainText("Stress.ApiService");
+  await spanDetails.getByRole("button", { name: "Close", exact: true }).click();
+
+  const detailUrl = page.url();
+  await page.reload();
+  await expect(page).toHaveURL(detailUrl);
+  await expect(page.getByText(/Total spans 10/)).toBeVisible();
+  await expect(page.getByRole("table").getByText("Perform1", { exact: true })).toHaveCount(2);
   await attachScreenshot(page, testInfo, "legacy-traces");
 });
 

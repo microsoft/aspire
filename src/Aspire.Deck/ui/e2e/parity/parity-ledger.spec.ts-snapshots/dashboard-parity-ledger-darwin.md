@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 42
+- Legacy black-box scenarios pending: 38
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -141,10 +141,10 @@
 | TRACE-CLEAR-001 | traces | `/traces` | traces | covered | TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001 | Trace data can be cleared for the selected resource or all resources. |
 | TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | covered | HTTP-TRACE-VIRTUALIZATION-001 | Large trace inventories remain responsive through virtualization. |
 | TRACE-ACTIONS-001 | traces | `/traces` | traces | covered | TRACE-ACTIONS-001 | Per-trace actions expose detail, copy, and related telemetry navigation. |
-| TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |
-| TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-TREE-001; HTTP-TRACES-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |
-| TRACE-EXPAND-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-EXPAND-001 | Trace detail supports individual and expand-all/collapse-all span control. |
-| TRACE-SPAN-DETAILS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAILS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Span details include identifiers, timing, status, attributes, resource, and instrumentation scope. |
+| TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |
+| TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-TREE-001; HTTP-TRACES-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |
+| TRACE-EXPAND-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-EXPAND-001 | Trace detail supports individual and expand-all/collapse-all span control. |
+| TRACE-SPAN-DETAILS-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-DETAILS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Span details include identifiers, timing, status, attributes, resource, and instrumentation scope. |
 | TRACE-EVENTS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-EVENTS-001; HTTP-TRACES-001 | Span events and exception details preserve timestamps and attributes. |
 | TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |
 | TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-GENAI-001 | GenAI spans and traces open the dedicated GenAI visualizer. |
