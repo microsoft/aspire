@@ -886,6 +886,45 @@ test(`${features("HTTP-TRACES-001")} streams OTLP spans through the HTTP backend
   await expect(rootDetails.getByRole("group", { name: "Span backlinks" })).toContainText("link.reasonretry");
 });
 
+test(`${features("HTTP-TRACE-VIRTUALIZATION-001")} virtualizes 1000 trace waterfalls`, async ({ page }) => {
+  await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.unroute("**/api/deck/telemetry/spans?*");
+  await page.route("**/api/deck/telemetry/spans?*", async (route) => route.fulfill({
+    contentType: "application/x-ndjson",
+    body: `${JSON.stringify({
+      resourceSpans: [{
+        resource: { attributes: [{ key: "service.name", value: { stringValue: "stress-api" } }] },
+        scopeSpans: [{
+          scope: { name: "Stress.Virtualization" },
+          spans: Array.from({ length: 1_000 }, (_, index) => ({
+            traceId: index.toString(16).padStart(32, "0"),
+            spanId: index.toString(16).padStart(16, "0"),
+            name: `trace operation ${index.toString().padStart(4, "0")}`,
+            kind: 2,
+            startTimeUnixNano: (1_783_670_400_000_000_000n + BigInt(index) * 1_000_000n).toString(),
+            endTimeUnixNano: (1_783_670_400_010_000_000n + BigInt(index) * 1_000_000n).toString(),
+            status: { code: 1 },
+          })),
+        }],
+      }],
+    })}\n`,
+  }));
+  await page.goto("/traces?backend=http");
+
+  const traces = page.getByRole("main").getByRole("region", { name: "Traces" });
+  const scroller = traces.locator(".page__body");
+  await expect(traces.locator(".page__subtitle")).toHaveText("1000 traces · 1,000 spans");
+  await expect(scroller).toHaveAttribute("data-virtualized", "true");
+  await expect(scroller).toHaveAttribute("aria-setsize", "1000");
+  expect(await traces.locator(".wf__trace").count()).toBeLessThan(100);
+  await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event("scroll")); });
+  const tail = traces.locator(".wf__trace").filter({ hasText: "trace operation 0000" });
+  await expect(tail).toBeVisible();
+  await tail.locator(".wf__span").press("Enter");
+  await expect(page.getByRole("dialog", { name: "trace operation 0000" })).toBeVisible();
+});
+
 test(`${features("HTTP-TRACE-CLEAR-001")} clears selected and all traces through the HTTP backend`, async ({ page }) => {
   interface TestSpan {
     resourceName: string;

@@ -187,7 +187,7 @@ const featureDefinitions = {
     ["TRACE-ERROR-001", "/traces", "Failed traces and spans expose status, tags, and error styling.", null, "covered", "TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001"],
     ["TRACE-PAUSE-001", "/traces", "Incoming traces can be paused and resumed.", "traces", "covered", "TRACE-PAUSE-001"],
     ["TRACE-CLEAR-001", "/traces", "Trace data can be cleared for the selected resource or all resources.", "traces", "covered", "TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001"],
-    ["TRACE-VIRTUALIZATION-001", "/traces", "Large trace inventories remain responsive through virtualization.", null, "missing"],
+    ["TRACE-VIRTUALIZATION-001", "/traces", "Large trace inventories remain responsive through virtualization.", null, "covered", "HTTP-TRACE-VIRTUALIZATION-001"],
     ["TRACE-ACTIONS-001", "/traces", "Per-trace actions expose detail, copy, and related telemetry navigation.", "traces", "partial", "TRACE-ACTIONS-001"],
     ["TRACE-DETAIL-ROUTE-001", "/traces/detail/{traceId}", "A trace opens on a stable deep-linked detail route.", null, "covered", "TRACE-DETAIL-ROUTE-001"],
     ["TRACE-TREE-001", "/traces/detail/{traceId}", "The trace detail preserves parent/child span hierarchy and chronological placement.", null, "partial", "TRACE-LIST-001; TRACE-COLLAPSE-001"],

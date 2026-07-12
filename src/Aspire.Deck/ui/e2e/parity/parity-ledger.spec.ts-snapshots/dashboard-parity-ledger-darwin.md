@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 123
+- React covered: 124
 - React partial: 18
-- React missing: 17
+- React missing: 16
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 35
+- React parity gaps: 34
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -140,7 +140,7 @@
 | TRACE-ERROR-001 | traces | `/traces` | PENDING | covered | TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001 | Failed traces and spans expose status, tags, and error styling. |
 | TRACE-PAUSE-001 | traces | `/traces` | traces | covered | TRACE-PAUSE-001 | Incoming traces can be paused and resumed. |
 | TRACE-CLEAR-001 | traces | `/traces` | traces | covered | TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001 | Trace data can be cleared for the selected resource or all resources. |
-| TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | missing | - | Large trace inventories remain responsive through virtualization. |
+| TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | covered | HTTP-TRACE-VIRTUALIZATION-001 | Large trace inventories remain responsive through virtualization. |
 | TRACE-ACTIONS-001 | traces | `/traces` | traces | partial | TRACE-ACTIONS-001 | Per-trace actions expose detail, copy, and related telemetry navigation. |
 | TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |
 | TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | PENDING | partial | TRACE-LIST-001; TRACE-COLLAPSE-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |

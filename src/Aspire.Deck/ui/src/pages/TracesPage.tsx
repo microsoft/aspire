@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { clearTraces } from "../api/deck";
 import type { SpanSummary, TelemetrySummary } from "../api/types";
 import { useResources, useTelemetry } from "../lib/useDeckEvent";
@@ -43,6 +43,13 @@ const MIN_DURATION_OPTIONS: { label: string; ms: number }[] = [
 ];
 
 const NANOS_PER_MS = 1_000_000n;
+const TRACE_VIRTUALIZATION_THRESHOLD = 200;
+const TRACE_HEADER_HEIGHT = 42;
+const TRACE_AXIS_HEIGHT = 24;
+const TRACE_ROW_HEIGHT = 30;
+const TRACE_BORDER_HEIGHT = 2;
+const TRACE_GAP = 12;
+const TRACE_OVERSCAN_PX = 800;
 
 interface WaterfallRow {
   span: SpanSummary;
@@ -227,6 +234,9 @@ export function TracesPage({
   const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
+  const traceScrollRef = useRef<HTMLDivElement | null>(null);
+  const [traceScrollTop, setTraceScrollTop] = useState(0);
+  const [traceViewportHeight, setTraceViewportHeight] = useState(0);
 
   const displayedTelemetry = pausedSnapshot ?? telemetry;
   const spans = displayedTelemetry?.recentSpans ?? [];
@@ -318,6 +328,34 @@ export function TracesPage({
   };
 
   const traceCount = useMemo(() => new Set(spans.map((s) => s.traceId)).size, [spans]);
+  const virtualizeTraces = traces.length > TRACE_VIRTUALIZATION_THRESHOLD;
+  useLayoutEffect(() => {
+    const scroller = traceScrollRef.current;
+    if (!virtualizeTraces || scroller === null) return;
+    const update = () => setTraceViewportHeight(scroller.clientHeight);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [virtualizeTraces]);
+  const traceLayout = useMemo(() => {
+    let top = 0;
+    const items = traces.map((trace) => {
+      const height = collapsed.has(trace.traceId)
+        ? TRACE_HEADER_HEIGHT + TRACE_BORDER_HEIGHT
+        : TRACE_HEADER_HEIGHT + TRACE_AXIS_HEIGHT + trace.rows.length * TRACE_ROW_HEIGHT + TRACE_BORDER_HEIGHT;
+      const item = { trace, top, height };
+      top += height + TRACE_GAP;
+      return item;
+    });
+    return { items, totalHeight: Math.max(0, top - TRACE_GAP) };
+  }, [collapsed, traces]);
+  const visibleTraceLayout = useMemo(() => {
+    if (!virtualizeTraces) return traceLayout.items;
+    const start = Math.max(0, traceScrollTop - TRACE_OVERSCAN_PX);
+    const end = traceScrollTop + (traceViewportHeight || 600) + TRACE_OVERSCAN_PX;
+    return traceLayout.items.filter((item) => item.top + item.height >= start && item.top <= end);
+  }, [traceLayout.items, traceScrollTop, traceViewportHeight, virtualizeTraces]);
 
   const updateRoute = (changes: Partial<TraceFilterRouteState>): void => {
     onFilterRouteChange({
@@ -428,13 +466,33 @@ export function TracesPage({
         />
       </PageToolbar>
 
-      <PageBody className="wf">
+      <PageBody
+        ref={traceScrollRef}
+        className={`wf ${virtualizeTraces ? "wf--virtual" : ""}`}
+        data-virtualized={virtualizeTraces ? "true" : undefined}
+        aria-setsize={traces.length}
+        onScroll={virtualizeTraces ? (event) => setTraceScrollTop(event.currentTarget.scrollTop) : undefined}
+      >
         {traces.length === 0 ? (
           <div className="wf__empty">
             {telemetry ? "No traces match your filter." : "Waiting for telemetry\u2026"}
           </div>
         ) : (
-          traces.map((trace) => (
+          virtualizeTraces ? (
+            <div className="wf__virtual-space" style={{ height: traceLayout.totalHeight }}>
+              {visibleTraceLayout.map(({ trace, top }) => (
+                <div key={trace.traceId} className="wf__virtual-item" style={{ top }}>
+                  <TraceBlock
+                    trace={trace}
+                    colorMap={colorMap}
+                    collapsed={collapsed.has(trace.traceId)}
+                    onToggle={() => toggle(trace.traceId)}
+                    onSelect={onSelectSpan}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : traces.map((trace) => (
             <TraceBlock
               key={trace.traceId}
               trace={trace}

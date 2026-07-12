@@ -15,6 +15,7 @@ export const httpBackendFeatures = {
   "HTTP-STRUCTURED-LOG-VIRTUALIZATION-001": "Large HTTP structured-log inventories keep a bounded semantic table with accessible total row count.",
   "HTTP-STRUCTURED-LOG-CLEAR-001": "HTTP mode clears one structured-log resource or all resources and refreshes its snapshot.",
   "HTTP-TRACES-001": "HTTP mode replays and streams OTLP spans into trace waterfalls and exact span details.",
+  "HTTP-TRACE-VIRTUALIZATION-001": "Large HTTP trace inventories use variable-height virtualization while preserving waterfall actions.",
   "HTTP-TRACE-CLEAR-001": "HTTP mode clears one trace resource or all trace resources and refreshes its snapshot.",
   "HTTP-METRICS-001": "HTTP mode loads real metric summaries and requests an exact resource, meter, and instrument series.",
   "HTTP-METRIC-CLEAR-001": "HTTP mode clears one metric resource or all metric resources and refreshes its snapshot.",

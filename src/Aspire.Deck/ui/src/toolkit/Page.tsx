@@ -1,4 +1,4 @@
-import type { HTMLAttributes } from "react";
+import { forwardRef, type HTMLAttributes } from "react";
 
 function classes(base: string, className?: string): string {
   return [base, className].filter(Boolean).join(" ");
@@ -47,6 +47,6 @@ export function PageToolbar({
   );
 }
 
-export function PageBody({ className, ...props }: HTMLAttributes<HTMLDivElement>) {
-  return <div {...props} className={classes("page__body", className)} />;
-}
+export const PageBody = forwardRef<HTMLDivElement, HTMLAttributes<HTMLDivElement>>(function PageBody({ className, ...props }, ref) {
+  return <div ref={ref} {...props} className={classes("page__body", className)} />;
+});

@@ -2149,6 +2149,18 @@ table.data tbody tr.selected {
   flex-direction: column;
   gap: 12px;
 }
+.wf--virtual {
+  display: block;
+}
+.wf__virtual-space {
+  position: relative;
+  width: 100%;
+}
+.wf__virtual-item {
+  position: absolute;
+  left: 0;
+  right: 0;
+}
 
 .wf__empty {
   padding: 40px 0;
@@ -2178,6 +2190,7 @@ table.data tbody tr.selected {
   border-bottom: 1px solid var(--border);
   color: var(--text);
   text-align: left;
+  height: 42px;
 }
 .wf__head:hover {
   background: var(--bg-hover);
@@ -2237,11 +2250,11 @@ table.data tbody tr.selected {
   display: grid;
   grid-template-columns: var(--wf-name-col) 1fr;
   align-items: stretch;
-  min-height: var(--wf-row-h);
+  height: var(--wf-row-h);
 }
 
 .wf__axis {
-  min-height: 24px;
+  height: 24px;
   border-bottom: 1px solid var(--border);
   background: var(--bg-base);
 }
