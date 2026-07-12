@@ -470,7 +470,10 @@ public static class AzureServiceBusExtensions
             }
 
             context.EnvironmentVariables.TryAdd("ACCEPT_EULA", "Y");
-            context.EnvironmentVariables.TryAdd("SQL_SERVER", $"{sqlConnection.Endpoint.Resource.Name}:{sqlConnection.Endpoint.TargetPort}");
+            // The endpoint is resolved in the emulator container's network context, so a containerized SQL
+            // Server resolves to its container-network address and a SQL Server hosted by an executable or
+            // project resolves to the container host address.
+            context.EnvironmentVariables.TryAdd("SQL_SERVER", sqlConnection.Endpoint.Property(EndpointProperty.HostAndPort));
             context.EnvironmentVariables.TryAdd("MSSQL_SA_PASSWORD", sqlConnection.Password);
         }));
 
@@ -688,9 +691,10 @@ public static class AzureServiceBusExtensions
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This is a lower-level alternative to <see cref="WithSqlServer"/> for SQL Server instances that are not
-    /// modeled as a <see cref="SqlServerServerResource"/>. The emulator connects to the SQL Server instance
-    /// over the container network using the provided endpoint and administrator password. If this method is
-    /// called multiple times the last call wins. It cannot be combined with <see cref="WithSqlServerContainer"/>.
+    /// modeled as a <see cref="SqlServerServerResource"/>. The endpoint is resolved in the context of the
+    /// emulator's container network: a containerized SQL Server resolves to its container-network address and
+    /// a SQL Server hosted by an executable or project resolves to the container host address. If this method
+    /// is called multiple times the last call wins. It cannot be combined with <see cref="WithSqlServerContainer"/>.
     /// </remarks>
     /// <ats-remarks />
     [AspireExport]

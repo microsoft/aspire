@@ -84,7 +84,7 @@ var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(emulator => emul
     .WithSqlServer(sql));
 ```
 
-For SQL Server instances that are not modeled as a SQL Server resource, the lower-level `WithSqlServerConnection(endpoint, saPasswordParameter)` overload accepts an endpoint and administrator password directly.
+For SQL Server instances that are not modeled as a SQL Server resource, the lower-level `WithSqlServerConnection(endpoint, saPasswordParameter)` overload accepts an endpoint and administrator password directly. The endpoint is resolved in the context of the emulator's container network, so it can point at a containerized SQL Server as well as one hosted by an executable or project resource.
 
 > NOTE: `WithSqlServerContainer` and `WithSqlServer`/`WithSqlServerConnection` are mutually exclusive and throw an exception when combined.
 

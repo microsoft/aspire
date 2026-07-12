@@ -664,10 +664,12 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var imageAnnotation = Assert.Single(sql.Annotations.OfType<ContainerImageAnnotation>());
         Assert.Equal("mssql/server", imageAnnotation.Image);
 
+        AllocateContainerNetworkEndpoint(sql, "sb-mssql.dev.internal", 1433);
+
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         Assert.Equal("Y", env["ACCEPT_EULA"]);
-        Assert.Equal("sb-mssql:1433", env["SQL_SERVER"]);
+        Assert.Equal("sb-mssql.dev.internal:1433", env["SQL_SERVER"]);
         Assert.False(string.IsNullOrEmpty(env["MSSQL_SA_PASSWORD"]));
     }
 
@@ -713,6 +715,9 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
             .WithSqlServerContainer(sql => sql.WithPassword(password)));
 
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+        AllocateContainerNetworkEndpoint(sql, "sb-mssql.dev.internal", 1433);
+
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         Assert.Equal("p@ssw0rd1", env["MSSQL_SA_PASSWORD"]);
@@ -730,10 +735,12 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
         Assert.DoesNotContain(builder.Resources, x => x.Name == "sb-mssql");
 
+        AllocateContainerNetworkEndpoint(sql.Resource, "sql.dev.internal", 1433);
+
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         Assert.Equal("Y", env["ACCEPT_EULA"]);
-        Assert.Equal("sql:1433", env["SQL_SERVER"]);
+        Assert.Equal("sql.dev.internal:1433", env["SQL_SERVER"]);
         Assert.Equal(await sql.Resource.PasswordParameter.GetValueAsync(CancellationToken.None), env["MSSQL_SA_PASSWORD"]);
     }
 
@@ -748,6 +755,8 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
             .WithSqlServer(sql));
 
         sql.WithPassword(builder.AddParameter("new-password", "p@ssw0rd2"));
+
+        AllocateContainerNetworkEndpoint(sql.Resource, "sql.dev.internal", 1433);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
@@ -766,11 +775,36 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
         Assert.DoesNotContain(builder.Resources, x => x.Name == "sb-mssql");
 
+        AllocateContainerNetworkEndpoint(sql.Resource, "sql.dev.internal", 1433);
+
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         Assert.Equal("Y", env["ACCEPT_EULA"]);
-        Assert.Equal("sql:1433", env["SQL_SERVER"]);
+        Assert.Equal("sql.dev.internal:1433", env["SQL_SERVER"]);
         Assert.Equal(await sql.Resource.PasswordParameter.GetValueAsync(CancellationToken.None), env["MSSQL_SA_PASSWORD"]);
+    }
+
+    [Fact]
+    public async Task WithSqlServerConnection_HostProcessEndpoint_ResolvesToContainerHostAddress()
+    {
+        // A SQL Server instance that is not a container (e.g. hosted by an executable resource) is not
+        // reachable from the emulator container via its resource name. The endpoint must resolve to the
+        // address the orchestrator projects into the container network (the container host address).
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var password = builder.AddParameter("sa-password", "p@ssw0rd1");
+        var sqlHost = builder.AddExecutable("sql-host", "sqlservr", ".")
+            .WithEndpoint(name: "tcp");
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
+            .WithSqlServerConnection(sqlHost.GetEndpoint("tcp"), password.Resource));
+
+        AllocateContainerNetworkEndpoint(sqlHost.Resource, "host.docker.internal", 52133);
+
+        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
+
+        Assert.Equal("host.docker.internal:52133", env["SQL_SERVER"]);
+        Assert.Equal("p@ssw0rd1", env["MSSQL_SA_PASSWORD"]);
     }
 
     [Fact]
@@ -815,9 +849,12 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
             .WithSqlServer(sql1)
             .WithSqlServer(sql2));
 
+        // Only sql2's endpoint is allocated; resolving successfully also proves sql1 is not consulted.
+        AllocateContainerNetworkEndpoint(sql2.Resource, "sql2.dev.internal", 1433);
+
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
-        Assert.Equal("sql2:1433", env["SQL_SERVER"]);
+        Assert.Equal("sql2.dev.internal:1433", env["SQL_SERVER"]);
         Assert.Equal(await sql2.Resource.PasswordParameter.GetValueAsync(CancellationToken.None), env["MSSQL_SA_PASSWORD"]);
     }
 
@@ -913,6 +950,16 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     {
         var annotation = Assert.Single(resource.Annotations.OfType<PersistenceAnnotation>());
         return Assert.IsAssignableFrom<IResource>(annotation.SourceResource);
+    }
+
+    // Simulates the orchestrator allocating the resource's 'tcp' endpoint on the container network,
+    // which is the network context the emulator resolves its SQL Server endpoint in.
+    private static void AllocateContainerNetworkEndpoint(IResource resource, string address, int port)
+    {
+        var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "tcp");
+        endpoint.AllAllocatedEndpoints.AddOrUpdateAllocatedEndpoint(
+            KnownNetworkIdentifiers.DefaultAspireContainerNetwork,
+            new AllocatedEndpoint(endpoint, address, port, EndpointBindingMode.SingleAddress, targetPortExpression: null, networkId: KnownNetworkIdentifiers.DefaultAspireContainerNetwork));
     }
 
     private static PersistenceMode ToPersistenceMode(Lifetime lifetime) =>
