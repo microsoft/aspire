@@ -246,10 +246,8 @@ builder.AddAzureAppServiceEnvironment("infra")
         }
         finally
         {
-            // Clean up the resource group we created
             output.WriteLine($"Triggering cleanup of resource group: {resourceGroupName}");
-            TriggerCleanupResourceGroup(resourceGroupName, output);
-            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
+            await TriggerCleanupResourceGroupAsync(resourceGroupName, output);
         }
     }
 
@@ -412,15 +410,9 @@ builder.AddAzureAppServiceEnvironment("infra")
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
     }
 
-    /// <summary>
-    /// Triggers cleanup of a specific resource group.
-    /// This is fire-and-forget - the hourly cleanup workflow handles any missed resources.
-    /// </summary>
-    private static void TriggerCleanupResourceGroup(string resourceGroupName, ITestOutputHelper output)
+    private static async Task TriggerCleanupResourceGroupAsync(string resourceGroupName, ITestOutputHelper output)
     {
-        // Fire and forget - trigger deletion of the specific resource group created by this test
-        // The cleanup workflow will handle any that don't get deleted
-        var process = new System.Diagnostics.Process
+        using var process = new System.Diagnostics.Process
         {
             StartInfo = new System.Diagnostics.ProcessStartInfo
             {
@@ -433,14 +425,30 @@ builder.AddAzureAppServiceEnvironment("infra")
             }
         };
 
-        try
+        if (!process.Start())
         {
-            process.Start();
-            output.WriteLine($"Cleanup triggered for resource group: {resourceGroupName}");
+            const string message = "Azure CLI did not start the resource group deletion request.";
+            output.WriteLine(message);
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: false, message);
+            return;
         }
-        catch (Exception ex)
+
+        // Read both streams concurrently to avoid deadlock when a pipe buffer fills.
+        var standardOutputTask = process.StandardOutput.ReadToEndAsync();
+        var standardErrorTask = process.StandardError.ReadToEndAsync();
+        await Task.WhenAll(process.WaitForExitAsync(), standardOutputTask, standardErrorTask);
+
+        if (process.ExitCode == 0)
         {
-            output.WriteLine($"Failed to trigger cleanup: {ex.Message}");
+            output.WriteLine($"Resource group deletion initiated: {resourceGroupName}");
+            DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Deletion initiated");
+            return;
         }
+
+        var standardError = await standardErrorTask;
+        var standardOutput = await standardOutputTask;
+        var error = string.IsNullOrWhiteSpace(standardError) ? standardOutput : standardError;
+        output.WriteLine($"Resource group deletion may have failed (exit code {process.ExitCode}): {error}");
+        DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: false, $"Exit code {process.ExitCode}: {error}");
     }
 }

@@ -364,7 +364,7 @@ app.MapDefaultEndpoints();
                 probe_result=$(curl -sS "https://$server_host_name/api/verify-blobs" --max-time 10 2>&1) || probe_result=""
                 if echo "$probe_result" | grep -q '"status":"ok"' &&
                    echo "$probe_result" | grep -q '"contentMatches":true' &&
-                   echo "$probe_result" | grep -Fq "$private_endpoint_ip"
+                   echo "$probe_result" | grep -Fq "\"$private_endpoint_ip\""
                 then
                     echo "Verified Blob access through private endpoint on attempt $attempt"
                     exit 0
