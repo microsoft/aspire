@@ -8,6 +8,7 @@ import {
   ConfirmDialog,
   DataTable,
   Divider,
+  Dialog,
   Drawer,
   EmptyState,
   IconButton,
@@ -99,6 +100,7 @@ export function ToolkitPlayground({
 }) {
   const [query, setQuery] = useState("");
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [confirmation, setConfirmation] = useState<ConfirmRequest | null>(null);
   const [lastAction, setLastAction] = useState("No action selected");
   const [notificationVisible, setNotificationVisible] = useState(false);
@@ -201,6 +203,7 @@ export function ToolkitPlayground({
             <Button variant="ghost" onClick={() => setLastAction("Ghost selected")}>Ghost</Button>
             <Button data-testid="toolkit-confirm" onClick={requestConfirmation}>Confirm command</Button>
             <Button data-testid="toolkit-open-drawer" onClick={() => setDrawerOpen(true)}>Open drawer</Button>
+            <Button onClick={() => setDialogOpen(true)}>Open dialog</Button>
             <Button
               onClick={() => setTextViewer({
                 title: "Sample structured log",
@@ -518,6 +521,14 @@ export function ToolkitPlayground({
       ) : null}
 
       <ConfirmDialog request={confirmation} onClose={() => setConfirmation(null)} />
+      <Dialog
+        open={dialogOpen}
+        title="Toolkit dialog"
+        onClose={() => setDialogOpen(false)}
+        actions={<Button onClick={() => setDialogOpen(false)}>Close dialog</Button>}
+      >
+        Reusable Fluent modal content.
+      </Dialog>
       <TextViewerDialog request={textViewer} onClose={() => setTextViewer(null)} />
       <NotificationStack
         notifications={notificationVisible

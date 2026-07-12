@@ -260,6 +260,12 @@ test(`${features("TK-MENU-001")} exercises the command menu with pointer and key
 });
 
 test(`${features("TK-DIALOG-001", "TK-DRAWER-001")} exercises modal surfaces`, async ({ page }) => {
+  await page.getByRole("button", { name: "Open dialog" }).click();
+  const toolkitDialog = page.getByRole("dialog", { name: "Toolkit dialog" });
+  await expect(toolkitDialog).toContainText("Reusable Fluent modal content.");
+  await toolkitDialog.getByRole("button", { name: "Close dialog" }).click();
+  await expect(toolkitDialog).toHaveCount(0);
+
   const openConfirmation = page.getByRole("button", { name: "Confirm command" });
 
   await openConfirmation.click();

@@ -1,26 +1,26 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 68
+- React covered: 72
 - React partial: 36
-- React missing: 54
+- React missing: 50
 - Legacy black-box scenarios pending: 80
-- React parity gaps: 90
+- React parity gaps: 86
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
 | SHELL-IDENTITY-001 | shell | `/` | shell | covered | APP-SHELL-001; STRESS-CONFIG-001 | Application identity and dashboard version are visible. |
 | SHELL-NAV-001 | shell | `/` | shell | partial | APP-NAV-001 | Resources, Parameters, Graph, Console, Structured Logs, Traces, and Metrics are reachable from navigation. |
 | SHELL-ROUTES-001 | shell | `/` | PENDING | covered | APP-ROUTES-001 | Pages have stable URLs and browser history/deep links restore the selected page. |
-| SHELL-REPO-001 | shell | `/` | shell | missing | - | The Aspire repository link is available from the top bar. |
-| SHELL-HELP-001 | shell | `/` | shell | missing | - | Help opens with documentation and keyboard shortcut reference content. |
-| SHELL-KEYBOARD-001 | shell | `/` | PENDING | missing | - | Page navigation, panel, help, and settings keyboard shortcuts work. |
+| SHELL-REPO-001 | shell | `/` | shell | covered | APP-REPOSITORY-001 | The Aspire repository link is available from the top bar. |
+| SHELL-HELP-001 | shell | `/` | shell | covered | APP-HELP-001 | Help opens with documentation and keyboard shortcut reference content. |
+| SHELL-KEYBOARD-001 | shell | `/` | PENDING | partial | APP-KEYBOARD-001 (page, help, and settings shortcuts; panel shortcuts await a shared panel host) | Page navigation, panel, help, and settings keyboard shortcuts work. |
 | SHELL-AGENTS-001 | shell | `/` | shell | missing | - | The AI agents entry point appears when enabled. |
 | SHELL-ASSISTANT-001 | shell | `/` | PENDING | missing | - | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
 | SHELL-NOTIFICATIONS-001 | shell | `/` | shell | partial | APP-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |
 | SHELL-NOTIFICATION-CENTER-001 | shell | `/` | PENDING | missing | - | The notification center opens and preserves notification history. |
-| SHELL-SETTINGS-001 | shell | `/` | shell | missing | - | Settings opens from the top bar and reports dashboard/runtime versions. |
-| SHELL-THEME-001 | shell | `/` | shell | partial | APP-THEME-001 | System, light, and dark theme selection is persisted. |
+| SHELL-SETTINGS-001 | shell | `/` | shell | covered | APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Settings opens from the top bar and reports dashboard/runtime versions. |
+| SHELL-THEME-001 | shell | `/` | shell | covered | APP-THEME-001; APP-SETTINGS-001 | System, light, and dark theme selection is persisted. |
 | SHELL-LANGUAGE-001 | shell | `/` | shell | missing | - | The dashboard language can be selected and applied. |
 | SHELL-TIME-FORMAT-001 | shell | `/` | shell | missing | - | System, 12-hour, and 24-hour time formatting can be selected. |
 | SHELL-MANAGE-DATA-001 | shell | `/` | PENDING | missing | - | Resource logs and telemetry can be inspected, exported, imported, and cleared. |

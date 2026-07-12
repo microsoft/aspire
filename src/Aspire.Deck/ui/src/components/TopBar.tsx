@@ -1,7 +1,7 @@
 import type { AppHostInfo, ConnectionState, ConnectionTarget, DeckConfig } from "../api/types";
 import { ConnectionPill } from "./ConnectionPill";
 import { AppHostSwitcher } from "./AppHostSwitcher";
-import { MoonIcon, SunIcon } from "../toolkit";
+import { MoonIcon, NamedIcon, SunIcon } from "../toolkit";
 import type { Theme } from "../lib/theme";
 
 const TARGET_ORDER: ConnectionTarget[] = ["resourceService", "otlpGrpc", "otlpHttp"];
@@ -12,12 +12,16 @@ export function TopBar({
   apphosts,
   theme,
   onToggleTheme,
+  onHelp,
+  onSettings,
 }: {
   config: DeckConfig | null;
   connection: Record<ConnectionTarget, ConnectionState>;
   apphosts: AppHostInfo[];
   theme: Theme;
   onToggleTheme: () => void;
+  onHelp: () => void;
+  onSettings: () => void;
 }) {
   const active = apphosts.find((a) => a.active);
   // The title reflects the AppHost the UI is currently showing. With multiple
@@ -42,6 +46,20 @@ export function TopBar({
         ))}
       </div>
 
+      <a
+        className="icon-btn"
+        href="https://aka.ms/aspire/repo"
+        target="_blank"
+        rel="noreferrer noopener"
+        title="Aspire repository"
+        aria-label="Aspire repository"
+      >
+        <NamedIcon name="BranchFork" size={17} />
+      </a>
+      <button className="icon-btn" type="button" onClick={onHelp} title="Help" aria-label="Help">
+        <NamedIcon name="QuestionCircle" size={17} />
+      </button>
+
       <button
         className="icon-btn"
         onClick={onToggleTheme}
@@ -49,6 +67,9 @@ export function TopBar({
         aria-label="Toggle theme"
       >
         {theme === "dark" ? <SunIcon size={17} /> : <MoonIcon size={17} />}
+      </button>
+      <button className="icon-btn" type="button" onClick={onSettings} title="Settings" aria-label="Settings">
+        <NamedIcon name="Settings" size={17} />
       </button>
     </header>
   );

@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import type { DeckConfig } from "./api/types";
 import { PARAMETER_RESOURCE_TYPE } from "./api/types";
 import { getConfig } from "./api/deck";
-import type { Theme } from "./lib/theme";
+import type { Theme, ThemeChoice } from "./lib/theme";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { NotConnected } from "./components/NotConnected";
@@ -16,6 +16,8 @@ import { MetricsPage } from "./pages/MetricsPage";
 import { CanvasesPage } from "./pages/CanvasesPage";
 import { InteractionPane } from "./components/InteractionPane";
 import { NotificationStack } from "./components/NotificationStack";
+import { HelpDialog } from "./components/HelpDialog";
+import { SettingsDialog } from "./components/SettingsDialog";
 import {
   dashboardRouteHref,
   readDashboardRoute,
@@ -23,7 +25,17 @@ import {
   type PageId,
 } from "./lib/routes";
 
-export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () => void }) {
+export function App({
+  theme,
+  themeChoice,
+  onThemeChoiceChange,
+  onToggleTheme,
+}: {
+  theme: Theme;
+  themeChoice: ThemeChoice;
+  onThemeChoiceChange: (choice: ThemeChoice) => void;
+  onToggleTheme: () => void;
+}) {
   const connection = useConnection();
   const { resources } = useResources();
   const telemetry = useTelemetry();
@@ -31,6 +43,8 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
   const interactions = useInteractions();
   const [config, setConfig] = useState<DeckConfig | null>(null);
   const [route, setRoute] = useState<DashboardRoute>(readDashboardRoute);
+  const [helpOpen, setHelpOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const page = route.page;
 
   useEffect(() => {
@@ -47,6 +61,42 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
     }
     setRoute(nextRoute);
   }, []);
+
+  useEffect(() => {
+    const onKeyDown = (event: KeyboardEvent): void => {
+      const target = event.target as HTMLElement | null;
+      if (event.metaKey || event.ctrlKey || event.altKey || target?.closest("input, textarea, select, [contenteditable='true']")) {
+        return;
+      }
+      if (event.key === "?") {
+        event.preventDefault();
+        setHelpOpen(true);
+        return;
+      }
+      if (event.shiftKey && event.key.toLowerCase() === "s") {
+        event.preventDefault();
+        setSettingsOpen(true);
+        return;
+      }
+      if (event.shiftKey || helpOpen || settingsOpen) {
+        return;
+      }
+      const pageByKey: Partial<Record<string, PageId>> = {
+        r: "resources",
+        c: "console",
+        s: "logs",
+        t: "traces",
+        m: "metrics",
+      };
+      const nextPage = pageByKey[event.key.toLowerCase()];
+      if (nextPage) {
+        event.preventDefault();
+        navigate({ page: nextPage });
+      }
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  }, [helpOpen, navigate, settingsOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -96,7 +146,15 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
         />
       </div>
       <div className="app__topbar">
-        <TopBar config={config} connection={connection} apphosts={apphosts} theme={theme} onToggleTheme={onToggleTheme} />
+        <TopBar
+          config={config}
+          connection={connection}
+          apphosts={apphosts}
+          theme={theme}
+          onToggleTheme={onToggleTheme}
+          onHelp={() => setHelpOpen(true)}
+          onSettings={() => setSettingsOpen(true)}
+        />
       </div>
       <main className="app__content">
         {showNotConnected ? (
@@ -204,6 +262,14 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
       </main>
       {dialog ? <InteractionPane interaction={dialog} /> : null}
       <NotificationStack notifications={notifications} />
+      <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
+      <SettingsDialog
+        open={settingsOpen}
+        config={config}
+        themeChoice={themeChoice}
+        onThemeChoiceChange={onThemeChoiceChange}
+        onClose={() => setSettingsOpen(false)}
+      />
     </div>
   );
 }

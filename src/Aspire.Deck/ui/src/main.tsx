@@ -12,7 +12,7 @@ if (!container) {
 }
 
 function Root() {
-  const { theme, toggleTheme } = useTheme();
+  const { theme, themeChoice, setThemeChoice, toggleTheme } = useTheme();
   const view = new URLSearchParams(window.location.search).get("view");
 
   return (
@@ -20,7 +20,7 @@ function Root() {
       {view === "toolkit" ? (
         <ToolkitPlayground theme={theme} onToggleTheme={toggleTheme} />
       ) : (
-        <App theme={theme} onToggleTheme={toggleTheme} />
+        <App theme={theme} themeChoice={themeChoice} onThemeChoiceChange={setThemeChoice} onToggleTheme={toggleTheme} />
       )}
     </DeckProvider>
   );

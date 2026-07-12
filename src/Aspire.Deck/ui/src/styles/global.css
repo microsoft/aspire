@@ -260,6 +260,88 @@ a:focus-visible {
   gap: 8px;
 }
 
+/* ---------- Shell dialogs ---------- */
+.shell-dialog {
+  width: min(680px, calc(100vw - 32px));
+  max-width: 680px;
+}
+.shell-dialog__heading {
+  margin: 20px 0 10px;
+  font-size: 14px;
+}
+.shortcut-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+}
+.shortcut-group {
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+}
+.shortcut-group h4 {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.shortcut-group dl,
+.settings-versions {
+  margin: 0;
+}
+.shortcut-group dl > div,
+.settings-versions > div {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 5px 0;
+}
+.shortcut-group dt,
+.settings-versions dt {
+  font-weight: 400;
+}
+.shortcut-group dd,
+.settings-versions dd {
+  margin: 0;
+}
+.shortcut-group kbd {
+  display: inline-block;
+  min-width: 24px;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  padding: 2px 6px;
+  background: var(--bg-base);
+  color: var(--text);
+  font: 11px var(--font-mono);
+  text-align: center;
+}
+.settings-group {
+  margin: 0;
+  border: 0;
+  padding: 0;
+}
+.settings-group legend {
+  margin-bottom: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+.settings-radio-group {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px;
+}
+.deck-radio {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+}
+.settings-versions {
+  margin-top: 20px;
+  border-top: 1px solid var(--border);
+  padding-top: 10px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 /* ---------- Connection pill ---------- */
 .pill {
   display: inline-flex;
@@ -2390,6 +2472,9 @@ table.data tbody tr.selected {
 }
 
 @media (max-width: 820px) {
+  .shortcut-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
   .app {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: var(--topbar-h) minmax(0, 1fr) 68px;

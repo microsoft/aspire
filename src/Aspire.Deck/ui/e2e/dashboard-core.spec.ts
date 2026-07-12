@@ -102,6 +102,55 @@ test(`${features("APP-NAV-001", "APP-APPHOST-001", "APP-THEME-001")} navigates, 
   await expect(root).toHaveAttribute("data-theme", "light");
 });
 
+test(`${features("APP-REPOSITORY-001", "APP-HELP-001", "APP-SETTINGS-001", "APP-KEYBOARD-001")} exposes shell utilities and keyboard navigation`, async ({ page }, testInfo) => {
+  const banner = page.getByRole("banner");
+  const repository = banner.getByRole("link", { name: "Aspire repository" });
+  await expect(repository).toHaveAttribute("href", "https://aka.ms/aspire/repo");
+  await expect(repository).toHaveAttribute("target", "_blank");
+  await expect(repository).toHaveAttribute("rel", /noopener/);
+  await expect(banner.locator("[data-icon-fallback]")).toHaveCount(0);
+
+  await banner.getByRole("button", { name: "Help" }).click();
+  let dialog = page.getByRole("dialog", { name: "Help" });
+  await expect(dialog.getByRole("link", { name: "Aspire dashboard documentation" })).toHaveAttribute("href", "https://aka.ms/aspire/dashboard");
+  await expect(dialog.getByRole("heading", { name: "Keyboard shortcuts" })).toBeVisible();
+  await expect(dialog.locator("kbd")).toHaveText(["R", "C", "S", "T", "M", "?", "Shift + S"]);
+  await dialog.getByRole("button", { name: "Close" }).click();
+
+  await page.keyboard.press("?");
+  dialog = page.getByRole("dialog", { name: "Help" });
+  await expect(dialog).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(dialog).toBeHidden();
+
+  const shortcuts = [["m", "Metrics"], ["c", "Console"], ["s", "Structured Logs"], ["t", "Traces"], ["r", "Resources"]] as const;
+  for (const [key, title] of shortcuts) {
+    await page.keyboard.press(key);
+    await expect(page.getByRole("main").locator(".page__title")).toHaveText(title);
+  }
+  const search = page.getByPlaceholder("Filter by name, type or state…");
+  await search.fill("frontend");
+  await search.press("m");
+  await expect(page.getByRole("main").locator(".page__title")).toHaveText("Resources");
+  await search.fill("");
+
+  await banner.locator(".topbar__title").click();
+  await page.keyboard.press("Shift+S");
+  const settings = page.getByRole("dialog", { name: "Settings" });
+  await expect(settings).toContainText("Dashboard version9.0.0-dev (mock)");
+  await expect(settings).toContainText("Runtime versionBrowser mock runtime");
+  await settings.getByRole("radio", { name: "System" }).check();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("aspire-deck-theme"))).toBe("system");
+  await settings.getByRole("radio", { name: "Light" }).check();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
+  await settings.getByRole("radio", { name: "Dark" }).check();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+  await attachScreenshot(page, testInfo, "dashboard-settings");
+  await settings.getByRole("button", { name: "Close" }).click();
+  await page.reload();
+  await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
 test(`${features("APP-ROUTES-001")} restores page routes and browser history`, async ({ page }) => {
   await navigationButton(page, "Structured Logs").click();
   await expect(page).toHaveURL(/\/structuredlogs$/);

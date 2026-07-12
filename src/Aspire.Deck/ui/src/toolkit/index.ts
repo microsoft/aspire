@@ -9,6 +9,7 @@ export * from "./DataTable";
 export * from "./DeckProvider";
 export * from "./Drawer";
 export * from "./Divider";
+export * from "./Dialog";
 export * from "./EmptyState";
 export * from "./Highlighter";
 export * from "./Icons";

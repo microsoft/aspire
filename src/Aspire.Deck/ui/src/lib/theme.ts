@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useState } from "react";
 
 export type Theme = "dark" | "light";
+export type ThemeChoice = Theme | "system";
 
 const STORAGE_KEY = "aspire-deck-theme";
 
-function readInitialTheme(): Theme {
+function readInitialTheme(): ThemeChoice {
   try {
     const stored = localStorage.getItem(STORAGE_KEY);
-    if (stored === "dark" || stored === "light") {
+    if (stored === "dark" || stored === "light" || stored === "system") {
       return stored;
     }
   } catch {
@@ -19,8 +20,29 @@ function readInitialTheme(): Theme {
 // Apply the document tokens in a layout effect so they change in the same paint as
 // FluentProvider. Suppressing transitions for that paint prevents foreground and
 // background colors from interpolating independently through unreadable values.
-export function useTheme(): { theme: Theme; toggleTheme: () => void } {
-  const [theme, setTheme] = useState<Theme>(readInitialTheme);
+function systemTheme(): Theme {
+  return window.matchMedia?.("(prefers-color-scheme: dark)").matches ? "dark" : "light";
+}
+
+export function useTheme(): {
+  theme: Theme;
+  themeChoice: ThemeChoice;
+  setThemeChoice: (choice: ThemeChoice) => void;
+  toggleTheme: () => void;
+} {
+  const [themeChoice, setThemeChoice] = useState<ThemeChoice>(readInitialTheme);
+  const [systemPreference, setSystemPreference] = useState<Theme>(systemTheme);
+  const theme = themeChoice === "system" ? systemPreference : themeChoice;
+
+  useEffect(() => {
+    const media = window.matchMedia?.("(prefers-color-scheme: dark)");
+    if (!media) {
+      return;
+    }
+    const update = (): void => setSystemPreference(media.matches ? "dark" : "light");
+    media.addEventListener("change", update);
+    return () => media.removeEventListener("change", update);
+  }, []);
 
   useLayoutEffect(() => {
     const root = document.documentElement;
@@ -32,15 +54,15 @@ export function useTheme(): { theme: Theme; toggleTheme: () => void } {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_KEY, theme);
+      localStorage.setItem(STORAGE_KEY, themeChoice);
     } catch {
       // Ignore persistence failures.
     }
-  }, [theme]);
+  }, [themeChoice]);
 
   const toggleTheme = useCallback(() => {
-    setTheme((prev) => (prev === "dark" ? "light" : "dark"));
-  }, []);
+    setThemeChoice(theme === "dark" ? "light" : "dark");
+  }, [theme]);
 
-  return { theme, toggleTheme };
+  return { theme, themeChoice, setThemeChoice, toggleTheme };
 }
