@@ -1893,9 +1893,12 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        // Two environments in the same AppHost (and therefore the same resource group).
-        var env1 = builder.AddAzureContainerAppEnvironment("cae1");
-        var env2 = builder.AddAzureContainerAppEnvironment("cae2");
+        // Two environments in the same AppHost (and therefore the same resource group). Opting into
+        // unique naming keeps each resource name's digits so the environments get distinct names.
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithUniqueResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2")
+            .WithUniqueResourceNaming();
 
         builder.AddContainer("api1", "myimage")
             .WithComputeEnvironment(env1);
@@ -1939,15 +1942,56 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task WithSingletonResourceNamingPreservesPreFixManagedEnvironmentName()
+    public async Task MultipleAzureContainerAppEnvironmentsShareManagedEnvironmentNameByDefault()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        // Opting into singleton naming keeps Azure.Provisioning's default (lowercase-letters-only)
-        // name so an already-deployed environment is not recreated. The trailing digit is dropped,
-        // reproducing the pre-fix name.
+        // Without opting into unique naming, both environments fall through to Azure.Provisioning's default
+        // name, whose sanitizer keeps only lowercase letters and drops the trailing digit. This preserves the
+        // pre-existing (colliding) behavior so already-deployed environments are not renamed. Deploying more
+        // than one environment to a single resource group in this mode collapses them onto one physical
+        // environment (the reason WithUniqueResourceNaming exists). See
+        // https://github.com/microsoft/aspire/issues/18722.
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1");
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2");
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResources = model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
+        Assert.Equal(2, envResources.Count);
+
+        var env1Resource = Assert.Single(envResources, r => r.Name == "cae1");
+        var env2Resource = Assert.Single(envResources, r => r.Name == "cae2");
+
+        var (_, bicep1) = await GetManifestWithBicep(env1Resource);
+        var (_, bicep2) = await GetManifestWithBicep(env2Resource);
+
+        var name1 = GetManagedEnvironmentNameExpression(bicep1);
+        var name2 = GetManagedEnvironmentNameExpression(bicep2);
+
+        Assert.Equal("take('cae${uniqueString(resourceGroup().id)}', 24)", name1);
+        Assert.Equal(name1, name2);
+    }
+
+    [Fact]
+    public async Task WithUniqueResourceNamingPreservesDigitsInManagedEnvironmentName()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Opting into unique naming keeps the resource name's trailing digit, so the environment name is
+        // distinct from other digit-suffixed environments in the same resource group.
         var env = builder.AddAzureContainerAppEnvironment("cae1")
-            .WithSingletonResourceNaming();
+            .WithUniqueResourceNaming();
 
         builder.AddContainer("api1", "myimage")
             .WithComputeEnvironment(env);
@@ -1964,7 +2008,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var name = GetManagedEnvironmentNameExpression(bicep);
 
-        Assert.Equal("take('cae${uniqueString(resourceGroup().id)}', 24)", name);
+        Assert.Equal("take('cae1${uniqueString(resourceGroup().id)}', 24)", name);
     }
 
     [Fact]
@@ -1975,7 +2019,8 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         builder.Services.Configure<AzureProvisioningOptions>(options =>
             options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new CustomManagedEnvironmentNameResolver()));
 
-        var env = builder.AddAzureContainerAppEnvironment("cae1");
+        var env = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithUniqueResourceNaming();
 
         builder.AddContainer("api1", "myimage")
             .WithComputeEnvironment(env);
@@ -1999,13 +2044,15 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        // Compact naming doesn't set the managed environment name itself, so it flows through the
-        // same default-naming path as the plain case. Two compact environments in one resource
-        // group must still get distinct, digit-preserving names to avoid the collision in #18722.
+        // Compact naming doesn't set the managed environment name itself. Combined with unique naming, two
+        // compact environments in one resource group must still get distinct, digit-preserving names to avoid
+        // the collision in #18722.
         var env1 = builder.AddAzureContainerAppEnvironment("cae1")
-            .WithCompactResourceNaming();
+            .WithCompactResourceNaming()
+            .WithUniqueResourceNaming();
         var env2 = builder.AddAzureContainerAppEnvironment("cae2")
-            .WithCompactResourceNaming();
+            .WithCompactResourceNaming()
+            .WithUniqueResourceNaming();
 
         builder.AddContainer("api1", "myimage")
             .WithComputeEnvironment(env1);

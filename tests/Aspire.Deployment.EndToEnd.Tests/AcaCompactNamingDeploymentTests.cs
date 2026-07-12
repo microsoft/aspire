@@ -255,8 +255,10 @@ builder.Build().Run();
 
             var buildRunPattern = "builder.Build().Run();";
             var replacement = """
-var cae1 = builder.AddAzureContainerAppEnvironment("cae1");
-var cae2 = builder.AddAzureContainerAppEnvironment("cae2");
+var cae1 = builder.AddAzureContainerAppEnvironment("cae1")
+                  .WithUniqueResourceNaming();
+var cae2 = builder.AddAzureContainerAppEnvironment("cae2")
+                  .WithUniqueResourceNaming();
 
 builder.AddContainer("api1", "mcr.microsoft.com/azuredocs/aci-helloworld", "latest")
        .WithImageSHA256("456a1150aa41340a14c7be1342deda2cde9e6e7df9fde6b8a69de0ae04f92fad")
@@ -270,6 +272,10 @@ builder.Build().Run();
 """;
 
             content = content.Replace(buildRunPattern, replacement);
+
+            // WithUniqueResourceNaming is experimental, so suppress the diagnostic in the generated AppHost.
+            content = "#pragma warning disable ASPIREACANAMING001\n" + content;
+
             File.WriteAllText(appHostFilePath, content);
 
             output.WriteLine("Modified apphost.cs with two Azure Container App environments");
