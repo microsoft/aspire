@@ -18,6 +18,9 @@ import type {
   MetricSummary,
   MetricSeriesResponse,
   MetricSeriesQuery,
+  ManageDataExport,
+  ManageDataRequest,
+  ManageDataResponse,
   Resource,
   ResourceCommand,
   ResourcesEvent,
@@ -591,6 +594,38 @@ class MockBackend {
 
   getConfig(): DeckConfig {
     return config;
+  }
+
+  getManageData(): ManageDataResponse {
+    return {
+      resources: this.resources
+        .filter((resource) => !resource.isHidden)
+        .map<ManageDataResponse["resources"][number]>((resource) => ({
+          name: resource.name,
+          displayName: resource.displayName,
+          dataTypes: ["ResourceDetails", "ConsoleLogs", "StructuredLogs", "Traces", "Metrics"],
+        })),
+      isImportEnabled: true,
+    };
+  }
+
+  exportManageData(request: ManageDataRequest): ManageDataExport {
+    return {
+      fileName: "aspire-telemetry-export-mock.json",
+      blob: new Blob([JSON.stringify(request, null, 2)], { type: "application/json" }),
+    };
+  }
+
+  importManageData(_file: File): void {
+    // The browser playground has no persistent telemetry store to import into.
+  }
+
+  removeManageData(request: ManageDataRequest): void {
+    for (const selection of request.resources) {
+      if (selection.dataTypes.includes("StructuredLogs")) this.clearStructuredLogs(selection.resourceName);
+      if (selection.dataTypes.includes("Traces")) this.clearTraces(selection.resourceName);
+      if (selection.dataTypes.includes("Metrics")) this.clearMetrics(selection.resourceName);
+    }
   }
 
   listResources(): Resource[] {

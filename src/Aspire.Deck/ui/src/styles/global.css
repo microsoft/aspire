@@ -420,6 +420,9 @@ a:focus-visible {
   flex-wrap: wrap;
   gap: 16px;
 }
+.settings-actions {
+  margin-top: 16px;
+}
 .deck-radio {
   display: inline-flex;
   align-items: center;
@@ -430,6 +433,53 @@ a:focus-visible {
   border-top: 1px solid var(--border);
   padding-top: 10px;
   color: var(--text-muted);
+  font-size: 12px;
+}
+.manage-data {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.manage-data__resource {
+  border-top: 1px solid var(--border);
+}
+.manage-data__resource-row {
+  display: flex;
+  min-height: 42px;
+  align-items: center;
+  gap: 4px;
+}
+.manage-data__type {
+  min-height: 36px;
+  padding-left: 44px;
+}
+.manage-data__footer {
+  display: flex;
+  width: 100%;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+.manage-data__selection-count {
+  margin-right: auto;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.manage-data__file {
+  display: none;
+}
+.manage-data__empty {
+  padding: 28px 12px;
+  color: var(--text-muted);
+  text-align: center;
+}
+.manage-data__error {
+  border: 1px solid var(--error);
+  border-radius: var(--radius);
+  padding: 8px 10px;
+  color: var(--error);
   font-size: 12px;
 }
 

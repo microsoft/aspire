@@ -11,6 +11,9 @@ import type {
   LogRecordSummary,
   MetricSummary,
   MetricSeriesQuery,
+  ManageDataExport,
+  ManageDataRequest,
+  ManageDataResponse,
   MetricSeriesResponse,
   Resource,
   ResourcesEvent,
@@ -119,6 +122,48 @@ async function deleteNoContent(path: string): Promise<void> {
   }
 
   await response.arrayBuffer();
+}
+
+async function getManageData(): Promise<ManageDataResponse> {
+  return await requestJson<ManageDataResponse>("manage-data");
+}
+
+async function exportManageData(request: ManageDataRequest): Promise<ManageDataExport> {
+  const response = await fetch("/api/deck/manage-data/export", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/zip", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  if (!response.ok) {
+    throw new Error(`Deck API request failed with ${response.status} ${response.statusText}.`);
+  }
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const encodedName = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  const quotedName = /filename="([^"]+)"/i.exec(disposition)?.[1];
+  return {
+    fileName: encodedName ? decodeURIComponent(encodedName) : quotedName ?? "aspire-telemetry-export.zip",
+    blob: await response.blob(),
+  };
+}
+
+async function importManageData(file: File): Promise<void> {
+  const body = await file.arrayBuffer();
+  const response = await fetch("/api/deck/manage-data/import", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { "Content-Type": file.type || "application/octet-stream", "X-Aspire-File-Name": file.name },
+    body,
+  });
+  if (!response.ok) {
+    throw new Error(`Deck API request failed with ${response.status} ${response.statusText}.`);
+  }
+}
+
+async function removeManageData(request: ManageDataRequest): Promise<void> {
+  await postNoContent("manage-data/remove", request);
 }
 
 function getConfig(): Promise<DeckConfig> {
@@ -565,6 +610,10 @@ export const httpBackend = {
   retryConnection(): void {
     retryResourceConnection?.();
   },
+  getManageData,
+  exportManageData,
+  importManageData,
+  removeManageData,
   getConfig,
   listResources,
   listCanvases(): Promise<CanvasManifest[]> {

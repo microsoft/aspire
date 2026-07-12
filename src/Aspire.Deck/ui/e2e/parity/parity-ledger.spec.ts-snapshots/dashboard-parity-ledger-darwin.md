@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 145
+- React covered: 146
 - React partial: 4
-- React missing: 9
+- React missing: 8
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 13
+- React parity gaps: 12
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -23,7 +23,7 @@
 | SHELL-THEME-001 | shell | `/` | shell | covered | APP-THEME-001; APP-SETTINGS-001 | System, light, and dark theme selection is persisted. |
 | SHELL-LANGUAGE-001 | shell | `/` | shell | missing | - | The dashboard language can be selected and applied. |
 | SHELL-TIME-FORMAT-001 | shell | `/` | shell | covered | APP-TIME-FORMAT-001 | System, 12-hour, and 24-hour time formatting can be selected. |
-| SHELL-MANAGE-DATA-001 | shell | `/` | PENDING | missing | - | Resource logs and telemetry can be inspected, exported, imported, and cleared. |
+| SHELL-MANAGE-DATA-001 | shell | `/` | PENDING | covered | HTTP-MANAGE-DATA-001; DeckApiTests.ManageData_InventoryExportImportAndRemoveUseDeckContract | Resource logs and telemetry can be inspected, exported, imported, and cleared. |
 | SHELL-USER-001 | shell | `/` | PENDING | missing | - | Authenticated user profile and sign-out behavior are available when configured. |
 | SHELL-AUTH-001 | shell | `/login` | PENDING | missing | - | Browser-token and OpenID Connect login flows protect the frontend. |
 | SHELL-RECONNECT-001 | shell | `/` | PENDING | covered | HTTP-RECOVERY-001; HTTP-RECONNECT-001 | A lost dashboard circuit or backend connection exposes reconnect and recovery UI. |

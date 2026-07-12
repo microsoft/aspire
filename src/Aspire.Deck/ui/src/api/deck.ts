@@ -23,6 +23,9 @@ import type {
   ResourcesEvent,
   MetricSeriesResponse,
   MetricSeriesQuery,
+  ManageDataExport,
+  ManageDataRequest,
+  ManageDataResponse,
   TelemetrySummary,
 } from "./types";
 
@@ -73,6 +76,36 @@ export function retryBackendConnection(): void {
     return;
   }
   window.location.reload();
+}
+
+export function getManageData(): Promise<ManageDataResponse> {
+  if (isHttpBackend()) {
+    return httpBackend.getManageData();
+  }
+  return Promise.resolve(mockBackend.getManageData());
+}
+
+export function exportManageData(request: ManageDataRequest): Promise<ManageDataExport> {
+  if (isHttpBackend()) {
+    return httpBackend.exportManageData(request);
+  }
+  return Promise.resolve(mockBackend.exportManageData(request));
+}
+
+export function importManageData(file: File): Promise<void> {
+  if (isHttpBackend()) {
+    return httpBackend.importManageData(file);
+  }
+  mockBackend.importManageData(file);
+  return Promise.resolve();
+}
+
+export function removeManageData(request: ManageDataRequest): Promise<void> {
+  if (isHttpBackend()) {
+    return httpBackend.removeManageData(request);
+  }
+  mockBackend.removeManageData(request);
+  return Promise.resolve();
 }
 
 export function listResources(): Promise<Resource[]> {

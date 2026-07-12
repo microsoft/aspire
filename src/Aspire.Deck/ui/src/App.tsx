@@ -1,8 +1,7 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react";
 import type { DeckConfig } from "./api/types";
 import { PARAMETER_RESOURCE_TYPE } from "./api/types";
-import { getConfig } from "./api/deck";
-import { retryBackendConnection } from "./api/deck";
+import { getConfig, retryBackendConnection } from "./api/deck";
 import type { Theme, ThemeChoice } from "./lib/theme";
 import type { TimeFormatChoice } from "./lib/timeFormat";
 import { Sidebar } from "./components/Sidebar";
@@ -24,6 +23,7 @@ import { HelpDialog } from "./components/HelpDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { NotificationCenter, type NotificationHistoryItem } from "./components/NotificationCenter";
 import { SystemNotifications } from "./components/SystemNotifications";
+import { ManageDataDrawer } from "./components/ManageDataDrawer";
 import {
   dashboardRouteHref,
   readDashboardRoute,
@@ -55,6 +55,7 @@ export function App({
   const [route, setRoute] = useState<DashboardRoute>(readDashboardRoute);
   const [helpOpen, setHelpOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [manageDataOpen, setManageDataOpen] = useState(false);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() => {
     try {
@@ -409,8 +410,13 @@ export function App({
         onThemeChoiceChange={onThemeChoiceChange}
         timeFormatChoice={timeFormatChoice}
         onTimeFormatChoiceChange={onTimeFormatChoiceChange}
+        onManageData={() => {
+          setSettingsOpen(false);
+          setManageDataOpen(true);
+        }}
         onClose={() => setSettingsOpen(false)}
       />
+      {manageDataOpen ? <ManageDataDrawer onClose={() => setManageDataOpen(false)} /> : null}
     </div>
   );
 }

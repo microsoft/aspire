@@ -8,6 +8,7 @@ import {
 const coveredFeatures = new Set<HttpBackendFeatureId>();
 const browserErrors = new WeakMap<Page, string[]>();
 const allowUnavailableResponses = new WeakSet<Page>();
+const allowInterceptedImportAbort = new WeakSet<Page>();
 
 function features(...ids: HttpBackendFeatureId[]): string {
   for (const id of ids) {
@@ -100,7 +101,10 @@ test.afterEach(async ({ page }) => {
   const unexpected = allowUnavailableResponses.has(page)
     ? errors.filter((error) => !error.startsWith("console: Failed to load resource: the server responded with a status of 503"))
     : errors;
-  expect(unexpected, "Unexpected browser errors").toEqual([]);
+  const filtered = allowInterceptedImportAbort.has(page)
+    ? unexpected.filter((error) => !error.includes("/api/deck/manage-data/import (net::ERR_ABORTED)"))
+    : unexpected;
+  expect(filtered, "Unexpected browser errors").toEqual([]);
 });
 
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {
@@ -164,6 +168,94 @@ test(`${features("HTTP-SHELL-UNSECURED-001")} warns about unsecured endpoints an
 
   await page.reload();
   await expect(page.getByRole("region", { name: "System notifications" })).toBeHidden();
+});
+
+test(`${features("HTTP-MANAGE-DATA-001")} manages dashboard data through the HTTP backend`, async ({ page }) => {
+  // Chromium reports an intercepted file upload as aborted after Playwright fulfills
+  // it, even though the response and payload complete. The real 204 endpoint is
+  // exercised by DeckApiTests.ManageData_InventoryExportImportAndRemoveUseDeckContract.
+  allowInterceptedImportAbort.add(page);
+  const requests: Array<{ operation: string; body: unknown }> = [];
+  let removed = false;
+  await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/deck/manage-data", async (route) => route.fulfill({
+    json: {
+      resources: [{
+        name: resource.name,
+        displayName: resource.displayName,
+        dataTypes: removed ? ["ResourceDetails", "ConsoleLogs"] : ["ResourceDetails", "ConsoleLogs", "StructuredLogs", "Traces", "Metrics"],
+      }],
+      isImportEnabled: true,
+    },
+  }));
+  await page.route("**/api/deck/manage-data/export", async (route) => {
+    requests.push({ operation: "export", body: route.request().postDataJSON() });
+    await route.fulfill({
+      contentType: "application/zip",
+      headers: { "Content-Disposition": "attachment; filename*=UTF-8''aspire-telemetry-export-test.zip" },
+      body: "PK-test-archive",
+    });
+  });
+  await page.route("**/api/deck/manage-data/import", async (route) => {
+    requests.push({
+      operation: "import",
+      body: {
+        fileName: route.request().headers()["x-aspire-file-name"],
+        content: route.request().postDataBuffer()?.toString("utf8"),
+      },
+    });
+    await route.fulfill({ status: 200, body: "" });
+  });
+  await page.route("**/api/deck/manage-data/remove", async (route) => {
+    requests.push({ operation: "remove", body: route.request().postDataJSON() });
+    removed = true;
+    await route.fulfill({ status: 204 });
+  });
+
+  await page.goto("/?backend=http");
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Manage data" }).click();
+
+  const drawer = page.getByRole("dialog", { name: "Manage data" });
+  await expect(page.getByRole("dialog", { name: "Settings" })).toBeHidden();
+  await expect(drawer.getByRole("checkbox")).toHaveCount(7);
+  await expect(drawer.getByRole("checkbox", { name: "Select all data", exact: true })).toBeChecked();
+  await expect(drawer).toContainText("Resource detailsConsole logsStructured logsTracesMetrics");
+  await expect(drawer.getByText("5 selected")).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await drawer.getByRole("button", { name: "Export" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("aspire-telemetry-export-test.zip");
+
+  const importResponse = page.waitForResponse("**/api/deck/manage-data/import");
+  await drawer.getByLabel("Import telemetry file").setInputFiles({
+    name: "telemetry.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"resourceLogs":[]}'),
+  });
+  await importResponse;
+
+  await drawer.getByRole("button", { name: "Remove" }).click();
+  await expect(drawer.getByRole("checkbox")).toHaveCount(4);
+  await expect(drawer).not.toContainText("Structured logs");
+  await expect(drawer).not.toContainText("Traces");
+  await expect(drawer).not.toContainText("Metrics");
+
+  expect(requests).toEqual([
+    {
+      operation: "export",
+      body: { resources: [{ resourceName: resource.name, dataTypes: ["ResourceDetails", "ConsoleLogs", "StructuredLogs", "Traces", "Metrics", "Resource"] }] },
+    },
+    { operation: "import", body: { fileName: "telemetry.json", content: '{"resourceLogs":[]}' } },
+    {
+      operation: "remove",
+      body: { resources: [{ resourceName: resource.name, dataTypes: ["ResourceDetails", "ConsoleLogs", "StructuredLogs", "Traces", "Metrics", "Resource"] }] },
+    },
+  ]);
+  await drawer.getByRole("button", { name: "Close manage data" }).click();
+  await expect(drawer).toBeHidden();
 });
 
 test(`${features("HTTP-RESOURCE-VIRTUALIZATION-001")} virtualizes a 1000-resource inventory`, async ({ page }) => {

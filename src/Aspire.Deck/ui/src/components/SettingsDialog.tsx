@@ -1,7 +1,7 @@
 import type { DeckConfig } from "../api/types";
 import type { ThemeChoice } from "../lib/theme";
 import type { TimeFormatChoice } from "../lib/timeFormat";
-import { Button, Dialog } from "../toolkit";
+import { Button, Dialog, NamedIcon } from "../toolkit";
 
 const choices: Array<{ value: ThemeChoice; label: string }> = [
   { value: "system", label: "System" },
@@ -22,6 +22,7 @@ export function SettingsDialog({
   onThemeChoiceChange,
   timeFormatChoice,
   onTimeFormatChoiceChange,
+  onManageData,
   onClose,
 }: {
   open: boolean;
@@ -30,6 +31,7 @@ export function SettingsDialog({
   onThemeChoiceChange: (choice: ThemeChoice) => void;
   timeFormatChoice: TimeFormatChoice;
   onTimeFormatChoiceChange: (choice: TimeFormatChoice) => void;
+  onManageData: () => void;
   onClose: () => void;
 }) {
   return (
@@ -74,6 +76,9 @@ export function SettingsDialog({
           ))}
         </div>
       </fieldset>
+      <div className="settings-actions">
+        <Button onClick={onManageData}><NamedIcon name="Database" size={16} /> Manage data</Button>
+      </div>
       <dl className="settings-versions">
         <div><dt>Dashboard version</dt><dd>{config?.version || "Unknown"}</dd></div>
         <div><dt>Runtime version</dt><dd>{config?.runtimeVersion || "Not reported"}</dd></div>

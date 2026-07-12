@@ -12,6 +12,33 @@ export interface DeckConfig {
   isApiEndpointUnsecured?: boolean;
 }
 
+export type ManageDataType = "ResourceDetails" | "ConsoleLogs" | "StructuredLogs" | "Traces" | "Metrics" | "Resource";
+
+export interface ManageDataResource {
+  name: string;
+  displayName: string;
+  dataTypes: ManageDataType[];
+}
+
+export interface ManageDataResponse {
+  resources: ManageDataResource[];
+  isImportEnabled: boolean;
+}
+
+export interface ManageDataSelection {
+  resourceName: string;
+  dataTypes: ManageDataType[];
+}
+
+export interface ManageDataRequest {
+  resources: ManageDataSelection[];
+}
+
+export interface ManageDataExport {
+  fileName: string;
+  blob: Blob;
+}
+
 export type ConnectionTarget = "resourceService" | "otlpGrpc" | "otlpHttp";
 export type ConnectionState = "connecting" | "connected" | "disconnected" | "error";
 
