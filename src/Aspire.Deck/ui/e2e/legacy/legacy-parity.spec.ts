@@ -498,6 +498,48 @@ test(`${features("traces")} inventories trace controls and nested span details`,
   await attachScreenshot(page, testInfo, "legacy-traces");
 });
 
+test(`${features("trace-details")} verifies error events and linked span navigation`, async ({ page }) => {
+  await page.goto("/");
+  const apiResourceRow = page.getByRole("table").getByRole("row").filter({ hasText: "stress-apiservice" });
+  await apiResourceRow.getByText("stress-apiservice", { exact: true }).click();
+  await page.getByRole("dialog").filter({ hasText: "stress-apiservice" })
+    .getByRole("button", { name: "Trace details", exact: true }).click();
+
+  await page.goto("/traces");
+  const matchingTraceRows = page.getByRole("table").getByRole("row").filter({ hasText: "trace-fixture-error" });
+  await expect.poll(() => matchingTraceRows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+  const traceRow = matchingTraceRows.last();
+  await expect(traceRow).toHaveClass(/trace-row-error/);
+  await traceRow.getByRole("cell").first().click();
+  await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}$/);
+
+  const notificationDismissButtons = page.getByRole("button", { name: "Dismiss notification", exact: true });
+  await notificationDismissButtons.evaluateAll((buttons) => {
+    for (const button of buttons) {
+      (button as HTMLButtonElement).click();
+    }
+  });
+  await expect(notificationDismissButtons).toHaveCount(0);
+
+  const errorSpan = page.getByRole("table").getByRole("row").filter({ hasText: "trace-fixture-error" });
+  await errorSpan.getByRole("button", { name: "Actions", exact: true }).click();
+  await page.getByRole("menuitem", { name: "View details", exact: true }).click();
+  const spanDetails = page.locator("aside.drawer[role='dialog']");
+  await expect(spanDetails).toContainText("Error");
+  await expect(spanDetails).toContainText("fixture.error");
+  await expect(spanDetails).toContainText(/Events\s*1/);
+  await expect(spanDetails).toContainText("exception");
+  await expect(spanDetails).toContainText("exception.type");
+  await expect(spanDetails).toContainText("FixtureException");
+  await expect(spanDetails).toContainText(/Links\s*1/);
+  await expect(spanDetails).toContainText("fixture.link");
+  await expect(spanDetails).toContainText("linked-target");
+
+  await spanDetails.getByRole("button", { name: /^[0-9a-f]{7}$/ }).click();
+  await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}\?spanId=[0-9a-f]{16}$/);
+  await expect(page.getByRole("table").getByText("trace-fixture-linked-target", { exact: true })).toBeVisible();
+});
+
 test(`${features("metrics")} inventories metric controls and empty state`, async ({ page }, testInfo) => {
   test.setTimeout(120_000);
   await page.goto("/");

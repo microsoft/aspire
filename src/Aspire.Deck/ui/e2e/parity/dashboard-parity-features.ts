@@ -21,6 +21,7 @@ export type LegacyScenario =
   | "structured-logs"
   | "structured-log-virtualization"
   | "traces"
+  | "trace-details"
   | "metrics";
 
 export interface DashboardParityFeature {
@@ -186,7 +187,7 @@ const featureDefinitions = {
     ["TRACE-TEXT-FILTER-001", "/traces", "Traces filter by operation, resource, and trace identifiers.", "traces", "covered", "TRACE-FILTER-001"],
     ["TRACE-STRUCTURED-FILTER-001", "/traces", "Structured trace and span filters can be composed and managed.", "traces", "covered", "TRACE-STRUCTURED-FILTER-001; TK-STRUCTURED-FILTER-001"],
     ["TRACE-DURATION-001", "/traces", "Trace and span duration is represented consistently at different scales.", "traces", "covered", "TRACE-DURATION-001; HTTP-TRACES-001"],
-    ["TRACE-ERROR-001", "/traces", "Failed traces and spans expose status, tags, and error styling.", null, "covered", "TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001"],
+    ["TRACE-ERROR-001", "/traces", "Failed traces and spans expose status, tags, and error styling.", "trace-details", "covered", "TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001"],
     ["TRACE-PAUSE-001", "/traces", "Incoming traces can be paused and resumed.", "traces", "covered", "TRACE-PAUSE-001"],
     ["TRACE-CLEAR-001", "/traces", "Trace data can be cleared for the selected resource or all resources.", "traces", "covered", "TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001"],
     ["TRACE-VIRTUALIZATION-001", "/traces", "Large trace inventories remain responsive through virtualization.", null, "covered", "HTTP-TRACE-VIRTUALIZATION-001"],
@@ -195,8 +196,8 @@ const featureDefinitions = {
     ["TRACE-TREE-001", "/traces/detail/{traceId}", "The trace detail preserves parent/child span hierarchy and chronological placement.", "traces", "covered", "TRACE-TREE-001; HTTP-TRACES-001"],
     ["TRACE-EXPAND-001", "/traces/detail/{traceId}", "Trace detail supports individual and expand-all/collapse-all span control.", "traces", "covered", "TRACE-EXPAND-001"],
     ["TRACE-SPAN-DETAILS-001", "/traces/detail/{traceId}", "Span details include identifiers, timing, status, attributes, resource, and instrumentation scope.", "traces", "covered", "TRACE-DETAILS-001; HTTP-TRACES-001; STRESS-TRACES-001"],
-    ["TRACE-EVENTS-001", "/traces/detail/{traceId}", "Span events and exception details preserve timestamps and attributes.", null, "covered", "TRACE-EVENTS-001; HTTP-TRACES-001"],
-    ["TRACE-LINKS-001", "/traces/detail/{traceId}", "Span links navigate to related traces and preserve link attributes.", null, "covered", "TRACE-LINKS-001; HTTP-TRACES-001"],
+    ["TRACE-EVENTS-001", "/traces/detail/{traceId}", "Span events and exception details preserve timestamps and attributes.", "trace-details", "covered", "TRACE-EVENTS-001; HTTP-TRACES-001"],
+    ["TRACE-LINKS-001", "/traces/detail/{traceId}", "Span links navigate to related traces and preserve link attributes.", "trace-details", "covered", "TRACE-LINKS-001; HTTP-TRACES-001"],
     ["TRACE-GENAI-001", "/traces/detail/{traceId}", "GenAI spans and traces open the dedicated GenAI visualizer.", null, "covered", "TRACE-GENAI-001"],
     ["TRACE-EXPLAIN-001", "/traces", "Explain errors summarizes current failed traces through the assistant.", null, "covered", "TRACE-EXPLAIN-001"],
     ["TRACE-SESSION-001", "/traces", "Resource, type, filters, and selection are deep-linkable and restorable.", null, "covered", "TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001"],

@@ -393,6 +393,43 @@ app.MapGet("/multiple-traces-linked", async () =>
     return $"Created {TraceCount} traces.";
 });
 
+app.MapGet("/trace-details", async () =>
+{
+    var current = Activity.Current;
+    Activity.Current = null;
+    ActivitySource source = new("Services.Api", "1.0.0");
+
+    using var linkedTarget = source.StartActivity("trace-fixture-linked-target", ActivityKind.Internal);
+    Debug.Assert(linkedTarget is not null);
+    var linkedContext = linkedTarget.Context;
+    linkedTarget.Stop();
+
+    var linkTags = new ActivityTagsCollection
+    {
+        ["fixture.link"] = "linked-target"
+    };
+    var links = new[] { new ActivityLink(linkedContext, linkTags) };
+    using var errorActivity = source.StartActivity(
+        "trace-fixture-error",
+        ActivityKind.Internal,
+        default(ActivityContext),
+        tags: null,
+        links: links);
+    Debug.Assert(errorActivity is not null);
+    errorActivity.SetStatus(ActivityStatusCode.Error, "Fixture failure");
+    errorActivity.SetTag("fixture.error", true);
+    errorActivity.AddEvent(new ActivityEvent("exception", tags: new ActivityTagsCollection
+    {
+        ["exception.type"] = "FixtureException",
+        ["exception.message"] = "Deterministic trace fixture failure"
+    }));
+    await Task.Delay(50);
+    errorActivity.Stop();
+
+    Activity.Current = current;
+    return "Created deterministic trace details";
+});
+
 app.MapGet("/nested-trace-spans", async () =>
     {
         var forecast = Enumerable.Range(1, 5).Select(index =>

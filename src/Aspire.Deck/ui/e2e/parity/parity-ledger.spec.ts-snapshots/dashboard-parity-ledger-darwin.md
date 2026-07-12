@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 26
+- Legacy black-box scenarios pending: 23
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -136,7 +136,7 @@
 | TRACE-TEXT-FILTER-001 | traces | `/traces` | traces | covered | TRACE-FILTER-001 | Traces filter by operation, resource, and trace identifiers. |
 | TRACE-STRUCTURED-FILTER-001 | traces | `/traces` | traces | covered | TRACE-STRUCTURED-FILTER-001; TK-STRUCTURED-FILTER-001 | Structured trace and span filters can be composed and managed. |
 | TRACE-DURATION-001 | traces | `/traces` | traces | covered | TRACE-DURATION-001; HTTP-TRACES-001 | Trace and span duration is represented consistently at different scales. |
-| TRACE-ERROR-001 | traces | `/traces` | PENDING | covered | TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001 | Failed traces and spans expose status, tags, and error styling. |
+| TRACE-ERROR-001 | traces | `/traces` | trace-details | covered | TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001 | Failed traces and spans expose status, tags, and error styling. |
 | TRACE-PAUSE-001 | traces | `/traces` | traces | covered | TRACE-PAUSE-001 | Incoming traces can be paused and resumed. |
 | TRACE-CLEAR-001 | traces | `/traces` | traces | covered | TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001 | Trace data can be cleared for the selected resource or all resources. |
 | TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | covered | HTTP-TRACE-VIRTUALIZATION-001 | Large trace inventories remain responsive through virtualization. |
@@ -145,8 +145,8 @@
 | TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-TREE-001; HTTP-TRACES-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |
 | TRACE-EXPAND-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-EXPAND-001 | Trace detail supports individual and expand-all/collapse-all span control. |
 | TRACE-SPAN-DETAILS-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-DETAILS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Span details include identifiers, timing, status, attributes, resource, and instrumentation scope. |
-| TRACE-EVENTS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-EVENTS-001; HTTP-TRACES-001 | Span events and exception details preserve timestamps and attributes. |
-| TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |
+| TRACE-EVENTS-001 | traces | `/traces/detail/{traceId}` | trace-details | covered | TRACE-EVENTS-001; HTTP-TRACES-001 | Span events and exception details preserve timestamps and attributes. |
+| TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | trace-details | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |
 | TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-GENAI-001 | GenAI spans and traces open the dedicated GenAI visualizer. |
 | TRACE-EXPLAIN-001 | traces | `/traces` | PENDING | covered | TRACE-EXPLAIN-001 | Explain errors summarizes current failed traces through the assistant. |
 | TRACE-SESSION-001 | traces | `/traces` | PENDING | covered | TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001 | Resource, type, filters, and selection are deep-linkable and restorable. |
