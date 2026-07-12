@@ -5,7 +5,15 @@ import { NotificationStack, type NotificationItem } from "../toolkit";
 
 const UNSECURED_ENDPOINT_DISMISSED_KEY = "Aspire_Security_UnsecuredEndpointMessageDismissed";
 
-export function SystemNotifications({ config }: { config: DeckConfig | null }) {
+export function SystemNotifications({
+  config,
+  connectionError,
+  onRetryConnection,
+}: {
+  config: DeckConfig | null;
+  connectionError: boolean;
+  onRetryConnection: () => void;
+}) {
   const [unsecuredDismissed, setUnsecuredDismissed] = useState(
     () => window.localStorage.getItem(UNSECURED_ENDPOINT_DISMISSED_KEY) === "true",
   );
@@ -34,6 +42,16 @@ export function SystemNotifications({ config }: { config: DeckConfig | null }) {
         },
       }]
     : [];
+
+  if (connectionError) {
+    notifications.push({
+      id: "backend-disconnected",
+      intent: "warning",
+      title: "Lost connection to the AppHost",
+      message: "Attempting to reconnect...",
+      primaryAction: { label: "Retry", onClick: onRetryConnection },
+    });
+  }
 
   return <NotificationStack notifications={notifications} ariaLabel="System notifications" />;
 }

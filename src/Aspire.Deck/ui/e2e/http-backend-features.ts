@@ -6,6 +6,7 @@ export const httpBackendFeatures = {
   "HTTP-MOCK-ISOLATION-001": "Explicit HTTP mode never falls back to the standalone mock backend.",
   "HTTP-FAILURE-001": "HTTP mode reports an unavailable dashboard backend without unhandled browser errors.",
   "HTTP-RECOVERY-001": "HTTP mode recovers application identity and resources when the dashboard backend returns.",
+  "HTTP-RECONNECT-001": "A backend outage exposes an explicit retry action with and without a retained resource snapshot.",
   "HTTP-COMMAND-001": "HTTP mode executes a live resource command through the dashboard backend.",
   "HTTP-COMMAND-OUTCOMES-001": "HTTP commands distinguish successful, cancelled, failed, and transport-error outcomes.",
   "HTTP-INTERACTION-001": "HTTP mode round-trips resource command input interactions through the dashboard backend.",

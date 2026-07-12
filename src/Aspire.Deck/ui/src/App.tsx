@@ -2,6 +2,7 @@ import { useCallback, useEffect, useLayoutEffect, useRef, useState } from "react
 import type { DeckConfig } from "./api/types";
 import { PARAMETER_RESOURCE_TYPE } from "./api/types";
 import { getConfig } from "./api/deck";
+import { retryBackendConnection } from "./api/deck";
 import type { Theme, ThemeChoice } from "./lib/theme";
 import type { TimeFormatChoice } from "./lib/timeFormat";
 import { Sidebar } from "./components/Sidebar";
@@ -198,7 +199,11 @@ export function App({
       </div>
       <main className="app__content">
         {showNotConnected ? (
-          <NotConnected config={config} state={resourceState === "error" ? "error" : "disconnected"} />
+          <NotConnected
+            config={config}
+            state={resourceState === "error" ? "error" : "disconnected"}
+            onRetry={retryBackendConnection}
+          />
         ) : (
           <>
             {page === "resources" ? (
@@ -382,7 +387,11 @@ export function App({
           }
         }}
       />
-      <SystemNotifications config={config} />
+      <SystemNotifications
+        config={config}
+        connectionError={resourceState === "error" && resources.length > 0}
+        onRetryConnection={retryBackendConnection}
+      />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       <NotificationCenter
         open={notificationCenterOpen}

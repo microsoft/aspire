@@ -236,7 +236,7 @@ test(`${features("HTTP-FAILURE-001")} reports an unavailable HTTP backend`, asyn
   await testInfo.attach("http-backend-unavailable.png", { body, contentType: "image/png" });
 });
 
-test(`${features("HTTP-RECOVERY-001")} recovers when the HTTP backend returns`, async ({ page }) => {
+test(`${features("HTTP-RECOVERY-001", "HTTP-RECONNECT-001")} retries and recovers when the HTTP backend returns`, async ({ page }) => {
   allowUnavailableResponses.add(page);
   let available = false;
   await page.route("**/api/deck/config", async (route) => {
@@ -248,12 +248,42 @@ test(`${features("HTTP-RECOVERY-001")} recovers when the HTTP backend returns`, 
 
   await page.goto("/?backend=http");
   await expect(page.getByTitle("Resources: Error")).toBeVisible();
+  const retry = page.getByRole("main").getByRole("button", { name: "Retry" });
+  await expect(retry).toBeVisible();
 
   available = true;
+  await retry.click();
 
   await expect(page.getByRole("banner").locator(".topbar__app")).toHaveText("Stress AppHost");
   await expect(page.getByRole("table").getByRole("row", { name: /stress-api/ })).toBeVisible();
   await expect(page.getByTitle("Resources: Connected")).toBeVisible();
+});
+
+test(`${features("HTTP-RECONNECT-001")} retains resources and exposes retry during a backend outage`, async ({ page }) => {
+  allowUnavailableResponses.add(page);
+  let available = true;
+  let resourceRequests = 0;
+  await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/deck/resources", async (route) => {
+    resourceRequests++;
+    await route.fulfill(available ? { json: [resource] } : { status: 503, body: "Dashboard backend unavailable" });
+  });
+
+  await page.goto("/?backend=http");
+  await expect(page.getByRole("row", { name: /stress-api/ })).toBeVisible();
+  available = false;
+  await expect(page.getByTitle("Resources: Error")).toBeVisible();
+
+  const warning = page.getByRole("region", { name: "System notifications" }).getByRole("alert");
+  await expect(warning).toContainText("Lost connection to the AppHostAttempting to reconnect...");
+  const requestsBeforeRetry = resourceRequests;
+  available = true;
+  await warning.getByRole("button", { name: "Retry" }).click();
+
+  await expect.poll(() => resourceRequests).toBeGreaterThan(requestsBeforeRetry);
+  await expect(page.getByTitle("Resources: Connected")).toBeVisible();
+  await expect(warning).toBeHidden();
+  await expect(page.getByRole("row", { name: /stress-api/ })).toBeVisible();
 });
 
 test(`${features("HTTP-COMMAND-001", "HTTP-COMMAND-OUTCOMES-001")} executes resource command outcomes through the HTTP backend`, async ({ page }) => {

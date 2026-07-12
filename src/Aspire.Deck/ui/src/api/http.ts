@@ -56,6 +56,7 @@ const telemetryLogKeys = new Set<string>();
 const telemetrySpanKeys = new Set<string>();
 
 let configPromise: Promise<DeckConfig> | null = null;
+let retryResourceConnection: (() => void) | null = null;
 
 async function requestJson<T>(path: string): Promise<T> {
   const response = await fetch(`/api/deck/${path}`, {
@@ -163,8 +164,13 @@ function setResourceConnection(status: ConnectionStatus): void {
 function onResources(callback: (event: ResourcesEvent) => void): Unsubscribe {
   let cancelled = false;
   let timer: number | undefined;
+  let polling = false;
 
   const poll = async (): Promise<void> => {
+    if (polling) {
+      return;
+    }
+    polling = true;
     try {
       const resources = await listResources();
       if (!cancelled) {
@@ -180,15 +186,28 @@ function onResources(callback: (event: ResourcesEvent) => void): Unsubscribe {
         });
       }
     } finally {
+      polling = false;
       if (!cancelled) {
         timer = window.setTimeout(() => void poll(), 1_000);
       }
     }
   };
 
+  const retry = (): void => {
+    if (timer !== undefined) {
+      window.clearTimeout(timer);
+      timer = undefined;
+    }
+    setResourceConnection({ target: "resourceService", state: "connecting" });
+    void poll();
+  };
+  retryResourceConnection = retry;
   void poll();
   return () => {
     cancelled = true;
+    if (retryResourceConnection === retry) {
+      retryResourceConnection = null;
+    }
     if (timer !== undefined) {
       window.clearTimeout(timer);
     }
@@ -543,6 +562,9 @@ function subscribeConsoleLogs(
 }
 
 export const httpBackend = {
+  retryConnection(): void {
+    retryResourceConnection?.();
+  },
   getConfig,
   listResources,
   listCanvases(): Promise<CanvasManifest[]> {

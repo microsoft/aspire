@@ -67,6 +67,14 @@ export function getConfig(): Promise<DeckConfig> {
   return Promise.resolve(mockBackend.getConfig());
 }
 
+export function retryBackendConnection(): void {
+  if (isHttpBackend()) {
+    httpBackend.retryConnection();
+    return;
+  }
+  window.location.reload();
+}
+
 export function listResources(): Promise<Resource[]> {
   if (isTauri()) {
     return invoke<Resource[]>("deck_list_resources");
