@@ -531,6 +531,43 @@ test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001")} 
   await expect(details).toContainText("Running");
 });
 
+test(`${features("CMD-RESULT-TEXT-001", "CMD-RESULT-JSON-001", "CMD-RESULT-MARKDOWN-001", "CMD-RESULT-IMMEDIATE-001")} visualizes every command result format`, async ({ page }, testInfo) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  await page.getByRole("row", { name: /apiservice/ }).click();
+  const details = page.getByRole("dialog", { name: "apiservice" });
+
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: "Show text result" }).click();
+  const feedback = page.getByRole("status").filter({ hasText: "Show text result succeeded" });
+  await expect(feedback.getByRole("button", { name: "View response" })).toBeVisible();
+  await feedback.getByRole("button", { name: "View response" }).click();
+  let viewer = page.getByRole("dialog", { name: "Show text result" });
+  await expect(viewer.locator('[data-format="text"]')).toHaveText("Deployment report\nStatus: Healthy\nReplicas: 3");
+  await viewer.getByRole("button", { name: "Copy" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("Deployment report\nStatus: Healthy\nReplicas: 3");
+  const downloadPromise = page.waitForEvent("download");
+  await viewer.getByRole("button", { name: "Download" }).click();
+  expect((await downloadPromise).suggestedFilename()).toBe("result-text.txt");
+  await viewer.getByRole("button", { name: "Close", exact: true }).click();
+
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: "Show JSON result" }).click();
+  await page.getByRole("status").filter({ hasText: "Show JSON result succeeded" }).getByRole("button", { name: "View response" }).click();
+  viewer = page.getByRole("dialog", { name: "Show JSON result" });
+  await expect(viewer.locator('[data-format="json"]')).toContainText('{\n  "status": "Healthy",\n  "replicas": 3,');
+  await viewer.getByRole("button", { name: "Close", exact: true }).click();
+
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: "Show Markdown result" }).click();
+  viewer = page.getByRole("dialog", { name: "Show Markdown result" });
+  await expect(viewer).toBeVisible();
+  await expect(viewer.getByRole("table")).toContainText("RegionStatusWestHealthyEastHealthy");
+  await expect(viewer.getByRole("link", { name: "Runbook" })).toHaveAttribute("href", "https://example.com/runbook");
+  await expect(viewer.getByRole("link", { name: "unsafe" })).toHaveCount(0);
+  await expect(viewer).toContainText("unsafe (javascript:alert(1))");
+  await attachScreenshot(page, testInfo, "dashboard-command-markdown-result");
+});
+
 test(`${features("RES-INTERACTION-001", "CMD-CUSTOM-CHOICE-001", "CMD-DYNAMIC-001", "CMD-LIVE-VALIDATION-001", "CMD-VALIDATION-001")} validates and submits an input command`, async ({ page }) => {
   await page.getByRole("row", { name: /frontend/ }).click();
   await page.getByRole("dialog", { name: "frontend" }).getByRole("button", { name: "Resource commands" }).click();

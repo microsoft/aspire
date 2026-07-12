@@ -178,7 +178,17 @@ test(`${features("HTTP-COMMAND-001")} executes a resource command through the HT
   });
   await page.route("**/api/deck/commands/execute", async (route) => {
     commandRequest = route.request().postDataJSON();
-    await route.fulfill({ json: { kind: "succeeded", message: "Healthy." } });
+    await route.fulfill({
+      json: {
+        kind: "succeeded",
+        message: "Healthy.",
+        result: {
+          value: "## Health report\n\n| Check | Status |\n| --- | --- |\n| API | **Healthy** |",
+          format: "markdown",
+          displayImmediately: true,
+        },
+      },
+    });
   });
 
   await page.goto("/?backend=http");
@@ -186,7 +196,10 @@ test(`${features("HTTP-COMMAND-001")} executes a resource command through the HT
   const details = page.getByRole("dialog", { name: "stress-api" });
   await details.getByRole("button", { name: "Check health", exact: true }).click();
 
-  await expect(page.getByRole("status")).toHaveText("Check health succeeded");
+  await expect(page.getByRole("status").filter({ hasText: "Check health succeeded" })).toContainText("Check health succeeded");
+  const result = page.getByRole("dialog", { name: "Check health" });
+  await expect(result.getByRole("heading", { name: "Health report" })).toBeVisible();
+  await expect(result.getByRole("table")).toContainText("CheckStatusAPIHealthy");
   expect(commandRequest).toEqual({ resourceName: "stress-api-abc123", commandName: "check-health" });
 });
 

@@ -1,11 +1,13 @@
 import { useEffect, useId, useState } from "react";
 import { Button, IconButton } from "./Button";
 import { CloseIcon, NamedIcon } from "./Icons";
+import { MarkdownContent } from "./MarkdownContent";
 
 export interface TextViewerRequest {
   title: string;
   value: string;
-  format?: "text" | "json";
+  format?: "text" | "json" | "markdown";
+  downloadFileName?: string;
 }
 
 export function TextViewerDialog({
@@ -49,6 +51,26 @@ export function TextViewerDialog({
     }
   };
 
+  const download = (): void => {
+    const extension = request.format === "json" ? "json" : request.format === "markdown" ? "md" : "txt";
+    const href = URL.createObjectURL(new Blob([request.value], { type: "text/plain;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = href;
+    anchor.download = request.downloadFileName ?? `command-result.${extension}`;
+    anchor.click();
+    URL.revokeObjectURL(href);
+  };
+
+  const format = request.format ?? "text";
+  let displayValue = request.value;
+  if (format === "json") {
+    try {
+      displayValue = JSON.stringify(JSON.parse(request.value), null, 2);
+    } catch {
+      // Preserve malformed JSON exactly so command output is never discarded.
+    }
+  }
+
   return (
     <div className="modal-overlay" onClick={onClose}>
       <div
@@ -62,11 +84,21 @@ export function TextViewerDialog({
           <div className="modal__title" id={titleId}>{request.title}</div>
           <IconButton label="Close visualizer" icon={<CloseIcon size={16} />} onClick={onClose} />
         </div>
-        <pre className="text-viewer__content" data-format={request.format ?? "text"}>
-          <code>{request.value}</code>
-        </pre>
+        {format === "markdown" ? (
+          <div className="text-viewer__content text-viewer__content--markdown" data-format={format}>
+            <MarkdownContent markdown={request.value} />
+          </div>
+        ) : (
+          <pre className="text-viewer__content" data-format={format}>
+            <code>{displayValue}</code>
+          </pre>
+        )}
         <div className="modal__actions">
           <span className="text-viewer__status" role="status" aria-live="polite">{copyStatus}</span>
+          <Button onClick={download}>
+            <NamedIcon name="ArrowDownload" size={16} />
+            Download
+          </Button>
           <Button onClick={() => void copy()}>
             <NamedIcon name="Copy" size={16} />
             Copy

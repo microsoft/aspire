@@ -1964,6 +1964,33 @@ table.data tbody tr.selected {
   white-space: pre-wrap;
   overflow-wrap: anywhere;
 }
+
+.text-viewer__content--markdown {
+  font-family: var(--font);
+  white-space: normal;
+}
+
+.markdown-content__table-scroll {
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.markdown-content table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.markdown-content th,
+.markdown-content td {
+  padding: 6px 10px;
+  border: 1px solid var(--border-strong);
+  text-align: left;
+}
+
+.markdown-content th {
+  background: var(--bg-surface-2);
+  font-weight: 600;
+}
 .text-viewer__status {
   min-width: 72px;
   margin-inline-end: auto;
@@ -2347,6 +2374,12 @@ table.data tbody tr.selected {
   align-items: center;
   gap: 9px;
   animation: fade-in 0.16s ease forwards;
+}
+
+.command-feedback {
+  display: flex;
+  align-items: center;
+  gap: 8px;
 }
 .spinner {
   width: 16px;

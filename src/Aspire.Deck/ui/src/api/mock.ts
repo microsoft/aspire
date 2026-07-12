@@ -115,7 +115,7 @@ function makeResources(): Resource[] {
         { name: "ConnectionStrings__postgres", value: "Host=localhost;Port=5432;Username=postgres;Password=p@ssw0rd-pg", isFromSpec: false },
       ],
       healthReports: [{ status: "Healthy", key: "self", description: "Liveness probe succeeded." }],
-      commands: [...defaultCommands("Running"), manyInputsCommand(), ...interactionContentCommands()],
+      commands: [...defaultCommands("Running"), manyInputsCommand(), ...interactionContentCommands(), ...commandResultCommands()],
       relationships: [{ resourceName: "postgres", type: "Reference" }],
       isHidden: false,
       supportsDetailedTelemetry: true,
@@ -400,6 +400,41 @@ function interactionContentCommands(): ResourceCommand[] {
       displayDescription: "Show complete success and error notification variants.",
       confirmationMessage: null,
       iconName: "Info",
+      iconVariant: "regular",
+      isHighlighted: false,
+      state: "enabled",
+    },
+  ];
+}
+
+function commandResultCommands(): ResourceCommand[] {
+  return [
+    {
+      name: "result-text",
+      displayName: "Show text result",
+      displayDescription: "Return a downloadable plain-text command result.",
+      confirmationMessage: null,
+      iconName: "DocumentText",
+      iconVariant: "regular",
+      isHighlighted: false,
+      state: "enabled",
+    },
+    {
+      name: "result-json",
+      displayName: "Show JSON result",
+      displayDescription: "Return a formatted JSON command result.",
+      confirmationMessage: null,
+      iconName: "Braces",
+      iconVariant: "regular",
+      isHighlighted: false,
+      state: "enabled",
+    },
+    {
+      name: "result-markdown",
+      displayName: "Show Markdown result",
+      displayDescription: "Open a Markdown command result immediately.",
+      confirmationMessage: null,
+      iconName: "DocumentBulletList",
       iconVariant: "regular",
       isHighlighted: false,
       state: "enabled",
@@ -782,6 +817,28 @@ class MockBackend {
         );
         this.emitInteractions();
         return { kind: "succeeded", message: "Notifications shown.", result: null };
+      case "result-text":
+        return {
+          kind: "succeeded",
+          message: "Text report generated.",
+          result: { value: "Deployment report\nStatus: Healthy\nReplicas: 3", format: "text", displayImmediately: false },
+        };
+      case "result-json":
+        return {
+          kind: "succeeded",
+          message: "JSON report generated.",
+          result: { value: '{"status":"Healthy","replicas":3,"regions":["west","east"]}', format: "json", displayImmediately: false },
+        };
+      case "result-markdown":
+        return {
+          kind: "succeeded",
+          message: "Markdown report generated.",
+          result: {
+            value: "## Deployment report\n\n| Region | Status |\n| --- | --- |\n| West | **Healthy** |\n| East | Healthy |\n\n[Runbook](https://example.com/runbook) [unsafe](javascript:alert(1))",
+            format: "markdown",
+            displayImmediately: true,
+          },
+        };
       default:
         return { kind: "undefined", message: `Unknown command '${args.commandName}'.`, result: null };
     }

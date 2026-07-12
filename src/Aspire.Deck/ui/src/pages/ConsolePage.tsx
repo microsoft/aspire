@@ -1,7 +1,8 @@
 import { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import type { ConsoleLogLine, Resource, ResourceCommand } from "../api/types";
-import { executeCommand, subscribeConsoleLogs } from "../api/deck";
+import { subscribeConsoleLogs } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
+import { useCommandExecution } from "../components/useCommandExecution";
 import { formatConsoleTimestamp, parseConsoleLine } from "../lib/consoleLogs";
 import {
   Button,
@@ -72,7 +73,7 @@ export function ConsolePage({
   const [timestampsUtc, setTimestampsUtc] = useState(routeTimestampsUtc);
   const [wrapLines, setWrapLines] = useState(routeWrapLines);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
-  const [commandStatus, setCommandStatus] = useState<string | null>(null);
+  const { runCommand, feedbackUi } = useCommandExecution();
   const [autoScroll, setAutoScroll] = useState(true);
   const [scrollTop, setScrollTop] = useState(0);
   const [viewportHeight, setViewportHeight] = useState(0);
@@ -218,22 +219,6 @@ export function ConsolePage({
     anchor.download = `${filePrefix}-${new Date().toISOString().replaceAll(":", "").slice(0, 15)}.txt`;
     anchor.click();
     URL.revokeObjectURL(href);
-  };
-
-  const runCommand = async (resource: Resource, command: ResourceCommand): Promise<void> => {
-    try {
-      const response = await executeCommand({
-        resourceName: resource.name,
-        resourceType: resource.resourceType,
-        commandName: command.name,
-      });
-      setCommandStatus(response.kind === "succeeded"
-        ? `${command.displayName} succeeded`
-        : response.message ?? `${command.displayName} ${response.kind}`);
-    } catch (error) {
-      setCommandStatus(`Command failed: ${String(error)}`);
-    }
-    window.setTimeout(() => setCommandStatus(null), 3200);
   };
 
   const requestCommand = (resource: Resource, command: ResourceCommand): void => {
@@ -482,7 +467,7 @@ export function ConsolePage({
         )}
       </PageBody>
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
-      {commandStatus ? <div className="toast" role="status" aria-live="polite">{commandStatus}</div> : null}
+      {feedbackUi}
     </Page>
   );
 }

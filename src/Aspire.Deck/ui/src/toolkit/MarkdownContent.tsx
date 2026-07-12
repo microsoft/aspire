@@ -89,6 +89,26 @@ function renderBlocks(markdown: string, onLinkClick?: (url: string) => void): Re
       continue;
     }
 
+    if (isTableHeader(lines, index)) {
+      const headers = splitTableRow(line);
+      index += 2;
+      const rows: string[][] = [];
+      while (index < lines.length && isTableRow(lines[index]!)) {
+        rows.push(splitTableRow(lines[index++]!));
+      }
+      blocks.push(
+        <div className="markdown-content__table-scroll" key={`table-${index}`}>
+          <table>
+            <thead><tr>{headers.map((header, column) => <th key={column}>{renderInline(header, onLinkClick)}</th>)}</tr></thead>
+            <tbody>{rows.map((row, rowIndex) => (
+              <tr key={rowIndex}>{headers.map((_, column) => <td key={column}>{renderInline(row[column] ?? "", onLinkClick)}</td>)}</tr>
+            ))}</tbody>
+          </table>
+        </div>,
+      );
+      continue;
+    }
+
     const paragraph: string[] = [];
     while (index < lines.length && lines[index]!.trim() && !isBlockStart(lines[index]!)) {
       paragraph.push(lines[index++]!);
@@ -113,6 +133,18 @@ function renderBlocks(markdown: string, onLinkClick?: (url: string) => void): Re
 
 function isBlockStart(line: string): boolean {
   return line.startsWith("```") || /^(#{1,6})\s+/.test(line) || /^\s*[-*]\s+/.test(line) || /^\s*\d+\.\s+/.test(line) || line.startsWith("> ");
+}
+
+function isTableHeader(lines: string[], index: number): boolean {
+  return isTableRow(lines[index] ?? "") && /^\s*\|?(?:\s*:?-{3,}:?\s*\|)+\s*$/.test(lines[index + 1] ?? "");
+}
+
+function isTableRow(line: string): boolean {
+  return line.includes("|") && line.trim().length > 0;
+}
+
+function splitTableRow(line: string): string[] {
+  return line.trim().replace(/^\|/, "").replace(/\|$/, "").split("|").map((cell) => cell.trim());
 }
 
 function renderInline(markdown: string, onLinkClick?: (url: string) => void): ReactNode[] {

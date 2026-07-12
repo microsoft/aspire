@@ -1,8 +1,9 @@
 import { useMemo, useRef, useState } from "react";
-import type { Resource, ResourceCommand } from "../api/types";
+import type { Resource } from "../api/types";
 import { PARAMETER_RESOURCE_TYPE } from "../api/types";
-import { executeCommand, openExternal } from "../api/deck";
+import { openExternal } from "../api/deck";
 import { useResources } from "../lib/useDeckEvent";
+import { useCommandExecution } from "../components/useCommandExecution";
 import { formatRelativeTime } from "../lib/format";
 import { DetailsDrawer } from "../components/DetailsDrawer";
 import {
@@ -62,11 +63,6 @@ interface ResourceRow {
   depth: number;
   hasChildren: boolean;
   collapsed: boolean;
-}
-
-interface Toast {
-  message: string;
-  tone: "success" | "error";
 }
 
 interface GraphContext {
@@ -159,7 +155,7 @@ export function ResourcesPage({
 }) {
   const { resources, ready } = useResources();
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const { runCommand, feedbackUi } = useCommandExecution();
   const [resourceContext, setResourceContext] = useState<GraphContext | null>(null);
   const graphRef = useRef<ForceGraphHandle | null>(null);
   const hiddenTypes = useMemo(() => new Set(route.hiddenTypes), [route.hiddenTypes]);
@@ -217,18 +213,6 @@ export function ResourcesPage({
       if (right.resource.name === rightRoot.name) return 1;
       return factor * valueCompare(left.resource, right.resource);
     };
-
-  const runCommand = async (resource: Resource, command: ResourceCommand): Promise<void> => {
-    try {
-      const response = await executeCommand({ resourceName: resource.name, resourceType: resource.resourceType, commandName: command.name });
-      setToast(response.kind === "succeeded"
-        ? { message: `${command.displayName} succeeded`, tone: "success" }
-        : { message: response.message ?? `${command.displayName} ${response.kind}`, tone: "error" });
-    } catch (err) {
-      setToast({ message: `Command failed: ${String(err)}`, tone: "error" });
-    }
-    window.setTimeout(() => setToast(null), 3200);
-  };
 
   const columns: Column<ResourceRow>[] = [
     {
@@ -412,7 +396,7 @@ export function ResourcesPage({
           })),
         ] : []}
       />
-      {toast ? <div className="toast" role="status" aria-live="polite"><span className={`state__dot ${toast.tone === "success" ? "success" : "error"}`} />{toast.message}</div> : null}
+      {feedbackUi}
     </Page>
   );
 }

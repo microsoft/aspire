@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
-import type { Resource, ResourceCommand } from "../api/types";
+import type { Resource } from "../api/types";
 import { PARAMETER_RESOURCE_TYPE, PARAMETER_VALUE_PROPERTY } from "../api/types";
-import { executeCommand } from "../api/deck";
+import { useCommandExecution } from "../components/useCommandExecution";
 import { useResources } from "../lib/useDeckEvent";
 import { DetailsDrawer } from "../components/DetailsDrawer";
 import {
@@ -22,11 +22,6 @@ import {
   type ConfirmRequest,
   type SortDirection,
 } from "../toolkit";
-
-interface Toast {
-  message: string;
-  tone: "success" | "error";
-}
 
 // A parameter is "unset" when its value couldn't be resolved (no value in config,
 // user secrets, or a default). Aspire reports this as the ValueMissing state.
@@ -54,7 +49,7 @@ export function ParametersPage({
 }) {
   const { resources, ready } = useResources();
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const { runCommand, feedbackUi } = useCommandExecution();
 
   const changeRoute = (change: Partial<ParametersRouteState>): void => {
     onRouteChange({ ...route, ...change });
@@ -77,24 +72,6 @@ export function ParametersPage({
     () => resources.find((r) => r.name === route.resourceName) ?? null,
     [resources, route.resourceName],
   );
-
-  const runCommand = async (resource: Resource, command: ResourceCommand): Promise<void> => {
-    try {
-      const response = await executeCommand({
-        resourceName: resource.name,
-        resourceType: resource.resourceType,
-        commandName: command.name,
-      });
-      if (response.kind === "succeeded") {
-        setToast({ message: `${command.displayName} succeeded`, tone: "success" });
-      } else {
-        setToast({ message: response.message ?? `${command.displayName} ${response.kind}`, tone: "error" });
-      }
-    } catch (err) {
-      setToast({ message: `Command failed: ${String(err)}`, tone: "error" });
-    }
-    window.setTimeout(() => setToast(null), 3200);
-  };
 
   const columns: Column<Resource>[] = [
     {
@@ -162,12 +139,7 @@ export function ParametersPage({
 
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
 
-      {toast ? (
-        <div className="toast" role="status" aria-live="polite">
-          <span className={`state__dot ${toast.tone === "success" ? "success" : "error"}`} />
-          {toast.message}
-        </div>
-      ) : null}
+      {feedbackUi}
     </Page>
   );
 }
