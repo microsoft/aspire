@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { IconButton } from "./Button";
 import { EyeIcon, EyeOffIcon } from "./Icons";
+import { CopyValueButton } from "./CopyValueButton";
 
 export function SecretValue({
   value,
@@ -8,12 +9,16 @@ export function SecretValue({
   hideLabel = "Hide value",
   maxMaskLength = 24,
   className,
+  copyable = false,
+  copyLabel = "value",
 }: {
   value: string;
   revealLabel?: string;
   hideLabel?: string;
   maxMaskLength?: number;
   className?: string;
+  copyable?: boolean;
+  copyLabel?: string;
 }) {
   const [revealed, setRevealed] = useState(false);
   const classes = ["deck-secret-value", className].filter(Boolean).join(" ");
@@ -33,6 +38,7 @@ export function SecretValue({
           setRevealed((current) => !current);
         }}
       />
+      {copyable && revealed ? <CopyValueButton value={value} label={copyLabel} /> : null}
     </span>
   );
 }

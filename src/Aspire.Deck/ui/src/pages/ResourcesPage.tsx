@@ -160,7 +160,7 @@ export function ResourcesPage({
   const { resources, ready } = useResources();
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
   const [toast, setToast] = useState<Toast | null>(null);
-  const [graphContext, setGraphContext] = useState<GraphContext | null>(null);
+  const [resourceContext, setResourceContext] = useState<GraphContext | null>(null);
   const graphRef = useRef<ForceGraphHandle | null>(null);
   const hiddenTypes = useMemo(() => new Set(route.hiddenTypes), [route.hiddenTypes]);
   const hiddenStates = useMemo(() => new Set(route.hiddenStates), [route.hiddenStates]);
@@ -335,7 +335,7 @@ export function ResourcesPage({
       graphEdges.push({ source: resource.name, target });
     }
   }
-  const contextResource = graphContext ? resources.find((resource) => resource.name === graphContext.resourceName) ?? null : null;
+  const contextResource = resourceContext ? resources.find((resource) => resource.name === resourceContext.resourceName) ?? null : null;
 
   return (
     <Page aria-labelledby="deck-page-resources-title">
@@ -380,7 +380,7 @@ export function ResourcesPage({
               selectedId={route.resourceName}
               emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"}
               onSelect={(resourceName) => changeRoute({ resourceName })}
-              onContextMenu={(resourceName, x, y) => setGraphContext({ resourceName, x, y })}
+              onContextMenu={(resourceName, x, y) => setResourceContext({ resourceName, x, y })}
             />
             <div className="resources-graph__controls" role="toolbar" aria-label="Graph controls">
               <IconButton label="Zoom in" icon={<ZoomInIcon size={17} />} onClick={() => graphRef.current?.zoomIn()} />
@@ -389,17 +389,17 @@ export function ResourcesPage({
             </div>
           </div>
         ) : (
-          <DataTable columns={columns} rows={rows} rowKey={(row) => row.resource.name} onRowClick={(row) => changeRoute({ resourceName: row.resource.name })} isSelected={(row) => row.resource.name === route.resourceName} sort={{ columnKey: route.sortColumn, direction: route.sortDirection }} onSortChange={(sort) => changeRoute({ sortColumn: sort.columnKey, sortDirection: sort.direction })} emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"} />
+          <DataTable columns={columns} rows={rows} rowKey={(row) => row.resource.name} onRowClick={(row) => changeRoute({ resourceName: row.resource.name })} onRowContextMenu={(row, x, y) => setResourceContext({ resourceName: row.resource.name, x, y })} isSelected={(row) => row.resource.name === route.resourceName} sort={{ columnKey: route.sortColumn, direction: route.sortDirection }} onSortChange={(sort) => changeRoute({ sortColumn: sort.columnKey, sortDirection: sort.direction })} emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"} />
         )}
       </PageBody>
       {selected ? <DetailsDrawer resource={selected} onClose={() => changeRoute({ resourceName: null })} onExecuteCommand={(resource, command) => void runCommand(resource, command)} requestConfirm={setConfirm} /> : null}
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
       <ContextMenu
-        open={graphContext !== null}
-        x={graphContext?.x ?? 0}
-        y={graphContext?.y ?? 0}
-        ariaLabel="Resource graph actions"
-        onClose={() => setGraphContext(null)}
+        open={resourceContext !== null}
+        x={resourceContext?.x ?? 0}
+        y={resourceContext?.y ?? 0}
+        ariaLabel="Resource actions"
+        onClose={() => setResourceContext(null)}
         entries={contextResource ? [
           { id: "details", label: "View details", onSelect: () => changeRoute({ resourceName: contextResource.name }) },
           ...contextResource.commands.filter((command) => command.state !== "hidden").map((command) => ({

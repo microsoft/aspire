@@ -38,6 +38,7 @@ export function DataTable<T>({
   rows,
   rowKey,
   onRowClick,
+  onRowContextMenu,
   isSelected,
   rowClassName,
   emptyMessage = "No rows.",
@@ -49,6 +50,7 @@ export function DataTable<T>({
   rows: T[];
   rowKey: (row: T) => Key;
   onRowClick?: (row: T) => void;
+  onRowContextMenu?: (row: T, x: number, y: number) => void;
   isSelected?: (row: T) => boolean;
   rowClassName?: (row: T) => string | undefined;
   emptyMessage?: string;
@@ -143,15 +145,23 @@ export function DataTable<T>({
                   key={rowKey(row)}
                   className={`${onRowClick ? "clickable" : ""} ${selected ? "selected" : ""} ${extra}`.trim()}
                   onClick={onRowClick ? () => onRowClick(row) : undefined}
-                  onKeyDown={onRowClick
+                  onContextMenu={onRowContextMenu ? (event) => {
+                    event.preventDefault();
+                    onRowContextMenu(row, event.clientX, event.clientY);
+                  } : undefined}
+                  onKeyDown={onRowClick || onRowContextMenu
                     ? (event) => {
-                        if (event.key === "Enter" || event.key === " ") {
+                        if (onRowClick && (event.key === "Enter" || event.key === " ")) {
                           event.preventDefault();
                           onRowClick(row);
+                        } else if (onRowContextMenu && (event.key === "ContextMenu" || (event.shiftKey && event.key === "F10"))) {
+                          event.preventDefault();
+                          const bounds = event.currentTarget.getBoundingClientRect();
+                          onRowContextMenu(row, bounds.left + 24, bounds.top + 24);
                         }
                       }
                     : undefined}
-                  tabIndex={onRowClick ? 0 : undefined}
+                  tabIndex={onRowClick || onRowContextMenu ? 0 : undefined}
                   aria-selected={isSelected ? selected : undefined}
                 >
                   {columns.map((column) => (

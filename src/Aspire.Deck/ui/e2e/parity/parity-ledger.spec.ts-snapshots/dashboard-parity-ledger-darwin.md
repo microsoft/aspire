@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 87
-- React partial: 33
-- React missing: 38
-- Legacy black-box scenarios pending: 77
-- React parity gaps: 71
+- React covered: 92
+- React partial: 30
+- React missing: 36
+- Legacy black-box scenarios pending: 74
+- React parity gaps: 66
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -44,7 +44,7 @@
 | RES-COLUMNS-001 | resources | `/` | resources | covered | RES-LIST-001; RES-ENDPOINT-001; RES-SOURCE-001 | Name, state, source, URLs, and start time columns render the legacy data model. |
 | RES-SOURCE-001 | resources | `/` | resources | covered | RES-SOURCE-001 | Project, executable, container, and custom resource sources are displayed. |
 | RES-URLS-001 | resources | `/` | resources | covered | RES-ENDPOINT-001 | External endpoints use display names and preserve internal/inactive endpoint rules. |
-| RES-LONG-URLS-001 | resources | `/` | PENDING | partial | APP-RESPONSIVE-001 | Large endpoint sets and very long URLs remain usable without breaking layout. |
+| RES-LONG-URLS-001 | resources | `/` | resources | covered | RES-LONG-URLS-001; APP-RESPONSIVE-001 | Large endpoint sets and very long URLs remain usable without breaking layout. |
 | RES-NESTING-001 | resources | `/` | resources | covered | RES-HIERARCHY-001 | Parent/child resources render as a hierarchical tree. |
 | RES-EXPAND-001 | resources | `/` | resources | covered | RES-HIERARCHY-001; RES-VIEW-OPTIONS-001 | Individual branches and all branches can be expanded and collapsed. |
 | RES-GRAPH-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-001 | Resources and relationships render in the graph view. |
@@ -53,16 +53,16 @@
 | RES-VIRTUALIZATION-001 | resources | `/` | PENDING | missing | - | Large resource inventories remain responsive through row virtualization. |
 | RES-DETAILS-001 | resources | `/` | resources | covered | RES-DETAILS-001; STRESS-DETAILS-001 | Selecting a resource opens overview, endpoints, properties, environment, health, and relationships. |
 | RES-DETAILS-LINK-001 | resources | `/?resource={name}` | resources | covered | RES-DETAILS-LINK-001 | A resource details selection is deep-linkable and restorable. |
-| RES-PROPERTIES-001 | resources | `/` | resources | partial | RES-DETAILS-001 | Known, custom, highlighted, null, array, and object properties render correctly. |
+| RES-PROPERTIES-001 | resources | `/` | resources | covered | RES-PROPERTIES-001; RES-DETAILS-001 | Known, custom, highlighted, null, array, and object properties render correctly. |
 | RES-SECRETS-001 | resources | `/` | resources | covered | RES-SECRETS-001; STRESS-SECRETS-001 | Sensitive properties and environment values remain masked until explicitly revealed. |
-| RES-COPY-001 | resources | `/` | PENDING | missing | - | Resource property and environment values can be copied without accidental disclosure. |
+| RES-COPY-001 | resources | `/` | resources | covered | RES-COPY-001 | Resource property and environment values can be copied without accidental disclosure. |
 | RES-HEALTH-001 | resources | `/` | resources | covered | RES-DETAILS-001 | Health summaries and individual health reports preserve status and descriptions. |
 | RES-RELATIONSHIPS-001 | resources | `/` | resources | covered | RES-DETAILS-001 | Parent, child, wait, reference, and other relationships are visible. |
 | RES-STATE-001 | resources | `/` | resources | partial | STRESS-RESOURCES-001 | Running, starting, finished, exited, not-started, and unknown states remain distinguishable. |
-| RES-NO-STATUS-001 | resources | `/` | resources | partial | STRESS-RESOURCES-001 | Resources without status data render a stable unknown state. |
+| RES-NO-STATUS-001 | resources | `/` | resources | covered | RES-NO-STATUS-001; STRESS-RESOURCES-001 | Resources without status data render a stable unknown state. |
 | RES-RESOURCE-ICON-001 | resources | `/` | PENDING | covered | RES-ICON-001; HTTP-RESOURCES-001; STRESS-RESOURCE-ICON-001 | Custom Fluent resource icon names override resource-type fallbacks. |
 | RES-RESOURCE-ICON-VARIANT-001 | resources | `/` | PENDING | covered | RES-ICON-001; DeckApiTests.GetResources_ReturnsDeckResourceContract | Regular and filled resource icon variants are preserved. |
-| RES-CONTEXT-MENU-001 | resources | `/` | PENDING | missing | - | Resource rows expose details, navigation, and commands through a context menu. |
+| RES-CONTEXT-MENU-001 | resources | `/` | resources | covered | RES-CONTEXT-MENU-001 | Resource rows expose details, navigation, and commands through a context menu. |
 | RES-SESSION-001 | resources | `/` | resources | covered | RES-SORT-001; RES-STRUCTURED-FILTER-001; RES-VIEW-OPTIONS-001; RES-HIERARCHY-001; RES-DETAILS-LINK-001 | Search, filters, sort, view, expansion, and selection survive navigation and reload. |
 | PARAM-LIST-001 | parameters | `/parameters` | parameters | covered | PARAM-LIST-001; STRESS-PARAMETERS-001 | Plain, secret, and unresolved parameters render on a dedicated page. |
 | PARAM-COUNT-001 | parameters | `/parameters` | parameters | covered | STRESS-PARAMETERS-001 | The parameter count tracks the current filter. |

@@ -18,6 +18,7 @@ export const toolkitFeatures = {
   "TK-CHECKBOX-001": "Checkboxes support checked, unchecked, mixed, and disabled states.",
   "TK-SWITCH-001": "Switches expose an accessible binary state and controlled updates.",
   "TK-SECRET-001": "Sensitive values are masked by default and can be explicitly revealed and hidden.",
+  "TK-COPY-001": "Copy controls announce results and sensitive values cannot be copied before explicit reveal.",
   "TK-TABS-001": "Tabs support pointer and keyboard selection while preserving inactive panel state.",
   "TK-ACCORDION-001": "Accordion sections expose controlled expanded state, counts, and disclosure semantics.",
   "TK-DIVIDER-001": "Horizontal and vertical dividers expose semantic orientation.",

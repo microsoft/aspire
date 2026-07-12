@@ -10,6 +10,7 @@ import {
   Badge,
   Button,
   CommandMenu,
+  CopyValueButton,
   Drawer,
   ExternalIcon,
   LinkIcon,
@@ -37,7 +38,11 @@ function PropertyRow({ prop }: { prop: ResourceProperty }) {
     <>
       <div className="kv__key">{prop.displayName ?? prop.name}</div>
       <div className={`kv__val ${prop.isHighlighted ? "highlight" : ""}`}>
-        {prop.isSensitive ? <SecretValue value={prop.value} /> : <span className="secret">{prop.value}</span>}
+        {prop.isSensitive ? (
+          <SecretValue value={prop.value} copyable copyLabel={prop.displayName ?? prop.name} />
+        ) : (
+          <span className="resource-value"><span className="secret">{prop.value}</span><CopyValueButton value={prop.value} label={prop.displayName ?? prop.name} /></span>
+        )}
       </div>
     </>
   );
@@ -51,7 +56,7 @@ function EnvRow({ env }: { env: EnvVar }) {
     <>
       <div className="kv__key">{env.name}</div>
       <div className="kv__val">
-        {value.length > 0 ? <SecretValue value={value} /> : <span className="secret">—</span>}
+        {value.length > 0 ? <SecretValue value={value} copyable copyLabel={env.name} /> : <span className="secret">—</span>}
       </div>
     </>
   );

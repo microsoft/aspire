@@ -386,7 +386,8 @@ test(`${features("TK-NOTIFICATION-001")} exercises reusable notification actions
   await expect(status).toHaveText("Notification dismissed");
 });
 
-test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET-001")} exercises input and sensitive-value controls`, async ({ page }) => {
+test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET-001", "TK-COPY-001")} exercises input and sensitive-value controls`, async ({ page }) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
   const inputs = page.getByRole("region", { name: "Inputs" });
   const environment = inputs.getByRole("combobox", { name: "Environment" });
   await expect(environment).toHaveValue("development");
@@ -417,8 +418,12 @@ test(`${features("TK-SELECT-001", "TK-CHECKBOX-001", "TK-SWITCH-001", "TK-SECRET
   await expect(pause).toBeChecked();
 
   await expect(inputs.getByText("deck-secret-123", { exact: true })).toHaveCount(0);
+  await expect(inputs.getByRole("button", { name: "Copy API key" })).toHaveCount(0);
   await inputs.getByRole("button", { name: "Reveal API key" }).click();
   await expect(inputs.getByText("deck-secret-123", { exact: true })).toBeVisible();
+  await inputs.getByRole("button", { name: "Copy API key" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("deck-secret-123");
+  await expect(inputs.getByText("API key copied", { exact: true })).toBeAttached();
   await inputs.getByRole("button", { name: "Hide API key" }).click();
   await expect(inputs.getByText("deck-secret-123", { exact: true })).toHaveCount(0);
 });

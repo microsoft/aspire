@@ -6,6 +6,7 @@ export * from "./Checkbox";
 export * from "./CommandMenu";
 export * from "./ConfirmDialog";
 export * from "./ContextMenu";
+export * from "./CopyValueButton";
 export * from "./DataTable";
 export * from "./DeckProvider";
 export * from "./Drawer";

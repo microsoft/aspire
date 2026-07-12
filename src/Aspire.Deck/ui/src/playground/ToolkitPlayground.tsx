@@ -422,6 +422,8 @@ export function ToolkitPlayground({
                 value="deck-secret-123"
                 revealLabel="Reveal API key"
                 hideLabel="Hide API key"
+                copyable
+                copyLabel="API key"
               />
             </div>
           </div>

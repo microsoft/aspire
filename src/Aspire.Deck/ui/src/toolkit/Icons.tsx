@@ -312,6 +312,7 @@ export const FilterIcon = createIcon(Filter24Regular);
 export const ZoomInIcon = createIcon(AddRegular);
 export const ZoomOutIcon = createIcon(SubtractRegular);
 export const ResetViewIcon = createIcon(ArrowResetRegular);
+export const CopyIcon = createIcon(CopyRegular);
 export const SunIcon = createIcon(WeatherSunny24Regular);
 export const MoonIcon = createIcon(WeatherMoon24Regular);
 export const BackIcon = createIcon(ArrowLeft24Regular);

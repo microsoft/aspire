@@ -400,7 +400,7 @@ test(`${features("RES-GRAPH-001", "RES-GRAPH-ZOOM-001", "RES-GRAPH-CONTEXT-001")
   await page.getByRole("dialog", { name: "frontend" }).getByRole("button", { name: "Close" }).click();
 
   await frontend.click({ button: "right" });
-  const contextMenu = page.getByRole("menu", { name: "Resource graph actions" });
+  const contextMenu = page.getByRole("menu", { name: "Resource actions" });
   await expect(contextMenu.getByRole("menuitem")).toHaveText(["View details", "Start", "Stop", "Restart", "Scale…"]);
   await expect(contextMenu.getByRole("menuitem", { name: "Start", exact: true })).toBeDisabled();
   await contextMenu.getByRole("menuitem", { name: "View details" }).click();
@@ -430,6 +430,58 @@ test(`${features("RES-DETAILS-001", "RES-SECRETS-001")} inspects resource detail
   await dialog.getByRole("button", { name: "Reveal value" }).first().click();
   await expect(dialog.getByText("Development", { exact: true })).toBeVisible();
   await expect(dialog.getByRole("button", { name: "Hide value" })).toHaveCount(1);
+});
+
+test(`${features("RES-PROPERTIES-001", "RES-COPY-001", "RES-CONTEXT-MENU-001")} copies complete resource values and opens row context actions`, async ({ page }, testInfo) => {
+  await page.context().grantPermissions(["clipboard-read", "clipboard-write"]);
+  const frontend = page.getByRole("table").getByRole("row", { name: /frontend/ });
+  await frontend.click({ button: "right" });
+  let menu = page.getByRole("menu", { name: "Resource actions" });
+  await expect(menu.getByRole("menuitem")).toHaveText(["View details", "Start", "Stop", "Restart", "Scale…"]);
+  await menu.getByRole("menuitem", { name: "View details" }).click();
+
+  const details = page.getByRole("dialog", { name: "frontend" });
+  await expect(details).toContainText('Deployment metadata{"region":"west","replicas":2}');
+  await expect(details).toContainText('Feature flags["catalog","checkout"]');
+  await expect(details).toContainText("Optional ownernull");
+  await expect(details.locator(".kv__val.highlight")).toContainText("src/TestShop/Frontend/Frontend.csproj");
+
+  await details.getByRole("button", { name: "Copy Project path" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("src/TestShop/Frontend/Frontend.csproj");
+  await expect(details.getByText("Project path copied", { exact: true })).toBeAttached();
+  await expect(details.getByRole("button", { name: "Copy ASPNETCORE_ENVIRONMENT" })).toHaveCount(0);
+  await details.getByRole("button", { name: "Reveal value" }).first().click();
+  await details.getByRole("button", { name: "Copy ASPNETCORE_ENVIRONMENT" }).click();
+  expect(await page.evaluate(() => navigator.clipboard.readText())).toBe("Development");
+  await attachScreenshot(page, testInfo, "dashboard-resource-values");
+  await details.getByRole("button", { name: "Close" }).click();
+
+  const cache = page.getByRole("table").getByRole("row", { name: /cache/ });
+  await cache.focus();
+  await cache.press("Shift+F10");
+  menu = page.getByRole("menu", { name: "Resource actions" });
+  await expect(menu).toBeVisible();
+  await menu.getByRole("menuitem", { name: "View details" }).click();
+  await expect(page.getByRole("dialog", { name: "cache" })).toBeVisible();
+});
+
+test(`${features("RES-NO-STATUS-001", "RES-LONG-URLS-001")} contains unknown resources and large endpoint sets`, async ({ page }, testInfo) => {
+  await page.goto("/?showHiddenResources=true");
+  const table = page.getByRole("table");
+  const hidden = table.getByRole("row", { name: /hiddenContainer/ });
+  await expect(hidden).toContainText("Unknown");
+  await expect(hidden.getByRole("link")).toHaveText(["admin", "diagnostics-with-a-very-long-display-name", "metrics"]);
+  await expect(hidden).not.toContainText("internal");
+  await expect(hidden).not.toContainText("inactive");
+  await expect(hidden.getByRole("link", { name: "diagnostics-with-a-very-long-display-name" })).toHaveAttribute(
+    "title",
+    "https://hidden.example.test/diagnostics/this/is/a/very/long/path/that/must/not/expand/the/resource/table",
+  );
+  const [bodyBounds, tableBounds] = await Promise.all([page.locator(".page__body").boundingBox(), page.locator(".table-wrap").boundingBox()]);
+  expect(bodyBounds).not.toBeNull();
+  expect(tableBounds).not.toBeNull();
+  expect(tableBounds!.x + tableBounds!.width).toBeLessThanOrEqual(bodyBounds!.x + bodyBounds!.width);
+  await attachScreenshot(page, testInfo, "dashboard-resource-long-urls");
 });
 
 test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001")} confirms commands and updates live resource state`, async ({ page }) => {
