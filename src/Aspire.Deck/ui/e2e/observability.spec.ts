@@ -861,6 +861,15 @@ test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", 
   );
   await page.mouse.up();
   await expect(page.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
+  await expect.poll(() => new URL(page.url()).searchParams.get("zoomStart")).not.toBeNull();
+  await expect.poll(() => new URL(page.url()).searchParams.get("zoomEnd")).not.toBeNull();
+  const zoomStart = new URL(page.url()).searchParams.get("zoomStart")!;
+  const zoomEnd = new URL(page.url()).searchParams.get("zoomEnd")!;
+
+  await page.reload();
+  await expect(page.locator(".metric-chart")).toHaveAttribute("data-zoom-start", zoomStart);
+  await expect(page.locator(".metric-chart")).toHaveAttribute("data-zoom-end", zoomEnd);
+  await expect(page.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
 
   const exemplars = page.getByRole("region", { name: "Metric exemplars" });
   await expect(exemplars).toContainText("http.method=POST");

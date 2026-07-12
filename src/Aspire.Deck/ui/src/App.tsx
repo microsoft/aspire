@@ -345,6 +345,8 @@ export function App({
                 routePaused={route.metricsPaused ?? false}
                 routeDimensions={route.metricDimensions ?? {}}
                 routeShowCount={route.metricHistogramCount ?? false}
+                routeZoomStartMs={route.metricZoomStartMs ?? null}
+                routeZoomEndMs={route.metricZoomEndMs ?? null}
                 onRouteChange={(metricRoute) => navigate({
                   page: "metrics",
                   metricResourceName: metricRoute.resourceName ?? undefined,
@@ -355,6 +357,8 @@ export function App({
                   metricsPaused: metricRoute.paused || undefined,
                   metricDimensions: Object.keys(metricRoute.dimensions).length > 0 ? metricRoute.dimensions : undefined,
                   metricHistogramCount: metricRoute.showCount || undefined,
+                  metricZoomStartMs: metricRoute.zoomStartMs ?? undefined,
+                  metricZoomEndMs: metricRoute.zoomEndMs ?? undefined,
                 })}
                 onNavigateToSpan={(traceId, spanId) => navigate({ page: "traces", traceId, spanId })}
               />

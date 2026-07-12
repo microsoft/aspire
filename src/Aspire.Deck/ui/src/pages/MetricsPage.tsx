@@ -47,6 +47,8 @@ export interface MetricRouteState {
   paused: boolean;
   dimensions: Record<string, Array<string | null>>;
   showCount: boolean;
+  zoomStartMs: number | null;
+  zoomEndMs: number | null;
 }
 
 function cssVar(name: string, fallback: string): string {
@@ -90,6 +92,8 @@ export function MetricsPage({
   routePaused,
   routeDimensions,
   routeShowCount,
+  routeZoomStartMs,
+  routeZoomEndMs,
   onRouteChange,
   onNavigateToSpan,
 }: {
@@ -101,6 +105,8 @@ export function MetricsPage({
   routePaused: boolean;
   routeDimensions: Record<string, Array<string | null>>;
   routeShowCount: boolean;
+  routeZoomStartMs: number | null;
+  routeZoomEndMs: number | null;
   onRouteChange: (state: MetricRouteState) => void;
   onNavigateToSpan: (traceId: string, spanId: string) => void;
 }) {
@@ -154,6 +160,8 @@ export function MetricsPage({
       paused: routePaused,
       dimensions: routeDimensions,
       showCount: routeShowCount,
+      zoomStartMs: routeZoomStartMs,
+      zoomEndMs: routeZoomEndMs,
       ...changes,
     });
   };
@@ -193,7 +201,7 @@ export function MetricsPage({
     try {
       await clearMetrics(resourceName);
       setSeriesState(null);
-      updateRoute({ resourceName: null, meterName: null, metricName: null, paused: false, dimensions: {}, showCount: false });
+      updateRoute({ resourceName: null, meterName: null, metricName: null, paused: false, dimensions: {}, showCount: false, zoomStartMs: null, zoomEndMs: null });
       setClearStatus({
         message: resourceName === null ? "Cleared all metrics." : `Cleared metrics for ${resourceName}.`,
         error: false,
@@ -213,7 +221,9 @@ export function MetricsPage({
       unit={series.unit}
       kind={series.kind}
       height={300}
-      onUserZoom={() => updateRoute({ paused: true })}
+      zoomStartMs={routeZoomStartMs}
+      zoomEndMs={routeZoomEndMs}
+      onUserZoom={(zoomStartMs, zoomEndMs) => updateRoute({ paused: true, zoomStartMs, zoomEndMs })}
     />
   ) : (
     <div className="center-fill cell-muted">
@@ -243,7 +253,7 @@ export function MetricsPage({
           value={selectedResource ?? ""}
           placeholder="Select a resource"
           disabled={resourceOptions.length === 0}
-          onValueChange={(resourceName) => updateRoute({ resourceName, meterName: null, metricName: null, dimensions: {}, showCount: false })}
+          onValueChange={(resourceName) => updateRoute({ resourceName, meterName: null, metricName: null, dimensions: {}, showCount: false, zoomStartMs: null, zoomEndMs: null })}
         />
         <div className="seg" role="group" aria-label="Time range">
           {TIME_RANGES.map((range) => (
@@ -253,7 +263,7 @@ export function MetricsPage({
               className={`seg__btn ${range.seconds === selectedWindowSeconds ? "active" : ""}`}
               aria-pressed={range.seconds === selectedWindowSeconds}
               title={range.title}
-              onClick={() => updateRoute({ windowSeconds: range.seconds })}
+              onClick={() => updateRoute({ windowSeconds: range.seconds, zoomStartMs: null, zoomEndMs: null })}
             >
               {range.label}
             </button>
@@ -264,7 +274,7 @@ export function MetricsPage({
           label="Pause incoming data"
           checked={routePaused}
           disabled={active === null}
-          onCheckedChange={(paused) => updateRoute({ paused })}
+          onCheckedChange={(paused) => updateRoute({ paused, ...(!paused ? { zoomStartMs: null, zoomEndMs: null } : {}) })}
         />
         <CommandMenu
           ariaLabel="Clear metrics"
@@ -299,7 +309,7 @@ export function MetricsPage({
               <MetricTreeSelector
                 metrics={metrics}
                 active={active}
-                onSelect={(metric) => updateRoute({ meterName: metric.meterName ?? null, metricName: metric.name, dimensions: {}, showCount: false })}
+                onSelect={(metric) => updateRoute({ meterName: metric.meterName ?? null, metricName: metric.name, dimensions: {}, showCount: false, zoomStartMs: null, zoomEndMs: null })}
               />
             </div>
 
@@ -325,14 +335,14 @@ export function MetricsPage({
                   <MetricDimensionFilters
                     filters={series?.dimensionFilters ?? []}
                     selected={routeDimensions}
-                    onChange={(dimensions) => updateRoute({ dimensions })}
+                    onChange={(dimensions) => updateRoute({ dimensions, zoomStartMs: null, zoomEndMs: null })}
                   />
                   {active.kind === "histogram" ? (
                     <div className="metric-histogram-options">
                       <Checkbox
                         checked={routeShowCount}
                         label="Show count"
-                        onCheckedChange={(showCount) => updateRoute({ showCount })}
+                        onCheckedChange={(showCount) => updateRoute({ showCount, zoomStartMs: null, zoomEndMs: null })}
                       />
                     </div>
                   ) : null}

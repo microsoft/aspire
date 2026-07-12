@@ -29,6 +29,8 @@ export interface DashboardRoute {
   metricsPaused?: boolean;
   metricDimensions?: Record<string, Array<string | null>>;
   metricHistogramCount?: boolean;
+  metricZoomStartMs?: number;
+  metricZoomEndMs?: number;
   resourceName?: string;
   resourceQuery?: string;
   resourceHiddenTypes?: string[];
@@ -144,6 +146,10 @@ export function readDashboardRoute(
       ? durationMinutes * 60
       : rangeSeconds;
     const view = search.get("view");
+    const zoomStartValue = search.get("zoomStart");
+    const zoomEndValue = search.get("zoomEnd");
+    const zoomStart = zoomStartValue === null ? null : Number(zoomStartValue);
+    const zoomEnd = zoomEndValue === null ? null : Number(zoomEndValue);
     const dimensions: Record<string, Array<string | null>> = {};
     for (const encoded of search.getAll("dimension")) {
       try {
@@ -169,6 +175,8 @@ export function readDashboardRoute(
       metricsPaused: search.get("paused") === "true" || undefined,
       metricDimensions: Object.keys(dimensions).length > 0 ? dimensions : undefined,
       metricHistogramCount: search.get("histogram") === "count" || undefined,
+      metricZoomStartMs: zoomStart !== null && Number.isFinite(zoomStart) ? zoomStart : undefined,
+      metricZoomEndMs: zoomEnd !== null && Number.isFinite(zoomEnd) ? zoomEnd : undefined,
     };
   }
   if (path === "/canvases" || path.startsWith("/canvases/")) {
@@ -227,6 +235,8 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
   url.searchParams.delete("view");
   url.searchParams.delete("dimension");
   url.searchParams.delete("histogram");
+  url.searchParams.delete("zoomStart");
+  url.searchParams.delete("zoomEnd");
   url.searchParams.delete("hiddenType");
   url.searchParams.delete("hiddenState");
   url.searchParams.delete("hiddenHealth");
@@ -297,6 +307,10 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     }
     if (route.metricHistogramCount) {
       url.searchParams.set("histogram", "count");
+    }
+    if (route.metricZoomStartMs !== undefined && route.metricZoomEndMs !== undefined) {
+      url.searchParams.set("zoomStart", Math.round(route.metricZoomStartMs).toString());
+      url.searchParams.set("zoomEnd", Math.round(route.metricZoomEndMs).toString());
     }
   }
   if (route.page === "resources") {

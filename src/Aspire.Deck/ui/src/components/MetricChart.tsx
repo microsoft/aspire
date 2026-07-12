@@ -31,13 +31,17 @@ export function MetricChart({
   kind,
   height = 300,
   onUserZoom,
+  zoomStartMs,
+  zoomEndMs,
 }: {
   timestampsMs: number[];
   lines: ChartLine[];
   unit: string | null;
   kind: MetricKind;
   height?: number;
-  onUserZoom?: () => void;
+  onUserZoom?: (startMs: number, endMs: number) => void;
+  zoomStartMs?: number | null;
+  zoomEndMs?: number | null;
 }) {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const plotRef = useRef<uPlot | null>(null);
@@ -125,12 +129,14 @@ export function MetricChart({
             const dataMin = xData[0]!;
             const dataMax = xData[xData.length - 1]!;
             const scale = self.scales.x;
+            const scaleMin = scale?.min;
+            const scaleMax = scale?.max;
             const zoomed =
-              scale?.min !== undefined &&
-              scale?.max !== undefined &&
-              (scale.min > dataMin + 0.5 || scale.max < dataMax - 0.5);
-            if (zoomed) {
-              onUserZoomRef.current?.();
+              scaleMin !== undefined &&
+              scaleMax !== undefined &&
+              (scaleMin > dataMin + 0.5 || scaleMax < dataMax - 0.5);
+            if (zoomed && scaleMin !== undefined && scaleMax !== undefined) {
+              onUserZoomRef.current?.(scaleMin * 1000, scaleMax * 1000);
             }
           },
         ],
@@ -164,8 +170,19 @@ export function MetricChart({
     const data: uPlot.AlignedData = [xs, ...lines.map((l) => l.values)];
     applyingRef.current = true;
     plot.setData(data);
+    if (zoomStartMs !== null && zoomStartMs !== undefined && zoomEndMs !== null && zoomEndMs !== undefined) {
+      plot.setScale("x", { min: zoomStartMs / 1000, max: zoomEndMs / 1000 });
+    }
     applyingRef.current = false;
-  }, [timestampsMs, lines]);
+  }, [timestampsMs, lines, zoomEndMs, zoomStartMs]);
 
-  return <div ref={containerRef} className="metric-chart" style={{ height }} />;
+  return (
+    <div
+      ref={containerRef}
+      className="metric-chart"
+      data-zoom-start={zoomStartMs ?? undefined}
+      data-zoom-end={zoomEndMs ?? undefined}
+      style={{ height }}
+    />
+  );
 }
