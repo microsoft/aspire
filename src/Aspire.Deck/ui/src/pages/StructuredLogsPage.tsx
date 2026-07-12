@@ -65,6 +65,10 @@ function logKey(log: LogRecordSummary): string {
   return `${log.resourceName ?? ""}-${log.timeUnixNano}-${log.spanId ?? ""}-${log.severityNumber}-${log.body}`;
 }
 
+function logRouteId(log: LogRecordSummary): string {
+  return log.spanId ?? `${log.timeUnixNano}:${log.resourceName ?? ""}`;
+}
+
 export function StructuredLogsPage({
   routeSpanId,
   routeResourceName,
@@ -72,8 +76,10 @@ export function StructuredLogsPage({
   routeSeverity,
   routePaused,
   routeFilters,
+  routeLogId,
   onClearRoute,
   onFilterRouteChange,
+  onSelectedLogChange,
   onNavigateToTrace,
 }: {
   routeSpanId: string | null;
@@ -82,8 +88,10 @@ export function StructuredLogsPage({
   routeSeverity: string;
   routePaused: boolean;
   routeFilters: string | null;
+  routeLogId: string | null;
   onClearRoute: () => void;
   onFilterRouteChange: (state: LogFilterRouteState) => void;
+  onSelectedLogChange: (logId: string | null) => void;
   onNavigateToTrace: (traceId: string, spanId: string | null) => void;
 }) {
   const telemetry = useTelemetry();
@@ -117,6 +125,20 @@ export function StructuredLogsPage({
     if (!routePaused) setPausedSnapshot(null);
     else if (pausedSnapshot === null && telemetry !== null) setPausedSnapshot(telemetry);
   }, [pausedSnapshot, routePaused, telemetry]);
+
+  useEffect(() => {
+    if (routeLogId === null) {
+      setSelectedLog(null);
+      return;
+    }
+    const restored = logs.find((log) => logRouteId(log) === routeLogId);
+    if (restored) setSelectedLog(restored);
+  }, [logs, routeLogId]);
+
+  const selectLog = (log: LogRecordSummary | null): void => {
+    setSelectedLog(log);
+    onSelectedLogChange(log === null ? null : logRouteId(log));
+  };
 
   const updateRoute = (changes: Partial<LogFilterRouteState>): void => onFilterRouteChange({
     resourceName: selectedResource === "all" ? null : selectedResource,
@@ -212,7 +234,7 @@ export function StructuredLogsPage({
           onKeyDown={(event) => event.stopPropagation()}
         >
           <StructuredLogActions
-            onViewDetails={() => setSelectedLog(log)}
+            onViewDetails={() => selectLog(log)}
             onViewMessage={() => setTextViewer({
               title: "Structured log message",
               value: log.body,
@@ -332,7 +354,7 @@ export function StructuredLogsPage({
           columns={columns}
           rows={filtered}
           rowKey={logKey}
-          onRowClick={setSelectedLog}
+          onRowClick={selectLog}
           isSelected={(log) => selectedLog !== null && logKey(log) === logKey(selectedLog)}
           emptyMessage={telemetry === null
             ? "Waiting for telemetry…"
@@ -352,7 +374,7 @@ export function StructuredLogsPage({
       {selectedLog ? (
         <StructuredLogDetailsDrawer
           log={selectedLog}
-          onClose={() => setSelectedLog(null)}
+          onClose={() => selectLog(null)}
           onViewMessage={() => setTextViewer({
             title: "Structured log message",
             value: selectedLog.body,

@@ -15,7 +15,7 @@ export const observabilityFeatures = {
   "LOG-RESOURCE-001": "Structured logs can be constrained to one emitting resource or all resources.",
   "LOG-STRUCTURED-FILTER-001": "Structured log attribute filters can be added, edited, enabled, disabled, and removed.",
   "LOG-FILTER-COUNT-001": "The structured log filter menu reports the enabled filter count.",
-  "LOG-ROUTE-001": "Structured log resource, text, severity, pause, and structured filters restore from a stable URL.",
+  "LOG-ROUTE-001": "Structured log resource, text, severity, pause, filters, and selected entry restore from a stable URL.",
   "LOG-PAUSE-001": "Structured logs can freeze incoming data and catch up when resumed.",
   "LOG-DETAILS-001": "Selecting a structured log opens its event, scope, exception, resource, and correlation details.",
   "LOG-ACTIONS-001": "Structured log actions open details plus copyable message and JSON visualizers.",

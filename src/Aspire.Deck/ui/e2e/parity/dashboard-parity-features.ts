@@ -174,7 +174,7 @@ const featureDefinitions = {
     ["LOG-TRACE-LINK-001", "/structuredlogs", "Trace IDs deep-link to the matching trace and span.", null, "covered", "LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001"],
     ["LOG-GENAI-001", "/structuredlogs", "GenAI log records open the dedicated GenAI visualizer.", null, "missing"],
     ["LOG-EXPLAIN-001", "/structuredlogs", "Explain errors summarizes current error logs through the assistant.", null, "missing"],
-    ["LOG-ROUTE-001", "/structuredlogs/resource/{name}", "Resource selection, filters, and selected log are deep-linkable and restorable.", null, "partial", "LOG-ROUTE-001 (resource, text, severity, pause, and filters; selected log remains)"],
+    ["LOG-ROUTE-001", "/structuredlogs/resource/{name}", "Resource selection, filters, and selected log are deep-linkable and restorable.", null, "covered", "LOG-ROUTE-001"],
   ],
   traces: [
     ["TRACE-LIST-001", "/traces", "Traces render timestamp, name, span count, duration, error status, and actions.", "traces", "partial", "TRACE-LIST-001; HTTP-TRACES-001; STRESS-TRACES-001"],

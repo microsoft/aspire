@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 119
-- React partial: 20
+- React covered: 120
+- React partial: 19
 - React missing: 19
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 39
+- React parity gaps: 38
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -129,7 +129,7 @@
 | LOG-TRACE-LINK-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001 | Trace IDs deep-link to the matching trace and span. |
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | GenAI log records open the dedicated GenAI visualizer. |
 | LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Explain errors summarizes current error logs through the assistant. |
-| LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | PENDING | partial | LOG-ROUTE-001 (resource, text, severity, pause, and filters; selected log remains) | Resource selection, filters, and selected log are deep-linkable and restorable. |
+| LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | PENDING | covered | LOG-ROUTE-001 | Resource selection, filters, and selected log are deep-linkable and restorable. |
 | TRACE-LIST-001 | traces | `/traces` | traces | partial | TRACE-LIST-001; HTTP-TRACES-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
 | TRACE-LIVE-001 | traces | `/traces` | traces | covered | TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001 | Incoming spans update trace groups and totals without reloading the page. |
 | TRACE-RESOURCE-001 | traces | `/traces` | traces | covered | TRACE-RESOURCE-001 | Traces filter through a grouped resource selector. |

@@ -20,6 +20,7 @@ export interface DashboardRoute {
   logSeverity?: string;
   logPaused?: boolean;
   logFilters?: string;
+  logId?: string;
   metricResourceName?: string;
   metricMeterName?: string;
   metricName?: string;
@@ -106,6 +107,7 @@ export function readDashboardRoute(
       logSeverity: search.get("severity") || undefined,
       logPaused: search.get("paused") === "true" || undefined,
       logFilters: search.get("filters") || undefined,
+      logId: search.get("log") || undefined,
     };
   }
   if (path === "/traces" || path.startsWith("/traces/")) {
@@ -235,6 +237,7 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
   url.searchParams.delete("sortDirection");
   url.searchParams.delete("severity");
   url.searchParams.delete("filters");
+  url.searchParams.delete("log");
   if (route.spanId) {
     url.searchParams.set("span", route.spanId);
   }
@@ -277,6 +280,7 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     if (route.logSeverity && route.logSeverity !== "All") url.searchParams.set("severity", route.logSeverity);
     if (route.logPaused) url.searchParams.set("paused", "true");
     if (route.logFilters) url.searchParams.set("filters", route.logFilters);
+    if (route.logId) url.searchParams.set("log", route.logId);
   }
   if (route.page === "metrics") {
     if (route.metricWindowSeconds && route.metricWindowSeconds !== 300) {

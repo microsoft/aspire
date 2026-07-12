@@ -395,6 +395,15 @@ test(`${features("LOG-STRUCTURED-FILTER-001", "LOG-FILTER-COUNT-001", "LOG-ROUTE
   await expect(logs.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
   await expect(logs.getByRole("button", { name: "Filters, 1 enabled" })).toBeVisible();
 
+  await logs.getByRole("table").locator("tbody tr").first().click();
+  const selectedLog = page.getByRole("dialog", { name: "Structured log entry details" });
+  await expect(selectedLog).toBeVisible();
+  await expect(page).toHaveURL(/\/structuredlogs\/resource\/frontend\?.*log=/);
+  await page.reload();
+  await expect(page.getByRole("dialog", { name: "Structured log entry details" })).toBeVisible();
+  await page.getByRole("dialog", { name: "Structured log entry details" }).getByRole("button", { name: "Close details" }).click();
+  await expect(page).not.toHaveURL(/(?:\?|&)log=/);
+
   await logs.getByRole("button", { name: "Filters, 1 enabled" }).click();
   await page.getByRole("menuitem", { name: /http\.request\.method equals POST/ }).click();
   const editDialog = page.getByRole("dialog", { name: "Edit filter" });

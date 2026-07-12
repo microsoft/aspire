@@ -273,6 +273,7 @@ export function App({
                 routeSeverity={route.logSeverity ?? "All"}
                 routePaused={route.logPaused ?? false}
                 routeFilters={route.logFilters ?? null}
+                routeLogId={route.logId ?? null}
                 onClearRoute={() => navigate({ page: "logs" })}
                 onFilterRouteChange={(logState) => navigate({
                   page: "logs",
@@ -281,7 +282,9 @@ export function App({
                   logSeverity: logState.severity === "All" ? undefined : logState.severity,
                   logPaused: logState.paused || undefined,
                   logFilters: serializeTelemetryFilters(logState.filters),
+                  logId: route.logId,
                 })}
+                onSelectedLogChange={(logId) => navigate({ ...route, page: "logs", logId: logId ?? undefined })}
                 onNavigateToTrace={(traceId, spanId) => navigate({
                   page: "traces",
                   traceId,
