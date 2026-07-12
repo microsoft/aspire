@@ -184,6 +184,44 @@ ASPIRE_LEGACY_DASHBOARD_URL='https://Stress.dev.localhost:49985/login?t=<token>'
 Pass the login URL printed by the AppHost for a clean, isolated browser run. A bare dashboard
 origin also works when the browser context is authenticated by the surrounding environment.
 
+The Terminals AppHost covers the legacy unsecured-endpoint warning and live terminal controls:
+
+```bash
+ASPIRE_LEGACY_TERMINAL_DASHBOARD_URL='<dashboard-login-url>' \
+  npm exec -- playwright test --config=playwright.legacy-terminal.config.ts
+```
+
+The configured-user scenario uses `playground/Terminals/Terminals.OpenIdAuthority` as a local,
+deterministic OpenID Connect authority. Run that authority, then start a standalone legacy
+dashboard with `Dashboard__Frontend__AuthMode=OpenIdConnect`. Point the dashboard at the resource
+service of a running AppHost so the profile remains interactable during the test:
+
+```bash
+ASPNETCORE_URLS=http://127.0.0.1:18080 \
+  artifacts/bin/Terminals.OpenIdAuthority/Debug/net8.0/Terminals.OpenIdAuthority
+
+ASPNETCORE_ENVIRONMENT=Development \
+ASPIRE_ALLOW_UNSECURED_TRANSPORT=true \
+ASPNETCORE_URLS=http://127.0.0.1:18081 \
+Dashboard__Frontend__AuthMode=OpenIdConnect \
+Dashboard__Otlp__AuthMode=Unsecured \
+Dashboard__ResourceServiceClient__AuthMode=ApiKey \
+Dashboard__ResourceServiceClient__ApiKey='<resource-service-api-key>' \
+ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL='<resource-service-url>' \
+Authentication__Schemes__OpenIdConnect__Authority=http://127.0.0.1:18080 \
+Authentication__Schemes__OpenIdConnect__ClientId=terminals-dashboard \
+Authentication__Schemes__OpenIdConnect__ClientSecret=terminals-dashboard-secret \
+Authentication__Schemes__OpenIdConnect__RequireHttpsMetadata=false \
+  artifacts/bin/Aspire.Dashboard/Debug/net8.0/Aspire.Dashboard
+
+ASPIRE_LEGACY_AUTH_DASHBOARD_URL=http://127.0.0.1:18081 \
+  npm exec -- playwright test --config=playwright.legacy-auth.config.ts
+```
+
+`aspire describe aspire-dashboard --format json --include-hidden` reports the running dashboard's
+resource-service URL and client authentication settings. Treat the API key as a local secret and
+do not commit it.
+
 This run records screenshots, video, and traces for the legacy shell, resource list/details/graph,
 parameters, command argument inputs, console, structured logs, traces, and metrics. Features that
 still require a purpose-built fixture have `legacyScenario: null` in the ledger and are reported as
