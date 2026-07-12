@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
@@ -108,7 +109,8 @@ public static class DashboardEndpointsBuilder
                 ResourceServiceUrl: null,
                 OtlpGrpcUrl: null,
                 OtlpHttpUrl: null,
-                Version: VersionHelpers.DashboardDisplayVersion ?? string.Empty);
+                Version: VersionHelpers.DashboardDisplayVersion ?? string.Empty,
+                RuntimeVersion: RuntimeInformation.FrameworkDescription);
 
             return Results.Json(config, DeckApiJsonSerializerContext.Default.DeckConfig);
         });

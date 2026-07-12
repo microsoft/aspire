@@ -7,6 +7,7 @@ export interface DeckConfig {
   otlpGrpcUrl: string | null;
   otlpHttpUrl: string | null;
   version: string;
+  runtimeVersion?: string;
 }
 
 export type ConnectionTarget = "resourceService" | "otlpGrpc" | "otlpHttp";

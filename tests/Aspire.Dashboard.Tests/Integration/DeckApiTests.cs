@@ -55,7 +55,8 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             ["resourceServiceUrl"] = null,
             ["otlpGrpcUrl"] = null,
             ["otlpHttpUrl"] = null,
-            ["version"] = VersionHelpers.DashboardDisplayVersion ?? string.Empty
+            ["version"] = VersionHelpers.DashboardDisplayVersion ?? string.Empty,
+            ["runtimeVersion"] = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
         };
 
         Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");

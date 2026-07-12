@@ -45,6 +45,7 @@ const config: DeckConfig = {
   otlpGrpcUrl: "https://localhost:18889",
   otlpHttpUrl: "https://localhost:18890",
   version: "9.0.0-dev (mock)",
+  runtimeVersion: "Browser mock runtime",
 };
 
 function makeResources(): Resource[] {

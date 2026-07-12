@@ -81,6 +81,7 @@ export interface DeckConfig {
   otlpGrpcUrl: string | null;
   otlpHttpUrl: string | null;
   version: string;
+  runtimeVersion?: string; // ASP.NET runtime description when hosted by the dashboard
 }
 
 export type ConnectionTarget = "resourceService" | "otlpGrpc" | "otlpHttp";

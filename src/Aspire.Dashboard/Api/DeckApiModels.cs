@@ -8,7 +8,8 @@ internal sealed record DeckConfig(
     string? ResourceServiceUrl,
     string? OtlpGrpcUrl,
     string? OtlpHttpUrl,
-    string Version);
+    string Version,
+    string RuntimeVersion);
 
 internal sealed record DeckResource(
     string Name,
