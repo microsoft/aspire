@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 17
+- Legacy black-box scenarios pending: 15
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -49,7 +49,7 @@
 | RES-GRAPH-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-001 | Resources and relationships render in the graph view. |
 | RES-GRAPH-ZOOM-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-ZOOM-001 | Graph zoom in, zoom out, and reset controls work. |
 | RES-GRAPH-CONTEXT-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-CONTEXT-001 | Graph nodes expose resource actions and details context menus. |
-| RES-VIRTUALIZATION-001 | resources | `/` | PENDING | covered | HTTP-RESOURCE-VIRTUALIZATION-001 | Large resource inventories remain responsive through row virtualization. |
+| RES-VIRTUALIZATION-001 | resources | `/` | resource-virtualization | covered | HTTP-RESOURCE-VIRTUALIZATION-001 | Large resource inventories remain responsive through row virtualization. |
 | RES-DETAILS-001 | resources | `/` | resources | covered | RES-DETAILS-001; STRESS-DETAILS-001 | Selecting a resource opens overview, endpoints, properties, environment, health, and relationships. |
 | RES-DETAILS-LINK-001 | resources | `/?resource={name}` | resources | covered | RES-DETAILS-LINK-001 | A resource details selection is deep-linkable and restorable. |
 | RES-PROPERTIES-001 | resources | `/` | resources | covered | RES-PROPERTIES-001; RES-DETAILS-001 | Known, custom, highlighted, null, array, and object properties render correctly. |
@@ -139,7 +139,7 @@
 | TRACE-ERROR-001 | traces | `/traces` | trace-details | covered | TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001 | Failed traces and spans expose status, tags, and error styling. |
 | TRACE-PAUSE-001 | traces | `/traces` | traces | covered | TRACE-PAUSE-001 | Incoming traces can be paused and resumed. |
 | TRACE-CLEAR-001 | traces | `/traces` | traces | covered | TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001 | Trace data can be cleared for the selected resource or all resources. |
-| TRACE-VIRTUALIZATION-001 | traces | `/traces` | PENDING | covered | HTTP-TRACE-VIRTUALIZATION-001 | Large trace inventories remain responsive through virtualization. |
+| TRACE-VIRTUALIZATION-001 | traces | `/traces` | trace-virtualization | covered | HTTP-TRACE-VIRTUALIZATION-001 | Large trace inventories remain responsive through virtualization. |
 | TRACE-ACTIONS-001 | traces | `/traces` | traces | covered | TRACE-ACTIONS-001 | Per-trace actions expose detail, copy, and related telemetry navigation. |
 | TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |
 | TRACE-TREE-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-TREE-001; HTTP-TRACES-001 | The trace detail preserves parent/child span hierarchy and chronological placement. |

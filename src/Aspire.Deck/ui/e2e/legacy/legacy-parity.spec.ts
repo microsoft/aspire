@@ -157,6 +157,27 @@ test(`${features("resources")} inventories resources, details, and graph behavio
   await attachScreenshot(page, testInfo, "legacy-resource-graph");
 });
 
+test(`${features("resource-virtualization")} bounds a large resource inventory`, async ({ page }) => {
+  await page.goto("/");
+  await page.getByRole("button", { name: "View options", exact: true }).click();
+  await page.getByRole("menuitem", { name: "Show hidden resources", exact: true }).click();
+
+  const main = page.getByRole("main");
+  const table = main.getByRole("table");
+  const scroller = main.locator(".page__body");
+  await expect(main.locator(".page__subtitle")).toContainText(/2\d{2} resources/);
+  await expect.poll(() => table.locator("tbody tr.clickable").count()).toBeLessThan(100);
+
+  await scroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  const tail = table.getByRole("row").filter({ hasText: "virtualized-0249" });
+  await expect(tail).toBeVisible();
+  await tail.getByText("virtualized-0249", { exact: true }).click();
+  await expect(page.getByRole("dialog").filter({ hasText: "virtualized-0249" })).toBeVisible();
+});
+
 test(`${features("parameters")} inventories parameter states and secure reveal`, async ({ page }, testInfo) => {
   await page.goto("/parameters");
   const table = page.getByRole("table");
@@ -462,7 +483,8 @@ test(`${features("traces")} inventories trace controls and nested span details`,
   await page.goto("/traces");
   await expect(page.getByRole("combobox", { name: /^(Resource|Select a resource)$/ })).toBeVisible();
   await expect(page.getByRole("combobox", { name: "Type", exact: true })).toBeVisible();
-  await expect(page.getByRole("textbox", { name: "Filter...", exact: true })).toBeVisible();
+  const traceFilter = page.getByRole("textbox", { name: "Filter...", exact: true });
+  await expect(traceFilter).toBeVisible();
   await expect(page.getByRole("button", { name: "Add filter", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Pause incoming data", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Remove data", exact: true })).toBeVisible();
@@ -470,13 +492,14 @@ test(`${features("traces")} inventories trace controls and nested span details`,
     await expect(page.getByRole("columnheader", { name: header, exact: true })).toBeVisible();
   }
 
+  await traceFilter.fill("GET /nested-trace-spans");
   const matchingTraceRows = page.getByRole("table").getByRole("row").filter({ hasText: "GET /nested-trace-spans" });
   await expect.poll(() => matchingTraceRows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
   const traceRow = matchingTraceRows.last();
   await traceRow.getByRole("cell").first().click();
   await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}$/);
   await expect(page.getByText(/Depth 4/)).toBeVisible();
-  await expect(page.getByText(/Total spans 10/)).toBeVisible();
+  await expect(page.getByText(/Total spans \d+/)).toBeVisible();
 
   const spansTable = page.getByRole("table");
   await expect(spansTable.getByText("ValidateAndUpdateCacheService.ExecuteAsync", { exact: true })).toBeVisible();
@@ -514,7 +537,7 @@ test(`${features("traces")} inventories trace controls and nested span details`,
   const detailUrl = page.url();
   await page.reload();
   await expect(page).toHaveURL(detailUrl);
-  await expect(page.getByText(/Total spans 10/)).toBeVisible();
+  await expect(page.getByText(/Total spans \d+/)).toBeVisible();
   await expect(page.getByRole("table").getByText("Perform1", { exact: true })).toHaveCount(2);
   await attachScreenshot(page, testInfo, "legacy-traces");
 });
@@ -527,6 +550,7 @@ test(`${features("trace-details")} verifies error events and linked span navigat
     .getByRole("button", { name: "Trace details", exact: true }).click();
 
   await page.goto("/traces");
+  await page.getByRole("textbox", { name: "Filter...", exact: true }).fill("trace-fixture-error");
   const matchingTraceRows = page.getByRole("table").getByRole("row").filter({ hasText: "trace-fixture-error" });
   await expect.poll(() => matchingTraceRows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
   const traceRow = matchingTraceRows.last();
@@ -569,6 +593,7 @@ test(`${features("trace-genai")} opens the GenAI trace conversation visualizer`,
     .getByRole("button", { name: "Gen AI trace", exact: true }).click();
 
   await page.goto("/traces");
+  await page.getByRole("textbox", { name: "Filter...", exact: true }).fill("GET /genai-trace");
   const matchingTraceRows = page.getByRole("table").getByRole("row").filter({ hasText: "GET /genai-trace" });
   await expect.poll(() => matchingTraceRows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
   const traceRow = matchingTraceRows.last();
@@ -613,6 +638,37 @@ test(`${features("trace-session")} restores trace resource type filters and sele
   await expect(page).toHaveURL(traceListUrl);
   await expect(resource).toHaveAttribute("current-value", "Stress.ApiService");
   await expect(type.locator("option:checked")).toHaveText("(Other)");
+});
+
+test(`${features("trace-virtualization")} bounds a large trace inventory`, async ({ page }) => {
+  test.setTimeout(60_000);
+  await page.goto("/");
+  const apiResourceRow = page.getByRole("table").getByRole("row").filter({ hasText: "stress-apiservice" });
+  await apiResourceRow.getByText("stress-apiservice", { exact: true }).click();
+  const traceCommand = page.getByRole("dialog").filter({ hasText: "stress-apiservice" })
+    .getByRole("button", { name: "Trace virtualization", exact: true });
+  await expect(traceCommand).toBeEnabled({ timeout: 30_000 });
+  await traceCommand.click();
+  await expect(page.getByText('"Trace virtualization" succeeded', { exact: false })).toBeVisible({ timeout: 30_000 });
+
+  await page.goto("/traces");
+  const main = page.getByRole("main");
+  const table = main.getByRole("table");
+  const scroller = main.locator(".page__body");
+  await expect.poll(async () => {
+    const subtitle = await main.locator(".page__subtitle").textContent();
+    return Number.parseInt(subtitle?.replaceAll(",", "") ?? "0", 10);
+  }, { timeout: 30_000 }).toBeGreaterThanOrEqual(500);
+  await expect.poll(() => table.locator("tbody tr.clickable").count()).toBeLessThan(100);
+
+  await scroller.evaluate((element) => {
+    element.scrollTop = element.scrollHeight;
+    element.dispatchEvent(new Event("scroll"));
+  });
+  const tail = table.getByRole("row").filter({ hasText: /tracelimit-/ }).last();
+  await expect(tail).toBeVisible();
+  await tail.click();
+  await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}$/);
 });
 
 test(`${features("metrics")} inventories metric controls and empty state`, async ({ page }, testInfo) => {

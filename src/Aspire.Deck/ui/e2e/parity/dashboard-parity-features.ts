@@ -13,6 +13,7 @@ export type ReactParityStatus = "covered" | "partial" | "missing";
 export type LegacyScenario =
   | "shell"
   | "resources"
+  | "resource-virtualization"
   | "parameters"
   | "commands"
   | "console"
@@ -24,6 +25,7 @@ export type LegacyScenario =
   | "trace-details"
   | "trace-genai"
   | "trace-session"
+  | "trace-virtualization"
   | "metrics";
 
 export interface DashboardParityFeature {
@@ -92,7 +94,7 @@ const featureDefinitions = {
     ["RES-GRAPH-001", "/?view=Graph", "Resources and relationships render in the graph view.", "resources", "covered", "RES-GRAPH-001"],
     ["RES-GRAPH-ZOOM-001", "/?view=Graph", "Graph zoom in, zoom out, and reset controls work.", "resources", "covered", "RES-GRAPH-ZOOM-001"],
     ["RES-GRAPH-CONTEXT-001", "/?view=Graph", "Graph nodes expose resource actions and details context menus.", "resources", "covered", "RES-GRAPH-CONTEXT-001"],
-    ["RES-VIRTUALIZATION-001", "/", "Large resource inventories remain responsive through row virtualization.", null, "covered", "HTTP-RESOURCE-VIRTUALIZATION-001"],
+    ["RES-VIRTUALIZATION-001", "/", "Large resource inventories remain responsive through row virtualization.", "resource-virtualization", "covered", "HTTP-RESOURCE-VIRTUALIZATION-001"],
     ["RES-DETAILS-001", "/", "Selecting a resource opens overview, endpoints, properties, environment, health, and relationships.", "resources", "covered", "RES-DETAILS-001; STRESS-DETAILS-001"],
     ["RES-DETAILS-LINK-001", "/?resource={name}", "A resource details selection is deep-linkable and restorable.", "resources", "covered", "RES-DETAILS-LINK-001"],
     ["RES-PROPERTIES-001", "/", "Known, custom, highlighted, null, array, and object properties render correctly.", "resources", "covered", "RES-PROPERTIES-001; RES-DETAILS-001"],
@@ -192,7 +194,7 @@ const featureDefinitions = {
     ["TRACE-ERROR-001", "/traces", "Failed traces and spans expose status, tags, and error styling.", "trace-details", "covered", "TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001"],
     ["TRACE-PAUSE-001", "/traces", "Incoming traces can be paused and resumed.", "traces", "covered", "TRACE-PAUSE-001"],
     ["TRACE-CLEAR-001", "/traces", "Trace data can be cleared for the selected resource or all resources.", "traces", "covered", "TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001"],
-    ["TRACE-VIRTUALIZATION-001", "/traces", "Large trace inventories remain responsive through virtualization.", null, "covered", "HTTP-TRACE-VIRTUALIZATION-001"],
+    ["TRACE-VIRTUALIZATION-001", "/traces", "Large trace inventories remain responsive through virtualization.", "trace-virtualization", "covered", "HTTP-TRACE-VIRTUALIZATION-001"],
     ["TRACE-ACTIONS-001", "/traces", "Per-trace actions expose detail, copy, and related telemetry navigation.", "traces", "covered", "TRACE-ACTIONS-001"],
     ["TRACE-DETAIL-ROUTE-001", "/traces/detail/{traceId}", "A trace opens on a stable deep-linked detail route.", "traces", "covered", "TRACE-DETAIL-ROUTE-001"],
     ["TRACE-TREE-001", "/traces/detail/{traceId}", "The trace detail preserves parent/child span hierarchy and chronological placement.", "traces", "covered", "TRACE-TREE-001; HTTP-TRACES-001"],

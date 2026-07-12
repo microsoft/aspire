@@ -49,6 +49,13 @@ for (var i = 0; i < 2; i++)
     }
 }
 
+// Hidden logical resources keep the default playground concise while allowing the dashboard's
+// view-options path to exercise a genuinely large inventory without starting extra processes.
+for (var i = 0; i < 250; i++)
+{
+    builder.AddTestResource($"virtualized-{i:0000}").WithHidden();
+}
+
 builder.AddParameter("testParameterResource", () => "value", secret: true);
 var apiKeyParam = builder.AddParameter("api-key", secret: true);
 var connectionStringParam = builder.AddParameter("db-connection-string");

@@ -124,15 +124,16 @@ app.MapGet("/big-trace", async () =>
     return "Big trace created";
 });
 
-app.MapGet("/trace-limit", async () =>
-{
-    const int TraceCount = 20_000;
+app.MapGet("/trace-limit", (int? count) => CreateTracesAsync(Math.Clamp(count ?? 20_000, 1, 20_000)));
+app.MapGet("/trace-virtualization", () => CreateTracesAsync(500));
 
+static async Task<string> CreateTracesAsync(int traceCount)
+{
     var current = Activity.Current;
     Activity.Current = null;
     var traceCreator = new TraceCreator();
 
-    for (var i = 0; i < TraceCount; i++)
+    for (var i = 0; i < traceCount; i++)
     {
         // Delay so OTEL has the opportunity to send traces.
         if (i % 1000 == 0)
@@ -145,8 +146,8 @@ app.MapGet("/trace-limit", async () =>
 
     Activity.Current = current;
 
-    return $"Created {TraceCount} traces.";
-});
+    return $"Created {traceCount} traces.";
+}
 
 app.MapGet("/http-client-requests", async (HttpClient client) =>
 {

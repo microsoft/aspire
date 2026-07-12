@@ -449,6 +449,11 @@ a:focus-visible {
   overflow: hidden;
   background: var(--bg-surface);
 }
+/* An unconstrained overflow ancestor becomes Virtualize's scroll root and forces every item to
+   render. The page body owns scrolling for virtualized tables, so these wrappers must not clip. */
+.virtualized-table-wrap {
+  overflow: visible;
+}
 table.data {
   width: 100%;
   border-collapse: collapse;
