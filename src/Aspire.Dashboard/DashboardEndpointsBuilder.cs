@@ -5,6 +5,7 @@ using System.Runtime.InteropServices;
 using System.Text.Json;
 using Aspire.Dashboard.Api;
 using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
@@ -103,9 +104,25 @@ public static class DashboardEndpointsBuilder
             .RequireAuthorization(FrontendAuthorizationDefaults.PolicyName)
             .SkipStatusCodePages();
 
-        group.MapGet("/config", (IDashboardClient dashboardClient, IOptionsMonitor<DashboardOptions> options) =>
+        group.MapGet("/config", (
+            HttpContext httpContext,
+            IDashboardClient dashboardClient,
+            IOptionsMonitor<DashboardOptions> options,
+            IStringLocalizer<Resources.Login> loginLocalizer) =>
         {
             var dashboardOptions = options.CurrentValue;
+            DeckUser? user = null;
+            if (dashboardOptions.Frontend.AuthMode == FrontendAuthMode.OpenIdConnect &&
+                httpContext.User.Identity is System.Security.Claims.ClaimsIdentity { IsAuthenticated: true } identity)
+            {
+                var name = identity.FindFirst(dashboardOptions.Frontend.OpenIdConnect.GetNameClaimTypes());
+                if (string.IsNullOrWhiteSpace(name))
+                {
+                    name = loginLocalizer[nameof(Resources.Login.AuthorizedUser)];
+                }
+                var username = identity.FindFirst(dashboardOptions.Frontend.OpenIdConnect.GetUsernameClaimTypes());
+                user = new DeckUser(name, username);
+            }
             var config = new DeckConfig(
                 ApplicationName: dashboardClient.ApplicationName,
                 ResourceServiceUrl: null,
@@ -119,7 +136,9 @@ public static class DashboardEndpointsBuilder
                     !dashboardOptions.Otlp.SuppressUnsecuredMessage,
                 IsApiEndpointUnsecured:
                     !dashboardOptions.Api.Disabled.GetValueOrDefault() &&
-                    dashboardOptions.Api.AuthMode == ApiAuthMode.Unsecured);
+                    dashboardOptions.Api.AuthMode == ApiAuthMode.Unsecured,
+                FrontendAuthMode: dashboardOptions.Frontend.AuthMode?.ToString() ?? "Unknown",
+                User: user);
 
             return Results.Json(config, DeckApiJsonSerializerContext.Default.DeckConfig);
         });

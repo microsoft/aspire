@@ -11,7 +11,13 @@ internal sealed record DeckConfig(
     string Version,
     string RuntimeVersion,
     bool IsTelemetryEndpointUnsecured,
-    bool IsApiEndpointUnsecured);
+    bool IsApiEndpointUnsecured,
+    string FrontendAuthMode,
+    DeckUser? User);
+
+internal sealed record DeckUser(
+    string Name,
+    string? Username);
 
 internal sealed record DeckManageDataResponse(
     DeckManageDataResource[] Resources,

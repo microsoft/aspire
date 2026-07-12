@@ -58,7 +58,9 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             ["version"] = VersionHelpers.DashboardDisplayVersion ?? string.Empty,
             ["runtimeVersion"] = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
             ["isTelemetryEndpointUnsecured"] = true,
-            ["isApiEndpointUnsecured"] = true
+            ["isApiEndpointUnsecured"] = true,
+            ["frontendAuthMode"] = "Unsecured",
+            ["user"] = null
         };
 
         Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
