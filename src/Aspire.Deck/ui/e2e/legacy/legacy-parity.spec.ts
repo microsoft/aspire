@@ -419,7 +419,20 @@ test(`${features("traces")} inventories trace controls and nested span details`,
 });
 
 test(`${features("metrics")} inventories metric controls and empty state`, async ({ page }, testInfo) => {
-  test.setTimeout(60_000);
+  test.setTimeout(120_000);
+  await page.goto("/");
+  const resourcesTable = page.getByRole("table");
+  const apiRow = resourcesTable.getByRole("row").filter({ hasText: "stress-apiservice" });
+  await expect(apiRow).toHaveCount(1);
+  await apiRow.getByText("stress-apiservice", { exact: true }).click();
+  const resourceDetails = page.getByRole("dialog").filter({ hasText: "stress-apiservice" });
+  await expect(resourceDetails.getByText("Healthy", { exact: true }).first()).toBeVisible({ timeout: 45_000 });
+  await resourceDetails.getByRole("button", { name: "Out of order nested spans", exact: true }).click();
+  await expect(page.getByText('"Out of order nested spans" succeeded', { exact: false })).toBeVisible({ timeout: 30_000 });
+  await resourceDetails.getByRole("button", { name: "Log message", exact: true }).click();
+  await expect(page.getByText('"Log message" succeeded', { exact: false })).toBeVisible({ timeout: 30_000 });
+  await page.waitForTimeout(2_000);
+
   await page.goto("/metrics");
   await expect(page.getByRole("button", { name: "Pause incoming data", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Remove data", exact: true })).toBeVisible();
@@ -431,26 +444,74 @@ test(`${features("metrics")} inventories metric controls and empty state`, async
 
   const resource = page.getByRole("combobox", { name: /^(Resource|Select a resource)$/ });
   await resource.click();
-  await page.getByRole("option", { name: "TestResource", exact: true }).click();
-  await expect(resource).toHaveAttribute("current-value", "TestResource");
+  await page.getByRole("option", { name: "Stress.ApiService", exact: true }).click();
+  await expect(resource).toHaveAttribute("current-value", "Stress.ApiService");
 
-  const meter = page.getByRole("treeitem", { name: "TestScope-<b>Bold</b>", exact: true });
-  const instrument = meter.getByRole("treeitem", { name: "Test-<b>Bold</b>", exact: true });
+  const meter = page.getByRole("treeitem", { name: "Microsoft.AspNetCore.Hosting", exact: true });
+  const instrument = meter.getByRole("treeitem", { name: "http.server.request.duration", exact: true });
   await expect(meter).toBeVisible();
   await expect(instrument).toBeVisible();
   await instrument.click();
-  await expect(page).toHaveURL(/\/metrics\/resource\/TestResource\?meter=TestScope-%3Cb%3EBold%3C%2Fb%3E&instrument=Test-%3Cb%3EBold%3C%2Fb%3E&duration=5/);
+  await expect(page).toHaveURL(/\/metrics\/resource\/Stress\.ApiService\?meter=Microsoft\.AspNetCore\.Hosting&instrument=http\.server\.request\.duration&duration=5/);
+  await expect(page.getByRole("heading", { name: "http.server.request.duration", exact: true })).toBeVisible();
+  await expect(page.getByText("Duration of HTTP server requests.", { exact: true })).toBeVisible();
 
   await expect(page.locator(".js-plotly-plot")).toBeVisible();
   await expect.poll(() => page.locator(".scatterlayer .trace").count()).toBeGreaterThan(0);
+  const exemplarPoints = page.locator(".scatterlayer .point");
+  await expect.poll(() => exemplarPoints.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+  const exemplarPoint = exemplarPoints.last();
+  const exemplarBounds = await exemplarPoint.boundingBox();
+  expect(exemplarBounds).not.toBeNull();
+  await page.mouse.move(exemplarBounds!.x + exemplarBounds!.width / 2, exemplarBounds!.y + exemplarBounds!.height / 2);
+  const hover = page.locator(".hoverlayer .hovertext");
+  await expect(hover).toContainText("Value:");
+  await expect(hover).toContainText("Time:");
+
+  let activePanel = page.locator('[role="tabpanel"]:not([hidden])');
+  const routeFilter = activePanel.getByRole("row").filter({ hasText: "http.route" });
+  await expect(routeFilter).toContainText("/nested-trace-spans");
+  await expect(routeFilter).toContainText("/log-message");
+  const routeFilterButton = routeFilter.getByRole("button", { name: "All tags", exact: true });
+  await routeFilterButton.click();
+  const nestedRoute = routeFilter.getByRole("checkbox", { name: "/nested-trace-spans", exact: true });
+  const logRoute = routeFilter.getByRole("checkbox", { name: "/log-message", exact: true });
+  await expect(nestedRoute).toBeChecked();
+  await expect(logRoute).toBeChecked();
+  await logRoute.uncheck();
+  await expect(routeFilter.getByRole("button", { name: "Filtered tags", exact: true })).toBeVisible();
+  await logRoute.check();
+  await routeFilterButton.click({ force: true });
+
+  const showCount = activePanel.getByRole("checkbox", { name: "Show count", exact: true });
+  await showCount.check();
   await page.getByRole("tab", { name: "Table", exact: true }).click();
-  const metricTable = page.getByRole("table");
+  activePanel = page.locator('[role="tabpanel"]:not([hidden])');
+  let metricTable = activePanel.getByRole("table").first();
   await expect(metricTable).toBeVisible();
   await expect.poll(() => metricTable.getByRole("row").count()).toBeGreaterThan(1);
+  await expect(metricTable.getByRole("columnheader")).toHaveText(["Time", "Count"]);
   await expect(page).toHaveURL(/view=Table/);
 
+  await activePanel.getByRole("checkbox", { name: "Show count", exact: true }).uncheck();
+  metricTable = activePanel.getByRole("table").first();
+  await expect(metricTable.getByRole("columnheader")).toHaveText(["Time", "P50 Seconds", "P90 Seconds", "P99 Seconds", "Exemplars"]);
+  const viewExemplarButtons = metricTable.getByRole("button", { name: "View exemplars", exact: true });
+  await expect.poll(() => viewExemplarButtons.count()).toBeGreaterThan(0);
+  await viewExemplarButtons.last().click();
+  const exemplars = page.locator("fluent-dialog").filter({ hasText: "Exemplars" });
+  await expect(exemplars).toContainText("Trace");
+  await expect(exemplars).toContainText("Timestamp");
+  await expect(exemplars).toContainText("Value");
+  await expect(exemplars).toContainText(/Stress\.ApiService: GET \//);
+  const tracedExemplars = exemplars.getByRole("row").filter({ hasText: "Stress.ApiService: GET /" });
+  await expect.poll(() => tracedExemplars.count()).toBeGreaterThan(0);
+  await tracedExemplars.last().getByRole("button", { name: "View", exact: true }).click();
+  await expect(page).toHaveURL(/\/traces\/detail\/[0-9a-f]{32}\?spanId=[0-9a-f]{16}$/);
+  await page.goBack();
+
   await page.reload();
-  await expect(resource).toHaveAttribute("current-value", "TestResource");
+  await expect(resource).toHaveAttribute("current-value", "Stress.ApiService");
   await expect(page.getByRole("tab", { name: "Table", exact: true })).toHaveAttribute("aria-selected", "true");
   await expect.poll(() => page.getByRole("table").getByRole("row").count()).toBeGreaterThan(1);
   await attachScreenshot(page, testInfo, "legacy-metrics");
