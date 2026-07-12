@@ -11,6 +11,7 @@ export const toolkitFeatures = {
   "TK-DRAWER-001": "Drawers expose an accessible title, footer actions, close command, and Escape dismissal.",
   "TK-DATA-001": "Data tables retain semantic headers, filtering, row content, and empty results.",
   "TK-DATA-SORT-001": "Data tables provide stable pointer sorting, aria-sort state, keyboard row activation, and selected-row semantics.",
+  "TK-DATA-VIRTUALIZATION-001": "Data tables virtualize large sorted inventories while preserving total row semantics and row activation.",
   "TK-STATUS-001": "Badges and resource state indicators expose every semantic status tone.",
   "TK-ICON-001": "Named Aspire icons expose their Fluent regular/filled component mapping and fallback behavior.",
   "TK-EMPTY-001": "Empty states expose an icon, title, and supporting content.",

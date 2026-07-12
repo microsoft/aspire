@@ -929,6 +929,14 @@ a:focus-visible {
   overflow-y: hidden;
   background: var(--bg-surface);
 }
+.table-wrap--virtual {
+  height: 100%;
+  overflow: auto;
+}
+table.data tbody tr.data__virtual-spacer td {
+  padding: 0;
+  border: 0;
+}
 table.data {
   width: 100%;
   border-collapse: collapse;

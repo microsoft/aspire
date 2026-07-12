@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 121
+- React covered: 123
 - React partial: 18
-- React missing: 19
+- React missing: 17
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 37
+- React parity gaps: 35
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -50,7 +50,7 @@
 | RES-GRAPH-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-001 | Resources and relationships render in the graph view. |
 | RES-GRAPH-ZOOM-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-ZOOM-001 | Graph zoom in, zoom out, and reset controls work. |
 | RES-GRAPH-CONTEXT-001 | resources | `/?view=Graph` | resources | covered | RES-GRAPH-CONTEXT-001 | Graph nodes expose resource actions and details context menus. |
-| RES-VIRTUALIZATION-001 | resources | `/` | PENDING | missing | - | Large resource inventories remain responsive through row virtualization. |
+| RES-VIRTUALIZATION-001 | resources | `/` | PENDING | covered | HTTP-RESOURCE-VIRTUALIZATION-001 | Large resource inventories remain responsive through row virtualization. |
 | RES-DETAILS-001 | resources | `/` | resources | covered | RES-DETAILS-001; STRESS-DETAILS-001 | Selecting a resource opens overview, endpoints, properties, environment, health, and relationships. |
 | RES-DETAILS-LINK-001 | resources | `/?resource={name}` | resources | covered | RES-DETAILS-LINK-001 | A resource details selection is deep-linkable and restorable. |
 | RES-PROPERTIES-001 | resources | `/` | resources | covered | RES-PROPERTIES-001; RES-DETAILS-001 | Known, custom, highlighted, null, array, and object properties render correctly. |
@@ -123,7 +123,7 @@
 | LOG-FILTER-COUNT-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-FILTER-COUNT-001 | Enabled structured filters expose a count and management menu. |
 | LOG-PAUSE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001 | Incoming structured logs can be paused and resumed. |
 | LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | covered | HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001 | Structured logs can be cleared for the selected resource or all resources. |
-| LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | PENDING | missing | - | Large log volumes remain responsive through row virtualization. |
+| LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | PENDING | covered | HTTP-STRUCTURED-LOG-VIRTUALIZATION-001 | Large log volumes remain responsive through row virtualization. |
 | LOG-DETAILS-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-DETAILS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Selecting a log opens complete event, scope, resource, and attribute details. |
 | LOG-ACTIONS-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Per-log actions expose details, text/JSON visualizers, copy, and related navigation. |
 | LOG-TRACE-LINK-001 | structured-logs | `/structuredlogs` | PENDING | covered | LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001 | Trace IDs deep-link to the matching trace and span. |

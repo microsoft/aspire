@@ -278,7 +278,7 @@ export function StructuredLogsPage({
           <PageTitle id="deck-page-structured-logs-title">Structured Logs</PageTitle>
           <PageSubtitle>
             {displayedTelemetry
-              ? `${displayedTelemetry.logCount.toLocaleString()} total · showing ${filtered.length}${routePaused ? " · paused" : ""}`
+              ? `${displayedTelemetry.logCount.toLocaleString()} total · showing ${filtered.length.toLocaleString()}${routePaused ? " · paused" : ""}`
               : "Loading…"}
           </PageSubtitle>
         </PageHeading>
@@ -361,6 +361,7 @@ export function StructuredLogsPage({
             : logs.length === 0
               ? "No structured logs."
               : "No logs match your filter."}
+          virtualizeAbove={200}
         />
       </PageBody>
 

@@ -129,13 +129,25 @@ export function ToolkitPlayground({
   const [selectedGraphNode, setSelectedGraphNode] = useState<string | null>(null);
   const graphRef = useRef<ForceGraphHandle | null>(null);
   const iconNames = useMemo(getIconNames, []);
+  const sampleResources = useMemo(() => {
+    const requested = Number(new URLSearchParams(window.location.search).get("rows"));
+    return Number.isInteger(requested) && requested > resources.length && requested <= 5_000
+      ? Array.from({ length: requested }, (_, index): SampleResource => ({
+          name: `resource-${index.toString().padStart(4, "0")}`,
+          type: index % 2 === 0 ? "Project" : "Container",
+          state: "Running",
+          stateStyle: null,
+          health: "Healthy",
+        }))
+      : resources;
+  }, []);
 
   const filteredResources = useMemo(() => {
     const normalizedQuery = query.trim().toLowerCase();
     return normalizedQuery
-      ? resources.filter((resource) => `${resource.name} ${resource.type} ${resource.state}`.toLowerCase().includes(normalizedQuery))
-      : resources;
-  }, [query]);
+      ? sampleResources.filter((resource) => `${resource.name} ${resource.type} ${resource.state}`.toLowerCase().includes(normalizedQuery))
+      : sampleResources;
+  }, [query, sampleResources]);
 
   const requestConfirmation = (): void => {
     setConfirmation({
@@ -527,6 +539,8 @@ export function ToolkitPlayground({
               }}
               isSelected={(resource) => resource.name === selectedResource}
               emptyMessage="No matching resources."
+              virtualizeAbove={200}
+              virtualHeight={360}
             />
           </div>
         </section>

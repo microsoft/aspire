@@ -1,4 +1,4 @@
-import { useMemo, useState, type CSSProperties, type Key, type ReactNode } from "react";
+import { useLayoutEffect, useMemo, useRef, useState, type CSSProperties, type Key, type ReactNode, type UIEvent } from "react";
 import {
   Table,
   TableBody,
@@ -45,6 +45,10 @@ export function DataTable<T>({
   sort,
   defaultSort,
   onSortChange,
+  virtualizeAbove,
+  virtualRowHeight = 45,
+  virtualOverscan = 12,
+  virtualHeight = "100%",
 }: {
   columns: Column<T>[];
   rows: T[];
@@ -57,6 +61,10 @@ export function DataTable<T>({
   sort?: DataTableSort | null;
   defaultSort?: DataTableSort | null;
   onSortChange?: (sort: DataTableSort) => void;
+  virtualizeAbove?: number;
+  virtualRowHeight?: number;
+  virtualOverscan?: number;
+  virtualHeight?: CSSProperties["height"];
 }) {
   const [internalSort, setInternalSort] = useState<DataTableSort | null>(defaultSort ?? null);
   const activeSort = sort === undefined ? internalSort : sort;
@@ -83,6 +91,29 @@ export function DataTable<T>({
         : direction * compare!(left.row, right.row)) || left.index - right.index)
       .map((item) => item.row);
   }, [activeSort, columns, rows]);
+  const virtual = virtualizeAbove !== undefined && displayedRows.length > virtualizeAbove;
+  const wrapperRef = useRef<HTMLDivElement | null>(null);
+  const [scrollTop, setScrollTop] = useState(0);
+  const [viewportHeight, setViewportHeight] = useState(0);
+  useLayoutEffect(() => {
+    const wrapper = wrapperRef.current;
+    if (!virtual || wrapper === null) return;
+    const update = () => setViewportHeight(wrapper.clientHeight);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(wrapper);
+    return () => observer.disconnect();
+  }, [virtual]);
+  const virtualWindow = useMemo(() => {
+    if (!virtual) return { rows: displayedRows, start: 0, end: displayedRows.length };
+    const visibleCount = Math.ceil((viewportHeight || 600) / virtualRowHeight);
+    const start = Math.max(0, Math.min(
+      Math.floor(scrollTop / virtualRowHeight) - virtualOverscan,
+      Math.max(0, displayedRows.length - visibleCount),
+    ));
+    const end = Math.min(displayedRows.length, start + visibleCount + virtualOverscan * 2);
+    return { rows: displayedRows.slice(start, end), start, end };
+  }, [displayedRows, scrollTop, viewportHeight, virtual, virtualOverscan, virtualRowHeight]);
 
   const changeSort = (column: Column<T>): void => {
     if (!column.compare && !column.compareWithDirection) {
@@ -103,8 +134,14 @@ export function DataTable<T>({
   };
 
   return (
-    <div className="table-wrap">
-      <Table className="data" size="small" style={{ minWidth: tableMinWidth }}>
+    <div
+      ref={wrapperRef}
+      className={`table-wrap ${virtual ? "table-wrap--virtual" : ""}`.trim()}
+      style={virtual ? { height: virtualHeight } : undefined}
+      data-virtualized={virtual ? "true" : undefined}
+      onScroll={virtual ? (event: UIEvent<HTMLDivElement>) => setScrollTop(event.currentTarget.scrollTop) : undefined}
+    >
+      <Table className="data" size="small" style={{ minWidth: tableMinWidth }} aria-rowcount={displayedRows.length + 1}>
         <TableHeader>
           <TableRow>
             {columns.map((column) => {
@@ -137,7 +174,13 @@ export function DataTable<T>({
               </TableCell>
             </TableRow>
           ) : (
-            displayedRows.map((row) => {
+            <>
+            {virtualWindow.start > 0 ? (
+              <TableRow aria-hidden="true" className="data__virtual-spacer">
+                <TableCell colSpan={columns.length} style={{ height: virtualWindow.start * virtualRowHeight }} />
+              </TableRow>
+            ) : null}
+            {virtualWindow.rows.map((row) => {
               const selected = isSelected?.(row) ?? false;
               const extra = rowClassName?.(row) ?? "";
               return (
@@ -169,7 +212,13 @@ export function DataTable<T>({
                   ))}
                 </TableRow>
               );
-            })
+            })}
+            {virtualWindow.end < displayedRows.length ? (
+              <TableRow aria-hidden="true" className="data__virtual-spacer">
+                <TableCell colSpan={columns.length} style={{ height: (displayedRows.length - virtualWindow.end) * virtualRowHeight }} />
+              </TableRow>
+            ) : null}
+            </>
           )}
         </TableBody>
       </Table>

@@ -131,6 +131,30 @@ test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-0
   await testInfo.attach("http-backend-resources.png", { body, contentType: "image/png" });
 });
 
+test(`${features("HTTP-RESOURCE-VIRTUALIZATION-001")} virtualizes a 1000-resource inventory`, async ({ page }) => {
+  const resources = Array.from({ length: 1_000 }, (_, index): Resource => ({
+    ...resource,
+    name: `stress-api-${index.toString().padStart(4, "0")}`,
+    displayName: `stress-api-${index.toString().padStart(4, "0")}`,
+    uid: `stress-resource-${index}`,
+  }));
+  await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: resources }));
+  await page.goto("/?backend=http");
+
+  const table = page.getByRole("table");
+  const wrapper = table.locator("..");
+  await expect(wrapper).toHaveAttribute("data-virtualized", "true");
+  await expect(table).toHaveAttribute("aria-rowcount", "1001");
+  expect(await table.locator("tbody tr:not(.data__virtual-spacer)").count()).toBeLessThan(100);
+  await expect(table.getByText("stress-api-0000", { exact: true })).toBeVisible();
+  await wrapper.evaluate((element) => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event("scroll")); });
+  const lastRow = table.getByRole("row").filter({ hasText: "stress-api-0999" });
+  await expect(lastRow).toBeVisible();
+  await lastRow.press("Enter");
+  await expect(page.getByRole("dialog", { name: "stress-api-0999" })).toBeVisible();
+});
+
 test(`${features("HTTP-FAILURE-001")} reports an unavailable HTTP backend`, async ({ page }, testInfo: TestInfo) => {
   allowUnavailableResponses.add(page);
   await page.route("**/api/deck/**", async (route) => {
@@ -566,6 +590,46 @@ test(`${features("HTTP-STRUCTURED-LOGS-001", "HTTP-STRUCTURED-LOG-DETAILS-001")}
     contentType: "image/png",
   });
   await details.getByRole("button", { name: "Close details" }).click();
+});
+
+test(`${features("HTTP-STRUCTURED-LOG-VIRTUALIZATION-001")} virtualizes 1000 structured logs`, async ({ page }) => {
+  await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.unroute("**/api/deck/telemetry/logs?*");
+  await page.route("**/api/deck/telemetry/logs?*", async (route) => route.fulfill({
+    contentType: "application/x-ndjson",
+    body: `${JSON.stringify({
+      resourceLogs: [{
+        resource: { attributes: [{ key: "service.name", value: { stringValue: "stress-api" } }] },
+        scopeLogs: [{
+          scope: { name: "Stress.Virtualization" },
+          logRecords: Array.from({ length: 1_000 }, (_, index) => ({
+            timeUnixNano: (1_783_670_400_000_000_000n + BigInt(index)).toString(),
+            severityNumber: 9,
+            severityText: "Information",
+            body: { stringValue: `virtualized structured log ${index.toString().padStart(4, "0")}` },
+            attributes: [],
+            spanId: index.toString(16).padStart(16, "0"),
+          })),
+        }],
+      }],
+    })}\n`,
+  }));
+  await page.goto("/?backend=http");
+  await page.getByRole("navigation").getByRole("button", { name: /^Structured Logs(?: \d+)?$/ }).click();
+
+  const logs = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
+  const table = logs.getByRole("table");
+  const wrapper = table.locator("..");
+  await expect(logs.locator(".page__subtitle")).toHaveText("1,000 total · showing 1,000");
+  await expect(wrapper).toHaveAttribute("data-virtualized", "true");
+  await expect(table).toHaveAttribute("aria-rowcount", "1001");
+  expect(await table.locator("tbody tr:not(.data__virtual-spacer)").count()).toBeLessThan(100);
+  await wrapper.evaluate((element) => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event("scroll")); });
+  const tail = table.getByRole("row").filter({ hasText: "virtualized structured log 0000" });
+  await expect(tail).toBeVisible();
+  await tail.click();
+  await expect(page.getByRole("dialog", { name: "Structured log entry details" })).toContainText("virtualized structured log 0000");
 });
 
 test(`${features("HTTP-STRUCTURED-LOG-CLEAR-001")} clears selected and all structured logs through the HTTP backend`, async ({ page }, testInfo) => {

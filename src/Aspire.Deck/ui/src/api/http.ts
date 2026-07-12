@@ -326,6 +326,10 @@ function compareSpansNewestFirst(left: SpanSummary, right: SpanSummary): number 
   return right.startUnixNano.localeCompare(left.startUnixNano);
 }
 
+// Keep enough history for meaningful dashboard inspection while bounding long-running sessions.
+// The UI virtualizes these collections, so retention does not translate into an equivalent DOM size.
+const MAX_RETAINED_TELEMETRY_RECORDS = 5_000;
+
 function toLogRecordSummary(log: OtlpLogRecordSummary): LogRecordSummary {
   const { recordKey: _, ...summary } = log;
   return summary;
@@ -354,7 +358,7 @@ function appendStructuredLogs(logs: OtlpLogRecordSummary[]): void {
     logCount: telemetrySummary.logCount + additions.length,
     recentLogs: [...additions.map(toLogRecordSummary), ...telemetrySummary.recentLogs]
       .sort(compareNewestFirst)
-      .slice(0, 200),
+      .slice(0, MAX_RETAINED_TELEMETRY_RECORDS),
   };
   notifyTelemetry();
 }
@@ -379,7 +383,7 @@ function appendSpans(spans: OtlpSpanSummary[]): void {
       ...telemetrySummary.recentSpans,
     ]
       .sort(compareSpansNewestFirst)
-      .slice(0, 200),
+      .slice(0, MAX_RETAINED_TELEMETRY_RECORDS),
   };
   notifyTelemetry();
 }

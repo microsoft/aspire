@@ -510,6 +510,8 @@ const spanNames = [
   "npgsql SELECT",
 ];
 
+const MAX_RETAINED_TELEMETRY_RECORDS = 5_000;
+
 class MockBackend {
   private resources: Resource[] = makeResources();
   private telemetry: TelemetrySummary = {
@@ -1295,7 +1297,7 @@ class MockBackend {
       scopeDroppedAttributesCount: 0,
       resourceDroppedAttributesCount: 0,
     };
-    this.telemetry.recentLogs = [log, ...this.telemetry.recentLogs].slice(0, 200);
+    this.telemetry.recentLogs = [log, ...this.telemetry.recentLogs].slice(0, MAX_RETAINED_TELEMETRY_RECORDS);
     this.telemetry.logCount += 1;
     this.logCountByResource.set(
       resourceName,
@@ -1386,7 +1388,7 @@ class MockBackend {
         : [],
       droppedLinksCount: 0,
     }));
-    this.telemetry.recentSpans = [...newSpans, ...this.telemetry.recentSpans].slice(0, 200);
+    this.telemetry.recentSpans = [...newSpans, ...this.telemetry.recentSpans].slice(0, MAX_RETAINED_TELEMETRY_RECORDS);
     this.telemetry.spanCount += newSpans.length;
     for (const span of newSpans) {
       if (span.resourceName !== null) {

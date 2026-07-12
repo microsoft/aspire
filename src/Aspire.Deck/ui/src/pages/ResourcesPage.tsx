@@ -373,7 +373,7 @@ export function ResourcesPage({
             </div>
           </div>
         ) : (
-          <DataTable columns={columns} rows={rows} rowKey={(row) => row.resource.name} onRowClick={(row) => changeRoute({ resourceName: row.resource.name })} onRowContextMenu={(row, x, y) => setResourceContext({ resourceName: row.resource.name, x, y })} isSelected={(row) => row.resource.name === route.resourceName} sort={{ columnKey: route.sortColumn, direction: route.sortDirection }} onSortChange={(sort) => changeRoute({ sortColumn: sort.columnKey, sortDirection: sort.direction })} emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"} />
+          <DataTable columns={columns} rows={rows} rowKey={(row) => row.resource.name} onRowClick={(row) => changeRoute({ resourceName: row.resource.name })} onRowContextMenu={(row, x, y) => setResourceContext({ resourceName: row.resource.name, x, y })} isSelected={(row) => row.resource.name === route.resourceName} sort={{ columnKey: route.sortColumn, direction: route.sortDirection }} onSortChange={(sort) => changeRoute({ sortColumn: sort.columnKey, sortDirection: sort.direction })} emptyMessage={ready ? "No resources match your filter." : "Connecting to resource service…"} virtualizeAbove={200} />
         )}
       </PageBody>
       {selected ? <DetailsDrawer resource={selected} onClose={() => changeRoute({ resourceName: null })} onExecuteCommand={(resource, command) => void runCommand(resource, command)} requestConfirm={setConfirm} /> : null}

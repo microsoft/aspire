@@ -538,6 +538,20 @@ test(`${features("TK-DATA-SORT-001")} sorts and activates data rows accessibly`,
   await expect(page.getByRole("region", { name: "Actions" }).getByRole("status")).toHaveText("frontend selected");
 });
 
+test(`${features("TK-DATA-VIRTUALIZATION-001")} virtualizes large semantic tables`, async ({ page }) => {
+  await page.goto("/?view=toolkit&rows=1000");
+  const table = page.getByTestId("toolkit-table").getByRole("table");
+  const wrapper = table.locator("..");
+  await expect(wrapper).toHaveAttribute("data-virtualized", "true");
+  await expect(table).toHaveAttribute("aria-rowcount", "1001");
+  expect(await table.locator("tbody tr:not(.data__virtual-spacer)").count()).toBeLessThan(100);
+  await wrapper.evaluate((element) => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event("scroll")); });
+  const last = table.getByRole("row").filter({ hasText: "resource-0999" });
+  await expect(last).toBeVisible();
+  await last.press("Enter");
+  await expect(last).toHaveAttribute("aria-selected", "true");
+});
+
 test(`${features("TK-SHELL-001")} switches and persists a readable Fluent theme`, async ({ page }) => {
   const root = page.locator("html");
   const secondary = page.getByRole("button", { name: "Secondary", exact: true });

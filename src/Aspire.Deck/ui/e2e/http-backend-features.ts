@@ -1,6 +1,7 @@
 export const httpBackendFeatures = {
   "HTTP-CONFIG-001": "HTTP mode loads the application identity and version from the dashboard backend.",
   "HTTP-RESOURCES-001": "HTTP mode renders the resource snapshot returned by the dashboard backend.",
+  "HTTP-RESOURCE-VIRTUALIZATION-001": "Large HTTP resource inventories keep a bounded semantic table while preserving sorting and row actions.",
   "HTTP-MOCK-ISOLATION-001": "Explicit HTTP mode never falls back to the standalone mock backend.",
   "HTTP-FAILURE-001": "HTTP mode reports an unavailable dashboard backend without unhandled browser errors.",
   "HTTP-RECOVERY-001": "HTTP mode recovers application identity and resources when the dashboard backend returns.",
@@ -11,6 +12,7 @@ export const httpBackendFeatures = {
   "HTTP-CONSOLE-VIRTUALIZATION-001": "HTTP console keeps a bounded DOM while preserving full-stream geometry and stable line numbers.",
   "HTTP-STRUCTURED-LOGS-001": "HTTP mode replays and streams OTLP structured logs from the dashboard backend.",
   "HTTP-STRUCTURED-LOG-DETAILS-001": "HTTP mode preserves event, scope, exception, resource, and correlation details for structured logs.",
+  "HTTP-STRUCTURED-LOG-VIRTUALIZATION-001": "Large HTTP structured-log inventories keep a bounded semantic table with accessible total row count.",
   "HTTP-STRUCTURED-LOG-CLEAR-001": "HTTP mode clears one structured-log resource or all resources and refreshes its snapshot.",
   "HTTP-TRACES-001": "HTTP mode replays and streams OTLP spans into trace waterfalls and exact span details.",
   "HTTP-TRACE-CLEAR-001": "HTTP mode clears one trace resource or all trace resources and refreshes its snapshot.",
