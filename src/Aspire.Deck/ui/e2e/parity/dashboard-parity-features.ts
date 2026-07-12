@@ -62,7 +62,7 @@ const featureDefinitions = {
     ["SHELL-USER-001", "/", "Authenticated user profile and sign-out behavior are available when configured.", null, "missing"],
     ["SHELL-AUTH-001", "/login", "Browser-token and OpenID Connect login flows protect the frontend.", null, "missing"],
     ["SHELL-RECONNECT-001", "/", "A lost dashboard circuit or backend connection exposes reconnect and recovery UI.", null, "missing"],
-    ["SHELL-UNSECURED-001", "/", "An unsecured telemetry/API endpoint warning is visible with supporting guidance.", "shell", "missing"],
+    ["SHELL-UNSECURED-001", "/", "An unsecured telemetry/API endpoint warning is visible with supporting guidance.", "shell", "covered", "HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
     ["SHELL-UPDATE-001", "/", "Available dashboard updates show instructions, ignore, and dismiss actions.", "shell", "missing"],
     ["SHELL-NOTFOUND-001", "/error/404", "Unknown routes render a dedicated not-found experience.", null, "covered", "APP-NOTFOUND-001"],
     ["SHELL-ERROR-001", "/error", "Unhandled errors render a recoverable error experience.", "shell", "covered", "APP-ERROR-001"],

@@ -22,6 +22,7 @@ import { NotificationStack } from "./components/NotificationStack";
 import { HelpDialog } from "./components/HelpDialog";
 import { SettingsDialog } from "./components/SettingsDialog";
 import { NotificationCenter, type NotificationHistoryItem } from "./components/NotificationCenter";
+import { SystemNotifications } from "./components/SystemNotifications";
 import {
   dashboardRouteHref,
   readDashboardRoute,
@@ -381,6 +382,7 @@ export function App({
           }
         }}
       />
+      <SystemNotifications config={config} />
       <HelpDialog open={helpOpen} onClose={() => setHelpOpen(false)} />
       <NotificationCenter
         open={notificationCenterOpen}

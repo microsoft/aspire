@@ -8,6 +8,8 @@ export interface DeckConfig {
   otlpHttpUrl: string | null;
   version: string;
   runtimeVersion?: string;
+  isTelemetryEndpointUnsecured?: boolean;
+  isApiEndpointUnsecured?: boolean;
 }
 
 export type ConnectionTarget = "resourceService" | "otlpGrpc" | "otlpHttp";

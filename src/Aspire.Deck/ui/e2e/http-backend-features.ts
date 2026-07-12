@@ -1,4 +1,5 @@
 export const httpBackendFeatures = {
+  "HTTP-SHELL-UNSECURED-001": "Backend security configuration renders a persistent, dismissible unsecured-endpoint warning.",
   "HTTP-CONFIG-001": "HTTP mode loads the application identity and version from the dashboard backend.",
   "HTTP-RESOURCES-001": "HTTP mode renders the resource snapshot returned by the dashboard backend.",
   "HTTP-RESOURCE-VIRTUALIZATION-001": "Large HTTP resource inventories keep a bounded semantic table while preserving sorting and row actions.",

@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 143
+- React covered: 144
 - React partial: 4
-- React missing: 11
+- React missing: 10
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 15
+- React parity gaps: 14
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -27,7 +27,7 @@
 | SHELL-USER-001 | shell | `/` | PENDING | missing | - | Authenticated user profile and sign-out behavior are available when configured. |
 | SHELL-AUTH-001 | shell | `/login` | PENDING | missing | - | Browser-token and OpenID Connect login flows protect the frontend. |
 | SHELL-RECONNECT-001 | shell | `/` | PENDING | missing | - | A lost dashboard circuit or backend connection exposes reconnect and recovery UI. |
-| SHELL-UNSECURED-001 | shell | `/` | shell | missing | - | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
+| SHELL-UNSECURED-001 | shell | `/` | shell | covered | HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
 | SHELL-UPDATE-001 | shell | `/` | shell | missing | - | Available dashboard updates show instructions, ignore, and dismiss actions. |
 | SHELL-NOTFOUND-001 | shell | `/error/404` | PENDING | covered | APP-NOTFOUND-001 | Unknown routes render a dedicated not-found experience. |
 | SHELL-ERROR-001 | shell | `/error` | shell | covered | APP-ERROR-001 | Unhandled errors render a recoverable error experience. |

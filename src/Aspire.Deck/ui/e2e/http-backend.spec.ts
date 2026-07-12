@@ -131,6 +131,41 @@ test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-0
   await testInfo.attach("http-backend-resources.png", { body, contentType: "image/png" });
 });
 
+test(`${features("HTTP-SHELL-UNSECURED-001")} warns about unsecured endpoints and persists dismissal`, async ({ page }) => {
+  await page.route("**/api/deck/config", async (route) => route.fulfill({
+    json: {
+      ...config,
+      isTelemetryEndpointUnsecured: true,
+      isApiEndpointUnsecured: true,
+    } satisfies DeckConfig,
+  }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+
+  await page.goto("/?backend=http");
+
+  const notifications = page.getByRole("region", { name: "System notifications" });
+  const warning = notifications.getByRole("alert");
+  await expect(warning).toContainText("Endpoint is unsecured");
+  await expect(warning).toContainText("Untrusted apps can send telemetry to the dashboard.");
+  await expect(warning).toContainText("Untrusted apps can access telemetry data via the API.");
+  await expect(warning.getByRole("button")).toHaveText(["More information", ""]);
+  await page.evaluate(() => {
+    window.open = (url) => {
+      document.body.dataset.openedUrl = String(url);
+      return null;
+    };
+  });
+  await warning.getByRole("button", { name: "More information" }).click();
+  await expect(page.locator("body")).toHaveAttribute("data-opened-url", "https://aka.ms/aspire/api-endpoint-unsecured");
+
+  await warning.getByRole("button", { name: "Dismiss notification" }).click();
+  await expect(notifications).toBeHidden();
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("Aspire_Security_UnsecuredEndpointMessageDismissed"))).toBe("true");
+
+  await page.reload();
+  await expect(page.getByRole("region", { name: "System notifications" })).toBeHidden();
+});
+
 test(`${features("HTTP-RESOURCE-VIRTUALIZATION-001")} virtualizes a 1000-resource inventory`, async ({ page }) => {
   const resources = Array.from({ length: 1_000 }, (_, index): Resource => ({
     ...resource,

@@ -102,15 +102,23 @@ public static class DashboardEndpointsBuilder
             .RequireAuthorization(FrontendAuthorizationDefaults.PolicyName)
             .SkipStatusCodePages();
 
-        group.MapGet("/config", (IDashboardClient dashboardClient) =>
+        group.MapGet("/config", (IDashboardClient dashboardClient, IOptionsMonitor<DashboardOptions> options) =>
         {
+            var dashboardOptions = options.CurrentValue;
             var config = new DeckConfig(
                 ApplicationName: dashboardClient.ApplicationName,
                 ResourceServiceUrl: null,
                 OtlpGrpcUrl: null,
                 OtlpHttpUrl: null,
                 Version: VersionHelpers.DashboardDisplayVersion ?? string.Empty,
-                RuntimeVersion: RuntimeInformation.FrameworkDescription);
+                RuntimeVersion: RuntimeInformation.FrameworkDescription,
+                IsTelemetryEndpointUnsecured:
+                    (dashboardOptions.Otlp.GetGrpcEndpointAddress() is not null || dashboardOptions.Otlp.GetHttpEndpointAddress() is not null) &&
+                    dashboardOptions.Otlp.AuthMode == OtlpAuthMode.Unsecured &&
+                    !dashboardOptions.Otlp.SuppressUnsecuredMessage,
+                IsApiEndpointUnsecured:
+                    !dashboardOptions.Api.Disabled.GetValueOrDefault() &&
+                    dashboardOptions.Api.AuthMode == ApiAuthMode.Unsecured);
 
             return Results.Json(config, DeckApiJsonSerializerContext.Default.DeckConfig);
         });

@@ -9,7 +9,9 @@ internal sealed record DeckConfig(
     string? OtlpGrpcUrl,
     string? OtlpHttpUrl,
     string Version,
-    string RuntimeVersion);
+    string RuntimeVersion,
+    bool IsTelemetryEndpointUnsecured,
+    bool IsApiEndpointUnsecured);
 
 internal sealed record DeckResource(
     string Name,

@@ -56,7 +56,9 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             ["otlpGrpcUrl"] = null,
             ["otlpHttpUrl"] = null,
             ["version"] = VersionHelpers.DashboardDisplayVersion ?? string.Empty,
-            ["runtimeVersion"] = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription
+            ["runtimeVersion"] = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
+            ["isTelemetryEndpointUnsecured"] = true,
+            ["isApiEndpointUnsecured"] = true
         };
 
         Assert.True(JsonNode.DeepEquals(expected, actual), $"Expected:{Environment.NewLine}{expected}{Environment.NewLine}Actual:{Environment.NewLine}{actual}");
