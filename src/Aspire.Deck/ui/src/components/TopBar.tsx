@@ -3,6 +3,7 @@ import { ConnectionPill } from "./ConnectionPill";
 import { AppHostSwitcher } from "./AppHostSwitcher";
 import { MoonIcon, NamedIcon, SunIcon } from "../toolkit";
 import type { Theme } from "../lib/theme";
+import { UserProfile } from "./UserProfile";
 
 const TARGET_ORDER: ConnectionTarget[] = ["resourceService", "otlpGrpc", "otlpHttp"];
 
@@ -79,6 +80,7 @@ export function TopBar({
       <button className="icon-btn" type="button" onClick={onSettings} title="Settings" aria-label="Settings">
         <NamedIcon name="Settings" size={17} />
       </button>
+      {config?.user ? <UserProfile user={config.user} /> : null}
     </header>
   );
 }

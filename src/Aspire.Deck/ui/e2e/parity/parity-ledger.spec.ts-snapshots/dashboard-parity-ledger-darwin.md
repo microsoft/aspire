@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 147
+- React covered: 148
 - React partial: 4
-- React missing: 6
+- React missing: 5
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 10
+- React parity gaps: 9
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -24,7 +24,7 @@
 | SHELL-LANGUAGE-001 | shell | `/` | shell | missing | - | The dashboard language can be selected and applied. |
 | SHELL-TIME-FORMAT-001 | shell | `/` | shell | covered | APP-TIME-FORMAT-001 | System, 12-hour, and 24-hour time formatting can be selected. |
 | SHELL-MANAGE-DATA-001 | shell | `/` | PENDING | covered | HTTP-MANAGE-DATA-001; DeckApiTests.ManageData_InventoryExportImportAndRemoveUseDeckContract | Resource logs and telemetry can be inspected, exported, imported, and cleared. |
-| SHELL-USER-001 | shell | `/` | PENDING | missing | - | Authenticated user profile and sign-out behavior are available when configured. |
+| SHELL-USER-001 | shell | `/` | PENDING | covered | HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Authenticated user profile and sign-out behavior are available when configured. |
 | SHELL-AUTH-001 | shell | `/login` | PENDING | covered | HTTP-AUTH-001; DeckApiTests.GetResources_BrowserTokenAuthWithoutCookie_RedirectsToLogin; BrowserTokenAuthenticationTests; FrontendOpenIdConnectAuthTests | Browser-token and OpenID Connect login flows protect the frontend. |
 | SHELL-RECONNECT-001 | shell | `/` | PENDING | covered | HTTP-RECOVERY-001; HTTP-RECONNECT-001 | A lost dashboard circuit or backend connection exposes reconnect and recovery UI. |
 | SHELL-UNSECURED-001 | shell | `/` | shell | covered | HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |

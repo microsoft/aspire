@@ -51,6 +51,8 @@ const config: DeckConfig = {
   otlpHttpUrl: "https://localhost:18890",
   version: "9.0.0-dev (mock)",
   runtimeVersion: "Browser mock runtime",
+  frontendAuthMode: "Unsecured",
+  user: null,
 };
 
 function makeResources(): Resource[] {

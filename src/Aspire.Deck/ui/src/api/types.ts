@@ -10,6 +10,13 @@ export interface DeckConfig {
   runtimeVersion?: string;
   isTelemetryEndpointUnsecured?: boolean;
   isApiEndpointUnsecured?: boolean;
+  frontendAuthMode?: string;
+  user?: DeckUser | null;
+}
+
+export interface DeckUser {
+  name: string;
+  username: string | null;
 }
 
 export type ManageDataType = "ResourceDetails" | "ConsoleLogs" | "StructuredLogs" | "Traces" | "Metrics" | "Resource";

@@ -200,6 +200,45 @@ test(`${features("HTTP-AUTH-001")} transfers an authentication challenge to the 
   await expect(page.getByRole("heading", { name: "Can't reach the AppHost" })).toHaveCount(0);
 });
 
+test(`${features("HTTP-USER-001")} shows the authenticated user and signs out`, async ({ page }) => {
+  await page.route("**/api/deck/config", async (route) => route.fulfill({
+    json: {
+      ...config,
+      frontendAuthMode: "OpenIdConnect",
+      user: { name: "Ada Lovelace", username: "ada@example.com" },
+    } satisfies DeckConfig,
+  }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  let logoutMethod: string | null = null;
+  await page.route("**/authentication/logout", async (route) => {
+    logoutMethod = route.request().method();
+    await route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><title>Signed out</title><h1>Signed out</h1>",
+    });
+  });
+
+  await page.goto("/?backend=http");
+  const profile = page.getByRole("button", { name: "User profile for Ada Lovelace" });
+  await expect(profile).toHaveText("AL");
+  await profile.click();
+
+  let menu = page.getByRole("menu", { name: "User profile" });
+  await expect(menu.getByText("Logged in as", { exact: true })).toBeVisible();
+  await expect(menu.getByText("Ada Lovelace", { exact: true })).toBeVisible();
+  await expect(menu.getByText("ada@example.com", { exact: true })).toBeVisible();
+  await expect(menu.getByRole("menuitem", { name: "Sign out" })).toBeVisible();
+  await page.keyboard.press("Escape");
+  await expect(menu).toBeHidden();
+
+  await profile.click();
+  menu = page.getByRole("menu", { name: "User profile" });
+  await menu.getByRole("menuitem", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/authentication\/logout$/);
+  await expect(page.getByRole("heading", { name: "Signed out" })).toBeVisible();
+  expect(logoutMethod).toBe("POST");
+});
+
 test(`${features("HTTP-MANAGE-DATA-001")} manages dashboard data through the HTTP backend`, async ({ page }) => {
   // Chromium reports an intercepted file upload as aborted after Playwright fulfills
   // it, even though the response and payload complete. The real 204 endpoint is

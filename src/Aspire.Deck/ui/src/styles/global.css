@@ -484,6 +484,61 @@ a:focus-visible {
 }
 
 /* ---------- Connection pill ---------- */
+.user-profile {
+  position: relative;
+}
+.user-profile__trigger,
+.user-profile__avatar {
+  display: grid;
+  width: 28px;
+  height: 28px;
+  place-items: center;
+  border: 1px solid var(--border-strong);
+  border-radius: 50%;
+  background: var(--accent);
+  color: var(--text-inverted);
+  font-size: 11px;
+  font-weight: 700;
+}
+.user-profile__trigger {
+  cursor: pointer;
+}
+.user-profile__menu {
+  position: absolute;
+  z-index: 1000;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 260px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  padding: 12px;
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-pop);
+}
+.user-profile__label,
+.user-profile__username {
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.user-profile__identity {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 0;
+}
+.user-profile__avatar {
+  width: 40px;
+  height: 40px;
+}
+.user-profile__name {
+  font-weight: 600;
+}
+.user-profile__signout {
+  display: flex;
+  justify-content: flex-end;
+  border-top: 1px solid var(--border);
+  padding-top: 8px;
+}
 .pill {
   display: inline-flex;
   align-items: center;

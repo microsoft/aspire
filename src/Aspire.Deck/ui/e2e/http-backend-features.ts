@@ -2,6 +2,7 @@ export const httpBackendFeatures = {
   "HTTP-SHELL-UNSECURED-001": "Backend security configuration renders a persistent, dismissible unsecured-endpoint warning.",
   "HTTP-MANAGE-DATA-001": "Manage Data inventories, selects, exports, imports, and removes dashboard data through the HTTP backend.",
   "HTTP-AUTH-001": "Frontend API authentication challenges transfer the React browser to the dashboard login flow.",
+  "HTTP-USER-001": "An authenticated OpenID user can inspect their profile and submit dashboard sign-out.",
   "HTTP-CONFIG-001": "HTTP mode loads the application identity and version from the dashboard backend.",
   "HTTP-RESOURCES-001": "HTTP mode renders the resource snapshot returned by the dashboard backend.",
   "HTTP-RESOURCE-VIRTUALIZATION-001": "Large HTTP resource inventories keep a bounded semantic table while preserving sorting and row actions.",
