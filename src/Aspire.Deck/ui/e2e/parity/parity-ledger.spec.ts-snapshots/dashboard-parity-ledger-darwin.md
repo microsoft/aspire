@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 120
-- React partial: 19
+- React covered: 121
+- React partial: 18
 - React missing: 19
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 38
+- React parity gaps: 37
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -112,7 +112,7 @@
 | CONSOLE-TERMINAL-001 | console | `/consolelogs` | PENDING | missing | - | Interactive resources render a terminal and can take or release control. |
 | CONSOLE-TERMINAL-FONT-001 | console | `/consolelogs` | PENDING | missing | - | Interactive terminal font size can be increased, decreased, and reset. |
 | CONSOLE-TERMINAL-SIZE-001 | console | `/consolelogs` | PENDING | missing | - | Interactive terminal column and row presets update the remote terminal size. |
-| CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | PENDING | partial | CONSOLE-STREAM-001 | Large console streams remain responsive and preserve stable line numbers. |
+| CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | PENDING | covered | HTTP-CONSOLE-VIRTUALIZATION-001 | Large console streams remain responsive and preserve stable line numbers. |
 | CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | PENDING | covered | CONSOLE-ROUTE-001 | Selected resource and console options are deep-linkable and restorable. |
 | LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIST-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
 | LOG-LIVE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | New structured logs stream into the list and update totals. |

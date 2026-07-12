@@ -155,7 +155,7 @@ const featureDefinitions = {
     ["CONSOLE-TERMINAL-001", "/consolelogs", "Interactive resources render a terminal and can take or release control.", null, "missing"],
     ["CONSOLE-TERMINAL-FONT-001", "/consolelogs", "Interactive terminal font size can be increased, decreased, and reset.", null, "missing"],
     ["CONSOLE-TERMINAL-SIZE-001", "/consolelogs", "Interactive terminal column and row presets update the remote terminal size.", null, "missing"],
-    ["CONSOLE-VIRTUALIZATION-001", "/consolelogs", "Large console streams remain responsive and preserve stable line numbers.", null, "partial", "CONSOLE-STREAM-001"],
+    ["CONSOLE-VIRTUALIZATION-001", "/consolelogs", "Large console streams remain responsive and preserve stable line numbers.", null, "covered", "HTTP-CONSOLE-VIRTUALIZATION-001"],
     ["CONSOLE-ROUTE-001", "/consolelogs/resource/{name}", "Selected resource and console options are deep-linkable and restorable.", null, "covered", "CONSOLE-ROUTE-001"],
   ],
   "structured-logs": [

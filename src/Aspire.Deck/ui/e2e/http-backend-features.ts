@@ -8,6 +8,7 @@ export const httpBackendFeatures = {
   "HTTP-INTERACTION-001": "HTTP mode round-trips resource command input interactions through the dashboard backend.",
   "HTTP-CONSOLE-001": "HTTP mode replays and streams resource console output from the dashboard backend.",
   "HTTP-CONSOLE-CONTROLS-001": "HTTP console output supports parsed timestamps, UTC display, wrapping, and exact text download.",
+  "HTTP-CONSOLE-VIRTUALIZATION-001": "HTTP console keeps a bounded DOM while preserving full-stream geometry and stable line numbers.",
   "HTTP-STRUCTURED-LOGS-001": "HTTP mode replays and streams OTLP structured logs from the dashboard backend.",
   "HTTP-STRUCTURED-LOG-DETAILS-001": "HTTP mode preserves event, scope, exception, resource, and correlation details for structured logs.",
   "HTTP-STRUCTURED-LOG-CLEAR-001": "HTTP mode clears one structured-log resource or all resources and refreshes its snapshot.",

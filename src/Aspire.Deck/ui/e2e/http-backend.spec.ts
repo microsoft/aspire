@@ -402,6 +402,41 @@ test(`${features("HTTP-CONSOLE-001", "HTTP-CONSOLE-CONTROLS-001")} streams and c
   });
 });
 
+test(`${features("HTTP-CONSOLE-VIRTUALIZATION-001")} virtualizes a 5000-line console backlog`, async ({ page }) => {
+  await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/deck/resources/stress-api-abc123/console-logs", async (route) => {
+    await route.fulfill({
+      contentType: "application/x-ndjson",
+      body: `${JSON.stringify({
+        resourceName: resource.name,
+        lines: Array.from({ length: 5_000 }, (_, index) => ({
+          lineNumber: index + 1,
+          text: `virtualized line ${index + 1}`,
+          isStdErr: false,
+        })),
+      })}\n`,
+    });
+  });
+
+  await page.goto("/?backend=http");
+  await page.getByRole("navigation").getByRole("button", { name: /^Console(?: \d+)?$/ }).click();
+  await page.getByRole("main").getByRole("combobox", { name: "Resource" }).selectOption(resource.name);
+  const consoleRegion = page.getByRole("main").getByRole("region", { name: "Console" });
+  const scroller = consoleRegion.locator(".console__scroll");
+  await expect(consoleRegion.locator(".console__footer")).toContainText("5,000 lines");
+  await expect(consoleRegion.locator(".console__scroll > div")).toHaveAttribute("style", /height: 105000px/);
+  expect(await consoleRegion.locator(".log-line").count()).toBeLessThan(100);
+
+  await scroller.evaluate((element) => { element.scrollTop = 0; element.dispatchEvent(new Event("scroll")); });
+  await expect(consoleRegion.getByText("virtualized line 1", { exact: true })).toBeVisible();
+  await expect(consoleRegion.locator(".log-line__num").first()).toHaveText("1");
+  await scroller.evaluate((element) => { element.scrollTop = element.scrollHeight; element.dispatchEvent(new Event("scroll")); });
+  await expect(consoleRegion.getByText("virtualized line 5000", { exact: true })).toBeVisible();
+  await expect(consoleRegion.locator(".log-line__num").last()).toHaveText("5000");
+  expect(await consoleRegion.locator(".log-line").count()).toBeLessThan(100);
+});
+
 test(`${features("HTTP-STRUCTURED-LOGS-001", "HTTP-STRUCTURED-LOG-DETAILS-001")} streams detailed OTLP structured logs through the HTTP backend`, async ({ page }, testInfo) => {
   let structuredLogRequests = 0;
   await page.route("**/api/deck/config", async (route) => {
