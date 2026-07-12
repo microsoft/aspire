@@ -5,7 +5,7 @@ import type {
   SpanSummary,
   TelemetryAttribute,
 } from "../api/types";
-import { dateFromUnixNano, formatDurationNanos, formatTimeWithMillis, shortId } from "../lib/format";
+import { dateFromUnixNano, formatDateTime, formatDurationNanos, formatTimeWithMillis, shortId } from "../lib/format";
 import {
   Badge,
   Divider,
@@ -210,7 +210,7 @@ export function SpanDetailDrawer({
       <div className="span-detail__record">
         <div className="span-detail__record-heading">
           <strong>{event.name}</strong>
-          <span title={dateFromUnixNano(event.timeUnixNano).toLocaleString()}>
+          <span title={formatDateTime(dateFromUnixNano(event.timeUnixNano))}>
             {formatTimeWithMillis(dateFromUnixNano(event.timeUnixNano))}
           </span>
         </div>
@@ -308,7 +308,7 @@ export function SpanDetailDrawer({
               Duration <strong>{formatDurationNanos(span.durationNanos)}</strong>
             </span>
             <Divider label="Span timing" />
-            <span className="span-detail__meta" title={started.toLocaleString()}>
+            <span className="span-detail__meta" title={formatDateTime(started)}>
               Started <strong>{formatTimeWithMillis(started)}</strong>
             </span>
           </div>

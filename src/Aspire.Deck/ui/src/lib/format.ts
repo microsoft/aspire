@@ -1,4 +1,5 @@
 // Formatting helpers for durations, timestamps and byte sizes.
+import { timeFormatOptions } from "./timeFormat";
 
 const NANOS_PER_MS = 1_000_000;
 
@@ -51,6 +52,7 @@ export function formatTime(value: Date | string | null): string {
     return "—";
   }
   return date.toLocaleTimeString(undefined, {
+    ...timeFormatOptions(),
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
@@ -66,11 +68,16 @@ export function formatTimeWithMillis(value: Date | string | null): string {
     return "—";
   }
   return date.toLocaleTimeString(undefined, {
+    ...timeFormatOptions(),
     hour: "2-digit",
     minute: "2-digit",
     second: "2-digit",
     fractionalSecondDigits: 3,
   });
+}
+
+export function formatDateTime(value: Date): string {
+  return value.toLocaleString(undefined, timeFormatOptions());
 }
 
 export function formatRelativeTime(value: string | null): string {

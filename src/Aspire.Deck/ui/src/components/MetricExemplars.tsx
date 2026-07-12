@@ -1,6 +1,6 @@
 import type { MetricExemplar } from "../api/types";
 import { Button } from "../toolkit";
-import { formatMetricValue } from "../lib/format";
+import { formatMetricValue, formatTimeWithMillis } from "../lib/format";
 
 export function MetricExemplars({
   exemplars,
@@ -24,7 +24,7 @@ export function MetricExemplars({
           <tbody>
             {exemplars.map((exemplar, index) => (
               <tr key={`${exemplar.timestampMs}-${exemplar.traceId}-${index}`}>
-                <td className="cell-mono">{new Date(exemplar.timestampMs).toLocaleTimeString()}</td>
+                <td className="cell-mono">{formatTimeWithMillis(new Date(exemplar.timestampMs))}</td>
                 <td className="cell-mono">{formatMetricValue(exemplar.value, unit)}</td>
                 <td>{exemplar.attributes.length === 0 ? "—" : exemplar.attributes.map((attribute) => `${attribute.key}=${attribute.value}`).join(", ")}</td>
                 <td>

@@ -5,6 +5,7 @@ import { useTheme } from "./lib/theme";
 import { ToolkitPlayground } from "./playground/ToolkitPlayground";
 import { DeckProvider } from "./toolkit";
 import { AppErrorBoundary } from "./components/AppErrorBoundary";
+import { useTimeFormat } from "./lib/timeFormat";
 import "./styles/global.css";
 
 const container = document.getElementById("root");
@@ -26,6 +27,7 @@ function RenderErrorTrigger(): never {
 
 function Root() {
   const { theme, themeChoice, setThemeChoice, toggleTheme } = useTheme();
+  const [timeFormatChoice, setTimeFormatChoice] = useTimeFormat();
   const view = new URLSearchParams(window.location.search).get("view");
 
   return (
@@ -35,7 +37,14 @@ function Root() {
       ) : view === "toolkit" ? (
         <ToolkitPlayground theme={theme} onToggleTheme={toggleTheme} />
       ) : (
-        <App theme={theme} themeChoice={themeChoice} onThemeChoiceChange={setThemeChoice} onToggleTheme={toggleTheme} />
+        <App
+          theme={theme}
+          themeChoice={themeChoice}
+          onThemeChoiceChange={setThemeChoice}
+          onToggleTheme={toggleTheme}
+          timeFormatChoice={timeFormatChoice}
+          onTimeFormatChoiceChange={setTimeFormatChoice}
+        />
       )}
     </DeckProvider>
   );

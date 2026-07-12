@@ -157,16 +157,55 @@ test(`${features("APP-REPOSITORY-001", "APP-HELP-001", "APP-SETTINGS-001", "APP-
   const settings = page.getByRole("dialog", { name: "Settings" });
   await expect(settings).toContainText("Dashboard version9.0.0-dev (mock)");
   await expect(settings).toContainText("Runtime versionBrowser mock runtime");
-  await settings.getByRole("radio", { name: "System" }).check();
+  const themeSettings = settings.getByRole("group", { name: "Theme" });
+  await themeSettings.getByRole("radio", { name: "System" }).check();
   await expect.poll(() => page.evaluate(() => localStorage.getItem("aspire-deck-theme"))).toBe("system");
-  await settings.getByRole("radio", { name: "Light" }).check();
+  await themeSettings.getByRole("radio", { name: "Light" }).check();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "light");
-  await settings.getByRole("radio", { name: "Dark" }).check();
+  await themeSettings.getByRole("radio", { name: "Dark" }).check();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await attachScreenshot(page, testInfo, "dashboard-settings");
   await settings.getByRole("button", { name: "Close" }).click();
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
+});
+
+test(`${features("APP-TIME-FORMAT-001")} applies and persists the selected time format`, async ({ page }) => {
+  const openSettings = async () => {
+    await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+    return page.getByRole("dialog", { name: "Settings" });
+  };
+  const readStarted = async (): Promise<string> => {
+    await navigationButton(page, "Resources").click();
+    await page.getByRole("row", { name: /apiservice/ }).click();
+    const details = page.getByRole("dialog", { name: "apiservice" });
+    const started = details.getByTestId("resource-started-time");
+    const value = await started.innerText();
+    await details.getByRole("button", { name: "Close details" }).click();
+    return value;
+  };
+  const readLogTimes = async (): Promise<string[]> => {
+    await navigationButton(page, "Structured Logs").click();
+    return page.getByRole("table").locator(".cell-time").allTextContents();
+  };
+
+  let settings = await openSettings();
+  const timeSettings = settings.getByRole("group", { name: "Time format" });
+  await timeSettings.getByRole("radio", { name: "12-hour" }).check();
+  await settings.getByRole("button", { name: "Close" }).click();
+  expect(await readStarted()).toMatch(/\b(?:AM|PM)\b/);
+  expect(await readLogTimes()).toEqual(expect.arrayContaining([expect.stringMatching(/\b(?:AM|PM)\b/)]));
+
+  settings = await openSettings();
+  await settings.getByRole("group", { name: "Time format" }).getByRole("radio", { name: "24-hour" }).check();
+  await settings.getByRole("button", { name: "Close" }).click();
+  expect(await readStarted()).toMatch(/^\d{2}:\d{2}:\d{2}$/);
+  expect(await readLogTimes()).toEqual(expect.arrayContaining([expect.stringMatching(/^\d{2}:\d{2}:\d{2}\.\d{3}$/)]));
+  await expect.poll(() => page.evaluate(() => localStorage.getItem("aspire-deck-time-format"))).toBe("24-hour");
+
+  await page.reload();
+  settings = await openSettings();
+  await expect(settings.getByRole("group", { name: "Time format" }).getByRole("radio", { name: "24-hour" })).toBeChecked();
 });
 
 test(`${features("APP-ROUTES-001")} restores page routes and browser history`, async ({ page }) => {

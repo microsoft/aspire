@@ -3,6 +3,7 @@ import type { DeckConfig } from "./api/types";
 import { PARAMETER_RESOURCE_TYPE } from "./api/types";
 import { getConfig } from "./api/deck";
 import type { Theme, ThemeChoice } from "./lib/theme";
+import type { TimeFormatChoice } from "./lib/timeFormat";
 import { Sidebar } from "./components/Sidebar";
 import { TopBar } from "./components/TopBar";
 import { NotConnected } from "./components/NotConnected";
@@ -31,11 +32,15 @@ export function App({
   themeChoice,
   onThemeChoiceChange,
   onToggleTheme,
+  timeFormatChoice,
+  onTimeFormatChoiceChange,
 }: {
   theme: Theme;
   themeChoice: ThemeChoice;
   onThemeChoiceChange: (choice: ThemeChoice) => void;
   onToggleTheme: () => void;
+  timeFormatChoice: TimeFormatChoice;
+  onTimeFormatChoiceChange: (choice: TimeFormatChoice) => void;
 }) {
   const connection = useConnection();
   const { resources } = useResources();
@@ -327,6 +332,8 @@ export function App({
         config={config}
         themeChoice={themeChoice}
         onThemeChoiceChange={onThemeChoiceChange}
+        timeFormatChoice={timeFormatChoice}
+        onTimeFormatChoiceChange={onTimeFormatChoiceChange}
         onClose={() => setSettingsOpen(false)}
       />
     </div>

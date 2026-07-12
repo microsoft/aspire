@@ -159,7 +159,7 @@ export function DetailsDrawer({
           <div className="kv__key">Health</div>
           <div className="kv__val">{resource.health ?? "—"}</div>
           <div className="kv__key">Started</div>
-          <div className="kv__val">{formatTime(resource.startedAt)}</div>
+          <div className="kv__val" data-testid="resource-started-time">{formatTime(resource.startedAt)}</div>
           {resource.stoppedAt ? (
             <>
               <div className="kv__key">Stopped</div>

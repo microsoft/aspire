@@ -2,7 +2,8 @@ import { useEffect, useRef } from "react";
 import uPlot from "uplot";
 import "uplot/dist/uPlot.min.css";
 import type { MetricKind } from "../api/types";
-import { formatMetricValue } from "../lib/format";
+import { formatMetricValue, formatTime } from "../lib/format";
+import { getTimeFormatChoice } from "../lib/timeFormat";
 
 function cssVar(name: string, fallback: string): string {
   if (typeof window === "undefined") {
@@ -46,7 +47,7 @@ export function MetricChart({
 
   // Recreate the plot when its structural shape changes (series count, unit,
   // kind, height). Live data updates go through the separate effect below.
-  const shapeKey = `${kind}|${unit ?? ""}|${height}|${lines.map((l) => l.label).join(",")}`;
+  const shapeKey = `${kind}|${unit ?? ""}|${height}|${lines.map((l) => l.label).join(",")}|${getTimeFormatChoice()}`;
 
   useEffect(() => {
     const container = containerRef.current;
@@ -65,11 +66,7 @@ export function MetricChart({
         value: (_self, raw) =>
           raw === null
             ? "—"
-            : new Date(raw * 1000).toLocaleTimeString(undefined, {
-                hour: "2-digit",
-                minute: "2-digit",
-                second: "2-digit",
-              }),
+            : formatTime(new Date(raw * 1000)),
       },
       ...lines.map<uPlot.Series>((line) => ({
         label: line.label,

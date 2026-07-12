@@ -5,7 +5,7 @@ import { MetricChart, type ChartLine } from "../components/MetricChart";
 import { MetricDimensionFilters } from "../components/MetricDimensionFilters";
 import { MetricExemplars } from "../components/MetricExemplars";
 import { MetricTreeSelector } from "../components/MetricTreeSelector";
-import { displayUnit, formatMetricValue } from "../lib/format";
+import { displayUnit, formatMetricValue, formatTimeWithMillis } from "../lib/format";
 import { useResources, useTelemetry } from "../lib/useDeckEvent";
 import {
   CommandMenu,
@@ -402,7 +402,7 @@ function MetricSeriesTable({ series }: { series: MetricSeriesResponse | null }) 
         <tbody>
           {series.timestampsMs.map((timestamp, index) => (
             <tr key={`${timestamp}-${index}`}>
-              <td className="cell-mono">{new Date(timestamp).toLocaleTimeString()}</td>
+              <td className="cell-mono">{formatTimeWithMillis(new Date(timestamp))}</td>
               {lines.map((values, lineIndex) => (
                 <td key={headers[lineIndex]} className="cell-mono">
                   {formatMetricValue(values[index] ?? null, series.unit)}

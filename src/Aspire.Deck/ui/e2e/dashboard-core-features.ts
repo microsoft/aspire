@@ -10,6 +10,7 @@ export const dashboardCoreFeatures = {
   "APP-REPOSITORY-001": "The top bar links to the Aspire repository in a safe external tab.",
   "APP-HELP-001": "Help exposes dashboard documentation and every implemented keyboard shortcut.",
   "APP-SETTINGS-001": "Settings reports dashboard/runtime versions and controls theme selection.",
+  "APP-TIME-FORMAT-001": "Settings persists and applies system, 12-hour, and 24-hour timestamp formatting.",
   "APP-KEYBOARD-001": "Page, Help, and Settings shortcuts work outside editable controls.",
   "APP-NOTFOUND-001": "Unknown paths render a dedicated 404 experience and recover to Resources.",
   "APP-ERROR-001": "The error route and React render boundary expose recovery and reload actions.",

@@ -1,6 +1,6 @@
 import { useMemo, type ReactNode } from "react";
 import type { LogRecordSummary, TelemetryAttribute } from "../api/types";
-import { dateFromUnixNano, formatTimeWithMillis } from "../lib/format";
+import { dateFromUnixNano, formatDateTime, formatTimeWithMillis } from "../lib/format";
 import {
   Divider,
   Drawer,
@@ -128,7 +128,7 @@ export function StructuredLogDetailsDrawer({
               Resource <strong>{log.resourceName ?? "unknown"}</strong>
             </span>
             <Divider label="Log metadata" />
-            <span className="structured-log-details__meta" title={timestamp.toLocaleString()}>
+            <span className="structured-log-details__meta" title={formatDateTime(timestamp)}>
               Timestamp <strong>{formatTimeWithMillis(timestamp)}</strong>
             </span>
           </div>

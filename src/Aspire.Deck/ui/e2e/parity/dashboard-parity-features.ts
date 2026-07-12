@@ -57,7 +57,7 @@ const featureDefinitions = {
     ["SHELL-SETTINGS-001", "/", "Settings opens from the top bar and reports dashboard/runtime versions.", "shell", "covered", "APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
     ["SHELL-THEME-001", "/", "System, light, and dark theme selection is persisted.", "shell", "covered", "APP-THEME-001; APP-SETTINGS-001"],
     ["SHELL-LANGUAGE-001", "/", "The dashboard language can be selected and applied.", "shell", "missing"],
-    ["SHELL-TIME-FORMAT-001", "/", "System, 12-hour, and 24-hour time formatting can be selected.", "shell", "missing"],
+    ["SHELL-TIME-FORMAT-001", "/", "System, 12-hour, and 24-hour time formatting can be selected.", "shell", "covered", "APP-TIME-FORMAT-001"],
     ["SHELL-MANAGE-DATA-001", "/", "Resource logs and telemetry can be inspected, exported, imported, and cleared.", null, "missing"],
     ["SHELL-USER-001", "/", "Authenticated user profile and sign-out behavior are available when configured.", null, "missing"],
     ["SHELL-AUTH-001", "/login", "Browser-token and OpenID Connect login flows protect the frontend.", null, "missing"],
