@@ -184,10 +184,12 @@ internal static class KubernetesDeployTestHelpers
     ///     control-plane install and workspace are pinned to the intended cluster.
     ///   </description></item>
     ///   <item><description>
-    ///     <c>rad install kubernetes</c> does NOT create a default resource group,
-    ///     environment, or workspace, so <c>rad deploy</c> would otherwise fail to
-    ///     resolve a scope. We create <c>default</c>/<c>default</c> and a workspace
-    ///     bound to them explicitly.
+    ///     <c>rad install kubernetes</c> provisions the <c>default</c> resource group
+    ///     and environment, but does NOT persist a workspace, so <c>rad deploy</c>
+    ///     would otherwise fail to resolve a workspace scope. We create the workspace
+    ///     explicitly; the <c>rad group create</c>/<c>rad env create</c> calls below are
+    ///     defensive (idempotent) so the sequence still succeeds even if a future
+    ///     <c>rad</c> stops creating the group/environment during install.
     ///   </description></item>
     /// </list>
     /// </remarks>

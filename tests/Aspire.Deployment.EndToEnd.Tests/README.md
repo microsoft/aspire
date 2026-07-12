@@ -184,8 +184,15 @@ Radius-specific notes:
 - **Verifies the Radius.Core UDT app, not just Redis.** Graph validation uses
   `rad app graph -a app --preview` (the legacy `rad app graph` routes to Applications.Core, which
   the Redis-only legacy `app` satisfies on its own) and asserts the graph names both project
-  containers. The `webfrontend` probe requests `/weather` (not `/`) so it exercises the
-  `AddRedisOutputCache` path and the apiservice API client end-to-end.
+  containers. Each container is then probed on its own HTTP endpoint via `kubectl port-forward`:
+  `apiservice`'s `/weatherforecast` and `webfrontend`'s home page (`/`).
+- **Cross-container connectivity is not asserted (current Radius limitation).** The `webfrontend`
+  `/weather` page fans out to `apiservice` through the Redis output cache, but Radius 0.59 does not
+  synthesize a Kubernetes `Service` for a `Radius.Compute/containers` workload, so the
+  service-discovery hostname Aspire emits for `apiservice`
+  (`apiservice.<namespace>.svc.cluster.local`) does not resolve in-cluster (`rad app graph` shows
+  `webfrontend` wired only to the cache). The test therefore validates each container in isolation
+  rather than the `/weather` end-to-end path until that connectivity is supported.
 
 ## TypeScript deployment coverage
 

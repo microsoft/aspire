@@ -200,11 +200,19 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // the KUBECONFIG environment variable, unlike az/kubectl. With our isolated
             // $KUBECONFIG (Step 1b), that step fails with
             // "failed to initialize Kubernetes client config: open ~/.kube/config: no such file or directory".
-            // Symlink the default path to our isolated kubeconfig so `rad` finds the AKS context.
-            // Only create it when absent so a developer's real ~/.kube/config is never clobbered on
-            // a local run (on the ephemeral CI runner the file does not exist, so the symlink is used).
+            // Point the default path at our isolated kubeconfig so `rad` finds the AKS context.
+            //
+            // Back up a developer's real ~/.kube/config first (a non-symlink file), then force the
+            // symlink so `rad install` can never read the developer's current-context cluster on a
+            // local run. The RestoreDefaultKubeConfig call in `finally` moves the backup back (or
+            // removes our symlink when none existed, e.g. on the ephemeral CI runner), so the
+            // developer's kube state is never left pointing at the deleted cluster or dangling into
+            // the deleted workspace — even if the test fails.
             output.WriteLine("Step 8b: Linking default kubeconfig path for rad install...");
-            await auto.TypeAsync("mkdir -p \"$HOME/.kube\" && { [ -e \"$HOME/.kube/config\" ] || ln -s \"$KUBECONFIG\" \"$HOME/.kube/config\"; }");
+            await auto.TypeAsync(
+                "mkdir -p \"$HOME/.kube\" && " +
+                $"{{ [ -e \"$HOME/.kube/config\" ] && [ ! -L \"$HOME/.kube/config\" ] && cp -a \"$HOME/.kube/config\" \"{wsRoot}/kube-default.bak\" || true; }} && " +
+                "ln -sf \"$KUBECONFIG\" \"$HOME/.kube/config\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -497,10 +505,54 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
         }
         finally
         {
+            // Restore the developer's default kubeconfig that Step 8b shadowed with a symlink to
+            // the isolated $KUBECONFIG. Runs even on failure so a local run never leaves
+            // ~/.kube/config pointing at the deleted cluster or dangling into the deleted workspace.
+            RestoreDefaultKubeConfig(workspace.WorkspaceRoot.FullName);
+
             // Deleting the resource group removes AKS, ACR, and all Radius control-plane state,
             // so no separate `rad` cleanup is required.
             output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
             await CleanupResourceGroupAsync(resourceGroupName);
+        }
+    }
+
+    /// <summary>
+    /// Reverses the Step 8b default-kubeconfig shadow. If a real <c>~/.kube/config</c> existed
+    /// before the run it was copied to <c>&lt;workspace&gt;/kube-default.bak</c>; move it back.
+    /// Otherwise remove only the symlink we created (never a real file a concurrent process may
+    /// have written). Best-effort: cleanup must not mask a test failure.
+    /// </summary>
+    private void RestoreDefaultKubeConfig(string workspaceRoot)
+    {
+        try
+        {
+            var home = Environment.GetEnvironmentVariable("HOME")
+                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+            if (string.IsNullOrEmpty(home))
+            {
+                return;
+            }
+
+            var defaultKubeConfig = Path.Combine(home, ".kube", "config");
+            var backup = Path.Combine(workspaceRoot, "kube-default.bak");
+
+            if (File.Exists(backup))
+            {
+                File.Move(backup, defaultKubeConfig, overwrite: true);
+            }
+            else
+            {
+                var info = new FileInfo(defaultKubeConfig);
+                if (info.Exists && info.LinkTarget is not null)
+                {
+                    info.Delete();
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            output.WriteLine($"Warning: could not restore default kubeconfig: {ex.Message}");
         }
     }
 

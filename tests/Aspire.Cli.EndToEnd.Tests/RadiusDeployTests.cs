@@ -149,10 +149,16 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             // aspire deploy regenerates the artifacts and runs `rad deploy app.bicep`
             // against the radius-e2e workspace (pinned to this KinD cluster). A
             // container-only Radius app has no parameters to prompt for.
+            //
+            // Wait on this command's own sequence-numbered prompt with the full deploy
+            // budget rather than WaitForPipelineSuccessAsync: the latter scans the whole
+            // viewport and would match the stale "Pipeline succeeded" left by the earlier
+            // `aspire publish`, returning before this deploy finishes. The prompt wait is
+            // scoped to this command and still fails fast on a non-zero deploy via the ERR
+            // prompt.
             await auto.TypeAsync("aspire deploy");
             await auto.EnterAsync();
-            await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(15));
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(15));
 
             // =================================================================
             // Phase 5: Verify the workload is scheduled and serving HTTP
@@ -187,10 +193,15 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter);
 
             // The aspnetapp sample serves HTTP 200 on `/`. Retry to absorb the brief
-            // window while the port-forward and container finish coming up.
+            // window while the port-forward and container finish coming up. The success
+            // marker is split in the shell source (VERIFY''_OK evaluates to VERIFY_OK) so
+            // the contiguous token appears only in curl's output on a 200, never in the
+            // echoed command line — otherwise WaitUntilTextAsync would match the command
+            // itself and return before curl succeeds. Mirrors BICEP_IMAGES''_OK in the
+            // AKS deployment test.
             await auto.TypeAsync("for i in $(seq 1 20); do " +
                 "code=$(curl -s -o /dev/null -w '%{http_code}' http://localhost:18080/ 2>/dev/null); " +
-                "if [ \"$code\" = \"200\" ]; then echo \"VERIFY_OK: http=$code\"; break; fi; " +
+                "if [ \"$code\" = \"200\" ]; then echo VERIFY''_OK; break; fi; " +
                 "echo \"Attempt $i: got http=$code, retrying...\"; sleep 5; done");
             await auto.EnterAsync();
             await auto.WaitUntilTextAsync("VERIFY_OK", timeout: TimeSpan.FromMinutes(3));
