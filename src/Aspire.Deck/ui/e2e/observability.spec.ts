@@ -337,6 +337,42 @@ test(`${features("LOG-DETAILS-001", "LOG-ACTIONS-001")} opens complete structure
   await expect(details).toHaveCount(0);
 });
 
+test(`${features("LOG-GENAI-001", "TRACE-GENAI-001")} opens GenAI conversations from logs and spans`, async ({ page }) => {
+  await navigationButton(page, "Structured Logs").click();
+  await page.getByRole("switch", { name: "Pause incoming data" }).check();
+  const query = page.getByRole("textbox", { name: "Filter messages…" });
+  await query.fill("Summarize the latest catalog changes.");
+  const genAILogRows = page.getByRole("table").locator("tbody tr");
+  await expect.poll(() => genAILogRows.count()).toBeGreaterThan(0);
+  const logRow = genAILogRows.first();
+  await logRow.getByRole("button", { name: "Log actions" }).click();
+  await page.getByRole("menu", { name: "Log actions" }).getByRole("menuitem", { name: "View Generative AI details" }).click();
+
+  const logVisualizer = page.getByRole("dialog", { name: "Generative AI details" });
+  await expect(logVisualizer).toContainText("Provider openai");
+  await expect(logVisualizer).toContainText("Model gpt-4.1-mini");
+  await expect(logVisualizer.getByRole("region", { name: "GenAI conversation" })).toContainText("Summarize the latest catalog changes.");
+  await logVisualizer.getByRole("button", { name: "Close" }).click();
+
+  await navigationButton(page, "Traces").click();
+  await page.getByRole("switch", { name: "Pause incoming data" }).check();
+  await page.getByRole("combobox", { name: "Span type" }).selectOption("genai");
+  const genAISpan = page.locator(".wf__span").filter({ hasText: "chat completion" });
+  await expect(genAISpan).toHaveCount(1);
+  await genAISpan.click();
+  const spanDetails = page.getByRole("dialog", { name: "chat completion" });
+  await spanDetails.getByRole("button", { name: "Span actions" }).click();
+  await page.getByRole("menu", { name: "Span actions" }).getByRole("menuitem", { name: "View Generative AI details" }).click();
+
+  const spanVisualizer = page.getByRole("dialog", { name: "Generative AI details" });
+  const conversation = spanVisualizer.getByRole("region", { name: "GenAI conversation" });
+  await expect(spanVisualizer).toContainText("Operation chat");
+  await expect(conversation).toContainText("Summarize the latest catalog changes.");
+  await expect(conversation).toContainText("The catalog added two products and updated pricing.");
+  await spanVisualizer.getByRole("button", { name: "Close" }).click();
+  await spanDetails.getByRole("button", { name: "Close" }).click();
+});
+
 test(`${features("LOG-TRACE-LINK-001", "TRACE-DETAIL-ROUTE-001")} opens and restores the related trace span`, async ({ page }) => {
   await navigationButton(page, "Structured Logs").click();
 

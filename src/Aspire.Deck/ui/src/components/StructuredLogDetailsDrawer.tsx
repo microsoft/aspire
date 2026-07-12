@@ -36,6 +36,7 @@ export function StructuredLogDetailsDrawer({
   onClose,
   onViewMessage,
   onViewJson,
+  onViewGenAI,
   onNavigateToTrace,
   canNavigateToTrace,
 }: {
@@ -43,6 +44,7 @@ export function StructuredLogDetailsDrawer({
   onClose: () => void;
   onViewMessage: () => void;
   onViewJson: () => void;
+  onViewGenAI?: () => void;
   onNavigateToTrace: (traceId: string, spanId: string | null) => void;
   canNavigateToTrace: boolean;
 }) {
@@ -138,6 +140,7 @@ export function StructuredLogDetailsDrawer({
             placement="below-start"
             onViewMessage={onViewMessage}
             onViewJson={onViewJson}
+            onViewGenAI={onViewGenAI}
           />
         )}
       />

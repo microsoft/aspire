@@ -107,6 +107,7 @@ export function SpanDetailDrawer({
   onNavigateToSpan,
   onViewLogs,
   onViewJson,
+  onViewGenAI,
 }: {
   span: SpanSummary;
   allSpans: readonly SpanSummary[];
@@ -115,6 +116,7 @@ export function SpanDetailDrawer({
   onNavigateToSpan: (traceId: string, spanId: string | null) => void;
   onViewLogs: () => void;
   onViewJson: () => void;
+  onViewGenAI?: () => void;
 }) {
   const backlinks = useMemo<SpanBacklink[]>(() => allSpans.flatMap((source) =>
     source.links.flatMap((link) =>
@@ -318,6 +320,7 @@ export function SpanDetailDrawer({
             placement="below-start"
             onViewLogs={onViewLogs}
             onViewJson={onViewJson}
+            onViewGenAI={onViewGenAI}
           />
         )}
       />

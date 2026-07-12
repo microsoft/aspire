@@ -1288,6 +1288,7 @@ class MockBackend {
     // interaction tests always exercise both successful and failed traces.
     const telemetryIndex = this.telemetryTick++;
     const isErr = telemetryIndex % 4 === 0;
+    const isGenAI = telemetryIndex % 5 === 1;
     const resourceName = this.resources[telemetryIndex % 3]?.name ?? "frontend";
     const traceId = indexedHex(telemetryIndex + 1, 32);
     const spanIdBase = telemetryIndex * 8 + 1;
@@ -1297,18 +1298,25 @@ class MockBackend {
       observedTimeUnixNano: toUnixNano(timestampMs),
       severity: isErr ? "Error" : "Information",
       severityNumber: isErr ? 17 : 9,
-      body: isErr
+      body: isGenAI
+        ? JSON.stringify({ content: "Summarize the latest catalog changes." })
+        : isErr
         ? errorBodies[Math.floor(Math.random() * errorBodies.length)]!
         : logBodies[Math.floor(Math.random() * logBodies.length)]!,
       resourceName,
       traceId,
       spanId,
       parentId: null,
-      eventName: isErr ? "Catalog.RequestFailed" : "Catalog.RequestCompleted",
+      eventName: isGenAI ? "gen_ai.user.message" : isErr ? "Catalog.RequestFailed" : "Catalog.RequestCompleted",
       originalFormat: null,
       scopeName: "Aspire.Deck.MockTelemetry",
       scopeVersion: "1.0.0",
       attributes: [
+        ...(isGenAI ? [
+          { key: "event.name", value: "gen_ai.user.message" },
+          { key: "gen_ai.system", value: "openai" },
+          { key: "gen_ai.request.model", value: "gpt-4.1-mini" },
+        ] : []),
         { key: "http.request.method", value: isErr ? "POST" : "GET" },
         { key: "http.response.status_code", value: isErr ? "500" : "200" },
         ...(isErr
@@ -1356,7 +1364,7 @@ class MockBackend {
       dur: number;
       error?: boolean;
     }[] = [
-      { spanId: parentId, parentSpanId: null, name: pick(spanNames), kind: "Server", resource: resourceName, start: 0, dur: 200 },
+      { spanId: parentId, parentSpanId: null, name: isGenAI ? "chat completion" : pick(spanNames), kind: "Server", resource: resourceName, start: 0, dur: 200 },
       { spanId: indexedHex(spanIdBase + 1, 16), parentSpanId: parentId, name: "redis GET", kind: "Client", resource: "cache", start: 12, dur: 18 },
       { spanId: dbChildId, parentSpanId: parentId, name: "products.query", kind: "Client", resource: "apiservice", start: 40, dur: 130, error: isErr },
       { spanId: indexedHex(spanIdBase + 3, 16), parentSpanId: dbChildId, name: "npgsql SELECT", kind: "Client", resource: "catalogdb", start: 55, dur: 95 },
@@ -1380,6 +1388,13 @@ class MockBackend {
       attributes: [
         { key: "code.function.name", value: s.name },
         { key: "server.address", value: s.resource },
+        ...(isGenAI && s.parentSpanId === null ? [
+          { key: "gen_ai.system", value: "openai" },
+          { key: "gen_ai.operation.name", value: "chat" },
+          { key: "gen_ai.request.model", value: "gpt-4.1-mini" },
+          { key: "gen_ai.input.messages", value: JSON.stringify([{ role: "user", content: "Summarize the latest catalog changes." }]) },
+          { key: "gen_ai.output.messages", value: JSON.stringify([{ role: "assistant", content: "The catalog added two products and updated pricing." }]) },
+        ] : []),
         ...(s.name === "redis GET" || s.name === "npgsql SELECT"
           ? [{ key: "db.system.name", value: s.name === "redis GET" ? "redis" : "postgresql" }]
           : s.name === "products.query"

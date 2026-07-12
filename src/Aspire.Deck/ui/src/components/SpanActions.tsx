@@ -56,11 +56,13 @@ export function SpanActions({
   onViewDetails,
   onViewLogs,
   onViewJson,
+  onViewGenAI,
   placement = "below-end",
 }: {
   onViewDetails?: () => void;
   onViewLogs: () => void;
   onViewJson: () => void;
+  onViewGenAI?: () => void;
   placement?: "below-start" | "below-end" | "above-start" | "above-end";
 }) {
   return (
@@ -71,6 +73,7 @@ export function SpanActions({
       triggerSize="small"
       placement={placement}
       entries={[
+        ...(onViewGenAI ? [{ id: "view-genai", label: "View Generative AI details", icon: <NamedIcon name="Sparkle" size={16} />, onSelect: onViewGenAI }] : []),
         ...(onViewDetails
           ? [{
               id: "view-details",

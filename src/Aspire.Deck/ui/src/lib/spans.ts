@@ -14,11 +14,13 @@ export const SPAN_TYPE_OPTIONS: ReadonlyArray<{ value: SpanTypeId; label: string
 ];
 
 const ATTRIBUTE_TYPES: ReadonlyArray<{ type: Exclude<SpanTypeId, "all" | "cloud" | "other">; keys: readonly string[] }> = [
+  // GenAI client libraries can also emit HTTP/RPC attributes. Prefer the
+  // domain-specific classification so those spans remain discoverable.
+  { type: "genai", keys: ["gen_ai.system", "gen_ai.provider.name", "gen_ai.operation.name"] },
   { type: "http", keys: ["http.request.method"] },
   { type: "database", keys: ["db.system.name", "db.system"] },
   { type: "messaging", keys: ["messaging.system"] },
   { type: "rpc", keys: ["rpc.system"] },
-  { type: "genai", keys: ["gen_ai.system", "gen_ai.provider.name", "gen_ai.operation.name"] },
 ];
 
 function hasAttribute(span: SpanSummary, keys: readonly string[]): boolean {

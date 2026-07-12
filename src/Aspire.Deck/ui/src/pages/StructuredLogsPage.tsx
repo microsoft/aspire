@@ -3,6 +3,7 @@ import { clearStructuredLogs } from "../api/deck";
 import type { LogRecordSummary, TelemetrySummary } from "../api/types";
 import { StructuredLogActions, formatStructuredLogJson } from "../components/StructuredLogActions";
 import { StructuredLogDetailsDrawer } from "../components/StructuredLogDetailsDrawer";
+import { GenAIVisualizerDialog, hasGenAIAttributes } from "../components/GenAIVisualizerDialog";
 import { TraceLink } from "../components/TraceLink";
 import { useTelemetry } from "../lib/useDeckEvent";
 import { dateFromUnixNano, formatTimeWithMillis, shortId } from "../lib/format";
@@ -99,6 +100,7 @@ export function StructuredLogsPage({
   const [clearing, setClearing] = useState(false);
   const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
   const [selectedLog, setSelectedLog] = useState<LogRecordSummary | null>(null);
+  const [genAILog, setGenAILog] = useState<LogRecordSummary | null>(null);
   const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
 
   const displayedTelemetry = pausedSnapshot ?? telemetry;
@@ -245,6 +247,7 @@ export function StructuredLogsPage({
               value: formatStructuredLogJson(log),
               format: "json",
             })}
+            onViewGenAI={hasGenAIAttributes(log.attributes) || log.eventName?.startsWith("gen_ai.") ? () => setGenAILog(log) : undefined}
           />
         </div>
       ),
@@ -386,12 +389,14 @@ export function StructuredLogsPage({
             value: formatStructuredLogJson(selectedLog),
             format: "json",
           })}
+          onViewGenAI={hasGenAIAttributes(selectedLog.attributes) || selectedLog.eventName?.startsWith("gen_ai.") ? () => setGenAILog(selectedLog) : undefined}
           onNavigateToTrace={onNavigateToTrace}
           canNavigateToTrace={selectedLog.traceId !== null && availableTraceIds.has(selectedLog.traceId)}
         />
       ) : null}
 
       <TextViewerDialog request={textViewer} onClose={() => setTextViewer(null)} />
+      <GenAIVisualizerDialog source={genAILog} onClose={() => setGenAILog(null)} />
     </Page>
   );
 }

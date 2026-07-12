@@ -8,6 +8,7 @@ import { matchesTelemetryFilters, parseTelemetryFilters, spanFilterFields, telem
 import { SPAN_TYPE_OPTIONS, spanMatchesType, type SpanTypeId } from "../lib/spans";
 import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
 import { formatSpanJson } from "../components/SpanActions";
+import { GenAIVisualizerDialog, hasGenAIAttributes } from "../components/GenAIVisualizerDialog";
 import {
   ChevronIcon,
   CommandMenu,
@@ -268,6 +269,7 @@ export function TracesPage({
   const [pausedSnapshot, setPausedSnapshot] = useState<TelemetrySummary | null>(null);
   const [clearing, setClearing] = useState(false);
   const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
+  const [genAISpan, setGenAISpan] = useState<SpanSummary | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
   const [collapsedSpanKeys, setCollapsedSpanKeys] = useState<Set<string>>(new Set());
   const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
@@ -591,10 +593,12 @@ export function TracesPage({
             value: formatSpanJson(selected),
             format: "json",
           })}
+          onViewGenAI={hasGenAIAttributes(selected.attributes) ? () => setGenAISpan(selected) : undefined}
         />
       ) : null}
 
       <TextViewerDialog request={textViewer} onClose={() => setTextViewer(null)} />
+      <GenAIVisualizerDialog source={genAISpan} onClose={() => setGenAISpan(null)} />
     </Page>
   );
 }

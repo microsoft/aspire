@@ -1951,6 +1951,51 @@ table.data tbody tr.selected {
   font-weight: 500;
 }
 
+/* ---------- GenAI visualizer ---------- */
+.genai-dialog {
+  width: min(760px, calc(100vw - 32px));
+  max-width: 760px;
+}
+.genai-dialog__title,
+.genai-dialog__metadata {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.genai-dialog__metadata {
+  flex-wrap: wrap;
+  padding-bottom: 12px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.genai-dialog__conversation {
+  display: grid;
+  max-height: min(62vh, 620px);
+  gap: 10px;
+  overflow: auto;
+}
+.genai-message {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--bg-surface-2);
+}
+.genai-message h3 {
+  margin: 0 0 6px;
+  color: var(--text-muted);
+  font-size: 11px;
+  text-transform: uppercase;
+}
+.genai-message pre {
+  margin: 0;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  font: 13px/1.5 ui-monospace, "SFMono-Regular", Menlo, Consolas, monospace;
+}
+.genai-message--assistant {
+  border-left: 3px solid var(--accent);
+}
+
 /* ---------- Interactive terminal ---------- */
 .interactive-terminal {
   display: flex;
