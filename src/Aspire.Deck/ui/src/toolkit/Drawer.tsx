@@ -10,6 +10,8 @@ export interface DrawerProps {
   closeLabel?: string;
   children: ReactNode;
   footer?: ReactNode;
+  headerActions?: ReactNode;
+  className?: string;
   onClose: () => void;
 }
 
@@ -21,6 +23,8 @@ export function Drawer({
   closeLabel = "Close details",
   children,
   footer,
+  headerActions,
+  className,
   onClose,
 }: DrawerProps) {
   const titleId = useId();
@@ -39,7 +43,7 @@ export function Drawer({
     <>
       <div className="drawer-overlay" onClick={onClose} />
       <aside
-        className="drawer"
+        className={["drawer", className].filter(Boolean).join(" ")}
         role="dialog"
         aria-modal="true"
         aria-label={ariaLabel}
@@ -53,7 +57,10 @@ export function Drawer({
               {subtitle ? <div className="drawer__subtitle">{subtitle}</div> : null}
             </div>
           </div>
-          <IconButton label={closeLabel} icon={<CloseIcon size={16} />} onClick={onClose} />
+          <div className="drawer__header-actions">
+            {headerActions}
+            <IconButton label={closeLabel} icon={<CloseIcon size={16} />} onClick={onClose} />
+          </div>
         </div>
         <div className="drawer__body">{children}</div>
         {footer ? <div className="drawer__commands">{footer}</div> : null}

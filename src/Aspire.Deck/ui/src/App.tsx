@@ -25,6 +25,7 @@ import { NotificationCenter, type NotificationHistoryItem } from "./components/N
 import { SystemNotifications } from "./components/SystemNotifications";
 import { ManageDataDrawer } from "./components/ManageDataDrawer";
 import { AIAgentsDrawer } from "./components/AIAgentsDrawer";
+import { AssistantPanel } from "./components/AssistantPanel";
 import {
   dashboardRouteHref,
   readDashboardRoute,
@@ -58,6 +59,7 @@ export function App({
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [manageDataOpen, setManageDataOpen] = useState(false);
   const [aiAgentsOpen, setAIAgentsOpen] = useState(false);
+  const [assistantOpen, setAssistantOpen] = useState(false);
   const [notificationCenterOpen, setNotificationCenterOpen] = useState(false);
   const [notificationHistory, setNotificationHistory] = useState<NotificationHistoryItem[]>(() => {
     try {
@@ -196,6 +198,7 @@ export function App({
           onToggleTheme={onToggleTheme}
           onHelp={() => setHelpOpen(true)}
           onAIAgents={() => setAIAgentsOpen(true)}
+          onAssistant={() => setAssistantOpen((current) => !current)}
           onNotifications={() => setNotificationCenterOpen(true)}
           notificationCount={notificationHistory.length}
           onSettings={() => setSettingsOpen(true)}
@@ -423,6 +426,7 @@ export function App({
       {aiAgentsOpen && config?.agentHelpMarkdown ? (
         <AIAgentsDrawer markdown={config.agentHelpMarkdown} onClose={() => setAIAgentsOpen(false)} />
       ) : null}
+      {assistantOpen ? <AssistantPanel onClose={() => setAssistantOpen(false)} /> : null}
     </div>
   );
 }

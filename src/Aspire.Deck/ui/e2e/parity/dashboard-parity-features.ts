@@ -51,7 +51,7 @@ const featureDefinitions = {
     ["SHELL-HELP-001", "/", "Help opens with documentation and keyboard shortcut reference content.", "shell", "covered", "APP-HELP-001"],
     ["SHELL-KEYBOARD-001", "/", "Page navigation, panel, help, and settings keyboard shortcuts work.", null, "partial", "APP-KEYBOARD-001 (page, help, and settings shortcuts; panel shortcuts await a shared panel host)"],
     ["SHELL-AGENTS-001", "/", "The AI agents entry point appears when enabled.", "shell", "covered", "HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
-    ["SHELL-ASSISTANT-001", "/", "The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses.", null, "missing"],
+    ["SHELL-ASSISTANT-001", "/", "The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses.", null, "covered", "APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled"],
     ["SHELL-NOTIFICATIONS-001", "/", "Active notifications render intent, actions, links, and dismiss behavior.", "shell", "covered", "APP-NOTIFICATION-001; CMD-NOTIFICATION-001"],
     ["SHELL-NOTIFICATION-CENTER-001", "/", "The notification center opens and preserves notification history.", "shell", "covered", "APP-NOTIFICATION-CENTER-001"],
     ["SHELL-SETTINGS-001", "/", "Settings opens from the top bar and reports dashboard/runtime versions.", "shell", "covered", "APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],

@@ -1,5 +1,8 @@
 import type {
   AppHostInfo,
+  AssistantChatRequest,
+  AssistantEvent,
+  AssistantInfo,
   CanvasManifest,
   CommandResponse,
   ConnectionStatus,
@@ -175,6 +178,29 @@ async function importManageData(file: File): Promise<void> {
 
 async function removeManageData(request: ManageDataRequest): Promise<void> {
   await postNoContent("manage-data/remove", request);
+}
+
+async function getAssistantInfo(): Promise<AssistantInfo> {
+  return await requestJson<AssistantInfo>("assistant/info");
+}
+
+async function streamAssistantChat(
+  request: AssistantChatRequest,
+  onEvent: (event: AssistantEvent) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  const response = await fetch("/api/deck/assistant/chat", {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/x-ndjson", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+    signal,
+  });
+  if (!response.ok || !response.body) {
+    throw new Error(`Deck API request failed with ${response.status} ${response.statusText}.`);
+  }
+  await readNdjson<AssistantEvent>(response.body, onEvent);
 }
 
 function getConfig(): Promise<DeckConfig> {
@@ -625,6 +651,8 @@ export const httpBackend = {
   exportManageData,
   importManageData,
   removeManageData,
+  getAssistantInfo,
+  streamAssistantChat,
   getConfig,
   listResources,
   listCanvases(): Promise<CanvasManifest[]> {

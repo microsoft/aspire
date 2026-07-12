@@ -5,6 +5,9 @@
 import { PARAMETER_VALUE_PROPERTY } from "./types";
 import type {
   AppHostInfo,
+  AssistantChatRequest,
+  AssistantEvent,
+  AssistantInfo,
   CanvasManifest,
   CommandResponse,
   ConnectionStatus,
@@ -60,6 +63,7 @@ const config: DeckConfig = {
   ],
   isAgentHelpEnabled: true,
   agentHelpMarkdown: "Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence.\n\n- Resource state, health checks, and relationships\n- Console logs\n- Distributed traces\n- Structured logs\n\nInitialize AI agent support in your project with:\n\n```bash\naspire agent init\n```\n\nFor more information, see [AI coding agents](https://aka.ms/aspire/ai-agents-apphost).",
+  isAssistantEnabled: true,
 };
 
 function makeResources(): Resource[] {
@@ -635,6 +639,31 @@ class MockBackend {
       if (selection.dataTypes.includes("Traces")) this.clearTraces(selection.resourceName);
       if (selection.dataTypes.includes("Metrics")) this.clearMetrics(selection.resourceName);
     }
+  }
+
+  getAssistantInfo(): AssistantInfo {
+    return { models: [{ family: "gpt-5.4", displayName: "GPT-5.4" }, { family: "gpt-4.1", displayName: "GPT-4.1" }] };
+  }
+
+  async streamAssistantChat(
+    request: AssistantChatRequest,
+    onEvent: (event: AssistantEvent) => void,
+    signal: AbortSignal,
+  ): Promise<void> {
+    onEvent({ type: "start", content: null, message: null });
+    const prompt = request.messages.at(-1)?.content ?? "";
+    const chunks = ["I inspected ", "the dashboard context. ", `Your request was: ${prompt}`];
+    for (const content of chunks) {
+      await new Promise<void>((resolve, reject) => {
+        const timer = window.setTimeout(resolve, 80);
+        signal.addEventListener("abort", () => {
+          window.clearTimeout(timer);
+          reject(new DOMException("The operation was aborted.", "AbortError"));
+        }, { once: true });
+      });
+      onEvent({ type: "content", content, message: null });
+    }
+    onEvent({ type: "complete", content: null, message: null });
   }
 
   listResources(): Resource[] {

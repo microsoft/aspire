@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 150
+- React covered: 151
 - React partial: 4
-- React missing: 3
+- React missing: 2
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 7
+- React parity gaps: 6
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -16,7 +16,7 @@
 | SHELL-HELP-001 | shell | `/` | shell | covered | APP-HELP-001 | Help opens with documentation and keyboard shortcut reference content. |
 | SHELL-KEYBOARD-001 | shell | `/` | PENDING | partial | APP-KEYBOARD-001 (page, help, and settings shortcuts; panel shortcuts await a shared panel host) | Page navigation, panel, help, and settings keyboard shortcuts work. |
 | SHELL-AGENTS-001 | shell | `/` | shell | covered | HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | The AI agents entry point appears when enabled. |
-| SHELL-ASSISTANT-001 | shell | `/` | PENDING | missing | - | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
+| SHELL-ASSISTANT-001 | shell | `/` | PENDING | covered | APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
 | SHELL-NOTIFICATIONS-001 | shell | `/` | shell | covered | APP-NOTIFICATION-001; CMD-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |
 | SHELL-NOTIFICATION-CENTER-001 | shell | `/` | shell | covered | APP-NOTIFICATION-CENTER-001 | The notification center opens and preserves notification history. |
 | SHELL-SETTINGS-001 | shell | `/` | shell | covered | APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Settings opens from the top bar and reports dashboard/runtime versions. |

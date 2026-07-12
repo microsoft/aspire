@@ -12,6 +12,9 @@ import { httpBackend } from "./http";
 import { mockBackend } from "./mock";
 import type {
   AppHostInfo,
+  AssistantChatRequest,
+  AssistantEvent,
+  AssistantInfo,
   CanvasManifest,
   CommandResponse,
   ConnectionStatus,
@@ -106,6 +109,24 @@ export function removeManageData(request: ManageDataRequest): Promise<void> {
   }
   mockBackend.removeManageData(request);
   return Promise.resolve();
+}
+
+export function getAssistantInfo(): Promise<AssistantInfo> {
+  if (isHttpBackend()) {
+    return httpBackend.getAssistantInfo();
+  }
+  return Promise.resolve(mockBackend.getAssistantInfo());
+}
+
+export function streamAssistantChat(
+  request: AssistantChatRequest,
+  onEvent: (event: AssistantEvent) => void,
+  signal: AbortSignal,
+): Promise<void> {
+  if (isHttpBackend()) {
+    return httpBackend.streamAssistantChat(request, onEvent, signal);
+  }
+  return mockBackend.streamAssistantChat(request, onEvent, signal);
 }
 
 export function listResources(): Promise<Resource[]> {

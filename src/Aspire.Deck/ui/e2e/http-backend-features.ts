@@ -5,6 +5,7 @@ export const httpBackendFeatures = {
   "HTTP-USER-001": "An authenticated OpenID user can inspect their profile and submit dashboard sign-out.",
   "HTTP-LANGUAGE-001": "Settings submits a supported culture to the dashboard and reloads with its persisted culture.",
   "HTTP-AI-AGENTS-001": "Backend-controlled AI agent guidance opens with CLI commands, external links, and dismissal.",
+  "HTTP-ASSISTANT-001": "The assistant discovers backend models, submits conversation history, and renders NDJSON response chunks.",
   "HTTP-CONFIG-001": "HTTP mode loads the application identity and version from the dashboard backend.",
   "HTTP-RESOURCES-001": "HTTP mode renders the resource snapshot returned by the dashboard backend.",
   "HTTP-RESOURCE-VIRTUALIZATION-001": "Large HTTP resource inventories keep a bounded semantic table while preserving sorting and row actions.",

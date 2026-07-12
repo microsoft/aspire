@@ -208,6 +208,31 @@ test(`${features("APP-TIME-FORMAT-001")} applies and persists the selected time 
   await expect(settings.getByRole("group", { name: "Time format" }).getByRole("radio", { name: "24-hour" })).toBeChecked();
 });
 
+test(`${features("APP-ASSISTANT-001")} controls the assistant conversation lifecycle`, async ({ page }) => {
+  await page.getByRole("banner").getByRole("button", { name: "Assistant" }).click();
+  const assistant = page.getByRole("dialog", { name: "Assistant" });
+  await expect(assistant).toBeVisible();
+  await expect(assistant).toContainText("Ask the assistant to investigate your distributed application.");
+
+  const initialWidth = (await assistant.boundingBox())!.width;
+  await assistant.getByRole("button", { name: "Expand assistant" }).click();
+  await expect.poll(async () => (await assistant.boundingBox())!.width).toBeGreaterThan(initialWidth);
+  await assistant.getByRole("button", { name: "Collapse assistant" }).click();
+
+  await assistant.getByLabel("Message the assistant").fill("Inspect the resources");
+  await assistant.getByRole("button", { name: "Send" }).click();
+  await expect(assistant.getByRole("button", { name: "Stop" })).toBeVisible();
+  await assistant.getByRole("button", { name: "Stop" }).click();
+  await expect(assistant.getByRole("button", { name: "Send" })).toBeVisible();
+  await expect(assistant.getByRole("log", { name: "Assistant conversation" })).toContainText("Inspect the resources");
+
+  await assistant.getByRole("button", { name: "New chat" }).click();
+  await expect(assistant).toContainText("Ask the assistant to investigate your distributed application.");
+  await expect(assistant.getByText("Inspect the resources", { exact: true })).toHaveCount(0);
+  await assistant.getByRole("button", { name: "Close assistant" }).click();
+  await expect(assistant).toBeHidden();
+});
+
 test(`${features("APP-ROUTES-001")} restores page routes and browser history`, async ({ page }) => {
   await navigationButton(page, "Structured Logs").click();
   await expect(page).toHaveURL(/\/structuredlogs$/);
