@@ -194,29 +194,24 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 8b: Expose the isolated kubeconfig at the default path for `rad install`.
-            // `rad install kubernetes` configures the Contour gateway through a code path that
-            // reads the default kubeconfig location (~/.kube/config) directly and does NOT honor
-            // the KUBECONFIG environment variable, unlike az/kubectl. With our isolated
-            // $KUBECONFIG (Step 1b), that step fails with
+            // Step 8b: Stage the isolated kubeconfig under a workspace-local HOME for `rad install`.
+            // `rad install kubernetes` configures the Contour gateway through a code path that reads
+            // the default kubeconfig location ($HOME/.kube/config) directly and does NOT honor the
+            // KUBECONFIG environment variable, unlike az/kubectl. With our isolated $KUBECONFIG
+            // (Step 1b) and no override, that step fails with
             // "failed to initialize Kubernetes client config: open ~/.kube/config: no such file or directory".
-            // Point the default path at our isolated kubeconfig so `rad` finds the AKS context.
             //
-            // Before overwriting the path, snapshot whatever was there so cleanup can restore it
-            // exactly. `cp -a` keeps a symlink a symlink (-d/--no-dereference) instead of copying
-            // its target, so a pre-existing link is backed up intact, and the `[ -e ] || [ -L ]`
-            // test also catches a dangling link (`-e` is false for a broken symlink). A marker file
-            // records that this test actually took over the path: provisioning can fail earlier,
-            // before Step 8b runs, and cleanup must not touch the developer's kubeconfig in that
-            // case. RestoreDefaultKubeConfig in `finally` uses the marker + backup to put the
-            // original back (file, symlink, or nothing) so a local run is never left pointing at the
-            // deleted cluster or dangling into the deleted workspace — even if the test fails.
-            output.WriteLine("Step 8b: Linking default kubeconfig path for rad install...");
+            // Rather than shadow (and later restore) the developer's real ~/.kube/config for the
+            // ~55-minute run — which would leak the test cluster into any concurrent kubectl/rad and
+            // risk losing a kubeconfig update made by another process — we create a private HOME under
+            // the TemporaryWorkspace and point its .kube/config at our isolated $KUBECONFIG. Step 9
+            // then runs `rad install` with HOME set to this directory, so the Contour code reads the
+            // isolated config and the developer's real ~/.kube/config is never touched. The workspace
+            // (and this HOME) is removed on dispose, so there is nothing to restore.
+            output.WriteLine("Step 8b: Staging an isolated kubeconfig under a workspace-local HOME for rad install...");
             await auto.TypeAsync(
-                "mkdir -p \"$HOME/.kube\" && " +
-                $"{{ {{ [ -e \"$HOME/.kube/config\" ] || [ -L \"$HOME/.kube/config\" ]; }} && cp -a \"$HOME/.kube/config\" \"{wsRoot}/kube-default.bak\" || true; }} && " +
-                $"touch \"{wsRoot}/kube-shadowed.marker\" && " +
-                "ln -sf \"$KUBECONFIG\" \"$HOME/.kube/config\"");
+                $"mkdir -p \"{wsRoot}/home/.kube\" && " +
+                $"ln -sf \"$KUBECONFIG\" \"{wsRoot}/home/.kube/config\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
@@ -224,9 +219,12 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
 
             // Install the Radius control plane. The `rad` CLI version is pinned by the
             // "Setup Radius" workflow step, and `rad install kubernetes` installs the matching
-            // control plane onto the current kube context.
+            // control plane onto the current kube context. HOME is overridden for this one command
+            // only so Contour's default-path kubeconfig read (Step 8b) resolves to our isolated
+            // config; PATH still routes `rad` through the Step 1b shim, so config writes land in the
+            // workspace-local <ws>/.rad/config.yaml regardless of HOME.
             output.WriteLine("Step 9: Installing the Radius control plane onto the cluster...");
-            await auto.TypeAsync("rad install kubernetes");
+            await auto.TypeAsync($"HOME=\"{wsRoot}/home\" rad install kubernetes");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(10));
 
@@ -509,69 +507,12 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
         }
         finally
         {
-            // Restore the developer's default kubeconfig that Step 8b shadowed with a symlink to
-            // the isolated $KUBECONFIG. Runs even on failure so a local run never leaves
-            // ~/.kube/config pointing at the deleted cluster or dangling into the deleted workspace.
-            RestoreDefaultKubeConfig(workspace.WorkspaceRoot.FullName);
-
             // Deleting the resource group removes AKS, ACR, and all Radius control-plane state,
-            // so no separate `rad` cleanup is required.
+            // so no separate `rad` cleanup is required. The isolated kubeconfig lived under the
+            // TemporaryWorkspace (Step 1b/8b), so disposing the workspace is all the kube cleanup
+            // needed — the developer's real ~/.kube/config was never touched.
             output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
             await CleanupResourceGroupAsync(resourceGroupName);
-        }
-    }
-
-    /// <summary>
-    /// Reverses the Step 8b default-kubeconfig shadow, restoring exactly what was there before.
-    /// Only acts when Step 8b actually ran (its <c>kube-shadowed.marker</c> is present); if
-    /// provisioning failed earlier the developer's <c>~/.kube/config</c> was never touched and is
-    /// left alone. When a backup exists it is moved back verbatim — <c>cp -a</c> preserved a
-    /// regular file as a file and a symlink as a symlink, so a pre-existing link is not turned into
-    /// a copy or dropped. When no backup exists nothing was there before, so only our own symlink
-    /// is removed. Best-effort: cleanup must not mask a test failure.
-    /// </summary>
-    private void RestoreDefaultKubeConfig(string workspaceRoot)
-    {
-        try
-        {
-            // Provisioning can fail before Step 8b runs. Without this guard the no-backup branch
-            // below would delete a developer's own pre-existing ~/.kube/config symlink that this
-            // test never created.
-            var marker = Path.Combine(workspaceRoot, "kube-shadowed.marker");
-            if (!File.Exists(marker))
-            {
-                return;
-            }
-
-            var home = Environment.GetEnvironmentVariable("HOME")
-                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (string.IsNullOrEmpty(home))
-            {
-                return;
-            }
-
-            var defaultKubeConfig = Path.Combine(home, ".kube", "config");
-            var backup = Path.Combine(workspaceRoot, "kube-default.bak");
-
-            // Remove the symlink Step 8b created (Delete on a symlink removes the link, not its
-            // target). LinkTarget is non-null for a symlink even when it dangles, so this also
-            // clears a link left pointing into the about-to-be-deleted workspace.
-            var current = new FileInfo(defaultKubeConfig);
-            if (current.Exists || current.LinkTarget is not null)
-            {
-                current.Delete();
-            }
-
-            // Put the original back verbatim if Step 8b captured one.
-            var backupInfo = new FileInfo(backup);
-            if (backupInfo.Exists || backupInfo.LinkTarget is not null)
-            {
-                File.Move(backup, defaultKubeConfig);
-            }
-        }
-        catch (Exception ex)
-        {
-            output.WriteLine($"Warning: could not restore default kubeconfig: {ex.Message}");
         }
     }
 
