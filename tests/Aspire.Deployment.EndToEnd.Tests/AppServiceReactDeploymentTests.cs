@@ -189,47 +189,16 @@ builder.AddAzureAppServiceEnvironment("infra")
             await auto.WaitForPipelineSuccessAsync(timeout: TimeSpan.FromMinutes(30));
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(2));
 
-            // Step 14: Extract deployment URLs and verify endpoints with retry
+            // Step 14: Extract deployment URLs and verify endpoints with retry.
             // The workload is deployed to its staging slot, so the production site's empty
             // hostname is not a liveness target. Sites without slots, such as the dashboard,
             // are reached through their production hostname.
-            // Retry each endpoint for up to 3 minutes (18 attempts * 10 seconds)
+            // Verify both endpoints concurrently for up to six minutes. Each attempt has a
+            // 10-second curl cap and waits 10 seconds before the next attempt.
             output.WriteLine("Step 14: Verifying deployed endpoints...");
-            await auto.TypeAsync($"RG_NAME=\"{resourceGroupName}\" && " +
-                  "echo \"Resource group: $RG_NAME\" && " +
-                  "if ! az group show -n \"$RG_NAME\" &>/dev/null; then echo \"❌ Resource group not found\"; exit 1; fi && " +
-                  "webapps=$(az webapp list -g \"$RG_NAME\" --query \"[].name\" -o tsv 2>/dev/null) && " +
-                  "if [ -z \"$webapps\" ]; then echo \"❌ No App Service sites found\"; exit 1; fi && " +
-                  "urls='' && staging_endpoint_count=0 && dashboard_endpoint_count=0 && " +
-                  "for webapp in $webapps; do " +
-                  "slots=$(az webapp deployment slot list -g \"$RG_NAME\" -n \"$webapp\" --query \"[].name\" -o tsv 2>/dev/null); " +
-                  "if [ -n \"$slots\" ]; then " +
-                  "for slot in $slots; do " +
-                  "if ! url=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --slot \"$slot\" --query defaultHostName -o tsv); then echo \"❌ Failed to query hostname for staging slot $webapp/$slot\"; exit 1; fi; " +
-                  "if [ -z \"$url\" ]; then echo \"❌ Missing hostname for staging slot $webapp/$slot\"; exit 1; fi; " +
-                  "urls=\"$urls $url\"; staging_endpoint_count=$((staging_endpoint_count + 1)); " +
-                  "done; " +
-                  "else " +
-                  "if ! url=$(az webapp show -g \"$RG_NAME\" -n \"$webapp\" --query defaultHostName -o tsv); then echo \"❌ Failed to query hostname for dashboard $webapp\"; exit 1; fi; " +
-                  "if [ -z \"$url\" ]; then echo \"❌ Missing hostname for dashboard $webapp\"; exit 1; fi; " +
-                  "urls=\"$urls $url\"; dashboard_endpoint_count=$((dashboard_endpoint_count + 1)); " +
-                  "fi; " +
-                  "done && " +
-                  "if [ \"$staging_endpoint_count\" -ne 1 ] || [ \"$dashboard_endpoint_count\" -ne 1 ]; then echo \"❌ Expected one staging slot endpoint and one dashboard endpoint\"; exit 1; fi && " +
-                  "failed=0 && " +
-                  "for url in $urls; do " +
-                  "echo \"Checking https://$url...\"; " +
-                  "success=0; " +
-                  "for i in $(seq 1 18); do " +
-                  "STATUS=$(curl -s -o /dev/null -w \"%{http_code}\" \"https://$url\" --max-time 30 2>/dev/null); " +
-                  "if [ \"$STATUS\" = \"200\" ] || [ \"$STATUS\" = \"302\" ]; then echo \"  ✅ $STATUS (attempt $i)\"; success=1; break; fi; " +
-                  "echo \"  Attempt $i: $STATUS, retrying in 10s...\"; sleep 10; " +
-                  "done; " +
-                  "if [ \"$success\" -eq 0 ]; then echo \"  ❌ Failed after 18 attempts\"; failed=1; fi; " +
-                  "done && " +
-                  "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
+            await auto.TypeAsync(BuildEndpointVerificationCommand(resourceGroupName));
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(7));
 
             // Step 15: Verify that the production site, staging slot, and dashboard use the delegated subnet.
             output.WriteLine("Step 15: Verifying regional VNet integration...");
@@ -273,6 +242,103 @@ builder.AddAzureAppServiceEnvironment("infra")
             TriggerCleanupResourceGroup(resourceGroupName, output);
             DeploymentReporter.ReportCleanupStatus(resourceGroupName, success: true, "Cleanup triggered (fire-and-forget)");
         }
+    }
+
+    private static string BuildEndpointVerificationCommand(string resourceGroupName)
+    {
+        var script = $$"""
+            set -uo pipefail
+
+            fail() {
+                echo "ERROR: $1"
+                exit 1
+            }
+
+            resource_group={{AspireCliShellCommandHelpers.QuoteBashArg(resourceGroupName)}}
+
+            az group show -n "$resource_group" >/dev/null ||
+                fail "Resource group was not found"
+
+            webapps=$(az webapp list -g "$resource_group" --query "[].name" -o tsv) ||
+                fail "Failed to query App Service sites"
+            [ -n "$webapps" ] || fail "No App Service sites found"
+
+            urls=""
+            staging_endpoint_count=0
+            dashboard_endpoint_count=0
+            for webapp in $webapps
+            do
+                slots=$(az webapp deployment slot list -g "$resource_group" -n "$webapp" --query "[].name" -o tsv) ||
+                    fail "Failed to query deployment slots for $webapp"
+                if [ -n "$slots" ]
+                then
+                    for slot in $slots
+                    do
+                        url=$(az webapp show -g "$resource_group" -n "$webapp" --slot "$slot" --query defaultHostName -o tsv) ||
+                            fail "Failed to query hostname for staging slot $webapp/$slot"
+                        [ -n "$url" ] || fail "Missing hostname for staging slot $webapp/$slot"
+                        urls="$urls $url"
+                        staging_endpoint_count=$((staging_endpoint_count + 1))
+                    done
+                else
+                    url=$(az webapp show -g "$resource_group" -n "$webapp" --query defaultHostName -o tsv) ||
+                        fail "Failed to query hostname for dashboard $webapp"
+                    [ -n "$url" ] || fail "Missing hostname for dashboard $webapp"
+                    urls="$urls $url"
+                    dashboard_endpoint_count=$((dashboard_endpoint_count + 1))
+                fi
+            done
+
+            [ "$staging_endpoint_count" -eq 1 ] &&
+                [ "$dashboard_endpoint_count" -eq 1 ] ||
+                fail "Expected one staging slot endpoint and one dashboard endpoint"
+
+            verify_endpoint() {
+                local url="$1"
+                local status
+
+                echo "Checking https://$url..."
+                for attempt in $(seq 1 18)
+                do
+                    status=$(curl -s -o /dev/null -w "%{http_code}" "https://$url" --max-time 10 2>/dev/null) ||
+                        status=""
+                    if [ "$status" = "200" ] || [ "$status" = "302" ]
+                    then
+                        echo "  $status (attempt $attempt)"
+                        return 0
+                    fi
+
+                    echo "  Attempt $attempt: $status, retrying in 10 seconds..."
+                    if [ "$attempt" -lt 18 ]
+                    then
+                        sleep 10
+                    fi
+                done
+
+                echo "  Failed after 18 attempts"
+                return 1
+            }
+
+            pids=()
+            for url in $urls
+            do
+                verify_endpoint "$url" &
+                pids+=("$!")
+            done
+
+            failed=0
+            for pid in "${pids[@]}"
+            do
+                if ! wait "$pid"
+                then
+                    failed=1
+                fi
+            done
+
+            [ "$failed" -eq 0 ] || fail "One or more endpoint checks failed"
+            """;
+
+        return $"bash -c {AspireCliShellCommandHelpers.QuoteBashArg(script)}";
     }
 
     private static async Task VerifyNoVnetIntegrationAsync(
