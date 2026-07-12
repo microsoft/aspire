@@ -326,7 +326,7 @@ public static class AzureVirtualNetworkExtensions
             .FirstOrDefault(annotation => !string.Equals(
                 annotation.ServiceName,
                 target.DelegatedSubnetServiceName,
-                StringComparison.Ordinal));
+                StringComparison.OrdinalIgnoreCase));
         if (conflictingDelegation is not null)
         {
             throw new InvalidOperationException(
