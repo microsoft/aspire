@@ -1,4 +1,4 @@
-export type PageId = "resources" | "parameters" | "console" | "logs" | "traces" | "metrics" | "canvases";
+export type PageId = "resources" | "parameters" | "console" | "logs" | "traces" | "metrics" | "canvases" | "notFound" | "error";
 
 export interface DashboardRoute {
   page: PageId;
@@ -32,6 +32,8 @@ const pagePaths: Record<PageId, string> = {
   traces: "/traces",
   metrics: "/metrics",
   canvases: "/canvases",
+  notFound: "/error/404",
+  error: "/error",
 };
 
 export function pagePath(page: PageId): string {
@@ -132,7 +134,13 @@ export function readDashboardRoute(
   if (path === "/canvases" || path.startsWith("/canvases/")) {
     return { page: "canvases" };
   }
-  return { page: "resources" };
+  if (path === "/error") {
+    return { page: "error" };
+  }
+  if (path === "/" || path === "") {
+    return { page: "resources" };
+  }
+  return { page: "notFound" };
 }
 
 export function dashboardRouteHref(route: DashboardRoute, location: Location = window.location): string {

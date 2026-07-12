@@ -172,6 +172,21 @@ test(`${features("APP-ROUTES-001")} restores page routes and browser history`, a
   await expect(navigationButton(page, "Metrics")).toHaveAttribute("aria-current", "page");
 });
 
+test(`${features("APP-NOTFOUND-001", "APP-ERROR-001")} renders recoverable error routes`, async ({ page }, testInfo) => {
+  await page.goto("/does-not-exist");
+  const notFound = page.getByRole("main").getByRole("region", { name: "Page not found" });
+  await expect(notFound).toContainText("404Page not foundThe requested dashboard page does not exist.");
+  await notFound.getByRole("button", { name: "Go to resources" }).click();
+  await expect(page).toHaveURL(/\/$/);
+  await expect(page.getByRole("main").locator(".page__title")).toHaveText("Resources");
+
+  await page.goto("/error");
+  const error = page.getByRole("main").getByRole("region", { name: "Dashboard error" });
+  await expect(error).toContainText("Something went wrongThe dashboard could not complete this request.");
+  await expect(error.getByRole("button")).toHaveText(["Go to resources", "Reload dashboard"]);
+  await attachScreenshot(page, testInfo, "dashboard-error");
+});
+
 test(`${features("APP-PAGE-001")} composes every route from the page toolkit`, async ({ page }) => {
   const pages = [
     { navigation: "Resources", title: "Resources", toolbar: "Resource tools" },

@@ -14,6 +14,7 @@ import { StructuredLogsPage } from "./pages/StructuredLogsPage";
 import { TracesPage } from "./pages/TracesPage";
 import { MetricsPage } from "./pages/MetricsPage";
 import { CanvasesPage } from "./pages/CanvasesPage";
+import { RouteErrorPage } from "./pages/RouteErrorPage";
 import { InteractionPane } from "./components/InteractionPane";
 import { NotificationStack } from "./components/NotificationStack";
 import { HelpDialog } from "./components/HelpDialog";
@@ -257,6 +258,9 @@ export function App({
               />
             ) : null}
             {page === "canvases" ? <CanvasesPage /> : null}
+            {page === "notFound" || page === "error" ? (
+              <RouteErrorPage kind={page} onHome={() => navigate({ page: "resources" })} />
+            ) : null}
           </>
         )}
       </main>

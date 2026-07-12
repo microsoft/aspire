@@ -287,6 +287,39 @@ a:focus-visible {
 .settings-versions {
   margin: 0;
 }
+
+/* ---------- Error routes ---------- */
+.route-error {
+  display: flex;
+  min-height: 100%;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  gap: 10px;
+  padding: 32px;
+  text-align: center;
+}
+.route-error__code {
+  color: var(--accent);
+  font-size: 64px;
+  font-weight: 700;
+  line-height: 1;
+}
+.route-error h1 {
+  margin: 0;
+  font-size: 22px;
+}
+.route-error p {
+  margin: 0;
+  color: var(--text-muted);
+}
+.route-error__actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  margin-top: 8px;
+}
 .shortcut-group dl > div,
 .settings-versions > div {
   display: flex;
