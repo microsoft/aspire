@@ -182,6 +182,15 @@ builder.AddAzureAppServiceEnvironment("infra")
 
             File.WriteAllText(appHostFilePath, upgradedContent);
 
+            // Clear the terminal before redeploying. WaitForPipelineSuccessAsync matches the
+            // "pipeline succeeded" banner anywhere on the visible screen, and the first deploy's
+            // banner is still shown. Without clearing, the second deploy's wait matches that stale
+            // banner immediately (instead of waiting for the redeploy to finish), which forces the
+            // subsequent success-prompt wait to absorb the entire second deployment and time out.
+            await auto.TypeAsync("clear");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter);
+
             // Step 13: Upgrade the existing production site, staging slot, and dashboard.
             output.WriteLine("Step 13: Upgrading the deployment with regional VNet integration...");
             await auto.TypeAsync("aspire deploy --clear-cache");
