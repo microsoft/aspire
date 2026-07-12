@@ -17,6 +17,10 @@ public sealed class IconDto
     /// </summary>
     public string? Svg { get; init; }
 
+    public bool UsesFill { get; init; }
+    public string? Name { get; init; }
+    public string? Variant { get; init; }
+
     public required string Color { get; init; }
     public required string? Tooltip { get; init; }
 }

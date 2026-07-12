@@ -5,12 +5,13 @@ using System.Collections.Immutable;
 using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Resources;
 using Microsoft.Extensions.Localization;
+using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Model.ResourceGraph;
 
 public static class ResourceGraphMapper
 {
-    public static ResourceDto MapResource(ResourceViewModel r, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources)
+    public static ResourceDto MapResource(ResourceViewModel r, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver)
     {
         var resolvedNames = new List<string>();
 
@@ -36,7 +37,8 @@ public static class ResourceGraphMapper
         var resourceName = ResourceViewModel.GetResourceName(r, resourcesByName);
         var color = ColorGenerator.Instance.GetColorVariableByKey(resourceName);
 
-        var icon = DeckIconData.GetInnerMarkup(ResourceIconHelpers.GetDeckIconForResource(r));
+        var customIcon = ResourceIconHelpers.ResolveCustomIcon(iconResolver, r, IconSize.Size24);
+        var icon = customIcon?.Content ?? DeckIconData.GetInnerMarkup(ResourceIconHelpers.GetDeckIconForResource(r));
 
         // The graph shows resource state as a tone-colored dot rather than a glyph: map the Deck state
         // tone (success/info/warning/error/neutral) to its CSS color variable.
@@ -60,6 +62,9 @@ public static class ResourceGraphMapper
             ResourceIcon = new IconDto
             {
                 Svg = icon,
+                UsesFill = customIcon is not null,
+                Name = customIcon is not null ? r.IconName : null,
+                Variant = customIcon is not null ? (r.IconVariant ?? IconVariant.Filled).ToString().ToLowerInvariant() : null,
                 Color = color,
                 Tooltip = r.ResourceType
             },

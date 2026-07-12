@@ -103,7 +103,7 @@ const featureDefinitions = {
     ["RES-STATE-001", "/", "Running, starting, finished, exited, not-started, and unknown states remain distinguishable.", "resources", "covered", "HTTP-RESOURCES-001; STRESS-RESOURCES-001"],
     ["RES-NO-STATUS-001", "/", "Resources without status data render a stable unknown state.", "resources", "covered", "RES-NO-STATUS-001; STRESS-RESOURCES-001"],
     ["RES-RESOURCE-ICON-001", "/", "Custom Fluent resource icon names override resource-type fallbacks.", "resources", "covered", "RES-ICON-001; HTTP-RESOURCES-001; STRESS-RESOURCE-ICON-001"],
-    ["RES-RESOURCE-ICON-VARIANT-001", "/", "Regular and filled resource icon variants are preserved.", null, "covered", "RES-ICON-001; DeckApiTests.GetResources_ReturnsDeckResourceContract"],
+    ["RES-RESOURCE-ICON-VARIANT-001", "/", "Regular and filled resource icon variants are preserved.", "resources", "covered", "RES-ICON-001; DeckApiTests.GetResources_ReturnsDeckResourceContract"],
     ["RES-CONTEXT-MENU-001", "/", "Resource rows expose details, navigation, and commands through a context menu.", "resources", "covered", "RES-CONTEXT-MENU-001"],
     ["RES-SESSION-001", "/", "Search, filters, sort, view, expansion, and selection survive navigation and reload.", "resources", "covered", "RES-SORT-001; RES-STRUCTURED-FILTER-001; RES-VIEW-OPTIONS-001; RES-HIERARCHY-001; RES-DETAILS-LINK-001"],
   ],

@@ -66,7 +66,7 @@ var serviceBuilder = builder.AddProject<Projects.Stress_ApiService>("stress-apis
     .WithEnvironment("OTEL_DOTNET_EXPERIMENTAL_METRICS_EMIT_OVERFLOW_ATTRIBUTE", "true")
     .WithEnvironment("API_KEY", apiKeyParam)
     .WithEnvironment("DB_CONNECTION_STRING", connectionStringParam)
-    .WithIconName("Server");
+    .WithIconName("Server", IconVariant.Regular);
 serviceBuilder
     .WithEnvironment("HOST", $"{serviceBuilder.GetEndpoint("http").Property(EndpointProperty.Host)}")
     .WithEnvironment("PORT", $"{serviceBuilder.GetEndpoint("http").Property(EndpointProperty.Port)}")

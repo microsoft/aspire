@@ -1,0 +1,37 @@
+@inject IconResolver IconResolver
+
+@if (ResourceIconHelpers.ResolveCustomIcon(IconResolver, Resource, DesiredIconSize) is { } icon)
+{
+    <span data-icon-name="@Resource.IconName"
+          data-icon-variant="@((Resource.IconVariant ?? Microsoft.FluentUI.AspNetCore.Components.IconVariant.Filled).ToString().ToLowerInvariant())">
+        <FluentIcon Value="icon" Width="@($"{Size}px")" Class="@Class" Style="@Style" />
+    </span>
+}
+else
+{
+    <DeckIcon Name="@ResourceIconHelpers.GetDeckIconForResource(Resource)"
+              Size="@Size"
+              Class="@Class"
+              Style="@Style" />
+}
+
+@code {
+    [Parameter, EditorRequired]
+    public required ResourceViewModel Resource { get; set; }
+
+    [Parameter]
+    public int Size { get; set; } = 16;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public string? Style { get; set; }
+
+    private IconSize DesiredIconSize => Size switch
+    {
+        <= 16 => IconSize.Size16,
+        <= 20 => IconSize.Size20,
+        _ => IconSize.Size24
+    };
+}

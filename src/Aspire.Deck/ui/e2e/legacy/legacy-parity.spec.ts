@@ -127,6 +127,8 @@ test(`${features("resources")} inventories resources, details, and graph behavio
   const defaultIcon = defaultIconRow.locator("svg.resource-icon");
   await expect(customIcon).toHaveCount(1);
   await expect(defaultIcon).toHaveCount(1);
+  await expect(customIconRow.locator('[data-icon-name="Server"][data-icon-variant="regular"]')).toHaveCount(1);
+  await expect(defaultIconRow.locator('[data-icon-name="Document"][data-icon-variant="filled"]')).toHaveCount(1);
   expect(await customIcon.evaluate((element) => element.innerHTML)).not.toBe(
     await defaultIcon.evaluate((element) => element.innerHTML),
   );
@@ -150,6 +152,8 @@ test(`${features("resources")} inventories resources, details, and graph behavio
   await expect(page.getByRole("button", { name: "Zoom in", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Zoom out", exact: true })).toBeVisible();
   await expect(page.getByRole("button", { name: "Reset", exact: true })).toBeVisible();
+  await expect(page.locator('g[data-icon-name="Server"][data-icon-variant="regular"]')).toHaveCount(1);
+  await expect(page.locator('g[data-icon-name="Document"][data-icon-variant="filled"]').first()).toBeVisible();
   await attachScreenshot(page, testInfo, "legacy-resource-graph");
 });
 

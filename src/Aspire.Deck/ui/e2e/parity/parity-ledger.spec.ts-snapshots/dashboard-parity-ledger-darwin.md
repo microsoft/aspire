@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 18
+- Legacy black-box scenarios pending: 17
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -60,7 +60,7 @@
 | RES-STATE-001 | resources | `/` | resources | covered | HTTP-RESOURCES-001; STRESS-RESOURCES-001 | Running, starting, finished, exited, not-started, and unknown states remain distinguishable. |
 | RES-NO-STATUS-001 | resources | `/` | resources | covered | RES-NO-STATUS-001; STRESS-RESOURCES-001 | Resources without status data render a stable unknown state. |
 | RES-RESOURCE-ICON-001 | resources | `/` | resources | covered | RES-ICON-001; HTTP-RESOURCES-001; STRESS-RESOURCE-ICON-001 | Custom Fluent resource icon names override resource-type fallbacks. |
-| RES-RESOURCE-ICON-VARIANT-001 | resources | `/` | PENDING | covered | RES-ICON-001; DeckApiTests.GetResources_ReturnsDeckResourceContract | Regular and filled resource icon variants are preserved. |
+| RES-RESOURCE-ICON-VARIANT-001 | resources | `/` | resources | covered | RES-ICON-001; DeckApiTests.GetResources_ReturnsDeckResourceContract | Regular and filled resource icon variants are preserved. |
 | RES-CONTEXT-MENU-001 | resources | `/` | resources | covered | RES-CONTEXT-MENU-001 | Resource rows expose details, navigation, and commands through a context menu. |
 | RES-SESSION-001 | resources | `/` | resources | covered | RES-SORT-001; RES-STRUCTURED-FILTER-001; RES-VIEW-OPTIONS-001; RES-HIERARCHY-001; RES-DETAILS-LINK-001 | Search, filters, sort, view, expansion, and selection survive navigation and reload. |
 | PARAM-LIST-001 | parameters | `/parameters` | parameters | covered | PARAM-LIST-001; STRESS-PARAMETERS-001 | Plain, secret, and unresolved parameters render on a dedicated page. |
