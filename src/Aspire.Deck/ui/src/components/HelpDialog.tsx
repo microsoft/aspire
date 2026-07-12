@@ -1,6 +1,7 @@
 import { Button, Dialog } from "../toolkit";
 
 const shortcutGroups = [
+  { title: "Panel", shortcuts: [["+", "Increase panel size"], ["-", "Decrease panel size"], ["Shift + R", "Reset panel size"], ["Shift + T", "Toggle panel orientation"], ["Shift + X", "Close panel"]] },
   { title: "Pages", shortcuts: [["R", "Resources"], ["C", "Console"], ["S", "Structured Logs"], ["T", "Traces"], ["M", "Metrics"]] },
   { title: "Dashboard", shortcuts: [["?", "Help"], ["Shift + S", "Settings"]] },
 ] as const;

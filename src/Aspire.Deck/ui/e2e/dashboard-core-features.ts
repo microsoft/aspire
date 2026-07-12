@@ -11,7 +11,7 @@ export const dashboardCoreFeatures = {
   "APP-HELP-001": "Help exposes dashboard documentation and every implemented keyboard shortcut.",
   "APP-SETTINGS-001": "Settings reports dashboard/runtime versions and controls theme selection.",
   "APP-TIME-FORMAT-001": "Settings persists and applies system, 12-hour, and 24-hour timestamp formatting.",
-  "APP-KEYBOARD-001": "Page, Help, and Settings shortcuts work outside editable controls.",
+  "APP-KEYBOARD-001": "Page, panel, Help, and Settings shortcuts work outside editable controls.",
   "APP-ASSISTANT-001": "The assistant opens, expands, starts a new chat, sends, stops, and closes.",
   "APP-NOTFOUND-001": "Unknown paths render a dedicated 404 experience and recover to Resources.",
   "APP-ERROR-001": "The error route and React render boundary expose recovery and reload actions.",

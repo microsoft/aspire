@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 157
-- React covered: 153
-- React partial: 4
+- React covered: 154
+- React partial: 3
 - React missing: 0
 - Legacy black-box scenarios pending: 54
-- React parity gaps: 4
+- React parity gaps: 3
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -14,7 +14,7 @@
 | SHELL-ROUTES-001 | shell | `/` | PENDING | covered | APP-ROUTES-001 | Pages have stable URLs and browser history/deep links restore the selected page. |
 | SHELL-REPO-001 | shell | `/` | shell | covered | APP-REPOSITORY-001 | The Aspire repository link is available from the top bar. |
 | SHELL-HELP-001 | shell | `/` | shell | covered | APP-HELP-001 | Help opens with documentation and keyboard shortcut reference content. |
-| SHELL-KEYBOARD-001 | shell | `/` | PENDING | partial | APP-KEYBOARD-001 (page, help, and settings shortcuts; panel shortcuts await a shared panel host) | Page navigation, panel, help, and settings keyboard shortcuts work. |
+| SHELL-KEYBOARD-001 | shell | `/` | PENDING | covered | APP-KEYBOARD-001 | Page navigation, panel, help, and settings keyboard shortcuts work. |
 | SHELL-AGENTS-001 | shell | `/` | shell | covered | HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | The AI agents entry point appears when enabled. |
 | SHELL-ASSISTANT-001 | shell | `/` | PENDING | covered | APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
 | SHELL-NOTIFICATIONS-001 | shell | `/` | shell | covered | APP-NOTIFICATION-001; CMD-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |

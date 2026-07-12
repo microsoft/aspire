@@ -83,6 +83,7 @@ export function AssistantPanel({ initialPrompt, onClose }: { initialPrompt?: str
       leading={<NamedIcon name="ChatSparkle" size={20} />}
       closeLabel="Close assistant"
       className={expanded ? "assistant-panel assistant-panel--expanded" : "assistant-panel"}
+      size={expanded ? 960 : 480}
       onClose={onClose}
       headerActions={(
         <>

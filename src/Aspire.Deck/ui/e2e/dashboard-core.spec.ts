@@ -132,7 +132,7 @@ test(`${features("APP-REPOSITORY-001", "APP-HELP-001", "APP-SETTINGS-001", "APP-
   let dialog = page.getByRole("dialog", { name: "Help" });
   await expect(dialog.getByRole("link", { name: "Aspire dashboard documentation" })).toHaveAttribute("href", "https://aka.ms/aspire/dashboard");
   await expect(dialog.getByRole("heading", { name: "Keyboard shortcuts" })).toBeVisible();
-  await expect(dialog.locator("kbd")).toHaveText(["R", "C", "S", "T", "M", "?", "Shift + S"]);
+  await expect(dialog.locator("kbd")).toHaveText(["+", "-", "Shift + R", "Shift + T", "Shift + X", "R", "C", "S", "T", "M", "?", "Shift + S"]);
   await dialog.getByRole("button", { name: "Close" }).click();
 
   await page.keyboard.press("?");
@@ -166,6 +166,26 @@ test(`${features("APP-REPOSITORY-001", "APP-HELP-001", "APP-SETTINGS-001", "APP-
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
   await attachScreenshot(page, testInfo, "dashboard-settings");
   await settings.getByRole("button", { name: "Close" }).click();
+
+  await page.getByRole("row", { name: /frontend/ }).click();
+  const panel = page.getByRole("dialog", { name: "frontend" });
+  const initialBox = (await panel.boundingBox())!;
+  await page.keyboard.press("+");
+  await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(initialBox.width);
+  await page.keyboard.press("-");
+  await expect.poll(async () => Math.round((await panel.boundingBox())!.width)).toBe(Math.round(initialBox.width));
+  await page.keyboard.press("Shift+T");
+  await expect(panel).toHaveClass(/drawer--bottom/);
+  await expect.poll(async () => (await panel.boundingBox())!.width).toBeGreaterThan(initialBox.width);
+  const initialBottomHeight = (await panel.boundingBox())!.height;
+  await page.keyboard.press("+");
+  await expect.poll(async () => (await panel.boundingBox())!.height).toBeGreaterThan(initialBottomHeight);
+  const expandedBottomHeight = (await panel.boundingBox())!.height;
+  await page.keyboard.press("Shift+R");
+  await expect.poll(async () => (await panel.boundingBox())!.height).toBeLessThan(expandedBottomHeight);
+  await page.keyboard.press("Shift+X");
+  await expect(panel).toBeHidden();
+
   await page.reload();
   await expect(page.locator("html")).toHaveAttribute("data-theme", "dark");
 });

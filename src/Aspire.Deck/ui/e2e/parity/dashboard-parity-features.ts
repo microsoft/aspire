@@ -49,7 +49,7 @@ const featureDefinitions = {
     ["SHELL-ROUTES-001", "/", "Pages have stable URLs and browser history/deep links restore the selected page.", null, "covered", "APP-ROUTES-001"],
     ["SHELL-REPO-001", "/", "The Aspire repository link is available from the top bar.", "shell", "covered", "APP-REPOSITORY-001"],
     ["SHELL-HELP-001", "/", "Help opens with documentation and keyboard shortcut reference content.", "shell", "covered", "APP-HELP-001"],
-    ["SHELL-KEYBOARD-001", "/", "Page navigation, panel, help, and settings keyboard shortcuts work.", null, "partial", "APP-KEYBOARD-001 (page, help, and settings shortcuts; panel shortcuts await a shared panel host)"],
+    ["SHELL-KEYBOARD-001", "/", "Page navigation, panel, help, and settings keyboard shortcuts work.", null, "covered", "APP-KEYBOARD-001"],
     ["SHELL-AGENTS-001", "/", "The AI agents entry point appears when enabled.", "shell", "covered", "HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
     ["SHELL-ASSISTANT-001", "/", "The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses.", null, "covered", "APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled"],
     ["SHELL-NOTIFICATIONS-001", "/", "Active notifications render intent, actions, links, and dismiss behavior.", "shell", "covered", "APP-NOTIFICATION-001; CMD-NOTIFICATION-001"],
