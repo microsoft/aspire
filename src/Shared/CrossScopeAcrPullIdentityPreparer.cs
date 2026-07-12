@@ -114,7 +114,14 @@ internal static class CrossScopeAcrPullIdentityPreparer
         // A cross-scope role assignment cannot be emitted inline in the environment module (BCP139).
         // Promote only this path to a standalone identity so AzureResourcePreparer can emit the
         // role assignment as a module scoped to the existing registry.
-        var identity = new AzureUserAssignedIdentityResource($"{builder.Resource.Name}-mi");
+        var identityName = $"{builder.Resource.Name}-mi";
+        if (context.Model.Resources.TryGetByName(identityName, out _))
+        {
+            throw new DistributedApplicationException(
+                $"Cannot create the cross-scope ACR pull identity '{identityName}' for environment '{builder.Resource.Name}' because a resource with that name already exists. Call 'WithAcrPullIdentity' on the environment to select an existing identity, or use a different resource name.");
+        }
+
+        var identity = new AzureUserAssignedIdentityResource(identityName);
         var identityBuilder = builder.ApplicationBuilder.CreateResourceBuilder(identity);
         configureIdentity?.Invoke(identityBuilder);
         identityBuilder.WithRoleAssignments(

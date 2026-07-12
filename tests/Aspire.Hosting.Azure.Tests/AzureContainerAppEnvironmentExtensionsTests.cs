@@ -288,6 +288,27 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
     }
 
     [Fact]
+    public async Task CrossResourceGroupRegistry_ThrowsTargetedErrorWhenGeneratedIdentityNameAlreadyExists()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExisting("myacr", "my-existing-resource-group");
+
+        builder.AddAzureUserAssignedIdentity("env-mi");
+        builder.AddAzureContainerAppEnvironment("env")
+            .WithAzureContainerRegistry(registry);
+
+        using var app = builder.Build();
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(
+            () => AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default));
+
+        Assert.Equal(
+            "Cannot create the cross-scope ACR pull identity 'env-mi' for environment 'env' because a resource with that name already exists. Call 'WithAcrPullIdentity' on the environment to select an existing identity, or use a different resource name.",
+            exception.Message);
+    }
+
+    [Fact]
     public async Task CrossResourceGroupRegistry_WithAzdNaming_PreservesIdentityName()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
