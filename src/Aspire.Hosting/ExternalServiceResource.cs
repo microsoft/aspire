@@ -20,7 +20,7 @@ public sealed class ExternalServiceResource : Resource
     /// <param name="name">The name of the resource.</param>
     /// <param name="uri">The URI for the external service.</param>
     /// <remarks>
-    /// The URI must be an absolute URI with the absolute path ending with '/'.
+    /// The URI must be an absolute URI.
     /// The URI cannot contain a fragment or query string.
     /// </remarks>
     public ExternalServiceResource(string name, Uri uri) : base(name)
@@ -85,10 +85,6 @@ public sealed class ExternalServiceResource : Resource
         if (!uri.IsAbsoluteUri)
         {
             return new ArgumentException("The URI for the external service must be absolute.", nameof(uri));
-        }
-        if (!uri.AbsolutePath.EndsWith("/", StringComparison.Ordinal))
-        {
-            return new ArgumentException("The URI absolute path must end with '/'.", nameof(uri));
         }
         if (!string.IsNullOrEmpty(uri.Fragment))
         {
