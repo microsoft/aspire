@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 22
+- Legacy black-box scenarios pending: 21
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -147,7 +147,7 @@
 | TRACE-SPAN-DETAILS-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-DETAILS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Span details include identifiers, timing, status, attributes, resource, and instrumentation scope. |
 | TRACE-EVENTS-001 | traces | `/traces/detail/{traceId}` | trace-details | covered | TRACE-EVENTS-001; HTTP-TRACES-001 | Span events and exception details preserve timestamps and attributes. |
 | TRACE-LINKS-001 | traces | `/traces/detail/{traceId}` | trace-details | covered | TRACE-LINKS-001; HTTP-TRACES-001 | Span links navigate to related traces and preserve link attributes. |
-| TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | PENDING | covered | TRACE-GENAI-001 | GenAI spans and traces open the dedicated GenAI visualizer. |
+| TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | trace-genai | covered | TRACE-GENAI-001 | GenAI spans and traces open the dedicated GenAI visualizer. |
 | TRACE-EXPLAIN-001 | traces | `/traces` | PENDING | covered | TRACE-EXPLAIN-001 | Explain errors summarizes current failed traces through the assistant. |
 | TRACE-SESSION-001 | traces | `/traces` | trace-session | covered | TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001 | Resource, type, filters, and selection are deep-linkable and restorable. |
 | METRIC-RESOURCE-001 | metrics | `/metrics` | metrics | covered | METRIC-RESOURCE-001; METRIC-SESSION-001 | Metrics require and preserve a selected telemetry resource. |

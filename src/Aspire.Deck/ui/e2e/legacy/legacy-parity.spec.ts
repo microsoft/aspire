@@ -540,6 +540,28 @@ test(`${features("trace-details")} verifies error events and linked span navigat
   await expect(page.getByRole("table").getByText("trace-fixture-linked-target", { exact: true })).toBeVisible();
 });
 
+test(`${features("trace-genai")} opens the GenAI trace conversation visualizer`, async ({ page }) => {
+  await page.goto("/");
+  const apiResourceRow = page.getByRole("table").getByRole("row").filter({ hasText: "stress-apiservice" });
+  await apiResourceRow.getByText("stress-apiservice", { exact: true }).click();
+  await page.getByRole("dialog").filter({ hasText: "stress-apiservice" })
+    .getByRole("button", { name: "Gen AI trace", exact: true }).click();
+
+  await page.goto("/traces");
+  const matchingTraceRows = page.getByRole("table").getByRole("row").filter({ hasText: "GET /genai-trace" });
+  await expect.poll(() => matchingTraceRows.count(), { timeout: 30_000 }).toBeGreaterThan(0);
+  const traceRow = matchingTraceRows.last();
+  await traceRow.getByRole("button", { name: "GenAI details", exact: true }).click();
+
+  const visualizer = page.locator("fluent-dialog");
+  await expect(visualizer).toContainText("chat gpt");
+  await expect(visualizer).toContainText("Tokens 470");
+  await expect(visualizer).toContainText("This is the input prompt.");
+  await expect(visualizer).toContainText("The weather in Tokyo is currently sunny");
+  await expect(visualizer.getByRole("tab", { name: /^Tools \d+$/ })).toBeVisible();
+  await visualizer.getByRole("button", { name: "Close", exact: true }).click();
+});
+
 test(`${features("trace-session")} restores trace resource type filters and selection`, async ({ page }) => {
   await page.goto("/traces");
   const resource = page.getByRole("combobox", { name: /^(Resource|Select a resource)$/ });

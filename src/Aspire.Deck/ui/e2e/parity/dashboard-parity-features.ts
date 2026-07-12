@@ -22,6 +22,7 @@ export type LegacyScenario =
   | "structured-log-virtualization"
   | "traces"
   | "trace-details"
+  | "trace-genai"
   | "trace-session"
   | "metrics";
 
@@ -199,7 +200,7 @@ const featureDefinitions = {
     ["TRACE-SPAN-DETAILS-001", "/traces/detail/{traceId}", "Span details include identifiers, timing, status, attributes, resource, and instrumentation scope.", "traces", "covered", "TRACE-DETAILS-001; HTTP-TRACES-001; STRESS-TRACES-001"],
     ["TRACE-EVENTS-001", "/traces/detail/{traceId}", "Span events and exception details preserve timestamps and attributes.", "trace-details", "covered", "TRACE-EVENTS-001; HTTP-TRACES-001"],
     ["TRACE-LINKS-001", "/traces/detail/{traceId}", "Span links navigate to related traces and preserve link attributes.", "trace-details", "covered", "TRACE-LINKS-001; HTTP-TRACES-001"],
-    ["TRACE-GENAI-001", "/traces/detail/{traceId}", "GenAI spans and traces open the dedicated GenAI visualizer.", null, "covered", "TRACE-GENAI-001"],
+    ["TRACE-GENAI-001", "/traces/detail/{traceId}", "GenAI spans and traces open the dedicated GenAI visualizer.", "trace-genai", "covered", "TRACE-GENAI-001"],
     ["TRACE-EXPLAIN-001", "/traces", "Explain errors summarizes current failed traces through the assistant.", null, "covered", "TRACE-EXPLAIN-001"],
     ["TRACE-SESSION-001", "/traces", "Resource, type, filters, and selection are deep-linkable and restorable.", "trace-session", "covered", "TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001"],
   ],
