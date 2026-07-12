@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 21
+- Legacy black-box scenarios pending: 18
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -74,11 +74,11 @@
 | PARAM-SESSION-001 | parameters | `/parameters` | parameters | covered | PARAM-SESSION-001 | Parameter filter, sort, and selected resource state are restorable. |
 | CMD-VISIBILITY-001 | commands | `/` | commands | covered | CMD-VISIBILITY-001; STRESS-COMMAND-VISIBILITY-001 | Enabled, disabled, hidden, UI-only, and API-only command visibility is honored. |
 | CMD-HIGHLIGHT-001 | commands | `/` | commands | covered | CMD-HIGHLIGHT-001 | Highlighted commands remain directly available and other commands use overflow presentation. |
-| CMD-ICON-001 | commands | `/` | PENDING | covered | RES-ICON-001; STRESS-COMMAND-ICON-001 | Custom command icon names render in direct and overflow command surfaces. |
-| CMD-ICON-VARIANT-001 | commands | `/` | PENDING | covered | TK-ICON-001; RES-ICON-001; STRESS-COMMAND-ICON-001 | Regular and filled command icon variants are preserved. |
+| CMD-ICON-001 | commands | `/` | commands | covered | RES-ICON-001; STRESS-COMMAND-ICON-001 | Custom command icon names render in direct and overflow command surfaces. |
+| CMD-ICON-VARIANT-001 | commands | `/` | commands | covered | TK-ICON-001; RES-ICON-001; STRESS-COMMAND-ICON-001 | Regular and filled command icon variants are preserved. |
 | CMD-DESCRIPTION-001 | commands | `/` | commands | covered | CMD-DESCRIPTION-001 | Command display names and descriptions remain visible and accessible. |
 | CMD-CONFIRM-001 | commands | `/` | commands | covered | CMD-CONFIRM-001 | Commands with confirmation messages require explicit confirmation. |
-| CMD-EXECUTE-001 | commands | `/` | PENDING | covered | RES-COMMANDS-001; HTTP-COMMAND-001; HTTP-COMMAND-OUTCOMES-001; STRESS-COMMAND-EXECUTE-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |
+| CMD-EXECUTE-001 | commands | `/` | commands | covered | RES-COMMANDS-001; HTTP-COMMAND-001; HTTP-COMMAND-OUTCOMES-001; STRESS-COMMAND-EXECUTE-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |
 | CMD-TEXT-001 | commands | `/` | commands | covered | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Text arguments support label, description, placeholder, required, and maximum length. |
 | CMD-NUMBER-001 | commands | `/` | commands | covered | HTTP-INTERACTION-001; CMD-VALIDATION-001; STRESS-COMMAND-ARGUMENTS-001 | Number arguments preserve numeric values and validation. |
 | CMD-BOOLEAN-001 | commands | `/` | commands | covered | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Boolean arguments preserve checked state and disabled state. |

@@ -1,0 +1,29 @@
+@inject IconResolver IconResolver
+
+@if (ResolvedIcon is { } icon)
+{
+    <span class="@Class" data-icon-name="@IconName" data-icon-variant="@((IconVariant ?? Microsoft.FluentUI.AspNetCore.Components.IconVariant.Regular).ToString().ToLowerInvariant())">
+        <FluentIcon Value="icon" Width="@($"{Size}px")" />
+    </span>
+}
+
+@code {
+    [Parameter]
+    public string? IconName { get; set; }
+
+    [Parameter]
+    public IconVariant? IconVariant { get; set; }
+
+    [Parameter]
+    public int Size { get; set; } = 16;
+
+    [Parameter]
+    public string? Class { get; set; }
+
+    [Parameter]
+    public bool UseHighlightedFallback { get; set; }
+
+    private Icon? ResolvedIcon => UseHighlightedFallback
+        ? IconResolver.ResolveHighlightedCommandIcon(IconName, IconVariant)
+        : IconResolver.ResolveCommandIcon(IconName, IconVariant);
+}

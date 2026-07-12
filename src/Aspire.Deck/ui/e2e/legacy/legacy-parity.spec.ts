@@ -198,9 +198,20 @@ test(`${features("commands")} inventories command icons and argument input types
   const highlightedIconCommand = details.getByRole("button", { name: "Icon test highlighted", exact: true });
   await expect(iconCommand).toBeVisible();
   await expect(highlightedIconCommand).toBeVisible();
+  await expect(iconCommand.locator('[data-icon-name="CloudDatabase"][data-icon-variant="regular"]')).toHaveCount(1);
+  await expect(highlightedIconCommand.locator('[data-icon-name="CloudDatabase"][data-icon-variant="regular"]')).toHaveCount(1);
   await highlightedIconCommand.click();
   await expect(page.getByText('"Icon test highlighted" succeeded', { exact: false })).toBeVisible();
   await attachScreenshot(page, testInfo, "legacy-icon-commands");
+  await details.getByRole("button", { name: "Close", exact: true }).click({ force: true });
+
+  const lifecycleCommands = table.getByRole("row").filter({ hasText: "lifecycle-commands" });
+  await lifecycleCommands.click({ force: true });
+  details = page.getByRole("dialog").filter({ hasText: "lifecycle-commands" });
+  await expect(details.getByRole("button", { name: "Stop all resources", exact: true })
+    .locator('[data-icon-name="Stop"][data-icon-variant="filled"]')).toHaveCount(1);
+  await expect(details.getByRole("button", { name: "Start all resources", exact: true })
+    .locator('[data-icon-name="Play"][data-icon-variant="filled"]')).toHaveCount(1);
   await details.getByRole("button", { name: "Close", exact: true }).click({ force: true });
 
   const argumentCommands = table.getByRole("row").filter({ hasText: "argument-commands" });
@@ -218,6 +229,12 @@ test(`${features("commands")} inventories command icons and argument input types
   await expect(inputs.getByRole("textbox", { name: "Optional secret", exact: true })).toHaveAttribute("type", "password");
   await attachScreenshot(page, testInfo, "legacy-command-inputs");
   await inputs.getByRole("button", { name: "Cancel", exact: true }).click();
+  await details.getByRole("button", { name: "Close", exact: true }).click({ force: true });
+
+  await page.goto("/consolelogs/resource/stress-apiservice");
+  await page.getByRole("main").getByRole("button", { name: "Resource actions", exact: true }).click();
+  await expect(page.locator('fluent-menu-item[title="Write to console"]')
+    .locator('[data-icon-name="ContentViewGalleryLightning"][data-icon-variant="regular"]')).toHaveCount(1);
 });
 
 test(`${features("console")} inventories console streaming controls`, async ({ page }, testInfo) => {
@@ -718,7 +735,7 @@ test(`${features("console-follow")} preserves manual console position and restor
     return Boolean((window as Window & { getIsScrolledToContent?: () => boolean }).getIsScrolledToContent?.());
   })).toBe(true);
   const heightBeforeManualBurst = await consoleScroller.evaluate((element) => element.scrollHeight);
-  await page.getByRole("main").getByRole("button", { name: "Stop", exact: true }).click();
+  await page.getByRole("main").getByRole("button", { name: "Stop resource", exact: true }).click();
   await expect.poll(() => consoleScroller.evaluate((element) => element.scrollHeight), { timeout: 30_000 })
     .toBeGreaterThan(heightBeforeManualBurst);
   expect(await consoleScroller.evaluate((element) => element.scrollTop)).toBeLessThan(100);
@@ -728,8 +745,8 @@ test(`${features("console-follow")} preserves manual console position and restor
     element.dispatchEvent(new Event("scroll"));
     return Boolean((window as Window & { getIsScrolledToContent?: () => boolean }).getIsScrolledToContent?.());
   })).toBe(false);
-  await page.getByRole("main").getByRole("button", { name: "Start", exact: true }).click();
-  await expect(page.getByRole("main").getByRole("button", { name: "Stop", exact: true })).toBeVisible({ timeout: 30_000 });
+  await page.getByRole("main").getByRole("button", { name: "Start resource", exact: true }).click();
+  await expect(page.getByRole("main").getByRole("button", { name: "Stop resource", exact: true })).toBeVisible({ timeout: 30_000 });
   await expect.poll(() => consoleScroller.evaluate((element) =>
     element.scrollHeight - element.clientHeight - element.scrollTop)).toBeLessThan(10);
 });

@@ -25,7 +25,13 @@
             };
 
             return @<FluentMenuItem Id="@item.Id" Class="@item.Class" OnClick="() => HandleItemClicked(item)" Disabled="@item.IsDisabled" AdditionalAttributes="@additionalMenuItemAttributes" Label="@item.Text" MenuItems="@RenderNestedItems(item)">
-                @if (item.Icon is { } iconName)
+                @if (!string.IsNullOrEmpty(item.FluentIconName))
+                {
+                    <span slot="start">
+                        <DynamicFluentIcon IconName="@item.FluentIconName" IconVariant="item.FluentIconVariant" />
+                    </span>
+                }
+                else if (item.Icon is { } iconName)
                 {
                     <span slot="start">
                         <DeckIcon Name="iconName" Size="16" Style="vertical-align: text-bottom;" />

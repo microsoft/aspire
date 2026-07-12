@@ -12,14 +12,9 @@
             var highlightedCommand = _highlightedCommands[i];
 
             <button type="button" class="icon-btn icon-btn--sm" title="@(!string.IsNullOrEmpty(highlightedCommand.GetDisplayDescription()) ? highlightedCommand.GetDisplayDescription() : highlightedCommand.GetDisplayName())" @onclick="@(() => CommandSelected.InvokeAsync(highlightedCommand))" disabled="@(highlightedCommand.State == CommandViewModelState.Disabled || IsCommandExecuting(Resource, highlightedCommand))">
-                @if (!string.IsNullOrEmpty(highlightedCommand.IconName) && ResourceIconHelpers.TryGetDeckIcon(highlightedCommand.IconName, out var commandIcon))
-                {
-                    <DeckIcon Name="commandIcon" Size="16" />
-                }
-                else
-                {
-                    @highlightedCommand.GetDisplayName()
-                }
+                <DynamicFluentIcon IconName="@highlightedCommand.IconName"
+                                   IconVariant="highlightedCommand.IconVariant"
+                                   UseHighlightedFallback="true" />
             </button>
         }
         else

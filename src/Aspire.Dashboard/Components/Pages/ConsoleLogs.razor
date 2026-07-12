@@ -66,14 +66,9 @@
                         title="@(!string.IsNullOrEmpty(command.GetDisplayDescription()) ? command.GetDisplayDescription() : command.GetDisplayName())"
                         disabled="@(command.State == CommandViewModelState.Disabled || DashboardCommandExecutor.IsExecuting(selectedResource.Name, command.Name))"
                         @onclick="@(() => ExecuteResourceCommandAsync(command))">
-                    @if (!string.IsNullOrEmpty(command.IconName) && ResourceIconHelpers.TryGetDeckIcon(command.IconName, out var commandIcon))
-                    {
-                        <DeckIcon Name="commandIcon" Size="16" />
-                    }
-                    else
-                    {
-                        @command.GetDisplayName()
-                    }
+                    <DynamicFluentIcon IconName="@command.IconName"
+                                       IconVariant="command.IconVariant"
+                                       UseHighlightedFallback="true" />
                 </button>
             }
 

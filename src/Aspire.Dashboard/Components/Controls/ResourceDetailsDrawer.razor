@@ -173,7 +173,11 @@
                         disabled="@(command.State == CommandViewModelState.Disabled)"
                         title="@(command.GetDisplayDescription() ?? command.GetDisplayName())"
                         @onclick="() => OnExecuteCommand.InvokeAsync((Resource, command))">
-                    @if (CommandIcon(command.Name) is { } icon)
+                    @if (!string.IsNullOrEmpty(command.IconName))
+                    {
+                        <DynamicFluentIcon IconName="@command.IconName" IconVariant="command.IconVariant" />
+                    }
+                    else if (CommandIcon(command.Name) is { } icon)
                     {
                         <DeckIcon Name="icon" Size="15" />
                     }
