@@ -1,11 +1,11 @@
 # Dashboard migration parity ledger
 
 - Total legacy features: 158
-- React covered: 96
-- React partial: 29
-- React missing: 33
-- Legacy black-box scenarios pending: 70
-- React parity gaps: 62
+- React covered: 100
+- React partial: 27
+- React missing: 31
+- Legacy black-box scenarios pending: 66
+- React parity gaps: 58
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
 | --- | --- | --- | --- | --- | --- | --- |
@@ -86,10 +86,10 @@
 | CMD-CHOICE-001 | commands | `/` | commands | partial | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Choice arguments preserve options, display names, placeholders, and defaults. |
 | CMD-CUSTOM-CHOICE-001 | commands | `/` | commands | covered | TK-COMBOBOX-001; CMD-CUSTOM-CHOICE-001 | Choice arguments can allow a searchable custom value. |
 | CMD-SECRET-001 | commands | `/` | commands | partial | HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Secret text arguments mask values, disable password saving, and support explicit reveal. |
-| CMD-DYNAMIC-001 | commands | `/` | PENDING | missing | - | Dependent argument choices load asynchronously when prerequisite values change. |
-| CMD-LIVE-VALIDATION-001 | commands | `/` | PENDING | partial | RES-INTERACTION-001 | Inputs can request server validation while values change. |
-| CMD-VALIDATION-001 | commands | `/` | PENDING | partial | RES-INTERACTION-001 | Field-level and form-level validation errors are announced and rendered. |
-| CMD-MANY-INPUTS-001 | commands | `/` | PENDING | missing | - | Large command forms remain scrollable and submit every input value. |
+| CMD-DYNAMIC-001 | commands | `/` | commands | covered | CMD-DYNAMIC-001 | Dependent argument choices load asynchronously when prerequisite values change. |
+| CMD-LIVE-VALIDATION-001 | commands | `/` | commands | covered | CMD-LIVE-VALIDATION-001 | Inputs can request server validation while values change. |
+| CMD-VALIDATION-001 | commands | `/` | commands | covered | CMD-VALIDATION-001 | Field-level and form-level validation errors are announced and rendered. |
+| CMD-MANY-INPUTS-001 | commands | `/` | commands | covered | CMD-MANY-INPUTS-001 | Large command forms remain scrollable and submit every input value. |
 | CMD-MESSAGEBOX-001 | commands | `/` | PENDING | partial | APP-NOTIFICATION-001 | Confirmation and message-box interactions support primary, secondary, dismiss, and intent. |
 | CMD-NOTIFICATION-001 | commands | `/` | PENDING | partial | APP-NOTIFICATION-001 | Interaction notifications support semantic intent, links, actions, and non-dismissible state. |
 | CMD-MARKDOWN-001 | commands | `/` | PENDING | missing | - | Interaction messages and field descriptions opt into sanitized Markdown rendering. |

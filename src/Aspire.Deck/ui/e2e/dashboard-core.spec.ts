@@ -520,30 +520,69 @@ test(`${features("RES-COMMANDS-001", "RES-ACTION-MENU-001", "RES-CONFIRM-001")} 
   await expect(details).toContainText("Running");
 });
 
-test(`${features("RES-INTERACTION-001", "CMD-CUSTOM-CHOICE-001")} validates and submits an input command`, async ({ page }) => {
+test(`${features("RES-INTERACTION-001", "CMD-CUSTOM-CHOICE-001", "CMD-DYNAMIC-001", "CMD-LIVE-VALIDATION-001", "CMD-VALIDATION-001")} validates and submits an input command`, async ({ page }) => {
   await page.getByRole("row", { name: /frontend/ }).click();
   await page.getByRole("dialog", { name: "frontend" }).getByRole("button", { name: "Resource commands" }).click();
   await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: /Scale/ }).click();
   const interaction = page.getByRole("dialog", { name: "Scale resource" });
   const replicas = interaction.getByRole("spinbutton", { name: "Replicas" });
   const tier = interaction.getByRole("combobox", { name: "Tier" });
+  const region = interaction.getByRole("combobox", { name: "Region" });
   const drain = interaction.getByRole("checkbox", { name: "Drain connections before scaling down" });
 
   await expect(replicas).toHaveValue("1");
   await expect(tier).toHaveValue("Standard");
+  await expect(region).toHaveValue("US East");
   await expect(drain).toBeChecked();
   await replicas.fill("0");
-  await expect(interaction).toContainText("Replicas must be a whole number between 1 and 10.");
+  const validationSummary = interaction.getByRole("alert");
+  await expect(validationSummary).toContainText("Replicas: Replicas must be a whole number between 1 and 10.");
+  await expect(replicas).toHaveAttribute("aria-invalid", "true");
+  await expect(replicas).toHaveAttribute("aria-describedby", /int-replicas-description int-replicas-errors/);
   await expect(replicas).toHaveValue("0");
 
   await replicas.fill("3");
   await drain.uncheck();
+  await tier.click();
+  await tier.press("ArrowDown");
+  await page.getByRole("option", { name: "Premium", exact: true }).click();
+  await expect(region).toBeDisabled();
+  await expect(region).toHaveAttribute("placeholder", "Loading regions…");
+  await expect(region).toBeEnabled();
+  await expect(region).toHaveValue("Global");
   await tier.fill("private-tier");
   await expect(tier).toHaveValue("private-tier");
+  await expect(region).toBeEnabled();
+  await expect(region).toHaveValue("US East");
   const submit = interaction.getByRole("button", { name: "Scale", exact: true });
   await submit.focus();
   await page.keyboard.press("Enter");
   await expect(interaction).toHaveCount(0);
+});
+
+test(`${features("CMD-MANY-INPUTS-001")} scrolls and submits a 50-field command form`, async ({ page }) => {
+  await page.getByRole("row", { name: /apiservice/ }).click();
+  const details = page.getByRole("dialog", { name: "apiservice" });
+  await details.getByRole("button", { name: "Resource commands" }).click();
+  await page.getByRole("menu", { name: "Resource commands" }).getByRole("menuitem", { name: /Many inputs/ }).click();
+
+  const interaction = page.getByRole("dialog", { name: "Many inputs" });
+  const inputs = interaction.getByRole("textbox");
+  await expect(inputs).toHaveCount(50);
+  const geometry = await interaction.locator(".drawer__body").evaluate((element) => ({
+    clientHeight: element.clientHeight,
+    scrollHeight: element.scrollHeight,
+  }));
+  expect(geometry.scrollHeight).toBeGreaterThan(geometry.clientHeight);
+
+  await interaction.getByRole("textbox", { name: "Input 1", exact: true }).fill("first");
+  await interaction.getByRole("textbox", { name: "Input 50", exact: true }).fill("final-value");
+  await interaction.getByRole("button", { name: "Submit all" }).click();
+  await expect(interaction).toHaveCount(0);
+  await expect(details).toContainText("Submitted input count");
+  await expect(details).toContainText("50");
+  await expect(details).toContainText("Last input value");
+  await expect(details).toContainText("final-value");
 });
 
 test(`${features("PARAM-LIST-001", "PARAM-SORT-001", "PARAM-FILTER-001", "PARAM-SECRET-001")} sorts, filters, and reveals parameter values`, async ({ page }) => {

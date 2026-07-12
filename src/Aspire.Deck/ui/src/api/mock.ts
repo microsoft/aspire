@@ -19,6 +19,7 @@ import type {
   MetricSeriesResponse,
   MetricSeriesQuery,
   Resource,
+  ResourceCommand,
   ResourcesEvent,
   SpanSummary,
   TelemetrySummary,
@@ -114,7 +115,7 @@ function makeResources(): Resource[] {
         { name: "ConnectionStrings__postgres", value: "Host=localhost;Port=5432;Username=postgres;Password=p@ssw0rd-pg", isFromSpec: false },
       ],
       healthReports: [{ status: "Healthy", key: "self", description: "Liveness probe succeeded." }],
-      commands: defaultCommands("Running"),
+      commands: [...defaultCommands("Running"), manyInputsCommand()],
       relationships: [{ resourceName: "postgres", type: "Reference" }],
       isHidden: false,
       supportsDetailedTelemetry: true,
@@ -368,6 +369,19 @@ function defaultCommands(state: string): Resource["commands"] {
   ];
 }
 
+function manyInputsCommand(): ResourceCommand {
+  return {
+    name: "many-inputs",
+    displayName: "Many inputs…",
+    displayDescription: "Open a scrollable command with 50 inputs.",
+    confirmationMessage: null,
+    iconName: "TableLightning",
+    iconVariant: "regular",
+    isHighlighted: false,
+    state: "enabled",
+  };
+}
+
 const canvases: CanvasManifest[] = [
   {
     id: "resource-radar",
@@ -460,6 +474,8 @@ class MockBackend {
   private interactionSubs = new Set<(list: InteractionInfo[]) => void>();
   private dialog: InteractionInfo | null = null;
   private parameterDialogResourceName: string | null = null;
+  private scaleUpdateVersion = 0;
+  private manyInputsResourceName: string | null = null;
   private notifications: InteractionInfo[] = [
     {
       interactionId: 9001, kind: "notification", title: "Unresolved parameters",
@@ -711,6 +727,11 @@ class MockBackend {
         this.dialog = this.buildParameterDialog(target);
         this.emitInteractions();
         return { kind: "succeeded", message: "Awaiting input…" };
+      case "many-inputs":
+        this.manyInputsResourceName = target.name;
+        this.dialog = this.buildManyInputsDialog();
+        this.emitInteractions();
+        return { kind: "succeeded", message: "Awaiting input…" };
       default:
         return { kind: "undefined", message: `Unknown command '${args.commandName}'.` };
     }
@@ -720,23 +741,41 @@ class MockBackend {
 
   // --- Interactions (mock) ---
 
-  private buildScaleDialog(errorsFor: { name: string; error: string }[]): InteractionInfo {
+  private buildScaleDialog(
+    errorsFor: { name: string; error: string }[],
+    values: Record<string, string> = {},
+    regionLoading = false,
+  ): InteractionInfo {
     const errs = (name: string): string[] => errorsFor.filter((e) => e.name === name).map((e) => e.error);
+    const tier = values.tier ?? "standard";
+    const regionOptions: [string, string][] = tier === "premium"
+      ? [["global", "Global"], ["edge", "Edge"]]
+      : [["east", "US East"], ["west", "US West"]];
+    const requestedRegion = values.region ?? regionOptions[0]![0];
+    const region = regionOptions.some(([value]) => value === requestedRegion)
+      ? requestedRegion
+      : regionOptions[0]![0];
     const inputs: InteractionInputInfo[] = [
       {
         name: "replicas", label: "Replicas", placeholder: "1-10", inputType: "number", required: true,
-        options: [], value: "1", validationErrors: errs("replicas"), description: "Number of instances to run.",
+        options: [], value: values.replicas ?? "1", validationErrors: errs("replicas"), description: "Number of instances to run.",
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: true,
       },
       {
         name: "tier", label: "Tier", placeholder: "", inputType: "choice", required: true,
-        options: [["standard", "Standard"], ["premium", "Premium"]], value: "standard",
+        options: [["standard", "Standard"], ["premium", "Premium"]], value: tier,
         validationErrors: errs("tier"), description: "Compute tier for the replicas.",
-        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: true, disabled: false, updateStateOnChange: false,
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: true, disabled: false, updateStateOnChange: true,
+      },
+      {
+        name: "region", label: "Region", placeholder: regionLoading ? "Loading regions…" : "Select a region",
+        inputType: "choice", required: true, options: regionLoading ? [] : regionOptions,
+        value: regionLoading ? "" : region, validationErrors: errs("region"), description: "Available regions depend on the selected tier.",
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: regionLoading, updateStateOnChange: false,
       },
       {
         name: "drain", label: "Drain connections before scaling down", placeholder: "", inputType: "boolean",
-        required: false, options: [], value: "true", validationErrors: [], description: "",
+        required: false, options: [], value: values.drain ?? "true", validationErrors: [], description: "",
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
       },
     ];
@@ -778,6 +817,40 @@ class MockBackend {
         disabled: false,
         updateStateOnChange: false,
       }],
+      linkText: "",
+      linkUrl: "",
+    };
+  }
+
+  private buildManyInputsDialog(): InteractionInfo {
+    const inputs: InteractionInputInfo[] = Array.from({ length: 50 }, (_, index) => ({
+      name: `input${index + 1}`,
+      label: `Input ${index + 1}`,
+      placeholder: `Enter input ${index + 1}`,
+      inputType: "text",
+      required: false,
+      options: [],
+      value: "",
+      validationErrors: [],
+      description: "",
+      enableDescriptionMarkdown: false,
+      maxLength: 0,
+      allowCustomChoice: false,
+      disabled: false,
+      updateStateOnChange: false,
+    }));
+    return {
+      interactionId: 3,
+      kind: "inputsDialog",
+      title: "Many inputs",
+      message: "Complete any values and submit the entire 50-field form.",
+      primaryButtonText: "Submit all",
+      secondaryButtonText: "Cancel",
+      showSecondaryButton: true,
+      showDismiss: true,
+      enableMessageMarkdown: false,
+      intent: "none",
+      inputs,
       linkText: "",
       linkUrl: "",
     };
@@ -834,14 +907,51 @@ class MockBackend {
       return;
     }
 
+    if (interactionId === 3 && this.manyInputsResourceName) {
+      const target = this.resources.find((resource) => resource.name === this.manyInputsResourceName);
+      if (action === "submit" && target) {
+        target.properties = target.properties.filter((property) => !property.name.startsWith("command.manyInputs."));
+        target.properties.push(
+          { name: "command.manyInputs.count", displayName: "Submitted input count", value: String(Object.keys(values).length), isSensitive: false, isHighlighted: false, sortOrder: 90 },
+          { name: "command.manyInputs.last", displayName: "Last input value", value: values.input50 ?? "", isSensitive: false, isHighlighted: false, sortOrder: 91 },
+        );
+        this.emitResources({ type: "change", upserts: [structuredClone(target)] });
+      }
+      if (action !== "update") {
+        this.manyInputsResourceName = null;
+        this.dialog = null;
+        this.emitInteractions();
+      }
+      return;
+    }
+
     if (action === "submit" || action === "update") {
       const errors: { name: string; error: string }[] = [];
       const replicas = Number(values.replicas);
       if (!Number.isInteger(replicas) || replicas < 1 || replicas > 10) {
         errors.push({ name: "replicas", error: "Replicas must be a whole number between 1 and 10." });
       }
-      if (errors.length > 0 || action === "update") {
-        this.dialog = this.buildScaleDialog(errors);
+      if (action === "update") {
+        const currentTier = this.dialog?.inputs.find((input) => input.name === "tier")?.value;
+        if (values.tier !== currentTier) {
+          const updateVersion = ++this.scaleUpdateVersion;
+          this.dialog = this.buildScaleDialog(errors, values, true);
+          this.emitInteractions();
+          window.setTimeout(() => {
+            if (this.dialog?.interactionId !== 1 || updateVersion !== this.scaleUpdateVersion) {
+              return;
+            }
+            this.dialog = this.buildScaleDialog(errors, values);
+            this.emitInteractions();
+          }, 150);
+          return;
+        }
+        this.dialog = this.buildScaleDialog(errors, values);
+        this.emitInteractions();
+        return;
+      }
+      if (errors.length > 0) {
+        this.dialog = this.buildScaleDialog(errors, values);
         this.emitInteractions();
         return;
       }

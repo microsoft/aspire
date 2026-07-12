@@ -20,6 +20,8 @@ export interface ComboBoxProps<T = unknown> {
   allowCustomValue?: boolean;
   className?: string;
   fieldClassName?: string;
+  ariaInvalid?: boolean;
+  ariaDescribedBy?: string;
 }
 
 export function ComboBox<T>({
@@ -34,6 +36,8 @@ export function ComboBox<T>({
   allowCustomValue = false,
   className,
   fieldClassName,
+  ariaInvalid,
+  ariaDescribedBy,
 }: ComboBoxProps<T>) {
   const generatedId = useId();
   const controlId = id ?? generatedId;
@@ -48,6 +52,8 @@ export function ComboBox<T>({
         id={controlId}
         className={classes}
         aria-label={ariaLabel}
+        aria-invalid={ariaInvalid || undefined}
+        aria-describedby={ariaDescribedBy}
         placeholder={placeholder}
         disabled={disabled}
         freeform={allowCustomValue}

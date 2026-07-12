@@ -11,6 +11,7 @@ import { CloseIcon, ComboBox } from "../toolkit";
 export function InteractionPane({ interaction }: { interaction: InteractionInfo }) {
   const [values, setValues] = useState<Record<string, string>>(() => initValues(interaction));
   const idRef = useRef(interaction.interactionId);
+  const interactionRef = useRef(interaction);
 
   // Reset local values only when a brand-new interaction arrives — not on the
   // validation updates that re-send the same interaction id with new errors.
@@ -18,7 +19,22 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
     if (idRef.current !== interaction.interactionId) {
       idRef.current = interaction.interactionId;
       setValues(initValues(interaction));
+    } else {
+      const previousInputs = new Map(interactionRef.current.inputs.map((input) => [input.name, input]));
+      setValues((current) => {
+        const next: Record<string, string> = {};
+        for (const input of interaction.inputs) {
+          const previousInput = previousInputs.get(input.name);
+          // A changed value from an update response is authoritative. If only options,
+          // validation, or disabled state changed, retain text the user is still editing.
+          next[input.name] = !previousInput || input.value !== previousInput.value
+            ? input.value
+            : current[input.name] ?? input.value;
+        }
+        return next;
+      });
     }
+    interactionRef.current = interaction;
   }, [interaction]);
 
   const close = () => respondInteraction(interaction.interactionId, "cancel", {});
@@ -32,6 +48,9 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
   }
 
   const isInputs = interaction.kind === "inputsDialog";
+  const validationErrors = interaction.inputs.flatMap((input) =>
+    input.validationErrors.map((error) => ({ name: input.label || input.name, error })),
+  );
 
   return (
     <>
@@ -58,6 +77,16 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
                 respondInteraction(interaction.interactionId, "submit", values);
               }}
             >
+              {validationErrors.length > 0 ? (
+                <div className="interaction-form__validation" role="alert" aria-live="assertive">
+                  <div>Correct the following errors:</div>
+                  <ul>
+                    {validationErrors.map(({ name, error }, index) => (
+                      <li key={`${name}-${index}`}>{name}: {error}</li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
               {interaction.inputs.map((input) => (
                 <InputField
                   key={input.name}
@@ -117,6 +146,9 @@ function InputField({
 }) {
   const hasErrors = input.validationErrors.length > 0;
   const fieldId = `int-${input.name}`;
+  const descriptionId = input.description ? `${fieldId}-description` : undefined;
+  const errorId = hasErrors ? `${fieldId}-errors` : undefined;
+  const describedBy = [descriptionId, errorId].filter(Boolean).join(" ") || undefined;
 
   return (
     <div className={`field ${hasErrors ? "field--error" : ""}`}>
@@ -127,6 +159,8 @@ function InputField({
             type="checkbox"
             checked={value === "true"}
             disabled={input.disabled}
+            aria-invalid={hasErrors || undefined}
+            aria-describedby={describedBy}
             onChange={(e) => onChange(e.target.checked ? "true" : "false")}
           />
           <span>{input.label}</span>
@@ -144,6 +178,8 @@ function InputField({
               disabled={input.disabled}
               allowCustomValue={input.allowCustomChoice}
               placeholder={input.placeholder}
+              ariaInvalid={hasErrors}
+              ariaDescribedBy={describedBy}
               options={input.options.map(([optionValue, label]) => ({ value: optionValue, label }))}
               onValueChange={(nextValue) => onChange(nextValue)}
             />
@@ -156,18 +192,20 @@ function InputField({
               placeholder={input.placeholder}
               disabled={input.disabled}
               maxLength={input.maxLength > 0 ? input.maxLength : undefined}
+              aria-invalid={hasErrors || undefined}
+              aria-describedby={describedBy}
               onChange={(e) => onChange(e.target.value)}
             />
           )}
         </>
       )}
 
-      {input.description ? <div className="field__desc">{input.description}</div> : null}
-      {input.validationErrors.map((err, i) => (
-        <div key={i} className="field__error">
-          {err}
+      {input.description ? <div id={descriptionId} className="field__desc">{input.description}</div> : null}
+      {hasErrors ? (
+        <div id={errorId} className="field__errors">
+          {input.validationErrors.map((err, i) => <div key={i} className="field__error">{err}</div>)}
         </div>
-      ))}
+      ) : null}
     </div>
   );
 }
