@@ -7,7 +7,9 @@
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
+using Azure.Provisioning;
 using Azure.Provisioning.ContainerRegistry;
+using Azure.Provisioning.Roles;
 
 // ACA and App Service normally emit their ACR pull identity and AcrPull assignment inline in the
 // environment module. That remains the preferred path, but Bicep rejects an inline role assignment
@@ -123,6 +125,19 @@ internal static class CrossScopeAcrPullIdentityPreparer
 
         var identity = new AzureUserAssignedIdentityResource(identityName);
         var identityBuilder = builder.ApplicationBuilder.CreateResourceBuilder(identity);
+        identityBuilder.ConfigureInfrastructure(infrastructure =>
+        {
+            // The inline identity uses the environment module's standard tags parameter. Recreate that
+            // contract on the promoted module so deployment tags and required-tag policies still apply.
+            var tags = new ProvisioningParameter("tags", typeof(object))
+            {
+                Value = new BicepDictionary<string>()
+            };
+            infrastructure.Add(tags);
+
+            var identity = infrastructure.GetProvisionableResources().OfType<UserAssignedIdentity>().Single();
+            identity.Tags = tags;
+        });
         configureIdentity?.Invoke(identityBuilder);
         identityBuilder.WithRoleAssignments(
             builder.ApplicationBuilder.CreateResourceBuilder(registry),
