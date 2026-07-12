@@ -9,6 +9,7 @@ export type DashboardArea =
   | "metrics";
 
 export type ReactParityStatus = "covered" | "partial" | "missing";
+export type LegacyCoverage = LegacyScenario | "not-applicable";
 
 export type LegacyScenario =
   | "shell"
@@ -38,7 +39,7 @@ export interface DashboardParityFeature {
   area: DashboardArea;
   legacyRoute: string;
   description: string;
-  legacyScenario: LegacyScenario | null;
+  legacyScenario: LegacyCoverage | null;
   reactStatus: ReactParityStatus;
   currentCoverage: string | null;
 }
@@ -47,7 +48,7 @@ type FeatureDefinition = readonly [
   id: string,
   legacyRoute: string,
   description: string,
-  legacyScenario: LegacyScenario | null,
+  legacyScenario: LegacyCoverage | null,
   reactStatus: ReactParityStatus,
   currentCoverage?: string,
 ];
@@ -224,10 +225,10 @@ const featureDefinitions = {
     ["METRIC-HISTOGRAM-001", "/metrics", "Histogram count and percentile views preserve aggregation semantics.", "metrics", "covered", "METRIC-HISTOGRAM-001; HTTP-METRICS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries; ChartDataCalculatorTests.TryCalculateHistogramAggregatePoint_ReturnsCumulativeDeltas"],
     ["METRIC-EXEMPLARS-001", "/metrics", "Metric exemplars expose values, timestamps, attributes, and related trace navigation.", "metrics", "covered", "METRIC-EXEMPLARS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries"],
     ["METRIC-CURSOR-001", "/metrics", "Hovering charts exposes aligned timestamp and series values.", "metrics", "covered", "METRIC-CURSOR-001"],
-    ["METRIC-ZOOM-001", "/metrics", "Dragging to zoom preserves inspection state and pauses live updates.", null, "covered", "METRIC-ZOOM-001"],
+    ["METRIC-ZOOM-001", "/metrics", "Dragging to zoom preserves inspection state and pauses live updates.", "not-applicable", "covered", "METRIC-ZOOM-001"],
     ["METRIC-ROUTES-001", "/metrics/resource/{resource}?meter={meter}&instrument={instrument}", "Resource, meter, instrument, duration, and view are deep-linkable.", "metrics", "covered", "METRIC-ROUTES-001; METRIC-SESSION-001"],
     ["METRIC-EMPTY-001", "/metrics", "Loading, no-resource, no-meter, no-instrument, and no-data states are distinct.", "metrics", "covered", "HTTP-EMPTY-TELEMETRY-001; STRESS-EMPTY-TELEMETRY-001"],
-    ["METRIC-SESSION-001", "/metrics", "Metric selection, duration, view, dimensions, and zoom are restorable.", null, "covered", "METRIC-SESSION-001"],
+    ["METRIC-SESSION-001", "/metrics", "Metric resource, meter, instrument, duration, and view are restorable.", "metrics", "covered", "METRIC-SESSION-001"],
   ],
 } as const satisfies Record<DashboardArea, readonly FeatureDefinition[]>;
 

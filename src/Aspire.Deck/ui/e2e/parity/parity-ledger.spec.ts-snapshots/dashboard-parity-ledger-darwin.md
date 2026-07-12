@@ -4,7 +4,7 @@
 - React covered: 157
 - React partial: 0
 - React missing: 0
-- Legacy black-box scenarios pending: 10
+- Legacy black-box scenarios pending: 8
 - React parity gaps: 0
 
 | ID | Area | Legacy route | Legacy test | React | Current coverage | Behavior |
@@ -162,7 +162,7 @@
 | METRIC-HISTOGRAM-001 | metrics | `/metrics` | metrics | covered | METRIC-HISTOGRAM-001; HTTP-METRICS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries; ChartDataCalculatorTests.TryCalculateHistogramAggregatePoint_ReturnsCumulativeDeltas | Histogram count and percentile views preserve aggregation semantics. |
 | METRIC-EXEMPLARS-001 | metrics | `/metrics` | metrics | covered | METRIC-EXEMPLARS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries | Metric exemplars expose values, timestamps, attributes, and related trace navigation. |
 | METRIC-CURSOR-001 | metrics | `/metrics` | metrics | covered | METRIC-CURSOR-001 | Hovering charts exposes aligned timestamp and series values. |
-| METRIC-ZOOM-001 | metrics | `/metrics` | PENDING | covered | METRIC-ZOOM-001 | Dragging to zoom preserves inspection state and pauses live updates. |
+| METRIC-ZOOM-001 | metrics | `/metrics` | N/A (React enhancement) | covered | METRIC-ZOOM-001 | Dragging to zoom preserves inspection state and pauses live updates. |
 | METRIC-ROUTES-001 | metrics | `/metrics/resource/{resource}?meter={meter}&instrument={instrument}` | metrics | covered | METRIC-ROUTES-001; METRIC-SESSION-001 | Resource, meter, instrument, duration, and view are deep-linkable. |
 | METRIC-EMPTY-001 | metrics | `/metrics` | metrics | covered | HTTP-EMPTY-TELEMETRY-001; STRESS-EMPTY-TELEMETRY-001 | Loading, no-resource, no-meter, no-instrument, and no-data states are distinct. |
-| METRIC-SESSION-001 | metrics | `/metrics` | PENDING | covered | METRIC-SESSION-001 | Metric selection, duration, view, dimensions, and zoom are restorable. |
+| METRIC-SESSION-001 | metrics | `/metrics` | metrics | covered | METRIC-SESSION-001 | Metric resource, meter, instrument, duration, and view are restorable. |

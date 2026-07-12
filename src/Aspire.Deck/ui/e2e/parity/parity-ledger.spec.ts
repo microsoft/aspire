@@ -64,12 +64,20 @@ function buildReport(): string {
 
   for (const feature of dashboardParityFeatures) {
     lines.push(
-      `| ${feature.id} | ${feature.area} | \`${feature.legacyRoute}\` | ${feature.legacyScenario ?? "PENDING"} | ${feature.reactStatus} | ${feature.currentCoverage ?? "-"} | ${feature.description} |`,
+      `| ${feature.id} | ${feature.area} | \`${feature.legacyRoute}\` | ${formatLegacyCoverage(feature.legacyScenario)} | ${feature.reactStatus} | ${feature.currentCoverage ?? "-"} | ${feature.description} |`,
     );
   }
 
   lines.push("");
   return lines.join("\n");
+}
+
+function formatLegacyCoverage(coverage: (typeof dashboardParityFeatures)[number]["legacyScenario"]): string {
+  if (coverage === "not-applicable") {
+    return "N/A (React enhancement)";
+  }
+
+  return coverage ?? "PENDING";
 }
 
 function countBy(values: readonly ReactParityStatus[]): Partial<Record<ReactParityStatus, number>> {
