@@ -396,7 +396,13 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
         var unboundResources = model.Resources
             .OfType<IComputeResource>()
-            .Where(resource => resource.GetComputeEnvironment() is null)
+            .Where(resource =>
+                resource.GetComputeEnvironment() is null &&
+                // When DisableDashboard=true, the dashboard resource remains in the model with
+                // ExplicitStartupAnnotation so users can start it on demand. It is intentionally
+                // not auto-assigned to publish compute environments and should not block validation.
+                !(string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName) &&
+                  resource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _)))
             .ToList();
 
         if (unboundResources.Count == 0)
