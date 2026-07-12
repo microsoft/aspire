@@ -942,6 +942,10 @@ test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, an
             p50: [30, 35, 40],
             p90: [45, 50, 55],
             p99: [60, 65, 70],
+            dimensionFilters: [{ name: "http.method", values: ["GET", "POST"] }],
+            dimensions: [],
+            exemplars: [],
+            hasOverflow: false,
           }
         : {
             name: "worker.jobs",
@@ -983,6 +987,11 @@ test(`${features("HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} loads, charts, an
     windowSeconds: "300",
     maxPoints: "600",
   });
+  await metrics.getByRole("switch", { name: "Pause incoming data" }).check();
+  const dimensions = metrics.getByRole("region", { name: "Metric dimension filters" });
+  await dimensions.getByText("http.method", { exact: true }).click();
+  await dimensions.getByRole("checkbox", { name: "POST" }).click();
+  await expect.poll(() => seriesRequests.some((request) => request["dimension.http.method"] === "s:GET")).toBe(true);
 
   await metrics.getByRole("button", { name: "Clear metrics" }).click();
   await page.getByRole("menuitem", { name: "Clear stress-api" }).click();

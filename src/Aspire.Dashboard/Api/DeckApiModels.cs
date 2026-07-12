@@ -149,7 +149,8 @@ internal sealed record DeckMetricSeriesResponse(
     DeckMetricDimensionFilter[] DimensionFilters,
     DeckMetricDimensionSeries[] Dimensions,
     DeckMetricExemplar[] Exemplars,
-    bool HasOverflow);
+    bool HasOverflow,
+    bool ShowCount);
 
 internal sealed record DeckMetricDimensionFilter(
     string Name,

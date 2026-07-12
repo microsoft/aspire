@@ -1247,6 +1247,38 @@ table.data tbody tr.selected {
   overflow: auto;
   background: var(--bg-surface);
 }
+.metric-selector__search {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-surface);
+}
+.metric-selector__search .searchbox {
+  width: 100%;
+}
+.metric-selector__empty {
+  padding: 18px 14px;
+}
+.metric-tree .deck-accordion-item {
+  border-bottom: 1px solid var(--border);
+}
+.metric-tree .deck-accordion-item__header {
+  min-height: 36px;
+  padding: 7px 10px;
+}
+.metric-tree .deck-accordion-item__body {
+  padding: 0;
+}
+.metric-tree__meter {
+  font-size: 12px;
+  font-weight: 600;
+  word-break: break-word;
+}
+.metric-tree .metric-item {
+  padding-left: 30px;
+}
 .metric-item {
   display: block;
   width: 100%;
@@ -1285,6 +1317,7 @@ table.data tbody tr.selected {
   display: flex;
   flex-direction: column;
   min-height: 0;
+  overflow: auto;
 }
 .metric-detail__head {
   display: flex;
@@ -1307,6 +1340,54 @@ table.data tbody tr.selected {
 .metric-detail__sub {
   font-size: 12px;
 }
+.metric-detail__description {
+  margin-top: 8px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+.metric-overflow {
+  margin-top: 10px;
+  padding: 8px 10px;
+  border: 1px solid var(--warning-border);
+  border-radius: var(--radius-sm);
+  color: var(--warning);
+  font-size: 12px;
+}
+.metric-filters,
+.metric-exemplars {
+  margin-top: 14px;
+  border-top: 1px solid var(--border);
+  padding-top: 12px;
+}
+.metric-filters h3,
+.metric-exemplars h3 {
+  margin: 0 0 8px;
+  font-size: 12px;
+}
+.metric-filter {
+  border-bottom: 1px solid var(--border);
+}
+.metric-filter summary {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 7px 2px;
+  cursor: pointer;
+  font-size: 12px;
+}
+.metric-filter__values {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 2px 10px;
+  padding: 4px 0 10px;
+}
+.metric-histogram-options {
+  padding-top: 8px;
+}
+.metric-exemplars .table-wrap {
+  max-height: 220px;
+  overflow: auto;
+}
 .metric-paused {
   color: var(--warning);
   font-weight: 600;
@@ -1318,19 +1399,17 @@ table.data tbody tr.selected {
 }
 .metric-detail > .deck-tabs-host {
   display: flex;
-  flex: 1;
+  flex: 0 0 auto;
   flex-direction: column;
   min-height: 0;
   margin-top: 14px;
 }
 .metric-detail > .deck-tabs-host .deck-tab-panel:not([hidden]) {
-  display: flex;
-  flex: 1;
+  display: block;
   min-height: 0;
 }
 .metric-detail > .deck-tabs-host .metric-detail__chart,
 .metric-series-table {
-  flex: 1;
   min-height: 0;
   margin-top: 0;
   overflow: auto;

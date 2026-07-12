@@ -587,6 +587,7 @@ test(`${features("TRACE-RESOURCE-001", "TRACE-TYPE-001", "TRACE-PAUSE-001", "TRA
   });
 
   await page.reload();
+  await page.getByRole("button", { name: "Dismiss notification" }).click();
   await expect(page.getByRole("combobox", { name: "Resource" })).toHaveValue("frontend");
   await expect(page.getByRole("combobox", { name: "Span type" })).toHaveValue("database");
   await expect(page.getByRole("textbox", { name: "Filter traces…" })).toHaveValue("redis");
@@ -613,7 +614,8 @@ test(`${features("TRACE-CLEAR-001")} clears selected and all trace telemetry`, a
   await expect(tracesPage).toContainText("No traces match your filter.");
 });
 
-test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", "METRIC-CHART-001", "METRIC-CURSOR-001", "METRIC-PAUSE-001", "METRIC-RANGE-001", "METRIC-TABLE-001", "METRIC-SESSION-001", "METRIC-ZOOM-001")} explores and restores live metric series`, async ({ page }, testInfo) => {
+test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", "METRIC-TREE-001", "METRIC-METADATA-001", "METRIC-CHART-001", "METRIC-CURSOR-001", "METRIC-PAUSE-001", "METRIC-RANGE-001", "METRIC-TABLE-001", "METRIC-DIMENSIONS-001", "METRIC-EXEMPLARS-001", "METRIC-ROUTES-001", "METRIC-SESSION-001", "METRIC-ZOOM-001")} explores and restores live metric series`, async ({ page }, testInfo) => {
+  await page.getByRole("button", { name: "Dismiss notification" }).click();
   await navigationButton(page, "Metrics").click();
 
   const metricsPage = page.getByRole("main").getByRole("region", { name: "Metrics" });
@@ -623,6 +625,12 @@ test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", 
   await resource.selectOption("frontend");
 
   const metricItems = page.locator(".metric-item");
+  await expect(metricItems).toHaveCount(3);
+  await expect(metricsPage.getByText("Aspire.Mock", { exact: true })).toBeVisible();
+  const metricSearch = metricsPage.getByPlaceholder("Filter meters and instruments");
+  await metricSearch.fill("duration");
+  await expect(metricItems).toHaveCount(1);
+  await metricSearch.fill("");
   await expect(metricItems).toHaveCount(3);
   await expect(metricItems.locator(".metric-item__name")).toHaveText([
     "http.server.active_requests",
@@ -636,7 +644,23 @@ test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", 
   await expect(durationMetric).toHaveClass(/active/);
   const detail = page.locator(".metric-detail");
   await expect(detail).toContainText("http.server.request.duration (milliseconds)");
-  await expect(detail).toContainText("Histogram · percentiles · frontend");
+  await expect(detail).toContainText("Histogram · percentiles · frontend · Aspire.Mock");
+  await expect(detail).toContainText("Synthetic http.server.request.duration telemetry.");
+
+  const dimensionFilters = detail.getByRole("region", { name: "Metric dimension filters" });
+  await expect(dimensionFilters).toContainText("http.method");
+  await dimensionFilters.getByText("http.method", { exact: true }).click();
+  await expect(dimensionFilters.getByRole("checkbox", { name: "GET" })).toBeChecked();
+  await dimensionFilters.getByRole("checkbox", { name: "POST" }).uncheck();
+
+  const showCount = detail.getByRole("checkbox", { name: "Show count" });
+  await showCount.check();
+  await expect(page).toHaveURL(/histogram=count/);
+  await detail.getByRole("tab", { name: "Table" }).click();
+  await expect(detail.locator(".metric-series-table").getByRole("columnheader")).toHaveText(["Time", "Count"]);
+  await detail.getByRole("tab", { name: "Chart" }).click();
+  await showCount.uncheck();
+  await expect(page).not.toHaveURL(/histogram=count/);
 
   const chart = detail.locator(".metric-chart");
   await expect(chart).toBeVisible();
@@ -694,12 +718,12 @@ test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", 
     search: Object.fromEntries(new URLSearchParams(window.location.search)),
   }));
   expect(route).toEqual({
-    pathname: "/metrics/resource/frontend",
+    pathname: "/metrics/resource/frontend/meter/Aspire.Mock/instrument/http.server.request.duration",
     search: {
-      metric: "http.server.request.duration",
-      range: "43200",
-      view: "table",
+      duration: "720",
+      view: "Table",
       paused: "true",
+      dimension: '["http.method",["GET"]]',
     },
   });
 
@@ -709,6 +733,10 @@ test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", 
   await expect(page.getByRole("button", { name: "12h", exact: true })).toHaveAttribute("aria-pressed", "true");
   await expect(page.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
   await expect(page.locator(".metric-item.active")).toContainText("http.server.request.duration");
+  const restoredDimensions = page.getByRole("region", { name: "Metric dimension filters" });
+  await restoredDimensions.getByText("http.method", { exact: true }).click();
+  await expect(restoredDimensions.getByRole("checkbox", { name: "GET" })).toBeChecked();
+  await expect(restoredDimensions.getByRole("checkbox", { name: "POST" })).not.toBeChecked();
 
   await page.getByRole("tab", { name: "Chart" }).click();
   await page.getByRole("switch", { name: "Pause incoming data" }).uncheck();
@@ -730,7 +758,13 @@ test(`${features("METRIC-LIST-001", "METRIC-RESOURCE-001", "METRIC-SELECT-001", 
   await page.mouse.up();
   await expect(page.getByRole("switch", { name: "Pause incoming data" })).toBeChecked();
 
+  const exemplars = page.getByRole("region", { name: "Metric exemplars" });
+  await expect(exemplars).toContainText("http.method=POST");
   await attachScreenshot(page, testInfo, "dashboard-metrics");
+  const viewTrace = exemplars.getByRole("button", { name: "View trace" });
+  await viewTrace.focus();
+  await viewTrace.press("Enter");
+  await expect(page).toHaveURL(/\/traces\/detail\/00000000000000000000000000000001\?span=0000000000000001/);
 });
 
 test(`${features("METRIC-CLEAR-001")} clears selected and all metric telemetry`, async ({ page }) => {

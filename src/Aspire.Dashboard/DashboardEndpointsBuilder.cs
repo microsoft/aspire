@@ -351,7 +351,8 @@ public static class DashboardEndpointsBuilder
             [FromQuery] string? meter,
             [FromQuery] string? instrument,
             [FromQuery] int? windowSeconds,
-            [FromQuery] int? maxPoints) =>
+            [FromQuery] int? maxPoints,
+            [FromQuery] bool? showCount) =>
         {
             if (string.IsNullOrWhiteSpace(resource)
                 || string.IsNullOrWhiteSpace(meter)
@@ -361,7 +362,15 @@ public static class DashboardEndpointsBuilder
             }
 
             httpContext.Response.Headers.CacheControl = "no-store";
-            var response = service.GetMetricSeries(resource, meter, instrument, windowSeconds, maxPoints);
+            var dimensionFilters = httpContext.Request.Query
+                .Where(static item => item.Key.StartsWith("dimension.", StringComparison.Ordinal))
+                .ToDictionary(
+                    static item => item.Key["dimension.".Length..],
+                    static item => item.Value.Count == 1 && item.Value[0] == "x:"
+                        ? []
+                        : item.Value.Select(static value => value == "n:" ? null : value?[2..]).ToArray(),
+                    StringComparer.Ordinal);
+            var response = service.GetMetricSeries(resource, meter, instrument, windowSeconds, maxPoints, dimensionFilters, showCount);
             return response is null
                 ? Results.NotFound()
                 : Results.Json(response, DeckApiJsonSerializerContext.Default.DeckMetricSeriesResponse);

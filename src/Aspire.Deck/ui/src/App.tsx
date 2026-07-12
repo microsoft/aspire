@@ -177,18 +177,25 @@ export function App({ theme, onToggleTheme }: { theme: Theme; onToggleTheme: () 
             {page === "metrics" ? (
               <MetricsPage
                 routeResourceName={route.metricResourceName ?? null}
+                routeMeterName={route.metricMeterName ?? null}
                 routeMetricName={route.metricName ?? null}
                 routeWindowSeconds={route.metricWindowSeconds ?? 300}
                 routeView={route.metricView ?? "chart"}
                 routePaused={route.metricsPaused ?? false}
+                routeDimensions={route.metricDimensions ?? {}}
+                routeShowCount={route.metricHistogramCount ?? false}
                 onRouteChange={(metricRoute) => navigate({
                   page: "metrics",
                   metricResourceName: metricRoute.resourceName ?? undefined,
+                  metricMeterName: metricRoute.meterName ?? undefined,
                   metricName: metricRoute.metricName ?? undefined,
                   metricWindowSeconds: metricRoute.windowSeconds === 300 ? undefined : metricRoute.windowSeconds,
                   metricView: metricRoute.view === "chart" ? undefined : metricRoute.view,
                   metricsPaused: metricRoute.paused || undefined,
+                  metricDimensions: Object.keys(metricRoute.dimensions).length > 0 ? metricRoute.dimensions : undefined,
+                  metricHistogramCount: metricRoute.showCount || undefined,
                 })}
+                onNavigateToSpan={(traceId, spanId) => navigate({ page: "traces", traceId, spanId })}
               />
             ) : null}
             {page === "canvases" ? <CanvasesPage /> : null}

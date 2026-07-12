@@ -648,6 +648,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
             startTime: now.AddSeconds(-1),
             value: 3,
             attributes: [KeyValuePair.Create("http.method", "POST")]);
+        AddHistogramMetric(repository, "frontend.duration", "frontend", now.AddSeconds(-1));
 
         using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
         using var summariesResponse = await httpClient.GetAsync("/api/deck/telemetry/metrics").DefaultTimeout();
@@ -655,7 +656,7 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(HttpStatusCode.OK, summariesResponse.StatusCode);
         Assert.Equal("no-store", summariesResponse.Headers.CacheControl?.ToString());
         var summaries = JsonNode.Parse(await summariesResponse.Content.ReadAsStringAsync().DefaultTimeout())!.AsArray();
-        var summary = Assert.IsType<JsonObject>(Assert.Single(summaries));
+        var summary = Assert.IsType<JsonObject>(summaries.Single(node => (string?)node?["name"] == "frontend.requests"));
         Assert.Equal("frontend.requests", (string?)summary["name"]);
         Assert.Equal("Test metric description", (string?)summary["description"]);
         Assert.Equal("widget", (string?)summary["unit"]);
@@ -703,6 +704,26 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         var exemplarAttribute = Assert.IsType<JsonObject>(Assert.Single(Assert.IsType<JsonArray>(exemplar["attributes"])));
         Assert.Equal("sampled", (string?)exemplarAttribute["key"]);
         Assert.Equal("true", (string?)exemplarAttribute["value"]);
+
+        using var filteredResponse = await httpClient.GetAsync(
+            "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=frontend.requests&windowSeconds=60&maxPoints=20&dimension.http.method=s%3AGET").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, filteredResponse.StatusCode);
+        var filteredSeries = JsonNode.Parse(await filteredResponse.Content.ReadAsStringAsync().DefaultTimeout())!.AsObject();
+        Assert.NotEmpty(Assert.IsType<JsonArray>(filteredSeries["timestampsMs"]));
+
+        using var noDimensionsResponse = await httpClient.GetAsync(
+            "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=frontend.requests&windowSeconds=60&maxPoints=20&dimension.http.method=x%3A").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, noDimensionsResponse.StatusCode);
+        var noDimensionsSeries = JsonNode.Parse(await noDimensionsResponse.Content.ReadAsStringAsync().DefaultTimeout())!.AsObject();
+        Assert.Empty(Assert.IsType<JsonArray>(noDimensionsSeries["timestampsMs"]));
+
+        using var histogramCountResponse = await httpClient.GetAsync(
+            "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=frontend.duration&windowSeconds=60&maxPoints=20&showCount=true").DefaultTimeout();
+        Assert.Equal(HttpStatusCode.OK, histogramCountResponse.StatusCode);
+        var histogramCountSeries = JsonNode.Parse(await histogramCountResponse.Content.ReadAsStringAsync().DefaultTimeout())!.AsObject();
+        Assert.True((bool?)histogramCountSeries["showCount"]);
+        Assert.NotEmpty(Assert.IsType<JsonArray>(histogramCountSeries["values"]));
+        Assert.Null(histogramCountSeries["p50"]);
 
         using var missingResponse = await httpClient.GetAsync(
             "/api/deck/telemetry/metrics/series?resource=frontend&meter=Stress.Telemetry&instrument=missing").DefaultTimeout();
@@ -977,6 +998,29 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                                 attributes: attributes,
                                 exemplars: exemplars)
                         }
+                    }
+                }
+            }
+        });
+    }
+
+    private static void AddHistogramMetric(
+        TelemetryRepository repository,
+        string metricName,
+        string resourceName,
+        DateTime startTime)
+    {
+        repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = TelemetryTestHelpers.CreateResource(name: resourceName, instanceId: "instance-1"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = TelemetryTestHelpers.CreateScope("Stress.Telemetry"),
+                        Metrics = { TelemetryTestHelpers.CreateHistogramMetric(metricName, startTime) }
                     }
                 }
             }

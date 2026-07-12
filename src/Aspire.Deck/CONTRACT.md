@@ -17,7 +17,10 @@ the equivalent `GET`/`DELETE /api/deck/telemetry/spans` routes.
 
 Metric summaries are read from `GET /api/deck/telemetry/metrics`. A selected time series is
 read from `GET /api/deck/telemetry/metrics/series` with `resource`, `meter`, `instrument`,
-`windowSeconds`, and `maxPoints` query parameters. Metrics are cleared through
+`windowSeconds`, and `maxPoints` query parameters. Selected dimensions are repeated as
+`dimension.{name}=s:{value}`; `n:` selects an unset value and `x:` selects no values. Responses
+include the aggregate chart, known dimension values, individual dimension series, exemplars,
+and the OpenTelemetry dimension-overflow flag. Metrics are cleared through
 `DELETE /api/deck/telemetry/metrics` with an optional `resource` query parameter.
 Command execution accepts
 `{ resourceName, commandName }` and returns `CommandResponse`. The interactions GET returns the
@@ -227,6 +230,8 @@ export type MetricKind = "gauge" | "counter" | "upDownCounter" | "histogram";
 
 export interface MetricSummary {
   name: string;
+  description?: string | null;
+  meterName?: string | null;
   unit: string | null;
   resourceName: string | null;
   kind: MetricKind;             // how the series should be charted
@@ -239,6 +244,7 @@ export interface MetricSummary {
 // histograms fill `p50`/`p90`/`p99`. All y-arrays align with `timestampsMs`.
 export interface MetricSeriesResponse {
   name: string;
+  meterName?: string | null;
   resourceName: string | null;
   unit: string | null;
   kind: MetricKind;
@@ -247,6 +253,24 @@ export interface MetricSeriesResponse {
   p50?: number[];
   p90?: number[];
   p99?: number[];
+  dimensionFilters?: Array<{ name: string; values: Array<string | null> }>;
+  dimensions?: Array<{
+    attributes: Array<{ key: string; value: string }>;
+    timestampsMs: number[];
+    values?: number[];
+    p50?: number[];
+    p90?: number[];
+    p99?: number[];
+  }>;
+  exemplars?: Array<{
+    timestampMs: number;
+    value: number;
+    traceId: string;
+    spanId: string;
+    attributes: Array<{ key: string; value: string }>;
+  }>;
+  hasOverflow?: boolean;
+  showCount?: boolean;
 }
 export interface TelemetrySummary {
   logCount: number;

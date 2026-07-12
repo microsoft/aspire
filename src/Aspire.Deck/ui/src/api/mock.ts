@@ -576,6 +576,7 @@ class MockBackend {
     const ts = hist.t.slice(start);
     const base: MetricSeriesResponse = {
       name: def.name,
+      meterName: "Aspire.Mock",
       resourceName: def.resource,
       unit: def.unit,
       kind: def.kind,
@@ -583,7 +584,54 @@ class MockBackend {
     };
 
     if (def.kind === "histogram") {
-      return { ...base, p50: hist.p50.slice(start), p90: hist.p90.slice(start), p99: hist.p99.slice(start) };
+      const methods = query.dimensions?.["http.method"];
+      const factor = methods?.length === 1 && methods[0] === "GET" ? 0.8
+        : methods?.length === 1 && methods[0] === "POST" ? 1.2
+          : methods?.length === 0 ? 0 : 1;
+      const scale = (values: number[]) => values.slice(start).map((value) => value * factor);
+      if (query.showCount) {
+        return {
+          ...base,
+          values: scale(hist.v),
+          dimensionFilters: [{ name: "http.method", values: ["GET", "POST"] }],
+          dimensions: [],
+          exemplars: [],
+          hasOverflow: false,
+          showCount: true,
+        };
+      }
+      return {
+        ...base,
+        p50: scale(hist.p50),
+        p90: scale(hist.p90),
+        p99: scale(hist.p99),
+        dimensionFilters: [{ name: "http.method", values: ["GET", "POST"] }],
+        dimensions: [
+          {
+            attributes: [{ key: "http.method", value: "GET" }],
+            timestampsMs: ts,
+            p50: hist.p50.slice(start).map((value) => value * 0.8),
+            p90: hist.p90.slice(start).map((value) => value * 0.8),
+            p99: hist.p99.slice(start).map((value) => value * 0.8),
+          },
+          {
+            attributes: [{ key: "http.method", value: "POST" }],
+            timestampsMs: ts,
+            p50: hist.p50.slice(start).map((value) => value * 1.2),
+            p90: hist.p90.slice(start).map((value) => value * 1.2),
+            p99: hist.p99.slice(start).map((value) => value * 1.2),
+          },
+        ],
+        exemplars: ts.length === 0 ? [] : [{
+          timestampMs: ts[ts.length - 1]!,
+          value: hist.p99[hist.p99.length - 1]!,
+          traceId: "00000000000000000000000000000001",
+          spanId: "0000000000000001",
+          attributes: [{ key: "http.method", value: "POST" }],
+        }],
+        hasOverflow: false,
+        showCount: false,
+      };
     }
     if (def.kind === "counter") {
       // Convert the cumulative samples to a per-second rate between points.

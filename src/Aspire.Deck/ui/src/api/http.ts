@@ -576,7 +576,16 @@ export const httpBackend = {
       instrument: query.name,
       windowSeconds: String(query.windowSeconds ?? 300),
       maxPoints: String(query.maxPoints ?? 400),
+      showCount: String(query.showCount ?? false),
     });
+    for (const [name, values] of Object.entries(query.dimensions ?? {})) {
+      if (values.length === 0) {
+        search.append(`dimension.${name}`, "x:");
+      }
+      for (const value of values) {
+        search.append(`dimension.${name}`, value === null ? "n:" : `s:${value}`);
+      }
+    }
     const response = await fetch(`/api/deck/telemetry/metrics/series?${search}`, {
       cache: "no-store",
       credentials: "same-origin",

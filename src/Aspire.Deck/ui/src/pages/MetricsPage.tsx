@@ -2,10 +2,14 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import type { MetricSummary, MetricSeriesResponse } from "../api/types";
 import { clearMetrics, getMetricSeries } from "../api/deck";
 import { MetricChart, type ChartLine } from "../components/MetricChart";
+import { MetricDimensionFilters } from "../components/MetricDimensionFilters";
+import { MetricExemplars } from "../components/MetricExemplars";
+import { MetricTreeSelector } from "../components/MetricTreeSelector";
 import { displayUnit, formatMetricValue } from "../lib/format";
 import { useResources, useTelemetry } from "../lib/useDeckEvent";
 import {
   CommandMenu,
+  Checkbox,
   EmptyState,
   MetricsIcon,
   NamedIcon,
@@ -36,10 +40,13 @@ const POLL_MS = 1500;
 
 export interface MetricRouteState {
   resourceName: string | null;
+  meterName: string | null;
   metricName: string | null;
   windowSeconds: number;
   view: "chart" | "table";
   paused: boolean;
+  dimensions: Record<string, Array<string | null>>;
+  showCount: boolean;
 }
 
 function cssVar(name: string, fallback: string): string {
@@ -50,14 +57,14 @@ function cssVar(name: string, fallback: string): string {
 }
 
 function buildLines(series: MetricSeriesResponse): ChartLine[] {
-  if (series.kind === "histogram") {
+  if (series.kind === "histogram" && !series.showCount) {
     return [
       { label: "p50", color: cssVar("--info", "#60a5fa"), values: series.p50 ?? [] },
       { label: "p90", color: cssVar("--accent", "#a855f7"), values: series.p90 ?? [] },
       { label: "p99", color: cssVar("--warning", "#fbbf24"), values: series.p99 ?? [] },
     ];
   }
-  const label = series.kind === "counter" ? "rate" : "value";
+  const label = series.kind === "counter" ? "rate" : series.showCount ? "count" : "value";
   return [{ label, color: cssVar("--accent", "#a855f7"), values: series.values ?? [] }];
 }
 
@@ -76,18 +83,26 @@ function kindLabel(kind: string): string {
 
 export function MetricsPage({
   routeResourceName,
+  routeMeterName,
   routeMetricName,
   routeWindowSeconds,
   routeView,
   routePaused,
+  routeDimensions,
+  routeShowCount,
   onRouteChange,
+  onNavigateToSpan,
 }: {
   routeResourceName: string | null;
+  routeMeterName: string | null;
   routeMetricName: string | null;
   routeWindowSeconds: number;
   routeView: "chart" | "table";
   routePaused: boolean;
+  routeDimensions: Record<string, Array<string | null>>;
+  routeShowCount: boolean;
   onRouteChange: (state: MetricRouteState) => void;
+  onNavigateToSpan: (traceId: string, spanId: string) => void;
 }) {
   const telemetry = useTelemetry();
   const { resources } = useResources();
@@ -113,7 +128,8 @@ export function MetricsPage({
     () => allMetrics.filter((metric) => metric.resourceName === selectedResource),
     [allMetrics, selectedResource],
   );
-  const active: MetricSummary | null = metrics.find((metric) => metric.name === routeMetricName)
+  const active: MetricSummary | null = metrics.find((metric) =>
+    metric.name === routeMetricName && (routeMeterName === null || metric.meterName === routeMeterName))
     ?? metrics[0]
     ?? null;
   const selectedWindowSeconds = TIME_RANGES.some((range) => range.seconds === routeWindowSeconds)
@@ -123,10 +139,13 @@ export function MetricsPage({
   const updateRoute = (changes: Partial<MetricRouteState>): void => {
     onRouteChange({
       resourceName: selectedResource,
+      meterName: active?.meterName ?? null,
       metricName: active?.name ?? null,
       windowSeconds: selectedWindowSeconds,
       view: routeView,
       paused: routePaused,
+      dimensions: routeDimensions,
+      showCount: routeShowCount,
       ...changes,
     });
   };
@@ -142,8 +161,10 @@ export function MetricsPage({
       resourceName: active.resourceName,
       windowSeconds: selectedWindowSeconds,
       maxPoints: 600,
+      dimensions: routeDimensions,
+      showCount: active.kind === "histogram" && routeShowCount,
     }));
-  }, [active, selectedWindowSeconds]);
+  }, [active, routeDimensions, routeShowCount, selectedWindowSeconds]);
 
   useEffect(() => {
     setSeries(null);
@@ -164,7 +185,7 @@ export function MetricsPage({
     try {
       await clearMetrics(resourceName);
       setSeries(null);
-      updateRoute({ resourceName: null, metricName: null, paused: false });
+      updateRoute({ resourceName: null, meterName: null, metricName: null, paused: false, dimensions: {}, showCount: false });
       setClearStatus({
         message: resourceName === null ? "Cleared all metrics." : `Cleared metrics for ${resourceName}.`,
         error: false,
@@ -214,7 +235,7 @@ export function MetricsPage({
           value={selectedResource ?? ""}
           placeholder="Select a resource"
           disabled={resourceOptions.length === 0}
-          onValueChange={(resourceName) => updateRoute({ resourceName, metricName: null })}
+          onValueChange={(resourceName) => updateRoute({ resourceName, meterName: null, metricName: null, dimensions: {}, showCount: false })}
         />
         <div className="seg" role="group" aria-label="Time range">
           {TIME_RANGES.map((range) => (
@@ -266,21 +287,12 @@ export function MetricsPage({
       <PageBody>
         {telemetry !== null && selectedResource !== null && metrics.length > 0 ? (
           <div className="metrics-layout">
-            <div className="metric-list" aria-label="Metric instruments">
-              {metrics.map((metric) => (
-                <button
-                  key={metric.name}
-                  className={`metric-item ${metric.name === active?.name ? "active" : ""}`}
-                  onClick={() => updateRoute({ metricName: metric.name })}
-                >
-                  <div className="metric-item__name">{metric.name}</div>
-                  <div className="metric-item__meta">
-                    <span>{formatMetricValue(metric.lastValue, metric.unit)}</span>
-                    <span>·</span>
-                    <span>{metric.resourceName ?? "—"}</span>
-                  </div>
-                </button>
-              ))}
+            <div className="metric-list">
+              <MetricTreeSelector
+                metrics={metrics}
+                active={active}
+                onSelect={(metric) => updateRoute({ meterName: metric.meterName ?? null, metricName: metric.name, dimensions: {}, showCount: false })}
+              />
             </div>
 
             <div className="metric-detail">
@@ -298,8 +310,24 @@ export function MetricsPage({
                     </div>
                   </div>
                   <div className="cell-muted metric-detail__sub">
-                    {kindLabel(active.kind)} · {active.resourceName ?? "—"} · {active.pointCount.toLocaleString()} points
+                    {kindLabel(active.kind)} · {active.resourceName ?? "—"} · {active.meterName ?? "Unknown meter"} · {active.pointCount.toLocaleString()} points
                   </div>
+                  {active.description ? <div className="metric-detail__description">{active.description}</div> : null}
+                  {series?.hasOverflow ? <div className="metric-overflow" role="status">Some metric dimensions exceeded the dashboard limit.</div> : null}
+                  <MetricDimensionFilters
+                    filters={series?.dimensionFilters ?? []}
+                    selected={routeDimensions}
+                    onChange={(dimensions) => updateRoute({ dimensions })}
+                  />
+                  {active.kind === "histogram" ? (
+                    <div className="metric-histogram-options">
+                      <Checkbox
+                        checked={routeShowCount}
+                        label="Show count"
+                        onCheckedChange={(showCount) => updateRoute({ showCount })}
+                      />
+                    </div>
+                  ) : null}
                   <Tabs
                     ariaLabel="Metric view"
                     selectedId={routeView}
@@ -318,6 +346,11 @@ export function MetricsPage({
                         content: <MetricSeriesTable series={series} />,
                       },
                     ]}
+                  />
+                  <MetricExemplars
+                    exemplars={series?.exemplars ?? []}
+                    unit={series?.unit ?? active.unit}
+                    onNavigateToSpan={onNavigateToSpan}
                   />
                 </>
               ) : null}
@@ -345,10 +378,10 @@ function MetricSeriesTable({ series }: { series: MetricSeriesResponse | null }) 
     return <div className="center-fill cell-muted metric-series-empty">No samples in this window yet.</div>;
   }
 
-  const lines = series.kind === "histogram"
+  const lines = series.kind === "histogram" && !series.showCount
     ? [series.p50 ?? [], series.p90 ?? [], series.p99 ?? []]
     : [series.values ?? []];
-  const headers = series.kind === "histogram" ? ["p50", "p90", "p99"] : ["Value"];
+  const headers = series.kind === "histogram" && !series.showCount ? ["p50", "p90", "p99"] : [series.showCount ? "Count" : "Value"];
   return (
     <div className="table-wrap metric-series-table">
       <table className="data">

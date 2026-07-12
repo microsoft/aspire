@@ -225,6 +225,38 @@ export interface MetricSeriesResponse {
   p50?: number[];
   p90?: number[];
   p99?: number[];
+  dimensionFilters?: MetricDimensionFilter[];
+  dimensions?: MetricDimensionSeries[];
+  exemplars?: MetricExemplar[];
+  hasOverflow?: boolean;
+  showCount?: boolean;
+}
+
+export interface MetricAttribute {
+  key: string;
+  value: string;
+}
+
+export interface MetricDimensionFilter {
+  name: string;
+  values: Array<string | null>;
+}
+
+export interface MetricDimensionSeries {
+  attributes: MetricAttribute[];
+  timestampsMs: number[];
+  values?: number[];
+  p50?: number[];
+  p90?: number[];
+  p99?: number[];
+}
+
+export interface MetricExemplar {
+  timestampMs: number;
+  value: number;
+  traceId: string;
+  spanId: string;
+  attributes: MetricAttribute[];
 }
 
 // Options for a metric series query.
@@ -234,6 +266,8 @@ export interface MetricSeriesQuery {
   resourceName?: string | null;
   windowSeconds?: number;
   maxPoints?: number;
+  dimensions?: Record<string, Array<string | null>>;
+  showCount?: boolean;
 }
 
 export interface TelemetrySummary {

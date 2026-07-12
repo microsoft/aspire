@@ -15,10 +15,13 @@ export interface DashboardRoute {
   traceMinDurationMs?: number;
   tracePaused?: boolean;
   metricResourceName?: string;
+  metricMeterName?: string;
   metricName?: string;
   metricWindowSeconds?: number;
   metricView?: "chart" | "table";
   metricsPaused?: boolean;
+  metricDimensions?: Record<string, Array<string | null>>;
+  metricHistogramCount?: boolean;
 }
 
 const pagePaths: Record<PageId, string> = {
@@ -89,17 +92,41 @@ export function readDashboardRoute(
     return { page: "traces", ...traceState };
   }
   if (path === "/metrics" || path.startsWith("/metrics/")) {
+    const instrumentMatch = /^\/metrics\/resource\/([^/]+)\/meter\/([^/]+)\/instrument\/([^/]+)\/?$/i.exec(location.pathname);
+    const meterMatch = /^\/metrics\/resource\/([^/]+)\/meter\/([^/]+)\/?$/i.exec(location.pathname);
     const resourceMatch = /^\/metrics\/resource\/([^/]+)\/?$/i.exec(location.pathname);
     const search = new URLSearchParams(location.search);
-    const windowSeconds = Number(search.get("range"));
+    const durationMinutes = Number(search.get("duration"));
+    const rangeSeconds = Number(search.get("range"));
+    const windowSeconds = Number.isFinite(durationMinutes) && durationMinutes > 0
+      ? durationMinutes * 60
+      : rangeSeconds;
     const view = search.get("view");
+    const dimensions: Record<string, Array<string | null>> = {};
+    for (const encoded of search.getAll("dimension")) {
+      try {
+        const parsed = JSON.parse(encoded) as unknown;
+        if (Array.isArray(parsed) && typeof parsed[0] === "string" && Array.isArray(parsed[1])) {
+          dimensions[parsed[0]] = parsed[1].filter((value): value is string | null => value === null || typeof value === "string");
+        }
+      } catch {
+        // Ignore malformed state from hand-edited URLs and restore the default selection.
+      }
+    }
     return {
       page: "metrics",
-      metricResourceName: resourceMatch ? decodeRoutePart(resourceMatch[1]!) : undefined,
-      metricName: search.get("metric") || undefined,
+      metricResourceName: instrumentMatch || meterMatch
+        ? decodeRoutePart((instrumentMatch ?? meterMatch)![1]!)
+        : resourceMatch ? decodeRoutePart(resourceMatch[1]!) : undefined,
+      metricMeterName: instrumentMatch || meterMatch
+        ? decodeRoutePart((instrumentMatch ?? meterMatch)![2]!)
+        : undefined,
+      metricName: instrumentMatch ? decodeRoutePart(instrumentMatch[3]!) : search.get("metric") || undefined,
       metricWindowSeconds: Number.isFinite(windowSeconds) && windowSeconds > 0 ? windowSeconds : undefined,
-      metricView: view === "table" ? "table" : undefined,
+      metricView: view?.toLowerCase() === "table" ? "table" : undefined,
       metricsPaused: search.get("paused") === "true" || undefined,
+      metricDimensions: Object.keys(dimensions).length > 0 ? dimensions : undefined,
+      metricHistogramCount: search.get("histogram") === "count" || undefined,
     };
   }
   if (path === "/canvases" || path.startsWith("/canvases/")) {
@@ -114,8 +141,12 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     ? `/traces/detail/${encodeURIComponent(route.traceId)}`
     : route.page === "console" && route.consoleResourceName
       ? `/consolelogs/resource/${encodeURIComponent(route.consoleResourceName)}`
-      : route.page === "metrics" && route.metricResourceName
-        ? `/metrics/resource/${encodeURIComponent(route.metricResourceName)}`
+      : route.page === "metrics" && route.metricResourceName && route.metricMeterName && route.metricName
+        ? `/metrics/resource/${encodeURIComponent(route.metricResourceName)}/meter/${encodeURIComponent(route.metricMeterName)}/instrument/${encodeURIComponent(route.metricName)}`
+        : route.page === "metrics" && route.metricResourceName && route.metricMeterName
+          ? `/metrics/resource/${encodeURIComponent(route.metricResourceName)}/meter/${encodeURIComponent(route.metricMeterName)}`
+          : route.page === "metrics" && route.metricResourceName
+            ? `/metrics/resource/${encodeURIComponent(route.metricResourceName)}`
         : pagePath(route.page);
   url.searchParams.delete("span");
   url.searchParams.delete("timestamps");
@@ -128,7 +159,10 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
   url.searchParams.delete("minDuration");
   url.searchParams.delete("metric");
   url.searchParams.delete("range");
+  url.searchParams.delete("duration");
   url.searchParams.delete("view");
+  url.searchParams.delete("dimension");
+  url.searchParams.delete("histogram");
   if (route.spanId) {
     url.searchParams.set("span", route.spanId);
   }
@@ -164,17 +198,20 @@ export function dashboardRouteHref(route: DashboardRoute, location: Location = w
     }
   }
   if (route.page === "metrics") {
-    if (route.metricName) {
-      url.searchParams.set("metric", route.metricName);
-    }
     if (route.metricWindowSeconds && route.metricWindowSeconds !== 300) {
-      url.searchParams.set("range", route.metricWindowSeconds.toString());
+      url.searchParams.set("duration", (route.metricWindowSeconds / 60).toString());
     }
     if (route.metricView === "table") {
-      url.searchParams.set("view", "table");
+      url.searchParams.set("view", "Table");
     }
     if (route.metricsPaused) {
       url.searchParams.set("paused", "true");
+    }
+    for (const [name, values] of Object.entries(route.metricDimensions ?? {}).sort(([left], [right]) => left.localeCompare(right))) {
+      url.searchParams.append("dimension", JSON.stringify([name, values]));
+    }
+    if (route.metricHistogramCount) {
+      url.searchParams.set("histogram", "count");
     }
   }
   url.hash = "";
