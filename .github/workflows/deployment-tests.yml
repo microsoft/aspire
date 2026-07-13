@@ -302,38 +302,6 @@ jobs:
         with:
           version: v4.2.0
 
-      # Install the Radius (`rad`) CLI only for the Radius deployment scenario. `aspire deploy`
-      # against a Radius environment shells out to `rad deploy`, so the CLI must be on PATH.
-      # Gated to the single matrix class so the ~dozens of other split jobs neither pay the
-      # download cost nor fail if the install endpoint is unavailable. RADIUS_VERSION pins the
-      # control-plane version (`rad install kubernetes` in the test installs the matching plane),
-      # keeping CI deterministic across Radius releases.
-      - name: Setup Radius
-        if: ${{ contains(matrix.classname, 'RadiusStarterDeploymentTests') }}
-        env:
-          # Full release tag component; install.sh resolves this to tag v0.59.0. Keep aligned
-          # with RadiusBicepExtension.Version (major.minor 0.59) so the installed control plane
-          # matches the Bicep types the publisher emits.
-          RADIUS_VERSION: "0.59.0"
-        run: |
-          # Pre-create the install dir (user-owned) BEFORE running install.sh. The
-          # Radius install.sh chooses whether to sudo by looking only at the install
-          # dir's immediate parent: for --install-dir "$HOME/.rad/bin" it inspects
-          # "$HOME/.rad", and on a fresh runner that does not exist yet, so it wrongly
-          # decides sudo is required and runs `sudo mkdir -p "$HOME/.rad/bin"`. That
-          # leaves "$HOME/.rad" owned by root, and the subsequent (non-sudo)
-          # `rad bicep download` then fails to create "$HOME/.rad/config.yaml.lock"
-          # with "permission denied". Creating the dir up front makes install.sh see a
-          # writable target and skip sudo entirely.
-          mkdir -p "$HOME/.rad/bin"
-          # Fetch install.sh pinned to the same release tag (v$RADIUS_VERSION) we install, rather
-          # than the moving `main` branch. This keeps the installer script content locked to the
-          # pinned version so it cannot drift independently (supply-chain hardening).
-          curl -fsSL "https://raw.githubusercontent.com/radius-project/radius/v${RADIUS_VERSION}/deploy/install.sh" | \
-            /bin/bash -s -- --version "$RADIUS_VERSION" --install-dir "$HOME/.rad/bin"
-          echo "$HOME/.rad/bin" >> "$GITHUB_PATH"
-          "$HOME/.rad/bin/rad" version --cli
-
       - name: Run deployment test (${{ matrix.shortname }})
         id: run_tests
         env:

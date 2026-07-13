@@ -103,6 +103,39 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1: Preparing environment...");
             await auto.PrepareEnvironmentAsync(workspace, counter);
 
+            var wsRoot = workspace.WorkspaceRoot.FullName;
+
+            // Step 1a: Install the Radius (`rad`) CLI into the workspace. `aspire deploy` against a
+            // Radius environment shells out to `rad deploy`, and this test drives `rad install
+            // kubernetes` / `rad workspace create` / `rad app graph` directly, so the CLI must be on
+            // PATH. Installing it here (rather than in the deployment-tests.yml workflow) keeps the
+            // Radius prerequisite self-contained in the test that needs it: the ~dozens of other
+            // deployment scenarios that share the workflow neither pay the download cost nor risk
+            // failing on an install-endpoint outage, and the test can be run locally without any
+            // workflow-specific setup.
+            //
+            // Install into a workspace-local dir so nothing leaks into the developer's real
+            // ~/.rad/bin, and prepend it to PATH so the Step 1b `command -v rad` (and every later
+            // `rad`) resolves to this binary. radiusVersion pins the CLI version; `rad install
+            // kubernetes` (Step 9) then installs the matching control plane, keeping the run
+            // deterministic across Radius releases. Keep this aligned with
+            // RadiusBicepExtension.Version (major.minor 0.59) so the installed control plane matches
+            // the Bicep types the publisher emits. install.sh is fetched pinned to the same release
+            // tag (v{version}) we install — not the moving `main` branch — so the installer content
+            // can't drift independently (supply-chain hardening). install.sh decides whether to sudo
+            // by inspecting the install dir's immediate parent; pre-creating the (user-owned)
+            // {wsRoot}/radbin makes it see a writable target and skip sudo entirely.
+            const string radiusVersion = "0.59.0";
+            output.WriteLine("Step 1a: Installing the Radius (rad) CLI into the workspace...");
+            await auto.TypeAsync(
+                $"mkdir -p \"{wsRoot}/radbin\" && " +
+                $"curl -fsSL \"https://raw.githubusercontent.com/radius-project/radius/v{radiusVersion}/deploy/install.sh\" | " +
+                $"/bin/bash -s -- --version \"{radiusVersion}\" --install-dir \"{wsRoot}/radbin\" && " +
+                $"export PATH=\"{wsRoot}/radbin:$PATH\" && " +
+                $"rad version --cli");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
+
             // Step 1b: Isolate kubeconfig, the Radius (`rad`) config, and Docker credentials to
             // throwaway files under the TemporaryWorkspace so this test never mutates the developer's
             // real ~/.kube/config, ~/.rad/config.yaml, or ~/.docker/config.json (test-isolation
@@ -133,7 +166,6 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // - DOCKER_CONFIG: the documented override directory for Docker's config.json. `az acr login`
             //   shells out to `docker login`, and `dotnet publish /t:PublishContainer` reads the same
             //   config, so both authenticate against this throwaway dir instead of ~/.docker.
-            var wsRoot = workspace.WorkspaceRoot.FullName;
             output.WriteLine("Step 1b: Isolating kubeconfig, rad config, and docker credentials to the workspace...");
             await auto.TypeAsync(
                 $"REAL_RAD=\"$(command -v rad)\" && " +
@@ -207,8 +239,8 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
 
             // ===== PHASE 2: Install the Radius control plane on the cluster =====
 
-            // Install the Radius control plane. The `rad` CLI version is pinned by the "Setup Radius"
-            // workflow step, and `rad install kubernetes` installs the matching control plane onto the
+            // Install the Radius control plane. The `rad` CLI version is pinned by the Step 1a
+            // install, and `rad install kubernetes` installs the matching control plane onto the
             // current kube context. This (and every other `rad`) runs through the Step 1b shim, so its
             // Contour gateway config - which reads the default-path kubeconfig ($HOME/.kube/config) and
             // ignores KUBECONFIG - resolves to our isolated config via the shim's workspace-local HOME,
