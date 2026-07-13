@@ -114,9 +114,13 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // failing on an install-endpoint outage, and the test can be run locally without any
             // workflow-specific setup.
             //
-            // Install into a workspace-local dir so nothing leaks into the developer's real
-            // ~/.rad/bin, and prepend it to PATH so the Step 1b `command -v rad` (and every later
-            // `rad`) resolves to this binary. radiusVersion pins the CLI version; `rad install
+            // Install into workspace-local dirs so nothing leaks into the developer's real
+            // ~/.rad, and prepend the CLI directory to PATH so the Step 1b `command -v rad` (and every
+            // later `rad`) resolves to this binary. The Radius installer invokes `rad bicep download`,
+            // which uses HOME to place Radius-managed tools under ~/.rad, so set HOME only inside the
+            // installer subshell. Later az/kubectl/docker/aspire commands keep the real HOME and use
+            // their own KUBECONFIG/DOCKER_CONFIG isolation where needed. radiusVersion pins the CLI
+            // version; `rad install
             // kubernetes` (Step 9) then installs the matching control plane, keeping the run
             // deterministic across Radius releases. Keep this aligned with
             // RadiusBicepExtension.Version (major.minor 0.59) so the installed control plane matches
@@ -134,7 +138,8 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
                 // replaced). Scoped to this compound command via a subshell so it never leaks into
                 // later steps' commands.
                 $"( set -o pipefail && " +
-                $"mkdir -p \"{wsRoot}/radbin\" && " +
+                $"mkdir -p \"{wsRoot}/radbin\" \"{wsRoot}/home\" && " +
+                $"export HOME=\"{wsRoot}/home\" && " +
                 $"curl -fsSL \"https://raw.githubusercontent.com/radius-project/radius/v{radiusVersion}/deploy/install.sh\" | " +
                 $"/bin/bash -s -- --version \"{radiusVersion}\" --install-dir \"{wsRoot}/radbin\" ) && " +
                 $"export PATH=\"{wsRoot}/radbin:$PATH\" && " +
