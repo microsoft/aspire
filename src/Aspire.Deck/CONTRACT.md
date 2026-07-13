@@ -7,6 +7,53 @@ The backend exposes **commands** (request/response via `@tauri-apps/api/core` `i
 **events** (push via `@tauri-apps/api/event` `listen`). All payloads are JSON; field names are
 `camelCase`.
 
+## Versioned ASP.NET Core backend
+
+The React migration uses a separately runnable Native AOT backend at `/api/dashboard`. This
+contract grows capability-by-capability while the existing Blazor dashboard and its unversioned
+`/api/deck` transport remain available.
+
+React starts with `GET /api/dashboard` and intersects the returned versions with the versions it
+understands. It selects the highest compatible version and uses that entry's `basePath` for every
+capability advertised by the entry. A client must fail the new capability explicitly when there is
+no compatible version; it must not guess a route or silently reinterpret an incompatible payload.
+
+The first discovery response is:
+
+```json
+{
+  "product": "Aspire.Dashboard",
+  "versions": [
+    {
+      "version": 1,
+      "basePath": "/api/dashboard/v1",
+      "capabilities": ["configuration"]
+    }
+  ]
+}
+```
+
+Version 1 currently defines one capability:
+
+| Capability | Route | Response |
+| --- | --- | --- |
+| `configuration` | `GET {basePath}/config` | `DashboardConfiguration` |
+
+```ts
+export interface DashboardConfiguration {
+  applicationName: string;
+  dashboardVersion: string;
+  runtimeVersion: string;
+}
+```
+
+The AOT backend must advertise only capabilities it implements end-to-end. During the side-by-side
+migration, React delegates every capability not advertised here to the existing `/api/deck`
+transport. All .NET request and response types in the versioned contract must be registered in a
+source-generated `JsonSerializerContext`; reflection serialization is not part of the contract.
+
+## Existing Deck transports
+
 The ASP.NET Core dashboard backend exposes the same config, resource, command, and interaction
 shapes through `GET /api/deck/config`, `GET /api/deck/resources`,
 `POST /api/deck/commands/execute`, `GET /api/deck/interactions`, and

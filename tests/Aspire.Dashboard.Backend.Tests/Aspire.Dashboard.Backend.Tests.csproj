@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.AspNetCore.TestHost" />
+    <PackageReference Include="Microsoft.DotNet.XUnitV3Extensions" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\src\Aspire.Dashboard.Backend\Aspire.Dashboard.Backend.csproj" />
+  </ItemGroup>
+
+</Project>
