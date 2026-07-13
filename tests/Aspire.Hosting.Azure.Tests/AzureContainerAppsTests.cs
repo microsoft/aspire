@@ -1935,10 +1935,11 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         // https://github.com/microsoft/aspire/issues/18722.
         Assert.NotEqual(name1, name2);
 
-        // The generated name incorporates the resource name (keeping its trailing digit)
-        // so the two environments are distinguishable.
-        Assert.Equal("take('cae1${uniqueString(resourceGroup().id)}', 24)", name1);
-        Assert.Equal("take('cae2${uniqueString(resourceGroup().id)}', 24)", name2);
+        // The generated name is computed with the same algorithm as every other Azure resource type
+        // (sanitized resource name + '-' separator + uniqueString(resourceGroup().id) suffix, truncated to the
+        // 32-character managed environment limit), keeping the trailing digit so the two environments differ.
+        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 32)", name1);
+        Assert.Equal("take('cae2-${uniqueString(resourceGroup().id)}', 32)", name2);
     }
 
     [Fact]
@@ -2008,7 +2009,37 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var name = GetManagedEnvironmentNameExpression(bicep);
 
-        Assert.Equal("take('cae1${uniqueString(resourceGroup().id)}', 24)", name);
+        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 32)", name);
+    }
+
+    [Fact]
+    public async Task WithUniqueResourceNamingComputesNameLikeStandardAzureResourceNaming()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // A hyphenated resource name normalizes to a bicep identifier with an underscore ("my_cae"). The managed
+        // environment character set doesn't allow underscores, so the sanitizer drops it exactly like it does for
+        // every other Azure resource type. This documents that WithUniqueResourceNaming is consistent with the
+        // standard naming algorithm rather than inventing a bespoke scheme.
+        var env = builder.AddAzureContainerAppEnvironment("my-cae")
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResource = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+
+        var (_, bicep) = await GetManifestWithBicep(envResource);
+
+        var name = GetManagedEnvironmentNameExpression(bicep);
+
+        Assert.Equal("take('mycae-${uniqueString(resourceGroup().id)}', 32)", name);
     }
 
     [Fact]
@@ -2079,15 +2110,15 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var name2 = GetManagedEnvironmentNameExpression(bicep2);
 
         Assert.NotEqual(name1, name2);
-        Assert.Equal("take('cae1${uniqueString(resourceGroup().id)}', 24)", name1);
-        Assert.Equal("take('cae2${uniqueString(resourceGroup().id)}', 24)", name2);
+        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 32)", name1);
+        Assert.Equal("take('cae2-${uniqueString(resourceGroup().id)}', 32)", name2);
     }
 
     private static string GetManagedEnvironmentNameExpression(string bicep)
     {
         // Extract the 'name:' line for the managed environment resource, e.g.:
         //   resource cae1 'Microsoft.App/managedEnvironments@2025-07-01' = {
-        //     name: take('cae1${uniqueString(resourceGroup().id)}', 24)
+        //     name: take('cae1-${uniqueString(resourceGroup().id)}', 32)
         var match = System.Text.RegularExpressions.Regex.Match(
             bicep,
             @"'Microsoft\.App/managedEnvironments@[^']+'\s*=\s*\{\s*\r?\n\s*name:\s*(?<name>.+)");

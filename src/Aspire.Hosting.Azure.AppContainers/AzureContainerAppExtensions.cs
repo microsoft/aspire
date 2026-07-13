@@ -470,15 +470,15 @@ public static class AzureContainerAppExtensions
         var options = appEnvResource.ProvisioningBuildOptions ??= new ProvisioningBuildOptions();
         var bicepIdentifier = appEnvResource.GetBicepIdentifier();
 
-        if (options.InfrastructureResolvers.OfType<DigitPreservingManagedEnvironmentNameResolver>()
+        if (options.InfrastructureResolvers.OfType<ManagedEnvironmentNameResolver>()
             .Any(resolver => resolver.BicepIdentifier == bicepIdentifier))
         {
             return;
         }
 
-        var resolver = new DigitPreservingManagedEnvironmentNameResolver(bicepIdentifier);
+        var resolver = new ManagedEnvironmentNameResolver(bicepIdentifier);
 
-        // Put Aspire's fallback after caller-configured resolvers but before Azure.Provisioning's default dynamic
+        // Put Aspire's resolver after caller-configured resolvers but before Azure.Provisioning's default dynamic
         // resolver. This preserves explicit policies such as AspireV8ResourceNamePropertyResolver while preventing
         // the built-in lowercase-letters-only fallback from collapsing "cae1" and "cae2" to the same name.
         var defaultDynamicResolverIndex = -1;
@@ -730,11 +730,14 @@ public static class AzureContainerAppExtensions
     /// (see <see href="https://github.com/microsoft/aspire/issues/18722"/>).
     /// </para>
     /// <para>
-    /// Applying this method keeps the resource name's digits so each environment gets a distinct
-    /// <c>name</c>. This is opt-in because enabling it changes the environment <c>name</c> for an
-    /// already-deployed single environment, which would cause Azure to recreate it. Apply it only to the
-    /// environments that need distinct names (typically when deploying more than one environment to a single
-    /// resource group), or to new deployments.
+    /// Applying this method computes the managed environment <c>name</c> with the same algorithm Azure.Provisioning
+    /// uses for every other Azure resource type (sanitized resource name, then a
+    /// <c>uniqueString(resourceGroup().id)</c> suffix, truncated to the maximum length), but with the character
+    /// requirements Azure Container Apps actually allows — lowercase letters, digits, and hyphens up to 32
+    /// characters. Preserving the digits gives each environment a distinct <c>name</c>. This is opt-in because
+    /// enabling it changes the environment <c>name</c> for an already-deployed single environment, which would
+    /// cause Azure to recreate it. Apply it only to the environments that need distinct names (typically when
+    /// deploying more than one environment to a single resource group), or to new deployments.
     /// </para>
     /// <para>
     /// This option has no effect when <see cref="WithAzdResourceNaming"/> is also used, since azd naming sets
@@ -860,24 +863,40 @@ public static class AzureContainerAppExtensions
         return builder;
     }
 
-    private sealed class DigitPreservingManagedEnvironmentNameResolver(string bicepIdentifier) : ResourceNamePropertyResolver
+    private sealed class ManagedEnvironmentNameResolver(string bicepIdentifier) : DynamicResourceNamePropertyResolver
     {
+        // Azure Container Apps managed environment names allow lowercase letters, digits, and hyphens, up to
+        // 32 characters, must start with a letter, and must end with an alphanumeric character
+        // (^[a-z][a-z0-9-]{0,31}[a-z0-9]$):
+        // https://learn.microsoft.com/azure/templates/microsoft.app/managedenvironments
+        //
+        // Azure.Provisioning.AppContainers does not override GetResourceNameRequirements for
+        // ContainerAppManagedEnvironment, so it inherits ProvisionableResource's conservative default of
+        // (1, 24, LowercaseLetters). That default silently drops the digits Aspire relies on to keep sibling
+        // environment names distinct, so "cae1"/"cae2" both sanitize to "cae" and collide in a shared resource
+        // group (https://github.com/microsoft/aspire/issues/18722).
+        private static readonly ResourceNameRequirements s_requirements = new(
+            minLength: 1,
+            maxLength: 32,
+            validCharacters: ResourceNameCharacters.LowercaseLetters | ResourceNameCharacters.Numbers | ResourceNameCharacters.Hyphen);
+
         public string BicepIdentifier { get; } = bicepIdentifier;
 
         public override BicepValue<string>? ResolveName(ProvisioningBuildOptions options, ProvisionableResource resource, ResourceNameRequirements requirements)
         {
+            // Only take over naming for the specific environment this resolver was created for. Every other
+            // resource (including managed environments that did not opt in) returns null so it falls through to
+            // the rest of the resolver chain unchanged.
             if (resource is not ContainerAppManagedEnvironment || resource.BicepIdentifier != BicepIdentifier)
             {
                 return null;
             }
 
-            // uniqueString(resourceGroup().id) is identical for every environment in the same resource group, so
-            // the prefix is the only differentiator. Keep digits that Azure.Provisioning's default requirements
-            // currently drop, otherwise "cae1" and "cae2" both become "cae" and deploy to the same environment.
-            var prefix = new string(resource.BicepIdentifier.ToLowerInvariant().Where(char.IsLetterOrDigit).ToArray());
-            return BicepFunction.Take(
-                BicepFunction.Interpolate($"{prefix}{BicepFunction.GetUniqueString(BicepFunction.GetResourceGroup().Id)}"),
-                24);
+            // Delegate to the standard dynamic naming algorithm, only substituting the requirements that
+            // Azure.Provisioning failed to declare. This keeps the generated name computed exactly like every
+            // other Azure resource type (sanitized prefix + separator + uniqueString(resourceGroup().id) suffix,
+            // truncated to the max length) while preserving the digits and hyphens that distinguish environments.
+            return base.ResolveName(options, resource, s_requirements);
         }
     }
 
