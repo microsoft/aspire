@@ -68,6 +68,7 @@ from typing import Callable, Pattern
 #   src/Aspire.Hosting.Redis/RedisContainerImageTags.cs   -> container_image_tags_file_changed
 #   src/Aspire.ProjectTemplates/templates/...             -> project_template_changed
 #   src/Aspire.Hosting.Analyzers/AppHostAnalyzer.cs       -> analyzer_source_changed
+#   src/Aspire.Hosting.CodeGeneration.Go/...              -> polyglot_code_generator_changed
 #   docs/list-of-diagnostics.md                           -> diagnostic_documentation_changed
 #   src/Aspire.Hosting/ApplicationModel/KnownDefaults.cs  -> defaults_or_constants_file_changed
 PATH_TRIGGERS: list[tuple[str, str, str]] = [
@@ -128,6 +129,23 @@ PATH_TRIGGERS: list[tuple[str, str, str]] = [
     # Roslyn analyzers — users see new build warnings/errors.
     ("analyzer_source_changed", "any",
      r"^src/Aspire\.(Hosting|AppHost)\.Analyzers/.+\.cs$"),
+    # Polyglot code generators. These emit the Go / TypeScript / Python /
+    # Rust / Java SDK source that AppHost authors write against, so the
+    # generated method and function signatures ARE the public API for
+    # polyglot AppHosts. Critically, no api/*.cs baseline tracks that
+    # generated output, so a signature-shape change (e.g. flattening a
+    # wrapper `options` DTO so it is passed directly) is a real — and
+    # potentially breaking — user-facing change that leaves no fingerprint
+    # on any of the C# API surfaces the other signals watch. It also need
+    # not touch the RPC payload at all, so the diff can look like a pure
+    # internal refactor. Watch both the per-language generator projects
+    # and the shared `src/Shared/CodeGeneration/` helpers they build on.
+    # (microsoft/aspire#18698: the Go options-DTO flattening breaking
+    # change classified as internal_refactor with signal_count == 0
+    # because nothing in the catalog matched these paths — the RPC payload
+    # was byte-identical and the PR carried no breaking wording or label.)
+    ("polyglot_code_generator_changed", "any",
+     r"^src/(Aspire\.Hosting\.CodeGeneration\.[^/]+|Shared/CodeGeneration)/.+\.cs$"),
     # Files whose name ends in `Defaults.cs` or `Constants.cs`
     # typically hold shipping default values (timeouts, retry
     # counts, well-known property names, image tags, etc.).
