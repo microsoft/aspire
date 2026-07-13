@@ -21,11 +21,12 @@ on:
 
 jobs:
   add-recording-comment:
-    # Only run on the dotnet org and for pull requests
-    # Note: This runs for all conclusions (success, failure, cancelled) since recordings may exist
-    if: >-
-      ${{ github.repository_owner == 'microsoft' &&
-          (github.event.workflow_run.event == 'pull_request' || github.event_name == 'workflow_dispatch') }}
+    # Temporarily disabled: asciinema.org uploads and PR comment posting are turned off.
+    # Recordings are still captured and uploaded as CI artifacts by the run-tests workflow.
+    # Original run condition preserved below for re-enabling:
+    #   ${{ github.repository_owner == 'microsoft' &&
+    #       (github.event.workflow_run.event == 'pull_request' || github.event_name == 'workflow_dispatch') }}
+    if: false
     runs-on: ubuntu-latest
     permissions:
       pull-requests: write
