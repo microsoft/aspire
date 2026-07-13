@@ -3963,7 +3963,7 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('workspace describe exit clears stale running AppHost before ps stop snapshot', async () => {
+    test('workspace describe exit confirms host removal before ps polling reports it', async () => {
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
@@ -3973,7 +3973,8 @@ suite('AppHostDataRepository', () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         const describeProcess = new TestChildProcess();
         let describeOptions: any;
-        let psOptions: any;
+        let psFollowOptions: any;
+        const oneShotPsOptions: any[] = [];
         spawnStub.callsFake((_terminalProvider, _command, args, options) => {
             if (args[0] === 'ls') {
                 getAppHostsLineCallback = createLsLineCallback(options);
@@ -3983,7 +3984,11 @@ suite('AppHostDataRepository', () => {
                 return describeProcess;
             }
             if (args[0] === 'ps') {
-                psOptions = options;
+                if (args.includes('--follow')) {
+                    psFollowOptions = options;
+                } else {
+                    oneShotPsOptions.push(options);
+                }
             }
             return new TestChildProcess();
         });
@@ -4002,9 +4007,9 @@ suite('AppHostDataRepository', () => {
             }));
             await waitForAppHostDiscovery();
 
-            assert.ok(psOptions);
+            assert.ok(psFollowOptions);
             // Describe is ps-gated: it spawns only once ps confirms the selected host running.
-            psOptions.lineCallback(JSON.stringify([
+            psFollowOptions.lineCallback(JSON.stringify([
                 {
                     appHostPath: '/workspace/labs/ops/apphost.cs',
                     appHostPid: 125881,
@@ -4019,17 +4024,22 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
             assert.strictEqual(repository.appHosts.length, 1);
 
-            // A `describe --follow` stream that already streamed resources and then exits means the
-            // AppHost stopped. Clear the stale running host immediately rather than waiting for the
-            // next ps stop snapshot: the resources drop and the host disappears from the running set.
+            const oneShotBeforeExit = oneShotPsOptions.length;
             describeOptions.exitCallback(0);
+            await waitForMicrotasks();
 
             assert.strictEqual(repository.workspaceResources.length, 0);
-            assert.strictEqual(repository.workspaceAppHost, undefined);
-            assert.strictEqual(repository.appHosts.length, 0);
+            assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
+            assert.strictEqual(repository.appHosts.length, 1);
 
-            // The subsequent ps stop snapshot is a no-op: the host is already gone.
-            psOptions.lineCallback(JSON.stringify([]));
+            // The exit triggered an authoritative snapshot (`ps --format json`, not `--follow`).
+            assert.ok(oneShotPsOptions.length > oneShotBeforeExit, 'expected describe exit to trigger a ps snapshot');
+            const confirmSnapshot = oneShotPsOptions.at(-1);
+
+            // The snapshot reports the host gone (it was stopped externally): it is removed promptly, without
+            // waiting for the `ps --follow` stream to emit a stop delta.
+            confirmSnapshot.stdoutCallback('[]');
+            confirmSnapshot.exitCallback(0);
             await waitForMicrotasks();
 
             assert.strictEqual(repository.workspaceAppHost, undefined);
@@ -4066,7 +4076,7 @@ suite('AppHostDataRepository', () => {
                 describeProcesses.push(process);
                 return process;
             }
-            if (args[0] === 'ps') {
+            if (args[0] === 'ps' && args.includes('--follow')) {
                 psOptions = options;
             }
             return new TestChildProcess();
@@ -4101,12 +4111,15 @@ suite('AppHostDataRepository', () => {
             assert.strictEqual(repository.workspaceAppHost?.appHostPid, 125881);
             assert.strictEqual(describeOptions.length, 1);
 
-            // First describe exits empty while ps still reports the host running.
+            // First describe exits empty while ps still reports the host running. This clears the stale
+            // resources but keeps the stream entry (a backoff restart is scheduled, not advanced here) — the
+            // host stays until ps says otherwise.
             describeOptions[0].exitCallback(0);
             assert.strictEqual(repository.workspaceResources.length, 0);
 
-            // ps reports the host stopped, then running again: the stopped snapshot tears down the
-            // first stream and the fresh start snapshot spawns a new one.
+            // ps --follow drives the restart: the stopped delta tears down the first stream (clearing its
+            // pending restart timer) and the running-again delta reconciles into a fresh describe. This guards
+            // that an earlier empty exit doesn't poison a later ps-driven restart.
             psOptions.lineCallback(JSON.stringify([]));
             await waitForMicrotasks();
             psOptions.lineCallback(JSON.stringify([

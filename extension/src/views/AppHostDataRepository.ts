@@ -977,69 +977,63 @@ export class AppHostDataRepository {
                         return;
                     }
 
-                    // A stream that already produced resources and then exits means that AppHost stopped.
+                    // ps is the authority on whether the host stopped, so a describe stream exiting
+                    // does not necessarily indicate the host has stopped.
                     if (stream.receivedData) {
-                        stream.resources.clear();
-                        this._describeStreams.delete(appHostPath);
-                        this._handlePsSnapshot(this._appHosts.filter(appHost => !isMatchingAppHostPath(appHost.appHostPath, appHostPath)));
-                        return;
-                    }
-
-                    // A stream that never produced resources and exits (cleanly or with an error) means the CLI
-                    // cannot describe the host. A CLI-wide compatibility problem (the installed CLI is too old
-                    // to `describe` at all) may be surfaced by any peer, since it's a fact about the CLI. A
-                    // host-scoped no-data error belongs to the selected workspace AppHost, so a non-selected
-                    // peer never surfaces one and can't masquerade as the selected host's error.
-                    extensionLogOutputChannel.warn(`aspire describe --follow (--apphost ${appHostPath}) exited (code ${code}) without producing data.`);
-                    if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath) || isDescribeUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
-                        const noDataError = this._getDescribeNoDataError(code, stream.nonJsonLines, stream.stderr);
-                        if (noDataError.message) {
-                            this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError, cliWide: noDataError.isCliWideError });
+                        extensionLogOutputChannel.info(`aspire describe --follow (--apphost ${appHostPath}) exited (code ${code}) after producing data; restarting.`);
+                    } else {
+                        // A stream that never produced resources and exits (cleanly or with an error) means
+                        // the CLI cannot describe the host. A CLI-wide compatibility problem (the installed
+                        // CLI is too old to `describe` at all) may be surfaced by any peer, since it's a fact
+                        // about the CLI. A host-scoped no-data error belongs to the selected workspace
+                        // AppHost, so a non-selected peer never surfaces one and can't masquerade as the
+                        // selected host's error.
+                        extensionLogOutputChannel.warn(`aspire describe --follow (--apphost ${appHostPath}) exited (code ${code}) without producing data.`);
+                        if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath) || isDescribeUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
+                            const noDataError = this._getDescribeNoDataError(code, stream.nonJsonLines, stream.stderr);
+                            if (noDataError.message) {
+                                this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError, cliWide: noDataError.isCliWideError });
+                            }
                         }
                     }
 
                     stream.resources.clear();
                     this._attachResourcesToAppHosts();
                     this._onDidChangeData.fire();
-
-                    const delay = stream.restartDelay;
-                    // `stream` is single-use and discarded below, so carry the backed-off delay into the
-                    // next stream via `_startDescribe`'s `initialRestartDelay` rather than mutating this one
-                    // (a write here would never be read again).
-                    const nextDelay = Math.min(delay * 2, this._getPollingIntervalMs());
-                    extensionLogOutputChannel.info(`Restarting describe --follow --apphost ${appHostPath} in ${delay}ms`);
-                    stream.restartTimer = setTimeout(() => {
-                        stream.restartTimer = undefined;
-                        if (this._disposed || this._describeStreams.get(appHostPath) !== stream) {
-                            return;
-                        }
-                        this._describeStreams.delete(appHostPath);
-                        if (!this._appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath))) {
-                            this._attachResourcesToAppHosts();
-                            this._onDidChangeData.fire();
-                            return;
-                        }
-                        this._startDescribe(appHostPath, undefined, nextDelay);
-                    }, delay);
+                    this._scheduleDescribeRestart(appHostPath, stream);
+                    this._refreshAppHostsFromAuthoritativeSnapshot();
                 },
                 errorCallback: (error) => {
                     if (this._describeStreams.get(appHostPath) !== stream || stream.process !== describeProcess) {
                         return;
                     }
 
+                    if (this._disposed) {
+                        return;
+                    }
+
                     // Spawn/stream error (as opposed to a clean exit). Only the selected workspace AppHost
                     // surfaces it through the shared describe banner; a non-selected peer is logged only so it
-                    // can't masquerade as the selected host's error. Drop the dead stream so the next `ps`
-                    // reconcile recreates it if the host is still running.
+                    // can't masquerade as the selected host's error.
                     extensionLogOutputChannel.warn(`aspire describe --follow --apphost ${appHostPath} error: ${error.message}`);
                     stream.process = undefined;
-                    this._describeStreams.delete(appHostPath);
                     stream.resources.clear();
                     if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath)) {
                         this._setDescribeError(errorFetchingAppHosts(error.message));
                     }
+
+                    // Host no longer running: drop the stream silently
+                    if (!this._appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath))) {
+                        this._describeStreams.delete(appHostPath);
+                        this._attachResourcesToAppHosts();
+                        this._onDidChangeData.fire();
+                        return;
+                    }
+
                     this._attachResourcesToAppHosts();
                     this._onDidChangeData.fire();
+                    this._scheduleDescribeRestart(appHostPath, stream);
+                    this._refreshAppHostsFromAuthoritativeSnapshot();
                 }
             });
             stream.process = describeProcess;
@@ -1056,6 +1050,25 @@ export class AppHostDataRepository {
                 this._setDescribeError(errorFetchingAppHosts(String(error)));
             }
         });
+    }
+
+    private _scheduleDescribeRestart(appHostPath: string, stream: DescribeStream): void {
+        const delay = stream.restartDelay;
+        const nextDelay = Math.min(delay * 2, this._getPollingIntervalMs());
+        extensionLogOutputChannel.info(`Restarting describe --follow --apphost ${appHostPath} in ${delay}ms`);
+        stream.restartTimer = setTimeout(() => {
+            stream.restartTimer = undefined;
+            if (this._disposed || this._describeStreams.get(appHostPath) !== stream) {
+                return;
+            }
+            this._describeStreams.delete(appHostPath);
+            if (!this._appHosts.some(appHost => isMatchingAppHostPath(appHost.appHostPath, appHostPath))) {
+                this._attachResourcesToAppHosts();
+                this._onDidChangeData.fire();
+                return;
+            }
+            this._startDescribe(appHostPath, undefined, nextDelay);
+        }, delay);
     }
 
     private _handleDescribeLine(stream: DescribeStream, line: string): boolean {
