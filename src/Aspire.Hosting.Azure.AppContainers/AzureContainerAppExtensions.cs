@@ -424,7 +424,7 @@ public static class AzureContainerAppExtensions
             // multiple environments in one resource group opt in to get distinct names.
             if (!appEnvResource.UseAzdNamingConvention && appEnvResource.UseUniqueResourceNaming)
             {
-                AddManagedEnvironmentNameFallbackResolver(appEnvResource);
+                AddManagedEnvironmentNameFallbackResolver(appEnvResource, containerAppEnvironment);
             }
 
             // Exposed so that callers reference the LA workspace in other bicep modules
@@ -465,13 +465,12 @@ public static class AzureContainerAppExtensions
     /// Registering a resolver rather than assigning <c>Name</c> here preserves any caller-supplied resolvers in
     /// <see cref="ProvisioningBuildOptions.InfrastructureResolvers"/> while still fixing the default fallback.
     /// </remarks>
-    private static void AddManagedEnvironmentNameFallbackResolver(AzureContainerAppEnvironmentResource appEnvResource)
+    private static void AddManagedEnvironmentNameFallbackResolver(AzureContainerAppEnvironmentResource appEnvResource, ContainerAppManagedEnvironment managedEnvironment)
     {
         var options = appEnvResource.ProvisioningBuildOptions ?? new ProvisioningBuildOptions();
-        var bicepIdentifier = appEnvResource.GetBicepIdentifier();
 
         if (options.InfrastructureResolvers.OfType<ManagedEnvironmentNameResolver>()
-            .Any(resolver => resolver.BicepIdentifier == bicepIdentifier))
+            .Any(resolver => ReferenceEquals(resolver.ManagedEnvironment, managedEnvironment)))
         {
             return;
         }
@@ -483,7 +482,7 @@ public static class AzureContainerAppExtensions
         options = CloneProvisioningBuildOptions(options);
         appEnvResource.ProvisioningBuildOptions = options;
 
-        var resolver = new ManagedEnvironmentNameResolver(bicepIdentifier);
+        var resolver = new ManagedEnvironmentNameResolver(managedEnvironment);
 
         // Put Aspire's resolver after caller-configured resolvers but before Azure.Provisioning's default dynamic
         // resolver. This preserves explicit policies such as AspireV8ResourceNamePropertyResolver while preventing
@@ -886,7 +885,7 @@ public static class AzureContainerAppExtensions
         return builder;
     }
 
-    private sealed class ManagedEnvironmentNameResolver(string bicepIdentifier) : DynamicResourceNamePropertyResolver
+    private sealed class ManagedEnvironmentNameResolver(ContainerAppManagedEnvironment managedEnvironment) : DynamicResourceNamePropertyResolver
     {
         // Azure Container Apps managed environment names allow lowercase letters, digits, and hyphens, up to
         // 32 characters, must start with a letter, and must end with an alphanumeric character
@@ -903,14 +902,15 @@ public static class AzureContainerAppExtensions
             maxLength: 32,
             validCharacters: ResourceNameCharacters.LowercaseLetters | ResourceNameCharacters.Numbers | ResourceNameCharacters.Hyphen);
 
-        public string BicepIdentifier { get; } = bicepIdentifier;
+        public ContainerAppManagedEnvironment ManagedEnvironment { get; } = managedEnvironment;
 
         public override BicepValue<string>? ResolveName(ProvisioningBuildOptions options, ProvisionableResource resource, ResourceNameRequirements requirements)
         {
-            // Only take over naming for the specific environment this resolver was created for. Every other
-            // resource (including managed environments that did not opt in) returns null so it falls through to
-            // the rest of the resolver chain unchanged.
-            if (resource is not ContainerAppManagedEnvironment || resource.BicepIdentifier != BicepIdentifier)
+            // Scope strictly to the environment instance this resolver was created for, by reference identity.
+            // Bicep identifiers are only unique within a single module, so matching on the identifier could rename
+            // an unrelated ContainerAppManagedEnvironment that happens to share the same name in another module.
+            // Every other resource returns null so it falls through to the rest of the resolver chain unchanged.
+            if (!ReferenceEquals(resource, ManagedEnvironment))
             {
                 return null;
             }

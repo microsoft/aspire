@@ -219,7 +219,7 @@ builder.Build().Run();
             }
         }
 
-        var workspace = TemporaryWorkspace.Create(output);
+        using var workspace = TemporaryWorkspace.Create(output);
         var startTime = DateTime.UtcNow;
         var resourceGroupName = DeploymentE2ETestHelpers.GenerateResourceGroupName("aca-multi-env");
 
@@ -271,7 +271,11 @@ builder.AddContainer("api2", "mcr.microsoft.com/azuredocs/aci-helloworld", "late
 builder.Build().Run();
 """;
 
-            content = content.Replace(buildRunPattern, replacement);
+            // Fail loudly if the AppHost template no longer contains the expected entry point, otherwise the
+            // Replace below would silently no-op and the test would deploy an unmodified AppHost, appearing to
+            // pass without ever exercising the multi-environment scenario.
+            Assert.Contains(buildRunPattern, content, StringComparison.Ordinal);
+            content = content.Replace(buildRunPattern, replacement, StringComparison.Ordinal);
 
             // WithUniqueResourceNaming is experimental, so suppress the diagnostic in the generated AppHost.
             content = "#pragma warning disable ASPIREACANAMING001\n" + content;
