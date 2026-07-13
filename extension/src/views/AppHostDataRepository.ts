@@ -1081,7 +1081,8 @@ export class AppHostDataRepository {
             const resource: ResourceJson = JSON.parse(trimmed);
             if (resource.name) {
                 stream.resources.set(resource.name, resource);
-                stream.receivedData = true;
+stream.receivedData = true;
+                stream.restartDelay = 5000;
                 // A working stream proves the CLI supports `describe`, so any peer clears a CLI-wide
                 // banner. A host-scoped banner belongs to the selected workspace AppHost, so only its own
                 // data clears that — a non-selected peer must not erase an error the selected host raised.
