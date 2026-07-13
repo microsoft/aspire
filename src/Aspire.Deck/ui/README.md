@@ -11,8 +11,9 @@ the **same** code:
   the authenticated `/api/deck` endpoints. The adapter polls for resource changes and reports
   connection failures without falling back to mock data.
 - **Versioned ASP.NET backend** — `?backend=aot` negotiates the versioned `/api/dashboard`
-  contract with the separate Native AOT host. The first slice reads only configuration there;
-  every unported capability continues through the existing `/api/deck` backend.
+  contract with the separate Native AOT host. Configuration and resources come from that host,
+  with resource snapshots and changes streamed over SignalR; every unported capability continues
+  through the existing `/api/deck` backend.
 - **Tauri-embedded** — when running inside the Tauri shell, the data layer
   (`src/api/deck.ts`) calls the real backend via `invoke(...)` / `listen(...)` exactly as
   described in [`../CONTRACT.md`](../CONTRACT.md).
@@ -143,9 +144,11 @@ ASPIRE_DASHBOARD_AOT_URL=http://127.0.0.1:18889 \
   npm run dev -- --host 127.0.0.1
 ```
 
-Open `http://127.0.0.1:1430/?backend=aot`. Version discovery, configuration, and read-only resource
-snapshots use the new host; telemetry, commands, interactions, authentication, and terminals remain
-on the existing dashboard until their versioned capabilities independently pass the parity inventory.
+Open `http://127.0.0.1:1430/?backend=aot`. Version discovery and configuration use the new host;
+resources arrive as an authoritative snapshot followed by live changes over SignalR. Telemetry,
+commands, interactions, authentication, and terminals remain on the existing dashboard until their
+versioned capabilities independently pass the parity inventory. The `resources` HTTP snapshot route
+remains a compatibility fallback for a version 1 host that does not advertise `resources-live`.
 
 Open `http://localhost:1430/?view=toolkit` for the standalone toolkit playground. It exercises
 the shared controls without depending on the Deck backend or mock data layer, making it the

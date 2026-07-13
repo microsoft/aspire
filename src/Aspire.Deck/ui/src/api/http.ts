@@ -657,6 +657,15 @@ export const httpBackend = {
   retryConnection(): void {
     retryResourceConnection?.();
   },
+  reportResourceConnection(
+    status: ConnectionStatus,
+    loadConfig: () => Promise<DeckConfig> = getConfig,
+  ): void {
+    setResourceConnection(status, loadConfig);
+  },
+  registerResourceRetry(retry: (() => void) | null): void {
+    retryResourceConnection = retry;
+  },
   getManageData,
   exportManageData,
   importManageData,

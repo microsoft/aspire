@@ -206,6 +206,104 @@ test(`${features("AOT-CONTRACT-001")} reads resources from the negotiated AOT ca
   expect(legacyResourceRequests).toBe(0);
 });
 
+test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes over SignalR`, async ({ page }) => {
+  let negotiateRequests = 0;
+  let websocketConnections = 0;
+  let streamInvocations = 0;
+  let resourceRequests = 0;
+  await page.route("**/api/dashboard", async (route) => {
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [
+          {
+            version: 1,
+            basePath: "/api/dashboard/v1",
+            capabilities: ["configuration", "resources", "resources-live"],
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    await route.fulfill({
+      json: {
+        applicationName: "Stress AOT",
+        dashboardVersion: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources/live/negotiate?**", async (route) => {
+    negotiateRequests++;
+    await route.fulfill({
+      json: {
+        negotiateVersion: 1,
+        connectionId: "playwright-signalr-connection",
+        connectionToken: "playwright-signalr-token",
+        availableTransports: [
+          { transport: "WebSockets", transferFormats: ["Text", "Binary"] },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources", async (route) => {
+    resourceRequests++;
+    await route.fulfill({ json: [] });
+  });
+  await page.routeWebSocket("**/api/dashboard/v1/resources/live?id=*", (webSocket) => {
+    websocketConnections++;
+    webSocket.onMessage((message) => {
+      // SignalR JSON messages are separated by ASCII record separators. The browser can
+      // coalesce the handshake and stream invocation, so handle every frame independently.
+      const frames = message.toString().split("\x1e").filter(Boolean);
+      for (const frame of frames) {
+        const payload = JSON.parse(frame) as {
+          protocol?: string;
+          type?: number;
+          invocationId?: string;
+          target?: string;
+        };
+        if (payload.protocol === "json") {
+          webSocket.send("{}\x1e");
+        } else if (payload.type === 4 && payload.target === "WatchResources") {
+          streamInvocations++;
+          webSocket.send(`${JSON.stringify({
+            type: 2,
+            invocationId: payload.invocationId,
+            item: { type: "snapshot", resources: [resource], upserts: null, deletes: null },
+          })}\x1e`);
+          setTimeout(() => {
+            webSocket.send(`${JSON.stringify({
+              type: 2,
+              invocationId: payload.invocationId,
+              item: {
+                type: "change",
+                resources: null,
+                upserts: [{ ...resource, state: "Stopped", stateStyle: "error" }],
+                deletes: [],
+              },
+            })}\x1e`);
+          }, 100);
+        }
+      }
+    });
+  });
+
+  await page.goto("/?backend=aot");
+
+  const resourceRow = page.getByRole("table").getByRole("row", { name: /stress-api/ });
+  await expect(resourceRow).toBeVisible();
+  await expect(resourceRow).toContainText("Stopped");
+  await expect(page.getByTitle("Resources: Connected")).toBeVisible();
+  // React strict mode can negotiate and tear down an initial connection while checking
+  // effect cleanup. At least one complete stream must win, and polling must remain unused.
+  expect(negotiateRequests).toBeGreaterThan(0);
+  expect(websocketConnections).toBeGreaterThan(0);
+  expect(streamInvocations).toBeGreaterThan(0);
+  expect(resourceRequests).toBe(0);
+});
+
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {
   let configRequests = 0;
   let resourceRequests = 0;

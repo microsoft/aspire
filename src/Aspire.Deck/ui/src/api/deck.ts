@@ -354,10 +354,37 @@ export function onResources(cb: (event: ResourcesEvent) => void): Unsubscribe {
     return unlisten;
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      let cancelled = false;
+      let unsubscribe: Unsubscribe | null = null;
+      void nativeBackend.hasCapability("resources-live").then((supported) => {
+        if (cancelled) {
+          return;
+        }
+
+        unsubscribe = supported
+          ? nativeBackend.subscribeResources(
+              cb,
+              (status) => httpBackend.reportResourceConnection(status, nativeBackend.getConfig),
+              (retry) => httpBackend.registerResourceRetry(retry),
+            )
+          : httpBackend.onResources(cb, listResources, nativeBackend.getConfig);
+      }).catch((error: unknown) => {
+        httpBackend.reportResourceConnection({
+          target: "resourceService",
+          state: "error",
+          message: error instanceof Error ? error.message : String(error),
+        }, nativeBackend.getConfig);
+      });
+
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
+    }
+
     return httpBackend.onResources(
       cb,
-      isAotBackend() ? listResources : undefined,
-      isAotBackend() ? nativeBackend.getConfig : undefined,
     );
   }
   return mockBackend.onResources(cb);

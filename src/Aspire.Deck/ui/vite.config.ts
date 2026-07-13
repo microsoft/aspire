@@ -36,6 +36,8 @@ export default defineConfig({
             target: aotDashboardUrl ?? dashboardUrl,
             changeOrigin: true,
             secure: false,
+            ws: true,
+            rewriteWsOrigin: true,
           },
           "/api/deck": {
             target: dashboardUrl,
