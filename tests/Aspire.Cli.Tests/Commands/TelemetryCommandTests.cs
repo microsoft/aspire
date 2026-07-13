@@ -175,6 +175,52 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         Assert.Empty(TelemetryCommandHelpers.ToOtlpResources([]));
     }
 
+    [Fact]
+    public void ResolveResourceNameMatches_WithResourceNameMatchingCompositeResourceName_ResolvesReplica()
+    {
+        var resources = new SimpleOtlpResource[]
+        {
+            new("api-1", "standalone"),
+            new("api", "1"),
+        };
+
+        var matches = OtlpHelpers.ResolveResourceNameMatches("API-1", resources);
+
+        var match = Assert.Single(matches);
+        Assert.Equal("api", match.ResourceName);
+        Assert.Equal("1", match.InstanceId);
+    }
+
+    [Fact]
+    public void TryResolveResourceNames_WithAmbiguousCompositeResourceName_ReturnsFalse()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api-a", InstanceId = "1" },
+            new() { Name = "api", InstanceId = "a-1" },
+        };
+
+        var result = TelemetryCommandHelpers.TryResolveResourceNames("api-a-1", resources, out var resolvedResources);
+
+        Assert.False(result);
+        Assert.Null(resolvedResources);
+    }
+
+    [Fact]
+    public void TryResolveResourceNames_WithBaseResourceName_ResolvesAllReplicas()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api", InstanceId = "1" },
+            new() { Name = "api", InstanceId = "2" },
+        };
+
+        var result = TelemetryCommandHelpers.TryResolveResourceNames("API", resources, out var resolvedResources);
+
+        Assert.True(result);
+        Assert.Equal(["api-1", "api-2"], resolvedResources);
+    }
+
     [Theory]
     [MemberData(nameof(ResolveResourceNameTestData))]
     internal void ResolveResourceName_ResolvesExpectedName(

@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics.CodeAnalysis;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using System.Threading.Channels;
@@ -595,45 +594,14 @@ internal sealed class TelemetryApiService(
             return true;
         }
 
-        // Try exact match by ResourceName first, then by composite ResourceKey string.
-        // Use a manual single-match search instead of SingleOrDefault to avoid throwing
-        // when multiple replicas share the same ResourceName.
-        // Resource names are case-insensitive throughout the dashboard (StringComparisons.ResourceName).
-        if (TryGetSingleResource(resources, r => string.Equals(r.ResourceName, resourceName, StringComparisons.ResourceName), out var resource)
-            || TryGetSingleResource(resources, r => r.ResourceKey.EqualsCompositeName(resourceName), out resource))
+        var matches = OtlpHelpers.ResolveResourceNameMatches(resourceName, resources);
+        if (matches.Count == 1)
         {
-            resourceKey = resource.ResourceKey;
+            resourceKey = matches[0].ResourceKey;
             return true;
         }
 
         resourceKey = null;
         return false;
-    }
-
-    private static bool TryGetSingleResource(
-        IReadOnlyList<OtlpResource> resources,
-        Func<OtlpResource, bool> predicate,
-        [NotNullWhen(true)] out OtlpResource? result)
-    {
-        result = default;
-        var found = false;
-
-        foreach (var item in resources)
-        {
-            if (predicate(item))
-            {
-                if (found)
-                {
-                    // Multiple matches — treat as unresolved.
-                    result = default;
-                    return false;
-                }
-
-                result = item;
-                found = true;
-            }
-        }
-
-        return found;
     }
 }
