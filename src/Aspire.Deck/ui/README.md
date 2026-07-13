@@ -143,9 +143,9 @@ ASPIRE_DASHBOARD_AOT_URL=http://127.0.0.1:18889 \
   npm run dev -- --host 127.0.0.1
 ```
 
-Open `http://127.0.0.1:1430/?backend=aot`. Version discovery and configuration use the new
-host; resources, telemetry, commands, interactions, authentication, and terminals remain on the
-existing dashboard until their versioned capabilities independently pass the parity inventory.
+Open `http://127.0.0.1:1430/?backend=aot`. Version discovery, configuration, and read-only resource
+snapshots use the new host; telemetry, commands, interactions, authentication, and terminals remain
+on the existing dashboard until their versioned capabilities independently pass the parity inventory.
 
 Open `http://localhost:1430/?view=toolkit` for the standalone toolkit playground. It exercises
 the shared controls without depending on the Deck backend or mock data layer, making it the

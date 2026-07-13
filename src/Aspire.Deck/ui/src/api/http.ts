@@ -230,12 +230,15 @@ function toApphost(config: DeckConfig): AppHostInfo {
   };
 }
 
-function setResourceConnection(status: ConnectionStatus): void {
+function setResourceConnection(
+  status: ConnectionStatus,
+  loadConfig: () => Promise<DeckConfig> = getConfig,
+): void {
   connectionStatuses.resourceService = status;
   for (const listener of connectionListeners) {
     listener(status);
   }
-  void getConfig().then((config) => {
+  void loadConfig().then((config) => {
     const apphosts = [toApphost(config)];
     for (const listener of apphostListeners) {
       listener(apphosts);
@@ -243,7 +246,11 @@ function setResourceConnection(status: ConnectionStatus): void {
   }).catch(() => undefined);
 }
 
-function onResources(callback: (event: ResourcesEvent) => void): Unsubscribe {
+function onResources(
+  callback: (event: ResourcesEvent) => void,
+  getResources: () => Promise<Resource[]> = listResources,
+  loadConfig: () => Promise<DeckConfig> = getConfig,
+): Unsubscribe {
   let cancelled = false;
   let timer: number | undefined;
   let polling = false;
@@ -254,10 +261,10 @@ function onResources(callback: (event: ResourcesEvent) => void): Unsubscribe {
     }
     polling = true;
     try {
-      const resources = await listResources();
+      const resources = await getResources();
       if (!cancelled) {
         callback({ type: "snapshot", resources });
-        setResourceConnection({ target: "resourceService", state: "connected" });
+        setResourceConnection({ target: "resourceService", state: "connected" }, loadConfig);
       }
     } catch (error) {
       if (!cancelled) {
@@ -265,7 +272,7 @@ function onResources(callback: (event: ResourcesEvent) => void): Unsubscribe {
           target: "resourceService",
           state: "error",
           message: error instanceof Error ? error.message : String(error),
-        });
+        }, loadConfig);
       }
     } finally {
       polling = false;
@@ -280,7 +287,7 @@ function onResources(callback: (event: ResourcesEvent) => void): Unsubscribe {
       window.clearTimeout(timer);
       timer = undefined;
     }
-    setResourceConnection({ target: "resourceService", state: "connecting" });
+    setResourceConnection({ target: "resourceService", state: "connecting" }, loadConfig);
     void poll();
   };
   retryResourceConnection = retry;
@@ -304,18 +311,21 @@ function onConnection(callback: (status: ConnectionStatus) => void): Unsubscribe
   return () => connectionListeners.delete(callback);
 }
 
-function listApphosts(): Promise<AppHostInfo[]> {
-  return getConfig().then((config) => [toApphost(config)]);
+function listApphosts(loadConfig: () => Promise<DeckConfig> = getConfig): Promise<AppHostInfo[]> {
+  return loadConfig().then((config) => [toApphost(config)]);
 }
 
-function onApphosts(callback: (apphosts: AppHostInfo[]) => void): Unsubscribe {
+function onApphosts(
+  callback: (apphosts: AppHostInfo[]) => void,
+  loadConfig: () => Promise<DeckConfig> = getConfig,
+): Unsubscribe {
   apphostListeners.add(callback);
-  void listApphosts().then(callback).catch((error) => {
+  void listApphosts(loadConfig).then(callback).catch((error) => {
     setResourceConnection({
       target: "resourceService",
       state: "error",
       message: error instanceof Error ? error.message : String(error),
-    });
+    }, loadConfig);
   });
   return () => apphostListeners.delete(callback);
 }

@@ -149,6 +149,11 @@ export function listResources(): Promise<Resource[]> {
   if (isTauri()) {
     return invoke<Resource[]>("deck_list_resources");
   }
+  if (isAotBackend()) {
+    return nativeBackend.hasCapability("resources").then((supported) => (
+      supported ? nativeBackend.listResources() : httpBackend.listResources()
+    ));
+  }
   if (isHttpBackend()) {
     return httpBackend.listResources();
   }
@@ -177,7 +182,7 @@ export function listApphosts(): Promise<AppHostInfo[]> {
     return invoke<AppHostInfo[]>("deck_list_apphosts");
   }
   if (isAotBackend()) {
-    return httpBackend.listApphosts().then(applyAotApphostIdentity);
+    return httpBackend.listApphosts(nativeBackend.getConfig).then(applyAotApphostIdentity);
   }
   if (isHttpBackend()) {
     return httpBackend.listApphosts();
@@ -210,7 +215,7 @@ export function onApphosts(cb: (apphosts: AppHostInfo[]) => void): Unsubscribe {
           cb(identifiedApphosts);
         }
       }).catch(() => undefined);
-    });
+    }, nativeBackend.getConfig);
     return () => {
       cancelled = true;
       unsubscribe();
@@ -349,7 +354,11 @@ export function onResources(cb: (event: ResourcesEvent) => void): Unsubscribe {
     return unlisten;
   }
   if (isHttpBackend()) {
-    return httpBackend.onResources(cb);
+    return httpBackend.onResources(
+      cb,
+      isAotBackend() ? listResources : undefined,
+      isAotBackend() ? nativeBackend.getConfig : undefined,
+    );
   }
   return mockBackend.onResources(cb);
 }

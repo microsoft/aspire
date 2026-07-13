@@ -120,7 +120,7 @@ test.afterEach(async ({ page }) => {
   expect(telemetryFiltered, "Unexpected browser errors").toEqual([]);
 });
 
-test(`${features("AOT-CONTRACT-001")} negotiates configuration while retaining the existing resource backend`, async ({ page }) => {
+test(`${features("AOT-CONTRACT-001")} falls back when the negotiated version does not advertise resources`, async ({ page }) => {
   let discoveryRequests = 0;
   let aotConfigRequests = 0;
   let legacyConfigRequests = 0;
@@ -163,8 +163,47 @@ test(`${features("AOT-CONTRACT-001")} negotiates configuration while retaining t
   await expect(page.getByRole("table").getByRole("row", { name: /stress-api/ })).toBeVisible();
   expect(discoveryRequests).toBe(1);
   expect(aotConfigRequests).toBe(1);
-  expect(legacyConfigRequests).toBeGreaterThan(0);
+  expect(legacyConfigRequests).toBe(0);
   expect(resourceRequests).toBeGreaterThan(0);
+});
+
+test(`${features("AOT-CONTRACT-001")} reads resources from the negotiated AOT capability`, async ({ page }) => {
+  let aotResourceRequests = 0;
+  let legacyResourceRequests = 0;
+  await page.route("**/api/dashboard", async (route) => {
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [
+          { version: 1, basePath: "/api/dashboard/v1", capabilities: ["configuration", "resources"] },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    await route.fulfill({
+      json: {
+        applicationName: "Stress AOT",
+        dashboardVersion: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources", async (route) => {
+    aotResourceRequests++;
+    await route.fulfill({ json: [resource] });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    legacyResourceRequests++;
+    await route.fulfill({ json: [] });
+  });
+
+  await page.goto("/?backend=aot");
+
+  await expect(page.getByRole("table").getByRole("row", { name: /stress-api/ })).toBeVisible();
+  await expect(page.getByTitle("Resources: Connected")).toBeVisible();
+  expect(aotResourceRequests).toBeGreaterThan(0);
+  expect(legacyResourceRequests).toBe(0);
 });
 
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {

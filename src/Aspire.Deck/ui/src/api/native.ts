@@ -3,11 +3,13 @@ import type {
   DashboardApiVersion,
   DashboardConfiguration,
   DeckConfig,
+  Resource,
 } from "./types";
 
 const dashboardProduct = "Aspire.Dashboard";
 const discoveryPath = "/api/dashboard";
 const configurationCapability = "configuration";
+const resourcesCapability = "resources";
 const supportedVersions = new Set([1]);
 
 let negotiatedVersion: Promise<DashboardApiVersion> | null = null;
@@ -120,6 +122,26 @@ function getConfig(): Promise<DeckConfig> {
   return configuration;
 }
 
+async function hasCapability(capability: string): Promise<boolean> {
+  return (await getNegotiatedVersion()).capabilities.includes(capability);
+}
+
+async function listResources(): Promise<Resource[]> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(resourcesCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise the resources capability.");
+  }
+
+  const payload = await requestJson(`${version.basePath}/resources`);
+  if (!Array.isArray(payload)) {
+    throw new Error("Dashboard API resources returned an incompatible payload.");
+  }
+
+  return payload as Resource[];
+}
+
 export const nativeBackend = {
   getConfig,
+  hasCapability,
+  listResources,
 };
