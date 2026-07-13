@@ -755,9 +755,9 @@ public static class AzureContainerAppExtensions
     /// Applying this method computes the managed environment <c>name</c> with the same algorithm Azure.Provisioning
     /// uses for every other Azure resource type (sanitized resource name, then a hyphen separator and a
     /// <c>uniqueString(resourceGroup().id)</c> suffix, truncated to the maximum length), but with the character
-    /// requirements Azure Container Apps actually allows — lowercase letters, digits, and hyphens up to 32
-    /// characters. For example, <c>cae1</c> produces
-    /// <c>take('cae1-${uniqueString(resourceGroup().id)}', 32)</c>, while <c>prod1</c> uses a <c>prod1</c>
+    /// requirements Azure Container Apps managed environments actually allow — lowercase letters, digits, and
+    /// hyphens, with a 60-character maximum. For example, <c>cae1</c> produces
+    /// <c>take('cae1-${uniqueString(resourceGroup().id)}', 60)</c>, while <c>prod1</c> uses a <c>prod1</c>
     /// prefix. Preserving the digits gives each environment a distinct <c>name</c>. This is opt-in because
     /// enabling it changes the environment <c>name</c> for an already-deployed single environment, which would
     /// cause Azure to recreate it. Apply it only to the environments that need distinct names (typically when
@@ -889,10 +889,10 @@ public static class AzureContainerAppExtensions
 
     private sealed class ManagedEnvironmentNameResolver(ContainerAppManagedEnvironment managedEnvironment) : DynamicResourceNamePropertyResolver
     {
-        // Azure Container Apps managed environment names allow lowercase letters, digits, and hyphens, up to
-        // 32 characters, must start with a letter, and must end with an alphanumeric character
-        // (^[a-z][a-z0-9-]{0,31}[a-z0-9]$):
-        // https://learn.microsoft.com/azure/templates/microsoft.app/managedenvironments
+        // Azure Container Apps managed environment names allow lowercase letters, digits, and hyphens and are
+        // 2-60 characters long. These are the managed-environment limits, not the 2-32 character container-app
+        // limits:
+        // https://azure.github.io/PSRule.Rules.Azure/en/rules/Azure.ContainerApp.EnvNaming/
         //
         // Azure.Provisioning.AppContainers does not override GetResourceNameRequirements for
         // ContainerAppManagedEnvironment, so it inherits ProvisionableResource's conservative default of
@@ -900,8 +900,8 @@ public static class AzureContainerAppExtensions
         // environment names distinct, so "cae1"/"cae2" both sanitize to "cae" and collide in a shared resource
         // group (https://github.com/microsoft/aspire/issues/18722).
         private static readonly ResourceNameRequirements s_requirements = new(
-            minLength: 1,
-            maxLength: 32,
+            minLength: 2,
+            maxLength: 60,
             validCharacters: ResourceNameCharacters.LowercaseLetters | ResourceNameCharacters.Numbers | ResourceNameCharacters.Hyphen);
 
         public ContainerAppManagedEnvironment ManagedEnvironment { get; } = managedEnvironment;

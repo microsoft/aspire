@@ -1938,9 +1938,9 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         // The generated name is computed with the same algorithm as every other Azure resource type
         // (sanitized resource name + '-' separator + uniqueString(resourceGroup().id) suffix, truncated to the
-        // 32-character managed environment limit), keeping the trailing digit so the two environments differ.
-        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 32)", name1);
-        Assert.Equal("take('cae2-${uniqueString(resourceGroup().id)}', 32)", name2);
+        // 60-character managed environment limit), keeping the trailing digit so the two environments differ.
+        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 60)", name1);
+        Assert.Equal("take('cae2-${uniqueString(resourceGroup().id)}', 60)", name2);
     }
 
     [Fact]
@@ -2010,7 +2010,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var name = GetManagedEnvironmentNameExpression(bicep);
 
-        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 32)", name);
+        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 60)", name);
     }
 
     [Fact]
@@ -2040,7 +2040,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var name = GetManagedEnvironmentNameExpression(bicep);
 
-        Assert.Equal("take('mycae-${uniqueString(resourceGroup().id)}', 32)", name);
+        Assert.Equal("take('mycae-${uniqueString(resourceGroup().id)}', 60)", name);
     }
 
     [Fact]
@@ -2111,15 +2111,15 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var name2 = GetManagedEnvironmentNameExpression(bicep2);
 
         Assert.NotEqual(name1, name2);
-        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 32)", name1);
-        Assert.Equal("take('cae2-${uniqueString(resourceGroup().id)}', 32)", name2);
+        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 60)", name1);
+        Assert.Equal("take('cae2-${uniqueString(resourceGroup().id)}', 60)", name2);
     }
 
     private static string GetManagedEnvironmentNameExpression(string bicep)
     {
         // Extract the 'name:' line for the managed environment resource, e.g.:
         //   resource cae1 'Microsoft.App/managedEnvironments@2025-07-01' = {
-        //     name: take('cae1-${uniqueString(resourceGroup().id)}', 32)
+        //     name: take('cae1-${uniqueString(resourceGroup().id)}', 60)
         var match = System.Text.RegularExpressions.Regex.Match(
             bicep,
             @"'Microsoft\.App/managedEnvironments@[^']+'\s*=\s*\{\s*\r?\n\s*name:\s*(?<name>.+)");
