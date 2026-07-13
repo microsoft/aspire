@@ -2930,6 +2930,69 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Equal(Enumerable.Range(0, apps.Count).ToArray(), predecessorCounts);
     }
 
+    [Fact]
+    public async Task MutuallyDependentContainerAppsAreNotChainedIntoCycle()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        // api and worker reference each other, forming a dependency cycle that can't be linearized.
+        // cache is an independent app in the same environment.
+        var api = builder.AddContainer("api", "myimage");
+        var worker = builder.AddContainer("worker", "myimage");
+        var cache = builder.AddContainer("cache", "myimage");
+
+        api.WithRelationship(worker.Resource, "Reference");
+        worker.WithRelationship(api.Resource, "Reference");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The mutually dependent apps can't be ordered relative to each other without creating a
+        // DependsOn cycle, so no synthetic edge is added between them. cache is serialized against the
+        // whole cycle by depending on every member of it, so it never deploys alongside either one.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "worker")));
+        Assert.Equal(["api", "worker"], GetDependsOnTargets(GetComputeResource(model, "cache")).OrderBy(name => name).ToArray());
+    }
+
+    [Fact]
+    public async Task CrossEnvironmentTransitiveDependencyDoesNotCreateCycle()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env1 = builder.AddAzureContainerAppEnvironment("env1");
+        var env2 = builder.AddAzureContainerAppEnvironment("env2");
+
+        var a = builder.AddContainer("a", "myimage").WithComputeEnvironment(env1);
+        var b = builder.AddContainer("b", "myimage").WithComputeEnvironment(env1);
+        var c = builder.AddContainer("c", "myimage").WithComputeEnvironment(env2);
+
+        // Existing acyclic ordering a -> c -> b routes through another environment: a must deploy
+        // after c, and c after b, so a must deploy after b. The serial-ordering pass must honor that
+        // transitive order and not add the reverse b -> a edge, which would form a cycle.
+        a.WithRelationship(c.Resource, "Reference");
+        c.WithRelationship(b.Resource, "Reference");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // b already precedes a transitively through c, so no synthetic edge is needed within env1
+        // and, crucially, no reverse b -> a edge is added.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "a")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "b")));
+
+        // env2's single app has no serial-ordering edge of its own.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "c")));
+    }
+
     // Ordering relationship types that force one resource to deploy before another: the synthetic
     // serialization edges (DependsOn) plus the user-declared dependencies (Reference/WaitFor).
     private static readonly string[] s_orderingRelationshipTypes = ["DependsOn", "Reference", "WaitFor"];
