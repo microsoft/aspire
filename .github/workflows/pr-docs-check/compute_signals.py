@@ -485,9 +485,27 @@ def compute_signals(pr: dict, files: list[dict]) -> dict:
             status = f.get("status") or ""
             if status_filter == "added" and status != "added":
                 continue
-            if regex.match(filename):
-                signals[signal_name] = True
-                record(signal_name, filename, f"path matched {path_regex}")
+            # GitHub reports a rename with the destination in `filename` and the
+            # source in `previous_filename` (status == "renamed"). Matching only
+            # `filename` misses *outbound* renames — a watched file moved to an
+            # untracked path — which would otherwise slip through as
+            # signal_count == 0 even though a status_filter of "any" is meant to
+            # include renames. Check the source path too so a generator source
+            # relocated out of the watched tree still gates. Inbound renames are
+            # already covered because the destination lands under `filename`.
+            # See https://docs.github.com/rest/pulls/pulls#list-pull-requests-files
+            candidate_paths = [filename]
+            if status == "renamed":
+                previous_filename = f.get("previous_filename") or ""
+                if previous_filename:
+                    candidate_paths.append(previous_filename)
+            for candidate in candidate_paths:
+                if regex.match(candidate):
+                    signals[signal_name] = True
+                    # Record the path that actually matched (the source for an
+                    # outbound rename) so the evidence points at the watched file.
+                    record(signal_name, candidate, f"path matched {path_regex}")
+                    break
 
     # ---- Group B: diff-content triggers ----
     #

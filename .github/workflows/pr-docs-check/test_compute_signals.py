@@ -31,11 +31,22 @@ def _pr(body: str = "", labels: list[str] | None = None, number: int = 1) -> dic
     }
 
 
-def _file(filename: str, status: str = "modified", patch: str | None = None) -> dict:
-    """Build a single 'files' entry. `patch` of None means GitHub omitted it."""
+def _file(
+    filename: str,
+    status: str = "modified",
+    patch: str | None = None,
+    previous_filename: str | None = None,
+) -> dict:
+    """Build a single 'files' entry. `patch` of None means GitHub omitted it.
+
+    `previous_filename` is set by GitHub only for renamed entries; pass it to
+    model a rename (also set status="renamed").
+    """
     out: dict = {"filename": filename, "status": status}
     if patch is not None:
         out["patch"] = patch
+    if previous_filename is not None:
+        out["previous_filename"] = previous_filename
     return out
 
 
@@ -312,6 +323,35 @@ class CatalogScenarioTests(unittest.TestCase):
         result = compute_signals.compute_signals(pr, files)
         self.assertEqual(result["recommendation"], "docs_required")
         self.assertTrue(result["signals"]["polyglot_code_generator_changed"])
+
+    def test_outbound_rename_of_generator_file_still_fires(self) -> None:
+        # GitHub reports a rename with the destination in `filename` and the
+        # source in `previous_filename` (status == "renamed"). Relocating a
+        # generator source OUT of the watched tree leaves only
+        # `previous_filename` under src/Aspire.Hosting.CodeGeneration.*, so the
+        # Group A loop matching `filename` alone would miss it and produce
+        # signal_count == 0 — despite the signal's "any" status filter being
+        # meant to include renames. The destination here is deliberately
+        # outside src/ (untracked by every signal) so this test isolates the
+        # source-path match: the polyglot signal must be the sole trigger, and
+        # its evidence must cite the watched source path, not the destination.
+        pr = _pr(body="Relocate the Go generator entry point.")
+        source = "src/Aspire.Hosting.CodeGeneration.Go/AtsGoCodeGenerator.cs"
+        files = [
+            _file(
+                "eng/codegen/AtsGoCodeGenerator.cs",
+                status="renamed",
+                previous_filename=source,
+            ),
+        ]
+        result = compute_signals.compute_signals(pr, files)
+        self.assertTrue(result["signals"]["polyglot_code_generator_changed"])
+        self.assertEqual(
+            result["triggered_signals"], ["polyglot_code_generator_changed"]
+        )
+        self.assertEqual(result["recommendation"], "docs_required")
+        evidence = result["evidence"]["polyglot_code_generator_changed"]
+        self.assertEqual(evidence[0]["file"], source)
 
 
 class DirectionAwareDiffScanTests(unittest.TestCase):
