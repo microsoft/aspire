@@ -1,0 +1,38 @@
+{
+  "run_id": 29220139824,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29220139824",
+  "analyzed_at": "2026-07-13T03:11:02Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18738,
+    "title": "Add App Service delegated subnet support",
+    "author": "davidfowl",
+    "state": "closed",
+    "head_branch": "davifowl-microsoft-verify-deployment-discussion",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18738"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Docker / Hosting.Docker (ubuntu-latest)",
+      "id": 86723728010,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29220139824/job/86723728010",
+      "classification": "flaky-test",
+      "reason": "Test failed due to Docker port 55216 already in use on the CI runner (address already in use), causing 'docker compose up' to fail. This is an environmental port conflict unrelated to the PR's Azure App Service subnet changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints",
+      "job": "Tests / Hosting.Docker / Hosting.Docker (ubuntu-latest)",
+      "error": "Assert.Contains() Failure: Filter not matched in collection\nCollection: []",
+      "stack_trace": "at Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 460\n   at Aspire.Hosting.Docker.Tests.DockerComposeTests.DeployWithDashboard_PrintsDashboardAndServiceEndpoints() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Docker.Tests/DockerComposeTests.cs:line 500",
+      "classification": "flaky",
+      "reason": "The test failed because Docker could not bind port 0.0.0.0:55216 (address already in use on CI runner). This is an environmental port conflict — the test is in Aspire.Hosting.Docker.Tests which is unrelated to the PR's Azure App Service delegated subnet changes. Matches prior cause 'docker-compose-port-already-in-use'."
+    }
+  ],
+  "causes": ["docker-compose-port-already-in-use"]
+}
