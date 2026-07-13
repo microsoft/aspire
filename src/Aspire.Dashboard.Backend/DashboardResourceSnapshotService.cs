@@ -27,6 +27,18 @@ internal sealed class DashboardResourceSnapshotService(
     private const string ResourceServiceAuthModeKey = "Dashboard:ResourceServiceClient:AuthMode";
     private const string ResourceServiceApiKeyKey = "Dashboard:ResourceServiceClient:ApiKey";
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
+    private const int ProducerDefinedPropertySortOrderStart = 7;
+
+    private static readonly Dictionary<string, (string DisplayName, int SortOrder)> s_knownProperties = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["resource.displayName"] = ("Display name", 0),
+        ["resource.state"] = ("State", 1),
+        ["resource.healthState"] = ("Health state", 2),
+        ["resource.startTime"] = ("Start time", 3),
+        ["resource.stopTime"] = ("Stop time", 4),
+        ["resource.exitCode"] = ("Exit code", 5),
+        ["resource.connectionString"] = ("Connection string", 6)
+    };
 
     private readonly Dictionary<string, DashboardResource> _resources = new(StringComparer.OrdinalIgnoreCase);
     private readonly object _lock = new();
@@ -150,9 +162,9 @@ internal sealed class DashboardResourceSnapshotService(
     internal static DashboardResource Map(ProtoResource resource)
     {
         var properties = resource.Properties
-            .OrderBy(property => property.HasSortOrder ? property.SortOrder : int.MaxValue)
-            .ThenBy(property => property.Name, StringComparer.Ordinal)
             .Select(MapProperty)
+            .OrderBy(property => property.SortOrder)
+            .ThenBy(property => property.Name, StringComparer.Ordinal)
             .ToArray();
         var terminalReplicaIndex = TryGetPropertyString(resource, "terminal.replicaIndex", out var replicaIndexText)
             && int.TryParse(replicaIndexText, NumberStyles.Integer, CultureInfo.InvariantCulture, out var replicaIndex)
@@ -172,13 +184,7 @@ internal sealed class DashboardResourceSnapshotService(
             resource.CreatedAt?.ToDateTime(),
             resource.StartedAt?.ToDateTime(),
             resource.StoppedAt?.ToDateTime(),
-            [.. resource.Urls.Select(url => new DashboardResourceUrl(
-                url.HasEndpointName ? url.EndpointName : null,
-                url.FullUrl,
-                url.IsInternal,
-                url.IsInactive,
-                string.IsNullOrEmpty(url.DisplayProperties?.DisplayName) ? null : url.DisplayProperties.DisplayName,
-                url.DisplayProperties?.SortOrder ?? 0))],
+            [.. resource.Urls.Select(MapUrl).OfType<DashboardResourceUrl>()],
             properties,
             [.. resource.Environment.Select(environment => new DashboardEnvironmentVariable(
                 environment.Name,
@@ -191,7 +197,7 @@ internal sealed class DashboardResourceSnapshotService(
             [.. resource.Commands.Select(command => new DashboardResourceCommand(
                 command.Name,
                 command.DisplayName,
-                command.HasDisplayDescription ? command.DisplayDescription : null,
+                command.HasDisplayDescription && !string.IsNullOrEmpty(command.DisplayDescription) ? command.DisplayDescription : null,
                 command.HasConfirmationMessage && !string.IsNullOrEmpty(command.ConfirmationMessage) ? command.ConfirmationMessage : null,
                 command.HasIconName && !string.IsNullOrEmpty(command.IconName) ? command.IconName : null,
                 MapIconVariant(command.IconVariant),
@@ -208,13 +214,47 @@ internal sealed class DashboardResourceSnapshotService(
 
     private static DashboardResourceProperty MapProperty(ResourceProperty property)
     {
+        var knownProperty = s_knownProperties.GetValueOrDefault(property.Name);
+        var sortOrder = knownProperty != default
+            ? knownProperty.SortOrder
+            : property.HasSortOrder ? ToProducerDefinedPropertySortOrder(property.SortOrder) : int.MaxValue;
+
         return new DashboardResourceProperty(
             property.Name,
-            property.HasDisplayName ? property.DisplayName : null,
+            property.HasDisplayName ? property.DisplayName : knownProperty.DisplayName,
             property.Value.KindCase is Value.KindOneofCase.StringValue ? property.Value.StringValue : property.Value.ToString(),
             property.HasIsSensitive && property.IsSensitive,
             property.IsHighlighted,
-            property.HasSortOrder ? property.SortOrder : null);
+            sortOrder);
+    }
+
+    private static DashboardResourceUrl? MapUrl(Url url)
+    {
+        // The legacy dashboard accepts only absolute URLs and renders them through Uri.ToString(),
+        // which canonicalizes an authority-only URL such as http://localhost:5000 with a trailing slash.
+        if (!Uri.TryCreate(url.FullUrl, UriKind.Absolute, out var parsedUrl))
+        {
+            return null;
+        }
+
+        return new DashboardResourceUrl(
+            url.HasEndpointName ? url.EndpointName : null,
+            parsedUrl.ToString(),
+            url.IsInternal,
+            url.IsInactive,
+            string.IsNullOrEmpty(url.DisplayProperties?.DisplayName) ? null : url.DisplayProperties.DisplayName,
+            url.DisplayProperties?.SortOrder ?? 0);
+    }
+
+    private static int ToProducerDefinedPropertySortOrder(int producerSortOrder)
+    {
+        if (producerSortOrder <= 0)
+        {
+            return ProducerDefinedPropertySortOrderStart;
+        }
+
+        var sortOrder = ProducerDefinedPropertySortOrderStart + (long)producerSortOrder;
+        return sortOrder > int.MaxValue ? int.MaxValue : (int)sortOrder;
     }
 
     private static string? GetHealth(ProtoResource resource)

@@ -153,6 +153,18 @@ public class DashboardBackendApplicationTests
             Name = "terminal.replicaIndex",
             Value = Value.ForString("3")
         });
+        resource.Properties.Add(new ResourceProperty
+        {
+            Name = "resource.state",
+            Value = Value.ForString("Running")
+        });
+        resource.Properties.Add(new ResourceProperty
+        {
+            Name = "executable.pid",
+            DisplayName = "Process ID",
+            Value = Value.ForString("123"),
+            SortOrder = 2
+        });
         resource.HealthReports.Add(new HealthReport
         {
             Key = "live",
@@ -176,6 +188,22 @@ public class DashboardBackendApplicationTests
         Assert.Equal("filled", result.IconVariant);
         Assert.Equal("disabled", Assert.Single(result.Commands).State);
         Assert.Equal("HTTP", Assert.Single(result.Urls).DisplayName);
+        Assert.Equal("http://localhost:5000/", Assert.Single(result.Urls).Url);
+        Assert.Collection(
+            result.Properties,
+            property =>
+            {
+                Assert.Equal("resource.state", property.Name);
+                Assert.Equal("State", property.DisplayName);
+                Assert.Equal(1, property.SortOrder);
+            },
+            property =>
+            {
+                Assert.Equal("executable.pid", property.Name);
+                Assert.Equal(9, property.SortOrder);
+            },
+            property => Assert.Equal("terminal.enabled", property.Name),
+            property => Assert.Equal("terminal.replicaIndex", property.Name));
     }
 
     private sealed class TestResourceSnapshotProvider(DashboardResource[] resources) : IDashboardResourceSnapshotProvider
