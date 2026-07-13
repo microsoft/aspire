@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Dashboard.Backend;
 
@@ -10,6 +11,9 @@ internal static class DashboardBackendApplication
     public static WebApplication Build(string[] args, Action<WebApplicationBuilder>? configureBuilder = null)
     {
         var builder = WebApplication.CreateSlimBuilder(args);
+        builder.Services.TryAddSingleton<DashboardResourceSnapshotService>();
+        builder.Services.TryAddSingleton<IDashboardResourceSnapshotProvider>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
+        builder.Services.AddHostedService(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         configureBuilder?.Invoke(builder);
 
         var app = builder.Build();
@@ -22,7 +26,7 @@ internal static class DashboardBackendApplication
                     new DashboardApiVersion(
                         DashboardApiContract.CurrentVersion,
                         DashboardApiContract.VersionOneBasePath,
-                        [DashboardApiContract.ConfigurationCapability])
+                        [DashboardApiContract.ConfigurationCapability, DashboardApiContract.ResourcesCapability])
                 ]);
 
             return Results.Json(
@@ -40,6 +44,24 @@ internal static class DashboardBackendApplication
             return Results.Json(
                 configuration,
                 DashboardBackendJsonSerializerContext.Default.DashboardConfiguration);
+        });
+
+        app.MapGet($"{DashboardApiContract.VersionOneBasePath}/resources", async (
+            IDashboardResourceSnapshotProvider resourceSnapshotProvider,
+            HttpContext context) =>
+        {
+            try
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                var resources = await resourceSnapshotProvider.GetSnapshotAsync(context.RequestAborted).ConfigureAwait(false);
+                return Results.Json(
+                    resources,
+                    DashboardBackendJsonSerializerContext.Default.DashboardResourceArray);
+            }
+            catch (DashboardResourceServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
         });
 
         return app;

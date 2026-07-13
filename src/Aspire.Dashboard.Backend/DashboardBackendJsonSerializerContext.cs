@@ -11,4 +11,5 @@ namespace Aspire.Dashboard.Backend;
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
 [JsonSerializable(typeof(DashboardApiDiscovery))]
 [JsonSerializable(typeof(DashboardConfiguration))]
+[JsonSerializable(typeof(DashboardResource[]))]
 internal sealed partial class DashboardBackendJsonSerializerContext : JsonSerializerContext;

@@ -27,17 +27,18 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration"]
+      "capabilities": ["configuration", "resources"]
     }
   ]
 }
 ```
 
-Version 1 currently defines one capability:
+Version 1 currently defines two capabilities:
 
 | Capability | Route | Response |
 | --- | --- | --- |
 | `configuration` | `GET {basePath}/config` | `DashboardConfiguration` |
+| `resources` | `GET {basePath}/resources` | `Resource[]` |
 
 ```ts
 export interface DashboardConfiguration {
@@ -46,6 +47,10 @@ export interface DashboardConfiguration {
   runtimeVersion: string;
 }
 ```
+
+The `resources` response uses the transport-neutral `Resource` shape documented below. It is a
+complete point-in-time snapshot, returned with `Cache-Control: no-store`. React polls this route for
+the first resource migration slice; commands and other resource operations remain on `/api/deck`.
 
 The AOT backend must advertise only capabilities it implements end-to-end. During the side-by-side
 migration, React delegates every capability not advertised here to the existing `/api/deck`

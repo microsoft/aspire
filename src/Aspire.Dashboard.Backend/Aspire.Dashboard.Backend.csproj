@@ -11,4 +11,16 @@
     <InternalsVisibleTo Include="Aspire.Dashboard.Backend.Tests" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Protobuf Include="..\Aspire.Hosting\Dashboard\proto\dashboard_service.proto"
+              Link="ResourceService\dashboard_service.proto"
+              GrpcServices="Client" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Google.Protobuf" />
+    <PackageReference Include="Grpc.Net.ClientFactory" />
+    <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
+  </ItemGroup>
+
 </Project>
