@@ -174,9 +174,10 @@ AKS cluster + ACR, installs the Radius control plane onto the cluster, deploys t
 
 Radius-specific notes:
 
-- **`rad` CLI prerequisite.** `aspire deploy` against a Radius environment shells out to `rad`. In
-  CI the gated **Setup Radius** step in `deployment-tests.yml` installs a pinned `rad` version;
-  locally, install `rad` from <https://docs.radapp.io/installation/> before running the test.
+- **`rad` CLI installation.** `aspire deploy` against a Radius environment shells out to `rad`.
+  `RadiusStarterDeploymentTests.DeployStarterTemplateToRadiusOnAks` installs the pinned rad CLI
+  version into the test workspace's `radbin` directory and prepends it to `PATH`, so CI and local
+  runs do not require a machine-wide `rad` installation.
 - **Images must be pre-pushed.** The Radius publisher does not build or push images for project
   resources yet (<https://github.com/microsoft/aspire/issues/16844>). The test builds/pushes the
   starter images to ACR and attaches them with `WithContainerImage` (Experimental
