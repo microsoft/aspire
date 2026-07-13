@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CI/engineering maintenance — removes asciinema.org upload workflows with no user-facing impact",
+  "mergedAt": "2026-07-13T01:25:13Z",
+  "number": 18752,
+  "runDate": "2026-07-13T07:01:21Z",
+  "status": "excluded",
+  "title": "Disable asciinema.org uploads and CLI E2E comment posting"
+}

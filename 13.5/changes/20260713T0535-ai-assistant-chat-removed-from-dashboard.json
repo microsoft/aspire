@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": true,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The AI Assistant chat feature has been removed from the dashboard, including AssistantChat, AssistantModalDialog, AssistantSidebarDialog, ExplainErrorsButton, and \"Ask GitHub Copilot\" context menu items. The GenAI visualizer and AI Agents dialog remain unaffected.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🗑️",
+  "firstMergedAt": "2026-07-13T05:35:36Z",
+  "lastMergedAt": "2026-07-13T05:35:36Z",
+  "name": "AI Assistant chat removed from dashboard",
+  "owner": "JamesNK",
+  "prs": [
+    18726
+  ]
+}

@@ -1,0 +1,9 @@
+{
+  "author": "nellshamrell",
+  "comment": "Test-only changes — adds live E2E deployment test infrastructure, no user-facing product changes",
+  "mergedAt": "2026-07-13T01:57:29Z",
+  "number": 18730,
+  "runDate": "2026-07-13T07:01:21Z",
+  "status": "excluded",
+  "title": "Add live E2E deployment test for Aspire.Hosting.Radius"
+}

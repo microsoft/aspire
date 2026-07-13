@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Removes AI Assistant chat feature (AssistantChat, AssistantModalDialog, ExplainErrorsButton, etc.) from the dashboard — breaking removal of user-visible functionality",
+  "mergedAt": "2026-07-13T05:35:36Z",
+  "number": 18726,
+  "runDate": "2026-07-13T07:01:21Z",
+  "status": "included",
+  "title": "Remove AssistantChat, AssistantModalDialog, AssistantSidebarDialog, and Model/Assistant code"
+}

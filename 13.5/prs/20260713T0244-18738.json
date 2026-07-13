@@ -1,0 +1,9 @@
+{
+  "author": "davidfowl",
+  "comment": "New Azure App Service feature: delegated subnet/VNet integration via WithDelegatedSubnet()",
+  "mergedAt": "2026-07-13T02:44:31Z",
+  "number": 18738,
+  "runDate": "2026-07-13T07:01:21Z",
+  "status": "included",
+  "title": "Add App Service delegated subnet support"
+}

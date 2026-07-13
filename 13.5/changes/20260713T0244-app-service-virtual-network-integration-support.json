@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Azure App Service environments now support delegated subnet configuration via WithDelegatedSubnet(). AppHost authors can wire an Azure Virtual Network subnet to an App Service environment to enable regional VNet integration for outbound traffic, including workload sites, deployment slots, and the dashboard.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🌐",
+  "firstMergedAt": "2026-07-13T02:44:31Z",
+  "lastMergedAt": "2026-07-13T02:44:31Z",
+  "name": "App Service virtual network integration support",
+  "owner": "davidfowl",
+  "prs": [
+    18738
+  ]
+}
