@@ -4,6 +4,7 @@
 #pragma warning disable ASPIRERADIUS004 // Experimental: ConfigureRadiusInfrastructure escape-hatch construct types are consumed internally by the publisher.
 
 #pragma warning disable ASPIRECOMPUTE002 // GetEndpointPropertyExpression/GetHostAddressExpression are experimental compute-environment APIs the publisher relies on.
+#pragma warning disable ASPIRERADIUS006 // Secret-store model types (RadiusSecretStoreResource, etc.) are experimental; consumed internally by the publisher.
 using System.Globalization;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
@@ -11,6 +12,7 @@ using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing.Constructs;
 using Aspire.Hosting.Radius.ResourceMapping;
+using Aspire.Hosting.Radius.Secrets;
 using Azure.Provisioning;
 using Azure.Provisioning.Expressions;
 using Azure.Provisioning.Primitives;
@@ -47,6 +49,20 @@ internal sealed class RadiusInfrastructureBuilder
     // Maps the emitted Bicep parameter identifier to its originating Aspire ParameterResource, so
     // the deploy step can resolve each value at deploy time and pass it via `rad deploy --parameters`.
     private readonly Dictionary<string, ParameterResource> _deployParametersByIdentifier = new(StringComparer.Ordinal);
+
+    // Bicep `param`s allocated for recipe-parameter and inline-secret values that bind an Aspire
+    // ParameterResource. Keyed by the Aspire parameter name so repeated references reuse a single
+    // declaration; secure when the source parameter is secret so no value is written to the artifact.
+    private readonly Dictionary<string, ProvisioningParameter> _recipeParameters = new(StringComparer.Ordinal);
+
+    // Maps the emitted recipe/inline-secret Bicep parameter identifier to its originating Aspire
+    // ParameterResource, unioned into RadiusDeployParametersAnnotation so the deploy step resolves a
+    // value for every valueless `param` at deploy time.
+    private readonly Dictionary<string, ParameterResource> _recipeParameterBindings = new(StringComparer.Ordinal);
+
+    // Guards against two distinct Aspire parameter names sanitizing to the same Bicep identifier,
+    // which would emit duplicate `param` declarations (ASPIRERADIUS028). Keyed by Bicep identifier.
+    private readonly Dictionary<string, string> _recipeParameterIdentifiers = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Default recipe template paths per resource type.
@@ -139,6 +155,20 @@ internal sealed class RadiusInfrastructureBuilder
             IsLegacyResourceType(resolvedTypes[r].ResourceType));
         var hasComputeResources = computeResources.Any();
 
+        // Radius secret stores routed to this environment. Applications.Core/secretStores is a
+        // legacy Applications.Core resource, so its presence forces the legacy environment/
+        // application chain (which it references for scope). No-op when no store is declared,
+        // keeping the default path byte-for-byte unchanged.
+        var secretStoresForScope = GetSecretStoresForScope().ToList();
+        var hasSecretStores = secretStoresForScope.Count > 0;
+
+        // Secret-store consumers (recipeConfig auth / envSecrets) also require the legacy
+        // Applications.Core/environments chain, since recipeConfig lives on that resource.
+        var secretStoresAnnotation = _environment.Annotations
+            .OfType<Annotations.RadiusSecretStoresAnnotation>()
+            .FirstOrDefault();
+        var hasSecretStoreConsumers = secretStoresAnnotation is { Consumers.Count: > 0 };
+
         // Compute workloads always route to the UDT compute container type
         // (Radius.Compute/containers), which forces the UDT environment/application chain.
         var computeForcesUdtChain = hasComputeResources;
@@ -181,7 +211,7 @@ internal sealed class RadiusInfrastructureBuilder
         LegacyApplicationEnvironmentConstruct? legacyEnvConstruct = null;
         LegacyApplicationConstruct? legacyAppConstruct = null;
 
-        if (hasLegacyResources)
+        if (hasLegacyResources || hasSecretStores || hasSecretStoreConsumers)
         {
             // If the UDT chain is also emitted we suffix legacy identifiers with
             // `_legacy`; otherwise (pure-legacy publish) legacy can claim the
@@ -200,6 +230,10 @@ internal sealed class RadiusInfrastructureBuilder
 
             options.LegacyApplications.Add(legacyAppConstruct);
         }
+
+        // Secret stores (Applications.Core/secretStores) — emitted after the legacy chain they
+        // reference for scope. No-op when no store is declared.
+        EmitSecretStores(options, secretStoresForScope, legacyEnvConstruct, legacyAppConstruct);
 
         // 4. Resource type instances — parent wiring depends on legacy vs UDT.
         // Track each builder-created instance's parent pair so RewireIdReferences
@@ -281,6 +315,21 @@ internal sealed class RadiusInfrastructureBuilder
             containerConnectionTargets,
             identifierSnapshot);
 
+        // Surface recipe-parameter scopes that target a resource type with no emitted recipe
+        // entry, and register any ParameterResource-backed recipe/inline-secret Bicep params.
+        WarnUnmatchedResourceTypeScopes(udtRecipeEntries.Keys.Concat(legacyRecipeEntries.Keys));
+        foreach (var (name, parameter) in _recipeParameters)
+        {
+            options.RecipeParameters[name] = parameter;
+        }
+
+        // Surface the param-identifier -> ParameterResource bindings so the deploy step can
+        // resolve a value for every valueless `param` at deploy time (rad deploy --parameters).
+        foreach (var (identifier, parameter) in _recipeParameterBindings)
+        {
+            options.RecipeParameterBindings[identifier] = parameter;
+        }
+
         RecordDeployParameters();
 
         return options;
@@ -297,10 +346,18 @@ internal sealed class RadiusInfrastructureBuilder
             _environment.Annotations.Remove(existing);
         }
 
-        if (_deployParametersByIdentifier.Count > 0)
+        // Persist the union of PR1 container-env parameters and PR2 recipe/inline-secret
+        // parameter bindings. A parameter referenced by both a container env var and a recipe/
+        // secret value must resolve to exactly one deploy binding, so merge rather than replace.
+        var deployParameters = new Dictionary<string, ParameterResource>(_deployParametersByIdentifier, StringComparer.Ordinal);
+        foreach (var (identifier, parameter) in _recipeParameterBindings)
         {
-            _environment.Annotations.Add(new RadiusDeployParametersAnnotation(
-                new Dictionary<string, ParameterResource>(_deployParametersByIdentifier, StringComparer.Ordinal)));
+            deployParameters[identifier] = parameter;
+        }
+
+        if (deployParameters.Count > 0)
+        {
+            _environment.Annotations.Add(new RadiusDeployParametersAnnotation(deployParameters));
         }
     }
 
@@ -670,7 +727,7 @@ internal sealed class RadiusInfrastructureBuilder
         }
     }
 
-    private static RadiusRecipePackConstruct CreateRecipePackConstruct(
+    private RadiusRecipePackConstruct CreateRecipePackConstruct(
         string identifier, Dictionary<string, RecipeEntry> recipeEntries)
     {
         var construct = new RadiusRecipePackConstruct(identifier);
@@ -678,11 +735,21 @@ internal sealed class RadiusInfrastructureBuilder
 
         foreach (var (type, entry) in recipeEntries)
         {
-            construct.Recipes[type] = new RecipeEntryConstruct
+            var recipeEntry = new RecipeEntryConstruct
             {
                 RecipeKind = entry.RecipeKind,
                 RecipeLocation = entry.RecipeLocation,
             };
+
+            // Apply environment-level WithRecipeParameters for this resource type (environment-wide
+            // merged with any resource-type-scoped overrides). No-op when none are declared.
+            var parameters = GetEffectiveRecipeParameters(type);
+            if (parameters is not null)
+            {
+                ApplyRecipeParameters(recipeEntry.Parameters, parameters);
+            }
+
+            construct.Recipes[type] = recipeEntry;
         }
 
         return construct;
@@ -731,13 +798,23 @@ internal sealed class RadiusInfrastructureBuilder
         foreach (var (resourceType, byName) in legacyRecipeEntries)
         {
             var inner = new BicepDictionary<LegacyRecipeEntryConstruct>();
+            var parameters = GetEffectiveRecipeParameters(resourceType);
             foreach (var (recipeName, entry) in byName)
             {
-                inner[recipeName] = new LegacyRecipeEntryConstruct
+                var legacyEntry = new LegacyRecipeEntryConstruct
                 {
                     TemplateKind = entry.RecipeKind,
                     TemplatePath = entry.RecipeLocation,
                 };
+
+                // Apply environment-level WithRecipeParameters for this legacy resource type.
+                // No-op when none are declared.
+                if (parameters is not null)
+                {
+                    ApplyRecipeParameters(legacyEntry.Parameters, parameters);
+                }
+
+                inner[recipeName] = legacyEntry;
             }
             construct.Recipes[resourceType] = inner;
         }
@@ -1121,6 +1198,20 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         var identifier = Infrastructure.NormalizeBicepIdentifier(parameter.Name);
+
+        // A recipe parameter / inline secret may already have allocated a secure `param` for this
+        // same Aspire parameter — recipe-pack and secret-store emission both run before container
+        // env-var resolution. Reuse that declaration (it is emitted via options.RecipeParameters)
+        // so the shared value produces a single Bicep `param` and one deploy binding rather than a
+        // duplicate declaration. Keyed on the exact Aspire parameter name (unique in the app model)
+        // so two *distinct* parameters whose names normalize to the same identifier are NOT merged
+        // here — they fall through and surface as a genuine identifier collision (ASPIRERADIUS056).
+        // Not cached in _envParametersByName so it is not emitted twice.
+        if (_recipeParameters.TryGetValue(parameter.Name, out var recipeParameter))
+        {
+            return recipeParameter;
+        }
+
         var provisioningParameter = new ProvisioningParameter(identifier, typeof(string))
         {
             IsSecure = parameter.Secret,
@@ -1222,4 +1313,446 @@ internal sealed class RadiusInfrastructureBuilder
     }
 
     internal readonly record struct RecipeEntry(string RecipeKind, string RecipeLocation);
+
+    // ---------------------------------------------------------------------------------------------
+    // Recipe parameters (WithRecipeParameters) — environment-wide + resource-type-scoped values
+    // flowed onto the shared recipe pack. ParameterResource-backed values are emitted as valueless
+    // (secure when the source is secret) Bicep `param`s so no literal secret lands in the artifact.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Computes the effective recipe parameter set for a resource type by merging the
+    /// environment-wide parameters with any parameters scoped to that resource type.
+    /// Resource-type-scoped values win on key collision. Returns <see langword="null"/> when no
+    /// parameters apply.
+    /// </summary>
+    private IReadOnlyDictionary<string, object>? GetEffectiveRecipeParameters(string resourceType)
+    {
+        var annotation = _environment.Annotations
+            .OfType<Annotations.RadiusRecipeParametersAnnotation>()
+            .FirstOrDefault();
+        if (annotation is null)
+        {
+            return null;
+        }
+
+        var effective = new Dictionary<string, object>(annotation.EnvironmentWide, StringComparer.Ordinal);
+
+        if (annotation.ByResourceType.TryGetValue(resourceType, out var scoped))
+        {
+            foreach (var (key, value) in scoped)
+            {
+                if (effective.ContainsKey(key))
+                {
+                    _logger.LogDebug(
+                        "Recipe parameter '{Key}' scoped to resource type '{ResourceType}' overrides the environment-wide value.",
+                        key, resourceType);
+                }
+
+                effective[key] = value;
+            }
+        }
+
+        return effective.Count == 0 ? null : effective;
+    }
+
+    /// <summary>
+    /// Serializes each effective recipe parameter into <paramref name="target"/>, preserving Bicep
+    /// type fidelity and emitting parameter references for bound <see cref="ParameterResource"/>
+    /// values and provider references.
+    /// </summary>
+    private void ApplyRecipeParameters(BicepDictionary<object> target, IReadOnlyDictionary<string, object> parameters)
+    {
+        var sink = (IDictionary<string, IBicepValue>)target;
+        foreach (var (key, value) in parameters)
+        {
+            sink[key] = ConvertRecipeParameterValue(value);
+        }
+    }
+
+    /// <summary>
+    /// Converts a single recipe parameter value to a Bicep value. Handles
+    /// <see cref="ParameterResource"/> bindings (emitted as a Bicep <c>param</c> reference, never a
+    /// resolved secret), provider-scope references, and literal/array/object values.
+    /// </summary>
+    private IBicepValue ConvertRecipeParameterValue(object value)
+    {
+        switch (value)
+        {
+            case IResourceBuilder<ParameterResource> parameterBuilder:
+                return ParameterReference(GetOrAddRecipeParameter(parameterBuilder.Resource));
+            case ParameterResource parameterResource:
+                return ParameterReference(GetOrAddRecipeParameter(parameterResource));
+            case RadiusProviderReference providerReference:
+                return BicepPostProcessor.ToBicepValue(ResolveProviderReference(providerReference));
+            default:
+                return BicepPostProcessor.ToBicepValue(value);
+        }
+    }
+
+    /// <summary>
+    /// Wraps a Bicep <c>param</c> declaration as a value usable inside a recipe <c>parameters</c>
+    /// object (a reference to the parameter identifier).
+    /// </summary>
+    private static BicepValue<object> ParameterReference(ProvisioningParameter parameter)
+    {
+        BicepValue<object> reference = parameter;
+        return reference;
+    }
+
+    /// <summary>
+    /// Returns (creating once) the Bicep <c>param</c> declaration for an Aspire
+    /// <see cref="ParameterResource"/>. Secret parameters are declared secure so no value is
+    /// written to the published artifact.
+    /// </summary>
+    private ProvisioningParameter GetOrAddRecipeParameter(ParameterResource parameter)
+    {
+        if (!_recipeParameters.TryGetValue(parameter.Name, out var provisioningParameter))
+        {
+            var identifier = BicepPostProcessor.SanitizeIdentifier(parameter.Name);
+
+            // Two distinct parameter names can sanitize to the same Bicep identifier (e.g.
+            // "my-key" and "my.key" both become "my_key"). Emitting two `param my_key`
+            // declarations produces invalid Bicep, so fail with an actionable diagnostic
+            // (ASPIRERADIUS028) instead.
+            if (_recipeParameterIdentifiers.TryGetValue(identifier, out var existingName))
+            {
+                throw new InvalidOperationException(
+                    $"Recipe parameters bound to Aspire parameters '{existingName}' and '{parameter.Name}' both " +
+                    $"map to the Bicep identifier '{identifier}'. Rename one of the parameters so they produce " +
+                    "distinct Bicep identifiers. Diagnostic: ASPIRERADIUS028.");
+            }
+
+            provisioningParameter = new ProvisioningParameter(identifier, typeof(string))
+            {
+                IsSecure = parameter.Secret,
+            };
+            _recipeParameters[parameter.Name] = provisioningParameter;
+            _recipeParameterIdentifiers[identifier] = parameter.Name;
+            // Remember the originating ParameterResource keyed by the Bicep identifier so the
+            // deploy step can pass `--parameters <identifier>=<value>` for this valueless param.
+            _recipeParameterBindings[identifier] = parameter;
+        }
+
+        return provisioningParameter;
+    }
+
+    /// <summary>
+    /// Resolves a <see cref="RadiusProviderReference"/> to the corresponding scope value from the
+    /// cloud provider configured on this environment. Throws when the referenced provider is not
+    /// configured.
+    /// </summary>
+    private string ResolveProviderReference(RadiusProviderReference reference)
+    {
+        var providers = _environment.Annotations
+            .OfType<Annotations.RadiusCloudProvidersAnnotation>()
+            .FirstOrDefault();
+
+        return reference.Field switch
+        {
+            RadiusProviderScopeField.Region =>
+                providers?.Aws?.Region ?? throw MissingProviderReference("AWS", "WithAwsProvider"),
+            RadiusProviderScopeField.AccountId =>
+                providers?.Aws?.AccountId ?? throw MissingProviderReference("AWS", "WithAwsProvider"),
+            RadiusProviderScopeField.SubscriptionId =>
+                providers?.Azure?.SubscriptionId ?? throw MissingProviderReference("Azure", "WithAzureProvider"),
+            RadiusProviderScopeField.ResourceGroup =>
+                providers?.Azure?.ResourceGroup ?? throw MissingProviderReference("Azure", "WithAzureProvider"),
+            _ => throw new NotSupportedException($"Unknown provider scope field '{reference.Field}'."),
+        };
+    }
+
+    private InvalidOperationException MissingProviderReference(string cloud, string configureMethod) =>
+        new($"A recipe parameter on Radius environment '{_environment.Name}' references {cloud} provider " +
+            $"configuration, but no {cloud} provider is configured. Call {configureMethod}(...) on the environment.");
+
+    /// <summary>
+    /// Emits a non-fatal warning for each resource-type-scoped parameter set whose resource type
+    /// has no recipe entry in the emitted recipe pack.
+    /// </summary>
+    private void WarnUnmatchedResourceTypeScopes(IEnumerable<string> emittedResourceTypes)
+    {
+        var annotation = _environment.Annotations
+            .OfType<Annotations.RadiusRecipeParametersAnnotation>()
+            .FirstOrDefault();
+        if (annotation is null)
+        {
+            return;
+        }
+
+        var emitted = new HashSet<string>(emittedResourceTypes, StringComparer.Ordinal);
+        foreach (var resourceType in annotation.ByResourceType.Keys)
+        {
+            if (!emitted.Contains(resourceType))
+            {
+                _logger.LogWarning(
+                    "Recipe parameters were scoped to resource type '{ResourceType}' on Radius environment " +
+                    "'{Environment}', but no recipe entry of that type exists in the emitted recipe pack; " +
+                    "those parameters were ignored.",
+                    resourceType, _environment.Name);
+            }
+        }
+    }
+
+    // ---------------------------------------------------------------------------------------------
+    // Secret stores (AddRadiusSecretStore / WithSecretStore) — emitted as Applications.Core/
+    // secretStores scoped to the legacy environment/application, plus recipeConfig consumers.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// Returns the Radius secret stores routed to this environment: environment-scoped stores owned
+    /// by this environment, plus all application-scoped stores.
+    /// </summary>
+    private IEnumerable<RadiusSecretStoreResource> GetSecretStoresForScope()
+    {
+        return _model.Resources.OfType<RadiusSecretStoreResource>().Where(s =>
+            (s.Scope == RadiusSecretStoreScope.Environment && ReferenceEquals(s.OwningEnvironment, _environment))
+            || s.Scope == RadiusSecretStoreScope.Application);
+    }
+
+    /// <summary>
+    /// Emits one <see cref="RadiusSecretStoreConstruct"/> per declared store, scoped to the legacy
+    /// Applications.Core environment/application (secret stores are Applications.Core resources) and
+    /// populated per mode (inline / existing / sealed).
+    /// </summary>
+    private void EmitSecretStores(
+        RadiusInfrastructureOptions options,
+        IReadOnlyList<RadiusSecretStoreResource> stores,
+        LegacyApplicationEnvironmentConstruct? legacyEnvConstruct,
+        LegacyApplicationConstruct? legacyAppConstruct)
+    {
+        var storeConstructs = new Dictionary<string, RadiusSecretStoreConstruct>(StringComparer.Ordinal);
+
+        foreach (var store in stores)
+        {
+            var identifier = BicepPostProcessor.SanitizeIdentifier(store.Name);
+            var construct = new RadiusSecretStoreConstruct(identifier)
+            {
+                StoreName = store.Name,
+                StoreType = store.Type.ToRadiusTypeString(),
+            };
+
+            // Scope is implied by the declaring API form: application-scoped stores reference the
+            // application; environment-scoped stores reference the environment.
+            if (store.Scope == RadiusSecretStoreScope.Application && legacyAppConstruct is not null)
+            {
+                construct.ApplicationId = BuildIdExpression(legacyAppConstruct);
+            }
+            else if (legacyEnvConstruct is not null)
+            {
+                construct.EnvironmentId = BuildIdExpression(legacyEnvConstruct);
+            }
+
+            PopulateInlineSecretStoreData(store, construct);
+            PopulateSecretReferenceData(store, construct);
+
+            if (store.Population.HasSealedSecret)
+            {
+                options.SealedSecretManifestPaths[store.Name] = store.Population.SealedManifestPath!;
+            }
+
+            storeConstructs[store.Name] = construct;
+            options.SecretStores.Add(construct);
+        }
+
+        ApplySecretStoreConsumers(legacyEnvConstruct, storeConstructs);
+    }
+
+    /// <summary>
+    /// Emits the environment's <c>recipeConfig</c> from the recorded secret-store consumers
+    /// (private Bicep-registry auth, Terraform Git PAT auth, and <c>envSecrets</c>), referencing
+    /// each store by its <c>.id</c>.
+    /// </summary>
+    private void ApplySecretStoreConsumers(
+        LegacyApplicationEnvironmentConstruct? legacyEnvConstruct,
+        IReadOnlyDictionary<string, RadiusSecretStoreConstruct> storeConstructs)
+    {
+        var annotation = _environment.Annotations
+            .OfType<Annotations.RadiusSecretStoresAnnotation>()
+            .FirstOrDefault();
+        if (legacyEnvConstruct is null || annotation is null || annotation.Consumers.Count == 0)
+        {
+            return;
+        }
+
+        var bicepAuth = new Dictionary<string, object>(StringComparer.Ordinal);
+        var gitPat = new Dictionary<string, object>(StringComparer.Ordinal);
+        var envSecrets = new Dictionary<string, object>(StringComparer.Ordinal);
+
+        foreach (var consumer in annotation.Consumers)
+        {
+            var secretRef = ResolveSecretStoreReference(consumer.Store, storeConstructs);
+            switch (consumer.Kind)
+            {
+                case RadiusSecretStoreConsumerKind.BicepRegistryAuth:
+                    bicepAuth[consumer.Selector!] = new Dictionary<string, object> { ["secret"] = secretRef };
+                    break;
+                case RadiusSecretStoreConsumerKind.TerraformGitPat:
+                    gitPat[consumer.Selector!] = new Dictionary<string, object> { ["secret"] = secretRef };
+                    break;
+                case RadiusSecretStoreConsumerKind.EnvSecret:
+                    envSecrets[consumer.Selector!] = new Dictionary<string, object>
+                    {
+                        ["source"] = secretRef,
+                        ["key"] = consumer.Key!,
+                    };
+                    break;
+                case RadiusSecretStoreConsumerKind.TerraformProviderSecret:
+                    // Terraform provider secrets are not yet emitted (ASPIRERADIUS053). The Radius
+                    // recipeConfig.terraform.providers.<name> shape is an array of provider-config
+                    // objects that also needs a per-secret name/key the WithTerraformProviderSecret
+                    // API does not capture, so faithful emission is not possible today. Config-time
+                    // validation rejects this consumer before publish; throw defensively in case the
+                    // gate is bypassed rather than silently dropping the reference.
+                    throw new InvalidOperationException(
+                        $"Secret store '{consumer.Store.Name}' is referenced as a Terraform provider secret " +
+                        $"for provider '{consumer.Selector}', which is not yet supported. Diagnostic: ASPIRERADIUS053.");
+                case RadiusSecretStoreConsumerKind.GatewayTls:
+                    // Gateway TLS (tls.certificateFrom) is intentionally not emitted: the integration
+                    // does not model Radius gateways yet, so there is no gateway resource to attach the
+                    // certificate reference to. The consumer is recorded (and type-validated) so the
+                    // wiring is deterministic and can be emitted once gateways are modeled.
+                    break;
+                default:
+                    throw new InvalidOperationException(
+                        $"Unknown secret-store consumer kind '{consumer.Kind}' for store '{consumer.Store.Name}'.");
+            }
+        }
+
+        var recipeConfig = new Dictionary<string, object>(StringComparer.Ordinal);
+        if (bicepAuth.Count > 0)
+        {
+            recipeConfig["bicep"] = new Dictionary<string, object> { ["authentication"] = bicepAuth };
+        }
+
+        if (gitPat.Count > 0)
+        {
+            recipeConfig["terraform"] = new Dictionary<string, object>
+            {
+                ["authentication"] = new Dictionary<string, object>
+                {
+                    ["git"] = new Dictionary<string, object> { ["pat"] = gitPat },
+                },
+            };
+        }
+
+        if (envSecrets.Count > 0)
+        {
+            recipeConfig["envSecrets"] = envSecrets;
+        }
+
+        if (recipeConfig.Count > 0)
+        {
+            legacyEnvConstruct.RecipeConfig = BicepPostProcessor.ToBicepObject(recipeConfig);
+        }
+    }
+
+    /// <summary>
+    /// Resolves the value emitted for a secret-store reference in <c>recipeConfig</c>: the store's
+    /// <c>.id</c> expression.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The store is not emitted for this environment (<c>ASPIRERADIUS050</c>).
+    /// </exception>
+    private object ResolveSecretStoreReference(
+        RadiusSecretStoreResource store,
+        IReadOnlyDictionary<string, RadiusSecretStoreConstruct> storeConstructs)
+    {
+        if (storeConstructs.TryGetValue(store.Name, out var construct))
+        {
+            return BuildIdExpression(construct);
+        }
+
+        // Never fall back to the bare store name: that emits a plain string where a secret-store
+        // `.id` is expected, producing a reference Radius rejects only at deploy (or, worse, that
+        // silently resolves to nothing). Fail fast with an actionable diagnostic naming the
+        // consuming environment and the unresolved store.
+        throw new InvalidOperationException(
+            $"Environment '{_environment.Name}' references secret store '{store.Name}', but that store is not " +
+            "emitted for this environment. Ensure the store is declared on this environment. " +
+            "Diagnostic: ASPIRERADIUS050.");
+    }
+
+    /// <summary>
+    /// Populates a secret-store construct's <c>data</c> for the inline (Radius-created) mode: each
+    /// key's value is a reference to a valueless <c>@secure()</c> Bicep <c>param</c> (reusing
+    /// <see cref="GetOrAddRecipeParameter"/>), with <c>encoding</c> emitted when the author set it
+    /// explicitly or the type default is not <c>raw</c>.
+    /// </summary>
+    private void PopulateInlineSecretStoreData(RadiusSecretStoreResource store, RadiusSecretStoreConstruct construct)
+    {
+        if (!store.Population.HasInlineData)
+        {
+            return;
+        }
+
+        foreach (var (key, binding) in store.Population.Data)
+        {
+            var parameter = GetOrAddRecipeParameter(binding.Parameter);
+            var entry = new RadiusSecretStoreDataEntryConstruct
+            {
+                Value = new IdentifierExpression(parameter.BicepIdentifier),
+            };
+
+            var encoding = binding.Encoding ?? store.Type.DefaultEncoding();
+            if (binding.Encoding is not null || !string.Equals(encoding, "raw", StringComparison.Ordinal))
+            {
+                entry.Encoding = encoding;
+            }
+
+            construct.Data[key] = entry;
+        }
+    }
+
+    /// <summary>
+    /// Populates a secret-store construct for the existing-secret / sealed-secret modes: emits
+    /// <c>properties.resource: '&lt;namespace&gt;/&lt;name&gt;'</c> and each declared key as an
+    /// empty object (<c>{}</c>). A bare <c>&lt;name&gt;</c> defaults its namespace to the owning
+    /// environment's <see cref="RadiusEnvironmentResource.Namespace"/>.
+    /// </summary>
+    private void PopulateSecretReferenceData(RadiusSecretStoreResource store, RadiusSecretStoreConstruct construct)
+    {
+        if (!store.Population.IsSecretReference)
+        {
+            return;
+        }
+
+        construct.ResourceReference = ResolveSecretResourceReference(store);
+
+        foreach (var key in store.Population.Keys)
+        {
+            // An entry with no assigned properties emits as an empty object, naming a key to
+            // expose from the referenced Secret without passing any value through Aspire.
+            construct.Data[key] = new RadiusSecretStoreDataEntryConstruct();
+        }
+    }
+
+    /// <summary>
+    /// Resolves a secret store's <c>resource</c> reference: a fully-qualified
+    /// <c>&lt;namespace&gt;/&lt;name&gt;</c> is emitted verbatim; a bare <c>&lt;name&gt;</c> is
+    /// prefixed with the owning environment's namespace.
+    /// </summary>
+    private string ResolveSecretResourceReference(RadiusSecretStoreResource store)
+    {
+        var population = store.Population;
+        var defaultNamespace = store.OwningEnvironment?.Namespace ?? _environment.Namespace;
+
+        // For a sealed store the underlying Secret's namespace/name come from the SealedSecret
+        // manifest metadata (also the deploy-time materialization poll target); a missing or
+        // unreadable manifest fails publish with ASPIRERADIUS044.
+        if (population.HasSealedSecret)
+        {
+            var manifestPath = store.Population.SealedManifestPath!;
+            var metadata = SealedSecretManifest.ReadMetadata(store.Name, manifestPath, defaultNamespace);
+            return $"{metadata.Namespace}/{metadata.Name}";
+        }
+
+        var reference = population.ResourceReference!;
+        if (reference.Contains('/', StringComparison.Ordinal))
+        {
+            return reference;
+        }
+
+        return $"{defaultNamespace}/{reference}";
+    }
 }

@@ -85,6 +85,18 @@ internal static partial class BicepPostProcessor
             infra.Add(resource);
         }
 
+        // Secret stores (Applications.Core/secretStores) reference the legacy chain emitted above.
+        foreach (var resource in options.SecretStores)
+        {
+            infra.Add(resource);
+        }
+
+        // Recipe-parameter / inline-secret backed secure `param` declarations.
+        foreach (var parameter in options.RecipeParameters.Values)
+        {
+            infra.Add(parameter);
+        }
+
         var plan = infra.Build(new ProvisioningBuildOptions());
         var compiled = plan.Compile();
 
@@ -346,6 +358,19 @@ internal static partial class BicepPostProcessor
         foreach (var parameter in options.Parameters)
         {
             Register(parameter.BicepIdentifier, "a secret/parameter env value");
+        }
+
+        // Secret stores and recipe-parameter/inline-secret `param`s share the same flat symbol
+        // namespace; register them so an identifier collision surfaces as a clear ASPIRERADIUS056
+        // error rather than an opaque duplicate-declaration Bicep compile failure.
+        foreach (var store in options.SecretStores)
+        {
+            Register(store.BicepIdentifier, "a secret store");
+        }
+
+        foreach (var parameter in options.RecipeParameters.Values)
+        {
+            Register(parameter.BicepIdentifier, "a recipe/secret parameter value");
         }
 
     }

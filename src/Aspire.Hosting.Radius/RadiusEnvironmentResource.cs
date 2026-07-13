@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIRERADIUS006 // Secret-store validation/apply steps are experimental; consumed internally by the integration.
 
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
@@ -54,6 +55,23 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             var publishStep = new RadiusBicepPublishingContext(this).CreatePipelineStep();
             var deployStep = new RadiusDeploymentPipelineStep(this).CreatePipelineStep();
 
+            // Fail-fast Radius secret-store validation gate: RequiredBy this environment's
+            // publish and deploy steps so type/mode/key/encoding/duplicate-name failures
+            // surface before any Bicep is emitted or kubectl/rad is contacted. It is a no-op
+            // when the model declares no secret stores, keeping the default path unchanged.
+            var validateSecretStoresStep = new PipelineStep
+            {
+                Name = $"validate-radius-secret-stores-{Name}",
+                Description = $"Validates Radius secret stores for {Name}.",
+                Action = Secrets.RadiusSecretStoreValidation.ValidateAsync,
+                RequiredBySteps = [publishStep.Name, deployStep.Name],
+            };
+
+            // Sealed-secrets apply/wait gate: applies each SealedSecret manifest to the workspace's
+            // cluster and waits for the underlying Secret to materialize before rad deploy. Scheduled
+            // after publish and RequiredBy deploy; a no-op when no sealed store is declared.
+            var applySealedSecretsStep = new SealedSecretApplyStep(this).CreatePipelineStep();
+
             // Only schedule the credential-register step when the environment
             // has cloud-provider configuration attached. Apps without the new
             // WithAzure/WithAws extensions emit byte-identical pipelines.
@@ -63,10 +81,10 @@ public sealed class RadiusEnvironmentResource : Resource, IComputeEnvironmentRes
             if (hasCloudProviders)
             {
                 var registerStep = new RadCredentialRegisterStep(this).CreatePipelineStep();
-                return [prepareStep, publishStep, registerStep, deployStep];
+                return [validateSecretStoresStep, prepareStep, publishStep, registerStep, applySealedSecretsStep, deployStep];
             }
 
-            return [prepareStep, publishStep, deployStep];
+            return [validateSecretStoresStep, prepareStep, publishStep, applySealedSecretsStep, deployStep];
         }));
     }
 

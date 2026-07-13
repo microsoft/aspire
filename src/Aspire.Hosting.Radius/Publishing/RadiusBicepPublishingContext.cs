@@ -97,6 +97,11 @@ internal sealed class RadiusBicepPublishingContext
             await File.WriteAllTextAsync(bicepPath, bicepContent, cancellationToken).ConfigureAwait(false);
             await File.WriteAllTextAsync(configPath, bicepConfigContent, cancellationToken).ConfigureAwait(false);
 
+            // Copy each committed (encrypted) SealedSecret manifest into a per-store subdirectory of
+            // the environment output so a cross-machine `deploy` can apply the self-contained
+            // artifact when the author's source manifest path is absent. No-op when none declared.
+            CopySealedSecretManifests(options, outputDir, logger);
+
             logger.LogInformation(
                 "Bicep generation complete for environment '{EnvironmentName}': {BicepPath}",
                 _environment.Name,
@@ -147,6 +152,23 @@ internal sealed class RadiusBicepPublishingContext
                 pack.BicepIdentifier,
                 recipeCount,
                 recipeTypes);
+        }
+    }
+
+    // Copies each committed (encrypted) SealedSecret manifest into a per-store subdirectory
+    // (sealed-secrets/<storeName>/<file>) next to the emitted app.bicep so the published artifact
+    // is self-contained and the deploy step can apply it. Namespacing by the unique store name means
+    // two stores whose source manifests share a file name (but live in different source directories)
+    // cannot silently overwrite each other. The manifest is already encrypted, so no plaintext is
+    // written. Missing manifests were already rejected at build time (ASPIRERADIUS044).
+    private static void CopySealedSecretManifests(RadiusInfrastructureOptions options, string outputDir, ILogger logger)
+    {
+        foreach (var (storeName, manifestPath) in options.SealedSecretManifestPaths)
+        {
+            var destination = Secrets.SealedSecretArtifact.ResolvePath(outputDir, storeName, manifestPath);
+            Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
+            File.Copy(manifestPath, destination, overwrite: true);
+            logger.LogInformation("Copied SealedSecret manifest to {Destination}", destination);
         }
     }
 
