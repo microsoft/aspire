@@ -715,11 +715,11 @@ safe-outputs:
                   fi
 
                   if [ "$CAUSE_TYPE" = "flaky-test" ]; then
-                    CLASSIFICATION_ANALYSIS=$(jq -r --arg test_name "$TEST_NAME" \
-                      '([.failed_tests[]? | select(.name == $test_name)][0] // {}) | .reason // empty' \
+                    CLASSIFICATION_ANALYSIS=$(jq -r --arg n "$TEST_NAME" --arg j "$JOB_NAME" \
+                      '(first(.failed_tests[]? | select(.name == $n and .job == $j)) // {}) | .reason // empty' \
                       "$ANALYSIS_FILE")
-                    FAILURE_DETAILS_HTML=$(jq -r --arg test_name "$TEST_NAME" '
-                      ([.failed_tests[]? | select(.name == $test_name)][0] // {}) |
+                    FAILURE_DETAILS_HTML=$(jq -r --arg n "$TEST_NAME" --arg j "$JOB_NAME" '
+                      (first(.failed_tests[]? | select(.name == $n and .job == $j)) // {}) |
                       [["Error", .error // ""], ["Stack Trace", .stack_trace // ""],
                        ["Standard Output", .standard_output // ""], ["Standard Error", .standard_error // ""]] |
                       map(select(.[1] != "") | .[0] + ":\n" + .[1]) | join("\n\n") | @html
