@@ -918,7 +918,9 @@ public static class AzureContainerAppExtensions
             // Delegate to the standard dynamic naming algorithm, only substituting the requirements that
             // Azure.Provisioning failed to declare. This keeps the generated name computed exactly like every
             // other Azure resource type (sanitized prefix + separator + uniqueString(resourceGroup().id) suffix,
-            // truncated to the max length) while preserving the digits and hyphens that distinguish environments.
+            // truncated to the max length) while preserving the digits that distinguish environments. Allowing
+            // hyphens keeps the standard prefix/suffix separator; hyphens from the resource name are normalized to
+            // underscores in the Bicep identifier and then removed from the sanitized prefix (e.g. "my-cae" -> "mycae").
             return base.ResolveName(options, resource, s_requirements);
         }
     }
