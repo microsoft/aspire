@@ -5,7 +5,6 @@ using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
@@ -167,9 +166,6 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<DashboardTelemetryService>();
         context.Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         context.Services.AddSingleton<ComponentTelemetryContextProvider>();
-        context.Services.AddSingleton<TestAIContextProvider>();
-        context.Services.AddSingleton<IAIContextProvider>(serviceProvider => serviceProvider.GetRequiredService<TestAIContextProvider>());
-        context.Services.AddSingleton<IAssistantDisplayContext>(serviceProvider => serviceProvider.GetRequiredService<TestAIContextProvider>());
         context.Services.AddSingleton<ITelemetryErrorRecorder, TestTelemetryErrorRecorder>();
         context.Services.AddSingleton<ThemeManager>(themeManager ?? new ThemeManager(new TestThemeResolver()));
         context.Services.AddSingleton<GlobalState>();

@@ -226,6 +226,10 @@ public static partial class AzureAppServiceEnvironmentExtensions
             {
                 // Add aspire dashboard website
                 var website = AzureAppServiceEnvironmentUtility.AddDashboard(infra, managedIdentityClientIdOutputValue, plan.Id);
+                if (resource.GetDelegatedSubnetId(infra) is { } delegatedSubnetId)
+                {
+                    website.VirtualNetworkSubnetId = delegatedSubnetId;
+                }
 
                 infra.Add(new ProvisioningOutput("AZURE_APP_SERVICE_DASHBOARD_URI", typeof(string))
                 {

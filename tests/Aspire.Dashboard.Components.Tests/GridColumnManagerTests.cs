@@ -79,7 +79,7 @@ public class GridColumnManagerTests : DashboardTestContext
     public void WidthFraction_MobileViewOnResize()
     {
         var dimensionManager = new DimensionManager();
-        dimensionManager.InvokeOnViewportSizeChanged(new ViewportSize(ViewportInformation.MobileCutoffPixelWidth + 1, 1000), isAISidebarOpen: false);
+        dimensionManager.InvokeOnViewportSizeChanged(new ViewportSize(ViewportInformation.MobileCutoffPixelWidth + 1, 1000));
         dimensionManager.InvokeOnViewportInformationChanged(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         Services.AddSingleton<DimensionManager>(dimensionManager);
 
@@ -105,11 +105,7 @@ public class GridColumnManagerTests : DashboardTestContext
         Assert.Equal("1fr 0.5fr 2fr 4fr", manager.GetGridTemplateColumns());
 
         // Increase browser size so grid view port is desktop size.
-        dimensionManager.InvokeOnViewportSizeChanged(new ViewportSize((ViewportInformation.MobileCutoffPixelWidth + 1) * 2, 1000), isAISidebarOpen: false);
+        dimensionManager.InvokeOnViewportSizeChanged(new ViewportSize((ViewportInformation.MobileCutoffPixelWidth + 1) * 2, 1000));
         Assert.Equal("1fr 1fr 3fr", manager.GetGridTemplateColumns());
-
-        // Open AI sidebar reduces grid view port to mobile size.
-        dimensionManager.InvokeOnViewportSizeChanged(new ViewportSize((ViewportInformation.MobileCutoffPixelWidth + 1) * 2, 1000), isAISidebarOpen: true);
-        Assert.Equal("1fr 0.5fr 2fr 4fr", manager.GetGridTemplateColumns());
     }
 }

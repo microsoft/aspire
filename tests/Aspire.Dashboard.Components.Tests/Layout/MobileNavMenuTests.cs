@@ -111,12 +111,10 @@ public class MobileNavMenuTests : DashboardTestContext
         return RenderComponent<MobileNavMenu>(builder =>
         {
             builder.Add(p => p.IsNavMenuOpen, isNavMenuOpen);
-            builder.Add(p => p.IsAIEnabled, false);
             builder.Add(p => p.CloseNavMenu, closeNavMenu ?? (() => { }));
             builder.Add(p => p.LaunchHelpAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchAIAgentsAsync, () => Task.CompletedTask);
             builder.Add(p => p.IsAgentHelpEnabled, false);
-            builder.Add(p => p.LaunchAIAssistantAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchNotificationsAsync, () => Task.CompletedTask);
             builder.Add(p => p.LaunchSettingsAsync, () => Task.CompletedTask);
         });

@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRECOMPUTE002
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREAZURE003
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
@@ -75,6 +76,118 @@ public class AzureAppServiceTests(ITestOutputHelper outputHelper)
 
         await Verify(manifest.ToString(), "json")
               .AppendContentAsFile(bicep, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAppServiceWithDelegatedSubnet()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+        builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet)
+            .WithDeploymentSlot("stage");
+
+        var project = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appServiceEnvironment = Assert.Single(model.Resources.OfType<AzureAppServiceEnvironmentResource>());
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+
+        var (_, virtualNetworkBicep) = await GetManifestWithBicep(vnet.Resource);
+        var (_, environmentBicep) = await GetManifestWithBicep(appServiceEnvironment);
+        var (_, websiteBicep) = await GetManifestWithBicep(website);
+
+        await Verify($"""
+            // Virtual network
+            {virtualNetworkBicep}
+
+            // App Service environment
+            {environmentBicep}
+
+            // App Service website
+            {websiteBicep}
+            """, "bicep");
+    }
+
+    [Fact]
+    public async Task AddAppServiceWithDelegatedSubnetWithoutDeploymentSlot()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+        builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet);
+
+        var project = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints();
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appServiceEnvironment = Assert.Single(model.Resources.OfType<AzureAppServiceEnvironmentResource>());
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+
+        var (_, virtualNetworkBicep) = await GetManifestWithBicep(vnet.Resource);
+        var (_, environmentBicep) = await GetManifestWithBicep(appServiceEnvironment);
+        var (_, websiteBicep) = await GetManifestWithBicep(website);
+
+        await Verify($"""
+            // Virtual network
+            {virtualNetworkBicep}
+
+            // App Service environment
+            {environmentBicep}
+
+            // App Service website
+            {websiteBicep}
+            """, "bicep");
+    }
+
+    [Fact]
+    public async Task PublishAsAzureAppServiceWebsite_CanOverrideEnvironmentDelegatedSubnet()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24");
+        builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet)
+            .WithDeploymentSlot("stage");
+
+        var project = builder.AddProject<Project>("api", launchProfileName: null)
+            .WithHttpEndpoint()
+            .WithExternalHttpEndpoints()
+            .PublishAsAzureAppServiceWebsite(
+                configure: (_, website) => website.VirtualNetworkSubnetId = new global::Azure.Core.ResourceIdentifier("/subscriptions/subscription/resourceGroups/resource-group/providers/Microsoft.Network/virtualNetworks/vnet/subnets/website-subnet"),
+                configureSlot: (_, slot) => slot.VirtualNetworkSubnetId = new global::Azure.Core.ResourceIdentifier("/subscriptions/subscription/resourceGroups/resource-group/providers/Microsoft.Network/virtualNetworks/vnet/subnets/slot-subnet"));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var target = project.Resource.GetDeploymentTargetAnnotation();
+        Assert.NotNull(target);
+        var website = Assert.IsAssignableFrom<AzureProvisioningResource>(target.DeploymentTarget);
+
+        var (_, bicep) = await GetManifestWithBicep(website);
+
+        await Verify(bicep, "bicep");
     }
 
     [Fact]
