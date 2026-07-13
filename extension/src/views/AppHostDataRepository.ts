@@ -152,6 +152,10 @@ interface DescribeStream {
 interface DescribeNoDataError {
     message: string | undefined;
     isCompatibilityError: boolean;
+    // True only when the error is a fact about the installed CLI (too old to `describe` at all),
+    // so it applies identically to every host and any working stream disproves it. Host-scoped
+    // errors (including host-scoped compatibility) leave this false.
+    isCliWideError: boolean;
 }
 
 interface PostStopRefreshTimer {
@@ -256,6 +260,7 @@ export class AppHostDataRepository {
     // ── Error state ──
     private _describeErrorMessage: string | undefined;
     private _describeErrorIsCompatibility = false;
+    private _describeErrorIsCliWide = false;
     private _psErrorMessage: string | undefined;
     private _errorMessage: string | undefined;
     private _errorIsCompatibility = false;
@@ -988,7 +993,7 @@ export class AppHostDataRepository {
                     if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath) || isDescribeUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
                         const noDataError = this._getDescribeNoDataError(code, stream.nonJsonLines, stream.stderr);
                         if (noDataError.message) {
-                            this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError });
+                            this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError, cliWide: noDataError.isCliWideError });
                         }
                     }
 
@@ -1064,10 +1069,9 @@ export class AppHostDataRepository {
                 stream.resources.set(resource.name, resource);
                 stream.receivedData = true;
                 // A working stream proves the CLI supports `describe`, so any peer clears a CLI-wide
-                // compatibility banner. A host-scoped banner belongs to the selected workspace AppHost, so
-                // only its own data clears that — a non-selected peer must not erase an error the selected
-                // host raised.
-                if (this._describeErrorIsCompatibility || isMatchingAppHostPath(stream.appHostPath, this._workspaceAppHostPath)) {
+                // banner. A host-scoped banner belongs to the selected workspace AppHost, so only its own
+                // data clears that — a non-selected peer must not erase an error the selected host raised.
+                if (this._describeErrorIsCliWide || isMatchingAppHostPath(stream.appHostPath, this._workspaceAppHostPath)) {
                     this._setDescribeError(undefined);
                 }
                 this._attachResourcesToAppHosts();
@@ -1090,6 +1094,7 @@ export class AppHostDataRepository {
             return {
                 message: aspireCliDescribeNotSupported(aspireDescribeMinimumVersion),
                 isCompatibilityError: true,
+                isCliWideError: true,
             };
         }
 
@@ -1097,6 +1102,7 @@ export class AppHostDataRepository {
             return {
                 message: errorFetchingAppHosts(stderr || `exit code ${exitCode ?? 1}`),
                 isCompatibilityError: false,
+                isCliWideError: false,
             };
         }
 
@@ -1107,12 +1113,14 @@ export class AppHostDataRepository {
             return {
                 message: appHostDescribeMayNotBeSupported(aspireDescribeMinimumVersion),
                 isCompatibilityError: true,
+                isCliWideError: false,
             };
         }
 
         return {
             message: undefined,
             isCompatibilityError: false,
+            isCliWideError: false,
         };
     }
 
@@ -1608,15 +1616,18 @@ export class AppHostDataRepository {
     private _clearErrors(): void {
         this._describeErrorMessage = undefined;
         this._describeErrorIsCompatibility = false;
+        this._describeErrorIsCliWide = false;
         this._psErrorMessage = undefined;
         this._updateErrorMessage();
     }
 
-    private _setDescribeError(message: string | undefined, options?: { compatibility?: boolean }): void {
+    private _setDescribeError(message: string | undefined, options?: { compatibility?: boolean; cliWide?: boolean }): void {
         const compatibility = message !== undefined && (options?.compatibility ?? false);
-        if (this._describeErrorMessage !== message || this._describeErrorIsCompatibility !== compatibility) {
+        const cliWide = message !== undefined && (options?.cliWide ?? false);
+        if (this._describeErrorMessage !== message || this._describeErrorIsCompatibility !== compatibility || this._describeErrorIsCliWide !== cliWide) {
             this._describeErrorMessage = message;
             this._describeErrorIsCompatibility = compatibility;
+            this._describeErrorIsCliWide = cliWide;
             this._updateErrorMessage();
         }
     }
