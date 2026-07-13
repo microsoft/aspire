@@ -1,9 +1,21 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Text.RegularExpressions;
+using System.Text;
+using YamlDotNet.Core;
+using YamlDotNet.Core.Events;
+using YamlDotNet.RepresentationModel;
 
 namespace Aspire.Hosting.Radius.Secrets;
+
+/// <summary>
+/// Reads a committed, encrypted Bitnami <c>SealedSecret</c> manifest and returns both the
+/// identifying metadata and the exact bytes that were validated.
+/// </summary>
+internal readonly record struct ValidatedManifest(
+    SealedSecretManifest.Metadata Metadata,
+    string SourcePath,
+    ReadOnlyMemory<byte> Content);
 
 /// <summary>
 /// Minimal reader for a committed, encrypted Bitnami <c>SealedSecret</c> manifest. Extracts
@@ -14,6 +26,8 @@ namespace Aspire.Hosting.Radius.Secrets;
 /// </summary>
 internal static class SealedSecretManifest
 {
+    private static readonly UTF8Encoding s_utf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
+
     /// <summary>
     /// The result of reading a <c>SealedSecret</c> manifest's identifying metadata.
     /// <see cref="NamespaceWasExplicit"/> distinguishes a namespace read from the manifest from
@@ -22,6 +36,44 @@ internal static class SealedSecretManifest
     /// different namespace makes <c>kubectl apply</c> fail).
     /// </summary>
     internal readonly record struct Metadata(string Namespace, string Name, bool NamespaceWasExplicit);
+
+    /// <summary>
+    /// Reads, validates, and returns the manifest metadata plus the exact validated bytes.
+    /// </summary>
+    /// <exception cref="InvalidOperationException">
+    /// The manifest is missing, unreadable, malformed, has no <c>metadata.name</c>, or is not a
+    /// single encrypted Bitnami <c>SealedSecret</c> document (<c>ASPIRERADIUS044</c>).
+    /// </exception>
+    internal static ValidatedManifest ReadValidated(
+        string storeName, string manifestPath, string defaultNamespace)
+    {
+        byte[] content;
+        try
+        {
+            content = File.ReadAllBytes(manifestPath);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        {
+            throw new InvalidOperationException(
+                $"Secret store '{storeName}' references a SealedSecret manifest at '{manifestPath}' that " +
+                $"is missing or unreadable ({ex.GetType().Name}). Diagnostic: ASPIRERADIUS044.", ex);
+        }
+
+        string text;
+        try
+        {
+            text = s_utf8.GetString(content);
+        }
+        catch (DecoderFallbackException ex)
+        {
+            throw new InvalidOperationException(
+                $"Secret store '{storeName}' references a SealedSecret manifest at '{manifestPath}' that " +
+                "is not valid UTF-8 YAML. Diagnostic: ASPIRERADIUS044.", ex);
+        }
+
+        var metadata = ReadMetadataFromYaml(storeName, manifestPath, defaultNamespace, text);
+        return new ValidatedManifest(metadata, manifestPath, content);
+    }
 
     /// <summary>
     /// Reads the <c>metadata.name</c> (required) and <c>metadata.namespace</c> (optional,
@@ -33,75 +85,52 @@ internal static class SealedSecretManifest
     /// encrypted Bitnami <c>SealedSecret</c> document (<c>ASPIRERADIUS044</c>).
     /// </exception>
     internal static Metadata ReadMetadata(
-        string storeName, string manifestPath, string defaultNamespace)
+        string storeName, string manifestPath, string defaultNamespace) =>
+        ReadValidated(storeName, manifestPath, defaultNamespace).Metadata;
+
+    private static Metadata ReadMetadataFromYaml(
+        string storeName, string manifestPath, string defaultNamespace, string text)
     {
-        string text;
         try
         {
-            text = File.ReadAllText(manifestPath);
+            ValidateStructure(storeName, manifestPath, text);
+
+            var stream = new YamlStream();
+            stream.Load(new StringReader(text));
+
+            if (stream.Documents.Count != 1)
+            {
+                throw CreateInvalidManifestException(
+                    storeName,
+                    manifestPath,
+                    "contains multiple YAML documents. Provide a single encrypted Bitnami SealedSecret document.");
+            }
+
+            if (stream.Documents[0].RootNode is not YamlMappingNode root)
+            {
+                throw CreateInvalidManifestException(
+                    storeName,
+                    manifestPath,
+                    "does not have a YAML mapping as its root. Provide a single encrypted Bitnami SealedSecret object.");
+            }
+
+            return ReadMetadataFromRoot(storeName, manifestPath, defaultNamespace, root);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        catch (YamlException ex)
         {
-            throw new InvalidOperationException(
-                $"Secret store '{storeName}' references a SealedSecret manifest at '{manifestPath}' that " +
-                $"is missing or unreadable ({ex.GetType().Name}). Diagnostic: ASPIRERADIUS044.", ex);
+            throw CreateInvalidManifestException(
+                storeName,
+                manifestPath,
+                "is malformed YAML or uses unsupported YAML features.",
+                ex);
         }
-
-        // Gate on the document kind BEFORE trusting any metadata. A plaintext `kind: Secret`
-        // manifest also carries a `metadata.name`, so without this check we would happily copy it
-        // into published artifacts and `kubectl apply` it — leaking cleartext credentials to disk
-        // and the cluster. Only an encrypted Bitnami SealedSecret is ever accepted.
-        ValidateIsSealedSecret(storeName, manifestPath, text);
-
-        // Restrict the metadata search to the top-level `metadata:` block so we never pick up a
-        // nested `spec.template.metadata.name/namespace` or an `encryptedData` key literally named
-        // `name`/`namespace`. kubeseal output looks like:
-        //   apiVersion: bitnami.com/v1alpha1
-        //   kind: SealedSecret
-        //   metadata:
-        //     name: db-creds
-        //     namespace: app
-        //   spec:
-        //     encryptedData:
-        //       username: AgB...
-        //     template:
-        //       metadata:
-        //         name: db-creds        <-- must NOT be matched
-        var metadataBlock = ExtractTopLevelMetadataBlock(text);
-
-        var name = MatchMetadataField(metadataBlock, "name");
-        if (string.IsNullOrWhiteSpace(name))
-        {
-            throw new InvalidOperationException(
-                $"Secret store '{storeName}' references a SealedSecret manifest at '{manifestPath}' that has " +
-                "no metadata.name. Diagnostic: ASPIRERADIUS044.");
-        }
-
-        var ns = MatchMetadataField(metadataBlock, "namespace");
-        var namespaceWasExplicit = !string.IsNullOrWhiteSpace(ns);
-        return new Metadata(namespaceWasExplicit ? ns! : defaultNamespace, name!, namespaceWasExplicit);
     }
 
-    // Rejects anything that is not a single encrypted Bitnami SealedSecret document. kubeseal output
-    // looks like:
-    //   apiVersion: bitnami.com/v1alpha1
-    //   kind: SealedSecret
-    //   metadata: { ... }
-    //   spec: { encryptedData: { ... } }
-    // We require kind == SealedSecret and apiVersion starting "bitnami.com/", and explicitly reject a
-    // plaintext `kind: Secret`. Multi-document (`---`-separated) and list-form (`kind: List`) manifests
-    // are rejected because the line-oriented reader below cannot unambiguously identify a single object.
-    private static void ValidateIsSealedSecret(string storeName, string manifestPath, string text)
+    private static Metadata ReadMetadataFromRoot(
+        string storeName, string manifestPath, string defaultNamespace, YamlMappingNode root)
     {
-        if (ContainsMultipleDocuments(text))
-        {
-            throw new InvalidOperationException(
-                $"Secret store '{storeName}' references a manifest at '{manifestPath}' that contains multiple YAML " +
-                "documents. Provide a single encrypted Bitnami SealedSecret document. Diagnostic: ASPIRERADIUS044.");
-        }
-
-        var kind = ReadTopLevelScalar(text, "kind");
-        var apiVersion = ReadTopLevelScalar(text, "apiVersion");
+        var kind = ReadScalar(root, "kind");
+        var apiVersion = ReadScalar(root, "apiVersion");
 
         if (string.Equals(kind, "Secret", StringComparison.Ordinal))
         {
@@ -119,78 +148,204 @@ internal static class SealedSecretManifest
                 "Bitnami SealedSecret (expected 'kind: SealedSecret' and an 'apiVersion' under 'bitnami.com/'; found " +
                 $"kind '{kind ?? "<none>"}', apiVersion '{apiVersion ?? "<none>"}'). Diagnostic: ASPIRERADIUS044.");
         }
+
+        if (TryGetNode(root, "data", out _) || TryGetNode(root, "stringData", out _))
+        {
+            throw CreateInvalidManifestException(
+                storeName,
+                manifestPath,
+                "contains top-level plaintext Kubernetes Secret fields ('data' or 'stringData'). Seal those values under spec.encryptedData instead.");
+        }
+
+        if (TryGetNode(root, "spec", out var specNode) &&
+            specNode is YamlMappingNode spec &&
+            TryGetNode(spec, "template", out var templateNode) &&
+            templateNode is YamlMappingNode template &&
+            (ContainsPlaintextTemplateData(template, "data") || ContainsPlaintextTemplateData(template, "stringData")))
+        {
+            throw CreateInvalidManifestException(
+                storeName,
+                manifestPath,
+                "contains plaintext-capable spec.template.data or spec.template.stringData values. Seal secret material under spec.encryptedData instead.");
+        }
+
+        if (!TryGetNode(root, "metadata", out var metadataNode) || metadataNode is not YamlMappingNode metadata)
+        {
+            throw CreateInvalidManifestException(
+                storeName,
+                manifestPath,
+                "has no metadata mapping with metadata.name.");
+        }
+
+        var name = ReadScalar(metadata, "name");
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            throw new InvalidOperationException(
+                $"Secret store '{storeName}' references a SealedSecret manifest at '{manifestPath}' that has " +
+                "no metadata.name. Diagnostic: ASPIRERADIUS044.");
+        }
+
+        var ns = ReadScalar(metadata, "namespace");
+        var namespaceWasExplicit = !string.IsNullOrWhiteSpace(ns);
+        return new Metadata(namespaceWasExplicit ? ns! : defaultNamespace, name!, namespaceWasExplicit);
     }
 
-    // True when the document has more than one YAML document, i.e. a document-start marker appears on
-    // its own line after non-blank/non-comment content. A leading marker (document start) is allowed.
-    // A YAML directives-end / document-start marker is `---` at line start followed by end-of-line or
-    // whitespace (so `---`, `--- `, and `--- # comment` all separate documents), but NOT `----` or
-    // `---foo` (which are ordinary scalars/keys, not markers).
-    private static bool ContainsMultipleDocuments(string text)
-    {
-        var lines = text.Replace("\r\n", "\n").Split('\n');
-        var sawContent = false;
-        foreach (var raw in lines)
+    private static bool ContainsPlaintextTemplateData(YamlMappingNode template, string field) =>
+        TryGetNode(template, field, out var value) && HasContent(value);
+
+    private static bool HasContent(YamlNode node) =>
+        node switch
         {
-            var trimmed = raw.Trim();
-            if (IsDocumentMarker(trimmed))
-            {
-                if (sawContent)
-                {
-                    return true;
-                }
+            YamlScalarNode scalar => !string.IsNullOrEmpty(scalar.Value),
+            YamlMappingNode mapping => mapping.Children.Count > 0,
+            YamlSequenceNode sequence => sequence.Children.Count > 0,
+            _ => true
+        };
 
-                continue;
-            }
+    private static string? ReadScalar(YamlMappingNode mapping, string key) =>
+        TryGetNode(mapping, key, out var node) && node is YamlScalarNode scalar ? scalar.Value : null;
 
-            if (trimmed.Length != 0 && !trimmed.StartsWith('#'))
+    private static bool TryGetNode(YamlMappingNode mapping, string key, out YamlNode node)
+    {
+        foreach (var (candidateKey, value) in mapping.Children)
+        {
+            if (candidateKey is YamlScalarNode scalarKey &&
+                string.Equals(scalarKey.Value, key, StringComparison.Ordinal))
             {
-                sawContent = true;
+                node = value;
+                return true;
             }
         }
 
+        node = null!;
         return false;
     }
 
-    // A YAML document-start marker is exactly `---` optionally followed by whitespace and/or a comment
-    // or inline content. `----` (four dashes) and `---x` (no separating whitespace) are not markers.
-    private static bool IsDocumentMarker(string trimmedLine) =>
-        trimmedLine == "---" ||
-        (trimmedLine.StartsWith("---", StringComparison.Ordinal) &&
-         trimmedLine.Length > 3 &&
-         char.IsWhiteSpace(trimmedLine[3]));
-
-    // Reads a top-level (column-0) scalar such as `kind:` or `apiVersion:` from the whole document,
-    // ignoring the same keys when they appear indented under `spec`/`template`/`metadata`.
-    private static string? ReadTopLevelScalar(string text, string field)
+    private static void ValidateStructure(string storeName, string manifestPath, string text)
     {
-        var match = Regex.Match(
-            text,
-            $@"(?m)^{Regex.Escape(field)}:\s*(?<v>[^\s#]+)\s*$");
-        return match.Success ? match.Groups["v"].Value.Trim('\'', '"') : null;
+        var parser = new Parser(new StringReader(text));
+        var stack = new Stack<MappingFrame>();
+
+        while (parser.MoveNext())
+        {
+            var yamlEvent = parser.Current;
+
+            if (yamlEvent is AnchorAlias)
+            {
+                throw CreateInvalidManifestException(
+                    storeName,
+                    manifestPath,
+                    "uses YAML aliases. Provide a self-contained SealedSecret manifest without anchors, aliases, or merge keys.");
+            }
+
+            if (yamlEvent is NodeEvent nodeEvent)
+            {
+                if (!nodeEvent.Anchor.IsEmpty || HasExplicitTag(nodeEvent))
+                {
+                    throw CreateInvalidManifestException(
+                        storeName,
+                        manifestPath,
+                        "uses YAML anchors or explicit tags. Provide a plain SealedSecret manifest without anchors, aliases, merge keys, or tags.");
+                }
+
+                RegisterNodeWithParent(storeName, manifestPath, yamlEvent, stack);
+            }
+
+            if (yamlEvent is MappingStart)
+            {
+                stack.Push(new MappingFrame());
+            }
+            else if (yamlEvent is MappingEnd)
+            {
+                stack.Pop();
+            }
+            else if (yamlEvent is SequenceStart)
+            {
+                stack.Push(MappingFrame.s_sequence);
+            }
+            else if (yamlEvent is SequenceEnd)
+            {
+                stack.Pop();
+            }
+        }
     }
 
-    // Returns the region of the document that belongs to the top-level `metadata:` mapping: the
-    // lines after a column-0 `metadata:` up to (but not including) the next column-0 key. Falls
-    // back to the whole document when no top-level `metadata:` is found (the field match below
-    // then simply finds nothing and callers report ASPIRERADIUS044).
-    private static string ExtractTopLevelMetadataBlock(string text)
+    private static bool HasExplicitTag(NodeEvent nodeEvent) =>
+        !nodeEvent.Tag.IsEmpty &&
+        !string.Equals(nodeEvent.Tag.Value, "!", StringComparison.Ordinal);
+
+    private static void RegisterNodeWithParent(
+        string storeName, string manifestPath, ParsingEvent yamlEvent, Stack<MappingFrame> stack)
     {
-        // Match `metadata:` anchored at column 0 (no leading whitespace), then capture every
-        // subsequent line that is either blank or indented (i.e. still inside the mapping),
-        // stopping at the next non-indented key such as `spec:`.
-        var match = Regex.Match(text, @"(?m)^metadata:[ \t]*\r?$(?<body>(\r?\n([ \t]+\S.*|[ \t]*))*)");
-        return match.Success ? match.Groups["body"].Value : text;
+        if (stack.Count == 0)
+        {
+            return;
+        }
+
+        var frame = stack.Peek();
+        if (frame.IsSequence)
+        {
+            return;
+        }
+
+        if (frame.ExpectsKey)
+        {
+            if (yamlEvent is not Scalar scalar)
+            {
+                throw CreateInvalidManifestException(
+                    storeName,
+                    manifestPath,
+                    "uses a non-scalar YAML mapping key. Provide a plain SealedSecret manifest with scalar keys.");
+            }
+
+            var key = scalar.Value;
+            if (string.Equals(key, "<<", StringComparison.Ordinal))
+            {
+                throw CreateInvalidManifestException(
+                    storeName,
+                    manifestPath,
+                    "uses YAML merge keys. Provide a self-contained SealedSecret manifest without anchors, aliases, or merge keys.");
+            }
+
+            // YAML allows duplicate keys, and some high-level readers keep the last value. For a
+            // security gate that rejects plaintext-capable fields, last-wins semantics would let a
+            // document advertise `kind: SealedSecret` first and then override it with `kind: Secret`.
+            if (!frame.Keys.Add(key))
+            {
+                throw CreateInvalidManifestException(
+                    storeName,
+                    manifestPath,
+                    $"contains a duplicate YAML mapping key '{key}'. Provide a single unambiguous SealedSecret manifest.");
+            }
+        }
+
+        frame.ExpectsKey = !frame.ExpectsKey;
     }
 
-    // Matches a metadata field (name/namespace) at any indentation within the already-narrowed
-    // top-level `metadata:` block. The block is small and machine-generated by kubeseal, so a
-    // line-oriented match is sufficient without taking a YAML dependency.
-    private static string? MatchMetadataField(string metadataBlock, string field)
+    private static InvalidOperationException CreateInvalidManifestException(
+        string storeName, string manifestPath, string reason, Exception? innerException = null) =>
+        new(
+            $"Secret store '{storeName}' references a SealedSecret manifest at '{manifestPath}' that {reason} " +
+            "Diagnostic: ASPIRERADIUS044.",
+            innerException);
+
+    private sealed class MappingFrame
     {
-        var match = Regex.Match(
-            metadataBlock,
-            $@"(?m)^\s+{Regex.Escape(field)}:\s*(?<v>[^\s#]+)\s*$");
-        return match.Success ? match.Groups["v"].Value.Trim('\'', '"') : null;
+        internal static readonly MappingFrame s_sequence = new(isSequence: true);
+
+        private MappingFrame(bool isSequence)
+        {
+            IsSequence = isSequence;
+        }
+
+        internal MappingFrame()
+        {
+        }
+
+        internal bool IsSequence { get; }
+
+        internal bool ExpectsKey { get; set; } = true;
+
+        internal HashSet<string> Keys { get; } = new(StringComparer.Ordinal);
     }
 }

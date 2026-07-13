@@ -1544,12 +1544,7 @@ internal sealed class RadiusInfrastructureBuilder
             }
 
             PopulateInlineSecretStoreData(store, construct);
-            PopulateSecretReferenceData(store, construct);
-
-            if (store.Population.HasSealedSecret)
-            {
-                options.SealedSecretManifestPaths[store.Name] = store.Population.SealedManifestPath!;
-            }
+            PopulateSecretReferenceData(store, construct, options);
 
             storeConstructs[store.Name] = construct;
             options.SecretStores.Add(construct);
@@ -1710,14 +1705,17 @@ internal sealed class RadiusInfrastructureBuilder
     /// empty object (<c>{}</c>). A bare <c>&lt;name&gt;</c> defaults its namespace to the owning
     /// environment's <see cref="RadiusEnvironmentResource.Namespace"/>.
     /// </summary>
-    private void PopulateSecretReferenceData(RadiusSecretStoreResource store, RadiusSecretStoreConstruct construct)
+    private void PopulateSecretReferenceData(
+        RadiusSecretStoreResource store,
+        RadiusSecretStoreConstruct construct,
+        RadiusInfrastructureOptions options)
     {
         if (!store.Population.IsSecretReference)
         {
             return;
         }
 
-        construct.ResourceReference = ResolveSecretResourceReference(store);
+        construct.ResourceReference = ResolveSecretResourceReference(store, options);
 
         foreach (var key in store.Population.Keys)
         {
@@ -1732,7 +1730,7 @@ internal sealed class RadiusInfrastructureBuilder
     /// <c>&lt;namespace&gt;/&lt;name&gt;</c> is emitted verbatim; a bare <c>&lt;name&gt;</c> is
     /// prefixed with the owning environment's namespace.
     /// </summary>
-    private string ResolveSecretResourceReference(RadiusSecretStoreResource store)
+    private string ResolveSecretResourceReference(RadiusSecretStoreResource store, RadiusInfrastructureOptions options)
     {
         var population = store.Population;
         var defaultNamespace = store.OwningEnvironment?.Namespace ?? _environment.Namespace;
@@ -1743,7 +1741,13 @@ internal sealed class RadiusInfrastructureBuilder
         if (population.HasSealedSecret)
         {
             var manifestPath = store.Population.SealedManifestPath!;
-            var metadata = SealedSecretManifest.ReadMetadata(store.Name, manifestPath, defaultNamespace);
+            if (!options.SealedSecretManifests.TryGetValue(store.Name, out var manifest))
+            {
+                manifest = SealedSecretManifest.ReadValidated(store.Name, manifestPath, defaultNamespace);
+                options.SealedSecretManifests[store.Name] = manifest;
+            }
+
+            var metadata = manifest.Metadata;
             return $"{metadata.Namespace}/{metadata.Name}";
         }
 
