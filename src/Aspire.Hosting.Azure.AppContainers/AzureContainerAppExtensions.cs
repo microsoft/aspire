@@ -467,7 +467,7 @@ public static class AzureContainerAppExtensions
     /// </remarks>
     private static void AddManagedEnvironmentNameFallbackResolver(AzureContainerAppEnvironmentResource appEnvResource)
     {
-        var options = appEnvResource.ProvisioningBuildOptions ??= new ProvisioningBuildOptions();
+        var options = appEnvResource.ProvisioningBuildOptions ?? new ProvisioningBuildOptions();
         var bicepIdentifier = appEnvResource.GetBicepIdentifier();
 
         if (options.InfrastructureResolvers.OfType<ManagedEnvironmentNameResolver>()
@@ -475,6 +475,13 @@ public static class AzureContainerAppExtensions
         {
             return;
         }
+
+        // AzureResourcePreparer assigns the same ProvisioningBuildOptions instance to every provisioning resource.
+        // Deployment builds independent resource templates concurrently, so mutating that shared resolver list here
+        // would race with other builds that are enumerating it. Copy the caller-configured options first, then add
+        // the managed-environment fallback only to this resource's build options.
+        options = CloneProvisioningBuildOptions(options);
+        appEnvResource.ProvisioningBuildOptions = options;
 
         var resolver = new ManagedEnvironmentNameResolver(bicepIdentifier);
 
@@ -499,6 +506,22 @@ public static class AzureContainerAppExtensions
         {
             options.InfrastructureResolvers.Add(resolver);
         }
+    }
+
+    private static ProvisioningBuildOptions CloneProvisioningBuildOptions(ProvisioningBuildOptions options)
+    {
+        var clone = new ProvisioningBuildOptions
+        {
+            Random = options.Random
+        };
+
+        clone.InfrastructureResolvers.Clear();
+        foreach (var infrastructureResolver in options.InfrastructureResolvers)
+        {
+            clone.InfrastructureResolvers.Add(infrastructureResolver);
+        }
+
+        return clone;
     }
 
     /// <summary>
