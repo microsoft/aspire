@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useId } from "react";
+import { Button } from "./Button";
 
 export interface ConfirmRequest {
   title: string;
@@ -15,12 +16,15 @@ export function ConfirmDialog({
   request: ConfirmRequest | null;
   onClose: () => void;
 }) {
+  const titleId = useId();
+
   useEffect(() => {
     if (!request) {
       return;
     }
-    const onKey = (e: KeyboardEvent): void => {
-      if (e.key === "Escape") {
+
+    const onKey = (event: KeyboardEvent): void => {
+      if (event.key === "Escape") {
         onClose();
       }
     };
@@ -39,20 +43,20 @@ export function ConfirmDialog({
 
   return (
     <div className="modal-overlay" onClick={onClose}>
-      <div className="modal" onClick={(e) => e.stopPropagation()} role="dialog" aria-modal="true">
-        <div className="modal__title">{request.title}</div>
+      <div
+        className="modal"
+        onClick={(event) => event.stopPropagation()}
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby={titleId}
+      >
+        <div className="modal__title" id={titleId}>{request.title}</div>
         <div className="modal__text">{request.message}</div>
         <div className="modal__actions">
-          <button className="btn" onClick={onClose}>
-            Cancel
-          </button>
-          <button
-            className={`btn ${request.danger ? "btn--danger" : "btn--primary"}`}
-            onClick={confirm}
-            autoFocus
-          >
+          <Button onClick={onClose}>Cancel</Button>
+          <Button variant={request.danger ? "danger" : "primary"} onClick={confirm} autoFocus>
             {request.confirmLabel ?? "Confirm"}
-          </button>
+          </Button>
         </div>
       </div>
     </div>

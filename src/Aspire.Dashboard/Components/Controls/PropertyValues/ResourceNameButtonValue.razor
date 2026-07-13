@@ -1,10 +1,10 @@
 ﻿@using Aspire.Dashboard.Utils
 
-@if (_resourceIconName is { } iconName)
+@if (_resource is not null)
 {
     @* Only display a button if dashboard client is enabled and a matching resource can be found. *@
     <button type="button" class="button-hyperlink" @onclick="OnClickAsync">
-        <DeckIcon Name="iconName" Size="16" Class="resource-icon" />
+        <ResourceIcon Resource="_resource" Size="16" Class="resource-icon" />
         <Highlighter HighlightedText="@HighlightText" Text="@Value" />
     </button>
 }

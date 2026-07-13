@@ -95,6 +95,7 @@
                                 var isSelected = entry.InternalId == PageViewModel.SelectedLogEntry?.LogEntry.InternalId;
                             }
                             <tr class="clickable @(isSelected ? "selected" : "") @GetSeverityRowClass(entry)" @key="entry.InternalId"
+                                data-log-entry-id="@entry.InternalId"
                                 @onclick="() => OnShowPropertiesAsync(entry, buttonId: null)">
                                 <td>
                                     <span class="deck-log-resource" title="@GetResourceName(entry.ResourceView)"

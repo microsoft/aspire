@@ -1,19 +1,27 @@
 import { useMemo, useState } from "react";
-import type { Resource, ResourceCommand } from "../api/types";
+import type { Resource } from "../api/types";
 import { PARAMETER_RESOURCE_TYPE, PARAMETER_VALUE_PROPERTY } from "../api/types";
-import { executeCommand } from "../api/deck";
+import { useCommandExecution } from "../components/useCommandExecution";
 import { useResources } from "../lib/useDeckEvent";
-import { DataTable, type Column } from "../components/DataTable";
-import { SearchBox } from "../components/SearchBox";
-import { StateDot } from "../components/StateDot";
 import { DetailsDrawer } from "../components/DetailsDrawer";
-import { ConfirmDialog, type ConfirmRequest } from "../components/ConfirmDialog";
-import { ParametersIcon, EyeIcon, EyeOffIcon } from "../components/Icons";
-
-interface Toast {
-  message: string;
-  tone: "success" | "error";
-}
+import {
+  ConfirmDialog,
+  DataTable,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
+  ParametersIcon,
+  SearchBox,
+  SecretValue,
+  StateDot,
+  type Column,
+  type ConfirmRequest,
+  type SortDirection,
+} from "../toolkit";
 
 // A parameter is "unset" when its value couldn't be resolved (no value in config,
 // user secrets, or a default). Aspire reports this as the ValueMissing state.
@@ -25,16 +33,31 @@ function valueProperty(resource: Resource) {
   return resource.properties.find((p) => p.name === PARAMETER_VALUE_PROPERTY) ?? null;
 }
 
-export function ParametersPage() {
+export interface ParametersRouteState {
+  resourceName: string | null;
+  query: string;
+  sortColumn: string;
+  sortDirection: SortDirection;
+}
+
+export function ParametersPage({
+  route,
+  onRouteChange,
+}: {
+  route: ParametersRouteState;
+  onRouteChange: (route: ParametersRouteState) => void;
+}) {
   const { resources, ready } = useResources();
-  const [query, setQuery] = useState("");
-  const [selectedName, setSelectedName] = useState<string | null>(null);
   const [confirm, setConfirm] = useState<ConfirmRequest | null>(null);
-  const [toast, setToast] = useState<Toast | null>(null);
+  const { runCommand, feedbackUi } = useCommandExecution();
+
+  const changeRoute = (change: Partial<ParametersRouteState>): void => {
+    onRouteChange({ ...route, ...change });
+  };
 
   const visible = useMemo(() => {
     const list = resources.filter((r) => !r.isHidden && r.resourceType === PARAMETER_RESOURCE_TYPE);
-    const trimmed = query.trim().toLowerCase();
+    const trimmed = route.query.trim().toLowerCase();
     const filtered = trimmed
       ? list.filter(
           (r) =>
@@ -42,31 +65,13 @@ export function ParametersPage() {
             (r.state ?? "").toLowerCase().includes(trimmed),
         )
       : list;
-    return [...filtered].sort((a, b) => a.displayName.localeCompare(b.displayName));
-  }, [resources, query]);
+    return filtered;
+  }, [resources, route.query]);
 
   const selected = useMemo(
-    () => resources.find((r) => r.name === selectedName) ?? null,
-    [resources, selectedName],
+    () => resources.find((r) => r.name === route.resourceName) ?? null,
+    [resources, route.resourceName],
   );
-
-  const runCommand = async (resource: Resource, command: ResourceCommand): Promise<void> => {
-    try {
-      const response = await executeCommand({
-        resourceName: resource.name,
-        resourceType: resource.resourceType,
-        commandName: command.name,
-      });
-      if (response.kind === "succeeded") {
-        setToast({ message: `${command.displayName} succeeded`, tone: "success" });
-      } else {
-        setToast({ message: response.message ?? `${command.displayName} ${response.kind}`, tone: "error" });
-      }
-    } catch (err) {
-      setToast({ message: `Command failed: ${String(err)}`, tone: "error" });
-    }
-    window.setTimeout(() => setToast(null), 3200);
-  };
 
   const columns: Column<Resource>[] = [
     {
@@ -74,6 +79,7 @@ export function ParametersPage() {
       header: "State",
       width: "170px",
       render: (r) => <StateDot state={r.state} stateStyle={r.stateStyle} health={r.health} />,
+      compare: (left, right) => (left.state ?? "").localeCompare(right.state ?? ""),
     },
     {
       key: "name",
@@ -85,6 +91,7 @@ export function ParametersPage() {
           {r.displayName}
         </span>
       ),
+      compare: (left, right) => left.displayName.localeCompare(right.displayName),
     },
     {
       key: "value",
@@ -94,35 +101,37 @@ export function ParametersPage() {
   ];
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Parameters</div>
-          <div className="page__subtitle">
+    <Page aria-labelledby="deck-page-parameters-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-parameters-title">Parameters</PageTitle>
+          <PageSubtitle>
             {ready ? `${visible.length} parameter${visible.length === 1 ? "" : "s"}` : "Loading…"}
-          </div>
-        </div>
-      </div>
+          </PageSubtitle>
+        </PageHeading>
+      </PageHeader>
 
-      <div className="page__toolbar">
-        <SearchBox value={query} onChange={setQuery} placeholder="Filter by name or state…" />
-      </div>
+      <PageToolbar ariaLabel="Parameter tools">
+        <SearchBox value={route.query} onChange={(query) => changeRoute({ query })} placeholder="Filter by name or state…" />
+      </PageToolbar>
 
-      <div className="page__body">
+      <PageBody>
         <DataTable
           columns={columns}
           rows={visible}
           rowKey={(r) => r.name}
-          onRowClick={(r) => setSelectedName(r.name)}
-          isSelected={(r) => r.name === selectedName}
+          onRowClick={(r) => changeRoute({ resourceName: r.name })}
+          isSelected={(r) => r.name === route.resourceName}
+          sort={{ columnKey: route.sortColumn, direction: route.sortDirection }}
+          onSortChange={(sort) => changeRoute({ sortColumn: sort.columnKey, sortDirection: sort.direction })}
           emptyMessage={ready ? "This AppHost has no parameters." : "Connecting to resource service…"}
         />
-      </div>
+      </PageBody>
 
       {selected ? (
         <DetailsDrawer
           resource={selected}
-          onClose={() => setSelectedName(null)}
+          onClose={() => changeRoute({ resourceName: null })}
           onExecuteCommand={(resource, command) => void runCommand(resource, command)}
           requestConfirm={setConfirm}
         />
@@ -130,20 +139,14 @@ export function ParametersPage() {
 
       <ConfirmDialog request={confirm} onClose={() => setConfirm(null)} />
 
-      {toast ? (
-        <div className="toast">
-          <span className={`state__dot ${toast.tone === "success" ? "success" : "error"}`} />
-          {toast.message}
-        </div>
-      ) : null}
-    </div>
+      {feedbackUi}
+    </Page>
   );
 }
 
 // Shows the parameter's value: a muted "Not set" when unresolved, the value when
 // plain, or a reveal-on-demand mask when the parameter is a secret.
 function ValueCell({ resource }: { resource: Resource }) {
-  const [revealed, setRevealed] = useState(false);
   const prop = valueProperty(resource);
 
   if (isUnset(resource) || !prop || prop.value.length === 0) {
@@ -156,19 +159,7 @@ function ValueCell({ resource }: { resource: Resource }) {
 
   return (
     <span className="param-value param-value--secret">
-      <span className="secret">{revealed ? prop.value : "•".repeat(Math.min(prop.value.length, 24))}</span>
-      <button
-        type="button"
-        className="icon-btn"
-        title={revealed ? "Hide value" : "Reveal value"}
-        aria-label={revealed ? "Hide value" : "Reveal value"}
-        onClick={(e) => {
-          e.stopPropagation();
-          setRevealed((v) => !v);
-        }}
-      >
-        {revealed ? <EyeOffIcon size={14} /> : <EyeIcon size={14} />}
-      </button>
+      <SecretValue value={prop.value} />
     </span>
   );
 }

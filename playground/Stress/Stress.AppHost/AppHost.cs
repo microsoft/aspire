@@ -49,6 +49,13 @@ for (var i = 0; i < 2; i++)
     }
 }
 
+// Hidden logical resources keep the default playground concise while allowing the dashboard's
+// view-options path to exercise a genuinely large inventory without starting extra processes.
+for (var i = 0; i < 250; i++)
+{
+    builder.AddTestResource($"virtualized-{i:0000}").WithHidden();
+}
+
 builder.AddParameter("testParameterResource", () => "value", secret: true);
 var apiKeyParam = builder.AddParameter("api-key", secret: true);
 var connectionStringParam = builder.AddParameter("db-connection-string");
@@ -66,7 +73,7 @@ var serviceBuilder = builder.AddProject<Projects.Stress_ApiService>("stress-apis
     .WithEnvironment("OTEL_DOTNET_EXPERIMENTAL_METRICS_EMIT_OVERFLOW_ATTRIBUTE", "true")
     .WithEnvironment("API_KEY", apiKeyParam)
     .WithEnvironment("DB_CONNECTION_STRING", connectionStringParam)
-    .WithIconName("Server");
+    .WithIconName("Server", IconVariant.Regular);
 serviceBuilder
     .WithEnvironment("HOST", $"{serviceBuilder.GetEndpoint("http").Property(EndpointProperty.Host)}")
     .WithEnvironment("PORT", $"{serviceBuilder.GetEndpoint("http").Property(EndpointProperty.Port)}")
@@ -93,7 +100,10 @@ builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 // dashboard launch experience, Refer to Directory.Build.props for the path to
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
-builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard)
+    .WithEnvironment("ASPIRE_DASHBOARD_AI_DISABLED", "false")
+    .WithEnvironment("ASPIRE_AI_OPENAI_OPT_IN", "true")
+    .WithEnvironment("ASPIRE_AI_APIKEY", "stress-playground-key");
 #endif
 
 builder.AddExecutable("executableWithSingleArg", "dotnet", Environment.CurrentDirectory, "--version");

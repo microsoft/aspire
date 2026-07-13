@@ -280,6 +280,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // Data from the server.
         builder.Services.TryAddSingleton<IDashboardClient, DashboardClient>();
+        builder.Services.TryAddSingleton<DeckInteractionService>();
 
         builder.Services.TryAddSingleton<INotificationService, NotificationService>();
         builder.Services.TryAddSingleton(TimeProvider.System);
@@ -348,6 +349,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
         builder.Services.AddScoped<ResourceMenuBuilder>();
+        builder.Services.AddSingleton<IconResolver>();
         builder.Services.AddScoped<StructuredLogMenuBuilder>();
         builder.Services.AddScoped<SpanMenuBuilder>();
         builder.Services.AddScoped<TraceMenuBuilder>();
@@ -532,6 +534,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         _app.MapGrpcService<OtlpGrpcLogsService>();
 
         _app.MapTelemetryApi(dashboardOptions);
+        _app.MapDeckApi();
         _app.MapDashboardApi(dashboardOptions);
         _app.MapDashboardHealthChecks();
     }

@@ -168,6 +168,16 @@ impl MetricStore {
         }
         self.series.values().find(|s| s.name == name)
     }
+
+    pub fn clear(&mut self, resource: Option<&str>) {
+        if let Some(resource) = resource {
+            self.series
+                .retain(|_, series| series.resource_name.as_deref() != Some(resource));
+        } else {
+            self.series.clear();
+        }
+        self.point_count = self.series.values().map(MetricSeries::point_count).sum();
+    }
 }
 
 /// Query response: uPlot-friendly aligned arrays. Non-histogram metrics fill

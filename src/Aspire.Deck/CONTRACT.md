@@ -1,11 +1,30 @@
-# Aspire Deck — Tauri ⇄ UI contract
+# Aspire Deck backend ⇄ UI contract
 
-This is the single source of truth for the boundary between the Rust (Tauri) backend and the
-web UI. Both sides MUST agree on these names and shapes.
+This is the single source of truth for the boundary between the Rust (Tauri) or dashboard HTTP
+backend and the web UI. Both sides MUST agree on these names and shapes.
 
 The backend exposes **commands** (request/response via `@tauri-apps/api/core` `invoke`) and
 **events** (push via `@tauri-apps/api/event` `listen`). All payloads are JSON; field names are
 `camelCase`.
+
+The ASP.NET Core dashboard backend exposes the same config, resource, command, and interaction
+shapes through `GET /api/deck/config`, `GET /api/deck/resources`,
+`POST /api/deck/commands/execute`, `GET /api/deck/interactions`, and
+`POST /api/deck/interactions/respond`. Structured logs are streamed through
+`GET /api/deck/telemetry/logs?follow=true` and cleared through
+`DELETE /api/deck/telemetry/logs` with an optional `resource` query parameter. Traces use
+the equivalent `GET`/`DELETE /api/deck/telemetry/spans` routes.
+
+Metric summaries are read from `GET /api/deck/telemetry/metrics`. A selected time series is
+read from `GET /api/deck/telemetry/metrics/series` with `resource`, `meter`, `instrument`,
+`windowSeconds`, and `maxPoints` query parameters. Selected dimensions are repeated as
+`dimension.{name}=s:{value}`; `n:` selects an unset value and `x:` selects no values. Responses
+include the aggregate chart, known dimension values, individual dimension series, exemplars,
+and the OpenTelemetry dimension-overflow flag. Metrics are cleared through
+`DELETE /api/deck/telemetry/metrics` with an optional `resource` query parameter.
+Command execution accepts
+`{ resourceName, commandName }` and returns `CommandResponse`. The interactions GET returns the
+current `InteractionInfo[]`; the response POST accepts `{ interactionId, action, values }`.
 
 ## Commands (invoke)
 
@@ -18,6 +37,9 @@ The backend exposes **commands** (request/response via `@tauri-apps/api/core` `i
 | `deck_execute_command` | `{ resourceName, resourceType, commandName }` | `CommandResponse` |
 | `deck_list_canvases` | – | `CanvasManifest[]` |
 | `deck_get_telemetry_summary` | – | `TelemetrySummary` |
+| `deck_clear_structured_logs` | `{ resourceName?: string \| null }` | `void` |
+| `deck_clear_traces` | `{ resourceName?: string \| null }` | `void` |
+| `deck_clear_metrics` | `{ resourceName?: string \| null }` | `void` |
 | `deck_get_metric_series` | `{ name, resourceName?, windowSeconds?, maxPoints? }` | `MetricSeriesResponse \| null` (downsampled time series) |
 | `deck_list_apphosts` | – | `AppHostInfo[]` (attached AppHosts) |
 | `deck_select_apphost` | `{ id: string }` | `void` (switches the active AppHost) |
@@ -59,6 +81,7 @@ export interface DeckConfig {
   otlpGrpcUrl: string | null;
   otlpHttpUrl: string | null;
   version: string;
+  runtimeVersion?: string; // ASP.NET runtime description when hosted by the dashboard
 }
 
 export type ConnectionTarget = "resourceService" | "otlpGrpc" | "otlpHttp";
@@ -93,6 +116,7 @@ export interface ResourceCommand {
   displayDescription: string | null;
   confirmationMessage: string | null;
   iconName: string | null;
+  iconVariant: "regular" | "filled";
   isHighlighted: boolean;
   state: "enabled" | "disabled" | "hidden";
 }
@@ -118,6 +142,7 @@ export interface Resource {
   isHidden: boolean;
   supportsDetailedTelemetry: boolean;
   iconName: string | null;
+  iconVariant: "regular" | "filled" | null;
 }
 
 export interface ResourcesEvent {
@@ -136,30 +161,78 @@ export interface CommandResponse {
 }
 
 // --- Telemetry (OTLP) ---
+export interface TelemetryAttribute {
+  key: string;
+  value: string;
+}
 export interface LogRecordSummary {
-  timeUnixNano: string;        // string to avoid JS bigint loss
+  timeUnixNano: string;        // event time, or observed time when event time is 0
+  observedTimeUnixNano: string; // string to avoid JS bigint loss
   severity: string | null;     // e.g. "Information", "Error"
   severityNumber: number;
   body: string;
   resourceName: string | null; // from service.name attribute
   traceId: string | null;
   spanId: string | null;
+  parentId: string | null;
+  eventName: string | null;
+  originalFormat: string | null;
+  scopeName: string;           // "unknown" when the scope name is empty
+  scopeVersion: string | null;
+  attributes: TelemetryAttribute[];
+  scopeAttributes: TelemetryAttribute[];
+  resourceAttributes: TelemetryAttribute[];
+  flags: number;
+  droppedAttributesCount: number;
+  scopeDroppedAttributesCount: number;
+  resourceDroppedAttributesCount: number;
 }
 export interface SpanSummary {
   traceId: string;
   spanId: string;
+  traceState: string | null;
   parentSpanId: string | null;
+  flags: number;
   name: string;
   kind: string;
   resourceName: string | null;
   startUnixNano: string;
   durationNanos: string;
   statusCode: string | null;   // "Unset" | "Ok" | "Error"
+  statusMessage: string | null;
+  scopeName: string;
+  scopeVersion: string | null;
+  attributes: TelemetryAttribute[];
+  scopeAttributes: TelemetryAttribute[];
+  resourceAttributes: TelemetryAttribute[];
+  droppedAttributesCount: number;
+  scopeDroppedAttributesCount: number;
+  resourceDroppedAttributesCount: number;
+  events: SpanEventSummary[];
+  droppedEventsCount: number;
+  links: SpanLinkSummary[];
+  droppedLinksCount: number;
+}
+export interface SpanEventSummary {
+  timeUnixNano: string;
+  name: string;
+  attributes: TelemetryAttribute[];
+  droppedAttributesCount: number;
+}
+export interface SpanLinkSummary {
+  traceId: string;
+  spanId: string;
+  traceState: string | null;
+  attributes: TelemetryAttribute[];
+  droppedAttributesCount: number;
+  flags: number;
 }
 export type MetricKind = "gauge" | "counter" | "upDownCounter" | "histogram";
 
 export interface MetricSummary {
   name: string;
+  description?: string | null;
+  meterName?: string | null;
   unit: string | null;
   resourceName: string | null;
   kind: MetricKind;             // how the series should be charted
@@ -172,6 +245,7 @@ export interface MetricSummary {
 // histograms fill `p50`/`p90`/`p99`. All y-arrays align with `timestampsMs`.
 export interface MetricSeriesResponse {
   name: string;
+  meterName?: string | null;
   resourceName: string | null;
   unit: string | null;
   kind: MetricKind;
@@ -180,6 +254,24 @@ export interface MetricSeriesResponse {
   p50?: number[];
   p90?: number[];
   p99?: number[];
+  dimensionFilters?: Array<{ name: string; values: Array<string | null> }>;
+  dimensions?: Array<{
+    attributes: Array<{ key: string; value: string }>;
+    timestampsMs: number[];
+    values?: number[];
+    p50?: number[];
+    p90?: number[];
+    p99?: number[];
+  }>;
+  exemplars?: Array<{
+    timestampMs: number;
+    value: number;
+    traceId: string;
+    spanId: string;
+    attributes: Array<{ key: string; value: string }>;
+  }>;
+  hasOverflow?: boolean;
+  showCount?: boolean;
 }
 export interface TelemetrySummary {
   logCount: number;

@@ -267,7 +267,8 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             // Navigate to remove ?logEntryId=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
             await Task.Delay(200, _cts.Token);
 
-            NavigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
+            var normalizedUrl = GetUrlFromSerializableViewModel(ConvertViewModelToSerializable());
+            NavigationManager.NavigateTo(normalizedUrl, new NavigationOptions { ReplaceHistoryEntry = true });
         }
     }
 

@@ -1,11 +1,33 @@
-import { useMemo, useState } from "react";
-import type { SpanSummary } from "../api/types";
-import { useTelemetry } from "../lib/useDeckEvent";
-import { formatDurationNanos } from "../lib/format";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { clearTraces } from "../api/deck";
+import type { SpanSummary, TelemetrySummary } from "../api/types";
+import { useResources, useTelemetry } from "../lib/useDeckEvent";
+import { dateFromUnixNano, formatDurationNanos, formatTimeWithMillis } from "../lib/format";
 import { buildResourceColorMap, colorFor } from "../lib/colors";
-import { SearchBox } from "../components/SearchBox";
+import { matchesTelemetryFilters, parseTelemetryFilters, spanFilterFields, telemetryFieldNames, type TelemetryFilter } from "../lib/telemetryFilters";
+import { SPAN_TYPE_OPTIONS, spanMatchesType, type SpanTypeId } from "../lib/spans";
 import { SpanDetailDrawer } from "../components/SpanDetailDrawer";
-import { ChevronIcon } from "../components/Icons";
+import { formatSpanJson } from "../components/SpanActions";
+import { GenAIVisualizerDialog, hasGenAIAttributes } from "../components/GenAIVisualizerDialog";
+import {
+  Button,
+  ChevronIcon,
+  CommandMenu,
+  NamedIcon,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
+  SearchBox,
+  Select,
+  StructuredFilterControl,
+  Switch,
+  TextViewerDialog,
+  type TextViewerRequest,
+} from "../toolkit";
 
 // Minimum-duration filter options. Spans shorter than the selected threshold are
 // hidden so insignificant work doesn't clutter the waterfall.
@@ -23,6 +45,13 @@ const MIN_DURATION_OPTIONS: { label: string; ms: number }[] = [
 ];
 
 const NANOS_PER_MS = 1_000_000n;
+const TRACE_VIRTUALIZATION_THRESHOLD = 200;
+const TRACE_HEADER_HEIGHT = 42;
+const TRACE_AXIS_HEIGHT = 24;
+const TRACE_ROW_HEIGHT = 30;
+const TRACE_BORDER_HEIGHT = 2;
+const TRACE_GAP = 12;
+const TRACE_OVERSCAN_PX = 800;
 
 interface WaterfallRow {
   span: SpanSummary;
@@ -42,12 +71,57 @@ interface TraceGroup {
   hasError: boolean;
 }
 
+export interface TraceFilterRouteState {
+  resourceName: string | null;
+  type: SpanTypeId;
+  query: string;
+  minDurationMs: number;
+  paused: boolean;
+  filters: TelemetryFilter[];
+}
+
 function toBig(value: string): bigint {
   try {
     return BigInt(value);
   } catch {
     return 0n;
   }
+}
+
+function formatTraceJson(trace: TraceGroup): string {
+  return JSON.stringify({
+    traceId: trace.traceId,
+    startTimeUnixNano: trace.startNano.toString(),
+    durationNanos: trace.durationNano.toString(),
+    hasError: trace.hasError,
+    spans: trace.rows.map((row) => JSON.parse(formatSpanJson(row.span)) as unknown),
+  }, null, 2);
+}
+
+function spanTreeKey(traceId: string, spanId: string): string {
+  return `${traceId}:${spanId}`;
+}
+
+function collapsibleSpanKeys(traces: TraceGroup[]): Set<string> {
+  const keys = new Set<string>();
+  for (const trace of traces) {
+    for (const row of trace.rows) {
+      if (row.span.parentSpanId) keys.add(spanTreeKey(trace.traceId, row.span.parentSpanId));
+    }
+  }
+  return keys;
+}
+
+function visibleTraceRows(trace: TraceGroup, collapsedSpanKeys: Set<string>): WaterfallRow[] {
+  const byId = new Map(trace.rows.map((row) => [row.span.spanId, row.span]));
+  return trace.rows.filter((row) => {
+    let parentId = row.span.parentSpanId;
+    while (parentId) {
+      if (collapsedSpanKeys.has(spanTreeKey(trace.traceId, parentId))) return false;
+      parentId = byId.get(parentId)?.parentSpanId ?? null;
+    }
+    return true;
+  });
 }
 
 // Percentage of `part` within `total`, clamped to [0, 100] with two-decimal precision.
@@ -162,24 +236,112 @@ function buildTraceGroups(spans: SpanSummary[]): TraceGroup[] {
   return result;
 }
 
-export function TracesPage() {
+export function TracesPage({
+  routeTraceId,
+  routeSpanId,
+  routeResourceName,
+  routeType,
+  routeQuery,
+  routeMinDurationMs,
+  routePaused,
+  routeFilters,
+  onFilterRouteChange,
+  onSelectSpan,
+  onNavigateToSpan,
+  onNavigateToLogs,
+  onCloseDetails,
+  onExplainErrors,
+}: {
+  routeTraceId: string | null;
+  routeSpanId: string | null;
+  routeResourceName: string | null;
+  routeType: string;
+  routeQuery: string;
+  routeMinDurationMs: number;
+  routePaused: boolean;
+  routeFilters: string | null;
+  onFilterRouteChange: (state: TraceFilterRouteState) => void;
+  onSelectSpan: (span: SpanSummary) => void;
+  onNavigateToSpan: (traceId: string, spanId: string | null) => void;
+  onNavigateToLogs: (spanId: string) => void;
+  onCloseDetails: () => void;
+  onExplainErrors?: (prompt: string) => void;
+}) {
   const telemetry = useTelemetry();
-  const [query, setQuery] = useState("");
-  const [minMs, setMinMs] = useState(0);
+  const { resources } = useResources();
+  const [pausedSnapshot, setPausedSnapshot] = useState<TelemetrySummary | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
+  const [genAISpan, setGenAISpan] = useState<SpanSummary | null>(null);
   const [collapsed, setCollapsed] = useState<Set<string>>(new Set());
-  const [selected, setSelected] = useState<SpanSummary | null>(null);
+  const [collapsedSpanKeys, setCollapsedSpanKeys] = useState<Set<string>>(new Set());
+  const [textViewer, setTextViewer] = useState<TextViewerRequest | null>(null);
+  const traceScrollRef = useRef<HTMLDivElement | null>(null);
+  const [traceScrollTop, setTraceScrollTop] = useState(0);
+  const [traceViewportHeight, setTraceViewportHeight] = useState(0);
 
-  const spans = telemetry?.recentSpans ?? [];
+  const displayedTelemetry = pausedSnapshot ?? telemetry;
+  const spans = displayedTelemetry?.recentSpans ?? [];
+  const filters = useMemo(() => parseTelemetryFilters(routeFilters), [routeFilters]);
+  const filterFields = useMemo(() => telemetryFieldNames(spans.map(spanFilterFields), ["Name", "Kind", "Resource", "TraceId", "SpanId", "Status", "Duration", "ScopeName"]), [spans]);
+  const selectedType = SPAN_TYPE_OPTIONS.some((option) => option.value === routeType)
+    ? routeType as SpanTypeId
+    : "all";
+  const selectedMinDurationMs = MIN_DURATION_OPTIONS.some((option) => option.ms === routeMinDurationMs)
+    ? routeMinDurationMs
+    : 0;
+  const resourceOptions = useMemo(() => {
+    const resourceTypes = new Map(resources.map((resource) => [resource.name, resource.resourceType]));
+    const names = [...new Set(spans.flatMap((span) => span.resourceName === null ? [] : [span.resourceName]))]
+      .sort((left, right) => left.localeCompare(right));
+    return [
+      { value: "all", label: "All resources", group: "All" },
+      ...names.map((name) => ({
+        value: name,
+        label: name,
+        group: resourceTypes.get(name) ?? "Telemetry",
+      })),
+    ];
+  }, [resources, spans]);
+  const selectedResource = routeResourceName !== null && resourceOptions.some((option) => option.value === routeResourceName)
+    ? routeResourceName
+    : "all";
+
+  useEffect(() => {
+    if (!routePaused) {
+      setPausedSnapshot(null);
+    } else if (pausedSnapshot === null && telemetry !== null) {
+      setPausedSnapshot(telemetry);
+    }
+  }, [pausedSnapshot, routePaused, telemetry]);
+  const selected = useMemo(() => {
+    if (routeTraceId === null) {
+      return null;
+    }
+
+    const traceSpans = spans.filter((span) => span.traceId === routeTraceId);
+    return (routeSpanId === null
+      ? undefined
+      : traceSpans.find((span) => span.spanId === routeSpanId))
+      ?? traceSpans[0]
+      ?? null;
+  }, [routeSpanId, routeTraceId, spans]);
 
   const colorMap = useMemo(() => buildResourceColorMap(spans.map((s) => s.resourceName)), [spans]);
 
   const traces = useMemo(() => {
-    const minNano = BigInt(minMs) * NANOS_PER_MS;
-    const significant = minNano > 0n ? spans.filter((s) => toBig(s.durationNanos) >= minNano) : spans;
+    const minNano = BigInt(selectedMinDurationMs) * NANOS_PER_MS;
+    const significant = (minNano > 0n ? spans.filter((s) => toBig(s.durationNanos) >= minNano) : spans)
+      .filter((span) => matchesTelemetryFilters(spanFilterFields(span), filters));
 
-    const groups = buildTraceGroups(significant);
+    const groups = buildTraceGroups(significant).filter((trace) => {
+      if (selectedResource !== "all" && !trace.rows.some((row) => row.span.resourceName === selectedResource)) {
+        return false;
+      }
+      return selectedType === "all" || trace.rows.some((row) => spanMatchesType(row.span, selectedType));
+    });
 
-    const trimmed = query.trim().toLowerCase();
+    const trimmed = (routeTraceId ?? routeQuery).trim().toLowerCase();
     if (!trimmed) {
       return groups;
     }
@@ -193,7 +355,22 @@ export function TracesPage() {
             (r.span.resourceName ?? "").toLowerCase().includes(trimmed),
         ),
     );
-  }, [spans, query, minMs]);
+  }, [filters, routeQuery, routeTraceId, selectedMinDurationMs, selectedResource, selectedType, spans]);
+  const failedTraces = useMemo(() => traces.filter((trace) => trace.hasError), [traces]);
+
+  const explainErrors = (): void => {
+    if (onExplainErrors === undefined || failedTraces.length === 0) return;
+    const context = failedTraces.slice(0, 20).map((trace) => ({
+      traceId: trace.traceId,
+      operation: trace.rootName,
+      resourceName: trace.resourceName,
+      durationNanos: trace.durationNano.toString(),
+      failedSpans: trace.rows
+        .filter((row) => row.span.statusCode === "Error")
+        .map((row) => ({ spanId: row.span.spanId, name: row.span.name, resourceName: row.span.resourceName, statusMessage: row.span.statusMessage })),
+    }));
+    onExplainErrors(`Explain the failures in the currently filtered traces. Identify likely causes and concrete next steps.\n\n${JSON.stringify(context, null, 2)}`);
+  };
 
   const toggle = (traceId: string) => {
     setCollapsed((prev) => {
@@ -208,59 +385,242 @@ export function TracesPage() {
   };
 
   const traceCount = useMemo(() => new Set(spans.map((s) => s.traceId)).size, [spans]);
+  const spanParents = useMemo(() => collapsibleSpanKeys(traces), [traces]);
+  const toggleSpan = (traceId: string, spanId: string): void => {
+    const key = spanTreeKey(traceId, spanId);
+    setCollapsedSpanKeys((current) => {
+      const next = new Set(current);
+      if (next.has(key)) next.delete(key); else next.add(key);
+      return next;
+    });
+  };
+  const virtualizeTraces = traces.length > TRACE_VIRTUALIZATION_THRESHOLD;
+  useLayoutEffect(() => {
+    const scroller = traceScrollRef.current;
+    if (!virtualizeTraces || scroller === null) return;
+    const update = () => setTraceViewportHeight(scroller.clientHeight);
+    update();
+    const observer = new ResizeObserver(update);
+    observer.observe(scroller);
+    return () => observer.disconnect();
+  }, [virtualizeTraces]);
+  const traceLayout = useMemo(() => {
+    let top = 0;
+    const items = traces.map((trace) => {
+      const rows = visibleTraceRows(trace, collapsedSpanKeys);
+      const height = collapsed.has(trace.traceId)
+        ? TRACE_HEADER_HEIGHT + TRACE_BORDER_HEIGHT
+        : TRACE_HEADER_HEIGHT + TRACE_AXIS_HEIGHT + rows.length * TRACE_ROW_HEIGHT + TRACE_BORDER_HEIGHT;
+      const item = { trace, rows, top, height };
+      top += height + TRACE_GAP;
+      return item;
+    });
+    return { items, totalHeight: Math.max(0, top - TRACE_GAP) };
+  }, [collapsed, collapsedSpanKeys, traces]);
+  const visibleTraceLayout = useMemo(() => {
+    if (!virtualizeTraces) return traceLayout.items;
+    const start = Math.max(0, traceScrollTop - TRACE_OVERSCAN_PX);
+    const end = traceScrollTop + (traceViewportHeight || 600) + TRACE_OVERSCAN_PX;
+    return traceLayout.items.filter((item) => item.top + item.height >= start && item.top <= end);
+  }, [traceLayout.items, traceScrollTop, traceViewportHeight, virtualizeTraces]);
+
+  const updateRoute = (changes: Partial<TraceFilterRouteState>): void => {
+    onFilterRouteChange({
+      resourceName: selectedResource === "all" ? null : selectedResource,
+      type: selectedType,
+      query: routeQuery,
+      minDurationMs: selectedMinDurationMs,
+      paused: routePaused,
+      filters,
+      ...changes,
+    });
+  };
+
+  const clearTraceData = async (resourceName: string | null): Promise<void> => {
+    setClearing(true);
+    setClearStatus(null);
+    try {
+      await clearTraces(resourceName);
+      setPausedSnapshot(null);
+      updateRoute({ resourceName: null, paused: false });
+      setClearStatus({
+        message: resourceName === null ? "Cleared all traces." : `Cleared traces for ${resourceName}.`,
+        error: false,
+      });
+    } catch (error) {
+      setClearStatus({ message: `Could not clear traces: ${String(error)}`, error: true });
+    } finally {
+      setClearing(false);
+    }
+  };
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Traces</div>
-          <div className="page__subtitle">
-            {telemetry ? `${traceCount} traces \u00b7 ${telemetry.spanCount.toLocaleString()} spans` : "Loading\u2026"}
-          </div>
-        </div>
-      </div>
+    <Page aria-labelledby="deck-page-traces-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-traces-title">Traces</PageTitle>
+          <PageSubtitle>
+            {displayedTelemetry
+              ? `${traceCount} traces \u00b7 ${displayedTelemetry.spanCount.toLocaleString()} spans${routePaused ? " \u00b7 paused" : ""}`
+              : "Loading\u2026"}
+          </PageSubtitle>
+        </PageHeading>
+      </PageHeader>
 
-      <div className="page__toolbar">
-        <SearchBox value={query} onChange={setQuery} placeholder="Filter traces…" />
-        <label className="min-duration">
-          <span className="min-duration__label">Min duration</span>
-          <select className="select" value={minMs} onChange={(e) => setMinMs(Number(e.target.value))}>
-            {MIN_DURATION_OPTIONS.map((opt) => (
-              <option key={opt.ms} value={opt.ms}>
-                {opt.label}
-              </option>
-            ))}
-          </select>
-        </label>
-      </div>
+      <PageToolbar ariaLabel="Trace tools">
+        <SearchBox
+          value={routeTraceId ?? routeQuery}
+          onChange={(value) => {
+            if (routeTraceId !== null) {
+              onCloseDetails();
+            }
+            updateRoute({ query: value });
+          }}
+          placeholder="Filter traces…"
+        />
+        <Select
+          ariaLabel="Resource"
+          options={resourceOptions}
+          value={selectedResource}
+          onValueChange={(value) => updateRoute({ resourceName: value === "all" ? null : value })}
+        />
+        <CommandMenu
+          ariaLabel="Span expansion"
+          triggerContent={null}
+          triggerIcon={<NamedIcon name="Branch" size={16} />}
+          entries={[
+            { id: "expand", label: "Expand all spans", disabled: collapsedSpanKeys.size === 0, onSelect: () => setCollapsedSpanKeys(new Set()) },
+            { id: "collapse", label: "Collapse all spans", disabled: spanParents.size === 0, onSelect: () => setCollapsedSpanKeys(new Set(spanParents)) },
+          ]}
+        />
+        <StructuredFilterControl filters={filters} fields={filterFields} onChange={(next) => updateRoute({ filters: next })} />
+        <Select
+          ariaLabel="Span type"
+          options={SPAN_TYPE_OPTIONS}
+          value={selectedType}
+          onValueChange={(value) => updateRoute({ type: value as SpanTypeId })}
+        />
+        <Select
+          ariaLabel="Min duration"
+          options={MIN_DURATION_OPTIONS.map((option) => ({ value: option.ms.toString(), label: option.label }))}
+          value={selectedMinDurationMs.toString()}
+          onValueChange={(value) => updateRoute({ minDurationMs: Number(value) })}
+        />
+        <Button disabled={onExplainErrors === undefined || failedTraces.length === 0} onClick={explainErrors}>
+          <NamedIcon name="BrainCircuit" size={16} /> Explain errors
+        </Button>
+        <div className="page__header-spacer" />
+        <Switch
+          label="Pause incoming data"
+          checked={routePaused}
+          disabled={telemetry === null}
+          onCheckedChange={(checked) => {
+            setPausedSnapshot(checked ? telemetry : null);
+            updateRoute({ paused: checked });
+          }}
+        />
+        <CommandMenu
+          ariaLabel="Clear traces"
+          triggerContent="Clear"
+          triggerIcon={<NamedIcon name="Delete" size={16} />}
+          placement="below-start"
+          entries={[
+            {
+              id: "clear-all",
+              label: "Clear all resources",
+              icon: <NamedIcon name="BoxMultiple" size={16} />,
+              tone: "danger",
+              disabled: clearing || displayedTelemetry === null || displayedTelemetry.spanCount === 0,
+              onSelect: () => void clearTraceData(null),
+            },
+            {
+              id: "clear-resource",
+              label: selectedResource === "all" ? "Clear selected resource" : `Clear ${selectedResource}`,
+              icon: <NamedIcon name="CheckmarkCircle" size={16} />,
+              tone: "danger",
+              disabled: clearing || selectedResource === "all",
+              onSelect: () => void clearTraceData(selectedResource),
+            },
+          ]}
+        />
+      </PageToolbar>
 
-      <div className="page__body wf">
+      <PageBody
+        ref={traceScrollRef}
+        className={`wf ${virtualizeTraces ? "wf--virtual" : ""}`}
+        data-virtualized={virtualizeTraces ? "true" : undefined}
+        aria-setsize={traces.length}
+        onScroll={virtualizeTraces ? (event) => setTraceScrollTop(event.currentTarget.scrollTop) : undefined}
+      >
         {traces.length === 0 ? (
           <div className="wf__empty">
             {telemetry ? "No traces match your filter." : "Waiting for telemetry\u2026"}
           </div>
         ) : (
-          traces.map((trace) => (
+          virtualizeTraces ? (
+            <div className="wf__virtual-space" style={{ height: traceLayout.totalHeight }}>
+              {visibleTraceLayout.map(({ trace, rows, top }) => (
+                <div key={trace.traceId} className="wf__virtual-item" style={{ top }}>
+                  <TraceBlock
+                    trace={trace}
+                    colorMap={colorMap}
+                    collapsed={collapsed.has(trace.traceId)}
+                    onToggle={() => toggle(trace.traceId)}
+                    onSelect={onSelectSpan}
+                    onViewLogs={onNavigateToLogs}
+                    onViewJson={(trace) => setTextViewer({ title: `${trace.traceId}.json`, value: formatTraceJson(trace), format: "json" })}
+                    rows={rows}
+                    collapsedSpanKeys={collapsedSpanKeys}
+                    onToggleSpan={toggleSpan}
+                  />
+                </div>
+              ))}
+            </div>
+          ) : traces.map((trace) => (
             <TraceBlock
               key={trace.traceId}
               trace={trace}
               colorMap={colorMap}
               collapsed={collapsed.has(trace.traceId)}
               onToggle={() => toggle(trace.traceId)}
-              onSelect={setSelected}
+              onSelect={onSelectSpan}
+              onViewLogs={onNavigateToLogs}
+              onViewJson={(trace) => setTextViewer({ title: `${trace.traceId}.json`, value: formatTraceJson(trace), format: "json" })}
+              rows={visibleTraceRows(trace, collapsedSpanKeys)}
+              collapsedSpanKeys={collapsedSpanKeys}
+              onToggleSpan={toggleSpan}
             />
           ))
         )}
-      </div>
+      </PageBody>
+
+      {clearStatus ? (
+        <div className="toast" role="status" aria-live="polite">
+          <span className={`state__dot ${clearStatus.error ? "error" : "success"}`} />
+          {clearStatus.message}
+        </div>
+      ) : null}
 
       {selected ? (
         <SpanDetailDrawer
           span={selected}
+          allSpans={spans}
           color={colorFor(colorMap, selected.resourceName)}
-          onClose={() => setSelected(null)}
+          onClose={onCloseDetails}
+          onNavigateToSpan={onNavigateToSpan}
+          onViewLogs={() => onNavigateToLogs(selected.spanId)}
+          onViewJson={() => setTextViewer({
+            title: `${selected.name}.json`,
+            value: formatSpanJson(selected),
+            format: "json",
+          })}
+          onViewGenAI={hasGenAIAttributes(selected.attributes) ? () => setGenAISpan(selected) : undefined}
         />
       ) : null}
-    </div>
+
+      <TextViewerDialog request={textViewer} onClose={() => setTextViewer(null)} />
+      <GenAIVisualizerDialog source={genAISpan} onClose={() => setGenAISpan(null)} />
+    </Page>
   );
 }
 
@@ -270,12 +630,22 @@ function TraceBlock({
   collapsed,
   onToggle,
   onSelect,
+  onViewLogs,
+  onViewJson,
+  rows,
+  collapsedSpanKeys,
+  onToggleSpan,
 }: {
   trace: TraceGroup;
   colorMap: Map<string, string>;
   collapsed: boolean;
   onToggle: () => void;
   onSelect: (span: SpanSummary) => void;
+  onViewLogs: (spanId: string) => void;
+  onViewJson: (trace: TraceGroup) => void;
+  rows: WaterfallRow[];
+  collapsedSpanKeys: Set<string>;
+  onToggleSpan: (traceId: string, spanId: string) => void;
 }) {
   const headColor = colorFor(colorMap, trace.resourceName);
   // Axis ticks at 0/25/50/75/100% of the trace duration.
@@ -286,15 +656,31 @@ function TraceBlock({
 
   return (
     <div className={`wf__trace ${trace.hasError ? "wf__trace--error" : ""}`}>
-      <button className="wf__head" onClick={onToggle} aria-expanded={!collapsed}>
-        <ChevronIcon size={14} className={`wf__chevron ${collapsed ? "" : "wf__chevron--open"}`} />
-        <span className="wf__swatch" style={{ background: headColor }} />
-        <span className="wf__head-name">{trace.rootName}</span>
-        {trace.resourceName ? <span className="wf__head-res">{trace.resourceName}</span> : null}
-        <span className="wf__head-spacer" />
-        <span className="wf__head-meta">{trace.rows.length} spans</span>
-        <span className="wf__head-dur">{formatDurationNanos(String(trace.durationNano))}</span>
-      </button>
+      <div className="wf__head">
+        <button className="wf__head-toggle" onClick={onToggle} aria-expanded={!collapsed}>
+          <ChevronIcon size={14} className={`wf__chevron ${collapsed ? "" : "wf__chevron--open"}`} />
+          <span className="wf__swatch" style={{ background: headColor }} />
+          <span className="wf__head-name">{trace.rootName}</span>
+          {trace.resourceName ? <span className="wf__head-res">{trace.resourceName}</span> : null}
+          <span className="wf__head-spacer" />
+          <time className="wf__head-time" dateTime={dateFromUnixNano(trace.startNano.toString()).toISOString()}>
+            {formatTimeWithMillis(dateFromUnixNano(trace.startNano.toString()))}
+          </time>
+          <span className="wf__head-meta">{trace.rows.length} spans</span>
+          <span className="wf__head-dur">{formatDurationNanos(String(trace.durationNano))}</span>
+        </button>
+        <CommandMenu
+          ariaLabel="Trace actions"
+          triggerContent={null}
+          triggerIcon={<NamedIcon name="MoreHorizontal" size={16} />}
+          triggerSize="small"
+          entries={[
+            { id: "details", label: "View root span details", icon: <NamedIcon name="Info" size={16} />, onSelect: () => onSelect(trace.rows[0]!.span) },
+            { id: "logs", label: "View related structured logs", icon: <NamedIcon name="Logs" size={16} />, onSelect: () => onViewLogs(trace.rows[0]!.span.spanId) },
+            { id: "json", label: "View trace JSON", icon: <NamedIcon name="Braces" size={16} />, onSelect: () => onViewJson(trace) },
+          ]}
+        />
+      </div>
 
       {collapsed ? null : (
         <>
@@ -314,30 +700,37 @@ function TraceBlock({
           </div>
 
           <div className="wf__rows">
-            {trace.rows.map((row) => {
+            {rows.map((row) => {
               const color = colorFor(colorMap, row.span.resourceName);
               const isError = row.span.statusCode === "Error";
               const dur = formatDurationNanos(row.span.durationNanos);
+              const hasChildren = trace.rows.some((candidate) => candidate.span.parentSpanId === row.span.spanId);
+              const spanCollapsed = collapsedSpanKeys.has(spanTreeKey(trace.traceId, row.span.spanId));
               return (
                 <div
                   key={row.span.spanId}
                   className="wf__row wf__span"
                   onClick={() => onSelect(row.span)}
-                  role="button"
-                  tabIndex={0}
-                  onKeyDown={(e) => {
-                    if (e.key === "Enter" || e.key === " ") {
-                      e.preventDefault();
-                      onSelect(row.span);
-                    }
-                  }}
                 >
                   <div
                     className="wf__name"
                     style={{ paddingLeft: row.depth * 16 + 4, borderLeftColor: color }}
                   >
-                    {isError ? <span className="wf__error-dot" /> : null}
-                    <span className="cell-mono wf__name-text">{row.span.name}</span>
+                    {hasChildren ? (
+                      <button
+                        type="button"
+                        className="wf__span-toggle"
+                        aria-label={`${spanCollapsed ? "Expand" : "Collapse"} children of ${row.span.name}`}
+                        aria-expanded={!spanCollapsed}
+                        onClick={(event) => { event.stopPropagation(); onToggleSpan(trace.traceId, row.span.spanId); }}
+                      >
+                        <ChevronIcon size={12} className={`wf__chevron ${spanCollapsed ? "" : "wf__chevron--open"}`} />
+                      </button>
+                    ) : <span className="wf__span-toggle-placeholder" />}
+                    <button type="button" className="wf__span-open" onClick={(event) => { event.stopPropagation(); onSelect(row.span); }}>
+                      {isError ? <span className="wf__error-dot" /> : null}
+                      <span className="cell-mono wf__name-text">{row.span.name}</span>
+                    </button>
                   </div>
                   <div className="wf__track">
                     <span

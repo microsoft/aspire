@@ -293,7 +293,7 @@ internal static class CommandResources
             {
                 Description = "Minor dashboard/API stress command with many dynamically generated inputs to exercise argument metadata and payload handling.",
                 IconName = "TableLightning",
-                Visibility = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api,
+                Visibility = ResourceCommandVisibility.UI,
                 Arguments = CreateArgumentStressInputs(fieldCount: 20)
             });
         argumentCommands.WithCommand(
@@ -838,6 +838,7 @@ internal static class CommandResources
         serviceBuilder.WithHttpCommand("/increment-counter", "Increment counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/big-trace", "Big trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/trace-limit", "Trace limit", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/trace-virtualization", "Trace virtualization", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/log-message", "Log message", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/log-message-limit", "Log message limit", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/log-message-limit-large", "Log message limit large", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
@@ -845,6 +846,8 @@ internal static class CommandResources
         serviceBuilder.WithHttpCommand("/http-command-json-result", "HTTP command JSON result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Json, Description = "Run an HTTP command and flow the JSON response back to the caller" });
         serviceBuilder.WithHttpCommand("/http-command-text-result", "HTTP command text result", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning", ResultMode = HttpCommandResultMode.Text, Description = "Run an HTTP command and flow the plain-text response back to the caller" });
         serviceBuilder.WithHttpCommand("/multiple-traces-linked", "Multiple traces linked", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/trace-details", "Trace details", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/error-telemetry", "Error telemetry", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/overflow-counter", "Overflow counter", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/nested-trace-spans", "Out of order nested spans", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/exemplars-no-span", "Examplars with no span", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
@@ -1172,4 +1175,3 @@ internal static class CommandResources
 }
 
 #pragma warning restore ASPIREPROCESSCOMMAND001
-

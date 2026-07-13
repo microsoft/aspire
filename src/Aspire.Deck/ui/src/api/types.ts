@@ -7,6 +7,78 @@ export interface DeckConfig {
   otlpGrpcUrl: string | null;
   otlpHttpUrl: string | null;
   version: string;
+  runtimeVersion?: string;
+  isTelemetryEndpointUnsecured?: boolean;
+  isApiEndpointUnsecured?: boolean;
+  frontendAuthMode?: string;
+  user?: DeckUser | null;
+  culture?: string;
+  cultures?: DeckCulture[];
+  isAgentHelpEnabled?: boolean;
+  agentHelpMarkdown?: string | null;
+  isAssistantEnabled?: boolean;
+}
+
+export interface DeckUser {
+  name: string;
+  username: string | null;
+}
+
+export interface DeckCulture {
+  name: string;
+  displayName: string;
+}
+
+export interface AssistantModel {
+  family: string;
+  displayName: string;
+}
+
+export interface AssistantInfo {
+  models: AssistantModel[];
+}
+
+export interface AssistantMessage {
+  role: "user" | "assistant" | "system";
+  content: string;
+}
+
+export interface AssistantChatRequest {
+  messages: AssistantMessage[];
+  model: string | null;
+}
+
+export interface AssistantEvent {
+  type: "start" | "content" | "complete" | "error";
+  content: string | null;
+  message: string | null;
+}
+
+export type ManageDataType = "ResourceDetails" | "ConsoleLogs" | "StructuredLogs" | "Traces" | "Metrics" | "Resource";
+
+export interface ManageDataResource {
+  name: string;
+  displayName: string;
+  dataTypes: ManageDataType[];
+}
+
+export interface ManageDataResponse {
+  resources: ManageDataResource[];
+  isImportEnabled: boolean;
+}
+
+export interface ManageDataSelection {
+  resourceName: string;
+  dataTypes: ManageDataType[];
+}
+
+export interface ManageDataRequest {
+  resources: ManageDataSelection[];
+}
+
+export interface ManageDataExport {
+  fileName: string;
+  blob: Blob;
 }
 
 export type ConnectionTarget = "resourceService" | "otlpGrpc" | "otlpHttp";
@@ -49,6 +121,7 @@ export interface HealthReport {
 }
 
 export type ResourceCommandState = "enabled" | "disabled" | "hidden";
+export type IconVariant = "regular" | "filled";
 
 export interface ResourceCommand {
   name: string;
@@ -56,6 +129,7 @@ export interface ResourceCommand {
   displayDescription: string | null;
   confirmationMessage: string | null;
   iconName: string | null;
+  iconVariant: IconVariant;
   isHighlighted: boolean;
   state: ResourceCommandState;
 }
@@ -93,6 +167,9 @@ export interface Resource {
   isHidden: boolean;
   supportsDetailedTelemetry: boolean;
   iconName: string | null;
+  iconVariant: IconVariant | null;
+  hasTerminal?: boolean;
+  terminalReplicaIndex?: number | null;
 }
 
 export interface ResourcesEvent {
@@ -123,34 +200,95 @@ export type CommandResponseKind =
 export interface CommandResponse {
   kind: CommandResponseKind;
   message: string | null;
+  result: CommandResult | null;
+}
+
+export type CommandResultFormat = "text" | "json" | "markdown";
+
+export interface CommandResult {
+  value: string;
+  format: CommandResultFormat;
+  displayImmediately: boolean;
+}
+
+export interface TelemetryAttribute {
+  key: string;
+  value: string;
 }
 
 export interface LogRecordSummary {
   timeUnixNano: string;
+  observedTimeUnixNano: string;
   severity: string | null;
   severityNumber: number;
   body: string;
   resourceName: string | null;
   traceId: string | null;
   spanId: string | null;
+  parentId: string | null;
+  eventName: string | null;
+  originalFormat: string | null;
+  scopeName: string;
+  scopeVersion: string | null;
+  attributes: TelemetryAttribute[];
+  scopeAttributes: TelemetryAttribute[];
+  resourceAttributes: TelemetryAttribute[];
+  flags: number;
+  droppedAttributesCount: number;
+  scopeDroppedAttributesCount: number;
+  resourceDroppedAttributesCount: number;
+}
+
+export interface SpanEventSummary {
+  timeUnixNano: string;
+  name: string;
+  attributes: TelemetryAttribute[];
+  droppedAttributesCount: number;
+}
+
+export interface SpanLinkSummary {
+  traceId: string;
+  spanId: string;
+  traceState: string | null;
+  attributes: TelemetryAttribute[];
+  droppedAttributesCount: number;
+  flags: number;
 }
 
 export interface SpanSummary {
   traceId: string;
   spanId: string;
+  traceState: string | null;
   parentSpanId: string | null;
+  flags: number;
   name: string;
   kind: string;
   resourceName: string | null;
   startUnixNano: string;
   durationNanos: string;
   statusCode: string | null;
+  statusMessage: string | null;
+  scopeName: string;
+  scopeVersion: string | null;
+  attributes: TelemetryAttribute[];
+  scopeAttributes: TelemetryAttribute[];
+  resourceAttributes: TelemetryAttribute[];
+  droppedAttributesCount: number;
+  scopeDroppedAttributesCount: number;
+  resourceDroppedAttributesCount: number;
+  events: SpanEventSummary[];
+  droppedEventsCount: number;
+  links: SpanLinkSummary[];
+  droppedLinksCount: number;
 }
 
 export type MetricKind = "gauge" | "counter" | "upDownCounter" | "histogram";
+export type HistogramMode = "percentiles" | "count" | "sum" | "buckets";
 
 export interface MetricSummary {
   name: string;
+  description?: string | null;
+  meterName?: string | null;
   unit: string | null;
   resourceName: string | null;
   kind: MetricKind;
@@ -162,6 +300,7 @@ export interface MetricSummary {
 // histograms fill `p50`/`p90`/`p99`. All y-arrays align with `timestampsMs`.
 export interface MetricSeriesResponse {
   name: string;
+  meterName?: string | null;
   resourceName: string | null;
   unit: string | null;
   kind: MetricKind;
@@ -170,14 +309,61 @@ export interface MetricSeriesResponse {
   p50?: number[];
   p90?: number[];
   p99?: number[];
+  sum?: number[];
+  bucketBounds?: number[];
+  buckets?: MetricBucketSeries[];
+  dimensionFilters?: MetricDimensionFilter[];
+  dimensions?: MetricDimensionSeries[];
+  exemplars?: MetricExemplar[];
+  hasOverflow?: boolean;
+  showCount?: boolean;
+  histogramMode?: HistogramMode | null;
+}
+
+export interface MetricBucketSeries {
+  upperBound: number | null;
+  values: number[];
+}
+
+export interface MetricAttribute {
+  key: string;
+  value: string;
+}
+
+export interface MetricDimensionFilter {
+  name: string;
+  values: Array<string | null>;
+}
+
+export interface MetricDimensionSeries {
+  attributes: MetricAttribute[];
+  timestampsMs: number[];
+  values?: number[];
+  p50?: number[];
+  p90?: number[];
+  p99?: number[];
+  sum?: number[];
+  buckets?: MetricBucketSeries[];
+}
+
+export interface MetricExemplar {
+  timestampMs: number;
+  value: number;
+  traceId: string;
+  spanId: string;
+  attributes: MetricAttribute[];
 }
 
 // Options for a metric series query.
 export interface MetricSeriesQuery {
   name: string;
+  meterName?: string | null;
   resourceName?: string | null;
   windowSeconds?: number;
   maxPoints?: number;
+  dimensions?: Record<string, Array<string | null>>;
+  showCount?: boolean;
+  histogramMode?: HistogramMode;
 }
 
 export interface TelemetrySummary {
@@ -228,6 +414,7 @@ export interface InteractionInputInfo {
   value: string;
   validationErrors: string[];
   description: string;
+  enableDescriptionMarkdown: boolean;
   maxLength: number;
   allowCustomChoice: boolean;
   disabled: boolean;

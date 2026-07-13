@@ -7,7 +7,9 @@ using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
+using Aspire.Dashboard.Components.Controls.Chart;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Otlp.Serialization;
 
@@ -241,6 +243,322 @@ internal sealed class TelemetryApiService(
             TotalCount = totalCount,
             ReturnedCount = logs.Count
         };
+    }
+
+    /// <summary>
+    /// Clears structured logs for all resources or for the selected resource group.
+    /// Returns false when a requested resource is unknown.
+    /// </summary>
+    public bool ClearLogs(string? resourceName)
+    {
+        if (string.IsNullOrWhiteSpace(resourceName))
+        {
+            telemetryRepository.ClearStructuredLogs();
+            return true;
+        }
+
+        var resources = telemetryRepository.GetResources();
+        if (resources.Any(resource => string.Equals(resource.ResourceName, resourceName, StringComparison.Ordinal)))
+        {
+            // A resource name can represent multiple service instances. Clearing with a null
+            // instance ID preserves the grouped-resource behavior of the existing dashboard.
+            telemetryRepository.ClearStructuredLogs(new ResourceKey(resourceName, InstanceId: null));
+            return true;
+        }
+
+        if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey) || resourceKey is null)
+        {
+            return false;
+        }
+
+        telemetryRepository.ClearStructuredLogs(resourceKey);
+        return true;
+    }
+
+    /// <summary>
+    /// Clears traces for all resources or for the selected resource group.
+    /// Returns false when a requested resource is unknown.
+    /// </summary>
+    public bool ClearTraces(string? resourceName)
+    {
+        if (string.IsNullOrWhiteSpace(resourceName))
+        {
+            telemetryRepository.ClearTraces();
+            return true;
+        }
+
+        var resources = telemetryRepository.GetResources();
+        if (resources.Any(resource => string.Equals(resource.ResourceName, resourceName, StringComparison.Ordinal)))
+        {
+            telemetryRepository.ClearTraces(new ResourceKey(resourceName, InstanceId: null));
+            return true;
+        }
+
+        if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey) || resourceKey is null)
+        {
+            return false;
+        }
+
+        telemetryRepository.ClearTraces(resourceKey);
+        return true;
+    }
+
+    /// <summary>
+    /// Clears metrics for all resources or for the selected resource group.
+    /// Returns false when a requested resource is unknown.
+    /// </summary>
+    public bool ClearMetrics(string? resourceName)
+    {
+        if (string.IsNullOrWhiteSpace(resourceName))
+        {
+            telemetryRepository.ClearMetrics();
+            return true;
+        }
+
+        var resources = telemetryRepository.GetResources();
+        if (resources.Any(resource => string.Equals(resource.ResourceName, resourceName, StringComparison.Ordinal)))
+        {
+            telemetryRepository.ClearMetrics(new ResourceKey(resourceName, InstanceId: null));
+            return true;
+        }
+
+        if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey) || resourceKey is null)
+        {
+            return false;
+        }
+
+        telemetryRepository.ClearMetrics(resourceKey);
+        return true;
+    }
+
+    public DeckMetricSummary[] GetMetricSummaries()
+    {
+        return telemetryRepository.GetResources()
+            .Select(resource => resource.ResourceName)
+            .Distinct(StringComparers.ResourceName)
+            .SelectMany(resourceName => telemetryRepository
+                .GetInstrumentsSummaries(new ResourceKey(resourceName, InstanceId: null))
+                .Select(summary => CreateMetricSummary(resourceName, summary)))
+            .OrderBy(summary => summary.ResourceName, StringComparer.Ordinal)
+            .ThenBy(summary => summary.MeterName, StringComparer.Ordinal)
+            .ThenBy(summary => summary.Name, StringComparer.Ordinal)
+            .ToArray();
+    }
+
+    public DeckMetricSeriesResponse? GetMetricSeries(
+        string resourceName,
+        string meterName,
+        string instrumentName,
+        int? windowSeconds,
+        int? maxPoints,
+        IReadOnlyDictionary<string, string?[]>? dimensionFilters = null,
+        bool? showCount = null,
+        string? histogramMode = null)
+    {
+        var duration = TimeSpan.FromSeconds(Math.Clamp(windowSeconds ?? 300, 1, 12 * 60 * 60));
+        var pointCount = Math.Clamp(maxPoints ?? 400, 2, 4_000);
+        var endTime = DateTime.UtcNow;
+        var instrument = telemetryRepository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey(resourceName, InstanceId: null),
+            MeterName = meterName,
+            InstrumentName = instrumentName,
+            StartTime = endTime - duration,
+            EndTime = endTime
+        });
+        if (instrument is null)
+        {
+            return null;
+        }
+
+        var matchedDimensions = dimensionFilters is { Count: > 0 }
+            ? instrument.Dimensions.Where(dimension => MatchesDimensionFilters(dimension, dimensionFilters)).ToList()
+            : instrument.Dimensions;
+        var calculator = new ChartDataCalculator(pointCount, duration);
+        var selectedHistogramMode = instrument.Summary.Type == OtlpInstrumentType.Histogram
+            ? histogramMode ?? (showCount == true ? "count" : "percentiles")
+            : null;
+        var histogramCount = selectedHistogramMode == "count";
+        var rawHistogram = selectedHistogramMode is "sum" or "buckets";
+        var chart = instrument.Summary.Type == OtlpInstrumentType.Histogram && !histogramCount && !rawHistogram
+            ? calculator.CalculateHistogramValues(matchedDimensions, endTime, static value => value, instrument.Summary.Unit)
+            : calculator.CalculateChartValues(matchedDimensions, endTime, static value => value, instrument.Summary.Unit);
+        var aggregate = CreateMetricSeries(chart, instrument.Summary.Type, histogramCount || rawHistogram);
+        var aggregateHistogram = rawHistogram
+            ? CreateHistogramAggregateSeries(calculator.CalculateHistogramAggregateValues(matchedDimensions, endTime, static value => value))
+            : default;
+        var dimensions = instrument.Dimensions
+            .Select(dimension =>
+            {
+                var dimensionChart = instrument.Summary.Type == OtlpInstrumentType.Histogram && !histogramCount && !rawHistogram
+                    ? calculator.CalculateHistogramValues([dimension], endTime, static value => value, instrument.Summary.Unit)
+                    : calculator.CalculateChartValues([dimension], endTime, static value => value, instrument.Summary.Unit);
+                var series = CreateMetricSeries(dimensionChart, instrument.Summary.Type, histogramCount || rawHistogram);
+                var histogramSeries = rawHistogram
+                    ? CreateHistogramAggregateSeries(calculator.CalculateHistogramAggregateValues([dimension], endTime, static value => value))
+                    : default;
+                return new DeckMetricDimensionSeries(
+                    Attributes: dimension.Attributes.Select(static attribute => new DeckMetricAttribute(attribute.Key, attribute.Value)).ToArray(),
+                    TimestampsMs: rawHistogram ? histogramSeries.Timestamps : series.Timestamps,
+                    Values: rawHistogram ? null : series.Values,
+                    P50: series.P50,
+                    P90: series.P90,
+                    P99: series.P99,
+                    Sum: selectedHistogramMode == "sum" ? histogramSeries.Sums : null,
+                    Buckets: selectedHistogramMode == "buckets" ? histogramSeries.Buckets : null);
+            })
+            .ToArray();
+        var knownDimensionFilters = instrument.KnownAttributeValues
+            .OrderBy(static item => item.Key, StringComparer.Ordinal)
+            .Select(static item => new DeckMetricDimensionFilter(item.Key, item.Value.Order(StringComparer.Ordinal).ToArray()))
+            .ToArray();
+        var exemplars = instrument.Dimensions
+            .SelectMany(static dimension => dimension.Values)
+            .SelectMany(static value => value.Exemplars)
+            .Where(exemplar => exemplar.Start >= endTime - duration && exemplar.Start <= endTime)
+            .DistinctBy(static exemplar => (exemplar.Start, exemplar.Value, exemplar.TraceId, exemplar.SpanId))
+            .OrderBy(static exemplar => exemplar.Start)
+            .Select(static exemplar => new DeckMetricExemplar(
+                TimestampMs: new DateTimeOffset(exemplar.Start, TimeSpan.Zero).ToUnixTimeMilliseconds(),
+                Value: exemplar.Value,
+                TraceId: exemplar.TraceId,
+                SpanId: exemplar.SpanId,
+                Attributes: exemplar.Attributes.Select(static attribute => new DeckMetricAttribute(attribute.Key, attribute.Value)).ToArray()))
+            .ToArray();
+
+        return new DeckMetricSeriesResponse(
+            Name: instrument.Summary.Name,
+            ResourceName: resourceName,
+            MeterName: instrument.Summary.Parent.Name,
+            Unit: instrument.Summary.Unit,
+            Kind: GetMetricKind(instrument.Summary),
+            TimestampsMs: rawHistogram ? aggregateHistogram.Timestamps : aggregate.Timestamps,
+            Values: rawHistogram ? null : aggregate.Values,
+            P50: aggregate.P50,
+            P90: aggregate.P90,
+            P99: aggregate.P99,
+            Sum: selectedHistogramMode == "sum" ? aggregateHistogram.Sums : null,
+            BucketBounds: selectedHistogramMode == "buckets" ? aggregateHistogram.Bounds : null,
+            Buckets: selectedHistogramMode == "buckets" ? aggregateHistogram.Buckets : null,
+            DimensionFilters: knownDimensionFilters,
+            Dimensions: dimensions,
+            Exemplars: exemplars,
+            HasOverflow: instrument.HasOverflow,
+            ShowCount: histogramCount,
+            HistogramMode: selectedHistogramMode);
+    }
+
+    private DeckMetricSummary CreateMetricSummary(string resourceName, OtlpInstrumentSummary summary)
+    {
+        var instrument = telemetryRepository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey(resourceName, InstanceId: null),
+            MeterName = summary.Parent.Name,
+            InstrumentName = summary.Name,
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+        var values = instrument?.Dimensions.SelectMany(dimension => dimension.Values).ToArray() ?? [];
+        var lastValue = values.MaxBy(value => value.End) switch
+        {
+            MetricValue<long> value => value.Value,
+            MetricValue<double> value => value.Value,
+            HistogramValue { Count: > 0 } value => value.Sum / value.Count,
+            _ => (double?)null
+        };
+
+        return new DeckMetricSummary(
+            Name: summary.Name,
+            Description: summary.Description,
+            Unit: summary.Unit,
+            ResourceName: resourceName,
+            MeterName: summary.Parent.Name,
+            Kind: GetMetricKind(summary),
+            LastValue: lastValue,
+            PointCount: values.Aggregate(0UL, static (count, value) => count + value.Count));
+    }
+
+    private static string GetMetricKind(OtlpInstrumentSummary summary) => summary.Type switch
+    {
+        OtlpInstrumentType.Histogram => "histogram",
+        OtlpInstrumentType.Sum => "counter",
+        _ => "gauge"
+    };
+
+    private static double[] SelectTraceValues(ChartData chart, int[] indexes, int percentile)
+    {
+        var trace = chart.Traces.Single(trace => trace.Percentile == percentile);
+        return indexes.Select(index => trace.Values[index]!.Value).ToArray();
+    }
+
+    private static bool MatchesDimensionFilters(
+        DimensionScope dimension,
+        IReadOnlyDictionary<string, string?[]> filters)
+    {
+        foreach (var filter in filters)
+        {
+            var value = OtlpHelpers.GetValue(dimension.Attributes, filter.Key);
+            if (!filter.Value.Contains(value, StringComparer.Ordinal))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static (double[] Timestamps, double[]? Values, double[]? P50, double[]? P90, double[]? P99) CreateMetricSeries(
+        ChartData chart,
+        OtlpInstrumentType instrumentType,
+        bool histogramCount)
+    {
+        var populatedIndexes = Enumerable.Range(0, chart.XValues.Count)
+            .Where(index => chart.Traces.All(trace => trace.Values[index].HasValue))
+            .ToArray();
+        var timestamps = populatedIndexes
+            .Select(index => (double)chart.XValues[index].ToUnixTimeMilliseconds())
+            .ToArray();
+
+        if (instrumentType == OtlpInstrumentType.Histogram && !histogramCount)
+        {
+            return (
+                timestamps,
+                null,
+                SelectTraceValues(chart, populatedIndexes, percentile: 50),
+                SelectTraceValues(chart, populatedIndexes, percentile: 90),
+                SelectTraceValues(chart, populatedIndexes, percentile: 99));
+        }
+
+        return (
+            timestamps,
+            populatedIndexes.Select(index => chart.Traces[0].Values[index]!.Value).ToArray(),
+            null,
+            null,
+            null);
+    }
+
+    private static (double[] Timestamps, double[] Sums, double[] Bounds, DeckMetricBucketSeries[] Buckets) CreateHistogramAggregateSeries(
+        HistogramAggregateChartData chart)
+    {
+        var populatedIndexes = Enumerable.Range(0, chart.Points.Count)
+            .Where(index => chart.Points[index] is not null)
+            .ToArray();
+        if (populatedIndexes.Length == 0)
+        {
+            return ([], [], [], []);
+        }
+
+        var firstPoint = chart.Points[populatedIndexes[0]]!;
+        var buckets = Enumerable.Range(0, firstPoint.BucketCounts.Length)
+            .Select(bucketIndex => new DeckMetricBucketSeries(
+                UpperBound: bucketIndex < firstPoint.ExplicitBounds.Length ? firstPoint.ExplicitBounds[bucketIndex] : null,
+                Values: populatedIndexes.Select(index => (double)chart.Points[index]!.BucketCounts[bucketIndex]).ToArray()))
+            .ToArray();
+        return (
+            populatedIndexes.Select(index => (double)chart.XValues[index].ToUnixTimeMilliseconds()).ToArray(),
+            populatedIndexes.Select(index => chart.Points[index]!.Sum).ToArray(),
+            firstPoint.ExplicitBounds,
+            buckets);
     }
 
     /// <summary>

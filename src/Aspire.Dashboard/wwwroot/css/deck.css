@@ -449,6 +449,11 @@ a:focus-visible {
   overflow: hidden;
   background: var(--bg-surface);
 }
+/* An unconstrained overflow ancestor becomes Virtualize's scroll root and forces every item to
+   render. The page body owns scrolling for virtualized tables, so these wrappers must not clip. */
+.virtualized-table-wrap {
+  overflow: visible;
+}
 table.data {
   width: 100%;
   border-collapse: collapse;
@@ -2231,6 +2236,12 @@ table.data tbody tr.selected {
    trace/actions columns off-screen, matching the Deck DataTable feel. */
 table.data.deck-logs-table {
   table-layout: fixed;
+}
+/* `overflow: hidden` makes the wrapper Virtualize's scroll root even though its height is not
+   constrained. Keep this wrapper out of scroll-root discovery so Virtualize observes the
+   surrounding `.page__body` instead. */
+.deck-logs-table-wrap {
+  overflow: visible;
 }
 table.data.deck-logs-table tbody td {
   overflow: hidden;

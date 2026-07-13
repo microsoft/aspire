@@ -1,4 +1,5 @@
 import type { ComponentType } from "react";
+import type { PageId } from "../lib/routes";
 import {
   CanvasIcon,
   ConsoleIcon,
@@ -7,9 +8,9 @@ import {
   ParametersIcon,
   ResourcesIcon,
   TracesIcon,
-} from "./Icons";
+} from "../toolkit";
 
-export type PageId = "resources" | "parameters" | "console" | "logs" | "traces" | "metrics" | "canvases";
+export type { PageId } from "../lib/routes";
 
 interface NavEntry {
   id: PageId;
@@ -56,6 +57,7 @@ export function Sidebar({
           <button
             key={entry.id}
             className={`nav-item ${active === entry.id ? "active" : ""}`}
+            aria-current={active === entry.id ? "page" : undefined}
             onClick={() => onNavigate(entry.id)}
           >
             <Icon size={18} className="nav-item__icon" />

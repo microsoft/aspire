@@ -7,10 +7,10 @@
 <span class="resource-name-container">
     @* Do this to trim significant whitespace so there isn't a space added between icon and text *@
     @{
-        <DeckIcon Name="@ResourceIconHelpers.GetDeckIconForResource(Resource)"
-                  Size="16"
-                  Class="resource-icon"
-                  Style="@($"color: {ColorGenerator.Instance.GetColorVariableByKey(FormatName(Resource))};")" />
+        <ResourceIcon Resource="Resource"
+                      Size="16"
+                      Class="resource-icon"
+                      Style="@($"color: {ColorGenerator.Instance.GetColorVariableByKey(FormatName(Resource))};")" />
     }
     @{
         <span class="resource-name-text"><Highlighter HighlightedText="@FilterText" Text="@FormatName(Resource)" /></span>

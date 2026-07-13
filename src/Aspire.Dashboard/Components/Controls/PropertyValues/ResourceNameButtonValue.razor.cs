@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Utils;
@@ -28,19 +27,13 @@ public partial class ResourceNameButtonValue
     public required IDashboardClient DashboardClient { get; init; }
 
     private ResourceViewModel? _resource;
-    private DeckIconName? _resourceIconName;
-
     protected override void OnParametersSet()
     {
-        _resourceIconName = null;
+        _resource = null;
 
         if (DashboardClient.IsEnabled)
         {
             _resource = DashboardClient.GetResource(Resource.ResourceKey.ToString());
-            if (_resource != null)
-            {
-                _resourceIconName = ResourceIconHelpers.GetDeckIconForResource(_resource);
-            }
         }
     }
 

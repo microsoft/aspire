@@ -130,6 +130,28 @@ internal sealed class ChartDataCalculator
         };
     }
 
+    public HistogramAggregateChartData CalculateHistogramAggregateValues(
+        List<DimensionScope> dimensions,
+        DateTimeOffset startTime,
+        Func<DateTimeOffset, DateTimeOffset> toLocal)
+    {
+        var pointDuration = _duration / _pointCount;
+        var xValues = new List<DateTimeOffset>();
+        var points = new List<HistogramAggregatePoint?>();
+
+        for (var pointIndex = 0; pointIndex < (_pointCount + 2); pointIndex++)
+        {
+            var start = CalcOffset(pointIndex, startTime, pointDuration);
+            var end = CalcOffset(pointIndex - 1, startTime, pointDuration);
+            xValues.Add(toLocal(end));
+            points.Add(TryCalculateHistogramAggregatePoint(dimensions, start, end, out var point) ? point : null);
+        }
+
+        xValues.Reverse();
+        points.Reverse();
+        return new HistogramAggregateChartData(xValues, points);
+    }
+
     internal static bool TryCalculatePoint(List<DimensionScope> dimensions, DateTimeOffset start, DateTimeOffset end, out double pointValue)
     {
         var hasValue = false;
@@ -256,6 +278,70 @@ internal sealed class ChartDataCalculator
         return hasValue;
     }
 
+    internal static bool TryCalculateHistogramAggregatePoint(
+        List<DimensionScope> dimensions,
+        DateTimeOffset start,
+        DateTimeOffset end,
+        out HistogramAggregatePoint point)
+    {
+        ulong[]? bucketCounts = null;
+        double[]? explicitBounds = null;
+        var sum = 0d;
+        var hasValue = false;
+
+        start = start.Subtract(TimeSpan.FromSeconds(1));
+        end = end.Add(TimeSpan.FromSeconds(1));
+
+        foreach (var dimension in dimensions)
+        {
+            var dimensionValues = dimension.Values;
+            for (var i = dimensionValues.Count - 1; i >= 0; i--)
+            {
+                var metric = dimensionValues[i];
+                // Histogram points are observed at End. The first cumulative point commonly
+                // has the Unix epoch as Start, so binning on Start would discard valid data.
+                var metricEnd = new DateTimeOffset(metric.End, TimeSpan.Zero);
+                if (metricEnd < start || metricEnd > end)
+                {
+                    continue;
+                }
+
+                var histogramValue = GetHistogramValue(metric);
+                // A first stored cumulative point can predate the repository. Without its
+                // baseline, neither bucket nor sum deltas for that interval are meaningful.
+                if (i == 0 && CountBuckets(histogramValue) != histogramValue.Count)
+                {
+                    continue;
+                }
+
+                explicitBounds ??= histogramValue.ExplicitBounds;
+                if (!explicitBounds.SequenceEqual(histogramValue.ExplicitBounds))
+                {
+                    throw new InvalidOperationException("Histogram explicit bounds changed");
+                }
+
+                bucketCounts ??= new ulong[histogramValue.Values.Length];
+                if (bucketCounts.Length != histogramValue.Values.Length)
+                {
+                    throw new InvalidOperationException("Histogram values changed size");
+                }
+
+                var previous = i > 0 ? GetHistogramValue(dimensionValues[i - 1]) : null;
+                sum += histogramValue.Sum - (previous?.Sum ?? 0d);
+                for (var bucketIndex = 0; bucketIndex < histogramValue.Values.Length; bucketIndex++)
+                {
+                    bucketCounts[bucketIndex] += histogramValue.Values[bucketIndex] - (previous?.Values[bucketIndex] ?? 0ul);
+                }
+                hasValue = true;
+            }
+        }
+
+        point = hasValue
+            ? new HistogramAggregatePoint(sum, explicitBounds!, bucketCounts!)
+            : new HistogramAggregatePoint(0, [], []);
+        return hasValue;
+    }
+
     internal static double? CalculatePercentile(int percentile, ulong[] counts, double[] explicitBounds)
     {
         if (percentile < 0 || percentile > 100)
@@ -357,3 +443,12 @@ internal sealed class ChartDataCalculator
         return value;
     }
 }
+
+internal sealed record HistogramAggregateChartData(
+    List<DateTimeOffset> XValues,
+    List<HistogramAggregatePoint?> Points);
+
+internal sealed record HistogramAggregatePoint(
+    double Sum,
+    double[] ExplicitBounds,
+    ulong[] BucketCounts);

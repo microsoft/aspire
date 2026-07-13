@@ -1,0 +1,790 @@
+- main:
+  - heading "Deck Toolkit" [level=1]
+  - paragraph: Fluent React primitives with Aspire density and tokens
+  - button "Use light theme"
+  - region "Page composition":
+    - heading "Page composition" [level=2]
+    - region "Sample resources":
+      - heading "Sample resources" [level=2]
+      - paragraph: 3 resources
+      - status: Not refreshed
+      - button "Refresh sample resources"
+      - toolbar "Sample resource tools":
+        - textbox "Filter sample resources…"
+      - text: frontend Running · Healthy catalog-db Running · Degraded migration Exited
+  - region "Force graph":
+    - heading "Force graph" [level=2]
+    - status: No graph selection
+    - group "Sample force graph":
+      - button "frontend, Project, Running"
+      - button "catalog-db, Container, Running"
+      - button "migration, Executable, Exited"
+    - toolbar "Sample graph controls":
+      - button "Sample zoom in"
+      - button "Sample zoom out"
+      - button "Sample reset view"
+  - region "Actions":
+    - heading "Actions" [level=2]
+    - status: No action selected
+    - button "Secondary"
+    - button "Primary"
+    - button "Danger"
+    - button "Ghost"
+    - button "Confirm command"
+    - button "Open drawer"
+    - button "Open dialog"
+    - button "View sample JSON"
+    - button "Show notification"
+    - button "Resource commands"
+    - button "Sample filters": Filters
+    - button "Add filter"
+  - region "Status":
+    - heading "Status" [level=2]
+    - text: Neutral Healthy Starting Degraded Failed Selected
+  - region "Icon mapping":
+    - heading "Icon mapping" [level=2]
+    - table:
+      - rowgroup:
+        - row "Aspire name Fluent regular Fluent filled":
+          - columnheader "Aspire name"
+          - columnheader "Fluent regular"
+          - columnheader "Fluent filled"
+      - rowgroup:
+        - row "Add Add regular AddRegular Add filled AddFilled":
+          - cell "Add":
+            - code: Add
+          - cell "Add regular AddRegular":
+            - img "Add regular"
+            - code: AddRegular
+          - cell "Add filled AddFilled":
+            - img "Add filled"
+            - code: AddFilled
+        - row "Agents Agents regular AgentsRegular Agents filled AgentsFilled":
+          - cell "Agents":
+            - code: Agents
+          - cell "Agents regular AgentsRegular":
+            - img "Agents regular"
+            - code: AgentsRegular
+          - cell "Agents filled AgentsFilled":
+            - img "Agents filled"
+            - code: AgentsFilled
+        - row "AgentsAdd AgentsAdd regular AgentsAddRegular AgentsAdd filled AgentsAddFilled":
+          - cell "AgentsAdd":
+            - code: AgentsAdd
+          - cell "AgentsAdd regular AgentsAddRegular":
+            - img "AgentsAdd regular"
+            - code: AgentsAddRegular
+          - cell "AgentsAdd filled AgentsAddFilled":
+            - img "AgentsAdd filled"
+            - code: AgentsAddFilled
+        - row "Apps Apps regular AppsRegular Apps filled AppsFilled":
+          - cell "Apps":
+            - code: Apps
+          - cell "Apps regular AppsRegular":
+            - img "Apps regular"
+            - code: AppsRegular
+          - cell "Apps filled AppsFilled":
+            - img "Apps filled"
+            - code: AppsFilled
+        - row "ArrowClockwise ArrowClockwise regular ArrowClockwiseRegular ArrowClockwise filled ArrowClockwiseFilled":
+          - cell "ArrowClockwise":
+            - code: ArrowClockwise
+          - cell "ArrowClockwise regular ArrowClockwiseRegular":
+            - img "ArrowClockwise regular"
+            - code: ArrowClockwiseRegular
+          - cell "ArrowClockwise filled ArrowClockwiseFilled":
+            - img "ArrowClockwise filled"
+            - code: ArrowClockwiseFilled
+        - row "ArrowCounterclockwise ArrowCounterclockwise regular ArrowCounterclockwiseRegular ArrowCounterclockwise filled ArrowCounterclockwiseFilled":
+          - cell "ArrowCounterclockwise":
+            - code: ArrowCounterclockwise
+          - cell "ArrowCounterclockwise regular ArrowCounterclockwiseRegular":
+            - img "ArrowCounterclockwise regular"
+            - code: ArrowCounterclockwiseRegular
+          - cell "ArrowCounterclockwise filled ArrowCounterclockwiseFilled":
+            - img "ArrowCounterclockwise filled"
+            - code: ArrowCounterclockwiseFilled
+        - row "ArrowDownload ArrowDownload regular ArrowDownloadRegular ArrowDownload filled ArrowDownloadFilled":
+          - cell "ArrowDownload":
+            - code: ArrowDownload
+          - cell "ArrowDownload regular ArrowDownloadRegular":
+            - img "ArrowDownload regular"
+            - code: ArrowDownloadRegular
+          - cell "ArrowDownload filled ArrowDownloadFilled":
+            - img "ArrowDownload filled"
+            - code: ArrowDownloadFilled
+        - row "ArrowReset ArrowReset regular ArrowResetRegular ArrowReset filled ArrowResetFilled":
+          - cell "ArrowReset":
+            - code: ArrowReset
+          - cell "ArrowReset regular ArrowResetRegular":
+            - img "ArrowReset regular"
+            - code: ArrowResetRegular
+          - cell "ArrowReset filled ArrowResetFilled":
+            - img "ArrowReset filled"
+            - code: ArrowResetFilled
+        - row "ArrowSync ArrowSync regular ArrowSyncRegular ArrowSync filled ArrowSyncFilled":
+          - cell "ArrowSync":
+            - code: ArrowSync
+          - cell "ArrowSync regular ArrowSyncRegular":
+            - img "ArrowSync regular"
+            - code: ArrowSyncRegular
+          - cell "ArrowSync filled ArrowSyncFilled":
+            - img "ArrowSync filled"
+            - code: ArrowSyncFilled
+        - row "Beaker Beaker regular BeakerRegular Beaker filled BeakerFilled":
+          - cell "Beaker":
+            - code: Beaker
+          - cell "Beaker regular BeakerRegular":
+            - img "Beaker regular"
+            - code: BeakerRegular
+          - cell "Beaker filled BeakerFilled":
+            - img "Beaker filled"
+            - code: BeakerFilled
+        - row "Box Box regular BoxRegular Box filled BoxFilled":
+          - cell "Box":
+            - code: Box
+          - cell "Box regular BoxRegular":
+            - img "Box regular"
+            - code: BoxRegular
+          - cell "Box filled BoxFilled":
+            - img "Box filled"
+            - code: BoxFilled
+        - row "BoxMultiple BoxMultiple regular BoxMultipleRegular BoxMultiple filled BoxMultipleFilled":
+          - cell "BoxMultiple":
+            - code: BoxMultiple
+          - cell "BoxMultiple regular BoxMultipleRegular":
+            - img "BoxMultiple regular"
+            - code: BoxMultipleRegular
+          - cell "BoxMultiple filled BoxMultipleFilled":
+            - img "BoxMultiple filled"
+            - code: BoxMultipleFilled
+        - row "Braces Braces regular BracesRegular Braces filled BracesFilled":
+          - cell "Braces":
+            - code: Braces
+          - cell "Braces regular BracesRegular":
+            - img "Braces regular"
+            - code: BracesRegular
+          - cell "Braces filled BracesFilled":
+            - img "Braces filled"
+            - code: BracesFilled
+        - row "BrainCircuit BrainCircuit regular BrainCircuitRegular BrainCircuit filled BrainCircuitFilled":
+          - cell "BrainCircuit":
+            - code: BrainCircuit
+          - cell "BrainCircuit regular BrainCircuitRegular":
+            - img "BrainCircuit regular"
+            - code: BrainCircuitRegular
+          - cell "BrainCircuit filled BrainCircuitFilled":
+            - img "BrainCircuit filled"
+            - code: BrainCircuitFilled
+        - row "BranchFork BranchFork regular BranchForkRegular BranchFork filled BranchForkFilled":
+          - cell "BranchFork":
+            - code: BranchFork
+          - cell "BranchFork regular BranchForkRegular":
+            - img "BranchFork regular"
+            - code: BranchForkRegular
+          - cell "BranchFork filled BranchForkFilled":
+            - img "BranchFork filled"
+            - code: BranchForkFilled
+        - row "Calculator Calculator regular CalculatorRegular Calculator filled CalculatorFilled":
+          - cell "Calculator":
+            - code: Calculator
+          - cell "Calculator regular CalculatorRegular":
+            - img "Calculator regular"
+            - code: CalculatorRegular
+          - cell "Calculator filled CalculatorFilled":
+            - img "Calculator filled"
+            - code: CalculatorFilled
+        - row "Camera Camera regular CameraRegular Camera filled CameraFilled":
+          - cell "Camera":
+            - code: Camera
+          - cell "Camera regular CameraRegular":
+            - img "Camera regular"
+            - code: CameraRegular
+          - cell "Camera filled CameraFilled":
+            - img "Camera filled"
+            - code: CameraFilled
+        - row "Certificate Certificate regular CertificateRegular Certificate filled CertificateFilled":
+          - cell "Certificate":
+            - code: Certificate
+          - cell "Certificate regular CertificateRegular":
+            - img "Certificate regular"
+            - code: CertificateRegular
+          - cell "Certificate filled CertificateFilled":
+            - img "Certificate filled"
+            - code: CertificateFilled
+        - row "ChatSparkle ChatSparkle regular ChatSparkleRegular ChatSparkle filled ChatSparkleFilled":
+          - cell "ChatSparkle":
+            - code: ChatSparkle
+          - cell "ChatSparkle regular ChatSparkleRegular":
+            - img "ChatSparkle regular"
+            - code: ChatSparkleRegular
+          - cell "ChatSparkle filled ChatSparkleFilled":
+            - img "ChatSparkle filled"
+            - code: ChatSparkleFilled
+        - row "Clock Clock regular ClockRegular Clock filled ClockFilled":
+          - cell "Clock":
+            - code: Clock
+          - cell "Clock regular ClockRegular":
+            - img "Clock regular"
+            - code: ClockRegular
+          - cell "Clock filled ClockFilled":
+            - img "Clock filled"
+            - code: ClockFilled
+        - row "CheckmarkCircle CheckmarkCircle regular CheckmarkCircleRegular CheckmarkCircle filled CheckmarkCircleFilled":
+          - cell "CheckmarkCircle":
+            - code: CheckmarkCircle
+          - cell "CheckmarkCircle regular CheckmarkCircleRegular":
+            - img "CheckmarkCircle regular"
+            - code: CheckmarkCircleRegular
+          - cell "CheckmarkCircle filled CheckmarkCircleFilled":
+            - img "CheckmarkCircle filled"
+            - code: CheckmarkCircleFilled
+        - row "CloudArrowUp CloudArrowUp regular CloudArrowUpRegular CloudArrowUp filled CloudArrowUpFilled":
+          - cell "CloudArrowUp":
+            - code: CloudArrowUp
+          - cell "CloudArrowUp regular CloudArrowUpRegular":
+            - img "CloudArrowUp regular"
+            - code: CloudArrowUpRegular
+          - cell "CloudArrowUp filled CloudArrowUpFilled":
+            - img "CloudArrowUp filled"
+            - code: CloudArrowUpFilled
+        - row "CloudBidirectional CloudBidirectional regular CloudBidirectionalRegular CloudBidirectional filled CloudBidirectionalFilled":
+          - cell "CloudBidirectional":
+            - code: CloudBidirectional
+          - cell "CloudBidirectional regular CloudBidirectionalRegular":
+            - img "CloudBidirectional regular"
+            - code: CloudBidirectionalRegular
+          - cell "CloudBidirectional filled CloudBidirectionalFilled":
+            - img "CloudBidirectional filled"
+            - code: CloudBidirectionalFilled
+        - row "CloudDatabase CloudDatabase regular CloudDatabaseRegular CloudDatabase filled CloudDatabaseFilled":
+          - cell "CloudDatabase":
+            - code: CloudDatabase
+          - cell "CloudDatabase regular CloudDatabaseRegular":
+            - img "CloudDatabase regular"
+            - code: CloudDatabaseRegular
+          - cell "CloudDatabase filled CloudDatabaseFilled":
+            - img "CloudDatabase filled"
+            - code: CloudDatabaseFilled
+        - row "Code Code regular CodeRegular Code filled CodeFilled":
+          - cell "Code":
+            - code: Code
+          - cell "Code regular CodeRegular":
+            - img "Code regular"
+            - code: CodeRegular
+          - cell "Code filled CodeFilled":
+            - img "Code filled"
+            - code: CodeFilled
+        - row "CodeCircle CodeCircle regular CodeCircleRegular CodeCircle filled CodeCircleFilled":
+          - cell "CodeCircle":
+            - code: CodeCircle
+          - cell "CodeCircle regular CodeCircleRegular":
+            - img "CodeCircle regular"
+            - code: CodeCircleRegular
+          - cell "CodeCircle filled CodeCircleFilled":
+            - img "CodeCircle filled"
+            - code: CodeCircleFilled
+        - row "CodeCsRectangle CodeCsRectangle regular CodeCsRectangle16Regular CodeCsRectangle filled CodeCsRectangle16Filled":
+          - cell "CodeCsRectangle":
+            - code: CodeCsRectangle
+          - cell "CodeCsRectangle regular CodeCsRectangle16Regular":
+            - img "CodeCsRectangle regular"
+            - code: CodeCsRectangle16Regular
+          - cell "CodeCsRectangle filled CodeCsRectangle16Filled":
+            - img "CodeCsRectangle filled"
+            - code: CodeCsRectangle16Filled
+        - row "CodeFsRectangle CodeFsRectangle regular CodeFsRectangle16Regular CodeFsRectangle filled CodeFsRectangle16Filled":
+          - cell "CodeFsRectangle":
+            - code: CodeFsRectangle
+          - cell "CodeFsRectangle regular CodeFsRectangle16Regular":
+            - img "CodeFsRectangle regular"
+            - code: CodeFsRectangle16Regular
+          - cell "CodeFsRectangle filled CodeFsRectangle16Filled":
+            - img "CodeFsRectangle filled"
+            - code: CodeFsRectangle16Filled
+        - row "CodeJsRectangle CodeJsRectangle regular CodeJsRectangle16Regular CodeJsRectangle filled CodeJsRectangle16Filled":
+          - cell "CodeJsRectangle":
+            - code: CodeJsRectangle
+          - cell "CodeJsRectangle regular CodeJsRectangle16Regular":
+            - img "CodeJsRectangle regular"
+            - code: CodeJsRectangle16Regular
+          - cell "CodeJsRectangle filled CodeJsRectangle16Filled":
+            - img "CodeJsRectangle filled"
+            - code: CodeJsRectangle16Filled
+        - row "CodePyRectangle CodePyRectangle regular CodePyRectangle16Regular CodePyRectangle filled CodePyRectangle16Filled":
+          - cell "CodePyRectangle":
+            - code: CodePyRectangle
+          - cell "CodePyRectangle regular CodePyRectangle16Regular":
+            - img "CodePyRectangle regular"
+            - code: CodePyRectangle16Regular
+          - cell "CodePyRectangle filled CodePyRectangle16Filled":
+            - img "CodePyRectangle filled"
+            - code: CodePyRectangle16Filled
+        - row "CodeVbRectangle CodeVbRectangle regular CodeVbRectangle16Regular CodeVbRectangle filled CodeVbRectangle16Filled":
+          - cell "CodeVbRectangle":
+            - code: CodeVbRectangle
+          - cell "CodeVbRectangle regular CodeVbRectangle16Regular":
+            - img "CodeVbRectangle regular"
+            - code: CodeVbRectangle16Regular
+          - cell "CodeVbRectangle filled CodeVbRectangle16Filled":
+            - img "CodeVbRectangle filled"
+            - code: CodeVbRectangle16Filled
+        - row "ContentView ContentView regular ContentViewRegular ContentView filled ContentViewFilled":
+          - cell "ContentView":
+            - code: ContentView
+          - cell "ContentView regular ContentViewRegular":
+            - img "ContentView regular"
+            - code: ContentViewRegular
+          - cell "ContentView filled ContentViewFilled":
+            - img "ContentView filled"
+            - code: ContentViewFilled
+        - row "ContentViewGalleryLightning ContentViewGalleryLightning regular ContentViewGalleryLightningRegular ContentViewGalleryLightning filled ContentViewGalleryLightningFilled":
+          - cell "ContentViewGalleryLightning":
+            - code: ContentViewGalleryLightning
+          - cell "ContentViewGalleryLightning regular ContentViewGalleryLightningRegular":
+            - img "ContentViewGalleryLightning regular"
+            - code: ContentViewGalleryLightningRegular
+          - cell "ContentViewGalleryLightning filled ContentViewGalleryLightningFilled":
+            - img "ContentViewGalleryLightning filled"
+            - code: ContentViewGalleryLightningFilled
+        - row "Copy Copy regular CopyRegular Copy filled CopyFilled":
+          - cell "Copy":
+            - code: Copy
+          - cell "Copy regular CopyRegular":
+            - img "Copy regular"
+            - code: CopyRegular
+          - cell "Copy filled CopyFilled":
+            - img "Copy filled"
+            - code: CopyFilled
+        - row "Database Database regular DatabaseRegular Database filled DatabaseFilled":
+          - cell "Database":
+            - code: Database
+          - cell "Database regular DatabaseRegular":
+            - img "Database regular"
+            - code: DatabaseRegular
+          - cell "Database filled DatabaseFilled":
+            - img "Database filled"
+            - code: DatabaseFilled
+        - row "DatabaseArrowRight DatabaseArrowRight regular DatabaseArrowRightRegular DatabaseArrowRight filled DatabaseArrowRightFilled":
+          - cell "DatabaseArrowRight":
+            - code: DatabaseArrowRight
+          - cell "DatabaseArrowRight regular DatabaseArrowRightRegular":
+            - img "DatabaseArrowRight regular"
+            - code: DatabaseArrowRightRegular
+          - cell "DatabaseArrowRight filled DatabaseArrowRightFilled":
+            - img "DatabaseArrowRight filled"
+            - code: DatabaseArrowRightFilled
+        - row "DatabaseLightning DatabaseLightning regular DatabaseLightningRegular DatabaseLightning filled DatabaseLightningFilled":
+          - cell "DatabaseLightning":
+            - code: DatabaseLightning
+          - cell "DatabaseLightning regular DatabaseLightningRegular":
+            - img "DatabaseLightning regular"
+            - code: DatabaseLightningRegular
+          - cell "DatabaseLightning filled DatabaseLightningFilled":
+            - img "DatabaseLightning filled"
+            - code: DatabaseLightningFilled
+        - row "DatabaseMultiple DatabaseMultiple regular DatabaseMultipleRegular DatabaseMultiple filled DatabaseMultipleFilled":
+          - cell "DatabaseMultiple":
+            - code: DatabaseMultiple
+          - cell "DatabaseMultiple regular DatabaseMultipleRegular":
+            - img "DatabaseMultiple regular"
+            - code: DatabaseMultipleRegular
+          - cell "DatabaseMultiple filled DatabaseMultipleFilled":
+            - img "DatabaseMultiple filled"
+            - code: DatabaseMultipleFilled
+        - row "DatabasePlugConnected DatabasePlugConnected regular DatabasePlugConnectedRegular DatabasePlugConnected filled DatabasePlugConnectedFilled":
+          - cell "DatabasePlugConnected":
+            - code: DatabasePlugConnected
+          - cell "DatabasePlugConnected regular DatabasePlugConnectedRegular":
+            - img "DatabasePlugConnected regular"
+            - code: DatabasePlugConnectedRegular
+          - cell "DatabasePlugConnected filled DatabasePlugConnectedFilled":
+            - img "DatabasePlugConnected filled"
+            - code: DatabasePlugConnectedFilled
+        - row "DatabaseSearch DatabaseSearch regular DatabaseSearchRegular DatabaseSearch filled DatabaseSearchFilled":
+          - cell "DatabaseSearch":
+            - code: DatabaseSearch
+          - cell "DatabaseSearch regular DatabaseSearchRegular":
+            - img "DatabaseSearch regular"
+            - code: DatabaseSearchRegular
+          - cell "DatabaseSearch filled DatabaseSearchFilled":
+            - img "DatabaseSearch filled"
+            - code: DatabaseSearchFilled
+        - row "Delete Delete regular DeleteRegular Delete filled DeleteFilled":
+          - cell "Delete":
+            - code: Delete
+          - cell "Delete regular DeleteRegular":
+            - img "Delete regular"
+            - code: DeleteRegular
+          - cell "Delete filled DeleteFilled":
+            - img "Delete filled"
+            - code: DeleteFilled
+        - row "Document Document regular DocumentRegular Document filled DocumentFilled":
+          - cell "Document":
+            - code: Document
+          - cell "Document regular DocumentRegular":
+            - img "Document regular"
+            - code: DocumentRegular
+          - cell "Document filled DocumentFilled":
+            - img "Document filled"
+            - code: DocumentFilled
+        - row "Edit Edit regular EditRegular Edit filled EditFilled":
+          - cell "Edit":
+            - code: Edit
+          - cell "Edit regular EditRegular":
+            - img "Edit regular"
+            - code: EditRegular
+          - cell "Edit filled EditFilled":
+            - img "Edit filled"
+            - code: EditFilled
+        - row "Folder Folder regular FolderRegular Folder filled FolderFilled":
+          - cell "Folder":
+            - code: Folder
+          - cell "Folder regular FolderRegular":
+            - img "Folder regular"
+            - code: FolderRegular
+          - cell "Folder filled FolderFilled":
+            - img "Folder filled"
+            - code: FolderFilled
+        - row "GlobeArrowForward GlobeArrowForward regular GlobeArrowForwardRegular GlobeArrowForward filled GlobeArrowForwardFilled":
+          - cell "GlobeArrowForward":
+            - code: GlobeArrowForward
+          - cell "GlobeArrowForward regular GlobeArrowForwardRegular":
+            - img "GlobeArrowForward regular"
+            - code: GlobeArrowForwardRegular
+          - cell "GlobeArrowForward filled GlobeArrowForwardFilled":
+            - img "GlobeArrowForward filled"
+            - code: GlobeArrowForwardFilled
+        - row "GlobeDesktop GlobeDesktop regular GlobeDesktopRegular GlobeDesktop filled GlobeDesktopFilled":
+          - cell "GlobeDesktop":
+            - code: GlobeDesktop
+          - cell "GlobeDesktop regular GlobeDesktopRegular":
+            - img "GlobeDesktop regular"
+            - code: GlobeDesktopRegular
+          - cell "GlobeDesktop filled GlobeDesktopFilled":
+            - img "GlobeDesktop filled"
+            - code: GlobeDesktopFilled
+        - row "HeartBroken HeartBroken regular HeartBrokenRegular HeartBroken filled HeartBrokenFilled":
+          - cell "HeartBroken":
+            - code: HeartBroken
+          - cell "HeartBroken regular HeartBrokenRegular":
+            - img "HeartBroken regular"
+            - code: HeartBrokenRegular
+          - cell "HeartBroken filled HeartBrokenFilled":
+            - img "HeartBroken filled"
+            - code: HeartBrokenFilled
+        - row "Info Info regular InfoRegular Info filled InfoFilled":
+          - cell "Info":
+            - code: Info
+          - cell "Info regular InfoRegular":
+            - img "Info regular"
+            - code: InfoRegular
+          - cell "Info filled InfoFilled":
+            - img "Info filled"
+            - code: InfoFilled
+        - row "Key Key regular KeyRegular Key filled KeyFilled":
+          - cell "Key":
+            - code: Key
+          - cell "Key regular KeyRegular":
+            - img "Key regular"
+            - code: KeyRegular
+          - cell "Key filled KeyFilled":
+            - img "Key filled"
+            - code: KeyFilled
+        - row "LinkMultiple LinkMultiple regular LinkMultipleRegular LinkMultiple filled LinkMultipleFilled":
+          - cell "LinkMultiple":
+            - code: LinkMultiple
+          - cell "LinkMultiple regular LinkMultipleRegular":
+            - img "LinkMultiple regular"
+            - code: LinkMultipleRegular
+          - cell "LinkMultiple filled LinkMultipleFilled":
+            - img "LinkMultiple filled"
+            - code: LinkMultipleFilled
+        - row "Mail Mail regular MailRegular Mail filled MailFilled":
+          - cell "Mail":
+            - code: Mail
+          - cell "Mail regular MailRegular":
+            - img "Mail regular"
+            - code: MailRegular
+          - cell "Mail filled MailFilled":
+            - img "Mail filled"
+            - code: MailFilled
+        - row "Open Open regular OpenRegular Open filled OpenFilled":
+          - cell "Open":
+            - code: Open
+          - cell "Open regular OpenRegular":
+            - img "Open regular"
+            - code: OpenRegular
+          - cell "Open filled OpenFilled":
+            - img "Open filled"
+            - code: OpenFilled
+        - row "Play Play regular PlayRegular Play filled PlayFilled":
+          - cell "Play":
+            - code: Play
+          - cell "Play regular PlayRegular":
+            - img "Play regular"
+            - code: PlayRegular
+          - cell "Play filled PlayFilled":
+            - img "Play filled"
+            - code: PlayFilled
+        - row "PlugConnectedSettings PlugConnectedSettings regular PlugConnectedSettingsRegular PlugConnectedSettings filled PlugConnectedSettingsFilled":
+          - cell "PlugConnectedSettings":
+            - code: PlugConnectedSettings
+          - cell "PlugConnectedSettings regular PlugConnectedSettingsRegular":
+            - img "PlugConnectedSettings regular"
+            - code: PlugConnectedSettingsRegular
+          - cell "PlugConnectedSettings filled PlugConnectedSettingsFilled":
+            - img "PlugConnectedSettings filled"
+            - code: PlugConnectedSettingsFilled
+        - row "QuestionCircle QuestionCircle regular QuestionCircleRegular QuestionCircle filled QuestionCircleFilled":
+          - cell "QuestionCircle":
+            - code: QuestionCircle
+          - cell "QuestionCircle regular QuestionCircleRegular":
+            - img "QuestionCircle regular"
+            - code: QuestionCircleRegular
+          - cell "QuestionCircle filled QuestionCircleFilled":
+            - img "QuestionCircle filled"
+            - code: QuestionCircleFilled
+        - row "Send Send regular SendRegular Send filled SendFilled":
+          - cell "Send":
+            - code: Send
+          - cell "Send regular SendRegular":
+            - img "Send regular"
+            - code: SendRegular
+          - cell "Send filled SendFilled":
+            - img "Send filled"
+            - code: SendFilled
+        - row "Server Server regular ServerRegular Server filled ServerFilled":
+          - cell "Server":
+            - code: Server
+          - cell "Server regular ServerRegular":
+            - img "Server regular"
+            - code: ServerRegular
+          - cell "Server filled ServerFilled":
+            - img "Server filled"
+            - code: ServerFilled
+        - row "Settings Settings regular SettingsRegular Settings filled SettingsFilled":
+          - cell "Settings":
+            - code: Settings
+          - cell "Settings regular SettingsRegular":
+            - img "Settings regular"
+            - code: SettingsRegular
+          - cell "Settings filled SettingsFilled":
+            - img "Settings filled"
+            - code: SettingsFilled
+        - row "SettingsCogMultiple SettingsCogMultiple regular SettingsCogMultipleRegular SettingsCogMultiple filled SettingsCogMultipleFilled":
+          - cell "SettingsCogMultiple":
+            - code: SettingsCogMultiple
+          - cell "SettingsCogMultiple regular SettingsCogMultipleRegular":
+            - img "SettingsCogMultiple regular"
+            - code: SettingsCogMultipleRegular
+          - cell "SettingsCogMultiple filled SettingsCogMultipleFilled":
+            - img "SettingsCogMultiple filled"
+            - code: SettingsCogMultipleFilled
+        - row "Stop Stop regular StopRegular Stop filled StopFilled":
+          - cell "Stop":
+            - code: Stop
+          - cell "Stop regular StopRegular":
+            - img "Stop regular"
+            - code: StopRegular
+          - cell "Stop filled StopFilled":
+            - img "Stop filled"
+            - code: StopFilled
+        - row "Subtract Subtract regular SubtractRegular Subtract filled SubtractFilled":
+          - cell "Subtract":
+            - code: Subtract
+          - cell "Subtract regular SubtractRegular":
+            - img "Subtract regular"
+            - code: SubtractRegular
+          - cell "Subtract filled SubtractFilled":
+            - img "Subtract filled"
+            - code: SubtractFilled
+        - row "TableLightning TableLightning regular TableLightningRegular TableLightning filled TableLightningFilled":
+          - cell "TableLightning":
+            - code: TableLightning
+          - cell "TableLightning regular TableLightningRegular":
+            - img "TableLightning regular"
+            - code: TableLightningRegular
+          - cell "TableLightning filled TableLightningFilled":
+            - img "TableLightning filled"
+            - code: TableLightningFilled
+        - row "TextWrap TextWrap regular TextWrapRegular TextWrap filled TextWrapFilled":
+          - cell "TextWrap":
+            - code: TextWrap
+          - cell "TextWrap regular TextWrapRegular":
+            - img "TextWrap regular"
+            - code: TextWrapRegular
+          - cell "TextWrap filled TextWrapFilled":
+            - img "TextWrap filled"
+            - code: TextWrapFilled
+        - row "Toolbox Toolbox regular ToolboxRegular Toolbox filled ToolboxFilled":
+          - cell "Toolbox":
+            - code: Toolbox
+          - cell "Toolbox regular ToolboxRegular":
+            - img "Toolbox regular"
+            - code: ToolboxRegular
+          - cell "Toolbox filled ToolboxFilled":
+            - img "Toolbox filled"
+            - code: ToolboxFilled
+        - row "VirtualNetwork VirtualNetwork regular VirtualNetworkRegular VirtualNetwork filled VirtualNetworkFilled":
+          - cell "VirtualNetwork":
+            - code: VirtualNetwork
+          - cell "VirtualNetwork regular VirtualNetworkRegular":
+            - img "VirtualNetwork regular"
+            - code: VirtualNetworkRegular
+          - cell "VirtualNetwork filled VirtualNetworkFilled":
+            - img "VirtualNetwork filled"
+            - code: VirtualNetworkFilled
+        - row "Warning Warning regular WarningRegular Warning filled WarningFilled":
+          - cell "Warning":
+            - code: Warning
+          - cell "Warning regular WarningRegular":
+            - img "Warning regular"
+            - code: WarningRegular
+          - cell "Warning filled WarningFilled":
+            - img "Warning filled"
+            - code: WarningFilled
+        - row "Window Window regular WindowRegular Window filled WindowFilled":
+          - cell "Window":
+            - code: Window
+          - cell "Window regular WindowRegular":
+            - img "Window regular"
+            - code: WindowRegular
+          - cell "Window filled WindowFilled":
+            - img "Window filled"
+            - code: WindowFilled
+        - row "WindowConsole WindowConsole regular WindowConsoleRegular WindowConsole filled WindowConsoleFilled":
+          - cell "WindowConsole":
+            - code: WindowConsole
+          - cell "WindowConsole regular WindowConsoleRegular":
+            - img "WindowConsole regular"
+            - code: WindowConsoleRegular
+          - cell "WindowConsole filled WindowConsoleFilled":
+            - img "WindowConsole filled"
+            - code: WindowConsoleFilled
+        - row "WindowDatabase WindowDatabase regular WindowDatabaseRegular WindowDatabase filled WindowDatabaseFilled":
+          - cell "WindowDatabase":
+            - code: WindowDatabase
+          - cell "WindowDatabase regular WindowDatabaseRegular":
+            - img "WindowDatabase regular"
+            - code: WindowDatabaseRegular
+          - cell "WindowDatabase filled WindowDatabaseFilled":
+            - img "WindowDatabase filled"
+            - code: WindowDatabaseFilled
+        - row "UnknownIntegrationIcon Unknown icon container fallback Box24Regular resource fallback":
+          - cell "UnknownIntegrationIcon":
+            - code: UnknownIntegrationIcon
+          - cell "Unknown icon container fallback Box24Regular resource fallback":
+            - img "Unknown icon container fallback"
+            - code: Box24Regular resource fallback
+        - row "UnknownCommandIcon Unknown command icon fallback AppsRegular command fallback":
+          - cell "UnknownCommandIcon":
+            - code: UnknownCommandIcon
+          - cell "Unknown command icon fallback AppsRegular command fallback":
+            - img "Unknown command icon fallback"
+            - code: AppsRegular command fallback
+  - region "Inputs":
+    - heading "Inputs" [level=2]
+    - text: Environment
+    - combobox "Environment"
+    - text: Region
+    - combobox "Region": Central
+    - button "Open"
+    - checkbox "Include hidden resources"
+    - text: Include hidden resources
+    - checkbox "Select all resources" [checked=mixed]
+    - text: Select all resources
+    - checkbox "Unavailable option" [disabled]
+    - text: Unavailable option
+    - switch "Pause incoming data"
+    - text: Pause incoming data
+    - textbox "Command secret":
+      - /placeholder: Enter a secret
+    - button "Reveal secret"
+    - text: API key •••••••••••••••
+    - button "Reveal API key"
+  - region "Navigation and disclosure":
+    - heading "Navigation and disclosure" [level=2]
+    - tablist "Toolkit views":
+      - tab "Overview" [selected]
+      - tab "Logs 3"
+    - tabpanel "Overview": Overview panel
+    - group:
+      - button "Environment 2" [expanded]
+      - text: ASPNETCORE_ENVIRONMENT and HTTP_PORTS
+    - group:
+      - button "Endpoints 1"
+    - separator "Horizontal divider"
+    - text: Resource
+    - separator "Vertical divider"
+    - mark: frontend
+    - text: calls
+    - mark: FrontEnd
+    - text: API
+  - region "Resource data":
+    - heading "Resource data" [level=2]
+    - text: 3 resources
+    - textbox "Filter toolkit resources…"
+    - table:
+      - rowgroup:
+        - row "State Name Type":
+          - columnheader "State"
+          - columnheader "Name":
+            - button "Name"
+          - columnheader "Type"
+      - rowgroup:
+        - row "Running Running · Healthy frontend Project":
+          - cell "Running Running · Healthy"
+          - cell "frontend"
+          - cell "Project"
+        - row "Running Running · Degraded catalog-db Container":
+          - cell "Running Running · Degraded"
+          - cell "catalog-db"
+          - cell "Container"
+        - row "Exited Exited migration Executable":
+          - cell "Exited Exited"
+          - cell "migration"
+          - cell "Executable"
+  - region "Properties":
+    - heading "Properties" [level=2]
+    - group "Sample properties":
+      - term: State
+      - definition: Running · Healthy
+      - term: Resource
+      - definition: frontend
+      - term: Trace ID
+      - definition: 0123456789abcdef0123456789abcdef
+    - paragraph:
+      - strong: Safe Markdown
+      - text: with
+      - code: code
+      - text: ","
+      - link "documentation":
+        - /url: https://example.com/docs
+      - text: ", and unsafe (javascript:alert(1))."
+    - list:
+      - listitem: First item
+      - listitem: Second item
+    - region "Sample property explorer":
+      - toolbar "Sample property explorer tools":
+        - textbox "Filter sample details…"
+      - group:
+        - button "Span 3" [expanded]
+        - group "Sample span properties":
+          - term: Name
+          - definition: GET /catalog
+          - term: Kind
+          - definition: Server
+          - term: Trace ID
+          - definition: 0123456789abcdef0123456789abcdef
+      - group:
+        - button "Context 2" [expanded]
+        - group "Sample context properties":
+          - term: Source
+          - definition: OpenTelemetry.AspNetCore
+          - term: Version
+          - definition: 1.9.0
+  - region "Empty state":
+    - heading "Empty state" [level=2]
+    - heading "No incidents" [level=2]
+    - text: All monitored resources are within their configured thresholds.

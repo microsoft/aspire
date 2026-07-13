@@ -1,25 +1,53 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { MetricSummary, MetricSeriesResponse } from "../api/types";
-import { useTelemetry } from "../lib/useDeckEvent";
-import { getMetricSeries } from "../api/deck";
-import { formatMetricValue, displayUnit } from "../lib/format";
+import type { HistogramMode, MetricSummary, MetricSeriesResponse } from "../api/types";
+import { clearMetrics, getMetricSeries } from "../api/deck";
 import { MetricChart, type ChartLine } from "../components/MetricChart";
-import { EmptyState } from "../components/EmptyState";
-import { MetricsIcon, PauseIcon, PlayIcon } from "../components/Icons";
+import { MetricDimensionFilters } from "../components/MetricDimensionFilters";
+import { MetricExemplars } from "../components/MetricExemplars";
+import { MetricTreeSelector } from "../components/MetricTreeSelector";
+import { displayUnit, formatMetricValue, formatTimeWithMillis } from "../lib/format";
+import { useResources, useTelemetry } from "../lib/useDeckEvent";
+import {
+  CommandMenu,
+  EmptyState,
+  MetricsIcon,
+  NamedIcon,
+  Page,
+  PageBody,
+  PageHeader,
+  PageHeading,
+  PageSubtitle,
+  PageTitle,
+  PageToolbar,
+  Select,
+  Switch,
+  Tabs,
+} from "../toolkit";
 
-const TIME_RANGES: { label: string; seconds: number }[] = [
-  { label: "1m", seconds: 60 },
-  { label: "5m", seconds: 300 },
-  { label: "15m", seconds: 900 },
-  { label: "30m", seconds: 1800 },
-  { label: "1h", seconds: 3600 },
+const TIME_RANGES: ReadonlyArray<{ label: string; title: string; seconds: number }> = [
+  { label: "1m", title: "Last minute", seconds: 60 },
+  { label: "5m", title: "Last 5 minutes", seconds: 300 },
+  { label: "15m", title: "Last 15 minutes", seconds: 900 },
+  { label: "30m", title: "Last 30 minutes", seconds: 1800 },
+  { label: "1h", title: "Last hour", seconds: 3600 },
+  { label: "3h", title: "Last 3 hours", seconds: 10_800 },
+  { label: "6h", title: "Last 6 hours", seconds: 21_600 },
+  { label: "12h", title: "Last 12 hours", seconds: 43_200 },
 ];
 
 const POLL_MS = 1500;
 
-// Stable identity for a (name, resource) series.
-function metricKey(m: { name: string; resourceName: string | null }): string {
-  return `${m.name}\u0000${m.resourceName ?? ""}`;
+export interface MetricRouteState {
+  resourceName: string | null;
+  meterName: string | null;
+  metricName: string | null;
+  windowSeconds: number;
+  view: "chart" | "table";
+  paused: boolean;
+  dimensions: Record<string, Array<string | null>>;
+  histogramMode: HistogramMode;
+  zoomStartMs: number | null;
+  zoomEndMs: number | null;
 }
 
 function cssVar(name: string, fallback: string): string {
@@ -29,203 +57,409 @@ function cssVar(name: string, fallback: string): string {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
 }
 
-// Builds the chart lines for a series response: one line for gauge/counter/
-// up-down, three percentile lines for histograms.
 function buildLines(series: MetricSeriesResponse): ChartLine[] {
-  if (series.kind === "histogram") {
+  if (series.kind === "histogram" && series.histogramMode === "sum") {
+    return [{ label: "sum", color: cssVar("--accent", "#a855f7"), values: series.sum ?? [] }];
+  }
+  if (series.kind === "histogram" && series.histogramMode === "buckets") {
+    const colors = ["--info", "--success", "--accent", "--warning", "--danger"];
+    return (series.buckets ?? []).map((bucket, index) => ({
+      label: bucket.upperBound === null ? "+Inf" : `≤ ${bucket.upperBound}`,
+      color: cssVar(colors[index % colors.length]!, "#60a5fa"),
+      values: bucket.values,
+    }));
+  }
+  if (series.kind === "histogram" && series.histogramMode !== "count" && !series.showCount) {
     return [
       { label: "p50", color: cssVar("--info", "#60a5fa"), values: series.p50 ?? [] },
       { label: "p90", color: cssVar("--accent", "#a855f7"), values: series.p90 ?? [] },
       { label: "p99", color: cssVar("--warning", "#fbbf24"), values: series.p99 ?? [] },
     ];
   }
-  const label = series.kind === "counter" ? "rate" : "value";
+  const label = series.kind === "counter" ? "rate" : series.histogramMode === "count" || series.showCount ? "count" : "value";
   return [{ label, color: cssVar("--accent", "#a855f7"), values: series.values ?? [] }];
 }
 
-function kindLabel(kind: string): string {
+function kindLabel(kind: string, histogramMode: HistogramMode): string {
   switch (kind) {
     case "counter":
       return "Counter · rate/s";
     case "upDownCounter":
       return "Up/down counter";
     case "histogram":
-      return "Histogram · percentiles";
+      return `Histogram · ${histogramMode}`;
     default:
       return "Gauge";
   }
 }
 
-export function MetricsPage() {
+export function MetricsPage({
+  routeResourceName,
+  routeMeterName,
+  routeMetricName,
+  routeWindowSeconds,
+  routeView,
+  routePaused,
+  routeDimensions,
+  routeHistogramMode,
+  routeZoomStartMs,
+  routeZoomEndMs,
+  onRouteChange,
+  onNavigateToSpan,
+}: {
+  routeResourceName: string | null;
+  routeMeterName: string | null;
+  routeMetricName: string | null;
+  routeWindowSeconds: number;
+  routeView: "chart" | "table";
+  routePaused: boolean;
+  routeDimensions: Record<string, Array<string | null>>;
+  routeHistogramMode: HistogramMode;
+  routeZoomStartMs: number | null;
+  routeZoomEndMs: number | null;
+  onRouteChange: (state: MetricRouteState) => void;
+  onNavigateToSpan: (traceId: string, spanId: string) => void;
+}) {
   const telemetry = useTelemetry();
-  const [selectedKey, setSelectedKey] = useState<string | null>(null);
-  const [windowSeconds, setWindowSeconds] = useState(300);
-  const [paused, setPaused] = useState(false);
-  const [series, setSeries] = useState<MetricSeriesResponse | null>(null);
+  const { resources } = useResources();
+  const [seriesState, setSeriesState] = useState<{ key: string; value: MetricSeriesResponse | null } | null>(null);
+  const [clearing, setClearing] = useState(false);
+  const [clearStatus, setClearStatus] = useState<{ message: string; error: boolean } | null>(null);
 
-  const metrics = useMemo(
-    () => [...(telemetry?.metrics ?? [])].sort((a, b) => a.name.localeCompare(b.name)),
+  const allMetrics = useMemo(
+    () => [...(telemetry?.metrics ?? [])].sort((left, right) => left.name.localeCompare(right.name)),
     [telemetry],
   );
-
-  // Default to the first metric, and reset the selection when the current one is
-  // no longer present — e.g. after switching to a different AppHost, whose metric
-  // set is entirely different.
-  useEffect(() => {
-    const exists = selectedKey !== null && metrics.some((m) => metricKey(m) === selectedKey);
-    if (!exists) {
-      setSelectedKey(metrics.length > 0 ? metricKey(metrics[0]!) : null);
+  const resourceOptions = useMemo(() => {
+    const resourceTypes = new Map(resources.map((resource) => [resource.name, resource.resourceType]));
+    const metricResources = new Set(allMetrics.flatMap((metric) => metric.resourceName === null ? [] : [metric.resourceName]));
+    if (routeResourceName !== null && resources.some((resource) => resource.name === routeResourceName)) {
+      metricResources.add(routeResourceName);
     }
-  }, [metrics, selectedKey]);
-
-  const active: MetricSummary | null = useMemo(
-    () => metrics.find((m) => metricKey(m) === selectedKey) ?? null,
-    [metrics, selectedKey],
+    return [...metricResources]
+      .sort((left, right) => left.localeCompare(right))
+      .map((name) => ({ value: name, label: name, group: resourceTypes.get(name) ?? "Telemetry" }));
+  }, [allMetrics, resources, routeResourceName]);
+  const selectedResource = routeResourceName !== null
+    && resourceOptions.some((option) => option.value === routeResourceName)
+    ? routeResourceName
+    : resourceOptions[0]?.value ?? null;
+  const metrics = useMemo(
+    () => allMetrics.filter((metric) => metric.resourceName === selectedResource),
+    [allMetrics, selectedResource],
   );
+  const meterExists = routeMeterName === null || metrics.some((metric) => metric.meterName === routeMeterName);
+  const active: MetricSummary | null = routeMetricName !== null
+    ? metrics.find((metric) => metric.name === routeMetricName && (routeMeterName === null || metric.meterName === routeMeterName)) ?? null
+    : routeMeterName !== null
+      ? metrics.find((metric) => metric.meterName === routeMeterName) ?? null
+      : metrics[0] ?? null;
+  const selectedWindowSeconds = TIME_RANGES.some((range) => range.seconds === routeWindowSeconds)
+    ? routeWindowSeconds
+    : 300;
+  const activeName = active?.name ?? null;
+  const activeMeterName = active?.meterName ?? null;
+  const activeResourceName = active?.resourceName ?? null;
+  const activeKind = active?.kind ?? null;
+  const activeSeriesKey = activeName === null
+    ? null
+    : `${activeResourceName ?? ""}\u0000${activeMeterName ?? ""}\u0000${activeName}`;
+  const series = activeSeriesKey !== null && seriesState?.key === activeSeriesKey ? seriesState.value : null;
+
+  const updateRoute = (changes: Partial<MetricRouteState>): void => {
+    onRouteChange({
+      resourceName: selectedResource,
+      meterName: active?.meterName ?? null,
+      metricName: active?.name ?? null,
+      windowSeconds: selectedWindowSeconds,
+      view: routeView,
+      paused: routePaused,
+      dimensions: routeDimensions,
+      histogramMode: routeHistogramMode,
+      zoomStartMs: routeZoomStartMs,
+      zoomEndMs: routeZoomEndMs,
+      ...changes,
+    });
+  };
 
   const fetchSeries = useCallback(async () => {
-    if (!active) {
+    if (activeName === null) {
+      setSeriesState(null);
       return;
     }
-    const result = await getMetricSeries({
-      name: active.name,
-      resourceName: active.resourceName,
-      windowSeconds,
+    const value = await getMetricSeries({
+      name: activeName,
+      meterName: activeMeterName,
+      resourceName: activeResourceName,
+      windowSeconds: selectedWindowSeconds,
       maxPoints: 600,
+      dimensions: routeDimensions,
+      histogramMode: activeKind === "histogram" ? routeHistogramMode : undefined,
     });
-    setSeries(result);
-  }, [active, windowSeconds]);
+    setSeriesState({ key: activeSeriesKey!, value });
+  }, [activeKind, activeMeterName, activeName, activeResourceName, activeSeriesKey, routeDimensions, routeHistogramMode, selectedWindowSeconds]);
 
-  // Fetch immediately when the selection or window changes.
   useEffect(() => {
-    setSeries(null);
     void fetchSeries();
   }, [fetchSeries]);
 
-  // Poll while live (not paused).
   useEffect(() => {
-    if (paused || !active) {
+    if (routePaused || activeName === null) {
       return;
     }
     const id = window.setInterval(() => void fetchSeries(), POLL_MS);
     return () => window.clearInterval(id);
-  }, [paused, active, fetchSeries]);
+  }, [activeName, fetchSeries, routePaused]);
+
+  const clearMetricData = async (resourceName: string | null): Promise<void> => {
+    setClearing(true);
+    setClearStatus(null);
+    try {
+      await clearMetrics(resourceName);
+      setSeriesState(null);
+      updateRoute({ resourceName: null, meterName: null, metricName: null, paused: false, dimensions: {}, histogramMode: "percentiles", zoomStartMs: null, zoomEndMs: null });
+      setClearStatus({
+        message: resourceName === null ? "Cleared all metrics." : `Cleared metrics for ${resourceName}.`,
+        error: false,
+      });
+    } catch (error) {
+      setClearStatus({ message: `Could not clear metrics: ${String(error)}`, error: true });
+    } finally {
+      setClearing(false);
+    }
+  };
 
   const lines = useMemo(() => (series ? buildLines(series) : []), [series]);
+  const chart = series && series.timestampsMs.length > 0 ? (
+    <MetricChart
+      timestampsMs={series.timestampsMs}
+      lines={lines}
+      unit={series.unit}
+      kind={series.kind}
+      height={300}
+      zoomStartMs={routeZoomStartMs}
+      zoomEndMs={routeZoomEndMs}
+      onUserZoom={(zoomStartMs, zoomEndMs) => updateRoute({ paused: true, zoomStartMs, zoomEndMs })}
+    />
+  ) : (
+    <div className="center-fill cell-muted">
+      {active === null ? "Select a metric" : series === null ? "Loading…" : "No samples in this window yet."}
+    </div>
+  );
 
-  if (!telemetry || metrics.length === 0) {
-    return (
-      <div className="page">
-        <div className="page__header">
-          <div>
-            <div className="page__title">Metrics</div>
-            <div className="page__subtitle">Loading…</div>
-          </div>
-        </div>
-        <div className="page__body">
-          <EmptyState icon={<MetricsIcon size={26} />} title="No metrics yet">
-            Metrics will appear here as OTLP data arrives.
-          </EmptyState>
-        </div>
-      </div>
-    );
-  }
+  const emptyState = telemetry === null
+    ? { title: "Loading metrics", content: "Waiting for the telemetry snapshot." }
+    : selectedResource === null
+      ? { title: "No metric resources", content: "Metrics will appear here as OTLP data arrives." }
+      : metrics.length === 0
+        ? { title: "No meters for this resource", content: "This resource has not reported any metric instruments." }
+        : !meterExists
+          ? { title: "Meter not found", content: `The meter ${routeMeterName} is not available for this resource.` }
+          : routeMetricName !== null && active === null
+            ? { title: "Instrument not found", content: `The instrument ${routeMetricName} is not available in this meter.` }
+            : null;
 
   return (
-    <div className="page">
-      <div className="page__header">
-        <div>
-          <div className="page__title">Metrics</div>
-          <div className="page__subtitle">{metrics.length} instruments</div>
+    <Page aria-labelledby="deck-page-metrics-title">
+      <PageHeader>
+        <PageHeading>
+          <PageTitle id="deck-page-metrics-title">Metrics</PageTitle>
+          <PageSubtitle>
+            {telemetry === null
+              ? "Loading…"
+              : selectedResource === null
+                ? "Select a resource"
+                : `${metrics.length} instruments${routePaused ? " · paused" : ""}`}
+          </PageSubtitle>
+        </PageHeading>
+      </PageHeader>
+
+      <PageToolbar ariaLabel="Metric tools">
+        <Select
+          ariaLabel="Resource"
+          options={resourceOptions}
+          value={selectedResource ?? ""}
+          placeholder="Select a resource"
+          disabled={resourceOptions.length === 0}
+          onValueChange={(resourceName) => updateRoute({ resourceName, meterName: null, metricName: null, dimensions: {}, histogramMode: "percentiles", zoomStartMs: null, zoomEndMs: null })}
+        />
+        <div className="seg" role="group" aria-label="Time range">
+          {TIME_RANGES.map((range) => (
+            <button
+              key={range.seconds}
+              type="button"
+              className={`seg__btn ${range.seconds === selectedWindowSeconds ? "active" : ""}`}
+              aria-pressed={range.seconds === selectedWindowSeconds}
+              title={range.title}
+              onClick={() => updateRoute({ windowSeconds: range.seconds, zoomStartMs: null, zoomEndMs: null })}
+            >
+              {range.label}
+            </button>
+          ))}
         </div>
-      </div>
+        <div className="page__header-spacer" />
+        <Switch
+          label="Pause incoming data"
+          checked={routePaused}
+          disabled={active === null}
+          onCheckedChange={(paused) => updateRoute({ paused, ...(!paused ? { zoomStartMs: null, zoomEndMs: null } : {}) })}
+        />
+        <CommandMenu
+          ariaLabel="Clear metrics"
+          triggerContent="Clear"
+          triggerIcon={<NamedIcon name="Delete" size={16} />}
+          placement="below-end"
+          entries={[
+            {
+              id: "clear-all",
+              label: "Clear all resources",
+              icon: <NamedIcon name="BoxMultiple" size={16} />,
+              tone: "danger",
+              disabled: clearing || allMetrics.length === 0,
+              onSelect: () => void clearMetricData(null),
+            },
+            {
+              id: "clear-resource",
+              label: selectedResource === null ? "Clear selected resource" : `Clear ${selectedResource}`,
+              icon: <NamedIcon name="CheckmarkCircle" size={16} />,
+              tone: "danger",
+              disabled: clearing || selectedResource === null,
+              onSelect: () => void clearMetricData(selectedResource),
+            },
+          ]}
+        />
+      </PageToolbar>
 
-      <div className="page__body">
-        <div className="metrics-layout">
-          <div className="metric-list">
-            {metrics.map((metric) => {
-              const key = metricKey(metric);
-              return (
-                <button
-                  key={key}
-                  className={`metric-item ${key === selectedKey ? "active" : ""}`}
-                  onClick={() => setSelectedKey(key)}
-                >
-                  <div className="metric-item__name">{metric.name}</div>
-                  <div className="metric-item__meta">
-                    <span>{formatMetricValue(metric.lastValue, metric.unit)}</span>
-                    <span>·</span>
-                    <span>{metric.resourceName ?? "—"}</span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
+      <PageBody>
+        {emptyState === null ? (
+          <div className="metrics-layout">
+            <div className="metric-list">
+              <MetricTreeSelector
+                metrics={metrics}
+                active={active}
+                onSelect={(metric) => updateRoute({ meterName: metric.meterName ?? null, metricName: metric.name, dimensions: {}, histogramMode: "percentiles", zoomStartMs: null, zoomEndMs: null })}
+              />
+            </div>
 
-          <div className="metric-detail">
-            {active ? (
-              <>
-                <div className="metric-detail__head">
-                  <div>
-                    <span className="metric-detail__value">
-                      {formatMetricValue(active.lastValue, active.unit)}
-                    </span>
-                    <span className="cell-muted">
-                      {active.name}
-                      {displayUnit(active.unit) ? ` (${displayUnit(active.unit)})` : ""}
-                    </span>
+            <div className="metric-detail">
+              {active ? (
+                <>
+                  <div className="metric-detail__head">
+                    <div>
+                      <span className="metric-detail__value">
+                        {formatMetricValue(active.lastValue, active.unit)}
+                      </span>
+                      <span className="cell-muted">
+                        {active.name}
+                        {displayUnit(active.unit) ? ` (${displayUnit(active.unit)})` : ""}
+                      </span>
+                    </div>
                   </div>
-                  <div className="metric-toolbar">
-                    <button
-                      className={`btn btn--sm ${paused ? "btn--primary" : ""}`}
-                      onClick={() => setPaused((p) => !p)}
-                      title={paused ? "Resume live updates" : "Pause live updates"}
-                    >
-                      {paused ? <PlayIcon size={13} /> : <PauseIcon size={13} />}
-                      {paused ? "Resume" : "Pause"}
-                    </button>
-                    <div className="seg" role="group" aria-label="Time range">
-                      {TIME_RANGES.map((r) => (
+                  <div className="cell-muted metric-detail__sub">
+                    {kindLabel(active.kind, routeHistogramMode)} · {active.resourceName ?? "—"} · {active.meterName ?? "Unknown meter"} · {active.pointCount.toLocaleString()} points
+                  </div>
+                  {active.description ? <div className="metric-detail__description">{active.description}</div> : null}
+                  {series?.hasOverflow ? <div className="metric-overflow" role="status">Some metric dimensions exceeded the dashboard limit.</div> : null}
+                  <MetricDimensionFilters
+                    filters={series?.dimensionFilters ?? []}
+                    selected={routeDimensions}
+                    onChange={(dimensions) => updateRoute({ dimensions, zoomStartMs: null, zoomEndMs: null })}
+                  />
+                  {active.kind === "histogram" ? (
+                    <div className="metric-histogram-options seg" role="group" aria-label="Histogram aggregation">
+                      {(["percentiles", "count", "sum", "buckets"] as const).map((mode) => (
                         <button
-                          key={r.seconds}
-                          className={`seg__btn ${r.seconds === windowSeconds ? "active" : ""}`}
-                          aria-pressed={r.seconds === windowSeconds}
-                          onClick={() => setWindowSeconds(r.seconds)}
+                          key={mode}
+                          type="button"
+                          className={`seg__btn ${routeHistogramMode === mode ? "active" : ""}`}
+                          aria-pressed={routeHistogramMode === mode}
+                          onClick={() => updateRoute({ histogramMode: mode, zoomStartMs: null, zoomEndMs: null })}
                         >
-                          {r.label}
+                          {mode[0]!.toUpperCase() + mode.slice(1)}
                         </button>
                       ))}
                     </div>
-                  </div>
-                </div>
-                <div className="cell-muted metric-detail__sub">
-                  {kindLabel(active.kind)} · {active.resourceName ?? "—"} ·{" "}
-                  {active.pointCount.toLocaleString()} points
-                  {paused ? <span className="metric-paused"> · paused</span> : null}
-                </div>
-                <div className="metric-detail__chart">
-                  {series && series.timestampsMs.length > 0 ? (
-                    <MetricChart
-                      timestampsMs={series.timestampsMs}
-                      lines={lines}
-                      unit={series.unit}
-                      kind={series.kind}
-                      height={300}
-                      onUserZoom={() => setPaused(true)}
-                    />
-                  ) : (
-                    <div className="center-fill cell-muted">
-                      {series === null ? "Loading…" : "No samples in this window yet."}
-                    </div>
-                  )}
-                </div>
-              </>
-            ) : (
-              <div className="center-fill">Select a metric</div>
-            )}
+                  ) : null}
+                  <Tabs
+                    ariaLabel="Metric view"
+                    selectedId={routeView}
+                    onTabChange={(view) => updateRoute({ view: view as "chart" | "table" })}
+                    tabs={[
+                      {
+                        id: "chart",
+                        label: "Chart",
+                        icon: <NamedIcon name="Graph" size={16} />,
+                        content: <div className="metric-detail__chart">{chart}</div>,
+                      },
+                      {
+                        id: "table",
+                        label: "Table",
+                        icon: <NamedIcon name="TableLightning" size={16} />,
+                        content: <MetricSeriesTable series={series} />,
+                      },
+                    ]}
+                  />
+                  <MetricExemplars
+                    exemplars={series?.exemplars ?? []}
+                    unit={series?.unit ?? active.unit}
+                    onNavigateToSpan={onNavigateToSpan}
+                  />
+                </>
+              ) : null}
+            </div>
           </div>
+        ) : (
+          <EmptyState icon={<MetricsIcon size={26} />} title={emptyState.title}>
+            {emptyState.content}
+          </EmptyState>
+        )}
+      </PageBody>
+
+      {clearStatus ? (
+        <div className="toast" role="status" aria-live="polite">
+          <span className={`state__dot ${clearStatus.error ? "error" : "success"}`} />
+          {clearStatus.message}
         </div>
-      </div>
+      ) : null}
+    </Page>
+  );
+}
+
+function MetricSeriesTable({ series }: { series: MetricSeriesResponse | null }) {
+  if (series === null || series.timestampsMs.length === 0) {
+    return <div className="center-fill cell-muted metric-series-empty">No samples in this window yet.</div>;
+  }
+
+  const histogramMode = series.histogramMode ?? (series.showCount ? "count" : "percentiles");
+  const [lines, headers] = series.kind !== "histogram" || histogramMode === "count"
+    ? [[series.values ?? []], [histogramMode === "count" ? "Count" : "Value"]]
+    : histogramMode === "sum"
+      ? [[series.sum ?? []], ["Sum"]]
+      : histogramMode === "buckets"
+        ? [(series.buckets ?? []).map((bucket) => bucket.values), (series.buckets ?? []).map((bucket) => bucket.upperBound === null ? "+Inf" : `≤ ${bucket.upperBound}`)]
+        : [[series.p50 ?? [], series.p90 ?? [], series.p99 ?? []], ["p50", "p90", "p99"]];
+  return (
+    <div className="table-wrap metric-series-table">
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Time</th>
+            {headers.map((header) => <th key={header}>{header}</th>)}
+          </tr>
+        </thead>
+        <tbody>
+          {series.timestampsMs.map((timestamp, index) => (
+            <tr key={`${timestamp}-${index}`}>
+              <td className="cell-mono">{formatTimeWithMillis(new Date(timestamp))}</td>
+              {lines.map((values, lineIndex) => (
+                <td key={headers[lineIndex]} className="cell-mono">
+                  {formatMetricValue(values[index] ?? null, series.unit)}
+                </td>
+              ))}
+            </tr>
+          ))}
+        </tbody>
+      </table>
     </div>
   );
 }

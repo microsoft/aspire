@@ -12,7 +12,6 @@ using Aspire.Tests.Shared.DashboardModel;
 using Aspire.Tests.Shared.Telemetry;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -22,7 +21,6 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class ResourceMenuBuilderTests
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-    private readonly IconResolver _iconResolver = new IconResolver(NullLogger<IconResolver>.Instance);
     private readonly DashboardDialogService _dialogService;
 
     public ResourceMenuBuilderTests()
@@ -45,7 +43,6 @@ public sealed class ResourceMenuBuilderTests
             new TestStringLocalizer<Resources.Resources>(),
             new TestStringLocalizer<Resources.AIAssistant>(),
             new TestStringLocalizer<Resources.AIPrompts>(),
-            _iconResolver,
             _dialogService);
     }
 

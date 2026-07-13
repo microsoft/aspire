@@ -1,4 +1,5 @@
 import type { DeckConfig } from "../api/types";
+import { Button } from "../toolkit";
 
 // Shown when Deck has no AppHost to talk to: either no resource-service URL was
 // configured (standalone launch with no AppHost) or the configured endpoint is
@@ -7,9 +8,11 @@ import type { DeckConfig } from "../api/types";
 export function NotConnected({
   config,
   state,
+  onRetry,
 }: {
   config: DeckConfig | null;
   state: "disconnected" | "error";
+  onRetry: () => void;
 }) {
   const hasResourceService = Boolean(config?.resourceServiceUrl);
 
@@ -29,6 +32,7 @@ export function NotConnected({
             ? "Aspire Deck is configured to connect to a resource service, but no response is coming back. Make sure the AppHost is running and the endpoint below is reachable."
             : "Aspire Deck isn't connected to a running AppHost yet, so there are no resources or telemetry to show. Start your app with Deck attached, or point Deck at a running resource service."}
         </p>
+        {state === "error" ? <Button variant="primary" onClick={onRetry}>Retry</Button> : null}
 
         <div className="splash__hint">
           <div className="splash__hint-title">Start your app with Deck</div>

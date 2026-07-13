@@ -16,7 +16,7 @@ dashboard's Copilot/VS integration — its extensibility story is the **canvas**
 
 ## Architecture
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │ Aspire Deck (Tauri process)                                 │
 │                                                             │

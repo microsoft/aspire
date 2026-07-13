@@ -5,9 +5,17 @@ namespace Aspire.Dashboard.Model;
 
 using Aspire.Dashboard.Components.Deck;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.FluentUI.AspNetCore.Components;
 
 internal static class ResourceIconHelpers
 {
+    public static Icon? ResolveCustomIcon(IconResolver iconResolver, ResourceViewModel resource, IconSize desiredSize)
+    {
+        return !string.IsNullOrWhiteSpace(resource.IconName)
+            ? iconResolver.ResolveIconName(resource.IconName, desiredSize, resource.IconVariant ?? IconVariant.Filled)
+            : null;
+    }
+
     /// <summary>
     /// Maps a resource to a Deck icon, checking for a custom icon first, then falling back to a
     /// default icon based on the resource type.
