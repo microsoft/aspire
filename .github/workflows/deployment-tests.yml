@@ -401,10 +401,11 @@ jobs:
     name: Post PR Comment
     needs: [deploy-test]
     runs-on: ubuntu-latest
-    # Temporarily disabled: asciinema.org uploads and PR comment posting are turned off.
+    # Disabled: asciinema.org uploads and PR comment posting are turned off because CI
+    # was generating too much traffic to asciinema.org, contributing to it becoming
+    # unreachable from GitHub Actions runners. See
+    # https://github.com/asciinema/asciinema-server/issues/479#issuecomment-4953403559
     # Recordings are still captured and uploaded as CI artifacts by the deploy-test job.
-    # Original run condition preserved below for re-enabling:
-    #   ${{ always() && inputs.pr_number != '' }}
     if: false
     permissions:
       pull-requests: write

@@ -21,11 +21,11 @@ on:
 
 jobs:
   add-recording-comment:
-    # Temporarily disabled: asciinema.org uploads and PR comment posting are turned off.
+    # Disabled: asciinema.org uploads and PR comment posting are turned off because CI
+    # was generating too much traffic to asciinema.org, contributing to it becoming
+    # unreachable from GitHub Actions runners. See
+    # https://github.com/asciinema/asciinema-server/issues/479#issuecomment-4953403559
     # Recordings are still captured and uploaded as CI artifacts by the run-tests workflow.
-    # Original run condition preserved below for re-enabling:
-    #   ${{ github.repository_owner == 'microsoft' &&
-    #       (github.event.workflow_run.event == 'pull_request' || github.event_name == 'workflow_dispatch') }}
     if: false
     runs-on: ubuntu-latest
     permissions:
