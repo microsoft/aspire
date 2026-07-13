@@ -125,29 +125,42 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // `rad install kubernetes` (Step 9) then installs the matching control plane, keeping the run
             // deterministic across Radius releases. Keep this aligned with
             // RadiusBicepExtension.Version (major.minor 0.59) so the installed control plane matches
-            // the Bicep types the publisher emits. install.sh is fetched pinned to the same release
-            // tag (v{version}) we install — not the moving `main` branch — so the installer content
-            // can't drift independently (supply-chain hardening). install.sh's needsSudo checks the
-            // install dir first and skips sudo when that directory already exists and is writable;
-            // it only falls back to the parent dir when the install dir is absent. Pre-creating the
-            // user-owned {wsRoot}/radbin makes it see a writable target and skip sudo entirely.
+            // the Bicep types the publisher emits. install.sh is fetched pinned to the immutable
+            // commit SHA behind the v0.59.0 release tag (radiusInstallScriptSha) rather than a branch
+            // or tag ref, either of which can be retargeted, so the executed installer content cannot
+            // drift out from under this pin (supply-chain hardening). The download is retried a few
+            // times to tolerate transient GitHub CDN failures on scheduled runs. install.sh's needsSudo
+            // checks the install dir first and skips sudo when that directory already exists and is
+            // writable; it only falls back to the parent dir when the install dir is absent. Pre-creating
+            // the user-owned {wsRoot}/radbin makes it see a writable target and skip sudo entirely.
             const string radiusVersion = "0.59.0";
+
+            // Immutable commit SHA that the v0.59.0 tag pointed to in radius-project/radius. Update this
+            // together with radiusVersion (and RadiusBicepExtension.Version) when bumping the Radius
+            // release, re-resolving the tag to its commit SHA.
+            const string radiusInstallScriptSha = "2bf2c25fcdde20d4cba1371618829bbbe1f9a997";
             output.WriteLine("Step 1a: Installing the Radius (rad) CLI into the workspace...");
             await auto.TypeAsync(
                 // `set -o pipefail` so a failed `curl` propagates through the pipe instead of being
-                // masked by `install.sh`'s exit code (the interactive shell does not enable pipefail
-                // by default, unlike the GitHub Actions `bash -eo pipefail` runner shell this
-                // replaced). Scoped to this compound command via a subshell so it never leaks into
-                // later steps' commands.
+                // masked by `install.sh`'s exit code; the interactive terminal shell does not enable
+                // pipefail by default. Scoped to this compound command via a subshell so it never leaks
+                // into later steps' commands. The install is retried up to three times (deleting any
+                // partial binary between attempts) to ride out transient raw.githubusercontent.com or
+                // release-asset download failures, mirroring the CLI E2E installer's retry loop.
                 $"( set -o pipefail && " +
                 $"mkdir -p \"{wsRoot}/radbin\" \"{wsRoot}/home\" && " +
                 $"export HOME=\"{wsRoot}/home\" && " +
-                $"curl -fsSL \"https://raw.githubusercontent.com/radius-project/radius/v{radiusVersion}/deploy/install.sh\" | " +
+                $"{{ for i in 1 2 3; do " +
+                $"curl -fsSL \"https://raw.githubusercontent.com/radius-project/radius/{radiusInstallScriptSha}/deploy/install.sh\" | " +
                 $"/bin/bash -s -- --version \"{radiusVersion}\" --install-dir \"{wsRoot}/radbin\" && " +
+                $"test -x \"{wsRoot}/radbin/rad\" && break; " +
+                $"echo \"Retry $i: rad download failed, retrying in 5s...\"; " +
+                $"rm -f \"{wsRoot}/radbin/rad\"; sleep 5; done; " +
+                $"test -x \"{wsRoot}/radbin/rad\"; }} && " +
                 $"\"{wsRoot}/radbin/rad\" version --cli ) && " +
                 $"export PATH=\"{wsRoot}/radbin:$PATH\"");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
 
             // Step 1b: Isolate kubeconfig, the Radius (`rad`) config, and Docker credentials to
             // throwaway files under the TemporaryWorkspace so this test never mutates the developer's
