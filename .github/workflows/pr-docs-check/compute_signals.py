@@ -145,7 +145,7 @@ PATH_TRIGGERS: list[tuple[str, str, str]] = [
     # because nothing in the catalog matched these paths — the RPC payload
     # was byte-identical and the PR carried no breaking wording or label.)
     ("polyglot_code_generator_changed", "any",
-     r"^src/(Aspire\.Hosting\.CodeGeneration\.[^/]+|Shared/CodeGeneration)/.+$")
+     r"^src/(Aspire\.Hosting\.CodeGeneration\.[^/]+|Shared/CodeGeneration)/.+$"),
     # Files whose name ends in `Defaults.cs` or `Constants.cs`
     # typically hold shipping default values (timeouts, retry
     # counts, well-known property names, image tags, etc.).
