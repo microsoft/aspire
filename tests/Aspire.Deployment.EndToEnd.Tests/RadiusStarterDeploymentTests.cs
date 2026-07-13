@@ -128,9 +128,15 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             const string radiusVersion = "0.59.0";
             output.WriteLine("Step 1a: Installing the Radius (rad) CLI into the workspace...");
             await auto.TypeAsync(
+                // `set -o pipefail` so a failed `curl` propagates through the pipe instead of being
+                // masked by `install.sh`'s exit code (the interactive shell does not enable pipefail
+                // by default, unlike the GitHub Actions `bash -eo pipefail` runner shell this
+                // replaced). Scoped to this compound command via a subshell so it never leaks into
+                // later steps' commands.
+                $"( set -o pipefail && " +
                 $"mkdir -p \"{wsRoot}/radbin\" && " +
                 $"curl -fsSL \"https://raw.githubusercontent.com/radius-project/radius/v{radiusVersion}/deploy/install.sh\" | " +
-                $"/bin/bash -s -- --version \"{radiusVersion}\" --install-dir \"{wsRoot}/radbin\" && " +
+                $"/bin/bash -s -- --version \"{radiusVersion}\" --install-dir \"{wsRoot}/radbin\" ) && " +
                 $"export PATH=\"{wsRoot}/radbin:$PATH\" && " +
                 $"rad version --cli");
             await auto.EnterAsync();
