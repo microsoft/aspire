@@ -333,6 +333,8 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 debugConfiguration.serverReadyAction = determineServerReadyAction(baseProfile?.launchBrowser, baseProfile?.applicationUrl, baseProfile?.launchUrl);
             }
 
+            // TODO: Remove this block — the dashboard no longer recognizes ASPIRE_DASHBOARD_AI_DISABLED.
+            // See https://github.com/microsoft/aspire/issues/18751
             // Temporarily disable GH Copilot on the dashboard before the extension implementation is approved
             if (launchOptions.isApphost) {
                 env.push({ name: "ASPIRE_DASHBOARD_AI_DISABLED", value: "true" });

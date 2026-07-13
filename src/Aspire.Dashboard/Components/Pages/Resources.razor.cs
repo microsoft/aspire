@@ -7,7 +7,6 @@ using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
@@ -15,8 +14,6 @@ using Aspire.Dashboard.Utils;
 using Aspire.Hosting.Utils;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -62,17 +59,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
     [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
-    [Inject]
     public required IOptionsMonitor<DashboardOptions> DashboardOptions { get; init; }
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
     [Inject]
     public required ILogger<Resources> Logger { get; init; }
-    [Inject]
-    public required IStringLocalizer<Dashboard.Resources.AIAssistant> AIAssistantLoc { get; init; }
-    [Inject]
-    public required IStringLocalizer<Dashboard.Resources.AIPrompts> AIPromptsLoc { get; init; }
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
     [Inject]
@@ -138,7 +129,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
     private bool _showResourceTypeColumn;
-    private AIContext? _aiContext;
 
     private bool Filter(ResourceViewModel resource) => PageViewModel.Filter(resource);
 
@@ -196,17 +186,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         TelemetryContextProvider.Initialize(TelemetryContext);
-        _aiContext = AIContextProvider.AddNew(nameof(Resources), c =>
-        {
-            c.BuildIceBreakers = (builder, context) =>
-            {
-                var hasUnhealthyResources = _resourceByName.Values
-                    .Where(r => !r.IsResourceHidden(PageViewModel.ShowHiddenResources))
-                    .Any(r => r.KnownState != KnownResourceState.Running || r.HealthStatus is HealthStatus.Unhealthy or HealthStatus.Degraded);
-
-                builder.Resources(context, hasUnhealthyResources);
-            };
-        });
 
         (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
 
@@ -323,7 +302,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                     }
 
                     UpdateMaxHighlightedCount();
-                    _aiContext?.ContextHasChanged();
                     await UpdateResourceGraphResourcesAsync();
                     await InvokeAsync(async () =>
                     {
@@ -1004,7 +982,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     public async ValueTask DisposeAsync()
     {
-        _aiContext?.Dispose();
         CompleteContextMenuClosed();
 
         _resourcesInteropReference?.Dispose();
