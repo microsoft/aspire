@@ -126,9 +126,10 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // RadiusBicepExtension.Version (major.minor 0.59) so the installed control plane matches
             // the Bicep types the publisher emits. install.sh is fetched pinned to the same release
             // tag (v{version}) we install — not the moving `main` branch — so the installer content
-            // can't drift independently (supply-chain hardening). install.sh decides whether to sudo
-            // by inspecting the install dir's immediate parent; pre-creating the (user-owned)
-            // {wsRoot}/radbin makes it see a writable target and skip sudo entirely.
+            // can't drift independently (supply-chain hardening). install.sh's needsSudo checks the
+            // install dir first and skips sudo when that directory already exists and is writable;
+            // it only falls back to the parent dir when the install dir is absent. Pre-creating the
+            // user-owned {wsRoot}/radbin makes it see a writable target and skip sudo entirely.
             const string radiusVersion = "0.59.0";
             output.WriteLine("Step 1a: Installing the Radius (rad) CLI into the workspace...");
             await auto.TypeAsync(
