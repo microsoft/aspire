@@ -13,6 +13,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// Represents a single recipe entry inside a recipe pack (recipeKind + recipeLocation).
 /// </summary>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class RecipeEntryConstruct : ProvisionableConstruct
 {
     private BicepValue<string>? _recipeKind;
