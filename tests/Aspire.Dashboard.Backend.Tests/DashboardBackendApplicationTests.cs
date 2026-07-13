@@ -2,12 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
+using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Http.Connections;
+using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using ProtoResource = Aspire.DashboardService.Proto.V1.Resource;
 
@@ -26,7 +30,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -206,11 +210,148 @@ public class DashboardBackendApplicationTests
             property => Assert.Equal("terminal.replicaIndex", property.Name));
     }
 
+    [Fact]
+    public async Task ResourceEventSource_SendsSnapshotBeforeIncrementalChanges()
+    {
+        var service = new DashboardResourceSnapshotService(
+            new ConfigurationBuilder().Build(),
+            NullLoggerFactory.Instance,
+            NullLogger<DashboardResourceSnapshotService>.Instance);
+        var initialResource = new ProtoResource
+        {
+            Name = "api",
+            DisplayName = "API",
+            ResourceType = "Project",
+            Uid = "resource-1",
+            State = "Starting"
+        };
+        var initialUpdate = new WatchResourcesUpdate
+        {
+            InitialData = new InitialResourceData()
+        };
+        initialUpdate.InitialData.Resources.Add(initialResource);
+        service.ApplyUpdate(initialUpdate);
+
+        await using var events = service
+            .WatchAsync(TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.True(await events.MoveNextAsync());
+        var snapshot = events.Current;
+        Assert.Equal("snapshot", snapshot.Type);
+        Assert.Equal("Starting", Assert.Single(snapshot.Resources!).State);
+        Assert.Null(snapshot.Upserts);
+        Assert.Null(snapshot.Deletes);
+
+        var updatedResource = initialResource.Clone();
+        updatedResource.State = "Running";
+        var changes = new WatchResourcesUpdate
+        {
+            Changes = new WatchResourcesChanges()
+        };
+        changes.Changes.Value.Add(new WatchResourcesChange { Upsert = updatedResource });
+        changes.Changes.Value.Add(new WatchResourcesChange
+        {
+            Delete = new ResourceDeletion { ResourceName = "worker", ResourceType = "Project" }
+        });
+        service.ApplyUpdate(changes);
+
+        Assert.True(await events.MoveNextAsync());
+        var change = events.Current;
+        Assert.Equal("change", change.Type);
+        Assert.Equal("Running", Assert.Single(change.Upserts!).State);
+        Assert.Equal("worker", Assert.Single(change.Deletes!));
+        Assert.Null(change.Resources);
+    }
+
+    [Fact]
+    public async Task ResourceHub_StreamsSourceGeneratedSnapshotAndChanges()
+    {
+        DashboardResource[] resources =
+        [
+            new DashboardResource(
+                "api",
+                "Project",
+                "API",
+                "resource-1",
+                "Running",
+                "success",
+                "Healthy",
+                null,
+                null,
+                null,
+                [],
+                [],
+                [],
+                [],
+                [],
+                [],
+                false,
+                true,
+                "Code",
+                "regular",
+                false,
+                null)
+        ];
+        DashboardResourcesEvent[] resourceEvents =
+        [
+            DashboardResourcesEvent.Snapshot(resources),
+            DashboardResourcesEvent.Change(resources, ["worker"])
+        ];
+
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardResourceEventSource>(new TestResourceEventSource(resourceEvents));
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var connection = new HubConnectionBuilder()
+            .WithUrl($"http://localhost{DashboardApiContract.ResourceStreamPath}", options =>
+            {
+                options.HttpMessageHandlerFactory = _ => app.GetTestServer().CreateHandler();
+                options.Transports = HttpTransportType.LongPolling;
+            })
+            .AddJsonProtocol(options =>
+            {
+                options.PayloadSerializerOptions.TypeInfoResolverChain.Insert(0, DashboardBackendJsonSerializerContext.Default);
+            })
+            .Build();
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var events = connection
+            .StreamAsync<DashboardResourcesEvent>(nameof(DashboardResourcesHub.WatchResources), TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.True(await events.MoveNextAsync());
+        Assert.Equal("snapshot", events.Current.Type);
+        Assert.Equal("api", Assert.Single(events.Current.Resources!).Name);
+
+        Assert.True(await events.MoveNextAsync());
+        Assert.Equal("change", events.Current.Type);
+        Assert.Equal("api", Assert.Single(events.Current.Upserts!).Name);
+        Assert.Equal("worker", Assert.Single(events.Current.Deletes!));
+    }
+
     private sealed class TestResourceSnapshotProvider(DashboardResource[] resources) : IDashboardResourceSnapshotProvider
     {
         public ValueTask<DashboardResource[]> GetSnapshotAsync(CancellationToken cancellationToken)
         {
             return ValueTask.FromResult(resources);
+        }
+    }
+
+    private sealed class TestResourceEventSource(DashboardResourcesEvent[] events) : IDashboardResourceEventSource
+    {
+        public async IAsyncEnumerable<DashboardResourcesEvent> WatchAsync(
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            foreach (var resourceEvent in events)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return resourceEvent;
+                await Task.Yield();
+            }
         }
     }
 }

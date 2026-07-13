@@ -27,18 +27,19 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "resources"]
+      "capabilities": ["configuration", "resources", "resources-live"]
     }
   ]
 }
 ```
 
-Version 1 currently defines two capabilities:
+Version 1 currently defines three capabilities:
 
 | Capability | Route | Response |
 | --- | --- | --- |
 | `configuration` | `GET {basePath}/config` | `DashboardConfiguration` |
 | `resources` | `GET {basePath}/resources` | `Resource[]` |
+| `resources-live` | SignalR hub at `{basePath}/resources/live` | `ResourcesEvent` server stream |
 
 ```ts
 export interface DashboardConfiguration {
@@ -49,13 +50,22 @@ export interface DashboardConfiguration {
 ```
 
 The `resources` response uses the transport-neutral `Resource` shape documented below. It is a
-complete point-in-time snapshot, returned with `Cache-Control: no-store`. React polls this route for
-the first resource migration slice; commands and other resource operations remain on `/api/deck`.
+complete point-in-time snapshot, returned with `Cache-Control: no-store`. It remains the fallback
+when a compatible server does not advertise `resources-live`; commands and other resource
+operations remain on `/api/deck`.
+
+For `resources-live`, React connects with the SignalR JSON hub protocol and invokes the streaming
+hub method `WatchResources`. The first stream item is always an authoritative `snapshot`; later
+items are `change` events containing resource upserts and deleted resource names. Snapshot capture
+and subscriber registration are atomic, so an upstream gRPC change cannot overtake the first item.
+Every new or reconnected SignalR connection starts a new stream and receives a fresh snapshot before
+its changes. A slow subscriber is disconnected instead of receiving an unbounded backlog.
 
 The AOT backend must advertise only capabilities it implements end-to-end. During the side-by-side
 migration, React delegates every capability not advertised here to the existing `/api/deck`
 transport. All .NET request and response types in the versioned contract must be registered in a
-source-generated `JsonSerializerContext`; reflection serialization is not part of the contract.
+source-generated `JsonSerializerContext`, including SignalR hub payloads; reflection serialization
+is not part of the contract.
 
 ## Existing Deck transports
 

@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Runtime.CompilerServices;
+using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
@@ -15,12 +17,17 @@ internal interface IDashboardResourceSnapshotProvider
     ValueTask<DashboardResource[]> GetSnapshotAsync(CancellationToken cancellationToken);
 }
 
+internal interface IDashboardResourceEventSource
+{
+    IAsyncEnumerable<DashboardResourcesEvent> WatchAsync(CancellationToken cancellationToken);
+}
+
 internal sealed class DashboardResourceServiceUnavailableException(string message) : Exception(message);
 
 internal sealed class DashboardResourceSnapshotService(
     IConfiguration configuration,
     ILoggerFactory loggerFactory,
-    ILogger<DashboardResourceSnapshotService> logger) : BackgroundService, IDashboardResourceSnapshotProvider
+    ILogger<DashboardResourceSnapshotService> logger) : BackgroundService, IDashboardResourceSnapshotProvider, IDashboardResourceEventSource
 {
     private const string ResourceServiceEndpointKey = "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL";
     private const string LegacyResourceServiceEndpointKey = "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL";
@@ -28,6 +35,7 @@ internal sealed class DashboardResourceSnapshotService(
     private const string ResourceServiceApiKeyKey = "Dashboard:ResourceServiceClient:ApiKey";
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const int ProducerDefinedPropertySortOrderStart = 7;
+    private const int SubscriberBufferCapacity = 32;
 
     private static readonly Dictionary<string, (string DisplayName, int SortOrder)> s_knownProperties = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -41,6 +49,7 @@ internal sealed class DashboardResourceSnapshotService(
     };
 
     private readonly Dictionary<string, DashboardResource> _resources = new(StringComparer.OrdinalIgnoreCase);
+    private readonly HashSet<ChannelWriter<DashboardResourcesEvent>> _subscribers = [];
     private readonly object _lock = new();
     private readonly TaskCompletionSource<bool> _initialSnapshot = new(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -49,7 +58,49 @@ internal sealed class DashboardResourceSnapshotService(
         await _initialSnapshot.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
         lock (_lock)
         {
-            return [.. _resources.Values.OrderBy(resource => resource.DisplayName, StringComparer.OrdinalIgnoreCase).ThenBy(resource => resource.Name, StringComparer.OrdinalIgnoreCase)];
+            return CreateSnapshotLocked();
+        }
+    }
+
+    public async IAsyncEnumerable<DashboardResourcesEvent> WatchAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await _initialSnapshot.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+
+        var channel = Channel.CreateBounded<DashboardResourcesEvent>(new BoundedChannelOptions(SubscriberBufferCapacity)
+        {
+            SingleReader = true,
+            SingleWriter = false,
+            FullMode = BoundedChannelFullMode.Wait
+        });
+
+        lock (_lock)
+        {
+            // Add the authoritative snapshot while holding the same lock used for upstream
+            // changes. Registering the subscriber before releasing the lock guarantees that
+            // no gRPC delta can overtake this first event.
+            if (!channel.Writer.TryWrite(DashboardResourcesEvent.Snapshot(CreateSnapshotLocked())))
+            {
+                throw new InvalidOperationException("The resource subscriber could not accept its initial snapshot.");
+            }
+
+            _subscribers.Add(channel.Writer);
+        }
+
+        try
+        {
+            await foreach (var resourceEvent in channel.Reader.ReadAllAsync(cancellationToken).ConfigureAwait(false))
+            {
+                yield return resourceEvent;
+            }
+        }
+        finally
+        {
+            lock (_lock)
+            {
+                _subscribers.Remove(channel.Writer);
+                channel.Writer.TryComplete();
+            }
         }
     }
 
@@ -122,7 +173,7 @@ internal sealed class DashboardResourceSnapshotService(
         }
     }
 
-    private void ApplyUpdate(WatchResourcesUpdate update)
+    internal void ApplyUpdate(WatchResourcesUpdate update)
     {
         lock (_lock)
         {
@@ -135,27 +186,52 @@ internal sealed class DashboardResourceSnapshotService(
                 }
 
                 _initialSnapshot.TrySetResult(true);
+                PublishLocked(DashboardResourcesEvent.Snapshot(CreateSnapshotLocked()));
                 return;
             }
 
             if (update.KindCase is WatchResourcesUpdate.KindOneofCase.Changes)
             {
+                var upserts = new List<DashboardResource>();
+                var deletes = new List<string>();
                 foreach (var change in update.Changes.Value)
                 {
                     if (change.KindCase is WatchResourcesChange.KindOneofCase.Upsert)
                     {
-                        _resources[change.Upsert.Name] = Map(change.Upsert);
+                        var resource = Map(change.Upsert);
+                        _resources[resource.Name] = resource;
+                        upserts.Add(resource);
                     }
                     else if (change.KindCase is WatchResourcesChange.KindOneofCase.Delete)
                     {
                         _resources.Remove(change.Delete.ResourceName);
+                        deletes.Add(change.Delete.ResourceName);
                     }
                 }
 
+                PublishLocked(DashboardResourcesEvent.Change([.. upserts], [.. deletes]));
                 return;
             }
 
             throw new FormatException($"Unexpected {nameof(WatchResourcesUpdate)} kind: {update.KindCase}.");
+        }
+    }
+
+    private DashboardResource[] CreateSnapshotLocked() =>
+        [.. _resources.Values
+            .OrderBy(resource => resource.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ThenBy(resource => resource.Name, StringComparer.OrdinalIgnoreCase)];
+
+    private void PublishLocked(DashboardResourcesEvent resourceEvent)
+    {
+        foreach (var subscriber in _subscribers.ToArray())
+        {
+            if (!subscriber.TryWrite(resourceEvent))
+            {
+                _subscribers.Remove(subscriber);
+                subscriber.TryComplete(new InvalidOperationException(
+                    "The resource subscriber was disconnected because it could not keep up with live changes."));
+            }
         }
     }
 

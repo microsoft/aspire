@@ -11,6 +11,8 @@ internal static class DashboardApiContract
     public const string VersionOneBasePath = "/api/dashboard/v1";
     public const string ConfigurationCapability = "configuration";
     public const string ResourcesCapability = "resources";
+    public const string ResourceStreamCapability = "resources-live";
+    public const string ResourceStreamPath = $"{VersionOneBasePath}/resources/live";
 }
 
 internal sealed record DashboardApiDiscovery(
@@ -90,3 +92,22 @@ internal sealed record DashboardResourceCommand(
 internal sealed record DashboardResourceRelationship(
     string ResourceName,
     string Type);
+
+internal sealed record DashboardResourcesEvent(
+    string Type,
+    DashboardResource[]? Resources,
+    DashboardResource[]? Upserts,
+    string[]? Deletes)
+{
+    public static DashboardResourcesEvent Snapshot(DashboardResource[] resources) => new(
+        "snapshot",
+        resources,
+        null,
+        null);
+
+    public static DashboardResourcesEvent Change(DashboardResource[] upserts, string[] deletes) => new(
+        "change",
+        null,
+        upserts,
+        deletes);
+}

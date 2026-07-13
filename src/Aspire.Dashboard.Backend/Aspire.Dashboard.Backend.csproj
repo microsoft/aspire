@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk.Web">
 
   <PropertyGroup>
-    <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
+    <!-- SignalR server trimming and Native AOT support starts in .NET 9. Use the repository's
+         highest supported TFM so the standalone backend remains warning-free under PublishAot. -->
+    <TargetFramework>net10.0</TargetFramework>
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
     <InvariantGlobalization>true</InvariantGlobalization>

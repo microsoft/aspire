@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
+using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Dashboard.Backend;
@@ -13,7 +14,13 @@ internal static class DashboardBackendApplication
         var builder = WebApplication.CreateSlimBuilder(args);
         builder.Services.TryAddSingleton<DashboardResourceSnapshotService>();
         builder.Services.TryAddSingleton<IDashboardResourceSnapshotProvider>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
+        builder.Services.TryAddSingleton<IDashboardResourceEventSource>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.AddHostedService(services => services.GetRequiredService<DashboardResourceSnapshotService>());
+        builder.Services.AddSignalR();
+        builder.Services.Configure<JsonHubProtocolOptions>(options =>
+        {
+            options.PayloadSerializerOptions.TypeInfoResolverChain.Insert(0, DashboardBackendJsonSerializerContext.Default);
+        });
         configureBuilder?.Invoke(builder);
 
         var app = builder.Build();
@@ -26,7 +33,11 @@ internal static class DashboardBackendApplication
                     new DashboardApiVersion(
                         DashboardApiContract.CurrentVersion,
                         DashboardApiContract.VersionOneBasePath,
-                        [DashboardApiContract.ConfigurationCapability, DashboardApiContract.ResourcesCapability])
+                        [
+                            DashboardApiContract.ConfigurationCapability,
+                            DashboardApiContract.ResourcesCapability,
+                            DashboardApiContract.ResourceStreamCapability
+                        ])
                 ]);
 
             return Results.Json(
@@ -63,6 +74,8 @@ internal static class DashboardBackendApplication
                 return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
         });
+
+        app.MapHub<DashboardResourcesHub>(DashboardApiContract.ResourceStreamPath);
 
         return app;
     }
