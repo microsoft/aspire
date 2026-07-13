@@ -6,7 +6,9 @@
   "changeType": "Bug fixes",
   "communityContributors": [],
   "description": "Multiple CLI shutdown improvements: fixed Ctrl+C responsiveness during AppHost startup, fixed a double-signal bug causing immediate force-kill, and added an immediate \"Stopping Aspire...\" message after 200ms when shutdown is in progress.",
-  "docsPrs": [],
+  "docsPrs": [
+    1353
+  ],
   "docsRequired": false,
   "emoji": "🛑",
   "firstMergedAt": "2026-05-29T01:29:00Z",

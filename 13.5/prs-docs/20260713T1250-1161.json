@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Documents Aspire 13.3 WithCommand return-value payloads, not 13.5 milestone",
+  "mergedAt": "2026-07-13T12:50:03Z",
+  "number": 1161,
+  "runDate": "2026-07-13T12:55:13Z",
+  "status": "excluded",
+  "title": "Document `WithCommand` return-value payloads (Text/Json/Markdown) for Aspire 13.3"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documents CLI Ctrl+C shutdown feedback message, references microsoft/aspire#17652",
+  "mergedAt": "2026-07-13T12:38:10Z",
+  "number": 1353,
+  "runDate": "2026-07-13T12:55:13Z",
+  "status": "included",
+  "title": "[docs] CLI: mention 'Stopping Aspire...' feedback message on Ctrl+C"
+}
