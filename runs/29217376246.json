@@ -1,0 +1,38 @@
+{
+  "run_id": 29217376246,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29217376246",
+  "analyzed_at": "2026-07-13T02:20:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18752,
+    "title": "Disable asciinema.org uploads and CLI E2E comment posting",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-mitchdenny-disable-asciinema-uploads",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18752"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting-1 / Hosting-1 (8-core-ubuntu-latest)",
+      "id": 86715972525,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29217376246/job/86715972525",
+      "classification": "flaky-test",
+      "reason": "Test ParentProcessLifetimeScopesExecutableAndContainerToParentProcess failed due to DCP returning BadRequest with timestamp parsing error ('0001-01-01T00:02:47Z' cannot be parsed). PR only changed CI workflow YAML files, not hosting code.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Tests.DistributedApplicationTests.ParentProcessLifetimeScopesExecutableAndContainerToParentProcess",
+      "job": "Tests / Hosting-1 / Hosting-1 (8-core-ubuntu-latest)",
+      "error": "System.OperationCanceledException : Resource 'parent-process-lifetime-scope-container' failed to reach one of the target states: [NotStarted] before the operation was cancelled.\n- Current State: FailedToStart\n- Creation Time: (null)\n- Current Health: (null)\n---- System.OperationCanceledException : The operation was canceled.",
+      "stack_trace": "at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceCoreAsync(String resourceName, Func`2 predicate, String cancellationMessage, CancellationToken cancellationToken, String waitCondition) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 671\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceAsync(String resourceName, IEnumerable`1 targetStates, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 131\n   at Microsoft.AspNetCore.InternalTesting.AsyncTestHelpers.TimeoutAfter(Task task, TimeSpan timeout, String filePath, Int32 lineNumber) in /home/runner/work/aspire/aspire/tests/Shared/AsyncTestHelpers.cs:line 190\n   at Aspire.Hosting.Tests.DistributedApplicationTests.ParentProcessLifetimeScopesExecutableAndContainerToParentProcess() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Tests/DistributedApplicationTests.cs:line 2046",
+      "classification": "flaky",
+      "reason": "Root cause is DCP (k8s) returning HTTP 400 BadRequest due to timestamp parsing failure: 'parsing time \"0001-01-01T00:02:47Z\" as \"2006-01-02T15:04:05.000000Z07:00\": cannot parse \"Z\" as \".000000\"'. This is an intermittent DCP infrastructure issue. The PR only changed CI workflow YAML files (.github/workflows/), not any hosting or DCP code."
+    }
+  ],
+  "causes": ["hosting-parentprocess-dcp-timestamp-badrequest"]
+}

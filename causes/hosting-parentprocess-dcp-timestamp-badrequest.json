@@ -1,0 +1,17 @@
+{
+  "id": "hosting-parentprocess-dcp-timestamp-badrequest",
+  "type": "flaky-test",
+  "title": "Flaky: ParentProcessLifetimeScopesExecutableAndContainerToParentProcess fails due to DCP timestamp parsing BadRequest",
+  "test_name": "Aspire.Hosting.Tests.DistributedApplicationTests.ParentProcessLifetimeScopesExecutableAndContainerToParentProcess",
+  "error_pattern": "k8s.Autorest.HttpOperationException: Operation returned an invalid status code 'BadRequest', response body {\"message\":\"Executable in version \\\"v1\\\" cannot be handled as a Executable: parsing time \\\"0001-01-01T00:02:47Z\\\" as \\\"2006-01-02T15:04:05.000000Z07:00\\\": cannot parse \\\"Z\\\" as \\\".000000\\\"\",\"reason\":\"BadRequest\",\"code\":400}\n   at Aspire.Hosting.Dcp.KubernetesService in /_/src/Aspire.Hosting/Dcp/KubernetesService.cs:line 139",
+  "occurrences": [
+    {
+      "run_id": 29217376246,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29217376246",
+      "job": "Tests / Hosting-1 / Hosting-1 (8-core-ubuntu-latest)",
+      "pr_number": 18752,
+      "observed_at": "2026-07-13T02:20:00Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18755"
+}
