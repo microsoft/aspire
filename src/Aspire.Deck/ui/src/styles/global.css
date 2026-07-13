@@ -3328,6 +3328,11 @@ table.data tbody tr.selected {
 }
 
 @media (max-width: 820px) {
+  .resource-name {
+    min-width: 0;
+    overflow-wrap: anywhere;
+  }
+
   .command-feedback {
     right: 12px;
     bottom: 80px;

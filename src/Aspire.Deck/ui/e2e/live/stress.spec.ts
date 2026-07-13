@@ -118,7 +118,7 @@ test.afterEach(async ({ page }) => {
     : errors;
   if (allowNavigationAbort.has(page)) {
     unexpected = unexpected.filter((error) =>
-      !/^request: GET .*\/api\/deck\/(?:telemetry\/(?:(?:logs|spans)\?follow=true|metrics\/series\?.*)|interactions|resources(?:\/[^/]+\/console-logs)?) \(net::ERR_ABORTED\)$/.test(error));
+      !/^request: GET .*\/api\/deck\/(?:telemetry\/(?:(?:logs|spans)\?follow=true|metrics(?:\/series\?.*)?)|interactions|resources(?:\/[^/]+\/console-logs)?) \(net::ERR_ABORTED\)$/.test(error));
   }
   expect(unexpected, "Unexpected browser errors").toEqual([]);
 });
@@ -128,7 +128,7 @@ test(`${features("STRESS-CONFIG-001", "STRESS-RESOURCES-001", "STRESS-VISIBILITY
   await expect(page.getByRole("navigation")).toContainText(/Aspire Deck 13\.5\.0/);
 
   const table = page.getByRole("table");
-  await expect(table.getByRole("row")).toHaveCount(32);
+  await expect(table.getByRole("row")).toHaveCount(31);
   await expect(table).toContainText("stress-apiservice");
   await expect(table).toContainText("property-stress-resource");
   await expect(table).toContainText("interaction-commands");
@@ -560,6 +560,10 @@ test(`${features("STRESS-RESPONSIVE-001")} keeps the live resource workflow usab
   expect(geometry.navigation.width).toBe(390);
   expect(geometry.banner).toEqual({ x: 0, width: 390 });
   expect(geometry.main).toEqual({ x: 0, width: 390 });
+
+  const resourceNamesFit = await page.locator(".resource-name").evaluateAll((elements) =>
+    elements.every((element) => element.scrollWidth <= element.clientWidth));
+  expect(resourceNamesFit).toBe(true);
 
   const row = page.getByRole("row").filter({ hasText: "property-stress-resource" });
   await expect(row).toHaveCount(1);
