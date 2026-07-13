@@ -868,11 +868,13 @@ export class AppHostDataRepository {
      * `_appHosts`, restarts with backoff. A describe is only ever started for a host `aspire ps` has
      * confirmed running, so there is no proactive/eager start.
      *
-     * The describe error banner tracks only the selected workspace AppHost.
-     * A no-data exit from that host that looks like a compatibility problem
-     * surfaces the banner once (via the idempotent {@link _setDescribeError}), and a working describe
-     * from that same host clears it. Non-selected peers are log-only and never touch the banner. Their
-     * failures do not masquerade as the selected host's, and their successes do not hide it.
+     * The describe error banner distinguishes two kinds of failure. A CLI-wide compatibility problem
+     * (the installed CLI is too old to `describe` at all) may be surfaced by any peer and, once any
+     * stream works, cleared by any peer, since it is a fact about the CLI rather than a single host. A
+     * host-scoped no-data or spawn error belongs to the selected workspace AppHost
+     * (`_workspaceAppHostPath`): only that host sets it, and only its own working describe clears it, so
+     * a non-selected peer's failure never masquerades as the selected host's and its success never
+     * hides one.
      */
     private _startDescribe(appHostPath: string, forceIncludeDisabledCommands?: boolean, initialRestartDelay?: number): void {
         if (this._disposed) {
@@ -978,11 +980,12 @@ export class AppHostDataRepository {
                     }
 
                     // A stream that never produced resources and exits (cleanly or with an error) means the CLI
-                    // cannot describe the host. Only the selected workspace AppHost surfaces this through the
-                    // shared describe banner; a non-selected peer is logged only so it can't masquerade as the
-                    // selected host's error.
+                    // cannot describe the host. A CLI-wide compatibility problem (the installed CLI is too old
+                    // to `describe` at all) may be surfaced by any peer, since it's a fact about the CLI. A
+                    // host-scoped no-data error belongs to the selected workspace AppHost, so a non-selected
+                    // peer never surfaces one and can't masquerade as the selected host's error.
                     extensionLogOutputChannel.warn(`aspire describe --follow (--apphost ${appHostPath}) exited (code ${code}) without producing data.`);
-                    if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath)) {
+                    if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath) || isDescribeUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
                         const noDataError = this._getDescribeNoDataError(code, stream.nonJsonLines, stream.stderr);
                         if (noDataError.message) {
                             this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError });
@@ -1060,9 +1063,11 @@ export class AppHostDataRepository {
             if (resource.name) {
                 stream.resources.set(resource.name, resource);
                 stream.receivedData = true;
-                // Only the selected workspace AppHost clears the shared banner; a non-selected peer
-                // producing data must not erase an error the selected host raised (mirrors the set path).
-                if (isMatchingAppHostPath(stream.appHostPath, this._workspaceAppHostPath)) {
+                // A working stream proves the CLI supports `describe`, so any peer clears a CLI-wide
+                // compatibility banner. A host-scoped banner belongs to the selected workspace AppHost, so
+                // only its own data clears that — a non-selected peer must not erase an error the selected
+                // host raised.
+                if (this._describeErrorIsCompatibility || isMatchingAppHostPath(stream.appHostPath, this._workspaceAppHostPath)) {
                     this._setDescribeError(undefined);
                 }
                 this._attachResourcesToAppHosts();
