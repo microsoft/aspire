@@ -2770,6 +2770,36 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ContainerAppWithExistingDependsOnIsNotChainedIntoCycle()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var api = builder.AddContainer("api", "myimage");
+        var worker = builder.AddContainer("worker", "myimage");
+
+        api.WithRelationship(worker.Resource, "DependsOn");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apps = model.GetComputeResources().ToList();
+
+        Assert.Equal(["worker"], GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "worker")));
+
+        var predecessorCounts = apps
+            .Select(computeResource => GetTransitiveOrderingPredecessors(computeResource, apps).Count)
+            .OrderBy(count => count)
+            .ToArray();
+
+        Assert.Equal(Enumerable.Range(0, apps.Count).ToArray(), predecessorCounts);
+    }
+
+    [Fact]
     public async Task ContainerAppsSharingADependencyAreStillSerialized()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -238,7 +238,8 @@ public class AzureContainerAppEnvironmentResource :
     private const string DependsOnRelationshipType = "DependsOn";
 
     // Relationship types that express an ordering dependency between resources. These mirror the
-    // internal KnownRelationshipTypes values added by WithReference/WaitFor.
+    // internal KnownRelationshipTypes values added by WithReference/WaitFor and the DependsOn
+    // relationship used to serialize deployment.
     private const string ReferenceRelationshipType = "Reference";
     private const string WaitForRelationshipType = "WaitFor";
 
@@ -252,10 +253,11 @@ public class AzureContainerAppEnvironmentResource :
     /// <c>ContainerAppOperationInProgress</c>. The application model otherwise has no edge telling a
     /// model-graph-driven deployer that these apps must not deploy in parallel. To make the
     /// constraint explicit, the apps are linearized into one total order so that at most one app in
-    /// the environment deploys at a time. User-declared dependencies (via <c>WithReference</c> or
-    /// <c>WaitFor</c>) are honored: the total order is a topological sort of those dependencies, and
-    /// a synthetic edge is only added between two consecutive apps when the existing graph does not
-    /// already order them, avoiding redundant relationships. See
+    /// the environment deploys at a time. Existing ordering dependencies (<c>Reference</c>,
+    /// <c>WaitFor</c>, or already materialized <c>DependsOn</c>) are honored: the total order is a
+    /// topological sort of those dependencies, and a synthetic edge is only added between two
+    /// consecutive apps when the existing graph does not already order them, avoiding redundant
+    /// relationships and cycles. See
     /// https://github.com/microsoft/aspire/issues/18682.
     /// </remarks>
     private static void AddSerialDeploymentOrdering(IReadOnlyList<IResource> targets)
@@ -299,7 +301,7 @@ public class AzureContainerAppEnvironmentResource :
 
     /// <summary>
     /// Returns the set of resources in <paramref name="candidates"/> that <paramref name="resource"/>
-    /// already depends on via a reference or wait-for relationship.
+    /// already depends on via an ordering relationship.
     /// </summary>
     private static HashSet<IResource> GetExistingDependencies(IResource resource, HashSet<IResource> candidates, IEqualityComparer<IResource?> comparer)
     {
@@ -312,7 +314,7 @@ public class AzureContainerAppEnvironmentResource :
 
         foreach (var relationship in relationships)
         {
-            if (relationship.Type is not (ReferenceRelationshipType or WaitForRelationshipType))
+            if (relationship.Type is not (ReferenceRelationshipType or WaitForRelationshipType or DependsOnRelationshipType))
             {
                 continue;
             }
