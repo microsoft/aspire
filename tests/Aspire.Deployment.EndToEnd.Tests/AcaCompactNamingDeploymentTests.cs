@@ -278,7 +278,7 @@ builder.Build().Run();
             content = content.Replace(buildRunPattern, replacement, StringComparison.Ordinal);
 
             // WithUniqueResourceNaming is experimental, so suppress the diagnostic in the generated AppHost.
-            content = "#pragma warning disable ASPIREACANAMING001\n" + content;
+            content = "#pragma warning disable ASPIREACANAMING002\n" + content;
 
             File.WriteAllText(appHostFilePath, content);
 
