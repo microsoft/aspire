@@ -19,6 +19,25 @@ export interface DeckConfig {
   isAssistantEnabled?: boolean;
 }
 
+// Versioned ASP.NET backend discovery types. Keep these aligned with the
+// versioned contract in ../../CONTRACT.md rather than the legacy /api/deck shapes.
+export interface DashboardApiDiscovery {
+  product: string;
+  versions: DashboardApiVersion[];
+}
+
+export interface DashboardApiVersion {
+  version: number;
+  basePath: string;
+  capabilities: string[];
+}
+
+export interface DashboardConfiguration {
+  applicationName: string;
+  dashboardVersion: string;
+  runtimeVersion: string;
+}
+
 export interface DeckUser {
   name: string;
   username: string | null;

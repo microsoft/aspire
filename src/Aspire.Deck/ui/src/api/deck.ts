@@ -1,5 +1,6 @@
 // Transport-neutral data layer. Tauri dispatches to the Rust backend via
-// `invoke`/`listen`, explicit `?backend=http` mode calls the ASP.NET dashboard,
+// `invoke`/`listen`, explicit `?backend=http` mode calls the existing ASP.NET dashboard,
+// `?backend=aot` negotiates versioned capabilities with the Native AOT host,
 // and standalone browser development uses the in-process mock. Every transport
 // exposes the same function surface so feature code remains independent of it.
 //
@@ -10,6 +11,7 @@ import { invoke } from "@tauri-apps/api/core";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { httpBackend } from "./http";
 import { mockBackend } from "./mock";
+import { nativeBackend } from "./native";
 import type {
   AppHostInfo,
   AssistantChatRequest,
@@ -42,7 +44,18 @@ export function isTauri(): boolean {
 }
 
 export function isHttpBackend(): boolean {
-  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("backend") === "http";
+  if (typeof window === "undefined") {
+    return false;
+  }
+
+  const backend = new URLSearchParams(window.location.search).get("backend");
+  // AOT mode is a strangler path: capabilities not yet in the versioned contract
+  // deliberately continue through the existing HTTP backend until parity is proven.
+  return backend === "http" || backend === "aot";
+}
+
+export function isAotBackend(): boolean {
+  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("backend") === "aot";
 }
 
 // Bridges Tauri's promise-returning `listen` (which resolves to an unlisten fn)
@@ -66,6 +79,9 @@ function bridgeListen<T>(event: string, cb: (payload: T) => void): Unsubscribe {
 export function getConfig(): Promise<DeckConfig> {
   if (isTauri()) {
     return invoke<DeckConfig>("deck_get_config");
+  }
+  if (isAotBackend()) {
+    return nativeBackend.getConfig();
   }
   if (isHttpBackend()) {
     return httpBackend.getConfig();
@@ -149,9 +165,19 @@ export function listCanvases(): Promise<CanvasManifest[]> {
   return Promise.resolve(mockBackend.listCanvases());
 }
 
+async function applyAotApphostIdentity(apphosts: AppHostInfo[]): Promise<AppHostInfo[]> {
+  const config = await nativeBackend.getConfig();
+  return apphosts.map((apphost) => (
+    apphost.active ? { ...apphost, name: config.applicationName ?? apphost.name } : apphost
+  ));
+}
+
 export function listApphosts(): Promise<AppHostInfo[]> {
   if (isTauri()) {
     return invoke<AppHostInfo[]>("deck_list_apphosts");
+  }
+  if (isAotBackend()) {
+    return httpBackend.listApphosts().then(applyAotApphostIdentity);
   }
   if (isHttpBackend()) {
     return httpBackend.listApphosts();
@@ -175,6 +201,20 @@ export function onApphosts(cb: (apphosts: AppHostInfo[]) => void): Unsubscribe {
     const unlisten = bridgeListen<AppHostInfo[]>("deck://apphosts", cb);
     void listApphosts().then(cb);
     return unlisten;
+  }
+  if (isAotBackend()) {
+    let cancelled = false;
+    const unsubscribe = httpBackend.onApphosts((apphosts) => {
+      void applyAotApphostIdentity(apphosts).then((identifiedApphosts) => {
+        if (!cancelled) {
+          cb(identifiedApphosts);
+        }
+      }).catch(() => undefined);
+    });
+    return () => {
+      cancelled = true;
+      unsubscribe();
+    };
   }
   if (isHttpBackend()) {
     return httpBackend.onApphosts(cb);

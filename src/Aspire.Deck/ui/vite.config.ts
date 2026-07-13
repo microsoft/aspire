@@ -2,6 +2,7 @@ import { defineConfig, type Plugin } from "vite";
 import react from "@vitejs/plugin-react";
 
 const dashboardUrl = process.env.ASPIRE_DASHBOARD_URL;
+const aotDashboardUrl = process.env.ASPIRE_DASHBOARD_AOT_URL;
 
 // Vite stamps `crossorigin` on the entry <script>/<link> tags. Under Tauri's custom
 // asset protocol (notably macOS WKWebView), a `crossorigin` request is treated as a
@@ -29,6 +30,13 @@ export default defineConfig({
     strictPort: true,
     proxy: dashboardUrl
       ? {
+          // The versioned AOT backend is independently selectable. All capabilities
+          // it has not advertised remain on the existing dashboard proxy below.
+          "/api/dashboard": {
+            target: aotDashboardUrl ?? dashboardUrl,
+            changeOrigin: true,
+            secure: false,
+          },
           "/api/deck": {
             target: dashboardUrl,
             changeOrigin: true,

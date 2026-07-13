@@ -120,6 +120,53 @@ test.afterEach(async ({ page }) => {
   expect(telemetryFiltered, "Unexpected browser errors").toEqual([]);
 });
 
+test(`${features("AOT-CONTRACT-001")} negotiates configuration while retaining the existing resource backend`, async ({ page }) => {
+  let discoveryRequests = 0;
+  let aotConfigRequests = 0;
+  let legacyConfigRequests = 0;
+  let resourceRequests = 0;
+  await page.route("**/api/dashboard", async (route) => {
+    discoveryRequests++;
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [
+          { version: 99, basePath: "/api/dashboard/v99", capabilities: ["configuration"] },
+          { version: 1, basePath: "/api/dashboard/v1", capabilities: ["configuration"] },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    aotConfigRequests++;
+    await route.fulfill({
+      json: {
+        applicationName: "Stress AOT",
+        dashboardVersion: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+      },
+    });
+  });
+  await page.route("**/api/deck/config", async (route) => {
+    legacyConfigRequests++;
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    resourceRequests++;
+    await route.fulfill({ json: [resource] });
+  });
+
+  await page.goto("/?backend=aot");
+
+  await expect(page.getByRole("banner").locator(".topbar__app")).toHaveText("Stress AOT");
+  await expect(page.getByRole("navigation")).toContainText("Aspire Deck 13.5.0-aot");
+  await expect(page.getByRole("table").getByRole("row", { name: /stress-api/ })).toBeVisible();
+  expect(discoveryRequests).toBe(1);
+  expect(aotConfigRequests).toBe(1);
+  expect(legacyConfigRequests).toBeGreaterThan(0);
+  expect(resourceRequests).toBeGreaterThan(0);
+});
+
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {
   let configRequests = 0;
   let resourceRequests = 0;

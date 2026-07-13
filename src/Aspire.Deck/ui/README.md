@@ -10,6 +10,9 @@ the **same** code:
 - **ASP.NET dashboard** — `?backend=http` explicitly loads configuration and resources from
   the authenticated `/api/deck` endpoints. The adapter polls for resource changes and reports
   connection failures without falling back to mock data.
+- **Versioned ASP.NET backend** — `?backend=aot` negotiates the versioned `/api/dashboard`
+  contract with the separate Native AOT host. The first slice reads only configuration there;
+  every unported capability continues through the existing `/api/deck` backend.
 - **Tauri-embedded** — when running inside the Tauri shell, the data layer
   (`src/api/deck.ts`) calls the real backend via `invoke(...)` / `listen(...)` exactly as
   described in [`../CONTRACT.md`](../CONTRACT.md).
@@ -130,6 +133,19 @@ ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 npm run dev -- --host 12
 Then open `http://127.0.0.1:1430/?backend=http`. The Vite proxy is enabled only
 when `ASPIRE_DASHBOARD_URL` is present, so standalone development continues to use
 the deterministic mock backend.
+
+To exercise the first side-by-side Native AOT slice, start the host documented in
+[`../../Aspire.Dashboard.Backend/README.md`](../../Aspire.Dashboard.Backend/README.md), then provide both backend URLs:
+
+```bash
+ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
+ASPIRE_DASHBOARD_AOT_URL=http://127.0.0.1:18889 \
+  npm run dev -- --host 127.0.0.1
+```
+
+Open `http://127.0.0.1:1430/?backend=aot`. Version discovery and configuration use the new
+host; resources, telemetry, commands, interactions, authentication, and terminals remain on the
+existing dashboard until their versioned capabilities independently pass the parity inventory.
 
 Open `http://localhost:1430/?view=toolkit` for the standalone toolkit playground. It exercises
 the shared controls without depending on the Deck backend or mock data layer, making it the
