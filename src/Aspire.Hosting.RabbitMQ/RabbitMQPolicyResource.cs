@@ -19,7 +19,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </remarks>
 [DebuggerDisplay("Type = {GetType().Name,nq}, Name = {Name}, PolicyName = {PolicyName}")]
 [AspireExport(ExposeProperties = true)]
-public class RabbitMQPolicyResource : RabbitMQProvisionableResource, IResourceWithParent<RabbitMQVirtualHostResource>, IResourceWithQueueArguments, IResourceWithExchangeArguments, IRabbitMQServerChild
+public class RabbitMQPolicyResource : RabbitMQProvisionableResource, IResourceWithQueueArguments, IResourceWithExchangeArguments, IRabbitMQServerChild
 {
     private readonly Regex _compiledPattern;
 
@@ -129,12 +129,55 @@ public class RabbitMQPolicyResource : RabbitMQProvisionableResource, IResourceWi
         return _compiledPattern.IsMatch(entityName);
     }
 
+    private RabbitMQPolicyDefinition BuildDefinition()
+    {
+        var definition = new Dictionary<string, object?>();
+
+        if (ApplyTo != RabbitMQPolicyApplyTo.Exchanges)
+        {
+            QueueArguments.FlattenIntoPolicy(definition, $"Policy '{PolicyName}'");
+        }
+
+        if (ApplyTo != RabbitMQPolicyApplyTo.Queues)
+        {
+            ExchangeArguments.FlattenInto(definition, $"Policy '{PolicyName}'");
+        }
+
+        foreach (var (k, v) in AdditionalArguments)
+        {
+            definition[k] = v;
+        }
+
+        return new RabbitMQPolicyDefinition(
+            Pattern,
+            ApplyTo.ToString().ToLowerInvariant(),
+            definition,
+            Priority);
+    }
+
+    internal override async ValueTask ReconcileAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+        => await client.PutPolicyAsync(Parent.VirtualHostName, PolicyName, BuildDefinition(), cancellationToken).ConfigureAwait(false);
+
+    internal override async ValueTask DeleteAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+        => await client.DeletePolicyAsync(Parent.VirtualHostName, PolicyName, cancellationToken).ConfigureAwait(false);
+
     internal override async ValueTask<RabbitMQProbeResult> ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
-        var exists = await client.PolicyExistsAsync(Parent.VirtualHostName, PolicyName, cancellationToken).ConfigureAwait(false);
-        return exists
-            ? RabbitMQProbeResult.Healthy
-            : RabbitMQProbeResult.Unhealthy($"Policy '{PolicyName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
+        var live = await client.GetPolicyAsync(Parent.VirtualHostName, PolicyName, cancellationToken).ConfigureAwait(false);
+        if (live is null)
+        {
+            return RabbitMQProbeResult.Unhealthy($"Policy '{PolicyName}' does not exist in virtual host '{Parent.VirtualHostName}'.");
+        }
+
+        // Drift is scoped to the policy object itself — pattern matching is the server's business.
+        var desired = BuildDefinition();
+
+        return new RabbitMQDriftChecker("Policy", PolicyName)
+            .Field("pattern", desired.Pattern, live.Pattern, StringComparison.Ordinal)
+            .Field("apply-to", desired.ApplyTo, live.ApplyTo)
+            .Field("priority", desired.Priority, live.Priority)
+            .Arguments($"Policy '{PolicyName}' definition", desired.Definition, live.Definition)
+            .Result;
     }
 
     RabbitMQVirtualHostResource IRabbitMQServerChild.VirtualHost => Parent;

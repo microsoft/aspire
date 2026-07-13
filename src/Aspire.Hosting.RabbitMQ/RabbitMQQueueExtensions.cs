@@ -39,34 +39,12 @@ public static class RabbitMQQueueExtensions
         }
 
         var queue = new RabbitMQQueueResource(name, qName, builder.Resource, type);
-        var vhost = builder.Resource;
 
         builder.Resource.Queues.Add(queue);
 
-        return RabbitMQBuilderExtensions.WithProvisionableHealthCheck(builder.ApplicationBuilder.AddResource(queue))
+        return builder.ApplicationBuilder.AddResource(queue)
             .WithIconName("MailInbox")
-            .WithRabbitMQProvisioning(
-                dependencies: [(vhost, WaitType.WaitUntilHealthy)],
-                provisionAsync: async (q, client, _, ct) =>
-                {
-                    var args = new Dictionary<string, object?>();
-
-                    if (q.QueueType != RabbitMQQueueType.Classic)
-                    {
-                        args["x-queue-type"] = q.QueueType.ToString().ToLowerInvariant();
-                    }
-
-                    q.QueueArguments.FlattenInto(args, $"Queue '{q.QueueName}'");
-
-                    await client.DeclareQueueAsync(
-                        vhost.VirtualHostName,
-                        q.QueueName,
-                        q.Durable,
-                        q.Exclusive,
-                        q.AutoDelete,
-                        args.Count > 0 ? args : null,
-                        ct).ConfigureAwait(false);
-                });
+            .WithRabbitMQTopologyWiring(builder.Resource);
     }
 
     /// <summary>
@@ -149,17 +127,19 @@ public static class RabbitMQQueueExtensions
     ///      .WithDeadLetterExchange(dlx);
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "Generic constraint uses IResourceWithParent<RabbitMQVirtualHostResource> which is not ATS-compatible. Use WithQueueArguments to set DeadLetterExchange directly in polyglot app hosts.")]
+    [AspireExportIgnore(Reason = "Generic constraint uses IRabbitMQServerChild which is not ATS-compatible. Use WithQueueArguments to set DeadLetterExchange directly in polyglot app hosts.")]
     public static IResourceBuilder<T> WithDeadLetterExchange<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<RabbitMQExchangeResource> dlx,
         string? routingKey = null)
-        where T : Resource, IResourceWithQueueArguments, IResourceWithParent<RabbitMQVirtualHostResource>
+        where T : Resource, IResourceWithQueueArguments, IRabbitMQServerChild
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(dlx);
 
-        if (dlx.Resource.VirtualHost != ((IResourceWithParent<RabbitMQVirtualHostResource>)builder.Resource).Parent)
+        // The topology types no longer implement IResourceWithParent; use IRabbitMQServerChild.VirtualHost
+        // to reach the owning virtual host for the same-vhost validation.
+        if (dlx.Resource.VirtualHost != ((IRabbitMQServerChild)builder.Resource).VirtualHost)
         {
             throw new DistributedApplicationException(
                 $"Dead-letter exchange '{dlx.Resource.Name}' must be in the same virtual host as '{builder.Resource.Name}'.");

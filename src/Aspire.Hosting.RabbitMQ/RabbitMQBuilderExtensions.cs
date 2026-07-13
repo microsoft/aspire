@@ -290,13 +290,13 @@ public static class RabbitMQBuilderExtensions
 
     internal static IResourceBuilder<RabbitMQVirtualHostResource> GetOrAddDefaultVirtualHost(this IResourceBuilder<RabbitMQServerResource> server)
     {
-        var defaultVhost = server.Resource.VirtualHosts.FirstOrDefault(v => v.VirtualHostName == "/");
+        var defaultVhost = server.Resource.VirtualHosts.FirstOrDefault(v => v.IsDefault);
         if (defaultVhost is not null)
         {
             return server.ApplicationBuilder.CreateResourceBuilder(defaultVhost);
         }
 
-        return server.AddVirtualHost($"{server.Resource.Name}-default-vhost", "/");
+        return server.AddVirtualHost($"{server.Resource.Name}-default-vhost", RabbitMQVirtualHostResource.DefaultVirtualHostName);
     }
 
     /// <summary>
@@ -319,7 +319,9 @@ public static class RabbitMQBuilderExtensions
                 var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName);
                 var notifications = sp.GetRequiredService<ResourceNotificationService>();
                 var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<RabbitMQProvisionableHealthCheck>();
-                return new RabbitMQProvisionableHealthCheck(resource, client, notifications, logger);
+                // Pass serverName so the health check can short-circuit when the broker is not Running,
+                // avoiding a live probe call (which would hang until the HTTP timeout) against a dead broker.
+                return new RabbitMQProvisionableHealthCheck(resource, serverName, client, notifications, logger);
             },
             failureStatus: null,
             tags: null));

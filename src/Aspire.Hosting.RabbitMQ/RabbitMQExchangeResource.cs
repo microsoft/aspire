@@ -54,21 +54,10 @@ public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnec
     internal List<RabbitMQPolicyResource> AppliedPolicies { get; } = [];
 
     internal override IEnumerable<RabbitMQProvisionableResource> HealthDependencies
-    {
-        get
-        {
-            foreach (var policy in AppliedPolicies)
-            {
-                yield return policy;
-            }
-
-            // The alternate exchange must be provisioned before this exchange's health is meaningful.
-            if (ExchangeArguments.AlternateExchange is { } ae)
-            {
-                yield return ae;
-            }
-        }
-    }
+        // The alternate exchange must be provisioned before this exchange's health is meaningful.
+        => ExchangeArguments.AlternateExchange is { } ae
+            ? [.. AppliedPolicies, ae]
+            : [.. AppliedPolicies];
 
     /// <inheritdoc/>
     public override string ProvisionedName => ExchangeName;
@@ -82,12 +71,59 @@ public class RabbitMQExchangeResource : RabbitMQDestination, IResourceWithConnec
             new("ExchangeName", ReferenceExpression.Create($"{ExchangeName}")),
         ]);
 
+    /// <summary>
+    /// Builds the declared exchange arguments (the x-arguments Aspire authors) for this exchange.
+    /// Shared by <see cref="ReconcileAsync"/> (declare) and <see cref="ProbeAsync"/> (drift comparison)
+    /// so both sides compare the exact same bag.
+    /// </summary>
+    private Dictionary<string, object?> BuildDeclaredArguments()
+    {
+        var args = new Dictionary<string, object?>();
+        ExchangeArguments.FlattenInto(args, $"Exchange '{ExchangeName}'");
+        return args;
+    }
+
+    private string ExchangeTypeString => ExchangeType.ToString().ToLowerInvariant();
+
+    internal override async ValueTask ReconcileAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    {
+        var args = BuildDeclaredArguments();
+
+        await client.DeclareExchangeAsync(
+            VirtualHost.VirtualHostName,
+            ExchangeName,
+            ExchangeTypeString,
+            Durable,
+            AutoDelete,
+            args.Count > 0 ? args : null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal override async ValueTask DeleteAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+        => await client.DeleteExchangeAsync(VirtualHost.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
+
     internal override async ValueTask<RabbitMQProbeResult> ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
-        var exists = await client.ExchangeExistsAsync(VirtualHost.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
-        return exists
-            ? RabbitMQProbeResult.Healthy
-            : RabbitMQProbeResult.Unhealthy($"Exchange '{ExchangeName}' does not exist in virtual host '{VirtualHost.VirtualHostName}'.");
+        var live = await client.GetExchangeAsync(VirtualHost.VirtualHostName, ExchangeName, cancellationToken).ConfigureAwait(false);
+        if (live is null)
+        {
+            return RabbitMQProbeResult.Unhealthy($"Exchange '{ExchangeName}' does not exist in virtual host '{VirtualHost.VirtualHostName}'.");
+        }
+
+        // Compare only declared fields; server-computed fields (e.g. effective_policy_definition) are not mapped.
+        var checker = new RabbitMQDriftChecker("Exchange", ExchangeName);
+
+        // Skip type comparison when the broker reports empty — older versions omit it.
+        if (!string.IsNullOrEmpty(live.Type))
+        {
+            checker.Field("type", ExchangeTypeString, live.Type);
+        }
+
+        return checker
+            .Field("durable", Durable, live.Durable)
+            .Field("auto-delete", AutoDelete, live.AutoDelete)
+            .Arguments($"Exchange '{ExchangeName}'", BuildDeclaredArguments(), live.Arguments)
+            .Result;
     }
 
     internal override Task BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, Dictionary<string, object?>? args, CancellationToken ct)

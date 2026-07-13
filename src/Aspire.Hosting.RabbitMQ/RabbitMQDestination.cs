@@ -14,7 +14,6 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </remarks>
 public abstract class RabbitMQDestination : RabbitMQProvisionableResource,
     IResourceWithConnectionString,
-    IResourceWithParent<RabbitMQVirtualHostResource>,
     IRabbitMQServerChild
 {
     internal RabbitMQDestination(string name, RabbitMQVirtualHostResource virtualHost) : base(name)
@@ -27,11 +26,6 @@ public abstract class RabbitMQDestination : RabbitMQProvisionableResource,
     /// Gets the virtual host that contains this destination.
     /// </summary>
     public RabbitMQVirtualHostResource VirtualHost { get; }
-
-    /// <summary>
-    /// Explicit implementation of <see cref="IResourceWithParent{T}.Parent"/> that returns <see cref="VirtualHost"/>.
-    /// </summary>
-    RabbitMQVirtualHostResource IResourceWithParent<RabbitMQVirtualHostResource>.Parent => VirtualHost;
 
     /// <summary>
     /// Gets the wire name of the entity as known to the broker.

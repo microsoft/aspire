@@ -10,22 +10,21 @@ namespace Aspire.Hosting.RabbitMQ.Provisioning;
 /// <summary>
 /// Shared <see cref="IHealthCheck"/> implementation for all RabbitMQ child resources (virtual hosts, queues, exchanges, shovels, policies).
 /// </summary>
-/// <remarks>
-/// The check proceeds in stages: returns <see cref="HealthStatus.Unhealthy"/> if the resource's Aspire state
-/// is not yet <c>Running</c>, then checks each resource's health dependencies are healthy,
-/// and finally calls the live broker probe for verification.
-/// </remarks>
 internal sealed class RabbitMQProvisionableHealthCheck(
     RabbitMQProvisionableResource self,
+    string serverName,
     IRabbitMQProvisioningClient client,
     ResourceNotificationService notifications,
     ILogger<RabbitMQProvisionableHealthCheck> logger) : IHealthCheck
 {
     public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
     {
-        // Stage 1: ensure this resource itself has reached the Running state before probing.
-        // Without this guard, the health check would attempt live broker calls for resources
-        // that haven't been provisioned yet, producing confusing errors in the dashboard.
+        if (!notifications.TryGetCurrentState(serverName, out var serverEvt) ||
+            serverEvt.Snapshot.State?.Text != KnownResourceStates.Running)
+        {
+            return HealthCheckResult.Unhealthy($"Broker server '{serverName}' is not Running.");
+        }
+
         if (!notifications.TryGetCurrentState(self.Name, out var selfEvt) ||
             selfEvt.Snapshot.State?.Text != KnownResourceStates.Running)
         {

@@ -6,7 +6,7 @@ namespace Aspire.Hosting.ApplicationModel;
 /// <summary>
 /// Marker interface for resources that are children of a RabbitMQ server, reachable via a virtual host.
 /// </summary>
-internal interface IRabbitMQServerChild
+public interface IRabbitMQServerChild
 {
     /// <summary>Gets the virtual host that owns this resource.</summary>
     RabbitMQVirtualHostResource VirtualHost { get; }

@@ -82,28 +82,72 @@ public class RabbitMQQueueResource : RabbitMQDestination, IResourceWithConnectio
     internal List<RabbitMQPolicyResource> AppliedPolicies { get; } = [];
 
     internal override IEnumerable<RabbitMQProvisionableResource> HealthDependencies
-    {
-        get
-        {
-            foreach (var policy in AppliedPolicies)
-            {
-                yield return policy;
-            }
+        // The dead-letter exchange must be provisioned before this queue's health is meaningful.
+        => QueueArguments.DeadLetterExchange is { } dlx
+            ? [.. AppliedPolicies, dlx]
+            : [.. AppliedPolicies];
 
-            // The dead-letter exchange must be provisioned before this queue's health is meaningful.
-            if (QueueArguments.DeadLetterExchange is { } dlx)
-            {
-                yield return dlx;
-            }
+    // Compute once; used by both BuildDeclaredArguments (declare) and ProbeAsync (drift comparison).
+    private string QueueTypeString => QueueType.ToString().ToLowerInvariant();
+
+    /// <summary>
+    /// Builds the declared queue arguments (the x-arguments Aspire authors) for this queue.
+    /// Shared by <see cref="ReconcileAsync"/> (declare) and <see cref="ProbeAsync"/> (drift comparison)
+    /// so both sides compare the exact same bag.
+    /// </summary>
+    private Dictionary<string, object?> BuildDeclaredArguments()
+    {
+        var args = new Dictionary<string, object?>();
+
+        if (QueueType != RabbitMQQueueType.Classic)
+        {
+            args["x-queue-type"] = QueueTypeString;
         }
+
+        QueueArguments.FlattenInto(args, $"Queue '{QueueName}'");
+        return args;
     }
+
+    internal override async ValueTask ReconcileAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+    {
+        var args = BuildDeclaredArguments();
+
+        await client.DeclareQueueAsync(
+            VirtualHost.VirtualHostName,
+            QueueName,
+            Durable,
+            Exclusive,
+            AutoDelete,
+            args.Count > 0 ? args : null,
+            cancellationToken).ConfigureAwait(false);
+    }
+
+    internal override async ValueTask DeleteAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
+        => await client.DeleteQueueAsync(VirtualHost.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
 
     internal override async ValueTask<RabbitMQProbeResult> ProbeAsync(IRabbitMQProvisioningClient client, CancellationToken cancellationToken)
     {
-        var exists = await client.QueueExistsAsync(VirtualHost.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
-        return exists
-            ? RabbitMQProbeResult.Healthy
-            : RabbitMQProbeResult.Unhealthy($"Queue '{QueueName}' does not exist in virtual host '{VirtualHost.VirtualHostName}'.");
+        var live = await client.GetQueueAsync(VirtualHost.VirtualHostName, QueueName, cancellationToken).ConfigureAwait(false);
+        if (live is null)
+        {
+            return RabbitMQProbeResult.Unhealthy($"Queue '{QueueName}' does not exist in virtual host '{VirtualHost.VirtualHostName}'.");
+        }
+
+        // Compare only declared fields; server-computed fields (e.g. effective_policy_definition) are not mapped.
+        var checker = new RabbitMQDriftChecker("Queue", QueueName);
+
+        // Skip type comparison when the broker reports empty — older versions omit it for classic queues.
+        if (!string.IsNullOrEmpty(live.Type))
+        {
+            checker.Field("type", QueueTypeString, live.Type);
+        }
+
+        return checker
+            .Field("durable", Durable, live.Durable)
+            .Field("exclusive", Exclusive, live.Exclusive)
+            .Field("auto-delete", AutoDelete, live.AutoDelete)
+            .Arguments($"Queue '{QueueName}'", BuildDeclaredArguments(), live.Arguments)
+            .Result;
     }
 
     internal override Task BindAsync(IRabbitMQProvisioningClient client, string vhost, string sourceExchange, string routingKey, Dictionary<string, object?>? args, CancellationToken ct)

@@ -1,11 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Collections.Concurrent;
 using Aspire.Hosting.RabbitMQ.Provisioning;
-using Microsoft.Extensions.DependencyInjection;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.ApplicationModel;
 
@@ -45,89 +41,13 @@ public static class RabbitMQExchangeExtensions
         }
 
         var exchange = new RabbitMQExchangeResource(name, exName, builder.Resource, type);
-        var vhost = builder.Resource;
 
         builder.Resource.Exchanges.Add(exchange);
 
-        // Shared state — closed over by both the subscriber and the health check lambda.
-        var bindingErrors = new ConcurrentBag<string>();
-        var bindingsDone = false;
-        var bindingsKey = $"{exchange.Name}_bindings_check";
-        builder.ApplicationBuilder.Services.AddHealthChecks().AddAsyncCheck(
-            bindingsKey,
-            _ =>
-            {
-                if (!Volatile.Read(ref bindingsDone))
-                {
-                    return Task.FromResult(HealthCheckResult.Unhealthy(
-                        $"Bindings for exchange '{exchange.ExchangeName}' are not yet applied."));
-                }
-
-                return Task.FromResult(bindingErrors.IsEmpty
-                    ? HealthCheckResult.Healthy()
-                    : HealthCheckResult.Unhealthy(
-                        $"Binding failures for '{exchange.ExchangeName}': {string.Join("; ", bindingErrors)}"));
-            });
-
         return builder.ApplicationBuilder.AddResource(exchange)
-            .WithProvisionableHealthCheck()
             .WithIconName("ArrowSwap")
-            .WithRabbitMQProvisioning(
-                dependencies: [(vhost, WaitType.WaitUntilHealthy)],
-                provisionAsync: async (ex, client, _, ct) =>
-                {
-                    var typeString = ex.ExchangeType.ToString().ToLowerInvariant();
-                    var args = new Dictionary<string, object?>();
-
-                    ex.ExchangeArguments.FlattenInto(args, $"Exchange '{ex.ExchangeName}'");
-
-                    await client.DeclareExchangeAsync(
-                        vhost.VirtualHostName,
-                        ex.ExchangeName,
-                        typeString,
-                        ex.Durable,
-                        ex.AutoDelete,
-                        args.Count > 0 ? args : null,
-                        ct).ConfigureAwait(false);
-                })
-            .OnInitializeResource(async (ex, evt, ct) =>
-            {
-                // Wait for the exchange itself to be declared (Running).
-                await evt.Notifications.WaitForResourceAsync(ex.Name, KnownResourceStates.Running, ct)
-                    .ConfigureAwait(false);
-
-                var client = evt.Services.GetRequiredKeyedService<IRabbitMQProvisioningClient>(
-                    ex.VirtualHost.Parent.Name);
-
-                // Fan-out: each binding waits for its target to be healthy before applying.
-                await Task.WhenAll(ex.Bindings.Select(async binding =>
-                {
-                    await evt.Notifications.WaitForResourceHealthyAsync(
-                        binding.Destination.Name, ct).ConfigureAwait(false);
-                    try
-                    {
-                        await binding.Destination.BindAsync(
-                            client,
-                            ex.VirtualHost.VirtualHostName,
-                            ex.ExchangeName,
-                            binding.RoutingKey,
-                            binding.MatchHeaders,
-                            ct).ConfigureAwait(false);
-                    }
-                    catch (Exception bindEx)
-                    {
-                        bindingErrors.Add(
-                            $"Binding to '{binding.Destination.ProvisionedName}': {bindEx.Message}");
-                        evt.Logger.LogError(bindEx,
-                            "Failed to apply binding from '{Exchange}' to '{Destination}'.",
-                            ex.ExchangeName, binding.Destination.ProvisionedName);
-                    }
-                })).ConfigureAwait(false);
-
-                // Fan-in complete — all bag writes are done before this line.
-                Volatile.Write(ref bindingsDone, true);
-            })
-            .WithHealthCheck(bindingsKey);
+            .WithRabbitMQTopologyWiring(builder.Resource)
+            .WithExchangeBindings();
     }
 
     /// <summary>
@@ -239,16 +159,18 @@ public static class RabbitMQExchangeExtensions
     ///      .WithAlternateExchange(unroutable);
     /// </code>
     /// </example>
-    [AspireExportIgnore(Reason = "Generic constraint uses IResourceWithParent<RabbitMQVirtualHostResource> which is not ATS-compatible. Use WithExchangeArguments to set AlternateExchange directly in polyglot app hosts.")]
+    [AspireExportIgnore(Reason = "Generic constraint uses IRabbitMQServerChild which is not ATS-compatible. Use WithExchangeArguments to set AlternateExchange directly in polyglot app hosts.")]
     public static IResourceBuilder<T> WithAlternateExchange<T>(
         this IResourceBuilder<T> builder,
         IResourceBuilder<RabbitMQExchangeResource> alternateExchange)
-        where T : Resource, IResourceWithExchangeArguments, IResourceWithParent<RabbitMQVirtualHostResource>
+        where T : Resource, IResourceWithExchangeArguments, IRabbitMQServerChild
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(alternateExchange);
 
-        if (alternateExchange.Resource.VirtualHost != builder.Resource.Parent)
+        // The topology types no longer implement IResourceWithParent; use IRabbitMQServerChild.VirtualHost
+        // to reach the owning virtual host for the same-vhost validation.
+        if (alternateExchange.Resource.VirtualHost != ((IRabbitMQServerChild)builder.Resource).VirtualHost)
         {
             throw new DistributedApplicationException(
                 $"Alternate exchange '{alternateExchange.Resource.Name}' must be in the same virtual host as '{builder.Resource.Name}'.");

@@ -64,12 +64,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
             $"Failed to bind exchange '{destExchange}' to exchange '{sourceExchange}' on vhost '{vhost}'", ct).ConfigureAwait(false);
     }
 
-    public Task<bool> QueueExistsAsync(string vhost, string name, CancellationToken ct)
-        => SafeAmqpAsync(vhost, ch => ch.QueueDeclarePassiveAsync(name, cancellationToken: ct), ct);
-
-    public Task<bool> ExchangeExistsAsync(string vhost, string name, CancellationToken ct)
-        => SafeAmqpAsync(vhost, ch => ch.ExchangeDeclarePassiveAsync(name, cancellationToken: ct), ct);
-
     public async Task CreateVirtualHostAsync(string vhost, CancellationToken ct)
     {
         _logger.LogDebug("Creating virtual host '{Vhost}'.", vhost);
@@ -82,39 +76,40 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         await HttpPutAsync($"/api/parameters/shovel/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", def, $"Failed to create shovel '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
     }
 
-    public async Task<string?> GetShovelStateAsync(string vhost, string name, CancellationToken ct)
-    {
-        var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
-        try
-        {
-            var response = await http.GetAsync($"/api/shovels/{Uri.EscapeDataString(vhost)}", ct).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
-            {
-                return null;
-            }
-
-            var shovels = await response.Content.ReadFromJsonAsync<RabbitMQShovelStatus[]>(cancellationToken: ct).ConfigureAwait(false);
-            var shovel = shovels?.FirstOrDefault(s => s.Name == name);
-            return shovel?.State;
-        }
-        catch
-        {
-            return null;
-        }
-    }
-
     public async Task PutPolicyAsync(string vhost, string name, RabbitMQPolicyDefinition def, CancellationToken ct)
     {
         _logger.LogDebug("Applying policy '{Policy}' on vhost '{Vhost}'.", name, vhost);
         await HttpPutAsync($"/api/policies/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", def, $"Failed to apply policy '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
     }
 
-    public async Task<bool> PolicyExistsAsync(string vhost, string name, CancellationToken ct)
+    public async Task<RabbitMQQueueDefinition?> GetQueueAsync(string vhost, string name, CancellationToken ct)
+    {
+        return await HttpGetOrNullAsync<RabbitMQQueueDefinition>(
+            $"/api/queues/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", ct).ConfigureAwait(false);
+    }
+
+    public async Task<RabbitMQExchangeDefinition?> GetExchangeAsync(string vhost, string name, CancellationToken ct)
+    {
+        return await HttpGetOrNullAsync<RabbitMQExchangeDefinition>(
+            $"/api/exchanges/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", ct).ConfigureAwait(false);
+    }
+
+    public async Task<RabbitMQPolicyDefinition?> GetPolicyAsync(string vhost, string name, CancellationToken ct)
+        => await HttpGetOrNullAsync<RabbitMQPolicyDefinition>(
+            $"/api/policies/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", ct).ConfigureAwait(false);
+
+    public async Task<RabbitMQShovelDefinition?> GetShovelAsync(string vhost, string name, CancellationToken ct)
+    {
+        return await HttpGetOrNullAsync<RabbitMQShovelDefinition>(
+            $"/api/parameters/shovel/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", ct).ConfigureAwait(false);
+    }
+
+    public async Task<bool> VirtualHostExistsAsync(string vhost, CancellationToken ct)
     {
         var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
         try
         {
-            var response = await http.GetAsync($"/api/policies/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", ct).ConfigureAwait(false);
+            var response = await http.GetAsync($"/api/vhosts/{Uri.EscapeDataString(vhost)}", ct).ConfigureAwait(false);
             return response.IsSuccessStatusCode;
         }
         catch
@@ -123,13 +118,39 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         }
     }
 
+    public async Task DeleteVirtualHostAsync(string vhost, CancellationToken ct)
+    {
+        _logger.LogDebug("Deleting virtual host '{Vhost}'.", vhost);
+        await HttpDeleteAsync($"/api/vhosts/{Uri.EscapeDataString(vhost)}", $"Failed to delete virtual host '{vhost}'", ct).ConfigureAwait(false);
+    }
+
+    public async Task DeleteQueueAsync(string vhost, string name, CancellationToken ct)
+    {
+        _logger.LogDebug("Deleting queue '{Queue}' on vhost '{Vhost}'.", name, vhost);
+        await HttpDeleteAsync($"/api/queues/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", $"Failed to delete queue '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
+    }
+
+    public async Task DeleteExchangeAsync(string vhost, string name, CancellationToken ct)
+    {
+        _logger.LogDebug("Deleting exchange '{Exchange}' on vhost '{Vhost}'.", name, vhost);
+        await HttpDeleteAsync($"/api/exchanges/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", $"Failed to delete exchange '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
+    }
+
+    public async Task DeletePolicyAsync(string vhost, string name, CancellationToken ct)
+    {
+        _logger.LogDebug("Deleting policy '{Policy}' on vhost '{Vhost}'.", name, vhost);
+        await HttpDeleteAsync($"/api/policies/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", $"Failed to delete policy '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
+    }
+
+    public async Task DeleteShovelAsync(string vhost, string name, CancellationToken ct)
+    {
+        _logger.LogDebug("Deleting shovel '{Shovel}' on vhost '{Vhost}'.", name, vhost);
+        await HttpDeleteAsync($"/api/parameters/shovel/{Uri.EscapeDataString(vhost)}/{Uri.EscapeDataString(name)}", $"Failed to delete shovel '{name}' on vhost '{vhost}'", ct).ConfigureAwait(false);
+    }
+
     public async ValueTask DisposeAsync()
         => await _amqp.DisposeAsync().ConfigureAwait(false);
 
-    /// <summary>
-    /// Resolves the channel for <paramref name="vhost"/>, executes <paramref name="action"/>,
-    /// and wraps any exception in a <see cref="DistributedApplicationException"/>.
-    /// </summary>
     private async Task AmqpAsync(string vhost, Func<IChannel, Task> action, string errorMessage, CancellationToken ct)
     {
         var ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
@@ -139,8 +160,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         }
         catch (Exception e) when (e is AlreadyClosedException or OperationInterruptedException)
         {
-            // The broker closed or interrupted the channel mid-operation (e.g. the shovel plugin
-            // racing with queue declaration). Retry once with a fresh channel.
             ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
             try
             {
@@ -157,27 +176,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         }
     }
 
-    /// <summary>
-    /// Resolves the channel for <paramref name="vhost"/>, executes a passive-declare <paramref name="action"/>,
-    /// and returns <see langword="true"/> if it succeeds or <see langword="false"/> if any exception is thrown.
-    /// </summary>
-    private async Task<bool> SafeAmqpAsync(string vhost, Func<IChannel, Task> action, CancellationToken ct)
-    {
-        var ch = await _amqp.GetOrCreateChannelAsync(vhost, ct).ConfigureAwait(false);
-        try
-        {
-            await action(ch).ConfigureAwait(false);
-            return true;
-        }
-        catch
-        {
-            return false;
-        }
-    }
-
-    /// <summary>
-    /// Sends an HTTP PUT to the management API and wraps any failure in a <see cref="DistributedApplicationException"/>.
-    /// </summary>
     private async Task HttpPutAsync<T>(string path, T? body, string errorMessage, CancellationToken ct)
     {
         var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
@@ -194,10 +192,42 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
         }
     }
 
-    private sealed class RabbitMQShovelStatus
+    private async Task<T?> HttpGetOrNullAsync<T>(string path, CancellationToken ct) where T : class
     {
-        public string? Name { get; set; }
-        public string? State { get; set; }
+        var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var response = await http.GetAsync(path, ct).ConfigureAwait(false);
+            if (!response.IsSuccessStatusCode)
+            {
+                return null;
+            }
+
+            return await response.Content.ReadFromJsonAsync<T>(cancellationToken: ct).ConfigureAwait(false);
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    private async Task HttpDeleteAsync(string path, string errorMessage, CancellationToken ct)
+    {
+        var http = await _amqp.GetOrCreateHttpClientAsync(ct).ConfigureAwait(false);
+        try
+        {
+            var response = await http.DeleteAsync(path, ct).ConfigureAwait(false);
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                return;
+            }
+
+            response.EnsureSuccessStatusCode();
+        }
+        catch (Exception ex)
+        {
+            throw new DistributedApplicationException($"{errorMessage}: {ex.Message}", ex);
+        }
     }
 
     private sealed class RabbitMQAmqpConnectionManager(RabbitMQServerResource server) : IAsyncDisposable
@@ -221,7 +251,6 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
                     return racy;
                 }
 
-                // Dispose the stale connection/channel before replacing it to avoid leaking resources.
                 if (_channels.TryRemove(vhost, out var stale))
                 {
                     try { await stale.channel.DisposeAsync().ConfigureAwait(false); } catch { }
@@ -229,7 +258,16 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
                 }
 
                 var cs = await server.ConnectionStringExpression.GetValueAsync(ct).ConfigureAwait(false);
-                var f = new ConnectionFactory { Uri = new Uri(cs!), VirtualHost = vhost };
+                var f = new ConnectionFactory
+                {
+                    Uri = new Uri(cs!),
+                    VirtualHost = vhost,
+                    AutomaticRecoveryEnabled = true,
+                    RequestedConnectionTimeout = TimeSpan.FromSeconds(10),
+                    ContinuationTimeout = TimeSpan.FromSeconds(10),
+                    SocketReadTimeout = TimeSpan.FromSeconds(10),
+                    SocketWriteTimeout = TimeSpan.FromSeconds(10),
+                };
                 var conn = await f.CreateConnectionAsync(ct).ConfigureAwait(false);
                 var ch = await conn.CreateChannelAsync(cancellationToken: ct).ConfigureAwait(false);
                 var entry = (conn, ch);
@@ -284,7 +322,7 @@ internal sealed class RabbitMQProvisioningClient : IRabbitMQProvisioningClient
                 _http = new HttpClient
                 {
                     BaseAddress = new Uri(mgmt),
-                    Timeout = TimeSpan.FromSeconds(30)
+                    Timeout = TimeSpan.FromSeconds(5),
                 };
                 _http.DefaultRequestHeaders.Authorization =
                     new AuthenticationHeaderValue("Basic", Convert.ToBase64String(Encoding.UTF8.GetBytes($"{user}:{pass}")));

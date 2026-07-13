@@ -8,6 +8,8 @@ using Aspire.Hosting.Tests.Utils;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging.Abstractions;
 
+using static Aspire.Hosting.RabbitMQ.Tests.TestServices.RabbitMQTopologyTestFactory;
+
 namespace Aspire.Hosting.RabbitMQ.Tests;
 
 public class RabbitMQPolicyTests
@@ -223,9 +225,11 @@ public class RabbitMQPolicyTests
         await notifications.PublishUpdateAsync(policyBuilder.Resource, s =>
             (s with { State = KnownResourceStates.Running }).WithHealthReports(
                 [new HealthReportSnapshot("policy_check", HealthStatus.Unhealthy, "probe failed", null)]));
+        // Server must be Running so the health check's Stage 1 broker-liveness gate passes.
+        await notifications.PublishUpdateAsync(server.Resource, s => s with { State = KnownResourceStates.Running });
 
         var fakeClient = new FakeRabbitMQProvisioningClient();
-        var check = new RabbitMQProvisionableHealthCheck(queue.Resource, fakeClient, notifications, NullLogger<RabbitMQProvisionableHealthCheck>.Instance);
+        var check = new RabbitMQProvisionableHealthCheck(queue.Resource, server.Resource.Name, fakeClient, notifications, NullLogger<RabbitMQProvisionableHealthCheck>.Instance);
         var context = new HealthCheckContext
         {
             Registration = new HealthCheckRegistration("test", _ => null!, null, null)
@@ -260,9 +264,14 @@ public class RabbitMQPolicyTests
         await notifications.PublishUpdateAsync(policyBuilder.Resource, s =>
             (s with { State = KnownResourceStates.Running }).WithHealthReports(
                 [new HealthReportSnapshot("policy_check", HealthStatus.Unhealthy, "probe failed", null)]));
+        // Server must be Running so the health check's Stage 1 broker-liveness gate passes.
+        await notifications.PublishUpdateAsync(server.Resource, s => s with { State = KnownResourceStates.Running });
 
         var fakeClient = new FakeRabbitMQProvisioningClient();
-        var check = new RabbitMQProvisionableHealthCheck(nonMatchingQueue.Resource, fakeClient, notifications, NullLogger<RabbitMQProvisionableHealthCheck>.Instance);
+        // ProbeAsync now compares declared fields against a live read-back, so the queue must actually be
+        // reconciled into the client first for the probe stage to report Healthy.
+        await nonMatchingQueue.Resource.ReconcileAsync(fakeClient, default);
+        var check = new RabbitMQProvisionableHealthCheck(nonMatchingQueue.Resource, server.Resource.Name, fakeClient, notifications, NullLogger<RabbitMQProvisionableHealthCheck>.Instance);
         var context = new HealthCheckContext
         {
             Registration = new HealthCheckRegistration("test", _ => null!, null, null)
@@ -277,10 +286,7 @@ public class RabbitMQPolicyTests
     [Fact]
     public void AppliesTo_MatchingQueueName_ReturnsTrue()
     {
-        var server = new RabbitMQServerResource("rabbit", userName: null,
-            password: new ParameterResource("pw", _ => "pw", secret: true));
-        var vhost = new RabbitMQVirtualHostResource("myvhost", "myvhost", server);
-        var policy = new RabbitMQPolicyResource("p", "p", "^orders", vhost);
+        var policy = MakePolicy("^orders");
 
         Assert.True(policy.AppliesTo("orders", RabbitMQDestinationKind.Queue));
         Assert.True(policy.AppliesTo("orders-dlq", RabbitMQDestinationKind.Queue));
@@ -289,10 +295,7 @@ public class RabbitMQPolicyTests
     [Fact]
     public void AppliesTo_NonMatchingQueueName_ReturnsFalse()
     {
-        var server = new RabbitMQServerResource("rabbit", userName: null,
-            password: new ParameterResource("pw", _ => "pw", secret: true));
-        var vhost = new RabbitMQVirtualHostResource("myvhost", "myvhost", server);
-        var policy = new RabbitMQPolicyResource("p", "p", "^orders", vhost);
+        var policy = MakePolicy("^orders");
 
         Assert.False(policy.AppliesTo("payments", RabbitMQDestinationKind.Queue));
     }
@@ -300,10 +303,7 @@ public class RabbitMQPolicyTests
     [Fact]
     public void AppliesTo_ExchangeWhenApplyToQueues_ReturnsFalse()
     {
-        var server = new RabbitMQServerResource("rabbit", userName: null,
-            password: new ParameterResource("pw", _ => "pw", secret: true));
-        var vhost = new RabbitMQVirtualHostResource("myvhost", "myvhost", server);
-        var policy = new RabbitMQPolicyResource("p", "p", "^orders", vhost, RabbitMQPolicyApplyTo.Queues);
+        var policy = MakePolicy("^orders", RabbitMQPolicyApplyTo.Queues);
 
         Assert.False(policy.AppliesTo("orders", RabbitMQDestinationKind.Exchange));
     }
@@ -311,11 +311,14 @@ public class RabbitMQPolicyTests
     [Fact]
     public void AppliesTo_QueueWhenApplyToExchanges_ReturnsFalse()
     {
-        var server = new RabbitMQServerResource("rabbit", userName: null,
-            password: new ParameterResource("pw", _ => "pw", secret: true));
-        var vhost = new RabbitMQVirtualHostResource("myvhost", "myvhost", server);
-        var policy = new RabbitMQPolicyResource("p", "p", "^orders", vhost, RabbitMQPolicyApplyTo.Exchanges);
+        var policy = MakePolicy("^orders", RabbitMQPolicyApplyTo.Exchanges);
 
         Assert.False(policy.AppliesTo("orders", RabbitMQDestinationKind.Queue));
+    }
+
+    private static RabbitMQPolicyResource MakePolicy(string pattern, RabbitMQPolicyApplyTo applyTo = RabbitMQPolicyApplyTo.All)
+    {
+        var (_, vhost) = BuildVhost();
+        return new RabbitMQPolicyResource("p", "p", pattern, vhost, applyTo);
     }
 }

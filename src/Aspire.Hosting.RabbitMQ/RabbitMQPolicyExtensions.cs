@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.RabbitMQ.Provisioning;
-
 namespace Aspire.Hosting.ApplicationModel;
 
 /// <summary>
@@ -55,52 +53,16 @@ public static class RabbitMQPolicyExtensions
 
         var policyBuilder = builder.ApplicationBuilder.AddResource(policy);
 
-        // Policies use the management HTTP API — ensure the management plugin is enabled (idempotent).
-        builder.ApplicationBuilder
-            .CreateResourceBuilder(builder.Resource.Parent)
-            .WithManagementPlugin();
-
-        // Resolve which queues and exchanges this policy applies to at model-freeze time (BeforeStartEvent).
-        // Using BeforeStartEvent (not AddPolicy call time) ensures that entities added after the policy are also matched.
+        // Resolve matches at model-freeze time (BeforeStartEvent) so entities added after the policy are included.
         builder.ApplicationBuilder.Eventing.Subscribe<BeforeStartEvent>((@event, ct) =>
         {
             RabbitMQBuilderExtensions.ResolveAndApplyPolicyMatches(policy, builder.Resource, policyBuilder);
             return Task.CompletedTask;
         });
 
-        var vhost = builder.Resource;
-
-        return RabbitMQBuilderExtensions.WithProvisionableHealthCheck(policyBuilder)
+        return policyBuilder
             .WithIconName("ClipboardSettings")
-            .WithRabbitMQProvisioning(
-                dependencies: [(vhost, WaitType.WaitUntilHealthy)],
-                provisionAsync: async (p, client, _, ct) =>
-                {
-                    var definition = new Dictionary<string, object?>();
-
-                    if (p.ApplyTo != RabbitMQPolicyApplyTo.Exchanges)
-                    {
-                        p.QueueArguments.FlattenIntoPolicy(definition, $"Policy '{p.PolicyName}'");
-                    }
-
-                    if (p.ApplyTo != RabbitMQPolicyApplyTo.Queues)
-                    {
-                        p.ExchangeArguments.FlattenInto(definition, $"Policy '{p.PolicyName}'");
-                    }
-
-                    foreach (var (k, v) in p.AdditionalArguments)
-                    {
-                        definition[k] = v;
-                    }
-
-                    var def = new RabbitMQPolicyDefinition(
-                        p.Pattern,
-                        p.ApplyTo.ToString().ToLowerInvariant(),
-                        definition,
-                        p.Priority);
-
-                    await client.PutPolicyAsync(vhost.VirtualHostName, p.PolicyName, def, ct).ConfigureAwait(false);
-                });
+            .WithRabbitMQTopologyWiring(builder.Resource);
     }
 
     /// <summary>
@@ -125,12 +87,7 @@ public static class RabbitMQPolicyExtensions
         string? policyName = null)
     {
         ArgumentNullException.ThrowIfNull(server);
-        var vhostBuilder = RabbitMQBuilderExtensions.GetOrAddDefaultVirtualHost(server);
-
-        // Policies use the management HTTP API — ensure the management plugin is enabled (idempotent).
-        server.WithManagementPlugin();
-
-        return vhostBuilder.AddPolicy(name, pattern, applyTo, priority, policyName);
+        return RabbitMQBuilderExtensions.GetOrAddDefaultVirtualHost(server).AddPolicy(name, pattern, applyTo, priority, policyName);
     }
 
     /// <summary>
