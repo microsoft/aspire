@@ -117,11 +117,12 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             // Install into workspace-local dirs so nothing leaks into the developer's real
             // ~/.rad, and prepend the CLI directory to PATH so the Step 1b `command -v rad` (and every
             // later `rad`) resolves to this binary. The Radius installer invokes `rad bicep download`,
-            // which uses HOME to place Radius-managed tools under ~/.rad, so set HOME only inside the
-            // installer subshell. Later az/kubectl/docker/aspire commands keep the real HOME and use
-            // their own KUBECONFIG/DOCKER_CONFIG isolation where needed. radiusVersion pins the CLI
-            // version; `rad install
-            // kubernetes` (Step 9) then installs the matching control plane, keeping the run
+            // and even `rad version --cli` initializes config, so run both with HOME scoped to the
+            // installer subshell; Radius-managed tools and config then stay under the workspace home.
+            // Export PATH outside the subshell because the CLI location must persist, while HOME must
+            // not. Later az/kubectl/docker/aspire commands keep the real HOME and use their own
+            // KUBECONFIG/DOCKER_CONFIG isolation where needed. radiusVersion pins the CLI version;
+            // `rad install kubernetes` (Step 9) then installs the matching control plane, keeping the run
             // deterministic across Radius releases. Keep this aligned with
             // RadiusBicepExtension.Version (major.minor 0.59) so the installed control plane matches
             // the Bicep types the publisher emits. install.sh is fetched pinned to the same release
@@ -142,9 +143,9 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
                 $"mkdir -p \"{wsRoot}/radbin\" \"{wsRoot}/home\" && " +
                 $"export HOME=\"{wsRoot}/home\" && " +
                 $"curl -fsSL \"https://raw.githubusercontent.com/radius-project/radius/v{radiusVersion}/deploy/install.sh\" | " +
-                $"/bin/bash -s -- --version \"{radiusVersion}\" --install-dir \"{wsRoot}/radbin\" ) && " +
-                $"export PATH=\"{wsRoot}/radbin:$PATH\" && " +
-                $"rad version --cli");
+                $"/bin/bash -s -- --version \"{radiusVersion}\" --install-dir \"{wsRoot}/radbin\" && " +
+                $"\"{wsRoot}/radbin/rad\" version --cli ) && " +
+                $"export PATH=\"{wsRoot}/radbin:$PATH\"");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
