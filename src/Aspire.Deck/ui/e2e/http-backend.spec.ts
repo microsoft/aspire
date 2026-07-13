@@ -297,10 +297,10 @@ test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes
   await expect(resourceRow).toContainText("Stopped");
   await expect(page.getByTitle("Resources: Connected")).toBeVisible();
   // React strict mode can negotiate and tear down an initial connection while checking
-  // effect cleanup. At least one complete stream must win, and polling must remain unused.
+  // effect cleanup. Resource consumers still share one completed stream, and polling stays unused.
   expect(negotiateRequests).toBeGreaterThan(0);
-  expect(websocketConnections).toBeGreaterThan(0);
-  expect(streamInvocations).toBeGreaterThan(0);
+  expect(websocketConnections).toBe(1);
+  expect(streamInvocations).toBe(1);
   expect(resourceRequests).toBe(0);
 });
 

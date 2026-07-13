@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useState } from "react";
 import {
   onApphosts,
   onConnection,
@@ -25,38 +25,89 @@ const INITIAL_CONNECTION: ConnectionMap = {
   otlpHttp: "connecting",
 };
 
-// Subscribes to live resource events and maintains a name-keyed map, applying
-// snapshots and incremental change deltas from the backend.
-export function useResources(): { resources: Resource[]; ready: boolean } {
-  const [resources, setResources] = useState<Resource[]>([]);
-  const [ready, setReady] = useState(false);
-  const mapRef = useRef<Map<string, Resource>>(new Map());
+interface ResourceStoreSnapshot {
+  resources: Resource[];
+  ready: boolean;
+}
+
+const resourceMap = new Map<string, Resource>();
+const resourceListeners = new Set<() => void>();
+let resourceSubscription: (() => void) | null = null;
+let resourceSubscriptionTimer: number | undefined;
+let resourceSnapshot: ResourceStoreSnapshot = { resources: [], ready: false };
+
+function applyResourceEvent(event: ResourcesEvent): void {
+  if (event.type === "snapshot") {
+    resourceMap.clear();
+    for (const resource of event.resources ?? []) {
+      resourceMap.set(resource.name, resource);
+    }
+  } else {
+    for (const resource of event.upserts ?? []) {
+      resourceMap.set(resource.name, resource);
+    }
+    for (const name of event.deletes ?? []) {
+      resourceMap.delete(name);
+    }
+  }
+
+  resourceSnapshot = { resources: Array.from(resourceMap.values()), ready: true };
+  for (const listener of resourceListeners) {
+    listener();
+  }
+}
+
+function subscribeResourceStore(listener: () => void): () => void {
+  resourceListeners.add(listener);
+  // Several mounted pages consume the resource inventory at once. Keep one backend
+  // subscription so HTTP polling and SignalR connections are not multiplied per hook.
+  // Deferring its creation also lets React Strict Mode finish its synthetic unmount/remount
+  // without starting a request that it immediately has to abort.
+  if (resourceSubscription === null && resourceSubscriptionTimer === undefined) {
+    resourceSubscriptionTimer = window.setTimeout(() => {
+      resourceSubscriptionTimer = undefined;
+      if (resourceListeners.size > 0 && resourceSubscription === null) {
+        resourceSubscription = onResources(applyResourceEvent);
+      }
+    });
+  }
+
+  return () => {
+    resourceListeners.delete(listener);
+    if (resourceListeners.size === 0) {
+      if (resourceSubscriptionTimer !== undefined) {
+        window.clearTimeout(resourceSubscriptionTimer);
+        resourceSubscriptionTimer = undefined;
+      }
+      resourceSubscription?.();
+      resourceSubscription = null;
+      resourceMap.clear();
+      resourceSnapshot = { resources: [], ready: false };
+    }
+  };
+}
+
+function getResourceSnapshot(): ResourceStoreSnapshot {
+  return resourceSnapshot;
+}
+
+// Shares one live backend subscription while retaining hook-local snapshots. Priming each
+// consumer on the next task preserves the existing effect ordering for pages that open
+// additional streams after the resource inventory becomes available.
+export function useResources(): ResourceStoreSnapshot {
+  const [snapshot, setSnapshot] = useState<ResourceStoreSnapshot>({ resources: [], ready: false });
 
   useEffect(() => {
-    const apply = (event: ResourcesEvent): void => {
-      const map = mapRef.current;
-      if (event.type === "snapshot") {
-        map.clear();
-        for (const resource of event.resources ?? []) {
-          map.set(resource.name, resource);
-        }
-      } else {
-        for (const resource of event.upserts ?? []) {
-          map.set(resource.name, resource);
-        }
-        for (const name of event.deletes ?? []) {
-          map.delete(name);
-        }
-      }
-      setResources(Array.from(map.values()));
-      setReady(true);
+    const update = (): void => setSnapshot(getResourceSnapshot());
+    const unsubscribe = subscribeResourceStore(update);
+    const primeTimer = window.setTimeout(update);
+    return () => {
+      window.clearTimeout(primeTimer);
+      unsubscribe();
     };
-
-    const unsubscribe = onResources(apply);
-    return unsubscribe;
   }, []);
 
-  return { resources, ready };
+  return snapshot;
 }
 
 export function useConnection(): ConnectionMap {
