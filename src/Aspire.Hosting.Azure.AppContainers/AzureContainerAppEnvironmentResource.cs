@@ -243,6 +243,8 @@ public class AzureContainerAppEnvironmentResource :
     private const string ReferenceRelationshipType = "Reference";
     private const string WaitForRelationshipType = "WaitFor";
 
+    private static readonly object s_serialDeploymentOrderingLock = new();
+
     /// <summary>
     /// Chains the container apps targeted to this managed environment into a serial deployment order
     /// using <c>DependsOn</c> relationships.
@@ -278,8 +280,19 @@ public class AzureContainerAppEnvironmentResource :
             return;
         }
 
+        lock (s_serialDeploymentOrderingLock)
+        {
+            AddSerialDeploymentOrderingCore(targets);
+        }
+    }
+
+    private static void AddSerialDeploymentOrderingCore(IReadOnlyList<IResource> targets)
+    {
         var comparer = new ResourceNameComparer();
 
+        // Multiple managed environments prepare their deployment targets in independent pipeline
+        // steps. Keep the reachability snapshot and mutation atomic so concurrent environment passes
+        // cannot each add an edge from stale model state that jointly forms a cross-environment cycle.
         // reachable[x] = the apps in this environment that x must deploy after, following ordering
         // relationships transitively through the entire model. Traversing beyond this environment's
         // apps is deliberate: a chain like a -> c -> b, where c lives in another environment, still

@@ -2993,6 +2993,43 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "c")));
     }
 
+    [Fact]
+    public async Task CrossEnvironmentCrossedDependenciesDoNotCreateSerialOrderingCycle()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var envA = builder.AddAzureContainerAppEnvironment("env-a");
+        var envB = builder.AddAzureContainerAppEnvironment("env-b");
+
+        var a1 = builder.AddContainer("a1", "myimage").WithComputeEnvironment(envA);
+        var a2 = builder.AddContainer("a2", "myimage").WithComputeEnvironment(envA);
+        var b1 = builder.AddContainer("b1", "myimage").WithComputeEnvironment(envB);
+        var b2 = builder.AddContainer("b2", "myimage").WithComputeEnvironment(envB);
+
+        // Crossed dependencies between two managed environments. If each environment computes
+        // reachability from a stale model snapshot and then adds its own serial edge, the combined
+        // edges can form a cycle: a1 -> b2 -> b1 -> a2 -> a1.
+        a1.WithRelationship(b2.Resource, "Reference");
+        b1.WithRelationship(a2.Resource, "Reference");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apps = model.GetComputeResources().ToList();
+
+        foreach (var appResource in apps)
+        {
+            var selfCycles = GetTransitiveOrderingPredecessors(appResource, apps)
+                .Where(predecessor => ReferenceEquals(predecessor, appResource))
+                .Select(predecessor => predecessor.Name)
+                .ToArray();
+
+            Assert.Empty(selfCycles);
+        }
+    }
+
     // Ordering relationship types that force one resource to deploy before another: the synthetic
     // serialization edges (DependsOn) plus the user-declared dependencies (Reference/WaitFor).
     private static readonly string[] s_orderingRelationshipTypes = ["DependsOn", "Reference", "WaitFor"];
