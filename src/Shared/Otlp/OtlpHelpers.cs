@@ -138,7 +138,7 @@ public static partial class OtlpHelpers
 
         foreach (var resource in resources)
         {
-            if (EqualsCompositeName(resource.ResourceName, resource.InstanceId, resourceName))
+            if (resource.InstanceId is { } instanceId && EqualsCompositeName(resource.ResourceName, instanceId, resourceName))
             {
                 compositeNameMatches.Add(resource);
             }
@@ -157,13 +157,8 @@ public static partial class OtlpHelpers
         };
     }
 
-    private static bool EqualsCompositeName(string resourceName, string? instanceId, string value)
+    private static bool EqualsCompositeName(string resourceName, string instanceId, string value)
     {
-        if (instanceId is null)
-        {
-            return string.Equals(resourceName, value, StringComparisons.ResourceName);
-        }
-
         // Composite names have the format "{resourceName}-{instanceId}". Compare each
         // segment without allocating the composite string because this runs for every resource.
         return value.Length == resourceName.Length + instanceId.Length + 1

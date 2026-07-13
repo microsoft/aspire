@@ -221,6 +221,21 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(["api-1", "api-2"], resolvedResources);
     }
 
+    [Fact]
+    public void TryResolveResourceNames_WithBaseResourceNameAndMixedInstanceIds_ResolvesAllResources()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api", InstanceId = null },
+            new() { Name = "api", InstanceId = "1" },
+        };
+
+        var result = TelemetryCommandHelpers.TryResolveResourceNames("api", resources, out var resolvedResources);
+
+        Assert.True(result);
+        Assert.Equal(["api", "api-1"], resolvedResources);
+    }
+
     [Theory]
     [MemberData(nameof(ResolveResourceNameTestData))]
     internal void ResolveResourceName_ResolvesExpectedName(

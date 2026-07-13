@@ -980,6 +980,32 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
+    public void GetSpans_WithBaseResourceNameAndMixedInstanceIds_ReturnsNull()
+    {
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: null),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "singleton", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: "1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t2", spanId: "replica", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3)) } } }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: ["api"], traceId: null, hasError: null, limit: null);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
     public void GetSpans_WithUniqueResourceName_ResolvesDirectly()
     {
         // When only one resource matches the base name, it should resolve directly.
