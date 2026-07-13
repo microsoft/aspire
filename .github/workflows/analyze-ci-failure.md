@@ -269,7 +269,9 @@ jobs:
                   {
                     test: (.["+@testName"] // ""),
                     error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:1000]),
-                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000])
+                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000]),
+                    standard_output: ((.Output.StdOut // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:4000]),
+                    standard_error: ((.Output.StdErr // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:4000])
                   }
                 ' >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
               done
@@ -348,7 +350,7 @@ jobs:
             if [ -f "ci-failure-data/test-failures.json" ]; then
               FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end) + (if .standard_output != "" then "**Standard Output:**\n```\n\(.standard_output)\n```\n" else "" end) + (if .standard_error != "" then "**Standard Error:**\n```\n\(.standard_error)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
                 echo "No test failures extracted from TRX artifacts."
               fi
@@ -707,6 +709,35 @@ safe-outputs:
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
                   TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
+                  JOB_NAME=$(jq -r '.job_name // empty' "$CAUSE_FILE")
+                  if [ -z "$JOB_NAME" ]; then
+                    JOB_NAME="$FIRST_JOB"
+                  fi
+
+                  if [ "$CAUSE_TYPE" = "flaky-test" ]; then
+                    CLASSIFICATION_ANALYSIS=$(jq -r --arg test_name "$TEST_NAME" \
+                      '([.failed_tests[]? | select(.name == $test_name)][0] // {}) | .reason // empty' \
+                      "$ANALYSIS_FILE")
+                    FAILURE_DETAILS_HTML=$(jq -r --arg test_name "$TEST_NAME" '
+                      ([.failed_tests[]? | select(.name == $test_name)][0] // {}) |
+                      [["Error", .error // ""], ["Stack Trace", .stack_trace // ""],
+                       ["Standard Output", .standard_output // ""], ["Standard Error", .standard_error // ""]] |
+                      map(select(.[1] != "") | .[0] + ":\n" + .[1]) | join("\n\n") | @html
+                    ' "$ANALYSIS_FILE")
+                  else
+                    CLASSIFICATION_ANALYSIS=$(jq -r --arg job_name "$JOB_NAME" \
+                      '([.failed_jobs[]? | select(.name == $job_name)][0] // [.failed_jobs[]? | select(.classification == "transient-infra")][0] // {}) | .reason // empty' \
+                      "$ANALYSIS_FILE")
+                    FAILURE_DETAILS_HTML=$(jq -r '(.failure_details // .error_pattern) | @html' "$CAUSE_FILE")
+                  fi
+
+                  if [ -z "$CLASSIFICATION_ANALYSIS" ]; then
+                    CLASSIFICATION_ANALYSIS=$(jq -r '.analysis // empty' "$CAUSE_FILE")
+                  fi
+                  if [ -z "$FAILURE_DETAILS_HTML" ]; then
+                    FAILURE_DETAILS_HTML=$(jq -r '(.failure_details // .error_pattern) | @html' "$CAUSE_FILE")
+                  fi
+
                   {
                     echo "${MARKER}"
                     echo ""
@@ -714,17 +745,30 @@ safe-outputs:
                     echo ""
                     echo "Build: ${RUN_URL}"
                     if [ -n "$TEST_NAME" ]; then
-                      echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
+                      echo "Build error leg or test failing: ${JOB_NAME} / \`${TEST_NAME}\`"
                     else
-                      echo "Build error leg: ${FIRST_JOB}"
+                      echo "Build error leg: ${JOB_NAME}"
                     fi
                     echo "Pull request: #${PR_NUMBER}"
                     echo ""
-                    echo "## Error Message"
+                    echo "## Classification Analysis"
                     echo ""
-                    echo '```'
-                    jq -r '.error_pattern' "$CAUSE_FILE"
-                    echo '```'
+                    printf '%s\n' "$CLASSIFICATION_ANALYSIS"
+                    echo ""
+                    echo "## Failure Information"
+                    echo ""
+                    echo "<details>"
+                    if [ "$CAUSE_TYPE" = "flaky-test" ]; then
+                      echo "<summary>Test output</summary>"
+                    else
+                      echo "<summary>Job output snippet</summary>"
+                    fi
+                    echo ""
+                    echo "<pre>"
+                    printf '%s\n' "$FAILURE_DETAILS_HTML"
+                    echo "</pre>"
+                    echo ""
+                    echo "</details>"
                     echo ""
                     echo "## Description"
                     echo ""
@@ -999,6 +1043,8 @@ Write the run summary to `/tmp/gh-aw/agent/analysis-result.json`. The JSON must 
       "job": "job-name",
       "error": "the error message from the test failure",
       "stack_trace": "the stack trace from the test failure (first few frames)",
+      "standard_output": "standard output captured in the TRX file, when available",
+      "standard_error": "standard error captured in the TRX file, when available",
       "classification": "flaky | code-issue",
       "reason": "Why this test is classified this way"
     }
@@ -1013,6 +1059,8 @@ Field details:
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
 - `failed_tests[].error`: The full error message from the TRX test failure data.
 - `failed_tests[].stack_trace`: The stack trace from the TRX test failure data (include the first few relevant frames).
+- `failed_tests[].standard_output`: The test's standard output from the TRX data, when available.
+- `failed_tests[].standard_error`: The test's standard error from the TRX data, when available.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 - `causes`: An array of cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts.
 
@@ -1028,7 +1076,10 @@ Each cause file must follow this schema:
   "type": "flaky-test | infra-failure",
   "title": "Human-readable short description of the cause",
   "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
-  "error_pattern": "The key error message or pattern that identifies this cause"
+  "job_name": "Name of the failed job containing this cause",
+  "error_pattern": "The key error message or pattern that identifies this cause",
+  "analysis": "Why the evidence indicates this failure category",
+  "failure_details": "Test output from TRX or a relevant job log snippet"
 }
 ```
 
@@ -1037,7 +1088,10 @@ Field details:
 - `type`: One of `"flaky-test"` or `"infra-failure"`. Do NOT create cause files for code-issue classifications.
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
+- `job_name`: The exact name of the failed job containing this cause.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
+- `analysis`: Explain why the evidence supports the selected `type`. Use the same rationale represented in the corresponding `failed_tests[].reason` or `failed_jobs[].reason` entry.
+- `failure_details`: For flaky tests, copy the test failure content from the TRX data, including the error, stack trace, standard output, and standard error when available (up to ~8000 characters). For infrastructure failures, copy the relevant error-focused job log excerpt (up to ~4000 characters). Do not summarize or invent output in this field.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON.
 
