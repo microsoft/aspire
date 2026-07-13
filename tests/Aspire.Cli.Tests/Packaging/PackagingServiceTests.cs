@@ -586,6 +586,98 @@ public class PackagingServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetChannelsAsync_WhenIdentityIsStagingAndRequestedIsStagingOnStableShapedCli_DefaultsToStableQuality()
+    {
+        // Regression-pin for the if/else ordering in PackagingService.GetChannelsAsync: the
+        // `stagingIdentityChannel` arm MUST run before `stagingChannelConfigured || stagingChannelRequested`.
+        // The combination identity=staging + requested=staging is the steady state for
+        // `aspire init` on a staging CLI (InitCommand passes `requestedChannelName: staging`
+        // when identity is staging), so a refactor that reordered the if/else would silently
+        // re-introduce the https://github.com/microsoft/aspire/issues/17527 misroute even
+        // though the existing identity-only test would still pass. Lock both arms together
+        // by asserting that requested=staging does NOT override the identity-driven quality.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/nuget/v3/index.json"
+            })
+            .Build();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance, isStableShapedCliVersion: () => true);
+
+        var channels = await packagingService.GetChannelsAsync(requestedChannelName: PackageChannelNames.Staging).DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityIsStagingAndRequestedIsStagingOnPrereleaseShapedCli_DefaultsToBothQuality()
+    {
+        // Companion to the stable-shaped test above: when both identity and requested name
+        // are staging, the synthesized quality must be driven by the CLI version shape — the
+        // identity arm itself consults `_isStableShapedCliVersion`. A refactor that dropped
+        // that predicate from the identity arm (or routed all requested=staging callers
+        // through the explicit-opt-in arm) would change this prerelease case from
+        // Both → Stable and silently misroute Aspire.* away from the shared daily feed where
+        // prerelease-shaped staging packages actually live.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/nuget/v3/index.json"
+            })
+            .Build();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance, isStableShapedCliVersion: () => false);
+
+        var channels = await packagingService.GetChannelsAsync(requestedChannelName: PackageChannelNames.Staging).DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Both, stagingChannel.Quality);
+    }
+
+    [Fact]
+    public async Task GetChannelsAsync_WhenIdentityIsStagingAndConfigurationChannelIsStagingOnStableShapedCli_DefaultsToStableQuality()
+    {
+        // Same shape as the `requested=staging` companion, but for the configuration arm —
+        // `stagingChannelConfigured` (reading `_configuration["channel"]`) is the path
+        // exercised by `aspire add` / `IntegrationPackageSearchService` and
+        // `DotNetBasedAppHostServerProject` once a project's aspire.config.json pins
+        // `channel: staging`. A refactor that ran `stagingChannelConfigured` before
+        // `stagingIdentityChannel` would silently re-introduce the #17527 misroute for
+        // every staging-CLI invocation against a staging-pinned project.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempDir = workspace.WorkspaceRoot;
+        var hivesDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "hives"));
+        var cacheDir = new DirectoryInfo(Path.Combine(tempDir.FullName, ".aspire", "cache"));
+        var executionContext = new CliExecutionContext(tempDir, hivesDir, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log", identityChannel: PackageChannelNames.Staging);
+
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["channel"] = PackageChannelNames.Staging,
+                [PackagingService.OverrideStagingFeedConfigKey] = "https://example.com/nuget/v3/index.json"
+            })
+            .Build();
+        var packagingService = new PackagingService(executionContext, new FakeNuGetPackageCache(), new TestFeatures(), configuration, NullLogger<PackagingService>.Instance, isStableShapedCliVersion: () => true);
+
+        var channels = await packagingService.GetChannelsAsync().DefaultTimeout();
+
+        var stagingChannel = channels.First(c => c.Name == PackageChannelNames.Staging);
+        Assert.Equal(PackageChannelQuality.Stable, stagingChannel.Quality);
+    }
+
+    [Fact]
     public async Task GetChannelsAsync_WhenRequestedChannelIsStaging_IncludesStagingChannel()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

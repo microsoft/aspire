@@ -45,6 +45,15 @@ Before starting a release:
 1. **Signed Build**: Have a successful signed build from the official [`microsoft-aspire`](https://dev.azure.com/dnceng/internal/_build?definitionId=1602) pipeline
    - The build will be selected from a dropdown when running the release pipeline
    - The build should have a `BAR ID - NNNNNN` tag (auto-extracted by the pipeline)
+   - **For GA ships**: queue the source build with `aspireCliChannelOverride: stable`.
+     The default `auto` resolution bakes `AspireCliChannel=staging` for every
+     `release/*` source build (correct for dogfood/staging), so a stable ship
+     requires the explicit override. The release pipeline enforces this with a
+     `Validate Source Build CLI Channel` guard that fetches the source build's
+     tags and fails if `aspire-cli-channel - stable` is not present.
+     See [microsoft/aspire#17527](https://github.com/microsoft/aspire/issues/17527)
+     for the bug this guard prevents, and the `AllowNonStableCliChannel`
+     parameter below for the documented escape hatch.
 
 2. **Release Branch**: Ensure the release branch exists (e.g., `release/9.2`)
 
@@ -97,6 +106,7 @@ Before starting a release:
    | `SkipGitHubTasks` | Set `true` to skip dispatching the GH workflow | `false` |
    | `SkipReleaseAssets` | Set `true` to skip uploading aspire-cli-* assets to the GitHub release | `false` |
    | `SkipHomebrewValidation` | Set `true` if re-running after a successful Homebrew cask validation (validates against the live GH release) | `false` |
+   | `AllowNonStableCliChannel` | **Escape hatch**: bypass the `Validate Source Build CLI Channel` guard. Leave `false` for any GA ship — the guard catches a source build queued without `aspireCliChannelOverride=stable`. Setting this to `true` lets a source build with `AspireCliChannel=staging` (or any other value) publish to nuget.org. There is currently no known use case; the parameter exists so a real emergency override is documented rather than ad-hoc. | `false` |
    | `GitHubTasksWorkflowRef` | Ref to load `release-github-tasks.yml` from when dispatching. Only affects the workflow source — the release branch/commit are passed via inputs. Override only when testing pipeline changes on a topic branch. | `main` |
    
 4. Select the **Resources** button in the bottom right, then select the source build from the `aspire-build` dropdown
@@ -109,6 +119,14 @@ Before starting a release:
      source build (after the tag-emitting change in `azure-pipelines.yml`
      is on that release branch) or pass an explicit `ReleaseVersion`
      override below.
+   - **For GA ships**: also verify the source build has the
+     `aspire-cli-channel - stable` tag. If it shows `aspire-cli-channel - staging`
+     (or any other value), the build was queued without
+     `aspireCliChannelOverride=stable` — pick a different source build, or
+     queue a new one. The `Validate Source Build CLI Channel` step will fail
+     the pipeline if you proceed without a `stable`-tagged build (unless
+     `AllowNonStableCliChannel` is set, which you almost certainly do not
+     want for a GA ship).
 5. Click "Run" and monitor the pipeline. The final stage (`GitHubTasks`)
    dispatches `release-github-tasks.yml`, waits for it to complete, and
    then uploads the `aspire-cli-*` archives from the source build's
