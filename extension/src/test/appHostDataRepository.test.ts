@@ -102,6 +102,51 @@ suite('AppHostDataRepository', () => {
         repository.dispose();
     });
 
+    test('restarts ps polling immediately after a workspace-folder change while discovery is stuck', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        // Capture the folder-change listener the repository registers so the test can fire it directly.
+        let folderChangeListener: ((event: vscode.WorkspaceFoldersChangeEvent) => void) | undefined;
+        const onDidChangeWorkspaceFoldersStub = sinon.stub(vscode.workspace, 'onDidChangeWorkspaceFolders')
+            .callsFake((listener: any) => {
+                folderChangeListener = listener;
+                return { dispose: () => { } };
+            });
+        // A discovery that never resolves keeps `_workspaceAppHostDiscoveryComplete` false, so the only
+        // path that can restart ps is the folder-change handler itself (not a discovery-completion branch).
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: new vscode.EventEmitter<vscode.WorkspaceFolder>().event,
+            discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
+            dispose: () => { },
+        };
+        const countPsSpawns = () => spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'ps').length;
+
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForCondition(() => countPsSpawns() >= 1, 'expected initial ps watch to start');
+            const psSpawnsBeforeFolderChange = countPsSpawns();
+
+            assert.ok(folderChangeListener, 'expected the repository to register a workspace-folder listener');
+            folderChangeListener({ added: [], removed: [] });
+
+            // ps must restart right away — before the (stuck) discovery resolves — rather than leaving an
+            // active panel with no running-state source.
+            await waitForCondition(() => countPsSpawns() > psSpawnsBeforeFolderChange,
+                'expected ps polling to restart immediately after the workspace-folder change');
+            assert.strictEqual(repository.isWorkspaceAppHostDiscoveryComplete, false);
+        } finally {
+            repository.dispose();
+            onDidChangeWorkspaceFoldersStub.restore();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('visible workspace panel starts a describe for a running AppHost', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 

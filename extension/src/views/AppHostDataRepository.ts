@@ -289,6 +289,7 @@ export class AppHostDataRepository {
             this._clearWorkspaceAppHostDiscovery();
             this._clearErrors();
             this._updateWorkspaceContext();
+            this._syncPolling();
             this._fetchWorkspaceAppHost({ forceRefresh: true });
         });
         this._fetchWorkspaceAppHost();
