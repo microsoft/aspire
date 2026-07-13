@@ -8,6 +8,7 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Text;
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius.Secrets;
@@ -22,12 +23,14 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// and waits for the Sealed Secrets controller to materialize the underlying
 /// <c>kubernetes.io/v1 Secret</c> before deploy. Scheduled after publish and before deploy,
 /// mirroring <see cref="RadCredentialRegisterStep"/>. A missing <c>kubectl</c> fails with
-/// <c>ASPIRERADIUS045</c>; a never-materializing <c>Secret</c> fails with <c>ASPIRERADIUS046</c>
+/// <c>ASPIRERADIUS045</c>; an unresolvable kube-context fails with <c>ASPIRERADIUS059</c>;
+/// a never-synced <c>SealedSecret</c> fails with <c>ASPIRERADIUS058</c>
 /// (before <c>rad deploy</c>). No-op when no sealed store is declared (FR-008, FR-009, FR-010).
 /// </summary>
 internal sealed class SealedSecretApplyStep
 {
     private static readonly TimeSpan s_pollInterval = TimeSpan.FromSeconds(2);
+    private const string KubeContextOverrideEnvironmentVariable = "ASPIRE_RADIUS_KUBE_CONTEXT";
 
     private readonly RadiusEnvironmentResource _environment;
 
@@ -62,7 +65,12 @@ internal sealed class SealedSecretApplyStep
 
         await EnsureKubectlAsync(cancellationToken).ConfigureAwait(false);
 
-        var kubeContext = await ResolveWorkspaceKubeContextAsync(cancellationToken).ConfigureAwait(false);
+        var workspaceConfigPath = GetWorkspaceConfigPath();
+        var parsedKubeContext = await ResolveWorkspaceKubeContextAsync(workspaceConfigPath, cancellationToken).ConfigureAwait(false);
+        var kubeContext = RequireKubeContext(
+            Environment.GetEnvironmentVariable(KubeContextOverrideEnvironmentVariable),
+            parsedKubeContext,
+            workspaceConfigPath);
 
         // Same-run publish copies each manifest under the environment output directory; deploy
         // prefers that self-contained artifact and falls back to the author-provided source path.
@@ -99,11 +107,12 @@ internal sealed class SealedSecretApplyStep
         // checks the resolved namespace — so they must be pinned to the same value.
         var applyNamespace = metadata.NamespaceWasExplicit ? null : metadata.Namespace;
 
-        await ApplyManifestAsync(manifestPath, applyNamespace, kubeContext, logger, cancellationToken)
+        var appliedGeneration = await ApplyManifestAsync(manifestPath, applyNamespace, kubeContext, logger, cancellationToken)
             .ConfigureAwait(false);
 
-        await WaitForSecretMaterializationAsync(
-            store.Name, metadata.Namespace, metadata.Name, store.MaterializationTimeout, s_pollInterval,
+        await WaitForSealedSecretSyncedAsync(
+            store.Name, metadata.Namespace, metadata.Name, appliedGeneration, store.MaterializationTimeout, s_pollInterval,
+            ct => GetSealedSecretStatusAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
             ct => SecretExistsAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
             cancellationToken).ConfigureAwait(false);
     }
@@ -122,7 +131,7 @@ internal sealed class SealedSecretApplyStep
         // DetectKubectlAsync runs `kubectl version --client`, which only proves the kubectl client
         // binary is present on PATH — it does NOT contact the cluster or verify the Sealed Secrets
         // controller. Keep this message scoped to the client so it isn't misleading; a missing
-        // controller surfaces later as a materialization timeout (ASPIRERADIUS046).
+        // controller surfaces later as a status/materialization timeout (ASPIRERADIUS058).
         if (!await DetectKubectlAsync(cancellationToken).ConfigureAwait(false))
         {
             throw new InvalidOperationException(
@@ -141,12 +150,20 @@ internal sealed class SealedSecretApplyStep
     /// <summary>Builds the <c>kubectl apply</c> argument list, passing <c>-n</c> and <c>--context</c> only when supplied.</summary>
     internal static IReadOnlyList<string> BuildApplyArgs(string manifestPath, string? kubeContext, string? @namespace = null)
     {
-        var args = new List<string> { "apply", "-f", manifestPath };
+        var args = new List<string> { "apply", "-f", manifestPath, "-o", "json" };
         if (!string.IsNullOrWhiteSpace(@namespace))
         {
             args.Add("-n");
             args.Add(@namespace);
         }
+        AddContext(args, kubeContext);
+        return args;
+    }
+
+    /// <summary>Builds the <c>kubectl get sealedsecret</c> status-probe argument list.</summary>
+    internal static IReadOnlyList<string> BuildGetSealedSecretArgs(string ns, string name, string? kubeContext)
+    {
+        var args = new List<string> { "get", "sealedsecret", name, "-n", ns, "-o", "json" };
         AddContext(args, kubeContext);
         return args;
     }
@@ -168,56 +185,231 @@ internal sealed class SealedSecretApplyStep
         }
     }
 
-    /// <summary>
-    /// Polls <paramref name="secretExists"/> every <paramref name="interval"/> up to
-    /// <paramref name="timeout"/>, returning when the <c>Secret</c> exists and throwing
-    /// <c>ASPIRERADIUS046</c> (before <c>rad deploy</c>) if it never materializes.
-    /// </summary>
-    internal static async Task WaitForSecretMaterializationAsync(
+    /// <summary>Polls until the applied <c>SealedSecret</c> generation is synced and the <c>Secret</c> exists.</summary>
+    internal static async Task WaitForSealedSecretSyncedAsync(
         string storeName,
         string ns,
         string name,
+        long appliedGeneration,
         TimeSpan timeout,
         TimeSpan interval,
+        Func<CancellationToken, Task<SealedSecretStatusSnapshot>> getStatus,
         Func<CancellationToken, Task<bool>> secretExists,
         CancellationToken cancellationToken)
     {
         var deadline = DateTimeOffset.UtcNow + timeout;
         while (true)
         {
-            if (await secretExists(cancellationToken).ConfigureAwait(false))
+            var status = await InvokeProbeWithRemainingBudgetAsync(
+                getStatus,
+                RemainingBudget(deadline),
+                cancellationToken,
+                () => CreateSealedSecretSyncTimeoutException(storeName, ns, name, appliedGeneration, timeout))
+                .ConfigureAwait(false);
+            var decision = EvaluateSealedSecretSync(status, appliedGeneration);
+            if (decision.Kind == SealedSecretSyncDecisionKind.Synced)
             {
-                return;
+                if (await InvokeProbeWithRemainingBudgetAsync(
+                    secretExists,
+                    RemainingBudget(deadline),
+                    cancellationToken,
+                    () => CreateSealedSecretSyncTimeoutException(storeName, ns, name, appliedGeneration, timeout))
+                    .ConfigureAwait(false))
+                {
+                    return;
+                }
             }
-
-            if (DateTimeOffset.UtcNow >= deadline)
+            else if (decision.Kind == SealedSecretSyncDecisionKind.Failed)
             {
                 throw new InvalidOperationException(
-                    $"The Secret '{ns}/{name}' referenced by sealed secret store '{storeName}' did not " +
-                    $"materialize within {timeout.TotalSeconds:0}s. Likely causes: the Sealed Secrets " +
-                    "controller is not installed, the manifest was sealed for a different namespace, or " +
-                    "decryption failed. Diagnostic: ASPIRERADIUS046.");
+                    $"The SealedSecret '{ns}/{name}' referenced by sealed secret store '{storeName}' " +
+                    $"failed to sync generation {appliedGeneration}: {decision.Message}. Diagnostic: ASPIRERADIUS058.");
             }
 
-            await Task.Delay(interval, cancellationToken).ConfigureAwait(false);
+            var remaining = RemainingBudget(deadline);
+            if (remaining <= TimeSpan.Zero)
+            {
+                throw CreateSealedSecretSyncTimeoutException(storeName, ns, name, appliedGeneration, timeout);
+            }
+
+            try
+            {
+                await Task.Delay(remaining < interval ? remaining : interval, cancellationToken).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+            {
+                throw CreateSealedSecretSyncTimeoutException(storeName, ns, name, appliedGeneration, timeout);
+            }
         }
     }
 
-    private static async Task ApplyManifestAsync(string manifestPath, string? @namespace, string? kubeContext, ILogger logger, CancellationToken cancellationToken)
+    private static async Task<T> InvokeProbeWithRemainingBudgetAsync<T>(
+        Func<CancellationToken, Task<T>> probe,
+        TimeSpan remaining,
+        CancellationToken cancellationToken,
+        Func<InvalidOperationException> createTimeoutException)
+    {
+        if (remaining <= TimeSpan.Zero)
+        {
+            throw createTimeoutException();
+        }
+
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        linkedCts.CancelAfter(remaining);
+
+        try
+        {
+            return await probe(linkedCts.Token).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested && linkedCts.IsCancellationRequested)
+        {
+            throw createTimeoutException();
+        }
+    }
+
+    private static TimeSpan RemainingBudget(DateTimeOffset deadline) => deadline - DateTimeOffset.UtcNow;
+
+    private static InvalidOperationException CreateSealedSecretSyncTimeoutException(
+        string storeName,
+        string ns,
+        string name,
+        long appliedGeneration,
+        TimeSpan timeout) =>
+        new(
+            $"The SealedSecret '{ns}/{name}' referenced by sealed secret store '{storeName}' did not " +
+            $"report Synced=True for generation {appliedGeneration} and materialize its Secret within " +
+            $"{timeout.TotalSeconds:0}s. The Sealed Secrets controller must have status updates enabled " +
+            "(do not disable them with '--update-status=false' or Helm 'updateStatus: false'). Likely " +
+            "causes: the Sealed Secrets controller is not installed, the manifest was sealed for a " +
+            "different namespace, or decryption failed. Diagnostic: ASPIRERADIUS058.");
+
+    internal static SealedSecretSyncDecision EvaluateSealedSecretSync(SealedSecretStatusSnapshot status, long appliedGeneration)
+    {
+        if (status.Generation is not null && status.Generation.Value > appliedGeneration)
+        {
+            return SealedSecretSyncDecision.Failed(
+                $"the live SealedSecret generation advanced to {status.Generation} before generation {appliedGeneration} was observed, which indicates a concurrent modification");
+        }
+
+        if (status.ObservedGeneration == appliedGeneration)
+        {
+            foreach (var condition in status.Conditions)
+            {
+                if (string.Equals(condition.Type, "Synced", StringComparison.Ordinal) &&
+                    string.Equals(condition.Status, "False", StringComparison.Ordinal))
+                {
+                    return SealedSecretSyncDecision.Failed(
+                        string.IsNullOrWhiteSpace(condition.Message) ? "the Sealed Secrets controller reported Synced=False" : condition.Message);
+                }
+            }
+
+            foreach (var condition in status.Conditions)
+            {
+                if (string.Equals(condition.Type, "Synced", StringComparison.Ordinal) &&
+                    string.Equals(condition.Status, "True", StringComparison.Ordinal))
+                {
+                    return SealedSecretSyncDecision.Synced();
+                }
+            }
+        }
+
+        return SealedSecretSyncDecision.Waiting();
+    }
+
+    internal static long ParseGeneration(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        if (document.RootElement.TryGetProperty("metadata", out var metadata) &&
+            metadata.TryGetProperty("generation", out var generation) &&
+            generation.TryGetInt64(out var value))
+        {
+            return value;
+        }
+
+        throw new InvalidOperationException("kubectl apply did not return metadata.generation for the SealedSecret.");
+    }
+
+    internal static SealedSecretStatusSnapshot ParseSealedSecretStatus(string json)
+    {
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        long? generation = null;
+        if (root.TryGetProperty("metadata", out var metadata) &&
+            metadata.TryGetProperty("generation", out var generationElement) &&
+            generationElement.TryGetInt64(out var generationValue))
+        {
+            generation = generationValue;
+        }
+
+        long? observedGeneration = null;
+        var conditions = new List<SealedSecretCondition>();
+        if (root.TryGetProperty("status", out var status))
+        {
+            if (status.TryGetProperty("observedGeneration", out var observedGenerationElement) &&
+                observedGenerationElement.TryGetInt64(out var observedGenerationValue))
+            {
+                observedGeneration = observedGenerationValue;
+            }
+
+            if (status.TryGetProperty("conditions", out var conditionsElement) &&
+                conditionsElement.ValueKind == JsonValueKind.Array)
+            {
+                foreach (var condition in conditionsElement.EnumerateArray())
+                {
+                    var type = condition.TryGetProperty("type", out var typeElement) && typeElement.ValueKind == JsonValueKind.String
+                        ? typeElement.GetString()
+                        : null;
+                    var conditionStatus = condition.TryGetProperty("status", out var statusElement) && statusElement.ValueKind == JsonValueKind.String
+                        ? statusElement.GetString()
+                        : null;
+
+                    if (type is null || conditionStatus is null)
+                    {
+                        continue;
+                    }
+
+                    var message = condition.TryGetProperty("message", out var messageElement) && messageElement.ValueKind == JsonValueKind.String
+                        ? messageElement.GetString()
+                        : null;
+                    conditions.Add(new SealedSecretCondition(type, conditionStatus, message));
+                }
+            }
+        }
+
+        return new SealedSecretStatusSnapshot(generation, observedGeneration, conditions);
+    }
+
+    private static async Task<long> ApplyManifestAsync(string manifestPath, string? @namespace, string? kubeContext, ILogger logger, CancellationToken cancellationToken)
     {
         var args = BuildApplyArgs(manifestPath, kubeContext, @namespace);
-        var (exitCode, stderr) = await RunKubectlAsync(args, logger, cancellationToken).ConfigureAwait(false);
+        var (exitCode, stdout, stderr) = await RunKubectlAsync(args, logger, cancellationToken, logStdout: false).ConfigureAwait(false);
         if (exitCode != 0)
         {
             throw new InvalidOperationException(
                 $"'kubectl apply -f {manifestPath}' failed with exit code {exitCode}: {stderr.Trim()}");
         }
+
+        return ParseGeneration(stdout);
+    }
+
+    private static async Task<SealedSecretStatusSnapshot> GetSealedSecretStatusAsync(string ns, string name, string? kubeContext, CancellationToken cancellationToken)
+    {
+        var args = BuildGetSealedSecretArgs(ns, name, kubeContext);
+        var (exitCode, stdout, stderr) = await RunKubectlAsync(args, logger: null, cancellationToken, logStdout: false).ConfigureAwait(false);
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Failed to query the SealedSecret '{ns}/{name}' with 'kubectl get sealedsecret': {stderr.Trim()}");
+        }
+
+        return ParseSealedSecretStatus(stdout);
     }
 
     private static async Task<bool> SecretExistsAsync(string ns, string name, string? kubeContext, CancellationToken cancellationToken)
     {
         var args = BuildGetSecretArgs(ns, name, kubeContext);
-        var (exitCode, stderr) = await RunKubectlAsync(args, logger: null, cancellationToken).ConfigureAwait(false);
+        var (exitCode, _, stderr) = await RunKubectlAsync(args, logger: null, cancellationToken).ConfigureAwait(false);
         if (exitCode == 0)
         {
             return true;
@@ -248,14 +440,18 @@ internal sealed class SealedSecretApplyStep
         stderr.Contains($"secrets \"{name}\" not found", StringComparison.Ordinal);
 
     // Resolves the kubecontext of the active rad workspace so the SealedSecret is applied to the
-    // same cluster rad deploy will hit (not kubectl's ambient current-context). Best-effort: reads
-    // the Radius workspace config; returns null when unresolved (kubectl uses its current context).
-    private static async Task<string?> ResolveWorkspaceKubeContextAsync(CancellationToken cancellationToken)
+    // same cluster rad deploy will hit (not kubectl's ambient current-context). Reads the Radius
+    // workspace config; returns null when unresolved so the caller can fail closed.
+    private static string GetWorkspaceConfigPath()
+    {
+        var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
+        return Path.Combine(home, ".rad", "config.yaml");
+    }
+
+    private static async Task<string?> ResolveWorkspaceKubeContextAsync(string configPath, CancellationToken cancellationToken)
     {
         try
         {
-            var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            var configPath = Path.Combine(home, ".rad", "config.yaml");
             if (!File.Exists(configPath))
             {
                 return null;
@@ -285,8 +481,7 @@ internal sealed class SealedSecretApplyStep
     //           context: other-ctx
     // We read workspaces.default, then workspaces.items.<default>.connection.context. If the
     // default selector is absent (older/single-workspace configs), we fall back to the first
-    // `context:` occurrence. Best-effort and dependency-free: any miss returns null and the caller
-    // lets kubectl use its ambient current-context.
+    // `context:` occurrence. Dependency-free: any miss returns null and the caller fails closed.
     internal static string? ParseActiveWorkspaceContext(string text)
     {
         var lines = text.Replace("\r\n", "\n").Split('\n');
@@ -299,12 +494,34 @@ internal sealed class SealedSecretApplyStep
             {
                 return context;
             }
+
+            // Once rad names an active workspace, guessing from another workspace would fail open to
+            // the wrong cluster. Return null so the caller requires an explicit override/remediation.
+            return null;
         }
 
         // Fallback: first `context:` anywhere (single-workspace configs without a default selector).
         var match = System.Text.RegularExpressions.Regex.Match(
             text, @"(?m)^\s*context:\s*(?<v>[^\s#]+)\s*$");
         return match.Success ? match.Groups["v"].Value.Trim('\'', '"') : null;
+    }
+
+    internal static string RequireKubeContext(string? overrideContext, string? parsedContext, string attemptedConfigPath)
+    {
+        if (!string.IsNullOrWhiteSpace(overrideContext))
+        {
+            return overrideContext.Trim();
+        }
+
+        if (!string.IsNullOrWhiteSpace(parsedContext))
+        {
+            return parsedContext.Trim();
+        }
+
+        throw new InvalidOperationException(
+            $"Could not resolve the active Radius workspace kube-context from '{attemptedConfigPath}'. Configure " +
+            $"the active rad workspace, or set {KubeContextOverrideEnvironmentVariable} to the kubectl context " +
+            "that targets the same cluster before re-running deploy. Diagnostic: ASPIRERADIUS059.");
     }
 
     // Walks an indentation-nested mapping following <paramref name="path"/> key-by-key, returning
@@ -433,9 +650,10 @@ internal sealed class SealedSecretApplyStep
         }
     }
 
-    private static async Task<(int ExitCode, string StdErr)> RunKubectlAsync(
-        IReadOnlyList<string> args, ILogger? logger, CancellationToken cancellationToken)
+    private static async Task<(int ExitCode, string StdOut, string StdErr)> RunKubectlAsync(
+        IReadOnlyList<string> args, ILogger? logger, CancellationToken cancellationToken, bool logStdout = true)
     {
+        var stdout = new StringBuilder();
         var stderr = new StringBuilder();
         using var process = new Process
         {
@@ -453,13 +671,17 @@ internal sealed class SealedSecretApplyStep
             process.StartInfo.ArgumentList.Add(a);
         }
 
-        // The SealedSecret manifest passed to kubectl is already encrypted, so no plaintext is
-        // exposed; the wrapper still scrubs output uniformly with the rad wrapper's helpers.
+        // Some kubectl calls return full SealedSecret JSON, including spec.template. Capture stdout
+        // for parsing, but only log it when the caller has confirmed the output shape is safe.
         process.OutputDataReceived += (_, e) =>
         {
             if (e.Data is not null)
             {
-                logger?.LogInformation("kubectl (stdout): {Output}", e.Data);
+                stdout.AppendLine(e.Data);
+                if (logStdout)
+                {
+                    logger?.LogInformation("kubectl (stdout): {Output}", e.Data);
+                }
             }
         };
         process.ErrorDataReceived += (_, e) =>
@@ -479,6 +701,7 @@ internal sealed class SealedSecretApplyStep
         try
         {
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            process.WaitForExit();
         }
         catch (OperationCanceledException)
         {
@@ -500,6 +723,29 @@ internal sealed class SealedSecretApplyStep
             throw;
         }
 
-        return (process.ExitCode, stderr.ToString());
+        return (process.ExitCode, stdout.ToString(), stderr.ToString());
+    }
+
+    internal sealed record SealedSecretStatusSnapshot(
+        long? Generation,
+        long? ObservedGeneration,
+        IReadOnlyList<SealedSecretCondition> Conditions);
+
+    internal readonly record struct SealedSecretCondition(string Type, string Status, string? Message);
+
+    internal enum SealedSecretSyncDecisionKind
+    {
+        Waiting,
+        Synced,
+        Failed,
+    }
+
+    internal sealed record SealedSecretSyncDecision(SealedSecretSyncDecisionKind Kind, string? Message)
+    {
+        public static SealedSecretSyncDecision Waiting() => new(SealedSecretSyncDecisionKind.Waiting, null);
+
+        public static SealedSecretSyncDecision Synced() => new(SealedSecretSyncDecisionKind.Synced, null);
+
+        public static SealedSecretSyncDecision Failed(string message) => new(SealedSecretSyncDecisionKind.Failed, message);
     }
 }

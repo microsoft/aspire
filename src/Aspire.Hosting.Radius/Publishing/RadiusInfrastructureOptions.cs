@@ -6,6 +6,7 @@
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing.Constructs;
+using Aspire.Hosting.Radius.Secrets;
 using Azure.Provisioning;
 
 namespace Aspire.Hosting.Radius.Publishing;
@@ -77,14 +78,14 @@ public sealed class RadiusInfrastructureOptions
     public List<RadiusSecretStoreConstruct> SecretStores { get; } = [];
 
     /// <summary>
-    /// Gets the source file paths of committed <c>SealedSecret</c> manifests referenced by
-    /// sealed secret stores in this scope, keyed by the (unique) store name. The publish step
-    /// copies each into a per-store subdirectory next to the emitted <c>app.bicep</c> so the
-    /// artifact is self-contained and same-named manifests from different source directories
-    /// cannot collide (the manifest is already encrypted). Keyed by store name so the deploy
-    /// step can reconstruct the copied path deterministically via <c>SealedSecretArtifact</c>.
+    /// Gets the validated committed <c>SealedSecret</c> manifests referenced by sealed secret
+    /// stores in this scope, keyed by the (unique) store name. The publish step writes each into
+    /// a per-store subdirectory next to the emitted <c>app.bicep</c> so the artifact is
+    /// self-contained and same-named manifests from different source directories cannot collide.
+    /// Keyed by store name so the deploy step can reconstruct the copied path deterministically
+    /// via <c>SealedSecretArtifact</c>.
     /// </summary>
-    internal Dictionary<string, string> SealedSecretManifestPaths { get; } = new(StringComparer.Ordinal);
+    internal Dictionary<string, ValidatedManifest> SealedSecretManifests { get; } = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Gets the Bicep <c>param</c> declarations referenced by recipe parameters that

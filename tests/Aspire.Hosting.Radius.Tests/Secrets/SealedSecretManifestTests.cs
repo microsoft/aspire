@@ -216,4 +216,111 @@ public class SealedSecretManifestTests : IDisposable
         Assert.Equal("db-creds", metadata.Name);
         Assert.Equal("app", metadata.Namespace);
     }
+
+    [Theory]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "kind: Secret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "data:\n" +
+        "  password: c2VjcmV0\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "apiVersion: v1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "metadata:\n" +
+        "  name: other-creds\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "\"kind\": Secret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "data:\n" +
+        "  password: c2VjcmV0\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind : Secret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "data:\n" +
+        "  password: c2VjcmV0\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: !!str SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n")]
+    [InlineData("{apiVersion: bitnami.com/v1alpha1, kind: Secret, metadata: {name: db-creds}, data: {password: c2VjcmV0}}\n")]
+    [InlineData("{\"apiVersion\":\"bitnami.com/v1alpha1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"db-creds\"},\"data\":{\"password\":\"c2VjcmV0\"}}\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata: &metadata\n" +
+        "  name: db-creds\n" +
+        "spec:\n" +
+        "  template:\n" +
+        "    metadata:\n" +
+        "      <<: *metadata\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "data:\n" +
+        "  password: c2VjcmV0\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "stringData:\n" +
+        "  password: secret\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "spec:\n" +
+        "  template:\n" +
+        "    data:\n" +
+        "      password: c2VjcmV0\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "spec:\n" +
+        "  template:\n" +
+        "    stringData:\n" +
+        "      password: secret\n")]
+    [InlineData("just a scalar\n")]
+    [InlineData("- apiVersion: bitnami.com/v1alpha1\n- kind: SealedSecret\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: SealedSecret\n" +
+        "metadata:\n" +
+        "  name: db-creds\n" +
+        "---\n" +
+        "apiVersion: v1\n" +
+        "kind: Secret\n")]
+    [InlineData(
+        "apiVersion: bitnami.com/v1alpha1\n" +
+        "kind: [\n")]
+    public void ReadMetadata_UnsafeOrMalformedYaml_Throws_ASPIRERADIUS044(string content)
+    {
+        var path = Write(content);
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS044", ex.Message);
+    }
 }

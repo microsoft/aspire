@@ -155,19 +155,20 @@ internal sealed class RadiusBicepPublishingContext
         }
     }
 
-    // Copies each committed (encrypted) SealedSecret manifest into a per-store subdirectory
+    // Writes each committed (encrypted) SealedSecret manifest into a per-store subdirectory
     // (sealed-secrets/<storeName>/<file>) next to the emitted app.bicep so the published artifact
     // is self-contained and the deploy step can apply it. Namespacing by the unique store name means
     // two stores whose source manifests share a file name (but live in different source directories)
-    // cannot silently overwrite each other. The manifest is already encrypted, so no plaintext is
-    // written. Missing manifests were already rejected at build time (ASPIRERADIUS044).
+    // cannot silently overwrite each other. The manifest is already encrypted, and we write the exact
+    // bytes validated at build time so a later source-file swap cannot change the published artifact.
+    // Missing manifests were already rejected at build time (ASPIRERADIUS044).
     private static void CopySealedSecretManifests(RadiusInfrastructureOptions options, string outputDir, ILogger logger)
     {
-        foreach (var (storeName, manifestPath) in options.SealedSecretManifestPaths)
+        foreach (var (storeName, manifest) in options.SealedSecretManifests)
         {
-            var destination = Secrets.SealedSecretArtifact.ResolvePath(outputDir, storeName, manifestPath);
+            var destination = Secrets.SealedSecretArtifact.ResolvePath(outputDir, storeName, manifest.SourcePath);
             Directory.CreateDirectory(Path.GetDirectoryName(destination)!);
-            File.Copy(manifestPath, destination, overwrite: true);
+            File.WriteAllBytes(destination, manifest.Content.ToArray());
             logger.LogInformation("Copied SealedSecret manifest to {Destination}", destination);
         }
     }

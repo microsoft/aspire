@@ -4,10 +4,13 @@
 #pragma warning disable ASPIRERADIUS006 // Experimental: the secret-store APIs are under test.
 #pragma warning disable ASPIREPIPELINES001
 
+using System.Reflection;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;
+using Aspire.Hosting.Radius.Secrets;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Radius.Tests.Publishing;
 
@@ -72,5 +75,51 @@ public class SealedSecretPublishTests : IDisposable
                     s.FromSealedSecret(missing, "key"))));
 
         Assert.Contains("ASPIRERADIUS044", ex.Message);
+    }
+
+    [Fact]
+    public void FromSealedSecret_CopyWritesValidatedBytes_WhenSourceFileChangesAfterBuild()
+    {
+        var manifest = WriteManifest("db-creds", "app");
+        var originalBytes = File.ReadAllBytes(manifest);
+
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var env = builder.AddRadiusEnvironment("radius");
+        env.WithSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication, s =>
+            s.FromSealedSecret(manifest, "username", "password"));
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+        var options = context.BuildOptions(model);
+
+        File.WriteAllText(manifest,
+            "apiVersion: v1\n" +
+            "kind: Secret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "data:\n" +
+            "  username: dXNlcg==\n");
+
+        var outputDir = Directory.CreateTempSubdirectory("sealed-secret-output").FullName;
+        try
+        {
+            var copyMethod = typeof(RadiusBicepPublishingContext).GetMethod(
+                "CopySealedSecretManifests",
+                BindingFlags.NonPublic | BindingFlags.Static);
+
+            Assert.NotNull(copyMethod);
+            copyMethod.Invoke(null, [options, outputDir, NullLogger.Instance]);
+
+            var destination = SealedSecretArtifact.ResolvePath(outputDir, "db-creds", manifest);
+            Assert.Equal(originalBytes, File.ReadAllBytes(destination));
+            Assert.NotEqual(File.ReadAllBytes(manifest), File.ReadAllBytes(destination));
+        }
+        finally
+        {
+            Directory.Delete(outputDir, recursive: true);
+        }
     }
 }

@@ -3,6 +3,7 @@
 
 #pragma warning disable ASPIRERADIUS006 // Experimental: the secret-store APIs are under test.
 
+using System.Text.Json;
 using Aspire.Hosting.Radius.Publishing;
 
 namespace Aspire.Hosting.Radius.Tests.Secrets;
@@ -13,28 +14,28 @@ public class SealedSecretApplyStepTests
     public void BuildApplyArgs_WithContext_PassesContextExplicitly()
     {
         var args = SealedSecretApplyStep.BuildApplyArgs("/p/db.sealed.yaml", "kind-radius");
-        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "--context", "kind-radius" }, args);
+        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-o", "json", "--context", "kind-radius" }, args);
     }
 
     [Fact]
     public void BuildApplyArgs_NoContext_OmitsContextFlag()
     {
         var args = SealedSecretApplyStep.BuildApplyArgs("/p/db.sealed.yaml", null);
-        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml" }, args);
+        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-o", "json" }, args);
     }
 
     [Fact]
     public void BuildApplyArgs_WithNamespace_PassesNamespaceExplicitly()
     {
         var args = SealedSecretApplyStep.BuildApplyArgs("/p/db.sealed.yaml", "kind-radius", "app");
-        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-n", "app", "--context", "kind-radius" }, args);
+        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-o", "json", "-n", "app", "--context", "kind-radius" }, args);
     }
 
     [Fact]
     public void BuildApplyArgs_NamespaceWithoutContext_PassesNamespaceOnly()
     {
         var args = SealedSecretApplyStep.BuildApplyArgs("/p/db.sealed.yaml", null, "app");
-        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-n", "app" }, args);
+        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-o", "json", "-n", "app" }, args);
     }
 
     [Fact]
@@ -72,6 +73,23 @@ public class SealedSecretApplyStepTests
     }
 
     [Fact]
+    public void ParseActiveWorkspaceContext_DefaultContextMissing_ReturnsNullInsteadOfFallbackContext()
+    {
+        var config =
+            "workspaces:\n" +
+            "  default: prod\n" +
+            "  items:\n" +
+            "    dev:\n" +
+            "      connection:\n" +
+            "        context: dev-cluster\n" +
+            "    prod:\n" +
+            "      connection:\n" +
+            "        kind: kubernetes\n";
+
+        Assert.Null(SealedSecretApplyStep.ParseActiveWorkspaceContext(config));
+    }
+
+    [Fact]
     public void ParseActiveWorkspaceContext_NoContext_ReturnsNull()
     {
         var config =
@@ -93,32 +111,289 @@ public class SealedSecretApplyStepTests
     }
 
     [Fact]
-    public async Task WaitForSecretMaterialization_ReturnsOnceSecretExists()
+    public void BuildGetSealedSecretArgs_TargetsNamespaceAndContext()
     {
-        var calls = 0;
-        await SealedSecretApplyStep.WaitForSecretMaterializationAsync(
-            "db-creds", "app", "db-creds",
-            timeout: TimeSpan.FromSeconds(5),
-            interval: TimeSpan.FromMilliseconds(1),
-            secretExists: _ => Task.FromResult(++calls >= 2),
-            cancellationToken: default);
-
-        Assert.True(calls >= 2);
+        var args = SealedSecretApplyStep.BuildGetSealedSecretArgs("app", "db-creds", "kind-radius");
+        Assert.Equal(new[] { "get", "sealedsecret", "db-creds", "-n", "app", "-o", "json", "--context", "kind-radius" }, args);
     }
 
     [Fact]
-    public async Task WaitForSecretMaterialization_TimesOut_Throws_ASPIRERADIUS046()
+    public async Task WaitForSealedSecretSynced_ReturnsOnceObservedGenerationMatchesSyncedTrueAndSecretExists()
+    {
+        var statusCalls = 0;
+        var secretCalls = 0;
+        await SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+            "db-creds", "app", "db-creds", appliedGeneration: 4,
+            timeout: TimeSpan.FromSeconds(5),
+            interval: TimeSpan.FromMilliseconds(1),
+            getStatus: _ =>
+            {
+                statusCalls++;
+                return Task.FromResult(statusCalls == 1
+                    ? new SealedSecretApplyStep.SealedSecretStatusSnapshot(4, null, [])
+                    : new SealedSecretApplyStep.SealedSecretStatusSnapshot(
+                        4,
+                        4,
+                        [new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null)]));
+            },
+            secretExists: _ =>
+            {
+                secretCalls++;
+                return Task.FromResult(secretCalls >= 2);
+            },
+            cancellationToken: default);
+
+        Assert.True(statusCalls >= 3);
+        Assert.True(secretCalls >= 2);
+    }
+
+    [Fact]
+    public async Task WaitForSealedSecretSynced_FailsFastWhenSyncedFalseForAppliedGeneration()
     {
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            SealedSecretApplyStep.WaitForSecretMaterializationAsync(
-                "db-creds", "app", "db-creds",
-                timeout: TimeSpan.FromMilliseconds(10),
+            SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+                "db-creds", "app", "db-creds", appliedGeneration: 4,
+                timeout: TimeSpan.FromSeconds(5),
                 interval: TimeSpan.FromMilliseconds(1),
+                getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(
+                    4,
+                    4,
+                    [new SealedSecretApplyStep.SealedSecretCondition("Synced", "False", "no key could decrypt secret")])),
                 secretExists: _ => Task.FromResult(false),
                 cancellationToken: default));
 
-        Assert.Contains("ASPIRERADIUS046", ex.Message);
+        Assert.Contains("ASPIRERADIUS058", ex.Message);
+        Assert.Contains("no key could decrypt secret", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForSealedSecretSynced_TimesOutWhenStatusNeverMatches_Throws_ASPIRERADIUS058()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+                "db-creds", "app", "db-creds", appliedGeneration: 4,
+                timeout: TimeSpan.FromMilliseconds(10),
+                interval: TimeSpan.FromMilliseconds(1),
+                getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(4, 3, [])),
+                secretExists: _ => Task.FromResult(false),
+                cancellationToken: default));
+
+        Assert.Contains("ASPIRERADIUS058", ex.Message);
+        Assert.Contains("--update-status=false", ex.Message);
+        Assert.Contains("updateStatus: false", ex.Message);
         Assert.Contains("app/db-creds", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForSealedSecretSynced_FailsFastWhenGenerationAdvancesBeyondAppliedGeneration()
+    {
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+                "db-creds", "app", "db-creds", appliedGeneration: 4,
+                timeout: TimeSpan.FromSeconds(5),
+                interval: TimeSpan.FromMilliseconds(1),
+                getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(5, null, [])),
+                secretExists: _ => Task.FromResult(false),
+                cancellationToken: default));
+
+        Assert.Contains("concurrent modification", ex.Message);
+    }
+
+    [Fact]
+    public async Task WaitForSealedSecretSynced_StatusMatchesButSecretAbsent_KeepsWaitingThenTimesOut()
+    {
+        var secretCalls = 0;
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+                "db-creds", "app", "db-creds", appliedGeneration: 4,
+                timeout: TimeSpan.FromMilliseconds(10),
+                interval: TimeSpan.FromMilliseconds(1),
+                getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(
+                    4,
+                    4,
+                    [new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null)])),
+                secretExists: _ =>
+                {
+                    secretCalls++;
+                    return Task.FromResult(false);
+                },
+                cancellationToken: default));
+
+        Assert.Contains("ASPIRERADIUS058", ex.Message);
+        Assert.True(secretCalls > 1);
+    }
+
+    [Fact]
+    public async Task WaitForSealedSecretSynced_HangingProbeTimesOutWith_ASPIRERADIUS058()
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+                "db-creds", "app", "db-creds", appliedGeneration: 4,
+                timeout: TimeSpan.FromMilliseconds(50),
+                interval: TimeSpan.FromMilliseconds(1),
+                getStatus: async ct =>
+                {
+                    await Task.Delay(Timeout.Infinite, ct);
+                    return new SealedSecretApplyStep.SealedSecretStatusSnapshot(4, null, []);
+                },
+                secretExists: _ => Task.FromResult(false),
+                cancellationToken: default));
+
+        stopwatch.Stop();
+        Assert.Contains("ASPIRERADIUS058", ex.Message);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task WaitForSealedSecretSynced_CancellationDuringPolling_ThrowsOperationCanceledException()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+                "db-creds", "app", "db-creds", appliedGeneration: 4,
+                timeout: TimeSpan.FromSeconds(5),
+                interval: TimeSpan.FromMilliseconds(1),
+                getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(4, null, [])),
+                secretExists: _ => Task.FromResult(false),
+                cancellationToken: cts.Token));
+    }
+
+    [Fact]
+    public void ParseGeneration_ReadsMetadataGenerationFromApplyJson()
+    {
+        var generation = SealedSecretApplyStep.ParseGeneration("""
+            {
+              "apiVersion": "bitnami.com/v1alpha1",
+              "kind": "SealedSecret",
+              "metadata": {
+                "name": "db-creds",
+                "generation": 7
+              }
+            }
+            """);
+
+        Assert.Equal(7, generation);
+    }
+
+    [Fact]
+    public void ParseSealedSecretStatus_ReadsObservedGenerationAndConditions()
+    {
+        // Bitnami Sealed Secrets status is shaped like:
+        //   status:
+        //     observedGeneration: 4
+        //     conditions:
+        //     - type: Synced
+        //       status: "True"
+        //       message: SealedSecret unsealed successfully
+        var status = SealedSecretApplyStep.ParseSealedSecretStatus("""
+            {
+              "apiVersion": "bitnami.com/v1alpha1",
+              "kind": "SealedSecret",
+              "metadata": {
+                "name": "db-creds",
+                "generation": 4
+              },
+              "status": {
+                "observedGeneration": 4,
+                "conditions": [
+                  {
+                    "type": "Ready",
+                    "status": "True"
+                  },
+                  {
+                    "type": "Synced",
+                    "status": "True",
+                    "message": "SealedSecret unsealed successfully"
+                  }
+                ]
+              }
+            }
+            """);
+
+        Assert.Equal(4, status.Generation);
+        Assert.Equal(4, status.ObservedGeneration);
+        Assert.Collection(
+            status.Conditions,
+            condition =>
+            {
+                Assert.Equal("Ready", condition.Type);
+                Assert.Equal("True", condition.Status);
+                Assert.Null(condition.Message);
+            },
+            condition =>
+            {
+                Assert.Equal("Synced", condition.Type);
+                Assert.Equal("True", condition.Status);
+                Assert.Equal("SealedSecret unsealed successfully", condition.Message);
+            });
+    }
+
+    [Fact]
+    public void ParseSealedSecretStatus_MissingStatus_ReturnsEmptyStatus()
+    {
+        var status = SealedSecretApplyStep.ParseSealedSecretStatus("""
+            {
+              "metadata": {
+                "generation": 4
+              }
+            }
+            """);
+
+        Assert.Equal(4, status.Generation);
+        Assert.Null(status.ObservedGeneration);
+        Assert.Empty(status.Conditions);
+    }
+
+    [Fact]
+    public void ParseSealedSecretStatus_MalformedJson_ThrowsJsonException()
+    {
+        Assert.ThrowsAny<JsonException>(() => SealedSecretApplyStep.ParseSealedSecretStatus("{"));
+    }
+
+    [Fact]
+    public void EvaluateSealedSecretSync_MultipleConditions_UsesSyncedCondition()
+    {
+        var decision = SealedSecretApplyStep.EvaluateSealedSecretSync(
+            new SealedSecretApplyStep.SealedSecretStatusSnapshot(
+                4,
+                4,
+                [
+                    new SealedSecretApplyStep.SealedSecretCondition("Ready", "False", "not ready"),
+                    new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null),
+                ]),
+            appliedGeneration: 4);
+
+        Assert.Equal(SealedSecretApplyStep.SealedSecretSyncDecisionKind.Synced, decision.Kind);
+    }
+
+    [Fact]
+    public void RequireKubeContext_ReturnsOverrideWhenProvided()
+    {
+        var context = SealedSecretApplyStep.RequireKubeContext("ci-context", "workspace-context", "~/.rad/config.yaml");
+
+        Assert.Equal("ci-context", context);
+    }
+
+    [Fact]
+    public void RequireKubeContext_ReturnsParsedContextWhenOverrideAbsent()
+    {
+        var context = SealedSecretApplyStep.RequireKubeContext(null, "workspace-context", "~/.rad/config.yaml");
+
+        Assert.Equal("workspace-context", context);
+    }
+
+    [Fact]
+    public void RequireKubeContext_ThrowsWhenContextCannotBeResolved()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            SealedSecretApplyStep.RequireKubeContext(null, null, "~/.rad/config.yaml"));
+
+        Assert.Contains("ASPIRERADIUS059", ex.Message);
+        Assert.Contains("~/.rad/config.yaml", ex.Message);
+        Assert.Contains("ASPIRE_RADIUS_KUBE_CONTEXT", ex.Message);
     }
 
     [Theory]
