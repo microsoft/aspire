@@ -36,10 +36,15 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
 {
     private const string ProjectName = "AspireRadiusDeployTest";
 
-    // The container image is public and tagged (not :latest), so Kubernetes uses
-    // imagePullPolicy: IfNotPresent and the KinD node pulls it once from MCR.
-    private const string ContainerImage = "mcr.microsoft.com/dotnet/samples:aspnetapp";
-    private const int ContainerPort = 8080;
+    // A stable, digest-pinned public image. The `dotnet/samples` images are explicitly documented
+    // as unstable and can break at any time (dotnet/dotnet-docker#7191), so this test uses the same
+    // image + digest the deployment E2E suite standardized on (see
+    // tests/Aspire.Deployment.EndToEnd.Tests/AcaCompactNamingDeploymentTests.cs). Pinning by SHA256
+    // makes the pulled content immutable, so the KinD node pulls the exact bytes once from MCR.
+    private const string ContainerImage = "mcr.microsoft.com/azuredocs/aci-helloworld";
+    private const string ContainerImageTag = "latest";
+    private const string ContainerImageDigest = "456a1150aa41340a14c7be1342deda2cde9e6e7df9fde6b8a69de0ae04f92fad";
+    private const int ContainerPort = 80;
 
     [Fact]
     [CaptureWorkspaceOnFailure]
@@ -116,7 +121,8 @@ public sealed class RadiusDeployTests(ITestOutputHelper output)
             Assert.Contains(buildRunPattern, content);
             var radiusWiring = $$"""
                 builder.AddRadiusEnvironment("radius").WithNamespace("{{radiusNamespace}}");
-                builder.AddContainer("web", "{{ContainerImage}}")
+                builder.AddContainer("web", "{{ContainerImage}}", "{{ContainerImageTag}}")
+                    .WithImageSHA256("{{ContainerImageDigest}}")
                     .WithHttpEndpoint(targetPort: {{ContainerPort}});
                 """;
             content = content.Replace(buildRunPattern, radiusWiring + Environment.NewLine + Environment.NewLine + buildRunPattern);

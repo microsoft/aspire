@@ -110,16 +110,26 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             //
             // - KUBECONFIG: az/kubectl honor it, so `az aks get-credentials` writes here and every
             //   kube-touching command uses this file. Removed with the workspace on dispose. Note
-            //   `rad install kubernetes` does NOT fully honor KUBECONFIG (its Contour gateway config
-            //   reads the default ~/.kube/config), which is why Step 8b symlinks the default path.
-            // - rad config: `rad` only accepts a `--config` flag (no config env var), and `aspire deploy`
-            //   spawns `rad deploy` internally (FileName="rad", UseShellExecute=false -> PATH lookup;
-            //   see src/Aspire.Hosting.Radius/Publishing/RadiusDeploymentPipelineStep.cs). So we shadow
-            //   `rad` with a workspace-local shim earlier on PATH that injects
-            //   `--config <ws>/.rad/config.yaml` into every invocation (global flag, valid before any
-            //   subcommand). REAL_RAD is resolved BEFORE prepending the shim dir, so the shim never
-            //   recurses. This isolates the config file and its lock without backing up/restoring the
-            //   user's real config (which would race with any concurrent `rad` for the ~55-min run).
+            //   several `rad` subcommands do NOT honor KUBECONFIG (they read the default
+            //   ~/.kube/config), which is handled by the rad shim's workspace-local HOME below.
+            // - rad config + HOME: `rad` only accepts a `--config` flag (no config env var), and
+            //   `aspire deploy` spawns `rad deploy` internally (FileName="rad", UseShellExecute=false
+            //   -> PATH lookup; see src/Aspire.Hosting.Radius/Publishing/RadiusDeploymentPipelineStep.cs).
+            //   Several `rad` subcommands (e.g. `rad install kubernetes`'s Contour gateway config, and
+            //   `rad workspace create kubernetes`) read the DEFAULT kubeconfig at $HOME/.kube/config
+            //   directly and do NOT honor KUBECONFIG, unlike az/kubectl. So we shadow `rad` with a
+            //   workspace-local shim earlier on PATH that (a) injects `--config <ws>/.rad/config.yaml`
+            //   into every invocation (global flag, valid before any subcommand) and (b) exports
+            //   HOME=<ws>/home, whose .kube/config is symlinked to our isolated $KUBECONFIG below.
+            //   Setting HOME in the shim rather than on individual commands ensures EVERY `rad` -
+            //   including the `rad deploy` that `aspire deploy` spawns, which we cannot env-prefix -
+            //   reads the isolated kubeconfig, and it never touches the developer's real ~/.kube/config
+            //   or ~/.rad. az/kubectl/docker/aspire keep the real HOME (they use KUBECONFIG/DOCKER_CONFIG
+            //   env vars). REAL_RAD is resolved BEFORE prepending the shim dir, so the shim never
+            //   recurses. The symlink target ($KUBECONFIG) is written by `az aks get-credentials`
+            //   (Step 7) before the first `rad` runs (Step 9), so creating it here as a dangling link
+            //   is fine. Everything lives under the TemporaryWorkspace and is removed on dispose, so
+            //   there is nothing to back up or restore (avoiding a race with any concurrent `rad`).
             // - DOCKER_CONFIG: the documented override directory for Docker's config.json. `az acr login`
             //   shells out to `docker login`, and `dotnet publish /t:PublishContainer` reads the same
             //   config, so both authenticate against this throwaway dir instead of ~/.docker.
@@ -127,9 +137,10 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             output.WriteLine("Step 1b: Isolating kubeconfig, rad config, and docker credentials to the workspace...");
             await auto.TypeAsync(
                 $"REAL_RAD=\"$(command -v rad)\" && " +
-                $"mkdir -p \"{wsRoot}/bin\" \"{wsRoot}/.rad\" \"{wsRoot}/.kube\" \"{wsRoot}/.docker\" && " +
-                $"printf '#!/usr/bin/env bash\\nexec \"%s\" --config \"%s\" \"$@\"\\n' \"$REAL_RAD\" \"{wsRoot}/.rad/config.yaml\" > \"{wsRoot}/bin/rad\" && " +
+                $"mkdir -p \"{wsRoot}/bin\" \"{wsRoot}/.rad\" \"{wsRoot}/.kube\" \"{wsRoot}/.docker\" \"{wsRoot}/home/.kube\" && " +
+                $"printf '#!/usr/bin/env bash\\nexport HOME=\"%s\"\\nexec \"%s\" --config \"%s\" \"$@\"\\n' \"{wsRoot}/home\" \"$REAL_RAD\" \"{wsRoot}/.rad/config.yaml\" > \"{wsRoot}/bin/rad\" && " +
                 $"chmod +x \"{wsRoot}/bin/rad\" && " +
+                $"ln -sf \"{wsRoot}/.kube/config\" \"{wsRoot}/home/.kube/config\" && " +
                 $"export PATH=\"{wsRoot}/bin:$PATH\" && " +
                 $"export KUBECONFIG=\"{wsRoot}/.kube/config\" && " +
                 $"export DOCKER_CONFIG=\"{wsRoot}/.docker\"");
@@ -194,37 +205,14 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Step 8b: Expose the isolated kubeconfig at the default path for `rad install`.
-            // `rad install kubernetes` configures the Contour gateway through a code path that
-            // reads the default kubeconfig location (~/.kube/config) directly and does NOT honor
-            // the KUBECONFIG environment variable, unlike az/kubectl. With our isolated
-            // $KUBECONFIG (Step 1b), that step fails with
-            // "failed to initialize Kubernetes client config: open ~/.kube/config: no such file or directory".
-            // Point the default path at our isolated kubeconfig so `rad` finds the AKS context.
-            //
-            // Before overwriting the path, snapshot whatever was there so cleanup can restore it
-            // exactly. `cp -a` keeps a symlink a symlink (-d/--no-dereference) instead of copying
-            // its target, so a pre-existing link is backed up intact, and the `[ -e ] || [ -L ]`
-            // test also catches a dangling link (`-e` is false for a broken symlink). A marker file
-            // records that this test actually took over the path: provisioning can fail earlier,
-            // before Step 8b runs, and cleanup must not touch the developer's kubeconfig in that
-            // case. RestoreDefaultKubeConfig in `finally` uses the marker + backup to put the
-            // original back (file, symlink, or nothing) so a local run is never left pointing at the
-            // deleted cluster or dangling into the deleted workspace — even if the test fails.
-            output.WriteLine("Step 8b: Linking default kubeconfig path for rad install...");
-            await auto.TypeAsync(
-                "mkdir -p \"$HOME/.kube\" && " +
-                $"{{ {{ [ -e \"$HOME/.kube/config\" ] || [ -L \"$HOME/.kube/config\" ]; }} && cp -a \"$HOME/.kube/config\" \"{wsRoot}/kube-default.bak\" || true; }} && " +
-                $"touch \"{wsRoot}/kube-shadowed.marker\" && " +
-                "ln -sf \"$KUBECONFIG\" \"$HOME/.kube/config\"");
-            await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
-
             // ===== PHASE 2: Install the Radius control plane on the cluster =====
 
-            // Install the Radius control plane. The `rad` CLI version is pinned by the
-            // "Setup Radius" workflow step, and `rad install kubernetes` installs the matching
-            // control plane onto the current kube context.
+            // Install the Radius control plane. The `rad` CLI version is pinned by the "Setup Radius"
+            // workflow step, and `rad install kubernetes` installs the matching control plane onto the
+            // current kube context. This (and every other `rad`) runs through the Step 1b shim, so its
+            // Contour gateway config - which reads the default-path kubeconfig ($HOME/.kube/config) and
+            // ignores KUBECONFIG - resolves to our isolated config via the shim's workspace-local HOME,
+            // and config writes land in the workspace-local <ws>/.rad/config.yaml.
             output.WriteLine("Step 9: Installing the Radius control plane onto the cluster...");
             await auto.TypeAsync("rad install kubernetes");
             await auto.EnterAsync();
@@ -509,69 +497,12 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
         }
         finally
         {
-            // Restore the developer's default kubeconfig that Step 8b shadowed with a symlink to
-            // the isolated $KUBECONFIG. Runs even on failure so a local run never leaves
-            // ~/.kube/config pointing at the deleted cluster or dangling into the deleted workspace.
-            RestoreDefaultKubeConfig(workspace.WorkspaceRoot.FullName);
-
             // Deleting the resource group removes AKS, ACR, and all Radius control-plane state,
-            // so no separate `rad` cleanup is required.
+            // so no separate `rad` cleanup is required. The isolated kubeconfig lived under the
+            // TemporaryWorkspace (Step 1b/8b), so disposing the workspace is all the kube cleanup
+            // needed — the developer's real ~/.kube/config was never touched.
             output.WriteLine($"Cleaning up resource group: {resourceGroupName}");
             await CleanupResourceGroupAsync(resourceGroupName);
-        }
-    }
-
-    /// <summary>
-    /// Reverses the Step 8b default-kubeconfig shadow, restoring exactly what was there before.
-    /// Only acts when Step 8b actually ran (its <c>kube-shadowed.marker</c> is present); if
-    /// provisioning failed earlier the developer's <c>~/.kube/config</c> was never touched and is
-    /// left alone. When a backup exists it is moved back verbatim — <c>cp -a</c> preserved a
-    /// regular file as a file and a symlink as a symlink, so a pre-existing link is not turned into
-    /// a copy or dropped. When no backup exists nothing was there before, so only our own symlink
-    /// is removed. Best-effort: cleanup must not mask a test failure.
-    /// </summary>
-    private void RestoreDefaultKubeConfig(string workspaceRoot)
-    {
-        try
-        {
-            // Provisioning can fail before Step 8b runs. Without this guard the no-backup branch
-            // below would delete a developer's own pre-existing ~/.kube/config symlink that this
-            // test never created.
-            var marker = Path.Combine(workspaceRoot, "kube-shadowed.marker");
-            if (!File.Exists(marker))
-            {
-                return;
-            }
-
-            var home = Environment.GetEnvironmentVariable("HOME")
-                ?? Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
-            if (string.IsNullOrEmpty(home))
-            {
-                return;
-            }
-
-            var defaultKubeConfig = Path.Combine(home, ".kube", "config");
-            var backup = Path.Combine(workspaceRoot, "kube-default.bak");
-
-            // Remove the symlink Step 8b created (Delete on a symlink removes the link, not its
-            // target). LinkTarget is non-null for a symlink even when it dangles, so this also
-            // clears a link left pointing into the about-to-be-deleted workspace.
-            var current = new FileInfo(defaultKubeConfig);
-            if (current.Exists || current.LinkTarget is not null)
-            {
-                current.Delete();
-            }
-
-            // Put the original back verbatim if Step 8b captured one.
-            var backupInfo = new FileInfo(backup);
-            if (backupInfo.Exists || backupInfo.LinkTarget is not null)
-            {
-                File.Move(backup, defaultKubeConfig);
-            }
-        }
-        catch (Exception ex)
-        {
-            output.WriteLine($"Warning: could not restore default kubeconfig: {ex.Message}");
         }
     }
 
