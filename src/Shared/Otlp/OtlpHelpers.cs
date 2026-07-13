@@ -127,8 +127,9 @@ public static partial class OtlpHelpers
 
     /// <summary>
     /// Finds a resource by composite name first, then falls back to all resources with the base name.
-    /// Returns no matches when a composite name identifies multiple resources because joining the resource
-    /// name and instance ID with a dash is not guaranteed to produce a unique value.
+    /// Returns no matches when a composite name identifies multiple resources or also matches a resource's
+    /// base name because joining the resource name and instance ID with a dash is not guaranteed to produce
+    /// a unique value.
     /// </summary>
     internal static IReadOnlyList<T> ResolveResourceNameMatches<T>(string resourceName, IEnumerable<T> resources)
         where T : IOtlpResource
@@ -152,7 +153,7 @@ public static partial class OtlpHelpers
         return compositeNameMatches.Count switch
         {
             0 => resourceNameMatches,
-            1 => compositeNameMatches,
+            1 when resourceNameMatches.Count == 0 => compositeNameMatches,
             _ => []
         };
     }

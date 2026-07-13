@@ -176,7 +176,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void ResolveResourceNameMatches_WithResourceNameMatchingCompositeResourceName_ResolvesReplica()
+    public void ResolveResourceNameMatches_WithResourceNameMatchingCompositeResourceName_ReturnsNoMatches()
     {
         var resources = new SimpleOtlpResource[]
         {
@@ -186,9 +186,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
 
         var matches = OtlpHelpers.ResolveResourceNameMatches("API-1", resources);
 
-        var match = Assert.Single(matches);
-        Assert.Equal("api", match.ResourceName);
-        Assert.Equal("1", match.InstanceId);
+        Assert.Empty(matches);
     }
 
     [Fact]

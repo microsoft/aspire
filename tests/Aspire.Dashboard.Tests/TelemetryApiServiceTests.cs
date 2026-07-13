@@ -926,7 +926,7 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithResourceNameMatchingCompositeResourceKey_ResolvesReplica()
+    public void GetSpans_WithResourceNameMatchingCompositeResourceKey_ReturnsNull()
     {
         var repository = CreateRepository();
 
@@ -948,9 +948,7 @@ public class TelemetryApiServiceTests
 
         var result = service.GetSpans(resourceNames: ["api-1"], traceId: null, hasError: null, limit: null);
 
-        Assert.NotNull(result);
-        var span = Assert.Single(GetAllSpans(result));
-        Assert.Equal("replica", DecodeSpanId(span.SpanId));
+        Assert.Null(result);
     }
 
     [Fact]
