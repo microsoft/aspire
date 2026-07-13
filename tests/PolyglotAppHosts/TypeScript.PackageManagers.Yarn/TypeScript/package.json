@@ -15,5 +15,10 @@
     "nodemon": "^3.1.11",
     "tsx": "^4.19.0",
     "typescript": "^5.3.0"
+  },
+  "resolutions": {
+    "undici": "6.27.0",
+    "tar": "7.5.16",
+    "esbuild": "0.28.1"
   }
 }
