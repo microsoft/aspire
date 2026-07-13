@@ -744,19 +744,21 @@ public static class AzureContainerAppExtensions
     /// <remarks>
     /// <para>
     /// By default the managed environment relies on Azure.Provisioning's name, whose sanitizer keeps only
-    /// lowercase letters — dropping any trailing digit and yielding
-    /// <c>take('cae{uniqueString(resourceGroup().id)}', 24)</c> regardless of the resource name. When two
-    /// <see cref="AddAzureContainerAppEnvironment"/> resources (e.g. <c>cae1</c> and <c>cae2</c>) share a
-    /// resource group, that default collapses both onto a single physical environment and concurrent
+    /// lowercase letters. For example, two <see cref="AddAzureContainerAppEnvironment"/> resources named
+    /// <c>cae1</c> and <c>cae2</c> both drop their trailing digit and yield
+    /// <c>take('cae${uniqueString(resourceGroup().id)}', 24)</c>. When they share a resource group,
+    /// that default collapses both onto a single physical environment and concurrent
     /// container-app writes race with <c>ManagedEnvironmentOperationInProgress</c>
     /// (see <see href="https://github.com/microsoft/aspire/issues/18722"/>).
     /// </para>
     /// <para>
     /// Applying this method computes the managed environment <c>name</c> with the same algorithm Azure.Provisioning
-    /// uses for every other Azure resource type (sanitized resource name, then a
+    /// uses for every other Azure resource type (sanitized resource name, then a hyphen separator and a
     /// <c>uniqueString(resourceGroup().id)</c> suffix, truncated to the maximum length), but with the character
     /// requirements Azure Container Apps actually allows — lowercase letters, digits, and hyphens up to 32
-    /// characters. Preserving the digits gives each environment a distinct <c>name</c>. This is opt-in because
+    /// characters. For example, <c>cae1</c> produces
+    /// <c>take('cae1-${uniqueString(resourceGroup().id)}', 32)</c>, while <c>prod1</c> uses a <c>prod1</c>
+    /// prefix. Preserving the digits gives each environment a distinct <c>name</c>. This is opt-in because
     /// enabling it changes the environment <c>name</c> for an already-deployed single environment, which would
     /// cause Azure to recreate it. Apply it only to the environments that need distinct names (typically when
     /// deploying more than one environment to a single resource group), or to new deployments.
