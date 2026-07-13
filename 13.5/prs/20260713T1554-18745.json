@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "Bug fix: external service URIs with path-based endpoints (no trailing slash) were incorrectly rejected.",
+  "mergedAt": "2026-07-13T15:54:43Z",
+  "number": 18745,
+  "runDate": "2026-07-13T18:38:13Z",
+  "status": "included",
+  "title": "Allow external service URIs without trailing slash"
+}

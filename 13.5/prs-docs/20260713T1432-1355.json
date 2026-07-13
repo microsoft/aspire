@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documents Aspire 13.4 feature (PR #17454 HTTPS cert for non-.NET AppHosts). No matching changelog entry for this milestone.",
+  "mergedAt": "2026-07-13T14:32:31Z",
+  "number": 1355,
+  "runDate": "2026-07-13T18:38:13Z",
+  "status": "excluded",
+  "title": "[docs] Document automatic HTTPS certificate generation for non-.NET AppHosts"
+}

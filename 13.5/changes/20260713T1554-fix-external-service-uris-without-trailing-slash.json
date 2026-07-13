@@ -1,0 +1,21 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [
+    "@afscrome"
+  ],
+  "description": "External service resources and WithReference(Uri) now accept URIs whose absolute path does not end with a slash. Previously, valid references like https://tempuri.org/data.xml were incorrectly rejected.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔗",
+  "firstMergedAt": "2026-07-13T15:54:43Z",
+  "lastMergedAt": "2026-07-13T15:54:43Z",
+  "name": "External service URIs accept paths without trailing slash",
+  "owner": "karolz-ms",
+  "prs": [
+    18745
+  ]
+}

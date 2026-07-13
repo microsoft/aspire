@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documents Aspire 13.4 feature (PR #17700 Bun first-party hosting). No matching changelog entry for this milestone.",
+  "mergedAt": "2026-07-13T13:06:56Z",
+  "number": 1354,
+  "runDate": "2026-07-13T18:38:13Z",
+  "status": "excluded",
+  "title": "[docs] Update Bun integration docs for first-party Aspire.Hosting.JavaScript support"
+}

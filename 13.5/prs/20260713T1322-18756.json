@@ -1,0 +1,9 @@
+{
+  "author": "mitchdenny",
+  "comment": "CI infrastructure change: moves Radius CLI install from workflow into test. No user-facing impact.",
+  "mergedAt": "2026-07-13T13:22:21Z",
+  "number": 18756,
+  "runDate": "2026-07-13T18:38:13Z",
+  "status": "excluded",
+  "title": "Install Radius CLI in the test instead of the workflow"
+}
