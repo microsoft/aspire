@@ -1,0 +1,29 @@
+{
+  "run_id": 29253519053,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29253519053",
+  "analyzed_at": "2026-07-13T14:03:16Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18756,
+    "title": "Install Radius CLI in the test instead of the workflow",
+    "author": "mitchdenny",
+    "state": "closed",
+    "head_branch": "mitchdenny-radius-cli-install-in-test",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18756"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Build native CLI archive (Windows) / Build CLI (win-x64)",
+      "id": 86828188953,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29253519053/job/86828188953",
+      "classification": "transient-infra",
+      "reason": "The 'Set up job' step failed with 'Service Unavailable' when trying to resolve action download info — a transient GitHub Actions infrastructure issue unrelated to PR changes.",
+      "failed_steps": ["Set up job"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["github-actions-service-unavailable"]
+}
