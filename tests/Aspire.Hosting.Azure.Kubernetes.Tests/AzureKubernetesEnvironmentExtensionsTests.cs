@@ -521,4 +521,49 @@ public class AzureKubernetesEnvironmentExtensionsTests
         Assert.True(alb2.Resource.TryGetLastAnnotation<AzureSubnetServiceDelegationAnnotation>(out _));
     }
 
+    [Fact]
+    public void AddLoadBalancer_OnUserDelegatedSubnet_ReplacesDelegationAndRecordsDisplaced()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+
+        // The user delegates their ALB subnet to a different service before handing it to AGC.
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24")
+            .WithServiceDelegation("Microsoft.Netapp/volumes");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb", albSubnet);
+
+        // AGC requires trafficControllers, so the user's delegation is replaced (not appended). The
+        // subnet must keep exactly one delegation so a later WithServiceDelegation's Replace never
+        // encounters two annotations (which would throw via SingleOrDefault()).
+        var delegation = Assert.Single(albSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation.ServiceName);
+
+        // The displaced delegation is surfaced so the LB pipeline step can warn the user at deploy time.
+        Assert.Equal("Microsoft.Netapp/volumes", lb.Resource.DisplacedDelegationServiceName);
+    }
+
+    [Fact]
+    public void AddLoadBalancer_SharedSubnet_KeepsSingleDelegationWithNoDisplacement()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb1 = aks.AddLoadBalancer("lb1", albSubnet);
+        var lb2 = aks.AddLoadBalancer("lb2", albSubnet);
+
+        // Sharing a subnet across load balancers is idempotent: exactly one delegation remains.
+        var delegation = Assert.Single(albSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation.ServiceName);
+
+        // Neither LB displaced a user delegation; the only prior delegation was AGC's own.
+        Assert.Null(lb1.Resource.DisplacedDelegationServiceName);
+        Assert.Null(lb2.Resource.DisplacedDelegationServiceName);
+    }
+
 }
