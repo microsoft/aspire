@@ -2738,7 +2738,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         // The apps share a managed environment and express no dependencies of their own, so they
-        // are chained into a serial order: cache -> worker -> api.
+        // are chained into a serial order: api -> worker -> cache.
         Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
         Assert.Equal(["api"], GetDependsOnTargets(GetComputeResource(model, "worker")));
         Assert.Equal(["worker"], GetDependsOnTargets(GetComputeResource(model, "cache")));
