@@ -32,7 +32,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"console-logs\",\"console-logs-live\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -584,6 +584,52 @@ public class DashboardBackendApplicationTests
                 .GetString());
     }
 
+    [Fact]
+    public async Task ConsoleLogHub_StreamsResourceScopedBacklogAndLiveLines()
+    {
+        DashboardConsoleLogsEvent[] logEvents =
+        [
+            new("api", [new(1, "backlog", false), new(2, "warning", true)]),
+            new("api", [new(3, "live", false)])
+        ];
+        var source = new TestConsoleLogSource(logEvents);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardConsoleLogSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var connection = new HubConnectionBuilder()
+            .WithUrl($"http://localhost{DashboardApiContract.ConsoleLogStreamPath}", options =>
+            {
+                options.HttpMessageHandlerFactory = _ => app.GetTestServer().CreateHandler();
+                options.Transports = HttpTransportType.LongPolling;
+                options.Headers.Add("Cookie", ".Aspire.Dashboard=browser-session");
+            })
+            .AddJsonProtocol(options =>
+            {
+                options.PayloadSerializerOptions.TypeInfoResolverChain.Insert(0, DashboardBackendJsonSerializerContext.Default);
+            })
+            .Build();
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var events = connection
+            .StreamAsync<DashboardConsoleLogsEvent>(
+                nameof(DashboardConsoleLogsHub.WatchConsoleLogs),
+                "api",
+                TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.True(await events.MoveNextAsync());
+        Assert.Equal("backlog", events.Current.Lines[0].Text);
+        Assert.True(events.Current.Lines[1].IsStdErr);
+        Assert.True(await events.MoveNextAsync());
+        Assert.Equal(3, Assert.Single(events.Current.Lines).LineNumber);
+        Assert.Equal("api", source.ResourceName);
+        Assert.Equal(".Aspire.Dashboard=browser-session", source.Credentials?.Cookie);
+    }
+
     private sealed class TestResourceSnapshotProvider(DashboardResource[] resources) : IDashboardResourceSnapshotProvider
     {
         public ValueTask<DashboardResource[]> GetSnapshotAsync(CancellationToken cancellationToken)
@@ -637,6 +683,27 @@ public class DashboardBackendApplicationTests
             DashboardRequestCredentials credentials,
             [EnumeratorCancellation] CancellationToken cancellationToken)
         {
+            Credentials = credentials;
+            foreach (var logEvent in events)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return logEvent;
+                await Task.Yield();
+            }
+        }
+    }
+
+    private sealed class TestConsoleLogSource(DashboardConsoleLogsEvent[] events) : IDashboardConsoleLogSource
+    {
+        public string? ResourceName { get; private set; }
+        public DashboardRequestCredentials? Credentials { get; private set; }
+
+        public async IAsyncEnumerable<DashboardConsoleLogsEvent> WatchAsync(
+            string resourceName,
+            DashboardRequestCredentials credentials,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            ResourceName = resourceName;
             Credentials = credentials;
             foreach (var logEvent in events)
             {

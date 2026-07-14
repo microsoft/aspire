@@ -17,6 +17,7 @@ internal static class DashboardBackendApplication
         builder.Services.TryAddSingleton<IDashboardResourceEventSource>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.TryAddSingleton<IDashboardCommandExecutor, DashboardCommandExecutor>();
         builder.Services.TryAddSingleton<IDashboardStructuredLogSource, DashboardStructuredLogProxy>();
+        builder.Services.TryAddSingleton<IDashboardConsoleLogSource, DashboardConsoleLogProxy>();
         builder.Services.AddHostedService(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.AddSignalR();
         builder.Services.Configure<JsonHubProtocolOptions>(options =>
@@ -42,7 +43,9 @@ internal static class DashboardBackendApplication
                             DashboardApiContract.ResourceStreamCapability,
                             DashboardApiContract.CommandsCapability,
                             DashboardApiContract.StructuredLogsCapability,
-                            DashboardApiContract.StructuredLogStreamCapability
+                            DashboardApiContract.StructuredLogStreamCapability,
+                            DashboardApiContract.ConsoleLogsCapability,
+                            DashboardApiContract.ConsoleLogStreamCapability
                         ])
                 ]);
 
@@ -83,6 +86,7 @@ internal static class DashboardBackendApplication
 
         app.MapHub<DashboardResourcesHub>(DashboardApiContract.ResourceStreamPath);
         app.MapHub<DashboardStructuredLogsHub>(DashboardApiContract.StructuredLogStreamPath);
+        app.MapHub<DashboardConsoleLogsHub>(DashboardApiContract.ConsoleLogStreamPath);
 
         app.MapGet($"{DashboardApiContract.VersionOneBasePath}/structured-logs", async (
             HttpContext context,
