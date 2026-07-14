@@ -27,13 +27,13 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "resources", "resources-live", "commands"]
+      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live"]
     }
   ]
 }
 ```
 
-Version 1 currently defines four capabilities:
+Version 1 currently defines six capabilities:
 
 | Capability | Route | Response |
 | --- | --- | --- |
@@ -41,6 +41,8 @@ Version 1 currently defines four capabilities:
 | `resources` | `GET {basePath}/resources` | `Resource[]` |
 | `resources-live` | SignalR hub at `{basePath}/resources/live` | `ResourcesEvent` server stream |
 | `commands` | `POST {basePath}/commands/execute` | `CommandResponse` |
+| `structured-logs` | `GET {basePath}/structured-logs` | `StructuredLogsSnapshot` |
+| `structured-logs-live` | SignalR hub at `{basePath}/structured-logs/live` | `StructuredLogsEvent` server stream |
 
 ```ts
 export interface DashboardConfiguration {
@@ -59,6 +61,14 @@ The `commands` request is `{ resourceName, commandName }`. The backend resolves 
 and command from its authoritative resource snapshot before forwarding the command to the AppHost;
 unknown resources or commands return `404`, and malformed requests return `400`. Command input
 interactions and their responses remain on `/api/deck` until the interactions capability migrates.
+
+The read-only `structured-logs` response contains `{ totalCount, data }`, where `data` is the OTLP
+JSON resource-log tree used by the existing dashboard. The AOT host obtains the backlog from the
+loopback legacy dashboard and forwards the browser's dashboard credentials. `structured-logs-live`
+exposes `WatchStructuredLogs`; each event contains one `data` OTLP tree. React performs text,
+resource, severity, and structured-attribute filtering locally and freezes its displayed snapshot
+while paused. Trace, metric, console-log, and destructive telemetry operations remain on
+`/api/deck`; after a legacy structured-log clear, React reloads the versioned backlog.
 
 For `resources-live`, React connects with the SignalR JSON hub protocol and invokes the streaming
 hub method `WatchResources`. The first stream item is always an authoritative `snapshot`; later

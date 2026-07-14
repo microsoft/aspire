@@ -32,7 +32,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -504,6 +504,86 @@ public class DashboardBackendApplicationTests
         Assert.Equal("worker", Assert.Single(events.Current.Deletes!));
     }
 
+    [Fact]
+    public async Task GetStructuredLogs_ReturnsSourceGeneratedBacklogAndForwardsCredentials()
+    {
+        var source = new TestStructuredLogSource(
+            new DashboardStructuredLogsSnapshot(
+                2,
+                JsonSerializer.SerializeToElement(new { resourceLogs = new[] { new { resource = new { } } } })),
+            []);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardStructuredLogSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/dashboard/v1/structured-logs");
+        request.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer dashboard-token");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal(
+            "{\"totalCount\":2,\"data\":{\"resourceLogs\":[{\"resource\":{}}]}}",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(".Aspire.Dashboard=browser-session", source.Credentials?.Cookie);
+        Assert.Equal("Bearer dashboard-token", source.Credentials?.Authorization);
+    }
+
+    [Fact]
+    public async Task StructuredLogHub_StreamsSourceGeneratedOtlpEvents()
+    {
+        DashboardStructuredLogsEvent[] logEvents =
+        [
+            new(JsonSerializer.SerializeToElement(new
+            {
+                resourceLogs = new[]
+                {
+                    new { scopeLogs = new[] { new { logRecords = new[] { new { body = new { stringValue = "started" } } } } } }
+                }
+            }))
+        ];
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardStructuredLogSource>(new TestStructuredLogSource(
+                new DashboardStructuredLogsSnapshot(0, JsonSerializer.SerializeToElement(new { })),
+                logEvents));
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var connection = new HubConnectionBuilder()
+            .WithUrl($"http://localhost{DashboardApiContract.StructuredLogStreamPath}", options =>
+            {
+                options.HttpMessageHandlerFactory = _ => app.GetTestServer().CreateHandler();
+                options.Transports = HttpTransportType.LongPolling;
+            })
+            .AddJsonProtocol(options =>
+            {
+                options.PayloadSerializerOptions.TypeInfoResolverChain.Insert(0, DashboardBackendJsonSerializerContext.Default);
+            })
+            .Build();
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var events = connection
+            .StreamAsync<DashboardStructuredLogsEvent>(nameof(DashboardStructuredLogsHub.WatchStructuredLogs), TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.True(await events.MoveNextAsync());
+        Assert.Equal(
+            "started",
+            events.Current.Data.GetProperty("resourceLogs")[0]
+                .GetProperty("scopeLogs")[0]
+                .GetProperty("logRecords")[0]
+                .GetProperty("body")
+                .GetProperty("stringValue")
+                .GetString());
+    }
+
     private sealed class TestResourceSnapshotProvider(DashboardResource[] resources) : IDashboardResourceSnapshotProvider
     {
         public ValueTask<DashboardResource[]> GetSnapshotAsync(CancellationToken cancellationToken)
@@ -536,6 +616,34 @@ public class DashboardBackendApplicationTests
         {
             Request = request;
             return ValueTask.FromResult(response);
+        }
+    }
+
+    private sealed class TestStructuredLogSource(
+        DashboardStructuredLogsSnapshot snapshot,
+        DashboardStructuredLogsEvent[] events) : IDashboardStructuredLogSource
+    {
+        public DashboardRequestCredentials? Credentials { get; private set; }
+
+        public ValueTask<DashboardStructuredLogsSnapshot> GetSnapshotAsync(
+            DashboardRequestCredentials credentials,
+            CancellationToken cancellationToken)
+        {
+            Credentials = credentials;
+            return ValueTask.FromResult(snapshot);
+        }
+
+        public async IAsyncEnumerable<DashboardStructuredLogsEvent> WatchAsync(
+            DashboardRequestCredentials credentials,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            Credentials = credentials;
+            foreach (var logEvent in events)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return logEvent;
+                await Task.Yield();
+            }
         }
     }
 }
