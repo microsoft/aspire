@@ -354,6 +354,76 @@ public class SealedSecretApplyStepTests
     }
 
     [Fact]
+    public void ParseSecretDataKeys_ReadsDataKeyNames()
+    {
+        // `kubectl get secret <name> -o json` returns base64 values under `data`; only the key
+        // names are extracted (values are ignored so no secret material leaves the parser).
+        var keys = SealedSecretApplyStep.ParseSecretDataKeys("""
+            {
+              "apiVersion": "v1",
+              "kind": "Secret",
+              "data": {
+                "username": "YWRtaW4=",
+                "password": "czNjcmV0"
+              }
+            }
+            """);
+
+        Assert.Equal(new[] { "password", "username" }, keys.OrderBy(k => k, StringComparer.Ordinal));
+    }
+
+    [Fact]
+    public void ParseSecretDataKeys_NoData_ReturnsEmpty()
+    {
+        var keys = SealedSecretApplyStep.ParseSecretDataKeys("""
+            {
+              "apiVersion": "v1",
+              "kind": "Secret"
+            }
+            """);
+
+        Assert.Empty(keys);
+    }
+
+    [Fact]
+    public void BuildGetSecretDataArgs_TargetsNamespaceContextAndJson()
+    {
+        Assert.Equal(
+            new[] { "get", "secret", "db-creds", "-n", "app", "-o", "json", "--context", "kind-radius" },
+            SealedSecretApplyStep.BuildGetSecretDataArgs("app", "db-creds", "kind-radius"));
+    }
+
+    [Fact]
+    public void FindMissingDeclaredKeys_ReturnsDeclaredKeysAbsentFromSecret()
+    {
+        var missing = SealedSecretApplyStep.FindMissingDeclaredKeys(
+            new[] { "username", "password" },
+            new HashSet<string>(StringComparer.Ordinal) { "username" });
+
+        Assert.Equal(new[] { "password" }, missing);
+    }
+
+    [Fact]
+    public void FindMissingDeclaredKeys_AllPresent_ReturnsEmpty()
+    {
+        var missing = SealedSecretApplyStep.FindMissingDeclaredKeys(
+            new[] { "username", "password" },
+            new HashSet<string>(StringComparer.Ordinal) { "username", "password", "extra" });
+
+        Assert.Empty(missing);
+    }
+
+    [Fact]
+    public void FindMissingDeclaredKeys_NoDeclaredKeys_ReturnsEmpty()
+    {
+        var missing = SealedSecretApplyStep.FindMissingDeclaredKeys(
+            Array.Empty<string>(),
+            new HashSet<string>(StringComparer.Ordinal));
+
+        Assert.Empty(missing);
+    }
+
+    [Fact]
     public void EvaluateSealedSecretSync_MultipleConditions_UsesSyncedCondition()
     {
         var decision = SealedSecretApplyStep.EvaluateSealedSecretSync(

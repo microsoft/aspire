@@ -1592,22 +1592,15 @@ internal sealed class RadiusInfrastructureBuilder
                         ["key"] = consumer.Key!,
                     };
                     break;
-                case RadiusSecretStoreConsumerKind.TerraformProviderSecret:
-                    // Terraform provider secrets are not yet emitted (ASPIRERADIUS053). The Radius
-                    // recipeConfig.terraform.providers.<name> shape is an array of provider-config
-                    // objects that also needs a per-secret name/key the WithTerraformProviderSecret
-                    // API does not capture, so faithful emission is not possible today. Config-time
-                    // validation rejects this consumer before publish; throw defensively in case the
-                    // gate is bypassed rather than silently dropping the reference.
-                    throw new InvalidOperationException(
-                        $"Secret store '{consumer.Store.Name}' is referenced as a Terraform provider secret " +
-                        $"for provider '{consumer.Selector}', which is not yet supported. Diagnostic: ASPIRERADIUS053.");
                 case RadiusSecretStoreConsumerKind.GatewayTls:
-                    // Gateway TLS (tls.certificateFrom) is intentionally not emitted: the integration
-                    // does not model Radius gateways yet, so there is no gateway resource to attach the
-                    // certificate reference to. The consumer is recorded (and type-validated) so the
-                    // wiring is deterministic and can be emitted once gateways are modeled.
-                    break;
+                    // Gateway TLS (tls.certificateFrom) is not yet supported (ASPIRERADIUS060): the
+                    // integration does not model Radius gateways yet, so there is no gateway resource
+                    // to attach the certificate reference to. Config-time validation rejects this
+                    // consumer before publish; throw defensively in case the gate is bypassed rather
+                    // than silently dropping the reference.
+                    throw new InvalidOperationException(
+                        $"Secret store '{consumer.Store.Name}' is referenced as a gateway TLS certificate " +
+                        $"for '{consumer.Selector}', which is not yet supported. Diagnostic: ASPIRERADIUS060.");
                 default:
                     throw new InvalidOperationException(
                         $"Unknown secret-store consumer kind '{consumer.Kind}' for store '{consumer.Store.Name}'.");

@@ -50,11 +50,18 @@ public sealed class RadiusSecretStoreResource : Resource
     internal RadiusSecretStorePopulation Population { get; } = new();
 
     /// <summary>
-    /// The bounded time to wait for a sealed/referenced <c>Secret</c> to materialize
-    /// in-cluster before <c>rad deploy</c>. Default 120s; overridable via
-    /// <c>WithMaterializationTimeout</c>. Used only by the sealed-secrets deploy path.
+    /// The bounded time to wait for a sealed <c>Secret</c> to materialize in-cluster before
+    /// <c>rad deploy</c>. Default 120s; overridable via <c>WithMaterializationTimeout</c>.
+    /// Used only by the sealed-secrets deploy path (see <see cref="MaterializationTimeoutWasSet"/>).
     /// </summary>
     public TimeSpan MaterializationTimeout { get; internal set; } = TimeSpan.FromSeconds(120);
+
+    /// <summary>
+    /// Whether <c>WithMaterializationTimeout</c> was explicitly called. The timeout only affects the
+    /// sealed-secret deploy path, so the validation gate rejects an explicit override on a non-sealed
+    /// store (<c>ASPIRERADIUS062</c>) rather than let it silently no-op.
+    /// </summary>
+    internal bool MaterializationTimeoutWasSet { get; set; }
 
     /// <summary>
     /// The owning Radius environment for an <b>environment-scoped</b> store, used to default a bare
