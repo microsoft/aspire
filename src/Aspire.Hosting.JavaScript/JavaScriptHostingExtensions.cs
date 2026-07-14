@@ -1564,7 +1564,7 @@ public static class JavaScriptHostingExtensions
                             return;
                         }
 
-                        var aspireConfigDir = Path.Join(nodeModulesDir, ".aspire");
+                        var aspireConfigDir = Path.Join(nodeModulesDir, ".aspire", resource.Name);
                         Directory.CreateDirectory(aspireConfigDir);
 
                         // Compute the relative path from the wrapper location to the original config

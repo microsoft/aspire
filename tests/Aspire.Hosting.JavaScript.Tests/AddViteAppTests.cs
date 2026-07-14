@@ -814,7 +814,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         await certConfigAnnotation.Callback(context);
 
         // Verify the wrapper was written under the hoisted node_modules/.aspire (repo root, not app dir)
-        var expectedDir = Path.Combine(repoRoot, "node_modules", ".aspire");
+        var expectedDir = Path.Combine(repoRoot, "node_modules", ".aspire", "test-app");
         Assert.True(Directory.Exists(expectedDir), $"Expected .aspire directory at {expectedDir}");
 
         var wrapperFiles = Directory.GetFiles(expectedDir, "aspire.vite.config.ts");
@@ -838,6 +838,68 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         var absoluteConfigPath = Path.GetFullPath(viteConfigPath);
         var expectedEscapedPath = absoluteConfigPath.Replace("\\", "\\\\");
         Assert.Contains($"Found original Vite configuration at \"{expectedEscapedPath}\"", wrapperContent);
+    }
+
+    [Fact]
+    public async Task AddViteApp_ServerAuthCertConfig_SharedNodeModules_WritesResourceSpecificWrappers()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var repoRoot = Path.Combine(workspace.Path, "repo");
+        var firstAppDirectory = Path.Combine(repoRoot, "packages", "frontend-a");
+        var secondAppDirectory = Path.Combine(repoRoot, "packages", "frontend-b");
+        Directory.CreateDirectory(firstAppDirectory);
+        Directory.CreateDirectory(secondAppDirectory);
+        Directory.CreateDirectory(Path.Combine(repoRoot, "node_modules"));
+
+        var firstConfigPath = Path.Combine(firstAppDirectory, "vite.config.ts");
+        var secondConfigPath = Path.Combine(secondAppDirectory, "vite.config.ts");
+        File.WriteAllText(firstConfigPath, "export default { app: 'a' }");
+        File.WriteAllText(secondConfigPath, "export default { app: 'b' }");
+
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddViteApp("frontend-a", firstAppDirectory);
+        builder.AddViteApp("frontend-b", secondAppDirectory);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resources = appModel.Resources.OfType<ViteAppResource>().ToDictionary(resource => resource.Name);
+        var configPaths = new Dictionary<string, string>();
+
+        foreach (var resourceName in resources.Keys)
+        {
+            var resource = resources[resourceName];
+            var args = new List<object> { "run", "dev", "--", "--port", "3000" };
+            var context = new HttpsCertificateConfigurationCallbackAnnotationContext
+            {
+                ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
+                Resource = resource,
+                Arguments = args,
+                EnvironmentVariables = new Dictionary<string, object>(),
+                CertificatePath = ReferenceExpression.Create($"cert.pem"),
+                KeyPath = ReferenceExpression.Create($"key.pem"),
+                CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
+                PfxPath = ReferenceExpression.Create($"cert.pfx"),
+                Password = null,
+                CancellationToken = CancellationToken.None
+            };
+
+            var certConfigAnnotation = resource.Annotations
+                .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
+                .Single();
+            await certConfigAnnotation.Callback(context);
+
+            var configIndex = args.IndexOf("--config");
+            configPaths[resourceName] = Assert.IsType<string>(args[configIndex + 1]);
+        }
+
+        var firstWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", "frontend-a", "aspire.vite.config.ts");
+        var secondWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", "frontend-b", "aspire.vite.config.ts");
+        Assert.Equal(firstWrapperPath, configPaths["frontend-a"]);
+        Assert.Equal(secondWrapperPath, configPaths["frontend-b"]);
+        Assert.Contains(Path.GetFullPath(firstConfigPath).Replace("\\", "\\\\"), File.ReadAllText(firstWrapperPath));
+        Assert.Contains(Path.GetFullPath(secondConfigPath).Replace("\\", "\\\\"), File.ReadAllText(secondWrapperPath));
     }
 
     [Theory]
