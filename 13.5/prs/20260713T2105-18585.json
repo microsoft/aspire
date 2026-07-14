@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored automated update to generated file (FoundryModel.Generated.cs); no user-facing change",
+  "mergedAt": "2026-07-13T21:05:51Z",
+  "number": 18585,
+  "runDate": "2026-07-14T00:26:35Z",
+  "status": "excluded",
+  "title": "[Automated] Update Microsoft Foundry Models"
+}
