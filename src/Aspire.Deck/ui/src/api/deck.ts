@@ -269,7 +269,11 @@ export function clearStructuredLogs(resourceName: string | null): Promise<void> 
     return invoke<void>("deck_clear_structured_logs", { resourceName });
   }
   if (isHttpBackend()) {
-    return httpBackend.clearStructuredLogs(resourceName);
+    return httpBackend.clearStructuredLogs(resourceName).then(async () => {
+      if (isAotBackend() && await nativeBackend.hasCapability("structured-logs")) {
+        await nativeBackend.refreshStructuredLogs();
+      }
+    });
   }
   mockBackend.clearStructuredLogs(resourceName);
   return Promise.resolve();
@@ -412,6 +416,45 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
     return unlisten;
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      let cancelled = false;
+      let unsubscribeLegacy: Unsubscribe | null = null;
+      let unsubscribeStructuredLogs: Unsubscribe | null = null;
+      let legacySummary: TelemetrySummary | null = null;
+      let structuredLogs: Pick<TelemetrySummary, "logCount" | "recentLogs"> | null = null;
+      const publish = (): void => {
+        if (!cancelled && legacySummary !== null && structuredLogs !== null) {
+          cb({ ...legacySummary, ...structuredLogs });
+        }
+      };
+
+      void Promise.all([
+        nativeBackend.hasCapability("structured-logs"),
+        nativeBackend.hasCapability("structured-logs-live"),
+      ]).then(([hasBacklog, hasLive]) => {
+        if (cancelled) return;
+        if (!hasBacklog || !hasLive) {
+          unsubscribeLegacy = httpBackend.onTelemetry(cb);
+          return;
+        }
+
+        unsubscribeLegacy = httpBackend.onTelemetry((summary) => {
+          legacySummary = summary;
+          publish();
+        }, false);
+        unsubscribeStructuredLogs = nativeBackend.subscribeStructuredLogs((logs) => {
+          structuredLogs = logs;
+          publish();
+        });
+      }).catch(() => {
+        if (!cancelled) unsubscribeLegacy = httpBackend.onTelemetry(cb);
+      });
+      return () => {
+        cancelled = true;
+        unsubscribeLegacy?.();
+        unsubscribeStructuredLogs?.();
+      };
+    }
     return httpBackend.onTelemetry(cb);
   }
   return mockBackend.onTelemetry(cb);

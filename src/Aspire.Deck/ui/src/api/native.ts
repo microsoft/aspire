@@ -10,12 +10,16 @@ import type {
   DashboardApiDiscovery,
   DashboardApiVersion,
   DashboardConfiguration,
+  DashboardStructuredLogsEvent,
+  DashboardStructuredLogsSnapshot,
   DeckConfig,
   CommandResponse,
   ExecuteCommandArgs,
   Resource,
   ResourcesEvent,
+  LogRecordSummary,
 } from "./types";
+import { getLogRecordSummaries, type OtlpLogRecordSummary } from "./otlp";
 
 const dashboardProduct = "Aspire.Dashboard";
 const discoveryPath = "/api/dashboard";
@@ -23,10 +27,66 @@ const configurationCapability = "configuration";
 const resourcesCapability = "resources";
 const resourceStreamCapability = "resources-live";
 const commandsCapability = "commands";
+const structuredLogsCapability = "structured-logs";
+const structuredLogStreamCapability = "structured-logs-live";
 const supportedVersions = new Set([1]);
 
 let negotiatedVersion: Promise<DashboardApiVersion> | null = null;
 let configuration: Promise<DeckConfig> | null = null;
+const structuredLogListeners = new Set<(logs: NativeStructuredLogs) => void>();
+const structuredLogKeys = new Set<string>();
+let structuredLogs: NativeStructuredLogs = { logCount: 0, recentLogs: [] };
+
+interface NativeStructuredLogs {
+  logCount: number;
+  recentLogs: LogRecordSummary[];
+}
+
+function compareNewestFirst(left: LogRecordSummary, right: LogRecordSummary): number {
+  if (left.timeUnixNano.length !== right.timeUnixNano.length) {
+    return right.timeUnixNano.length - left.timeUnixNano.length;
+  }
+  return right.timeUnixNano.localeCompare(left.timeUnixNano);
+}
+
+function withoutRecordKey(log: OtlpLogRecordSummary): LogRecordSummary {
+  const { recordKey: _, ...summary } = log;
+  return summary;
+}
+
+function notifyStructuredLogs(): void {
+  for (const listener of structuredLogListeners) listener(structuredLogs);
+}
+
+async function refreshStructuredLogs(): Promise<void> {
+  const version = await getNegotiatedVersion();
+  const snapshot = await requestJson(`${version.basePath}/structured-logs`) as DashboardStructuredLogsSnapshot;
+  if (!Number.isInteger(snapshot.totalCount) || typeof snapshot.data !== "object" || snapshot.data === null) {
+    throw new Error("Dashboard API structured-log snapshot returned an incompatible payload.");
+  }
+  const records = getLogRecordSummaries(snapshot.data);
+  structuredLogKeys.clear();
+  for (const record of records) structuredLogKeys.add(record.recordKey);
+  structuredLogs = {
+    logCount: snapshot.totalCount,
+    recentLogs: records.map(withoutRecordKey).sort(compareNewestFirst),
+  };
+  notifyStructuredLogs();
+}
+
+function appendStructuredLogEvent(event: DashboardStructuredLogsEvent): void {
+  const additions = getLogRecordSummaries(event.data).filter((log) => {
+    if (structuredLogKeys.has(log.recordKey)) return false;
+    structuredLogKeys.add(log.recordKey);
+    return true;
+  }).map(withoutRecordKey);
+  if (additions.length === 0) return;
+  structuredLogs = {
+    logCount: structuredLogs.logCount + additions.length,
+    recentLogs: [...additions, ...structuredLogs.recentLogs].sort(compareNewestFirst).slice(0, 5_000),
+  };
+  notifyStructuredLogs();
+}
 
 async function requestJson(path: string): Promise<unknown> {
   const response = await fetch(path, {
@@ -343,10 +403,83 @@ function subscribeResources(
   };
 }
 
+function subscribeStructuredLogs(callback: (logs: NativeStructuredLogs) => void): () => void {
+  let cancelled = false;
+  let connection: HubConnection | null = null;
+  let subscription: ISubscription<DashboardStructuredLogsEvent> | null = null;
+  let retryTimer: number | undefined;
+
+  const start = async (): Promise<void> => {
+    try {
+      const version = await getNegotiatedVersion();
+      if (!version.capabilities.includes(structuredLogsCapability)
+          || !version.capabilities.includes(structuredLogStreamCapability)) {
+        throw new Error("Dashboard API version 1 does not advertise live structured logs.");
+      }
+
+      await refreshStructuredLogs();
+      if (cancelled) return;
+
+      connection = new HubConnectionBuilder()
+        .withUrl(`${version.basePath}/structured-logs/live`, { withCredentials: true })
+        .withAutomaticReconnect([0, 1_000, 2_000, 5_000])
+        .configureLogging(LogLevel.None)
+        .build();
+      connection.onreconnected(() => {
+        void refreshStructuredLogs().catch(() => undefined);
+        beginStream();
+      });
+      connection.onclose(() => {
+        subscription = null;
+        if (!cancelled) retryTimer = window.setTimeout(() => void start(), 1_000);
+      });
+      await connection.start();
+      beginStream();
+    } catch {
+      if (!cancelled) retryTimer = window.setTimeout(() => void start(), 1_000);
+    }
+  };
+
+  const beginStream = (): void => {
+    if (cancelled || connection?.state !== HubConnectionState.Connected) return;
+    subscription?.dispose();
+    subscription = connection.stream<DashboardStructuredLogsEvent>("WatchStructuredLogs").subscribe({
+      next: (event) => {
+        if (typeof event !== "object" || event === null || typeof event.data !== "object" || event.data === null) {
+          void connection?.stop();
+          return;
+        }
+        appendStructuredLogEvent(event);
+      },
+      error: () => {
+        subscription = null;
+        if (connection?.state === HubConnectionState.Connected) void connection.stop();
+      },
+      complete: () => {
+        subscription = null;
+        if (connection?.state === HubConnectionState.Connected) void connection.stop();
+      },
+    });
+  };
+
+  structuredLogListeners.add(callback);
+  callback(structuredLogs);
+  void start();
+  return () => {
+    cancelled = true;
+    structuredLogListeners.delete(callback);
+    if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    subscription?.dispose();
+    void connection?.stop();
+  };
+}
+
 export const nativeBackend = {
   getConfig,
   hasCapability,
   listResources,
   executeCommand,
   subscribeResources,
+  subscribeStructuredLogs,
+  refreshStructuredLogs,
 };

@@ -56,6 +56,7 @@ const emptyTelemetry: TelemetrySummary = {
 let telemetrySummary: TelemetrySummary = { ...emptyTelemetry, recentLogs: [] };
 let telemetryController: AbortController | null = null;
 let telemetryStarted = false;
+let telemetryIncludesStructuredLogs = true;
 let telemetryStopTimer: number | undefined;
 let telemetryMetricTimer: number | undefined;
 const telemetryLogKeys = new Set<string>();
@@ -584,18 +585,21 @@ async function clearMetrics(resourceName: string | null): Promise<void> {
   await refreshMetrics();
 }
 
-function ensureTelemetryStream(): void {
+function ensureTelemetryStream(includeStructuredLogs: boolean): void {
   if (telemetryStarted) {
     return;
   }
 
   telemetryStarted = true;
+  telemetryIncludesStructuredLogs = includeStructuredLogs;
   const controller = new AbortController();
   telemetryController = controller;
-  void streamStructuredLogs(appendStructuredLogs, controller.signal).catch(() => {
-    // Resource polling owns the shared backend connection state. Preserve the
-    // last telemetry snapshot when a live stream ends or the backend is unavailable.
-  });
+  if (includeStructuredLogs) {
+    void streamStructuredLogs(appendStructuredLogs, controller.signal).catch(() => {
+      // Resource polling owns the shared backend connection state. Preserve the
+      // last telemetry snapshot when a live stream ends or the backend is unavailable.
+    });
+  }
   void streamSpans(appendSpans, controller.signal).catch(() => {
     // A span stream failure must not tear down structured-log updates. Resource
     // polling owns the shared backend connection state and reports outages.
@@ -604,7 +608,10 @@ function ensureTelemetryStream(): void {
   telemetryMetricTimer = window.setInterval(() => void refreshMetrics().catch(() => undefined), 1500);
 }
 
-function subscribeTelemetry(callback: (summary: TelemetrySummary) => void): Unsubscribe {
+function subscribeTelemetry(
+  callback: (summary: TelemetrySummary) => void,
+  includeStructuredLogs = true,
+): Unsubscribe {
   if (telemetryStopTimer !== undefined) {
     window.clearTimeout(telemetryStopTimer);
     telemetryStopTimer = undefined;
@@ -612,7 +619,10 @@ function subscribeTelemetry(callback: (summary: TelemetrySummary) => void): Unsu
 
   telemetryListeners.add(callback);
   callback(telemetrySummary);
-  ensureTelemetryStream();
+  if (telemetryStarted && telemetryIncludesStructuredLogs !== includeStructuredLogs) {
+    throw new Error("Dashboard telemetry subscribers requested incompatible structured-log transports.");
+  }
+  ensureTelemetryStream(includeStructuredLogs);
 
   return () => {
     telemetryListeners.delete(callback);
@@ -742,7 +752,7 @@ export const httpBackend = {
   subscribeConsoleLogs,
   onResources,
   onConnection,
-  onTelemetry(callback: (summary: TelemetrySummary) => void): Unsubscribe {
-    return subscribeTelemetry(callback);
+  onTelemetry(callback: (summary: TelemetrySummary) => void, includeStructuredLogs = true): Unsubscribe {
+    return subscribeTelemetry(callback, includeStructuredLogs);
   },
 };
