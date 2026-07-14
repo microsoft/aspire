@@ -1563,7 +1563,7 @@ bach@^2.0.1:
 
 balanced-match@^1.0.0:
   version "1.0.2"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/balanced-match/-/balanced-match-1.0.2.tgz"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/balanced-match/-/balanced-match-1.0.2.tgz#e83e3a7e3f300b34cb9d87f615fa0cbf357690ee"
   integrity sha1-6D46fj8wCzTLnYf2FfoMvzV2kO4=
 
 balanced-match@^4.0.2:
@@ -1655,24 +1655,24 @@ boundary@^2.0.0:
   integrity sha1-FpyLHw1Ezywlk4lnoyjzfgpOXvw=
 
 brace-expansion@^1.1.7:
-  version "1.1.13"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-1.1.13.tgz"
-  integrity sha1-03h1wB3J7/mI3UnREqV8tntU7+Y=
+  version "1.1.16"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-1.1.16.tgz#723d3a30c0558c225abc9fc479a73e14e26c3c2f"
+  integrity sha1-cj06MMBVjCJavJ/Eeac+FOJsPC8=
   dependencies:
     balanced-match "^1.0.0"
     concat-map "0.0.1"
 
 brace-expansion@^2.0.2:
-  version "2.0.3"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-2.0.3.tgz"
-  integrity sha1-BJMzi91Y4xmxA5xnz37kOYksAdk=
+  version "2.1.2"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-2.1.2.tgz#0bba2271feb7d458b0d31ad13625aaa4754431e2"
+  integrity sha1-C7oicf631Fiw0xrRNiWqpHVEMeI=
   dependencies:
     balanced-match "^1.0.0"
 
 brace-expansion@^5.0.5:
-  version "5.0.5"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-5.0.5.tgz"
-  integrity sha1-3MOjcRa3nz4bRtuZTO1dVw6TD9s=
+  version "5.0.7"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/brace-expansion/-/brace-expansion-5.0.7.tgz#1b0e46965b479dad65af737b4a02790a05498337"
+  integrity sha1-Gw5GlltHna1lr3N7SgJ5CgVJgzc=
   dependencies:
     balanced-match "^4.0.2"
 
@@ -2080,7 +2080,7 @@ compare-versions@^6.1.1:
 
 concat-map@0.0.1:
   version "0.0.1"
-  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/concat-map/-/concat-map-0.0.1.tgz"
+  resolved "https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/concat-map/-/concat-map-0.0.1.tgz#d8a96bd77fd68df7793a73036a3ba0d5405d477b"
   integrity sha1-2Klr13/Wjfd5OnMDajug1UBdR3s=
 
 concat-with-sourcemaps@^1.0.0:

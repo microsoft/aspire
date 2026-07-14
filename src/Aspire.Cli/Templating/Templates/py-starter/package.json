@@ -24,12 +24,11 @@
     "@types/node": "^22.0.0",
     "eslint": "^10.0.3",
     "nodemon": "^3.1.14",
-    "tsx": "^4.21.0",
+    "tsx": "^4.22.3",
     "typescript": "^5.9.3",
     "typescript-eslint": "^8.57.1"
   },
   "overrides": {
-    "esbuild": "0.28.1",
     "brace-expansion": "5.0.7"
   }
 }

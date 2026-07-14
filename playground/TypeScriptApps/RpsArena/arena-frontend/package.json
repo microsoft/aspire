@@ -21,7 +21,6 @@
   },
   "overrides": {
     "postcss": "8.5.10",
-    "esbuild": "0.28.1",
     "@babel/core": "7.29.6"
   }
 }
