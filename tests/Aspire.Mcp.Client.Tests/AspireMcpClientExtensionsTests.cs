@@ -31,6 +31,58 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
+    public void AddMcpClientInvokesConfigurationDelegates()
+    {
+        var handler = new RequestRecordingHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        var clientOptionsConfigured = false;
+        var transportOptionsConfigured = false;
+
+        builder.AddMcpClient(
+            "mcp",
+            _ => clientOptionsConfigured = true,
+            options =>
+            {
+                transportOptionsConfigured = true;
+                options.Endpoint = new Uri("https://custom/mcp", UriKind.Absolute);
+            });
+
+        using var host = builder.Build();
+        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.True(clientOptionsConfigured);
+        Assert.True(transportOptionsConfigured);
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://custom/mcp");
+    }
+
+    [Fact]
+    public void AddKeyedMcpClientInvokesConfigurationDelegates()
+    {
+        var handler = new RequestRecordingHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        var clientOptionsConfigured = false;
+        var transportOptionsConfigured = false;
+
+        builder.AddKeyedMcpClient(
+            "mcp",
+            _ => clientOptionsConfigured = true,
+            options =>
+            {
+                transportOptionsConfigured = true;
+                options.Endpoint = new Uri("https://keyed/mcp", UriKind.Absolute);
+            });
+
+        using var host = builder.Build();
+        _ = Record.Exception(() => _ = host.Services.GetRequiredKeyedService<McpClient>("mcp"));
+
+        Assert.True(clientOptionsConfigured);
+        Assert.True(transportOptionsConfigured);
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://keyed/mcp");
+    }
+
+    [Fact]
     public void McpClientUsesServiceDiscoveryEndpoint()
     {
         var handler = new RequestRecordingHandler();

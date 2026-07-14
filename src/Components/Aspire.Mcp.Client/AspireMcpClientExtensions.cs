@@ -25,7 +25,28 @@ public static class AspireMcpClientExtensions
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="connectionName"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="connectionName"/> is empty.</exception>
     public static IHostApplicationBuilder AddMcpClient(this IHostApplicationBuilder builder, string connectionName)
-        => AddMcpClientCore(builder, connectionName, serviceKey: null);
+        => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions: null, configureTransportOptions: null);
+
+    /// <summary>
+    /// Registers an <see cref="McpClient"/> that connects to the specified MCP server through service discovery.
+    /// </summary>
+    /// <param name="builder">The application builder to add services to.</param>
+    /// <param name="connectionName">The service-discovery name of the MCP server.</param>
+    /// <param name="configureClientOptions">An optional delegate to configure <see cref="McpClientOptions"/> before the client is created.</param>
+    /// <param name="configureTransportOptions">An optional delegate to configure <see cref="HttpClientTransportOptions"/> before the transport is created.</param>
+    /// <remarks>
+    /// The server is resolved at <c>https://{connectionName}/mcp</c>. Use <c>WithReference</c> in the AppHost to
+    /// provide the server endpoint to this application.
+    /// </remarks>
+    /// <returns>The <paramref name="builder"/> for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="connectionName"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="connectionName"/> is empty.</exception>
+    public static IHostApplicationBuilder AddMcpClient(
+        this IHostApplicationBuilder builder,
+        string connectionName,
+        Action<McpClientOptions>? configureClientOptions,
+        Action<HttpClientTransportOptions>? configureTransportOptions)
+        => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions, configureTransportOptions);
 
     /// <summary>
     /// Registers a keyed <see cref="McpClient"/> that connects to the specified MCP server through service discovery.
@@ -44,10 +65,41 @@ public static class AspireMcpClientExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        return AddMcpClientCore(builder, name, name);
+        return AddMcpClientCore(builder, name, name, configureClientOptions: null, configureTransportOptions: null);
     }
 
-    private static IHostApplicationBuilder AddMcpClientCore(IHostApplicationBuilder builder, string connectionName, object? serviceKey)
+    /// <summary>
+    /// Registers a keyed <see cref="McpClient"/> that connects to the specified MCP server through service discovery.
+    /// </summary>
+    /// <param name="builder">The application builder to add services to.</param>
+    /// <param name="name">The service-discovery name of the MCP server and the service key of the client.</param>
+    /// <param name="configureClientOptions">An optional delegate to configure <see cref="McpClientOptions"/> before the client is created.</param>
+    /// <param name="configureTransportOptions">An optional delegate to configure <see cref="HttpClientTransportOptions"/> before the transport is created.</param>
+    /// <remarks>
+    /// The server is resolved at <c>https://{name}/mcp</c>. Use <c>WithReference</c> in the AppHost to provide the
+    /// server endpoint to this application.
+    /// </remarks>
+    /// <returns>The <paramref name="builder"/> for chaining.</returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="name"/> is <see langword="null"/>.</exception>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is empty.</exception>
+    public static IHostApplicationBuilder AddKeyedMcpClient(
+        this IHostApplicationBuilder builder,
+        string name,
+        Action<McpClientOptions>? configureClientOptions,
+        Action<HttpClientTransportOptions>? configureTransportOptions)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrEmpty(name);
+
+        return AddMcpClientCore(builder, name, name, configureClientOptions, configureTransportOptions);
+    }
+
+    private static IHostApplicationBuilder AddMcpClientCore(
+        IHostApplicationBuilder builder,
+        string connectionName,
+        object? serviceKey,
+        Action<McpClientOptions>? configureClientOptions,
+        Action<HttpClientTransportOptions>? configureTransportOptions)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(connectionName);
@@ -57,6 +109,8 @@ public static class AspireMcpClientExtensions
         builder.Services.AddHttpClient();
         builder.Services.AddKeyedSingleton<McpClientRegistration>(registrationKey, (serviceProvider, _) => new McpClientRegistration(
             endpoint,
+            configureClientOptions,
+            configureTransportOptions,
             serviceProvider.GetRequiredService<IHttpClientFactory>(),
             serviceProvider.GetRequiredService<ILoggerFactory>()));
 
@@ -78,9 +132,14 @@ public static class AspireMcpClientExtensions
     {
         private readonly Lazy<Task<McpClient>> _client;
 
-        public McpClientRegistration(Uri endpoint, IHttpClientFactory httpClientFactory, ILoggerFactory loggerFactory)
+        public McpClientRegistration(
+            Uri endpoint,
+            Action<McpClientOptions>? configureClientOptions,
+            Action<HttpClientTransportOptions>? configureTransportOptions,
+            IHttpClientFactory httpClientFactory,
+            ILoggerFactory loggerFactory)
         {
-            _client = new(() => CreateClientAsync(endpoint, httpClientFactory, loggerFactory));
+            _client = new(() => CreateClientAsync(endpoint, configureClientOptions, configureTransportOptions, httpClientFactory, loggerFactory));
         }
 
         public McpClient GetClient()
@@ -106,16 +165,22 @@ public static class AspireMcpClientExtensions
 
         private static async Task<McpClient> CreateClientAsync(
             Uri endpoint,
+            Action<McpClientOptions>? configureClientOptions,
+            Action<HttpClientTransportOptions>? configureTransportOptions,
             IHttpClientFactory httpClientFactory,
             ILoggerFactory loggerFactory)
         {
             var httpClient = httpClientFactory.CreateClient();
+            var transportOptions = new HttpClientTransportOptions { Endpoint = endpoint };
+            configureTransportOptions?.Invoke(transportOptions);
             var transport = new HttpClientTransport(
-                new HttpClientTransportOptions { Endpoint = endpoint },
+                transportOptions,
                 httpClient,
                 loggerFactory);
+            var clientOptions = new McpClientOptions();
+            configureClientOptions?.Invoke(clientOptions);
 
-            return await McpClient.CreateAsync(transport).ConfigureAwait(false);
+            return await McpClient.CreateAsync(transport, clientOptions).ConfigureAwait(false);
         }
     }
 }
