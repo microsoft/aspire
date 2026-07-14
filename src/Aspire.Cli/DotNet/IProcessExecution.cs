@@ -56,9 +56,9 @@ internal interface IProcessExecution : IAsyncDisposable
     bool HasExited { get; }
 
     /// <summary>
-    /// Gets the exit code of the process, when available. Only valid after <see cref="HasExited"/> returns <c>true</c>.
+    /// Gets the exit code of the process. Only valid after <see cref="HasExited"/> returns <c>true</c>.
     /// </summary>
-    int? ExitCode { get; }
+    int ExitCode { get; }
 
     /// <summary>
     /// Kills the process.

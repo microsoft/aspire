@@ -75,7 +75,7 @@ internal sealed class ProcessExecution : IProcessExecution
     public bool HasExited => Process.HasExited;
 
     /// <inheritdoc />
-    public int? ExitCode => Process.ExitCode;
+    public int ExitCode => Process.ExitCode;
 
     /// <inheritdoc />
     public DateTimeOffset? StartTime => Process.StartTime;

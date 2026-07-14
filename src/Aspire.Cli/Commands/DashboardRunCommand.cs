@@ -441,7 +441,7 @@ internal sealed class DashboardRunCommand : BaseCommand
 
             // Dashboard didn't become ready — either it exited or timed out.
             var exitMessage = process.HasExited
-                ? GetExitCodeMessage(process.ExitCode ?? -1)
+                ? GetExitCodeMessage(process.ExitCode)
                 : DashboardCommandStrings.DashboardStartTimedOut;
 
             InteractionService.DisplayError(exitMessage);
@@ -476,7 +476,7 @@ internal sealed class DashboardRunCommand : BaseCommand
 
         if (process.ExitCode != 0)
         {
-            InteractionService.DisplayError(GetExitCodeMessage(process.ExitCode ?? -1));
+            InteractionService.DisplayError(GetExitCodeMessage(process.ExitCode));
         }
 
         return process.ExitCode == 0 ? CommandResult.Success() : CommandResult.Failure(CliExitCodes.DashboardFailure);

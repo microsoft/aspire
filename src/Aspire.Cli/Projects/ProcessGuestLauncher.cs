@@ -177,7 +177,7 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
                 // distinguish user cancellation from internal teardown (surfacing captured output when
                 // the guest was killed because the AppHost system failed). Read the final code from the
                 // now-exited process; -1 only if the kill somehow left it observably alive.
-                finalExitCode = execution.HasExited ? execution.ExitCode ?? -1 : -1;
+                finalExitCode = execution.HasExited ? execution.ExitCode : -1;
             }
 
             _logger.LogDebug("{Language} guest process {ProcessId} exited with code {ExitCode}", _language, execution.ProcessId, finalExitCode);

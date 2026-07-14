@@ -2653,7 +2653,7 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 
         public bool HasExited => _started;
 
-        public int? ExitCode => exitCode;
+        public int ExitCode => exitCode;
 
         public Task<bool> StartAsync(CancellationToken cancellationToken)
         {

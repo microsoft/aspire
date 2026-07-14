@@ -486,7 +486,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
             public bool HasExited => true;
 
-            public int? ExitCode => CliExitCodes.FailedToDotnetRunAppHost;
+            public int ExitCode => CliExitCodes.FailedToDotnetRunAppHost;
 
             public Task<bool> StartAsync(CancellationToken cancellationToken)
             {
@@ -497,7 +497,7 @@ public class StartCommandTests(ITestOutputHelper outputHelper)
 
             public Task<int> WaitForExitAsync(CancellationToken cancellationToken)
             {
-                return Task.FromResult(ExitCode.GetValueOrDefault());
+                return Task.FromResult(ExitCode);
             }
 
             public void Kill(bool entireProcessTree)

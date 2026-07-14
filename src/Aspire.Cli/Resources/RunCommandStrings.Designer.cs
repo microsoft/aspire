@@ -255,12 +255,6 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string AppHostExitedWithoutExitCode {
-            get {
-                return ResourceManager.GetString("AppHostExitedWithoutExitCode", resourceCulture);
-            }
-        }
-        
         public static string AppHostFailedToBuild {
             get {
                 return ResourceManager.GetString("AppHostFailedToBuild", resourceCulture);

@@ -44,19 +44,10 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.Contains("123", message, StringComparison.Ordinal);
     }
 
-    [Fact]
-    public void GetDetachedFailureMessage_ReturnsUnknownExitCodeMessage_WhenExitCodeIsUnavailable()
-    {
-        var message = AppHostLauncher.GetDetachedFailureMessage(null);
-
-        Assert.Equal(RunCommandStrings.AppHostExitedWithoutExitCode, message);
-    }
-
     [Theory]
     [InlineData(CliExitCodes.Success, true)]
     [InlineData(CliExitCodes.FailedToDotnetRunAppHost, false)]
-    [InlineData(null, false)]
-    public void IsSuccessfulDetachedEarlyExit_OnlyTreatsZeroAsSuccess(int? exitCode, bool expected)
+    public void IsSuccessfulDetachedEarlyExit_OnlyTreatsZeroAsSuccess(int exitCode, bool expected)
     {
         var result = AppHostLauncher.IsSuccessfulDetachedEarlyExit(exitCode);
 
@@ -532,64 +523,6 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
             detachedHandle?.Dispose();
             forkProcess?.Dispose();
-            startedProcess?.Dispose();
-        }
-    }
-
-    [Fact]
-    public async Task LaunchDetachedAsync_ReportsUnknownExitCodeWhenDetachedProcessHandleCannotReadExitCode()
-    {
-        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
-
-        using var harness = AppHostLauncherHarness.Create(outputHelper);
-        Process? startedProcess = null;
-        MonitoredProcessExecutionAdapter? detachedHandle = null;
-        harness.ProcessFactory.StartHandler = (_, _, _, _, _, _) =>
-        {
-            var startInfo = new ProcessStartInfo
-            {
-                FileName = "/bin/sh",
-                UseShellExecute = false
-            };
-            startInfo.ArgumentList.Add("-c");
-            startInfo.ArgumentList.Add("sleep 0.2; exit 11");
-
-            startedProcess = Process.Start(startInfo) ?? throw new InvalidOperationException("Failed to start test process.");
-            detachedHandle = new MonitoredProcessExecutionAdapter(Process.GetProcessById(startedProcess.Id));
-            return Task.FromResult<IProcessExecution>(detachedHandle);
-        };
-
-        try
-        {
-            var result = await harness.Launcher.LaunchDetachedAsync(
-                harness.AppHostFile,
-                format: null,
-                isolated: false,
-                isExtensionHost: false,
-                waitForDebugger: false,
-                timeoutSeconds: 5,
-                globalArgs: [],
-                additionalArgs: [],
-                stopAfterLaunchDelay: null,
-                CancellationToken.None);
-
-            Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
-            Assert.Collection(harness.InteractionService.DisplayedErrors,
-                error => Assert.Equal(RunCommandStrings.FailedToStartAppHost, error),
-                error => Assert.Equal(RunCommandStrings.AppHostExitedWithoutExitCode, error));
-        }
-        finally
-        {
-            if (startedProcess is { HasExited: false })
-            {
-                startedProcess.Kill(entireProcessTree: true);
-                await startedProcess.WaitForExitAsync().DefaultTimeout();
-            }
-
-            if (detachedHandle is not null)
-            {
-                await detachedHandle.DisposeAsync();
-            }
             startedProcess?.Dispose();
         }
     }
@@ -1241,7 +1174,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
             public bool HasExited => Inner.HasExited;
 
-            public int? ExitCode => Inner.ExitCode;
+            public int ExitCode => Inner.ExitCode;
 
             private IProcessExecution Inner =>
                 _inner ?? throw new InvalidOperationException("Test detached process has not been started.");
@@ -1274,7 +1207,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public bool HasExited => exitMonitorProcess?.HasExited ?? process.HasExited;
 
-        public int? ExitCode
+        public int ExitCode
         {
             get
             {
@@ -1283,14 +1216,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                     return monitorProcess.ExitCode;
                 }
 
-                try
-                {
-                    return process.ExitCode;
-                }
-                catch (InvalidOperationException)
-                {
-                    return null;
-                }
+                return process.ExitCode;
             }
         }
 
@@ -1311,7 +1237,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             }
 
-            return ExitCode ?? -1;
+            return ExitCode;
         }
 
         public void Kill(bool entireProcessTree) => process.Kill(entireProcessTree);
@@ -1354,7 +1280,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public bool HasExited => false;
 
-        public int? ExitCode => null;
+        public int ExitCode => 0;
 
         public int WaitForExitCallCount => Volatile.Read(ref _waitForExitCallCount);
 

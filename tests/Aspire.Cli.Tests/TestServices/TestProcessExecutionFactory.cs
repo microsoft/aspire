@@ -183,7 +183,7 @@ internal sealed class TestProcessExecution : IProcessExecution
         }
     }
 
-    public int? ExitCode => _exitCode;
+    public int ExitCode => _exitCode;
 
     public int ProcessId { get; init; } = Environment.ProcessId;
 

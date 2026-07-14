@@ -367,7 +367,7 @@ internal sealed class AppHostLauncher(
         return environment;
     }
 
-    private record LaunchResult(IProcessExecution? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int? ChildExitCode, DateTimeOffset? ChildStartedAt = null);
+    private record LaunchResult(IProcessExecution? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int ChildExitCode, DateTimeOffset? ChildStartedAt = null);
 
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
         string executablePath,
@@ -559,19 +559,11 @@ internal sealed class AppHostLauncher(
     private LaunchResult CreateChildExitedLaunchResult(IProcessExecution childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset? childStartedAt)
     {
         var exitCode = childProcess.ExitCode;
-        if (exitCode is { } knownExitCode)
-        {
-            waitForBackchannelActivity.SetProcessExitCode(knownExitCode);
-        }
+        waitForBackchannelActivity.SetProcessExitCode(exitCode);
 
         if (IsSuccessfulDetachedEarlyExit(exitCode))
         {
             logger.LogInformation("Child CLI process exited successfully before AppHost readiness was observed.");
-        }
-        else if (exitCode is null)
-        {
-            waitForBackchannelActivity.SetError("Child CLI exited before AppHost readiness was observed, but its exit code is unavailable.");
-            logger.LogWarning("Child CLI process exited before AppHost readiness was observed, but its exit code is unavailable.");
         }
         else
         {
@@ -827,17 +819,16 @@ internal sealed class AppHostLauncher(
     /// <summary>
     /// Creates a user-facing error message for detached child process failures.
     /// </summary>
-    internal static string GetDetachedFailureMessage(int? childExitCode)
+    internal static string GetDetachedFailureMessage(int childExitCode)
     {
         return childExitCode switch
         {
             CliExitCodes.FailedToBuildArtifacts => RunCommandStrings.AppHostFailedToBuild,
-            null => RunCommandStrings.AppHostExitedWithoutExitCode,
             _ => string.Format(CultureInfo.CurrentCulture, RunCommandStrings.AppHostExitedWithCode, childExitCode)
         };
     }
 
-    internal static bool IsSuccessfulDetachedEarlyExit(int? childExitCode)
+    internal static bool IsSuccessfulDetachedEarlyExit(int childExitCode)
         => childExitCode == CliExitCodes.Success;
 
     /// <summary>

@@ -555,7 +555,7 @@ public sealed class InternalMicrosoftDetectorTests(ITestOutputHelper outputHelpe
 
         public bool HasExited => false;
 
-        public int? ExitCode => null;
+        public int ExitCode => 0;
 
         public Task<bool> StartAsync(CancellationToken cancellationToken)
             => throw new OperationCanceledException(cancellationToken);
