@@ -5,7 +5,7 @@ export const stressFeatures = {
   "STRESS-DETAILS-001": "A live Stress resource opens its populated details drawer.",
   "STRESS-RESOURCE-ICON-001": "Custom Stress resource icon names render instead of resource-type fallbacks.",
   "STRESS-COMMAND-ICON-001": "Custom Stress command icon names and filled variants render in command surfaces.",
-  "STRESS-COMMAND-EXECUTE-001": "A Stress resource command executes through the dashboard HTTP backend.",
+  "STRESS-COMMAND-EXECUTE-001": "A Stress resource command executes through the selected versioned or legacy dashboard backend.",
   "STRESS-COMMAND-ARGUMENTS-001": "A live Stress command round-trips text, number, boolean, choice, and secret inputs.",
   "STRESS-COMMAND-VISIBILITY-001": "The live dashboard includes UI-only commands and excludes API-only commands.",
   "STRESS-PROCESS-COMMAND-001": "Live process commands preserve stdin, environment, working directory, stdout, stderr, exit status, and output limits.",

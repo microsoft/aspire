@@ -318,6 +318,11 @@ export function executeCommand(args: ExecuteCommandArgs): Promise<CommandRespons
   if (isTauri()) {
     return invoke<CommandResponse>("deck_execute_command", { ...args });
   }
+  if (isAotBackend()) {
+    return nativeBackend.hasCapability("commands").then((supported) => (
+      supported ? nativeBackend.executeCommand(args) : httpBackend.executeCommand(args)
+    ));
+  }
   if (isHttpBackend()) {
     return httpBackend.executeCommand(args);
   }

@@ -138,7 +138,7 @@ const featureDefinitions = {
     ["CMD-ICON-VARIANT-001", "/", "Regular and filled command icon variants are preserved.", "commands", "covered", "TK-ICON-001; RES-ICON-001; STRESS-COMMAND-ICON-001"],
     ["CMD-DESCRIPTION-001", "/", "Command display names and descriptions remain visible and accessible.", "commands", "covered", "CMD-DESCRIPTION-001"],
     ["CMD-CONFIRM-001", "/", "Commands with confirmation messages require explicit confirmation.", "commands", "covered", "CMD-CONFIRM-001"],
-    ["CMD-EXECUTE-001", "/", "Commands execute against the selected live resource and report success, cancellation, or failure.", "commands", "covered", "RES-COMMANDS-001; HTTP-COMMAND-001; HTTP-COMMAND-OUTCOMES-001; STRESS-COMMAND-EXECUTE-001"],
+    ["CMD-EXECUTE-001", "/", "Commands execute against the selected live resource and report success, cancellation, or failure.", "commands", "covered", "RES-COMMANDS-001; HTTP-COMMAND-001; HTTP-COMMAND-OUTCOMES-001; AOT-CONTRACT-001; STRESS-COMMAND-EXECUTE-001"],
     ["CMD-TEXT-001", "/", "Text arguments support label, description, placeholder, required, and maximum length.", "commands", "covered", "RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001"],
     ["CMD-NUMBER-001", "/", "Number arguments preserve numeric values and validation.", "commands", "covered", "HTTP-INTERACTION-001; CMD-VALIDATION-001; STRESS-COMMAND-ARGUMENTS-001"],
     ["CMD-BOOLEAN-001", "/", "Boolean arguments preserve checked state and disabled state.", "commands", "covered", "RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001"],
