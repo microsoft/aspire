@@ -145,8 +145,8 @@ ASPIRE_DASHBOARD_AOT_URL=http://127.0.0.1:18889 \
 ```
 
 Open `http://127.0.0.1:1430/?backend=aot`. Version discovery and configuration use the new host;
-resources arrive as an authoritative snapshot followed by live changes over SignalR. Telemetry,
-commands, interactions, authentication, and terminals remain on the existing dashboard until their
+resources arrive as an authoritative snapshot followed by live changes over SignalR, and resource
+commands use the versioned backend. Telemetry, interactions, authentication, and terminals remain on the existing dashboard until their
 versioned capabilities independently pass the parity inventory. The `resources` HTTP snapshot route
 remains a compatibility fallback for a version 1 host that does not advertise `resources-live`.
 

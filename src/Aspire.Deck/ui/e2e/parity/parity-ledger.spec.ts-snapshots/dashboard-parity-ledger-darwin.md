@@ -78,7 +78,7 @@
 | CMD-ICON-VARIANT-001 | commands | `/` | commands | covered | TK-ICON-001; RES-ICON-001; STRESS-COMMAND-ICON-001 | Regular and filled command icon variants are preserved. |
 | CMD-DESCRIPTION-001 | commands | `/` | commands | covered | CMD-DESCRIPTION-001 | Command display names and descriptions remain visible and accessible. |
 | CMD-CONFIRM-001 | commands | `/` | commands | covered | CMD-CONFIRM-001 | Commands with confirmation messages require explicit confirmation. |
-| CMD-EXECUTE-001 | commands | `/` | commands | covered | RES-COMMANDS-001; HTTP-COMMAND-001; HTTP-COMMAND-OUTCOMES-001; STRESS-COMMAND-EXECUTE-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |
+| CMD-EXECUTE-001 | commands | `/` | commands | covered | RES-COMMANDS-001; HTTP-COMMAND-001; HTTP-COMMAND-OUTCOMES-001; AOT-CONTRACT-001; STRESS-COMMAND-EXECUTE-001 | Commands execute against the selected live resource and report success, cancellation, or failure. |
 | CMD-TEXT-001 | commands | `/` | commands | covered | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Text arguments support label, description, placeholder, required, and maximum length. |
 | CMD-NUMBER-001 | commands | `/` | commands | covered | HTTP-INTERACTION-001; CMD-VALIDATION-001; STRESS-COMMAND-ARGUMENTS-001 | Number arguments preserve numeric values and validation. |
 | CMD-BOOLEAN-001 | commands | `/` | commands | covered | RES-INTERACTION-001; HTTP-INTERACTION-001; STRESS-COMMAND-ARGUMENTS-001 | Boolean arguments preserve checked state and disabled state. |
@@ -113,14 +113,14 @@
 | CONSOLE-TERMINAL-SIZE-001 | console | `/consolelogs` | terminal | covered | CONSOLE-TERMINAL-SIZE-001 | Interactive terminal column and row presets update the remote terminal size. |
 | CONSOLE-VIRTUALIZATION-001 | console | `/consolelogs` | console-virtualization | covered | HTTP-CONSOLE-VIRTUALIZATION-001 | Large console streams remain responsive and preserve stable line numbers. |
 | CONSOLE-ROUTE-001 | console | `/consolelogs/resource/{name}` | console | covered | CONSOLE-ROUTE-001 | Selected resource and console options are deep-linkable and restorable. |
-| LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIST-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
-| LOG-LIVE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; STRESS-STRUCTURED-LOGS-001 | New structured logs stream into the list and update totals. |
-| LOG-RESOURCE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-RESOURCE-001; STRESS-STRUCTURED-LOG-RESOURCE-001 | Logs filter through a grouped resource selector. |
+| LOG-LIST-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIST-001; HTTP-STRUCTURED-LOGS-001; AOT-CONTRACT-001; STRESS-STRUCTURED-LOGS-001 | Structured logs render resource, level, timestamp, message, trace, and actions columns. |
+| LOG-LIVE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-LIVE-001; HTTP-STRUCTURED-LOGS-001; AOT-CONTRACT-001; STRESS-STRUCTURED-LOGS-001 | New structured logs stream into the list and update totals. |
+| LOG-RESOURCE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-RESOURCE-001; AOT-CONTRACT-001; STRESS-STRUCTURED-LOG-RESOURCE-001 | Logs filter through a grouped resource selector. |
 | LOG-LEVEL-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-SEVERITY-001 | All supported severity levels can be selected. |
-| LOG-TEXT-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-FILTER-001 | Logs filter across resource and message content. |
+| LOG-TEXT-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-FILTER-001; AOT-CONTRACT-001 | Logs filter across resource and message content. |
 | LOG-STRUCTURED-FILTER-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-STRUCTURED-FILTER-001; TK-STRUCTURED-FILTER-001 | Structured attribute filters can be added, edited, enabled, disabled, and removed. |
 | LOG-FILTER-COUNT-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-FILTER-COUNT-001 | Enabled structured filters expose a count and management menu. |
-| LOG-PAUSE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-PAUSE-001; STRESS-STRUCTURED-LOG-PAUSE-001 | Incoming structured logs can be paused and resumed. |
+| LOG-PAUSE-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-PAUSE-001; AOT-CONTRACT-001; STRESS-STRUCTURED-LOG-PAUSE-001 | Incoming structured logs can be paused and resumed. |
 | LOG-CLEAR-001 | structured-logs | `/structuredlogs` | structured-logs | covered | HTTP-STRUCTURED-LOG-CLEAR-001; STRESS-STRUCTURED-LOG-CLEAR-001 | Structured logs can be cleared for the selected resource or all resources. |
 | LOG-VIRTUALIZATION-001 | structured-logs | `/structuredlogs` | structured-log-virtualization | covered | HTTP-STRUCTURED-LOG-VIRTUALIZATION-001 | Large log volumes remain responsive through row virtualization. |
 | LOG-DETAILS-001 | structured-logs | `/structuredlogs` | structured-logs | covered | LOG-DETAILS-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001 | Selecting a log opens complete event, scope, resource, and attribute details. |

@@ -206,6 +206,54 @@ test(`${features("AOT-CONTRACT-001")} reads resources from the negotiated AOT ca
   expect(legacyResourceRequests).toBe(0);
 });
 
+test(`${features("AOT-CONTRACT-001")} executes commands through the negotiated AOT capability`, async ({ page }) => {
+  let aotCommandRequests = 0;
+  let legacyCommandRequests = 0;
+  await page.route("**/api/dashboard", async (route) => {
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [
+          { version: 1, basePath: "/api/dashboard/v1", capabilities: ["configuration", "resources", "commands"] },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    await route.fulfill({
+      json: {
+        applicationName: "Stress AOT",
+        dashboardVersion: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.route("**/api/dashboard/v1/commands/execute", async (route) => {
+    aotCommandRequests++;
+    expect(await route.request().postDataJSON()).toEqual({
+      resourceName: resource.name,
+      commandName: "check-health",
+    });
+    await route.fulfill({ json: { kind: "succeeded", message: "AOT command succeeded", result: null } });
+  });
+  await page.route("**/api/deck/commands/execute", async (route) => {
+    legacyCommandRequests++;
+    await route.fulfill({ json: { kind: "failed", message: "Legacy command used", result: null } });
+  });
+
+  await page.goto("/?backend=aot");
+  await page.getByRole("table").getByRole("row", { name: /stress-api/ }).click();
+  await page.getByRole("dialog", { name: "stress-api" })
+    .getByRole("button", { name: "Check health", exact: true }).click();
+
+  await expect(page.getByRole("status")).toContainText("Check health succeeded");
+  expect(aotCommandRequests).toBe(1);
+  expect(legacyCommandRequests).toBe(0);
+});
+
 test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes over SignalR`, async ({ page }) => {
   let negotiateRequests = 0;
   let websocketConnections = 0;
@@ -302,6 +350,93 @@ test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes
   expect(websocketConnections).toBe(1);
   expect(streamInvocations).toBe(1);
   expect(resourceRequests).toBe(0);
+});
+
+test(`${features("AOT-CONTRACT-001")} replays, filters, pauses, and resumes AOT structured logs`, async ({ page }) => {
+  const otlpLog = (message: string, timeUnixNano: string) => ({
+    resourceLogs: [{
+      resource: { attributes: [{ key: "service.name", value: { stringValue: "stress-api" } }] },
+      scopeLogs: [{
+        scope: { name: "Stress.Telemetry" },
+        logRecords: [{
+          timeUnixNano,
+          observedTimeUnixNano: timeUnixNano,
+          severityNumber: 9,
+          severityText: "Information",
+          body: { stringValue: message },
+        }],
+      }],
+    }],
+  });
+  let sendLiveLog: ((message: string, timeUnixNano: string) => void) | null = null;
+
+  await page.route("**/api/dashboard", async (route) => {
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [{
+          version: 1,
+          basePath: "/api/dashboard/v1",
+          capabilities: ["configuration", "structured-logs", "structured-logs-live"],
+        }],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    await route.fulfill({ json: { applicationName: "Stress AOT", dashboardVersion: "13.5.0-aot", runtimeVersion: ".NET 10.0.0" } });
+  });
+  await page.route("**/api/dashboard/v1/structured-logs", async (route) => {
+    await route.fulfill({ json: { totalCount: 1, data: otlpLog("AOT backlog entry", "100") } });
+  });
+  await page.route("**/api/dashboard/v1/structured-logs/live/negotiate?**", async (route) => {
+    await route.fulfill({
+      json: {
+        negotiateVersion: 1,
+        connectionId: "playwright-logs-connection",
+        connectionToken: "playwright-logs-token",
+        availableTransports: [{ transport: "WebSockets", transferFormats: ["Text", "Binary"] }],
+      },
+    });
+  });
+  await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.routeWebSocket("**/api/dashboard/v1/structured-logs/live?id=*", (webSocket) => {
+    let invocationId: string | undefined;
+    webSocket.onMessage((message) => {
+      for (const frame of message.toString().split("\x1e").filter(Boolean)) {
+        const payload = JSON.parse(frame) as { protocol?: string; type?: number; invocationId?: string; target?: string };
+        if (payload.protocol === "json") {
+          webSocket.send("{}\x1e");
+        } else if (payload.type === 4 && payload.target === "WatchStructuredLogs") {
+          invocationId = payload.invocationId;
+        }
+      }
+    });
+    sendLiveLog = (message, timeUnixNano) => {
+      if (invocationId === undefined) throw new Error("The structured-log stream has not started.");
+      webSocket.send(`${JSON.stringify({
+        type: 2,
+        invocationId,
+        item: { data: otlpLog(message, timeUnixNano) },
+      })}\x1e`);
+    };
+  });
+
+  await page.goto("/?backend=aot");
+  await page.getByRole("navigation").getByRole("button", { name: /^Structured Logs/ }).click();
+  const logs = page.getByRole("table");
+  await expect(logs).toContainText("AOT backlog entry");
+
+  await page.getByRole("textbox", { name: "Filter messages…" }).fill("backlog");
+  await expect(logs).toContainText("AOT backlog entry");
+  await page.getByRole("textbox", { name: "Filter messages…" }).fill("");
+  const pause = page.getByRole("switch", { name: "Pause incoming data" });
+  await pause.click();
+  expect(sendLiveLog).not.toBeNull();
+  sendLiveLog!("AOT paused entry", "200");
+  await expect(logs).not.toContainText("AOT paused entry");
+  await pause.click();
+  await expect(logs).toContainText("AOT paused entry");
 });
 
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {

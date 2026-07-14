@@ -12,7 +12,11 @@ internal static class DashboardApiContract
     public const string ConfigurationCapability = "configuration";
     public const string ResourcesCapability = "resources";
     public const string ResourceStreamCapability = "resources-live";
+    public const string CommandsCapability = "commands";
+    public const string StructuredLogsCapability = "structured-logs";
+    public const string StructuredLogStreamCapability = "structured-logs-live";
     public const string ResourceStreamPath = $"{VersionOneBasePath}/resources/live";
+    public const string StructuredLogStreamPath = $"{VersionOneBasePath}/structured-logs/live";
 }
 
 internal sealed record DashboardApiDiscovery(
@@ -111,3 +115,24 @@ internal sealed record DashboardResourcesEvent(
         upserts,
         deletes);
 }
+
+internal sealed record DashboardExecuteCommandRequest(
+    string ResourceName,
+    string CommandName);
+
+internal sealed record DashboardCommandResponse(
+    string Kind,
+    string? Message,
+    DashboardCommandResult? Result);
+
+internal sealed record DashboardCommandResult(
+    string Value,
+    string Format,
+    bool DisplayImmediately);
+
+internal sealed record DashboardStructuredLogsSnapshot(
+    int TotalCount,
+    System.Text.Json.JsonElement Data);
+
+internal sealed record DashboardStructuredLogsEvent(
+    System.Text.Json.JsonElement Data);

@@ -1,3 +1,5 @@
+import type { OtlpTelemetryData } from "./otlp";
+
 // Mirrors src/Aspire.Deck/CONTRACT.md exactly. This is the authoritative shared
 // boundary between the Rust (Tauri) backend and this UI. Field names are camelCase.
 
@@ -36,6 +38,15 @@ export interface DashboardConfiguration {
   applicationName: string;
   dashboardVersion: string;
   runtimeVersion: string;
+}
+
+export interface DashboardStructuredLogsSnapshot {
+  totalCount: number;
+  data: OtlpTelemetryData;
+}
+
+export interface DashboardStructuredLogsEvent {
+  data: OtlpTelemetryData;
 }
 
 export interface DeckUser {
