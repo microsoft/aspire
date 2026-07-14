@@ -15,6 +15,7 @@ internal static class DashboardBackendApplication
         builder.Services.TryAddSingleton<DashboardResourceSnapshotService>();
         builder.Services.TryAddSingleton<IDashboardResourceSnapshotProvider>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.TryAddSingleton<IDashboardResourceEventSource>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
+        builder.Services.TryAddSingleton<IDashboardCommandExecutor, DashboardCommandExecutor>();
         builder.Services.AddHostedService(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.AddSignalR();
         builder.Services.Configure<JsonHubProtocolOptions>(options =>
@@ -37,7 +38,8 @@ internal static class DashboardBackendApplication
                         [
                             DashboardApiContract.ConfigurationCapability,
                             DashboardApiContract.ResourcesCapability,
-                            DashboardApiContract.ResourceStreamCapability
+                            DashboardApiContract.ResourceStreamCapability,
+                            DashboardApiContract.CommandsCapability
                         ])
                 ]);
 
@@ -77,6 +79,33 @@ internal static class DashboardBackendApplication
         });
 
         app.MapHub<DashboardResourcesHub>(DashboardApiContract.ResourceStreamPath);
+
+        app.MapPost($"{DashboardApiContract.VersionOneBasePath}/commands/execute", async (
+            HttpContext context,
+            IDashboardCommandExecutor commandExecutor) =>
+        {
+            var request = await context.Request.ReadFromJsonAsync(
+                DashboardBackendJsonSerializerContext.Default.DashboardExecuteCommandRequest,
+                context.RequestAborted).ConfigureAwait(false);
+            if (request is null
+                || string.IsNullOrWhiteSpace(request.ResourceName)
+                || string.IsNullOrWhiteSpace(request.CommandName))
+            {
+                return Results.BadRequest();
+            }
+
+            try
+            {
+                var response = await commandExecutor.ExecuteAsync(request, context.RequestAborted).ConfigureAwait(false);
+                return response is null
+                    ? Results.NotFound()
+                    : Results.Json(response, DashboardBackendJsonSerializerContext.Default.DashboardCommandResponse);
+            }
+            catch (DashboardResourceServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
 
         return app;
     }

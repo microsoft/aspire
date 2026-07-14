@@ -27,19 +27,20 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "resources", "resources-live"]
+      "capabilities": ["configuration", "resources", "resources-live", "commands"]
     }
   ]
 }
 ```
 
-Version 1 currently defines three capabilities:
+Version 1 currently defines four capabilities:
 
 | Capability | Route | Response |
 | --- | --- | --- |
 | `configuration` | `GET {basePath}/config` | `DashboardConfiguration` |
 | `resources` | `GET {basePath}/resources` | `Resource[]` |
 | `resources-live` | SignalR hub at `{basePath}/resources/live` | `ResourcesEvent` server stream |
+| `commands` | `POST {basePath}/commands/execute` | `CommandResponse` |
 
 ```ts
 export interface DashboardConfiguration {
@@ -52,7 +53,12 @@ export interface DashboardConfiguration {
 The `resources` response uses the transport-neutral `Resource` shape documented below. It is a
 complete point-in-time snapshot, returned with `Cache-Control: no-store`. It remains the fallback
 when a compatible server does not advertise `resources-live`; commands and other resource
-operations remain on `/api/deck`.
+operations remain on `/api/deck` when the `commands` capability is not advertised.
+
+The `commands` request is `{ resourceName, commandName }`. The backend resolves the resource type
+and command from its authoritative resource snapshot before forwarding the command to the AppHost;
+unknown resources or commands return `404`, and malformed requests return `400`. Command input
+interactions and their responses remain on `/api/deck` until the interactions capability migrates.
 
 For `resources-live`, React connects with the SignalR JSON hub protocol and invokes the streaming
 hub method `WatchResources`. The first stream item is always an authoritative `snapshot`; later
