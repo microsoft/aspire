@@ -72,7 +72,7 @@ internal static class RadiusSecretStoreValidation
         {
             throw new InvalidOperationException(
                 $"Secret store '{store.Name}' must declare exactly one population mode " +
-                "(WithData, FromExistingSecret, or FromSealedSecret); it declares " +
+                "(WithData, WithExistingSecret, or WithSealedSecret); it declares " +
                 $"{population.DeclaredModeCount}. Diagnostic: ASPIRERADIUS041.");
         }
 

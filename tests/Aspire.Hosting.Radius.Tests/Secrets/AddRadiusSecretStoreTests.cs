@@ -109,7 +109,7 @@ public class AddRadiusSecretStoreTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var store = builder.AddRadiusSecretStore("tls", RadiusSecretStoreType.Generic);
 
-        Assert.Throws<ArgumentException>(() => store.FromExistingSecret("app/tls", "ok", "  "));
+        Assert.Throws<ArgumentException>(() => store.WithExistingSecret("app/tls", "ok", "  "));
     }
 
     [Fact]

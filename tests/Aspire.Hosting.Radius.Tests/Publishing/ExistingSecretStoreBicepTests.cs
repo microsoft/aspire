@@ -29,11 +29,11 @@ public class ExistingSecretStoreBicepTests
     }
 
     [Fact]
-    public void FromExistingSecret_QualifiedName_EmitsResourceAndEmptyKeys()
+    public void WithExistingSecret_QualifiedName_EmitsResourceAndEmptyKeys()
     {
         var bicep = GenerateStoreBicep("default", env =>
             env.WithSecretStore("tls-cert", RadiusSecretStoreType.Certificate, s =>
-                s.FromExistingSecret("app/tls-cert", "tls.crt", "tls.key")));
+                s.WithExistingSecret("app/tls-cert", "tls.crt", "tls.key")));
 
         Assert.Contains("Applications.Core/secretStores@2023-10-01-preview", bicep);
         Assert.Contains("type: 'certificate'", bicep);
@@ -45,11 +45,11 @@ public class ExistingSecretStoreBicepTests
     }
 
     [Fact]
-    public void FromExistingSecret_BareName_DefaultsNamespaceFromEnvironment()
+    public void WithExistingSecret_BareName_DefaultsNamespaceFromEnvironment()
     {
         var bicep = GenerateStoreBicep("team-a", env =>
             env.WithSecretStore("tls-cert", RadiusSecretStoreType.Certificate, s =>
-                s.FromExistingSecret("tls-cert", "tls.crt", "tls.key")));
+                s.WithExistingSecret("tls-cert", "tls.crt", "tls.key")));
 
         // A bare name is prefixed with the owning environment's namespace.
         Assert.Contains("resource: 'team-a/tls-cert'", bicep);

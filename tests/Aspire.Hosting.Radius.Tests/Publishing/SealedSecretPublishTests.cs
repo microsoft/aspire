@@ -49,13 +49,13 @@ public class SealedSecretPublishTests : IDisposable
     }
 
     [Fact]
-    public void FromSealedSecret_EmitsResourceReference_FromManifestMetadata_NoPlaintext()
+    public void WithSealedSecret_EmitsResourceReference_FromManifestMetadata_NoPlaintext()
     {
         var manifest = WriteManifest("db-creds", "app");
 
         var bicep = GenerateStoreBicep(env =>
             env.WithSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication, s =>
-                s.FromSealedSecret(manifest, "username", "password")));
+                s.WithSealedSecret(manifest, "username", "password")));
 
         Assert.Contains("Applications.Core/secretStores@2023-10-01-preview", bicep);
         Assert.Contains("resource: 'app/db-creds'", bicep);
@@ -65,20 +65,20 @@ public class SealedSecretPublishTests : IDisposable
     }
 
     [Fact]
-    public void FromSealedSecret_MissingManifest_Throws_ASPIRERADIUS044()
+    public void WithSealedSecret_MissingManifest_Throws_ASPIRERADIUS044()
     {
         var missing = Path.Combine(_dir, "does-not-exist.sealed.yaml");
 
         var ex = Assert.Throws<InvalidOperationException>(() =>
             GenerateStoreBicep(env =>
                 env.WithSecretStore("db-creds", RadiusSecretStoreType.Generic, s =>
-                    s.FromSealedSecret(missing, "key"))));
+                    s.WithSealedSecret(missing, "key"))));
 
         Assert.Contains("ASPIRERADIUS044", ex.Message);
     }
 
     [Fact]
-    public void FromSealedSecret_CopyWritesValidatedBytes_WhenSourceFileChangesAfterBuild()
+    public void WithSealedSecret_CopyWritesValidatedBytes_WhenSourceFileChangesAfterBuild()
     {
         var manifest = WriteManifest("db-creds", "app");
         var originalBytes = File.ReadAllBytes(manifest);
@@ -86,7 +86,7 @@ public class SealedSecretPublishTests : IDisposable
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var env = builder.AddRadiusEnvironment("radius");
         env.WithSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication, s =>
-            s.FromSealedSecret(manifest, "username", "password"));
+            s.WithSealedSecret(manifest, "username", "password"));
 
         using var app = builder.Build();
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();

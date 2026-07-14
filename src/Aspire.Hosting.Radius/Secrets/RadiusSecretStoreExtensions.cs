@@ -18,7 +18,7 @@ public static class RadiusSecretStoreExtensions
     /// <summary>
     /// Declares an <b>application-scoped</b> Radius secret store
     /// (<c>properties.application</c>). Choose the population mode with exactly one of
-    /// <c>WithData</c> / <c>FromExistingSecret</c> / <c>FromSealedSecret</c>.
+    /// <c>WithData</c> / <c>WithExistingSecret</c> / <c>WithSealedSecret</c>.
     /// </summary>
     /// <param name="builder">The distributed application builder.</param>
     /// <param name="name">The secret-store name (a valid resource-name segment).</param>
@@ -114,7 +114,7 @@ public static class RadiusSecretStoreExtensions
     /// <returns>The same store builder for chaining.</returns>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore]
-    public static IResourceBuilder<RadiusSecretStoreResource> FromExistingSecret(
+    public static IResourceBuilder<RadiusSecretStoreResource> WithExistingSecret(
         this IResourceBuilder<RadiusSecretStoreResource> store,
         string namespaceAndName,
         params string[] keys)
@@ -141,7 +141,7 @@ public static class RadiusSecretStoreExtensions
     /// <returns>The same store builder for chaining.</returns>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore]
-    public static IResourceBuilder<RadiusSecretStoreResource> FromSealedSecret(
+    public static IResourceBuilder<RadiusSecretStoreResource> WithSealedSecret(
         this IResourceBuilder<RadiusSecretStoreResource> store,
         string manifestPath,
         params string[] keys)
