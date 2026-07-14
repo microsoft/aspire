@@ -4,6 +4,7 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
+using ModelContextProtocol.Protocol;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -128,9 +129,9 @@ public static class AspireMcpClientExtensions
         return builder;
     }
 
-    private sealed class McpClientRegistration : IAsyncDisposable, IDisposable
+    private sealed class McpClientRegistration
     {
-        private readonly Lazy<Task<McpClient>> _client;
+        private readonly Lazy<Task<DisposableMcpClient>> _client;
 
         public McpClientRegistration(
             Uri endpoint,
@@ -147,23 +148,7 @@ public static class AspireMcpClientExtensions
             return _client.Value.GetAwaiter().GetResult();
         }
 
-        public async ValueTask DisposeAsync()
-        {
-            if (_client.IsValueCreated && _client.Value.IsCompletedSuccessfully)
-            {
-                await _client.Value.Result.DisposeAsync().ConfigureAwait(false);
-            }
-        }
-
-        public void Dispose()
-        {
-            if (_client.IsValueCreated && _client.Value.IsCompletedSuccessfully)
-            {
-                _client.Value.Result.DisposeAsync().AsTask().GetAwaiter().GetResult();
-            }
-        }
-
-        private static async Task<McpClient> CreateClientAsync(
+        private static async Task<DisposableMcpClient> CreateClientAsync(
             Uri endpoint,
             Action<McpClientOptions>? configureClientOptions,
             Action<HttpClientTransportOptions>? configureTransportOptions,
@@ -180,7 +165,56 @@ public static class AspireMcpClientExtensions
             var clientOptions = new McpClientOptions();
             configureClientOptions?.Invoke(clientOptions);
 
-            return await McpClient.CreateAsync(transport, clientOptions).ConfigureAwait(false);
+            var client = await McpClient.CreateAsync(transport, clientOptions).ConfigureAwait(false);
+            return new DisposableMcpClient(client);
+        }
+    }
+
+    // The DI container disposes singleton factory results directly. Wrapping the async-only client
+    // gives the host a synchronous disposal path while preserving the client API surface.
+#pragma warning disable MCPEXP002 // McpClient constructor is required to provide a wrapper that supports IDisposable.
+    private sealed class DisposableMcpClient(McpClient innerClient) : McpClient, IDisposable
+#pragma warning restore MCPEXP002
+    {
+        private int _disposed;
+
+        public override ServerCapabilities ServerCapabilities => innerClient.ServerCapabilities;
+
+        public override Implementation ServerInfo => innerClient.ServerInfo;
+
+        public override string ServerInstructions => innerClient.ServerInstructions!;
+
+        public override Task<ClientCompletionDetails> Completion => innerClient.Completion;
+
+        public override string SessionId => innerClient.SessionId!;
+
+        public override string NegotiatedProtocolVersion => innerClient.NegotiatedProtocolVersion!;
+
+        public override Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken = default)
+            => innerClient.SendRequestAsync(request, cancellationToken);
+
+        public override Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
+            => innerClient.SendMessageAsync(message, cancellationToken);
+
+        public override IAsyncDisposable RegisterNotificationHandler(string method, Func<JsonRpcNotification, CancellationToken, ValueTask> handler)
+            => innerClient.RegisterNotificationHandler(method, handler);
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) is 0)
+            {
+                innerClient.DisposeAsync().AsTask().GetAwaiter().GetResult();
+            }
+        }
+
+        public override ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) is 0)
+            {
+                return innerClient.DisposeAsync();
+            }
+
+            return ValueTask.CompletedTask;
         }
     }
 }

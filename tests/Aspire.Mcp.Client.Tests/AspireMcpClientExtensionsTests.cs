@@ -4,6 +4,9 @@
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ModelContextProtocol.Client;
+using System.Net;
+using System.Text;
+using System.Text.Json;
 using Xunit;
 
 namespace Aspire.Mcp.Client.Tests;
@@ -117,6 +120,21 @@ public class AspireMcpClientExtensionsTests
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://calendar/mcp");
     }
 
+    [Fact]
+    public void AddMcpClientAllowsSynchronousHostDisposalAfterSuccessfulResolution()
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        var host = builder.Build();
+        var resolveException = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.Null(resolveException);
+        Assert.Null(Record.Exception(host.Dispose));
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -165,6 +183,57 @@ public class AspireMcpClientExtensionsTests
         {
             RequestUris.Add(request.RequestUri!);
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+        }
+    }
+
+    private sealed class SuccessfulInitializationHandler : HttpMessageHandler
+    {
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Method == HttpMethod.Get)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            var requestBody = request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            using var requestJson = JsonDocument.Parse(requestBody);
+            if (requestJson.RootElement.TryGetProperty("method", out var methodElement))
+            {
+                if (string.Equals(methodElement.GetString(), "initialize", StringComparison.Ordinal))
+                {
+                    var id = requestJson.RootElement.GetProperty("id").GetInt32();
+                    var initializeResponse = JsonSerializer.Serialize(new
+                    {
+                        jsonrpc = "2.0",
+                        id,
+                        result = new
+                        {
+                            protocolVersion = "2025-11-25",
+                            capabilities = new { },
+                            serverInfo = new
+                            {
+                                name = "test",
+                                version = "1.0.0",
+                            },
+                        },
+                    });
+
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(initializeResponse, Encoding.UTF8, "application/json"),
+                    };
+                }
+
+                if (string.Equals(methodElement.GetString(), "notifications/initialized", StringComparison.Ordinal))
+                {
+                    return new HttpResponseMessage(HttpStatusCode.OK);
+                }
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
         }
     }
 }
