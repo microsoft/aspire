@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Bug fix: lazily forwards migration resource connection strings to dotnet-ef tool resource so WithReference db is available at start time",
+  "mergedAt": "2026-07-14T01:37:05Z",
+  "number": 18452,
+  "runDate": "2026-07-14T06:43:35Z",
+  "status": "included",
+  "title": "Forward EF migration connection string to the dotnet-ef tool resource"
+}

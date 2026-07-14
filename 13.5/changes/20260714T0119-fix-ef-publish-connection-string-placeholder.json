@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixed a bug where `aspire publish` would fail EF migration bundle generation because connection string environment variables resolved to manifest placeholders in publish mode, causing the design-time EF tool to throw an initialization error. The EF tool now skips connection string references during publish — the real connection string is supplied at deploy time.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-07-14T01:19:30Z",
+  "lastMergedAt": "2026-07-14T01:19:30Z",
+  "name": "Fix EF publish-mode connection string placeholder error",
+  "owner": "mitchdenny",
+  "prs": [
+    17905
+  ]
+}

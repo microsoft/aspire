@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Resolved a bug where calling `.WithReference(<db>)` on an EF migration resource failed to forward the connection string to the hidden `dotnet-ef` tool resource, resulting in `The ConnectionString property has not been initialized.` errors. Connection strings are now lazily forwarded at start time so they are available regardless of declaration order.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🐛",
+  "firstMergedAt": "2026-07-14T01:37:05Z",
+  "lastMergedAt": "2026-07-14T01:37:05Z",
+  "name": "Fix EF migration connection string not forwarded to dotnet-ef tool",
+  "owner": "mitchdenny",
+  "prs": [
+    18452
+  ]
+}

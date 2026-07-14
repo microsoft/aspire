@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "Bug fix: omits connection string placeholders from EF tool env vars during publish mode to prevent design-time initialization errors",
+  "mergedAt": "2026-07-14T01:19:30Z",
+  "number": 17905,
+  "runDate": "2026-07-14T06:43:35Z",
+  "status": "included",
+  "title": "Omit connection string placeholders when running EF tool during publish"
+}
