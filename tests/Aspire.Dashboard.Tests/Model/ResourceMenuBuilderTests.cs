@@ -36,7 +36,7 @@ public sealed class ResourceMenuBuilderTests
             dimensionManager);
     }
 
-    private ResourceMenuBuilder CreateResourceMenuBuilder(TelemetryRepository repository, TestAIContextProvider aiContextProvider)
+    private ResourceMenuBuilder CreateResourceMenuBuilder(
         InMemoryTelemetryRepository repository,
         IDashboardClient? dashboardClient = null)
     {
@@ -310,7 +310,6 @@ public sealed class ResourceMenuBuilderTests
         var repository = TelemetryTestHelpers.CreateRepository();
         var resourceMenuBuilder = CreateResourceMenuBuilder(
             repository,
-            new TestAIContextProvider(),
             new TestDashboardClient(isReadOnly: true));
 
         var menuItems = new List<MenuButtonItem>();
