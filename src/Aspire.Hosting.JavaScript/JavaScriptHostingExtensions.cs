@@ -1561,6 +1561,8 @@ public static class JavaScriptHostingExtensions
                             var resourceLoggerService = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
                             var resourceLogger = resourceLoggerService.GetLogger(resource);
                             resourceLogger.LogWarning("Could not find a node_modules directory in or above '{AppDirectory}' for resource '{ResourceName}'. Automatic HTTPS configuration won't be available. Ensure packages are installed before starting the app.", appDirectory, resource.Name);
+                            ctx.Arguments.Add("--config");
+                            ctx.Arguments.Add(configTarget);
                             return;
                         }
 

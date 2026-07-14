@@ -672,8 +672,6 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
         var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
 
-        // AspireHttpsConfigPath is null (SubscribeHttpsEndpointsUpdate did not generate a wrapper)
-
         // Get the HttpsCertificateConfigurationCallbackAnnotation
         var certConfigAnnotation = nodeResource.Annotations
             .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
@@ -704,6 +702,48 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain("--config", args);
 
         // Environment variables should NOT be set
+        Assert.Empty(env);
+    }
+
+    [Fact]
+    public async Task AddViteApp_ServerAuthCertConfig_WithMissingNodeModules_PreservesConfigArgument()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var viteConfigPath = Path.Combine(workspace.Path, "vite.config.js");
+        File.WriteAllText(viteConfigPath, "export default {}");
+
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddViteApp("test-app", workspace.Path);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+        var certConfigAnnotation = nodeResource.Annotations
+            .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
+            .Single();
+
+        var args = new List<object> { "run", "dev", "--", "--port", "3000", "--config", viteConfigPath };
+        var env = new Dictionary<string, object>();
+
+        var context = new HttpsCertificateConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
+            Resource = nodeResource,
+            Arguments = args,
+            EnvironmentVariables = env,
+            CertificatePath = ReferenceExpression.Create($"cert.pem"),
+            KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
+            PfxPath = ReferenceExpression.Create($"cert.pfx"),
+            Password = null,
+            CancellationToken = CancellationToken.None
+        };
+
+        await certConfigAnnotation.Callback(context);
+
+        Assert.Equal(["run", "dev", "--", "--port", "3000", "--config", viteConfigPath], args);
         Assert.Empty(env);
     }
 
@@ -763,7 +803,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task AddViteApp_HttpsEndpointsUpdate_WritesWrapperToNearestNodeModules()
+    public async Task AddViteApp_ServerAuthCertConfig_WritesWrapperToNearestNodeModules()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
