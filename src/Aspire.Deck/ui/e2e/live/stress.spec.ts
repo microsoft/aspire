@@ -130,7 +130,7 @@ test(`${features("STRESS-CONFIG-001", "STRESS-RESOURCES-001", "STRESS-VISIBILITY
   await expect(page.getByRole("navigation")).toContainText(/Aspire Deck 13\.5\.0/);
 
   const table = page.getByRole("table");
-  await expect(table.getByRole("row")).toHaveCount(31);
+  await expect(table.getByRole("row")).toHaveCount(32);
   await expect(table).toContainText("stress-apiservice");
   await expect(table).toContainText("property-stress-resource");
   await expect(table).toContainText("interaction-commands");
