@@ -186,7 +186,9 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
     }
 
-    internal sealed class TestDashboardRunStore(IReadOnlyList<DashboardRunDescriptor>? runs = null) : IDashboardRunStore
+    internal sealed class TestDashboardRunStore(
+        IReadOnlyList<DashboardRunDescriptor>? runs = null,
+        bool supportsRunSelection = true) : IDashboardRunStore
     {
         private readonly IReadOnlyList<DashboardRunDescriptor> _runs = runs ??
             [
@@ -201,6 +203,8 @@ internal static class FluentUISetupHelpers
             ];
 
         public IReadOnlyList<DashboardRunDescriptor> GetRuns() => _runs;
+
+        public bool SupportsRunSelection => supportsRunSelection;
     }
 
     internal sealed class TestDashboardRunSelection : IDashboardRunSelection

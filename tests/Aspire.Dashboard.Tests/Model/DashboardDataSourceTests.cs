@@ -34,6 +34,73 @@ public sealed class DashboardDataSourceTests : IDisposable
     }
 
     [Fact]
+    public void NoneMode_UsesTemporaryDatabaseAndDeletesItOnDispose()
+    {
+        var options = CreateOptions(persistenceMode: DashboardPersistenceMode.None);
+        string runDirectory;
+        string databasePath;
+
+        using (var runStore = new DashboardRunStore(options))
+        {
+            runDirectory = runStore.RunDirectory;
+            databasePath = runStore.DatabasePath;
+            new DashboardSqliteDatabase(databasePath).InitializeSchema();
+
+            Assert.False(runStore.SupportsRunSelection);
+            Assert.False(runDirectory.StartsWith(_temporaryDirectory, StringComparison.OrdinalIgnoreCase));
+            Assert.Collection(runStore.GetRuns(), run => Assert.True(run.IsCurrent));
+            Assert.True(File.Exists(databasePath));
+        }
+
+        Assert.False(Directory.Exists(runDirectory));
+        Assert.False(File.Exists(databasePath));
+    }
+
+    [Fact]
+    public void AppendMode_ReusesApplicationDatabaseWithoutRunSelection()
+    {
+        var options = CreateOptions("My Dashboard", DashboardPersistenceMode.Append);
+        string firstDatabasePath;
+
+        using (var firstRunStore = new DashboardRunStore(options))
+        {
+            firstDatabasePath = firstRunStore.DatabasePath;
+            new DashboardSqliteDatabase(firstDatabasePath).InitializeSchema();
+        }
+
+        using var secondRunStore = new DashboardRunStore(options);
+
+        Assert.Equal(firstDatabasePath, secondRunStore.DatabasePath);
+        Assert.False(secondRunStore.SupportsRunSelection);
+        Assert.Collection(secondRunStore.GetRuns(), run => Assert.True(run.IsCurrent));
+        Assert.True(DashboardSqliteDatabase.IsCompatible(secondRunStore.DatabasePath));
+    }
+
+    [Fact]
+    public void AppendMode_DeletesIncompatibleDatabase()
+    {
+        var options = CreateOptions(persistenceMode: DashboardPersistenceMode.Append);
+        string databasePath;
+
+        using (var firstRunStore = new DashboardRunStore(options))
+        {
+            databasePath = firstRunStore.DatabasePath;
+            using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "CREATE TABLE dashboard_schema (version INTEGER NOT NULL); INSERT INTO dashboard_schema VALUES (1);";
+            command.ExecuteNonQuery();
+        }
+
+        using var secondRunStore = new DashboardRunStore(options);
+
+        Assert.Equal(databasePath, secondRunStore.DatabasePath);
+        Assert.False(File.Exists(databasePath));
+        new DashboardSqliteDatabase(databasePath).InitializeSchema();
+        Assert.True(DashboardSqliteDatabase.IsCompatible(databasePath));
+    }
+
+    [Fact]
     public void ApplicationDirectoryName_IsSafeBoundedAndUnique()
     {
         var firstName = new string('a', 300) + "/dashboard";
@@ -205,12 +272,18 @@ public sealed class DashboardDataSourceTests : IDisposable
         Assert.Same(currentTelemetryRepository, dataSource.TelemetryRepository);
     }
 
-    private IOptions<DashboardOptions> CreateOptions(string applicationName = "TestApp")
+    private IOptions<DashboardOptions> CreateOptions(
+        string applicationName = "TestApp",
+        DashboardPersistenceMode persistenceMode = DashboardPersistenceMode.Runs)
     {
         return Options.Create(new DashboardOptions
         {
             ApplicationName = applicationName,
-            Data = new DashboardDataOptions { Directory = _temporaryDirectory }
+            Data = new DashboardDataOptions
+            {
+                Directory = _temporaryDirectory,
+                PersistenceMode = persistenceMode
+            }
         });
     }
 

@@ -24,12 +24,15 @@
                         <span class="application-run-start">@startText</span>
                     }
                 </FluentAnchor>
-                <FluentButton Class="application-run-button"
-                              Id="@DashboardRunsButtonId"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchDashboardRunsAsync"
-                              Title="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]" aria-label="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.Settings())" Color="Color.Neutral"/>
-                </FluentButton>
+                @if (RunStore.SupportsRunSelection)
+                {
+                    <FluentButton Class="application-run-button"
+                                  Id="@DashboardRunsButtonId"
+                                  Appearance="Appearance.Stealth" OnClick="@LaunchDashboardRunsAsync"
+                                  Title="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]" aria-label="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Settings())" Color="Color.Neutral"/>
+                    </FluentButton>
+                }
             </div>
             <div class="flex-filler"></div>
             <FluentAnchor Class="header-button"
@@ -75,12 +78,15 @@
                         <span class="application-run-start">@startText</span>
                     }
                 </FluentAnchor>
-                <FluentButton Class="application-run-button"
-                              Id="@DashboardRunsButtonId"
-                              Appearance="Appearance.Stealth" OnClick="@LaunchDashboardRunsAsync"
-                              Title="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]" aria-label="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]">
-                    <FluentIcon Value="@(new Icons.Regular.Size16.Settings())" Color="Color.Neutral"/>
-                </FluentButton>
+                @if (RunStore.SupportsRunSelection)
+                {
+                    <FluentButton Class="application-run-button"
+                                  Id="@DashboardRunsButtonId"
+                                  Appearance="Appearance.Stealth" OnClick="@LaunchDashboardRunsAsync"
+                                  Title="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]" aria-label="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]">
+                        <FluentIcon Value="@(new Icons.Regular.Size16.Settings())" Color="Color.Neutral"/>
+                    </FluentButton>
+                }
             </div>
             <div class="flex-filler"></div>
 
@@ -111,10 +117,7 @@
     <div class="layout-body-container">
         <FluentBodyContent Class="custom-body-content body-content">
             <FluentToastProvider MaxToastCount="3" Timeout="5000" />
-            @if (_runSelectionLoaded)
-            {
-                @Body
-            }
+            @Body
         </FluentBodyContent>
     </div>
 

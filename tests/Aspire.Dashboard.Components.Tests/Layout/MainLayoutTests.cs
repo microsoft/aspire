@@ -265,6 +265,41 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal(nameof(DashboardRunsDialog), capturedParameters.Id);
     }
 
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DashboardRunsButton_Unsupported_IsHiddenAndStaleSelectionIsIgnored(bool isDesktop)
+    {
+        var runStore = new FluentUISetupHelpers.TestDashboardRunStore(
+        [
+            new(
+                RunId: "current",
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: null,
+                CleanShutdown: false,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: true)
+        ],
+        supportsRunSelection: false);
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = _ => throw new InvalidOperationException("Run selection should not be read.")
+        };
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(
+                component => component.ViewportInformation,
+                new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        Assert.Empty(cut.FindAll("#dashboard-runs-button"));
+        var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
+        Assert.Null(runSelection.SelectedRunId);
+    }
+
     [Fact]
     public async Task DashboardRunsDialog_OkStoresSelectionAndReloadsWithoutQueryString()
     {

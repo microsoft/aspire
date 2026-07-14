@@ -39,7 +39,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     internal const string DashboardRunsButtonId = "dashboard-runs-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
     private DashboardRunDescriptor? _selectedRun;
-    private bool _runSelectionLoaded;
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -92,12 +91,15 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     protected override async Task OnInitializedAsync()
     {
         var runs = RunStore.GetRuns();
-        var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
-        var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+        string? selectedRunId = null;
+        if (RunStore.SupportsRunSelection)
+        {
+            var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
+            selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+        }
         _selectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, selectedRunId, StringComparison.Ordinal))
             ?? runs.Single(run => run.IsCurrent);
         RunSelection.SelectRun(_selectedRun.IsCurrent ? null : _selectedRun.RunId);
-        _runSelectionLoaded = true;
 
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
         // Note that this event could be raised from a settings dialog opened in a different browser window.
@@ -347,6 +349,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private async Task LaunchDashboardRunsAsync()
     {
+        if (!RunStore.SupportsRunSelection)
+        {
+            return;
+        }
+
         var content = new DashboardRunsDialogViewModel
         {
             SelectedRun = _selectedRun ?? RunStore.GetRuns().Single(run => run.IsCurrent)

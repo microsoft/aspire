@@ -22,6 +22,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     private readonly Dictionary<string, ResourceViewModel> _resources = new(StringComparers.ResourceName);
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _resourceChannels = [];
     private readonly Dictionary<string, ImmutableHashSet<Channel<IReadOnlyList<ResourceLogLine>>>> _consoleChannels = new(StringComparers.ResourceName);
+    private readonly Dictionary<string, Dictionary<int, long>> _consoleLogIds = new(StringComparers.ResourceName);
     private bool _disposed;
 
     public SqliteResourceRepository(
@@ -100,7 +101,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 SELECT line_number AS LineNumber, content AS Content, is_stderr AS IsStdErr
                 FROM console_logs
                 WHERE resource_name = @ResourceName
-                ORDER BY line_number;
+                ORDER BY console_log_id;
                 """, new { ResourceName = resourceName })
                 .Select(line => new ResourceLogLine(line.LineNumber, line.Content, line.IsStdErr))
                 .ToArray();
@@ -127,7 +128,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 SELECT line_number AS LineNumber, content AS Content, is_stderr AS IsStdErr
                 FROM console_logs
                 WHERE resource_name = @ResourceName
-                ORDER BY line_number;
+                ORDER BY console_log_id;
                 """, new { ResourceName = resourceName })
                 .Select(line => new ResourceLogLine(line.LineNumber, line.Content, line.IsStdErr))
                 .ToArray();
@@ -249,19 +250,39 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             ThrowIfDisposed();
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
-            connection.Execute("""
-                INSERT INTO console_logs (resource_name, line_number, content, is_stderr)
-                VALUES (@ResourceName, @LineNumber, @Content, @IsStdErr)
-                ON CONFLICT(resource_name, line_number) DO UPDATE SET
-                    content = excluded.content,
-                    is_stderr = excluded.is_stderr;
-                """, logLines.Select(line => new
+            if (!_consoleLogIds.TryGetValue(resourceName, out var resourceLogIds))
+            {
+                resourceLogIds = [];
+                _consoleLogIds.Add(resourceName, resourceLogIds);
+            }
+
+            foreach (var line in logLines)
+            {
+                var parameters = new
                 {
                     ResourceName = resourceName,
                     line.LineNumber,
                     Content = line.Text,
                     line.IsStdErr
-                }), transaction);
+                };
+                if (resourceLogIds.TryGetValue(line.LineNumber, out var consoleLogId))
+                {
+                    connection.Execute("""
+                        UPDATE console_logs
+                        SET content = @Content, is_stderr = @IsStdErr
+                        WHERE console_log_id = @ConsoleLogId;
+                        """, new { parameters.Content, parameters.IsStdErr, ConsoleLogId = consoleLogId }, transaction);
+                }
+                else
+                {
+                    consoleLogId = connection.QuerySingle<long>("""
+                        INSERT INTO console_logs (resource_name, line_number, content, is_stderr)
+                        VALUES (@ResourceName, @LineNumber, @Content, @IsStdErr)
+                        RETURNING console_log_id;
+                        """, parameters, transaction);
+                    resourceLogIds.Add(line.LineNumber, consoleLogId);
+                }
+            }
             transaction.Commit();
             channels = (_consoleChannels.GetValueOrDefault(resourceName) ?? []).ToArray();
         }
