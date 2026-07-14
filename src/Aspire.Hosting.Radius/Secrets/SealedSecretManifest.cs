@@ -257,6 +257,17 @@ internal static class SealedSecretManifest
             }
             else if (yamlEvent is MappingEnd)
             {
+                // A well-formed stream always pairs MappingStart/MappingEnd, but guard the pop so a
+                // malformed or out-of-sync event stream fails as ASPIRERADIUS044 rather than escaping
+                // ValidateStructure as a raw InvalidOperationException from Stack.Pop() on an empty stack.
+                if (stack.Count == 0)
+                {
+                    throw CreateInvalidManifestException(
+                        storeName,
+                        manifestPath,
+                        "is malformed YAML with an unbalanced mapping. Provide a single well-formed encrypted Bitnami SealedSecret document.");
+                }
+
                 stack.Pop();
             }
             else if (yamlEvent is SequenceStart)
@@ -265,6 +276,14 @@ internal static class SealedSecretManifest
             }
             else if (yamlEvent is SequenceEnd)
             {
+                if (stack.Count == 0)
+                {
+                    throw CreateInvalidManifestException(
+                        storeName,
+                        manifestPath,
+                        "is malformed YAML with an unbalanced sequence. Provide a single well-formed encrypted Bitnami SealedSecret document.");
+                }
+
                 stack.Pop();
             }
         }

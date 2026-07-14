@@ -164,7 +164,7 @@ var radius = builder.AddRadiusEnvironment("radius")
     // Environment-wide: applied to every recipe.
     .WithRecipeParameters(p => p["region"] = "eastus")
     // Scoped to one resource type; overrides the environment-wide value on collision.
-    .WithRecipeParameters("Applications.Datastores/redisCaches", p => p["sku"] = "Premium");
+    .WithRecipeParameters("Radius.Data/redisCaches", p => p["sku"] = "Premium");
 ```
 
 - **Type fidelity** — numbers, booleans, arrays, and objects are emitted with their Bicep types
