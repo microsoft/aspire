@@ -277,7 +277,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         // Data from the server.
-        builder.Services.TryAddSingleton<IDashboardClient, DashboardClient>();
+        builder.Services.TryAddSingleton<DashboardClient>();
+        builder.Services.AddScoped<DashboardDataSource>();
+        builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
+        builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();
 
         builder.Services.TryAddSingleton<INotificationService, NotificationService>();
         builder.Services.TryAddSingleton(TimeProvider.System);
@@ -294,18 +297,49 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // OTLP services.
         builder.Services.AddGrpc();
-        builder.Services.AddSingleton<TelemetryRepository>();
+        builder.Services.AddSingleton<DashboardRunStore>();
+        builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
+        builder.Services.AddSingleton(services => new DashboardSqliteDatabase(
+            services.GetRequiredService<DashboardRunStore>().DatabasePath));
+        builder.Services.AddSingleton<SqliteTelemetryRepository>(services =>
+        {
+            return new SqliteTelemetryRepository(
+                services.GetRequiredService<DashboardSqliteDatabase>(),
+                services.GetRequiredService<ILoggerFactory>(),
+                services.GetRequiredService<IOptions<DashboardOptions>>(),
+                services.GetRequiredService<PauseManager>(),
+                services.GetServices<IOutgoingPeerResolver>());
+        });
+        builder.Services.AddScoped<ITelemetryRepository>(services => services.GetRequiredService<DashboardDataSource>().TelemetryRepository);
+        builder.Services.AddSingleton<SqliteResourceRepository>(services =>
+        {
+            return new SqliteResourceRepository(
+                services.GetRequiredService<DashboardSqliteDatabase>(),
+                services.GetRequiredService<IKnownPropertyLookup>(),
+                services.GetRequiredService<ILoggerFactory>());
+        });
+        builder.Services.AddSingleton<IResourceRepositoryWriter>(services => services.GetRequiredService<SqliteResourceRepository>());
+        builder.Services.AddScoped<IResourceRepository>(services => services.GetRequiredService<DashboardDataSource>().ResourceRepository);
         builder.Services.AddTransient<StructuredLogsViewModel>();
 
-        builder.Services.AddTransient<OtlpLogsService>();
-        builder.Services.AddTransient<OtlpTraceService>();
-        builder.Services.AddTransient<OtlpMetricsService>();
+        builder.Services.AddTransient(services => new OtlpLogsService(
+            services.GetRequiredService<ILogger<OtlpLogsService>>(),
+            services.GetRequiredService<SqliteTelemetryRepository>()));
+        builder.Services.AddTransient(services => new OtlpTraceService(
+            services.GetRequiredService<ILogger<OtlpTraceService>>(),
+            services.GetRequiredService<SqliteTelemetryRepository>()));
+        builder.Services.AddTransient(services => new OtlpMetricsService(
+            services.GetRequiredService<ILogger<OtlpMetricsService>>(),
+            services.GetRequiredService<SqliteTelemetryRepository>()));
 
         // Telemetry API.
-        builder.Services.AddSingleton<TelemetryApiService>();
+        builder.Services.AddSingleton(services => new TelemetryApiService(
+            services.GetRequiredService<SqliteTelemetryRepository>(),
+            services.GetServices<IOutgoingPeerResolver>()));
 
         builder.Services.AddTransient<TracesViewModel>();
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, ResourceOutgoingPeerResolver>());
+        builder.Services.AddSingleton<IOutgoingPeerResolver>(services =>
+            new ResourceOutgoingPeerResolver(services.GetRequiredService<DashboardClient>()));
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, BrowserLinkOutgoingPeerResolver>());
 
         builder.Services.AddFluentUIComponents();
@@ -319,7 +353,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<ConsoleLogsManager>();
         builder.Services.AddScoped<ConsoleLogsFetcher>();
         builder.Services.AddScoped<TelemetryExportService>();
-        builder.Services.AddScoped<TelemetryImportService>();
+        builder.Services.AddScoped(services => new TelemetryImportService(
+            services.GetRequiredService<SqliteTelemetryRepository>(),
+            services.GetRequiredService<IOptionsMonitor<DashboardOptions>>(),
+            services.GetRequiredService<ILogger<TelemetryImportService>>()));
         builder.Services.AddSingleton<IInstrumentUnitResolver, DefaultInstrumentUnitResolver>();
 
         // Time zone is set by the browser.
@@ -333,7 +370,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // resource snapshot stream. Default impl looks up by display name and
         // replica index in IDashboardClient and connects to the consumer UDS
         // path the AppHost stamped onto the snapshot.
-        builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver, Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver>();
+        builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver>(services =>
+            new Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver(services.GetRequiredService<DashboardClient>()));
 
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
@@ -441,7 +479,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         {
             if (context.Request.Path.Equals(TargetLocationInterceptor.ResourcesPath, StringComparisons.UrlPath))
             {
-                var client = context.RequestServices.GetRequiredService<IDashboardClient>();
+                var client = context.RequestServices.GetRequiredService<DashboardClient>();
                 if (!client.IsEnabled)
                 {
                     context.Response.Redirect(TargetLocationInterceptor.StructuredLogsPath);

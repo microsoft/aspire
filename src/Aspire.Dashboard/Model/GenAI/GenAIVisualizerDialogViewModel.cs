@@ -51,7 +51,7 @@ public sealed class GenAIVisualizerDialogViewModel
         SpanDetailsViewModel spanDetailsViewModel,
         long? selectedLogEntryId,
         ITelemetryErrorRecorder errorRecorder,
-        TelemetryRepository telemetryRepository,
+        ITelemetryRepository telemetryRepository,
         Func<List<OtlpSpan>> getContextGenAISpans)
     {
         var resources = telemetryRepository.GetResources();
@@ -276,7 +276,7 @@ public sealed class GenAIVisualizerDialogViewModel
     // - Span attributes.
     // - Log entry bodies.
     // - Span event attributes.
-    private static void CreateMessages(GenAIVisualizerDialogViewModel viewModel, TelemetryRepository telemetryRepository)
+    private static void CreateMessages(GenAIVisualizerDialogViewModel viewModel, ITelemetryRepository telemetryRepository)
     {
         var currentIndex = 0;
 
@@ -592,7 +592,7 @@ public sealed class GenAIVisualizerDialogViewModel
         return type != null;
     }
 
-    private static List<OtlpLogEntry> GetSpanLogEntries(TelemetryRepository telemetryRepository, OtlpSpan span)
+    private static List<OtlpLogEntry> GetSpanLogEntries(ITelemetryRepository telemetryRepository, OtlpSpan span)
     {
         var logsContext = new GetLogsContext
         {
@@ -612,7 +612,7 @@ public sealed class GenAIVisualizerDialogViewModel
         return logsResult.Items;
     }
 
-    private static void ParseEvaluations(GenAIVisualizerDialogViewModel viewModel, TelemetryRepository telemetryRepository)
+    private static void ParseEvaluations(GenAIVisualizerDialogViewModel viewModel, ITelemetryRepository telemetryRepository)
     {
         var evaluations = new List<EvaluationResultViewModel>();
 

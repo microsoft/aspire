@@ -6,6 +6,8 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Extensions;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
@@ -63,7 +65,7 @@ public partial class MetricsTests : DashboardTestContext
             return ValueTask.CompletedTask;
         });
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
@@ -132,7 +134,7 @@ public partial class MetricsTests : DashboardTestContext
             loadRedirect = new Uri(a.Location);
         };
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
@@ -190,7 +192,7 @@ public partial class MetricsTests : DashboardTestContext
         // Arrange
         MetricsSetupHelpers.SetupMetricsPage(this);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
@@ -280,6 +282,52 @@ public partial class MetricsTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public void ReadOnly_ChartEndsAtLatestMetricTime()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isReadOnly: true));
+
+        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(1)),
+                            CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(2))
+                        }
+                    }
+                }
+            }
+        });
+        Services.GetRequiredService<PauseManager>().SetMetricsPaused(true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(
+            DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: "test-instrument", duration: 5, view: MetricViewKind.Graph.ToString()));
+
+        var cut = RenderComponent<Metrics>(builder =>
+        {
+            builder.Add(m => m.ResourceName, "TestApp");
+            builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        var chart = cut.FindComponent<PlotlyChart>();
+        var expectedEndTime = new DateTimeOffset(s_testTime.AddMinutes(2));
+        Assert.Equal(expectedEndTime, chart.Instance.DataEndTime);
+        cut.WaitForAssertion(() =>
+        {
+            var initializeChart = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "initializeChart");
+            Assert.Equal(chart.Instance.TimeProvider.ToLocal(expectedEndTime), Assert.IsType<DateTime>(initializeChart.Arguments[3]));
+        });
+    }
+
     private void ChangeResourceAndAssertInstrument(string app1InstrumentName, string app2InstrumentName, string? expectedMeterNameAfterChange, string? expectedInstrumentNameAfterChange)
     {
         // Arrange
@@ -288,7 +336,7 @@ public partial class MetricsTests : DashboardTestContext
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: app1InstrumentName, duration: 720, view: MetricViewKind.Table.ToString()));
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics

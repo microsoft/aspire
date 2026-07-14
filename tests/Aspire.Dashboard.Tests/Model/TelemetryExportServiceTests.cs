@@ -1091,7 +1091,7 @@ public sealed class TelemetryExportServiceTests
         Assert.Single(data.ResourceLogs[0].ScopeLogs![0].LogRecords!);
     }
 
-    private static async Task<TelemetryExportService> CreateExportServiceAsync(TelemetryRepository repository, bool isDashboardClientEnabled = true)
+    private static async Task<TelemetryExportService> CreateExportServiceAsync(InMemoryTelemetryRepository repository, bool isDashboardClientEnabled = true)
     {
         var dashboardClient = new TestDashboardClient(isEnabled: isDashboardClientEnabled);
         var sessionStorage = new TestSessionStorage();
@@ -1101,7 +1101,7 @@ public sealed class TelemetryExportServiceTests
         return new TelemetryExportService(repository, consoleLogsFetcher, dashboardClient, Array.Empty<IOutgoingPeerResolver>());
     }
 
-    private static Dictionary<string, HashSet<AspireDataType>> BuildAllResourcesSelection(TelemetryRepository repository)
+    private static Dictionary<string, HashSet<AspireDataType>> BuildAllResourcesSelection(InMemoryTelemetryRepository repository)
     {
         var allResources = repository.GetResources();
         return allResources.ToDictionary(
@@ -1109,7 +1109,7 @@ public sealed class TelemetryExportServiceTests
             _ => new HashSet<AspireDataType>([AspireDataType.ConsoleLogs, AspireDataType.StructuredLogs, AspireDataType.Traces, AspireDataType.Metrics]));
     }
 
-    private static void AddTestData(TelemetryRepository repository, string resourceName, string instanceId)
+    private static void AddTestData(InMemoryTelemetryRepository repository, string resourceName, string instanceId)
     {
         var compositeName = $"{resourceName}-{instanceId}";
 

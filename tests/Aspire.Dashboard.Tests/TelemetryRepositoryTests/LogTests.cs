@@ -16,7 +16,7 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class LogTests
+public abstract class LogTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -1526,4 +1526,14 @@ public class LogTests
         Assert.Single(logs.Items);
         Assert.Equal("matching log", logs.Items[0].Message);
     }
+}
+
+public sealed class InMemoryLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
+{
+    protected override bool UseSqlite => true;
 }

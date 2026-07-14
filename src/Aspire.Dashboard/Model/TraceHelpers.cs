@@ -64,7 +64,7 @@ public static class TraceHelpers
     /// </summary>
     public static IEnumerable<OrderedResource> GetOrderedResources(OtlpTrace trace)
     {
-        var resourceFirstTimes = new Dictionary<OtlpResource, OrderedResource>();
+        var resourceFirstTimes = new Dictionary<OtlpResource, OrderedResource>(OtlpResourceEqualityComparer.Instance);
 
         VisitSpans(trace, (OtlpSpan span, OrderedResourcesState state) =>
         {

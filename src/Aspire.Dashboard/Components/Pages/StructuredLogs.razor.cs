@@ -58,7 +58,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public StructuredLogsPageViewModel PageViewModel { get; set; } = null!;
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required ITelemetryRepository TelemetryRepository { get; init; }
 
     [Inject]
     public required StructuredLogsViewModel ViewModel { get; init; }

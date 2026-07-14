@@ -15,7 +15,7 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class MetricsTests
+public abstract class MetricsTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -1248,4 +1248,14 @@ public class MetricsTests
 
         Assert.Equal(valueCount, scope.Values.Count);
     }
+}
+
+public sealed class InMemoryMetricsTests : MetricsTests
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteMetricsTests : MetricsTests
+{
+    protected override bool UseSqlite => true;
 }

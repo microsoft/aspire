@@ -151,4 +151,21 @@ public sealed class TraceHelpersTests
                 Assert.Equal(app3, g.Resource);
             });
     }
+
+    [Fact]
+    public void GetOrderedResources_DifferentResourceInstancesWithSameKey_GroupedResult()
+    {
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var app1 = new OtlpResource("app1", "instance", uninstrumentedPeer: false, context);
+        var equivalentApp1 = new OtlpResource("app1", "instance", uninstrumentedPeer: true, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
+        var scope = TelemetryTestHelpers.CreateOtlpScope(context);
+        trace.AddSpan(TelemetryTestHelpers.CreateOtlpSpan(app1, trace, scope, spanId: "1", parentSpanId: null, startDate: new DateTime(2001, 1, 1, 1, 1, 1, DateTimeKind.Utc), uninstrumentedPeer: equivalentApp1));
+
+        var results = TraceHelpers.GetOrderedResources(trace);
+
+        var result = Assert.Single(results);
+        Assert.Same(app1, result.Resource);
+        Assert.Equal(2, result.TotalSpans);
+    }
 }

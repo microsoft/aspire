@@ -12,6 +12,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
+using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
 using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
 using Google.Protobuf.Collections;
@@ -29,6 +30,47 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 [UseCulture("en-US")]
 public partial class ResourcesTests : DashboardTestContext
 {
+    [Fact]
+    public void ReadOnly_HighlightedCommandIsVisibleAndDisabled()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "test-resource",
+            state: KnownResourceState.Running,
+            commands:
+            [
+                new CommandViewModel(
+                    "test-command",
+                    CommandViewModelState.Enabled,
+                    "Test command",
+                    "Test command description",
+                    confirmationMessage: "",
+                    argumentInputs: [],
+                    isHighlighted: true,
+                    iconName: string.Empty,
+                    iconVariant: IconVariant.Regular)
+            ]);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            initialResources: [resource],
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            isReadOnly: true);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var commandButton = Assert.Single(
+                cut.FindComponents<FluentButton>(),
+                button => string.Equals(button.Instance.Title, "Test command description", StringComparison.Ordinal));
+            Assert.True(commandButton.Instance.Disabled);
+        });
+    }
+
     [Fact]
     public void UpdateResources_FiltersUpdated()
     {
@@ -477,7 +519,7 @@ public partial class ResourcesTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentAnchor(this);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
         AddErrorLog(telemetryRepository, resourceName: "Resource1");
         var unviewedErrorCounts = telemetryRepository.GetResourceUnviewedErrorLogsCount();
         var resourceKey = Assert.Single(unviewedErrorCounts.Keys);
@@ -529,7 +571,7 @@ public partial class ResourcesTests : DashboardTestContext
         };
     }
 
-    private static void AddErrorLog(TelemetryRepository repository, string resourceName)
+    private static void AddErrorLog(InMemoryTelemetryRepository repository, string resourceName)
     {
         var addContext = new AddContext();
         var logs = new RepeatedField<ResourceLogs>();

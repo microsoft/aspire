@@ -19,7 +19,7 @@ public partial class TreeMetricSelector
     public bool IncludeLabel { get; set; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required ITelemetryRepository TelemetryRepository { get; init; }
 
     public void OnResourceChanged()
     {

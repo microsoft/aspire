@@ -64,9 +64,9 @@ public class OtlpInstrument
         // Need to add dimensions using durable attributes instance after scope is created.
         if (!Dimensions.TryGetValue(comparableAttributes, out var dimension))
         {
-            if (Dimensions.Count >= TelemetryRepository.MaxDimensionCount)
+            if (Dimensions.Count >= TelemetryRepositoryLimits.MaxDimensionCount)
             {
-                throw new InvalidOperationException($"Dimension limit of {TelemetryRepository.MaxDimensionCount} reached for instrument '{Summary.Name}'.");
+                throw new InvalidOperationException($"Dimension limit of {TelemetryRepositoryLimits.MaxDimensionCount} reached for instrument '{Summary.Name}'.");
             }
 
             dimension = CreateDimensionScope(comparableAttributes);
@@ -88,7 +88,7 @@ public class OtlpInstrument
             // Adds to dictionary if not present.
             if (values == null)
             {
-                if (!existed && KnownAttributeValues.Count > TelemetryRepository.MaxKnownAttributeValueCount)
+                if (!existed && KnownAttributeValues.Count > TelemetryRepositoryLimits.MaxKnownAttributeValueCount)
                 {
                     // Over limit. Remove the default entry that GetValueRefOrAddDefault added.
                     KnownAttributeValues.Remove(key);
@@ -100,12 +100,12 @@ public class OtlpInstrument
                 // If the key is new and there are already dimensions, add an empty value because there are dimensions without this key.
                 if (!isFirst)
                 {
-                    TryAddValue(values, null, TelemetryRepository.MaxKnownAttributeValuesPerKey);
+                    TryAddValue(values, null, TelemetryRepositoryLimits.MaxKnownAttributeValuesPerKey);
                 }
             }
 
             var currentDimensionValue = OtlpHelpers.GetValue(durableAttributes, key);
-            TryAddValue(values, currentDimensionValue, TelemetryRepository.MaxKnownAttributeValuesPerKey);
+            TryAddValue(values, currentDimensionValue, TelemetryRepositoryLimits.MaxKnownAttributeValuesPerKey);
         }
 
         return dimension;

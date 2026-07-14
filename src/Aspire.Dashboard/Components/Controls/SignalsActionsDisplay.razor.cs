@@ -9,6 +9,9 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class SignalsActionsDisplay
 {
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 

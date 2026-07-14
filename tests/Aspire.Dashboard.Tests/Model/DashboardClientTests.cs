@@ -154,6 +154,38 @@ public sealed class DashboardClientTests
     }
 
     [Fact]
+    public async Task SubscribeConsoleLogs_ReceivesAndPersistsLogs()
+    {
+        var repositoryWriter = new RecordingResourceRepositoryWriter();
+        await using var instance = CreateResourceServiceClient(repositoryWriter);
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            ConsoleLogUpdates =
+            [
+                new WatchResourceConsoleLogsUpdate
+                {
+                    LogLines =
+                    {
+                        new ConsoleLogLine { LineNumber = 1, Text = "Hello", IsStdErr = false }
+                    }
+                }
+            ]
+        });
+
+        var batches = new List<IReadOnlyList<ResourceLogLine>>();
+        await foreach (var batch in instance.SubscribeConsoleLogs("api", CancellationToken.None))
+        {
+            batches.Add(batch);
+        }
+
+        var line = Assert.Single(Assert.Single(batches));
+        Assert.Equal(new ResourceLogLine(1, "Hello", false), line);
+        var persistedLogs = Assert.Single(repositoryWriter.ConsoleLogs);
+        Assert.Equal("api", persistedLogs.ResourceName);
+        Assert.Equal("Hello", Assert.Single(persistedLogs.LogLines).Text);
+    }
+
+    [Fact]
     public async Task SubscribeInteractions_OnCancel_ChannelRemoved()
     {
         await using var instance = CreateResourceServiceClient();
@@ -522,6 +554,17 @@ public sealed class DashboardClientTests
         public bool FailOnExecuteResourceCommand { get; init; }
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
         public string MinDashboardVersion { get; init; } = "";
+        public IReadOnlyList<WatchResourceConsoleLogsUpdate> ConsoleLogUpdates { get; init; } = [];
+
+        public override AsyncServerStreamingCall<WatchResourceConsoleLogsUpdate> WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest request, CallOptions options)
+        {
+            return new AsyncServerStreamingCall<WatchResourceConsoleLogsUpdate>(
+                new AsyncStreamReader<WatchResourceConsoleLogsUpdate>(ConsoleLogUpdates),
+                Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess,
+                () => new Metadata(),
+                () => { });
+        }
 
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
         {
@@ -632,11 +675,42 @@ public sealed class DashboardClientTests
 
     private sealed class AsyncStreamReader<T> : IAsyncStreamReader<T>
     {
-        public T Current { get; } = default!;
+        private readonly Queue<T> _items;
+
+        public AsyncStreamReader(IEnumerable<T>? items = null)
+        {
+            _items = new Queue<T>(items ?? []);
+        }
+
+        public T Current { get; private set; } = default!;
 
         public Task<bool> MoveNext(CancellationToken cancellationToken)
         {
+            if (_items.TryDequeue(out var item))
+            {
+                Current = item;
+                return Task.FromResult(true);
+            }
+
             return Task.FromResult(false);
+        }
+    }
+
+    private sealed class RecordingResourceRepositoryWriter : IResourceRepositoryWriter
+    {
+        public List<(string ResourceName, IReadOnlyList<ConsoleLogLine> LogLines)> ConsoleLogs { get; } = [];
+
+        public void ReplaceResources(IReadOnlyList<Resource> resources)
+        {
+        }
+
+        public void ApplyChanges(IReadOnlyList<WatchResourcesChange> changes)
+        {
+        }
+
+        public void AddConsoleLogs(string resourceName, IReadOnlyList<ConsoleLogLine> logLines)
+        {
+            ConsoleLogs.Add((resourceName, logLines));
         }
     }
 
@@ -655,9 +729,9 @@ public sealed class DashboardClientTests
         }
     }
 
-    private DashboardClient CreateResourceServiceClient()
+    private DashboardClient CreateResourceServiceClient(IResourceRepositoryWriter? resourceRepositoryWriter = null)
     {
-        return new DashboardClient(NullLoggerFactory.Instance, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>());
+        return new DashboardClient(NullLoggerFactory.Instance, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>(), resourceRepositoryWriter: resourceRepositoryWriter);
     }
 
     private static CommandViewModel CreateCommand()

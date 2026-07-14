@@ -717,6 +717,53 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
+    public void ReadOnly_HighlightedCommandIsVisibleAndDisabled()
+    {
+        var resource = ModelTestHelpers.CreateResource(
+            resourceName: "test-resource",
+            state: KnownResourceState.Running,
+            commands:
+            [
+                new CommandViewModel(
+                    "test-command",
+                    CommandViewModelState.Enabled,
+                    "Test command",
+                    "Test command description",
+                    confirmationMessage: "",
+                    argumentInputs: [],
+                    isHighlighted: true,
+                    iconName: string.Empty,
+                    iconVariant: IconVariant.Regular)
+            ]);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>(),
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            initialResources: [resource],
+            isReadOnly: true);
+        SetupConsoleLogsServices(dashboardClient);
+        var viewport = CreateViewport(isDesktop: true);
+
+        var cut = RenderConsoleLogsPage(viewport, resource.Name);
+
+        cut.WaitForAssertion(() =>
+        {
+            var commandButton = Assert.Single(
+                cut.FindComponents<FluentButton>(),
+                button => string.Equals(button.Instance.Class, "highlighted-command", StringComparison.Ordinal));
+            Assert.True(commandButton.Instance.Disabled);
+
+            var clearButton = Assert.Single(
+                cut.FindComponents<FluentButton>(),
+                button => string.Equals(button.Instance.Class, "clear-button", StringComparison.Ordinal));
+            Assert.True(clearButton.Instance.Disabled);
+
+            var pauseButton = Assert.Single(cut.FindComponents<PauseIncomingDataSwitch>());
+            Assert.True(pauseButton.Instance.Disabled);
+        });
+    }
+
+    [Fact]
     public async Task ExecuteCommand_DelayExecuting_IsExecutingReturnsTrueWhileRunning()
     {
         // Arrange

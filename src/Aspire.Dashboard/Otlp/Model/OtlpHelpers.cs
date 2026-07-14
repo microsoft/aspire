@@ -12,6 +12,7 @@ using Google.Protobuf;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Resource.V1;
+using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Model;
 
@@ -24,6 +25,22 @@ public static partial class OtlpHelpers
     };
 
     // Note: ShortenedIdLength is defined in the shared OtlpHelpers.cs
+
+    internal static OtlpSpanKind ConvertSpanKind(SpanKind? kind)
+    {
+        return kind switch
+        {
+            // Unspecified to Internal is intentional.
+            // "Implementations MAY assume SpanKind to be INTERNAL when receiving UNSPECIFIED."
+            SpanKind.Unspecified => OtlpSpanKind.Internal,
+            SpanKind.Internal => OtlpSpanKind.Internal,
+            SpanKind.Client => OtlpSpanKind.Client,
+            SpanKind.Server => OtlpSpanKind.Server,
+            SpanKind.Producer => OtlpSpanKind.Producer,
+            SpanKind.Consumer => OtlpSpanKind.Consumer,
+            _ => OtlpSpanKind.Unspecified
+        };
+    }
 
     public static ResourceKey GetResourceKey(this Resource resource)
     {
@@ -471,9 +488,9 @@ public static partial class OtlpHelpers
                 return true;
             }
 
-            if (scopes.Count >= TelemetryRepository.MaxScopeCount)
+            if (scopes.Count >= TelemetryRepositoryLimits.MaxScopeCount)
             {
-                throw new InvalidOperationException($"Scope limit of {TelemetryRepository.MaxScopeCount} reached for {telemetryType}. Scope '{name}' will not be added.");
+                throw new InvalidOperationException($"Scope limit of {TelemetryRepositoryLimits.MaxScopeCount} reached for {telemetryType}. Scope '{name}' will not be added.");
             }
 
             s = (scope != null)

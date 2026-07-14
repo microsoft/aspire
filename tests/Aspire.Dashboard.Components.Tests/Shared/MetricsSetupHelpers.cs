@@ -20,7 +20,8 @@ internal static class MetricsSetupHelpers
 {
     public static void SetupChartContainer(TestContext context)
     {
-        _ = context.JSInterop.SetupModule("/Components/Controls/Chart/MetricTable.razor.js");
+        var metricTableModule = context.JSInterop.SetupModule("/Components/Controls/Chart/MetricTable.razor.js");
+        metricTableModule.SetupVoid("announceDataGridRows", _ => true);
 
         FluentUISetupHelpers.SetupFluentTab(context);
         FluentUISetupHelpers.SetupFluentOverflow(context);

@@ -21,6 +21,8 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private IDisposable? _themeChangedSubscription;
     private int _renderedDimensionsCount;
     private readonly InstrumentViewModel _instrumentViewModel = new InstrumentViewModel();
+    private (ResourceKey ResourceKey, string MeterName, string InstrumentName)? _dataEndTimeKey;
+    private DateTimeOffset? _dataEndTime;
 
     [Parameter, EditorRequired]
     public required ResourceKey ResourceKey { get; set; }
@@ -47,7 +49,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     public required string? PauseText { get; set; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required ITelemetryRepository TelemetryRepository { get; init; }
 
     [Inject]
     public required ILogger<ChartContainer> Logger { get; init; }
@@ -58,6 +60,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     [Inject]
     public required PauseManager PauseManager { get; init; }
 
+    [Inject]
+    public required IDashboardClient DashboardClient { get; init; }
+
     public ImmutableList<DimensionFilterViewModel> DimensionFilters { get; set; } = [];
     public string? PreviousMeterName { get; set; }
     public string? PreviousInstrumentName { get; set; }
@@ -66,9 +71,12 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     {
         await ThemeManager.EnsureInitializedAsync();
 
-        // Update the graph every 200ms. This displays the latest data and moves time forward.
-        _tickTimer = new PeriodicTimer(TimeSpan.FromSeconds(0.2));
-        _tickTask = Task.Run(UpdateDataAsync);
+        if (!DashboardClient.IsReadOnly)
+        {
+            // Update the graph every 200ms. This displays the latest data and moves time forward.
+            _tickTimer = new PeriodicTimer(TimeSpan.FromSeconds(0.2));
+            _tickTask = Task.Run(UpdateDataAsync);
+        }
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
         {
             _instrumentViewModel.Theme = ThemeManager.EffectiveTheme;
@@ -183,9 +191,19 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     private OtlpInstrumentData? GetInstrument()
     {
-        // When paused, use the paused time to keep the data window stable.
-        // This ensures filter changes while paused still show the same data.
-        var endDate = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : DateTime.UtcNow;
+        DateTime endDate;
+        if (DashboardClient.IsReadOnly)
+        {
+            EnsureDataEndTime();
+            endDate = _dataEndTime?.UtcDateTime ?? DateTime.UtcNow;
+        }
+        else
+        {
+            // When paused, use the paused time to keep the data window stable.
+            // This ensures filter changes while paused still show the same data.
+            endDate = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : DateTime.UtcNow;
+        }
+
         // Get more data than is being displayed. Histogram graph uses some historical data to calculate bucket counts.
         // It's ok to get more data than is needed here. An additional date filter is applied when building chart values.
         var startDate = endDate.Subtract(Duration + TimeSpan.FromSeconds(30));
@@ -209,6 +227,29 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         }
 
         return instrument;
+    }
+
+    private void EnsureDataEndTime()
+    {
+        var key = (ResourceKey, MeterName, InstrumentName);
+        if (_dataEndTimeKey == key)
+        {
+            return;
+        }
+
+        var instrument = TelemetryRepository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = ResourceKey,
+            MeterName = MeterName,
+            InstrumentName = InstrumentName,
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue,
+        });
+        var values = instrument?.Dimensions.SelectMany(dimension => dimension.Values).ToList();
+        _dataEndTime = values is { Count: > 0 }
+            ? new DateTimeOffset(values.Max(value => value.End))
+            : null;
+        _dataEndTimeKey = key;
     }
 
     private List<DimensionFilterViewModel> CreateUpdatedFilters(bool hasInstrumentChanged)

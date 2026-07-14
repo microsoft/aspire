@@ -17,7 +17,7 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class TelemetryImportService
 {
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepository _telemetryRepository;
     private readonly IOptionsMonitor<DashboardOptions> _options;
     private readonly ILogger<TelemetryImportService> _logger;
 
@@ -32,7 +32,7 @@ public sealed class TelemetryImportService
     /// <param name="telemetryRepository">The telemetry repository.</param>
     /// <param name="options">The dashboard options.</param>
     /// <param name="logger">The logger.</param>
-    public TelemetryImportService(TelemetryRepository telemetryRepository, IOptionsMonitor<DashboardOptions> options, ILogger<TelemetryImportService> logger)
+    public TelemetryImportService(ITelemetryRepository telemetryRepository, IOptionsMonitor<DashboardOptions> options, ILogger<TelemetryImportService> logger)
     {
         _telemetryRepository = telemetryRepository;
         _options = options;

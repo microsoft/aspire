@@ -29,22 +29,24 @@ public sealed class ResourceMenuBuilder
     private static readonly Icon s_exportEnvIcon = new Icons.Regular.Size16.DocumentText();
 
     private readonly NavigationManager _navigationManager;
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepository _telemetryRepository;
     private readonly IStringLocalizer<ControlsStrings> _controlLoc;
     private readonly IStringLocalizer<Resources.Resources> _loc;
     private readonly IconResolver _iconResolver;
     private readonly DashboardDialogService _dialogService;
+    private readonly IDashboardClient _dashboardClient;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="ResourceMenuBuilder"/> class.
     /// </summary>
     public ResourceMenuBuilder(
         NavigationManager navigationManager,
-        TelemetryRepository telemetryRepository,
+        ITelemetryRepository telemetryRepository,
         IStringLocalizer<ControlsStrings> controlLoc,
         IStringLocalizer<Resources.Resources> loc,
         IconResolver iconResolver,
-        DashboardDialogService dialogService)
+        DashboardDialogService dialogService,
+        IDashboardClient dashboardClient)
     {
         _navigationManager = navigationManager;
         _telemetryRepository = telemetryRepository;
@@ -52,6 +54,7 @@ public sealed class ResourceMenuBuilder
         _loc = loc;
         _iconResolver = iconResolver;
         _dialogService = dialogService;
+        _dashboardClient = dashboardClient;
     }
 
     /// <summary>
@@ -309,7 +312,7 @@ public sealed class ResourceMenuBuilder
                 Tooltip = command.GetDisplayDescription(),
                 Icon = _iconResolver.ResolveCommandIcon(command.IconName, command.IconVariant),
                 OnClick = () => commandSelected.InvokeAsync(command),
-                IsDisabled = command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
+                IsDisabled = _dashboardClient.IsReadOnly || command.State == CommandViewModelState.Disabled || isCommandExecuting(resource, command)
             };
         }
     }

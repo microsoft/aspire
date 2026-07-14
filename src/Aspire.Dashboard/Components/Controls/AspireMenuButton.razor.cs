@@ -51,6 +51,9 @@ public partial class AspireMenuButton : FluentComponentBase
     [Parameter]
     public bool HideIcon { get; set; }
 
+    [Parameter]
+    public bool Disabled { get; set; }
+
     /// <summary>
     /// Gets or sets a value indicating whether focus should return to this menu button after a menu item is clicked.
     /// </summary>
@@ -68,10 +71,9 @@ public partial class AspireMenuButton : FluentComponentBase
         if (Items != null && !_items.SequenceEqual(Items))
         {
             _items = Items.ToArray();
-
-            // Disabled if there are no actionable items
-            _disabled = !_items.Any(i => !i.IsDivider);
         }
+
+        _disabled = Disabled || !_items.Any(i => !i.IsDivider);
     }
 
     private void ToggleMenu()

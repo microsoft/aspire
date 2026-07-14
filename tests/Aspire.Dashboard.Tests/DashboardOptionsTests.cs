@@ -45,6 +45,28 @@ public sealed class DashboardOptionsTests
         Assert.True(result.Succeeded);
     }
 
+    [Fact]
+    public void PostConfigure_MapsDashboardRunStorageEnvironmentAliases()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardApplicationName.EnvVarName] = "My Dashboard",
+                [DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] = "/data/.aspire/dashboard"
+            })
+            .Build();
+        var options = new DashboardOptions
+        {
+            ApplicationName = "Section Name",
+            Data = new DashboardDataOptions { Directory = "/section/path" }
+        };
+
+        new PostConfigureDashboardOptions(configuration).PostConfigure(null, options);
+
+        Assert.Equal("My Dashboard", options.ApplicationName);
+        Assert.Equal("/data/.aspire/dashboard", options.Data.Directory);
+    }
+
     #region Frontend options
 
     [Fact]

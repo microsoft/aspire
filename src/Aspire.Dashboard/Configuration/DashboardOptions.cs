@@ -19,6 +19,12 @@ public sealed class DashboardOptions
     public TelemetryLimitOptions TelemetryLimits { get; set; } = new();
     public DebugSessionOptions DebugSession { get; set; } = new();
     public UIOptions UI { get; set; } = new();
+    public DashboardDataOptions Data { get; set; } = new();
+}
+
+public sealed class DashboardDataOptions
+{
+    public string? Directory { get; set; }
 }
 
 // Don't set values after validating/parsing options.

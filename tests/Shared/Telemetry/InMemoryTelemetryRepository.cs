@@ -14,6 +14,7 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Utils;
 using Google.Protobuf.Collections;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
@@ -24,18 +25,19 @@ using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
-public sealed partial class TelemetryRepository : IDisposable
+public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository
 {
-    internal const int MaxResourceViewCount = 10_000;
-    internal const int MaxInstrumentCount = 10_000;
-    internal const int MaxScopeCount = 10_000;
-    internal const int MaxDimensionCount = 10_000;
-    internal const int MaxKnownAttributeValueCount = 10_000;
-    internal const int MaxKnownAttributeValuesPerKey = 10_000;
+    internal const int MaxResourceViewCount = TelemetryRepositoryLimits.MaxResourceViewCount;
+    internal const int MaxInstrumentCount = TelemetryRepositoryLimits.MaxInstrumentCount;
+    internal const int MaxScopeCount = TelemetryRepositoryLimits.MaxScopeCount;
+    internal const int MaxDimensionCount = TelemetryRepositoryLimits.MaxDimensionCount;
+    internal const int MaxKnownAttributeValueCount = TelemetryRepositoryLimits.MaxKnownAttributeValueCount;
+    internal const int MaxKnownAttributeValuesPerKey = TelemetryRepositoryLimits.MaxKnownAttributeValuesPerKey;
 
     private readonly PauseManager _pauseManager;
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
     private readonly ILogger _logger;
+    private bool _isReadOnly;
 
     private readonly object _lock = new();
     internal TimeSpan _subscriptionMinExecuteInterval = TimeSpan.FromMilliseconds(100);
@@ -82,9 +84,19 @@ public sealed partial class TelemetryRepository : IDisposable
     internal List<OtlpSpanLink> SpanLinks => _spanLinks;
     internal List<Subscription> TracesSubscriptions => _tracesSubscriptions;
 
-    public TelemetryRepository(ILoggerFactory loggerFactory, IOptions<DashboardOptions> dashboardOptions, PauseManager pauseManager, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+    internal void MakeReadOnly() => _isReadOnly = true;
+
+    private void ThrowIfReadOnly()
     {
-        _logger = loggerFactory.CreateLogger(typeof(TelemetryRepository));
+        if (_isReadOnly)
+        {
+            throw new InvalidOperationException("Historical telemetry is read-only.");
+        }
+    }
+
+    public InMemoryTelemetryRepository(ILoggerFactory loggerFactory, IOptions<DashboardOptions> dashboardOptions, PauseManager pauseManager, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+    {
+        _logger = loggerFactory.CreateLogger(typeof(InMemoryTelemetryRepository));
         _otlpContext = new OtlpContext
         {
             Logger = _logger,
@@ -194,7 +206,7 @@ public sealed partial class TelemetryRepository : IDisposable
         }
     }
 
-    internal void MarkViewedErrorLogs(ResourceKey? key)
+    public void MarkViewedErrorLogs(ResourceKey? key)
     {
         _logsLock.EnterWriteLock();
 
@@ -306,7 +318,7 @@ public sealed partial class TelemetryRepository : IDisposable
             {
                 subscriptions.Remove(subscription!);
             }
-        }, ExecutionContext.Capture(), this);
+        }, ExecutionContext.Capture(), _logger, _subscriptionMinExecuteInterval);
 
         lock (_lock)
         {
@@ -329,6 +341,8 @@ public sealed partial class TelemetryRepository : IDisposable
 
     public void AddLogs(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
     {
+        ThrowIfReadOnly();
+
         if (_pauseManager.AreStructuredLogsPaused(out _))
         {
             _logger.LogTrace("{Count} incoming structured log(s) ignored because of an active pause.", resourceLogs.Count);
@@ -1311,6 +1325,8 @@ public sealed partial class TelemetryRepository : IDisposable
     /// <param name="selectedResources">Dictionary mapping resource names to the data types to clear.</param>
     public void ClearSelectedSignals(Dictionary<string, HashSet<AspireDataType>> selectedResources)
     {
+        ThrowIfReadOnly();
+
         var allOtlpResources = GetResources();
 
         foreach (var otlpResource in allOtlpResources)
@@ -1357,6 +1373,8 @@ public sealed partial class TelemetryRepository : IDisposable
 
     public void ClearTraces(ResourceKey? resourceKey = null)
     {
+        ThrowIfReadOnly();
+
         List<OtlpResource>? resources = null;
         if (resourceKey.HasValue)
         {
@@ -1419,6 +1437,8 @@ public sealed partial class TelemetryRepository : IDisposable
 
     public void ClearStructuredLogs(ResourceKey? resourceKey = null)
     {
+        ThrowIfReadOnly();
+
         List<OtlpResource>? resources = null;
         if (resourceKey.HasValue)
         {
@@ -1481,6 +1501,8 @@ public sealed partial class TelemetryRepository : IDisposable
 
     public void ClearMetrics(ResourceKey? resourceKey = null)
     {
+        ThrowIfReadOnly();
+
         List<OtlpResource> resources;
         if (resourceKey.HasValue)
         {
@@ -1636,6 +1658,8 @@ public sealed partial class TelemetryRepository : IDisposable
 
     public void AddMetrics(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
     {
+        ThrowIfReadOnly();
+
         if (_pauseManager.AreMetricsPaused(out _))
         {
             _logger.LogTrace("{Count} incoming metric(s) ignored because of an active pause.", resourceMetrics.Count);
@@ -1665,6 +1689,8 @@ public sealed partial class TelemetryRepository : IDisposable
 
     public void AddTraces(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
     {
+        ThrowIfReadOnly();
+
         if (_pauseManager.AreTracesPaused(out _))
         {
             _logger.LogTrace("{Count} incoming trace(s) ignored because of an active pause.", resourceSpans.Count);
@@ -1705,18 +1731,7 @@ public sealed partial class TelemetryRepository : IDisposable
 
     internal static OtlpSpanKind ConvertSpanKind(SpanKind? kind)
     {
-        return kind switch
-        {
-            // Unspecified to Internal is intentional.
-            // "Implementations MAY assume SpanKind to be INTERNAL when receiving UNSPECIFIED."
-            SpanKind.Unspecified => OtlpSpanKind.Internal,
-            SpanKind.Internal => OtlpSpanKind.Internal,
-            SpanKind.Client => OtlpSpanKind.Client,
-            SpanKind.Server => OtlpSpanKind.Server,
-            SpanKind.Producer => OtlpSpanKind.Producer,
-            SpanKind.Consumer => OtlpSpanKind.Consumer,
-            _ => OtlpSpanKind.Unspecified
-        };
+        return OtlpHelpers.ConvertSpanKind(kind);
     }
 
     internal void AddTracesCore(AddContext context, OtlpResourceView resourceView, RepeatedField<ScopeSpans> scopeSpans)

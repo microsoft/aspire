@@ -36,7 +36,7 @@ namespace Aspire.Dashboard.ServiceClient;
 /// <para>
 /// If the <c>ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL</c> environment variable is not specified, then there's
 /// no known endpoint to connect to, and this dashboard client will be disabled. Calls to
-/// <see cref="IDashboardClient.SubscribeResourcesAsync"/> and <see cref="IDashboardClient.SubscribeConsoleLogs"/>
+/// <see cref="IResourceRepository.SubscribeResourcesAsync"/> and <see cref="IResourceRepository.SubscribeConsoleLogs"/>
 /// will throw if <see cref="IDashboardClient.IsEnabled"/> is <see langword="false"/>. Callers should
 /// check this property first, before calling these methods.
 /// </para>
@@ -66,6 +66,7 @@ internal sealed class DashboardClient : IDashboardClient
     private readonly DashboardOptions _dashboardOptions;
     private readonly IStringLocalizer<DashboardResources> _loc;
     private readonly ILogger<DashboardClient> _logger;
+    private readonly IResourceRepositoryWriter? _resourceRepositoryWriter;
 
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
@@ -95,12 +96,14 @@ internal sealed class DashboardClient : IDashboardClient
         IOptions<DashboardOptions> dashboardOptions,
         IKnownPropertyLookup knownPropertyLookup,
         IStringLocalizer<DashboardResources> loc,
-        Action<SocketsHttpHandler>? configureHttpHandler = null)
+        Action<SocketsHttpHandler>? configureHttpHandler = null,
+        IResourceRepositoryWriter? resourceRepositoryWriter = null)
     {
         _loggerFactory = loggerFactory;
         _knownPropertyLookup = knownPropertyLookup;
         _dashboardOptions = dashboardOptions.Value;
         _loc = loc;
+        _resourceRepositoryWriter = resourceRepositoryWriter;
 
         // Take a copy of the token and always use it to avoid race between disposal of CTS and usage of token.
         _clientCancellationToken = _cts.Token;
@@ -630,6 +633,15 @@ internal sealed class DashboardClient : IDashboardClient
                 }
             }
 
+            if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
+            {
+                _resourceRepositoryWriter?.ReplaceResources(response.InitialData.Resources);
+            }
+            else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
+            {
+                _resourceRepositoryWriter?.ApplyChanges(response.Changes.Value);
+            }
+
             // Update connection state outside the lock to avoid potential deadlocks
             // if a subscriber tries to access DashboardClient state.
             if (shouldUpdateConnectionState)
@@ -913,6 +925,7 @@ internal sealed class DashboardClient : IDashboardClient
             {
                 await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
                 {
+                    _resourceRepositoryWriter?.AddConsoleLogs(resourceName, response.LogLines);
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(CreateLogLines(response.LogLines));
                 }
@@ -944,6 +957,7 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
         {
+            _resourceRepositoryWriter?.AddConsoleLogs(resourceName, response.LogLines);
             yield return CreateLogLines(response.LogLines);
         }
     }

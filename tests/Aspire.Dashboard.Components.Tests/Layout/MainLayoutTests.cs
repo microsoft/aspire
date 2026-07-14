@@ -6,6 +6,7 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
@@ -17,6 +18,8 @@ using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
 using Microsoft.JSInterop;
 using Xunit;
+using DashboardRunsDialog = Aspire.Dashboard.Components.Dialogs.DashboardRunsDialog;
+using DashboardRunsDialogViewModel = Aspire.Dashboard.Components.Dialogs.DashboardRunsDialogViewModel;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
 
@@ -238,6 +241,122 @@ public partial class MainLayoutTests : DashboardTestContext
         });
     }
 
+    [Fact]
+    public void DashboardRunsButton_Click_OpensDashboardRunsDialog()
+    {
+        DialogParameters? capturedParameters = null;
+        TestDialogService? dialogService = null;
+        dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
+        {
+            capturedParameters = parameters;
+            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+        });
+
+        SetupMainLayoutServices(dialogService: dialogService);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.Find("#dashboard-runs-button").Click();
+
+        Assert.NotNull(capturedParameters);
+        Assert.Equal(nameof(DashboardRunsDialog), capturedParameters.Id);
+    }
+
+    [Fact]
+    public async Task DashboardRunsDialog_OkStoresSelectionAndReloadsWithoutQueryString()
+    {
+        var historicalRun = new DashboardRunDescriptor(
+            RunId: "historical",
+            StartedAtUtc: new DateTimeOffset(2025, 1, 2, 12, 30, 0, TimeSpan.Zero),
+            EndedAtUtc: new DateTimeOffset(2025, 1, 2, 13, 30, 0, TimeSpan.Zero),
+            CleanShutdown: true,
+            ApplicationName: "TestApp",
+            DatabasePath: string.Empty,
+            IsCurrent: false);
+        var runStore = new FluentUISetupHelpers.TestDashboardRunStore(
+        [
+            new(
+                RunId: "current",
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: null,
+                CleanShutdown: false,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: true),
+            historicalRun
+        ]);
+        string? storedRunId = null;
+        var sessionStorage = new TestSessionStorage
+        {
+            OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
+        };
+        DashboardRunsDialogViewModel? content = null;
+        DialogParameters? capturedParameters = null;
+        TestDialogService? dialogService = null;
+        dialogService = new TestDialogService(onShowDialog: (dialogContent, parameters) =>
+        {
+            content = Assert.IsType<DashboardRunsDialogViewModel>(dialogContent);
+            capturedParameters = parameters;
+            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
+        });
+
+        SetupMainLayoutServices(dialogService: dialogService, dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(component => component.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.Find("#dashboard-runs-button").Click();
+        content!.SelectedRun = historicalRun;
+        await cut.InvokeAsync(() => capturedParameters!.OnDialogResult.InvokeAsync(DialogResult.Ok(true)));
+
+        Assert.Equal("historical", storedRunId);
+        Assert.Empty(new Uri(Services.GetRequiredService<NavigationManager>().Uri).Query);
+    }
+
+    [Fact]
+    public void HistoricalRun_DisplaysLocalStartTimeAfterApplicationName()
+    {
+        var timeProvider = new TestTimeProvider();
+        var runStore = new FluentUISetupHelpers.TestDashboardRunStore(
+        [
+            new(
+                RunId: "current",
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: null,
+                CleanShutdown: false,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: true),
+            new(
+                RunId: "historical",
+                StartedAtUtc: new DateTimeOffset(2025, 1, 2, 12, 30, 0, TimeSpan.Zero),
+                EndedAtUtc: new DateTimeOffset(2025, 1, 2, 13, 30, 0, TimeSpan.Zero),
+                CleanShutdown: true,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: false)
+        ]);
+
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetAsync = key => key == BrowserStorageKeys.SelectedDashboardRunId
+                ? (true, "historical")
+                : (false, null)
+        };
+        SetupMainLayoutServices(browserTimeProvider: timeProvider, dashboardRunStore: runStore, sessionStorage: sessionStorage);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        Assert.Equal("Started 1/2/2025 1:30 PM", cut.Find(".application-run-start").TextContent);
+    }
+
     [Theory]
     [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
     [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]
@@ -342,9 +461,18 @@ public partial class MainLayoutTests : DashboardTestContext
         TestLocalStorage? localStorage = null,
         MessageService? messageService = null,
         Action<DashboardOptions>? configureOptions = null,
-        IDialogService? dialogService = null)
+        IDialogService? dialogService = null,
+        BrowserTimeProvider? browserTimeProvider = null,
+        IDashboardRunStore? dashboardRunStore = null,
+        ISessionStorage? sessionStorage = null)
     {
-        FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);
+        FluentUISetupHelpers.AddCommonDashboardServices(
+            this,
+            localStorage: localStorage,
+            messageService: messageService,
+            browserTimeProvider: browserTimeProvider,
+            dashboardRunStore: dashboardRunStore,
+            sessionStorage: sessionStorage);
 
         if (dialogService is not null)
         {

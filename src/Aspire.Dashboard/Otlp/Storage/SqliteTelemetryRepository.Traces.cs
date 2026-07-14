@@ -1,0 +1,1090 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Data;
+using System.Globalization;
+using System.Text;
+using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Otlp;
+using Aspire.Dashboard.Otlp.Model;
+using Dapper;
+using Google.Protobuf.Collections;
+using Microsoft.Data.Sqlite;
+using OpenTelemetry.Proto.Trace.V1;
+
+namespace Aspire.Dashboard.Otlp.Storage;
+
+public sealed partial class SqliteTelemetryRepository
+{
+    private List<OtlpSpan> AddTracesToDatabase(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
+    {
+        var addedSpans = new List<OtlpSpan>();
+        lock (_writeLock)
+        {
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
+            var traces = new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
+
+            foreach (var resourceSpansItem in resourceSpans)
+            {
+                OtlpResourceView resourceView;
+                long resourceId;
+                long resourceViewId;
+                try
+                {
+                    var resourceKey = resourceSpansItem.Resource.GetResourceKey();
+                    resourceId = GetOrAddTelemetryResource(connection, transaction, resourceKey);
+                    var resource = new OtlpResource(resourceKey.Name, resourceKey.InstanceId, uninstrumentedPeer: false, _otlpContext)
+                    {
+                        HasTraces = true
+                    };
+                    resourceView = new OtlpResourceView(resource, resourceSpansItem.Resource.Attributes);
+                    resourceViewId = InsertResourceView(connection, transaction, resourceId, resourceView.Properties);
+                }
+                catch (Exception exception)
+                {
+                    context.FailureCount += resourceSpansItem.ScopeSpans.Sum(scope => scope.Spans.Count);
+                    _otlpContext.Logger.LogInformation(exception, "Error adding resource.");
+                    continue;
+                }
+
+                foreach (var scopeSpans in resourceSpansItem.ScopeSpans)
+                {
+                    OtlpScope scope;
+                    long scopeId;
+                    try
+                    {
+                        (scopeId, scope) = GetOrAddScope(connection, transaction, scopeSpans.Scope);
+                    }
+                    catch (Exception exception)
+                    {
+                        context.FailureCount += scopeSpans.Spans.Count;
+                        _otlpContext.Logger.LogInformation(exception, "Error adding trace scope.");
+                        continue;
+                    }
+
+                    foreach (var span in scopeSpans.Spans)
+                    {
+                        try
+                        {
+                            addedSpans.Add(AddSpanToDatabase(connection, transaction, traces, resourceId, resourceViewId, resourceView, scopeId, scope, span));
+                            context.SuccessCount++;
+                        }
+                        catch (Exception exception)
+                        {
+                            context.FailureCount++;
+                            _otlpContext.Logger.LogInformation(exception, "Error adding span.");
+                        }
+                    }
+                }
+
+                connection.Execute(
+                    "UPDATE telemetry_resources SET has_traces = 1 WHERE resource_id = @ResourceId;",
+                    new { ResourceId = resourceId },
+                    transaction);
+            }
+
+            TrimTracesToCapacity(connection, transaction);
+            transaction.Commit();
+        }
+
+        return addedSpans;
+    }
+
+    private OtlpSpan AddSpanToDatabase(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        Dictionary<string, OtlpTrace> traces,
+        long resourceId,
+        long resourceViewId,
+        OtlpResourceView resourceView,
+        long scopeId,
+        OtlpScope scope,
+        Span span)
+    {
+        var traceId = span.TraceId.ToHexString();
+        if (!traces.TryGetValue(traceId, out var trace))
+        {
+            trace = MaterializeTrace(connection, traceId, transaction) ?? new OtlpTrace(span.TraceId.Memory, DateTime.UtcNow);
+            traces.Add(traceId, trace);
+        }
+        var newTrace = trace.Spans.Count == 0;
+        var modelSpan = CreateSqliteSpan(resourceView, trace, scope, span);
+        trace.AddSpan(modelSpan);
+
+        if (newTrace)
+        {
+            connection.Execute("""
+                INSERT INTO telemetry_traces (
+                    trace_id, insertion_sequence, first_span_timestamp_ticks, duration_ticks, last_updated_timestamp_ticks, full_name)
+                VALUES (
+                    @TraceId,
+                    COALESCE((SELECT MAX(insertion_sequence) + 1 FROM telemetry_traces), 1),
+                    @FirstSpanTimestampTicks,
+                    @DurationTicks,
+                    @LastUpdatedTimestampTicks,
+                    @FullName);
+                """, new
+            {
+                trace.TraceId,
+                FirstSpanTimestampTicks = trace.TimeStamp.Ticks,
+                DurationTicks = trace.Duration.Ticks,
+                LastUpdatedTimestampTicks = trace.LastUpdatedDate.Ticks,
+                trace.FullName
+            }, transaction);
+        }
+
+        connection.Execute("""
+            INSERT INTO telemetry_spans (
+                trace_id, span_id, parent_span_id, resource_id, resource_view_id, scope_id, name, kind,
+                start_time_ticks, end_time_ticks, status, status_message, trace_state)
+            VALUES (
+                @TraceId, @SpanId, @ParentSpanId, @ResourceId, @ResourceViewId, @ScopeId, @Name, @Kind,
+                @StartTimeTicks, @EndTimeTicks, @Status, @StatusMessage, @State);
+            """, new
+        {
+            trace.TraceId,
+            modelSpan.SpanId,
+            modelSpan.ParentSpanId,
+            ResourceId = resourceId,
+            ResourceViewId = resourceViewId,
+            ScopeId = scopeId,
+            modelSpan.Name,
+            Kind = (int)modelSpan.Kind,
+            StartTimeTicks = modelSpan.StartTime.Ticks,
+            EndTimeTicks = modelSpan.EndTime.Ticks,
+            Status = (int)modelSpan.Status,
+            modelSpan.StatusMessage,
+            modelSpan.State
+        }, transaction);
+
+        InsertSpanDetails(connection, transaction, modelSpan);
+        UpdateUninstrumentedPeers(connection, transaction, trace);
+        connection.Execute("""
+            UPDATE telemetry_traces
+            SET first_span_timestamp_ticks = @FirstSpanTimestampTicks,
+                duration_ticks = @DurationTicks,
+                last_updated_timestamp_ticks = @LastUpdatedTimestampTicks,
+                full_name = @FullName
+            WHERE trace_id = @TraceId;
+            """, new
+        {
+            trace.TraceId,
+            FirstSpanTimestampTicks = trace.TimeStamp.Ticks,
+            DurationTicks = trace.Duration.Ticks,
+            LastUpdatedTimestampTicks = trace.LastUpdatedDate.Ticks,
+            trace.FullName
+        }, transaction);
+
+        return modelSpan;
+    }
+
+    private void UpdateUninstrumentedPeers(SqliteConnection connection, IDbTransaction transaction, OtlpTrace trace)
+    {
+        foreach (var span in trace.Spans)
+        {
+            OtlpResource? peer = null;
+            long? peerResourceId = null;
+            var hasPeerAddress = OtlpHelpers.GetPeerAddress(span.Attributes) is not null;
+            if (hasPeerAddress && span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer && !span.GetChildSpans().Any())
+            {
+                foreach (var resolver in _outgoingPeerResolvers)
+                {
+                    if (!resolver.TryResolvePeer(span.Attributes, out _, out var matchedResource) || matchedResource is null)
+                    {
+                        continue;
+                    }
+
+                    var peerKey = ResourceKey.Create(matchedResource.DisplayName, matchedResource.Name);
+                    peerResourceId = GetOrAddTelemetryResource(connection, transaction, peerKey);
+                    connection.Execute(
+                        "UPDATE telemetry_resources SET uninstrumented_peer = 1 WHERE resource_id = @ResourceId;",
+                        new { ResourceId = peerResourceId },
+                        transaction);
+                    peer = new OtlpResource(peerKey.Name, peerKey.InstanceId, uninstrumentedPeer: true, _otlpContext);
+                    break;
+                }
+            }
+
+            trace.SetSpanUninstrumentedPeer(span, peer);
+            connection.Execute("""
+                UPDATE telemetry_spans
+                SET uninstrumented_peer_resource_id = @PeerResourceId
+                WHERE trace_id = @TraceId AND span_id = @SpanId;
+                """, new { PeerResourceId = peerResourceId, span.TraceId, span.SpanId }, transaction);
+        }
+    }
+
+    private static void InsertSpanDetails(SqliteConnection connection, IDbTransaction transaction, OtlpSpan span)
+    {
+        connection.Execute("""
+            INSERT INTO telemetry_span_attributes (trace_id, span_id, ordinal, attribute_key, attribute_value)
+            VALUES (@TraceId, @SpanId, @Ordinal, @Key, @Value);
+            """, span.Attributes.Select((attribute, ordinal) => new
+        {
+            span.TraceId,
+            span.SpanId,
+            Ordinal = ordinal,
+            attribute.Key,
+            attribute.Value
+        }), transaction);
+
+        foreach (var (spanEvent, ordinal) in span.Events.Select((spanEvent, ordinal) => (spanEvent, ordinal)))
+        {
+            var eventId = spanEvent.InternalId.ToString("D");
+            connection.Execute("""
+                INSERT INTO telemetry_span_events (event_id, trace_id, span_id, ordinal, event_name, event_time_ticks)
+                VALUES (@EventId, @TraceId, @SpanId, @Ordinal, @Name, @TimeTicks);
+                """, new { EventId = eventId, span.TraceId, span.SpanId, Ordinal = ordinal, spanEvent.Name, TimeTicks = spanEvent.Time.Ticks }, transaction);
+            connection.Execute("""
+                INSERT INTO telemetry_span_event_attributes (event_id, ordinal, attribute_key, attribute_value)
+                VALUES (@EventId, @Ordinal, @Key, @Value);
+                """, spanEvent.Attributes.Select((attribute, attributeOrdinal) => new
+            {
+                EventId = eventId,
+                Ordinal = attributeOrdinal,
+                attribute.Key,
+                attribute.Value
+            }), transaction);
+        }
+
+        foreach (var link in span.Links)
+        {
+            var linkId = connection.QuerySingle<long>("""
+                INSERT INTO telemetry_span_links (
+                    source_trace_id, source_span_id, target_trace_id, target_span_id, trace_state)
+                VALUES (@SourceTraceId, @SourceSpanId, @TraceId, @SpanId, @TraceState)
+                RETURNING link_id;
+                """, link, transaction);
+            connection.Execute("""
+                INSERT INTO telemetry_span_link_attributes (link_id, ordinal, attribute_key, attribute_value)
+                VALUES (@LinkId, @Ordinal, @Key, @Value);
+                """, link.Attributes.Select((attribute, ordinal) => new
+            {
+                LinkId = linkId,
+                Ordinal = ordinal,
+                attribute.Key,
+                attribute.Value
+            }), transaction);
+        }
+    }
+
+    private OtlpSpan CreateSqliteSpan(OtlpResourceView resourceView, OtlpTrace trace, OtlpScope scope, Span span)
+    {
+        var spanId = span.SpanId?.ToHexString();
+        if (spanId is null)
+        {
+            throw new ArgumentException("Span has no SpanId");
+        }
+
+        var modelSpan = new OtlpSpan(resourceView, trace, scope)
+        {
+            SpanId = spanId,
+            ParentSpanId = span.ParentSpanId?.ToHexString(),
+            Name = span.Name,
+            Kind = OtlpHelpers.ConvertSpanKind(span.Kind),
+            StartTime = OtlpHelpers.UnixNanoSecondsToDateTime(span.StartTimeUnixNano),
+            EndTime = OtlpHelpers.UnixNanoSecondsToDateTime(span.EndTimeUnixNano),
+            Status = ConvertSqliteStatus(span.Status),
+            StatusMessage = span.Status?.Message,
+            Attributes = span.Attributes.ToKeyValuePairs(_otlpContext, filter: attribute => attribute.Key != OtlpHelpers.AspireDestinationNameAttribute),
+            State = !string.IsNullOrEmpty(span.TraceState) ? span.TraceState : null,
+            Events = [],
+            Links = [],
+            BackLinks = []
+        };
+
+        foreach (var spanEvent in span.Events.OrderBy(spanEvent => spanEvent.TimeUnixNano).Take(_otlpContext.Options.MaxSpanEventCount))
+        {
+            modelSpan.Events.Add(new OtlpSpanEvent(modelSpan)
+            {
+                InternalId = Guid.NewGuid(),
+                Name = spanEvent.Name,
+                Time = OtlpHelpers.UnixNanoSecondsToDateTime(spanEvent.TimeUnixNano),
+                Attributes = spanEvent.Attributes.ToKeyValuePairs(_otlpContext)
+            });
+        }
+
+        foreach (var link in span.Links)
+        {
+            modelSpan.Links.Add(new OtlpSpanLink
+            {
+                SourceSpanId = spanId,
+                SourceTraceId = trace.TraceId,
+                TraceState = link.TraceState,
+                SpanId = link.SpanId.ToHexString(),
+                TraceId = link.TraceId.ToHexString(),
+                Attributes = link.Attributes.ToKeyValuePairs(_otlpContext)
+            });
+        }
+
+        return modelSpan;
+    }
+
+    private static OtlpSpanStatusCode ConvertSqliteStatus(Status? status)
+    {
+        return status?.Code switch
+        {
+            Status.Types.StatusCode.Ok => OtlpSpanStatusCode.Ok,
+            Status.Types.StatusCode.Error => OtlpSpanStatusCode.Error,
+            _ => OtlpSpanStatusCode.Unset
+        };
+    }
+
+    private void TrimTracesToCapacity(SqliteConnection connection, IDbTransaction transaction)
+    {
+        connection.Execute("""
+            DELETE FROM telemetry_traces
+            WHERE trace_id IN (
+                SELECT trace_id
+                FROM telemetry_traces
+                ORDER BY first_span_timestamp_ticks, insertion_sequence DESC
+                LIMIT MAX((SELECT COUNT(*) FROM telemetry_traces) - @MaxTraceCount, 0)
+            );
+
+            DELETE FROM telemetry_resource_views
+            WHERE NOT EXISTS (SELECT 1 FROM telemetry_logs WHERE telemetry_logs.resource_view_id = telemetry_resource_views.resource_view_id)
+              AND NOT EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_view_id = telemetry_resource_views.resource_view_id);
+
+            UPDATE telemetry_resources
+            SET has_traces = EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_id = telemetry_resources.resource_id);
+            """, new { _otlpContext.Options.MaxTraceCount }, transaction);
+    }
+
+    private GetTracesResponse GetTracesFromDatabase(GetTracesRequest context)
+    {
+        using var connection = _database.OpenConnection();
+        var query = BuildTraceQuery(context);
+        var aggregate = connection.QuerySingle<TraceAggregateRecord>($"""
+            SELECT COUNT(*) AS TotalItemCount, COALESCE(MAX(t.duration_ticks), 0) AS MaxDurationTicks
+            {query.FromAndWhere};
+            """, query.Parameters);
+        query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
+        query.Parameters.Add("Count", Math.Max(context.Count, 0));
+        var records = connection.Query<TraceSummaryRecord>($"""
+            SELECT
+                t.trace_id AS TraceId,
+                t.last_updated_timestamp_ticks AS LastUpdatedTimestampTicks
+            {query.FromAndWhere}
+            ORDER BY t.first_span_timestamp_ticks, t.insertion_sequence DESC
+            LIMIT @Count OFFSET @StartIndex;
+            """, query.Parameters).AsList();
+        var traces = records.Select(record => MaterializeTrace(connection, record.TraceId)!).ToList();
+        return new GetTracesResponse
+        {
+            PagedResult = new PagedResult<OtlpTrace>
+            {
+                Items = traces,
+                TotalItemCount = aggregate.TotalItemCount,
+                IsFull = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_traces;") >= _otlpContext.Options.MaxTraceCount
+            },
+            MaxDuration = TimeSpan.FromTicks(aggregate.MaxDurationTicks)
+        };
+    }
+
+    private static TraceQuery BuildTraceQuery(GetTracesRequest context)
+    {
+        var sql = new StringBuilder("FROM telemetry_traces t WHERE EXISTS (SELECT 1 FROM telemetry_spans existing_span WHERE existing_span.trace_id = t.trace_id)");
+        var parameters = new DynamicParameters();
+        if (context.ResourceKeys.Count > 0)
+        {
+            var resourcePredicates = new List<string>(context.ResourceKeys.Count);
+            for (var index = 0; index < context.ResourceKeys.Count; index++)
+            {
+                var key = context.ResourceKeys[index];
+                parameters.Add($"ResourceName{index}", key.Name);
+                var sourcePredicate = $"r.resource_name = @ResourceName{index} COLLATE ORDINAL_IGNORE_CASE";
+                var peerPredicate = $"pr.resource_name = @ResourceName{index} COLLATE ORDINAL_IGNORE_CASE";
+                if (key.InstanceId is not null)
+                {
+                    parameters.Add($"InstanceId{index}", key.InstanceId);
+                    sourcePredicate += $" AND r.instance_id_is_null = 0 AND r.instance_id = @InstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                    peerPredicate += $" AND pr.instance_id_is_null = 0 AND pr.instance_id = @InstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                }
+                resourcePredicates.Add($"(({sourcePredicate}) OR ({peerPredicate}))");
+            }
+            sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id WHERE s.trace_id = t.trace_id AND (");
+            sql.AppendJoin(" OR ", resourcePredicates);
+            sql.Append("))");
+        }
+        if (!string.IsNullOrWhiteSpace(context.TraceNameFilterText))
+        {
+            sql.Append(" AND ordinal_contains(t.full_name, @TraceNameFilterText)");
+            parameters.Add("TraceNameFilterText", context.TraceNameFilterText);
+        }
+
+        var positivePredicates = new List<string>();
+        var filterIndex = 0;
+        foreach (var filter in context.Filters.Where(filter => filter.Enabled))
+        {
+            if (filter is not FieldTelemetryFilter fieldFilter)
+            {
+                continue;
+            }
+
+            if (fieldFilter.Field == KnownTraceFields.DurationField)
+            {
+                sql.Append(" AND ");
+                sql.Append(BuildTraceDurationPredicate(fieldFilter, parameters, filterIndex++));
+                continue;
+            }
+
+            if (fieldFilter.Condition is FilterCondition.NotEqual or FilterCondition.NotContains)
+            {
+                sql.Append(" AND NOT EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id WHERE s.trace_id = t.trace_id AND ");
+                sql.Append(BuildSpanFieldPredicate(fieldFilter, parameters, filterIndex++, invertNegative: true));
+                sql.Append(')');
+            }
+            else
+            {
+                positivePredicates.Add(BuildSpanFieldPredicate(fieldFilter, parameters, filterIndex++, invertNegative: false));
+            }
+        }
+        if (positivePredicates.Count > 0)
+        {
+            sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id WHERE s.trace_id = t.trace_id AND ");
+            sql.AppendJoin(" AND ", positivePredicates);
+            sql.Append(')');
+        }
+
+        if (context.TextFragments is { Length: > 0 })
+        {
+            var fullNamePredicates = new List<string>(context.TextFragments.Length);
+            var spanPredicates = new List<string>(context.TextFragments.Length);
+            for (var index = 0; index < context.TextFragments.Length; index++)
+            {
+                var parameterName = $"TextFragment{index}";
+                parameters.Add(parameterName, context.TextFragments[index]);
+                fullNamePredicates.Add($"ordinal_contains(t.full_name, @{parameterName})");
+                spanPredicates.Add($"""
+                    (
+                        ordinal_contains(s.name, @{parameterName}) OR
+                        ordinal_contains(s.span_id, @{parameterName}) OR
+                        ordinal_contains(s.trace_id, @{parameterName}) OR
+                        ordinal_contains(sc.scope_name, @{parameterName}) OR
+                        ordinal_contains(r.resource_name, @{parameterName}) OR
+                        ordinal_contains(CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END, @{parameterName}) OR
+                        ordinal_contains(CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END, @{parameterName}) OR
+                        ordinal_contains(COALESCE(s.status_message, ''), @{parameterName}) OR
+                        EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND (ordinal_contains(a.attribute_key, @{parameterName}) OR ordinal_contains(a.attribute_value, @{parameterName}))) OR
+                        EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND ordinal_contains(e.event_name, @{parameterName}))
+                    )
+                    """);
+            }
+            sql.Append(" AND ((");
+            sql.AppendJoin(" AND ", fullNamePredicates);
+            sql.Append(") OR EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id WHERE s.trace_id = t.trace_id AND ");
+            sql.AppendJoin(" AND ", spanPredicates);
+            sql.Append("))");
+        }
+        return new TraceQuery(sql.ToString(), parameters);
+    }
+
+    private static string BuildTraceDurationPredicate(FieldTelemetryFilter filter, DynamicParameters parameters, int filterIndex)
+    {
+        var parameterName = $"TraceDuration{filterIndex}";
+        if (!double.TryParse(filter.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var milliseconds) || !double.IsFinite(milliseconds))
+        {
+            return "0 = 1";
+        }
+
+        parameters.Add(parameterName, milliseconds);
+        return BuildNumericPredicate($"(CAST(t.duration_ticks AS REAL) / {TimeSpan.TicksPerMillisecond})", filter.Condition, parameterName);
+    }
+
+    private static string BuildSpanFieldPredicate(
+        FieldTelemetryFilter filter,
+        DynamicParameters parameters,
+        int filterIndex,
+        bool invertNegative)
+    {
+        var parameterName = $"TraceFilter{filterIndex}";
+        var condition = invertNegative
+            ? filter.Condition switch
+            {
+                FilterCondition.NotEqual => FilterCondition.Equals,
+                FilterCondition.NotContains => FilterCondition.Contains,
+                _ => filter.Condition
+            }
+            : filter.Condition;
+        parameters.Add(parameterName, filter.Value);
+
+        var expression = filter.Field switch
+        {
+            KnownResourceFields.ServiceNameField => null,
+            KnownTraceFields.TraceIdField => "s.trace_id",
+            KnownTraceFields.SpanIdField => "s.span_id",
+            KnownTraceFields.NameField => "s.name",
+            KnownTraceFields.KindField => "CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END",
+            KnownTraceFields.StatusField => "CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END",
+            KnownSourceFields.NameField => "sc.scope_name",
+            KnownTraceFields.TimestampField => "s.start_time_ticks / 10000",
+            _ => null
+        };
+        if (filter.Field == KnownTraceFields.TimestampField)
+        {
+            if (!DateTime.TryParse(filter.Value, CultureInfo.InvariantCulture, DateTimeStyles.AdjustToUniversal | DateTimeStyles.AssumeLocal, out var date))
+            {
+                return "0 = 1";
+            }
+            parameters.Add(parameterName, date.ToUniversalTime().Ticks / TimeSpan.TicksPerMillisecond);
+            return BuildNumericPredicate(expression!, condition, parameterName);
+        }
+        if (expression is not null)
+        {
+            return BuildStringPredicate(expression, condition, parameterName);
+        }
+        if (filter.Field == KnownResourceFields.ServiceNameField)
+        {
+            var sourcePredicate = BuildStringPredicate("r.resource_name", condition, parameterName);
+            var peerPredicate = BuildStringPredicate("pr.resource_name", condition, parameterName);
+            return $"({sourcePredicate} OR (pr.resource_id IS NOT NULL AND {peerPredicate}))";
+        }
+
+        var attributePredicate = BuildStringPredicate("a.attribute_value", condition, parameterName);
+        parameters.Add($"TraceField{filterIndex}", filter.Field);
+        return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND a.attribute_key = @TraceField{filterIndex} COLLATE ORDINAL_IGNORE_CASE AND {attributePredicate})";
+    }
+
+    private GetSpansResponse GetSpansFromDatabase(GetSpansRequest context)
+    {
+        using var connection = _database.OpenConnection();
+        var query = BuildSpanQuery(context);
+        var totalCount = connection.QuerySingle<int>($"SELECT COUNT(*) {query.FromAndWhere};", query.Parameters);
+        query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
+        query.Parameters.Add("Count", Math.Max(context.Count, 0));
+        var identities = connection.Query<SpanIdentityRecord>($"""
+            SELECT s.trace_id AS TraceId, s.span_id AS SpanId
+            {query.FromAndWhere}
+            ORDER BY t.first_span_timestamp_ticks, t.insertion_sequence DESC, s.start_time_ticks, s.span_id
+            LIMIT @Count OFFSET @StartIndex;
+            """, query.Parameters).AsList();
+        var traces = identities.Select(identity => identity.TraceId).Distinct(StringComparer.Ordinal)
+            .ToDictionary(traceId => traceId, traceId => MaterializeTrace(connection, traceId)!, StringComparer.Ordinal);
+        return new GetSpansResponse
+        {
+            PagedResult = new PagedResult<OtlpSpan>
+            {
+                Items = identities.Select(identity => traces[identity.TraceId].Spans.Single(span => span.SpanId == identity.SpanId)).ToList(),
+                TotalItemCount = totalCount,
+                IsFull = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_traces;") >= _otlpContext.Options.MaxTraceCount
+            }
+        };
+    }
+
+    private static TraceQuery BuildSpanQuery(GetSpansRequest context)
+    {
+        var sql = new StringBuilder("""
+            FROM telemetry_spans s
+            JOIN telemetry_traces t ON t.trace_id = s.trace_id
+            JOIN telemetry_resources r ON r.resource_id = s.resource_id
+            JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id
+            LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id
+            WHERE 1 = 1
+            """);
+        var parameters = new DynamicParameters();
+        if (context.ResourceKeys.Count > 0)
+        {
+            var predicates = new List<string>(context.ResourceKeys.Count);
+            for (var index = 0; index < context.ResourceKeys.Count; index++)
+            {
+                var key = context.ResourceKeys[index];
+                parameters.Add($"SpanResourceName{index}", key.Name);
+                var source = $"r.resource_name = @SpanResourceName{index} COLLATE ORDINAL_IGNORE_CASE";
+                var peer = $"pr.resource_name = @SpanResourceName{index} COLLATE ORDINAL_IGNORE_CASE";
+                if (key.InstanceId is not null)
+                {
+                    parameters.Add($"SpanInstanceId{index}", key.InstanceId);
+                    source += $" AND r.instance_id_is_null = 0 AND r.instance_id = @SpanInstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                    peer += $" AND pr.instance_id_is_null = 0 AND pr.instance_id = @SpanInstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                }
+                predicates.Add($"(({source}) OR ({peer}))");
+            }
+            sql.Append(" AND (");
+            sql.AppendJoin(" OR ", predicates);
+            sql.Append(')');
+        }
+        if (!string.IsNullOrEmpty(context.TraceId))
+        {
+            parameters.Add("SpanTraceId", context.TraceId);
+            sql.Append(context.TraceId.Length >= OtlpHelpers.ShortenedIdLength
+                ? " AND ordinal_starts_with(s.trace_id, @SpanTraceId)"
+                : " AND s.trace_id = @SpanTraceId COLLATE ORDINAL_IGNORE_CASE");
+        }
+        if (context.HasError is not null)
+        {
+            parameters.Add("SpanErrorStatus", (int)OtlpSpanStatusCode.Error);
+            sql.Append(context.HasError.Value ? " AND s.status = @SpanErrorStatus" : " AND s.status <> @SpanErrorStatus");
+        }
+
+        var filterIndex = 0;
+        foreach (var filter in context.Filters.Where(filter => filter.Enabled))
+        {
+            if (filter is not FieldTelemetryFilter fieldFilter)
+            {
+                continue;
+            }
+            if (fieldFilter.Field == KnownTraceFields.DurationField)
+            {
+                var parameterName = $"SpanDuration{filterIndex++}";
+                if (!double.TryParse(fieldFilter.Value, NumberStyles.Float, CultureInfo.InvariantCulture, out var milliseconds) || !double.IsFinite(milliseconds))
+                {
+                    sql.Append(" AND 0 = 1");
+                    continue;
+                }
+                parameters.Add(parameterName, milliseconds);
+                sql.Append(" AND ");
+                sql.Append(BuildNumericPredicate($"(CAST(s.end_time_ticks - s.start_time_ticks AS REAL) / {TimeSpan.TicksPerMillisecond})", fieldFilter.Condition, parameterName));
+                continue;
+            }
+
+            if (fieldFilter.Condition is FilterCondition.NotEqual or FilterCondition.NotContains &&
+                fieldFilter.Field is not (KnownResourceFields.ServiceNameField or KnownTraceFields.TraceIdField or KnownTraceFields.SpanIdField or KnownTraceFields.NameField or KnownTraceFields.KindField or KnownTraceFields.StatusField or KnownSourceFields.NameField or KnownTraceFields.TimestampField))
+            {
+                var violationFilter = new FieldTelemetryFilter
+                {
+                    Field = fieldFilter.Field,
+                    Condition = fieldFilter.Condition == FilterCondition.NotEqual ? FilterCondition.Equals : FilterCondition.Contains,
+                    Value = fieldFilter.Value
+                };
+                sql.Append(" AND NOT ");
+                sql.Append(BuildSpanFieldPredicate(violationFilter, parameters, filterIndex++, invertNegative: false));
+            }
+            else
+            {
+                sql.Append(" AND ");
+                sql.Append(BuildSpanFieldPredicate(fieldFilter, parameters, filterIndex++, invertNegative: false));
+            }
+        }
+
+        if (context.TextFragments is { Length: > 0 })
+        {
+            for (var index = 0; index < context.TextFragments.Length; index++)
+            {
+                var parameterName = $"SpanTextFragment{index}";
+                parameters.Add(parameterName, context.TextFragments[index]);
+                 sql.Append(CultureInfo.InvariantCulture, $"""
+                     AND (
+                        ordinal_contains(s.name, @{parameterName}) OR
+                        ordinal_contains(s.span_id, @{parameterName}) OR
+                        ordinal_contains(s.trace_id, @{parameterName}) OR
+                        ordinal_contains(sc.scope_name, @{parameterName}) OR
+                        ordinal_contains(r.resource_name, @{parameterName}) OR
+                        ordinal_contains(CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END, @{parameterName}) OR
+                        ordinal_contains(CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END, @{parameterName}) OR
+                        ordinal_contains(COALESCE(s.status_message, ''), @{parameterName}) OR
+                        EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND (ordinal_contains(a.attribute_key, @{parameterName}) OR ordinal_contains(a.attribute_value, @{parameterName}))) OR
+                        EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND ordinal_contains(e.event_name, @{parameterName}))
+                    )
+                    """);
+            }
+        }
+        return new TraceQuery(sql.ToString(), parameters);
+    }
+
+    private List<string> GetTracePropertyKeysFromDatabase(ResourceKey? resourceKey)
+    {
+        using var connection = _database.OpenConnection();
+        var parameters = new DynamicParameters();
+        var resourceWhere = string.Empty;
+        if (resourceKey is not null)
+        {
+            resourceWhere = " AND r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE";
+            parameters.Add("ResourceName", resourceKey.Value.Name);
+            if (resourceKey.Value.InstanceId is not null)
+            {
+                resourceWhere += " AND r.instance_id_is_null = 0 AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                parameters.Add("InstanceId", resourceKey.Value.InstanceId);
+            }
+        }
+        return connection.Query<string>($"""
+            SELECT DISTINCT a.attribute_key
+            FROM telemetry_span_attributes a
+            JOIN telemetry_spans s ON s.trace_id = a.trace_id AND s.span_id = a.span_id
+            JOIN telemetry_resources r ON r.resource_id = s.resource_id
+            WHERE 1 = 1{resourceWhere}
+            ORDER BY a.attribute_key;
+            """, parameters).AsList();
+    }
+
+    private Dictionary<string, int> GetTraceFieldValuesFromDatabase(string attributeName)
+    {
+        using var connection = _database.OpenConnection();
+        var traces = connection.Query<string>("SELECT trace_id FROM telemetry_traces ORDER BY first_span_timestamp_ticks, insertion_sequence DESC;")
+            .Select(traceId => MaterializeTrace(connection, traceId)!)
+            .ToList();
+        return OtlpSpan.GetFieldValuesFromTraces(traces, attributeName);
+    }
+
+    private bool HasUpdatedTraceInDatabase(OtlpTrace trace)
+    {
+        using var connection = _database.OpenConnection();
+        var lastUpdatedTicks = connection.QuerySingleOrDefault<long?>("""
+            SELECT last_updated_timestamp_ticks
+            FROM telemetry_traces
+            WHERE trace_id = @TraceId;
+            """, new { trace.TraceId });
+        return lastUpdatedTicks is null || lastUpdatedTicks.Value > trace.LastUpdatedDate.Ticks;
+    }
+
+    private OtlpTrace? GetTraceFromDatabase(string traceId)
+    {
+        using var connection = _database.OpenConnection();
+        var storedTraceId = connection.QueryFirstOrDefault<string>(traceId.Length >= OtlpHelpers.ShortenedIdLength
+            ? "SELECT trace_id FROM telemetry_traces WHERE ordinal_starts_with(trace_id, @TraceId) ORDER BY first_span_timestamp_ticks, insertion_sequence DESC LIMIT 1;"
+            : "SELECT trace_id FROM telemetry_traces WHERE trace_id = @TraceId COLLATE ORDINAL_IGNORE_CASE ORDER BY first_span_timestamp_ticks, insertion_sequence DESC LIMIT 1;", new { TraceId = traceId });
+        return storedTraceId is null ? null : MaterializeTrace(connection, storedTraceId);
+    }
+
+    private OtlpSpan? GetSpanFromDatabase(string traceId, string spanId)
+    {
+        var trace = GetTraceFromDatabase(traceId);
+        return trace?.Spans.FirstOrDefault(span => span.SpanId == spanId);
+    }
+
+    private OtlpTrace? MaterializeTrace(SqliteConnection connection, string traceId, IDbTransaction? transaction = null)
+    {
+        var records = connection.Query<SpanRecord>("""
+            SELECT
+                s.trace_id AS TraceId,
+                s.span_id AS SpanId,
+                s.parent_span_id AS ParentSpanId,
+                s.resource_id AS ResourceId,
+                s.resource_view_id AS ResourceViewId,
+                s.scope_id AS ScopeId,
+                s.name AS Name,
+                s.kind AS Kind,
+                s.start_time_ticks AS StartTimeTicks,
+                s.end_time_ticks AS EndTimeTicks,
+                s.status AS Status,
+                s.status_message AS StatusMessage,
+                s.trace_state AS State,
+                s.uninstrumented_peer_resource_id AS PeerResourceId,
+                t.last_updated_timestamp_ticks AS LastUpdatedTimestampTicks,
+                r.resource_name AS ResourceName,
+                r.instance_id AS InstanceId,
+                r.instance_id_is_null AS InstanceIdIsNull,
+                r.uninstrumented_peer AS UninstrumentedPeer,
+                r.has_logs AS HasLogs,
+                r.has_traces AS HasTraces,
+                r.has_metrics AS HasMetrics,
+                sc.scope_name AS ScopeName,
+                sc.scope_version AS ScopeVersion,
+                pr.resource_name AS PeerResourceName,
+                pr.instance_id AS PeerInstanceId,
+                pr.instance_id_is_null AS PeerInstanceIdIsNull
+            FROM telemetry_spans s
+            JOIN telemetry_traces t ON t.trace_id = s.trace_id
+            JOIN telemetry_resources r ON r.resource_id = s.resource_id
+            JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id
+            LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id
+            WHERE s.trace_id = @TraceId
+            ORDER BY s.start_time_ticks, s.span_id;
+            """, new { TraceId = traceId }, transaction).AsList();
+        if (records.Count == 0)
+        {
+            return null;
+        }
+
+        var spanIds = records.Select(record => record.SpanId).ToArray();
+        var viewIds = records.Select(record => record.ResourceViewId).Distinct().ToArray();
+        var scopeIds = records.Select(record => record.ScopeId).Distinct().ToArray();
+        var spanAttributes = connection.Query<TraceOwnedAttributeRecord>("""
+            SELECT span_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+            FROM telemetry_span_attributes
+            WHERE trace_id = @TraceId AND span_id IN @SpanIds
+            ORDER BY span_id, ordinal;
+            """, new { TraceId = traceId, SpanIds = spanIds }, transaction).ToLookup(record => record.OwnerId);
+        var viewAttributes = connection.Query<OwnedAttributeRecord>("""
+            SELECT resource_view_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+            FROM telemetry_resource_view_attributes
+            WHERE resource_view_id IN @Ids
+            ORDER BY resource_view_id, ordinal;
+            """, new { Ids = viewIds }, transaction).ToLookup(record => record.OwnerId);
+        var scopeAttributes = connection.Query<OwnedAttributeRecord>("""
+            SELECT scope_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+            FROM telemetry_scope_attributes
+            WHERE scope_id IN @Ids
+            ORDER BY scope_id, ordinal;
+            """, new { Ids = scopeIds }, transaction).ToLookup(record => record.OwnerId);
+        var eventRecords = connection.Query<SpanEventRecord>("""
+            SELECT event_id AS EventId, span_id AS SpanId, event_name AS EventName, event_time_ticks AS EventTimeTicks
+            FROM telemetry_span_events
+            WHERE trace_id = @TraceId
+            ORDER BY span_id, ordinal;
+            """, new { TraceId = traceId }, transaction).AsList();
+        var eventAttributes = connection.Query<TextOwnedAttributeRecord>("""
+            SELECT event_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+            FROM telemetry_span_event_attributes
+            WHERE event_id IN @Ids
+            ORDER BY event_id, ordinal;
+            """, new { Ids = eventRecords.Select(record => record.EventId).ToArray() }, transaction).ToLookup(record => record.OwnerId);
+        var events = eventRecords.ToLookup(record => record.SpanId);
+        var linkRecords = connection.Query<SpanLinkRecord>("""
+            SELECT
+                link_id AS LinkId,
+                source_trace_id AS SourceTraceId,
+                source_span_id AS SourceSpanId,
+                target_trace_id AS TraceId,
+                target_span_id AS SpanId,
+                trace_state AS TraceState
+            FROM telemetry_span_links
+            WHERE source_trace_id = @TraceId OR target_trace_id = @TraceId
+            ORDER BY link_id;
+            """, new { TraceId = traceId }, transaction).AsList();
+        var linkAttributes = connection.Query<LongOwnedAttributeRecord>("""
+            SELECT link_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+            FROM telemetry_span_link_attributes
+            WHERE link_id IN @Ids
+            ORDER BY link_id, ordinal;
+            """, new { Ids = linkRecords.Select(record => record.LinkId).ToArray() }, transaction).ToLookup(record => record.OwnerId);
+        var outgoingLinks = linkRecords.Where(record => record.SourceTraceId == traceId).ToLookup(record => record.SourceSpanId);
+        var incomingLinks = linkRecords.Where(record => record.TraceId == traceId).ToLookup(record => record.SpanId);
+
+        var trace = new OtlpTrace(Convert.FromHexString(traceId), new DateTime(records[0].LastUpdatedTimestampTicks, DateTimeKind.Utc));
+        var resources = new Dictionary<long, OtlpResource>();
+        var views = new Dictionary<long, OtlpResourceView>();
+        var scopes = new Dictionary<long, OtlpScope>();
+        foreach (var record in records)
+        {
+            if (!resources.TryGetValue(record.ResourceId, out var resource))
+            {
+                resource = new OtlpResource(record.ResourceName, record.InstanceIdIsNull ? null : record.InstanceId, record.UninstrumentedPeer, _otlpContext)
+                {
+                    HasLogs = record.HasLogs,
+                    HasTraces = record.HasTraces,
+                    HasMetrics = record.HasMetrics
+                };
+                resources.Add(record.ResourceId, resource);
+            }
+            if (!views.TryGetValue(record.ResourceViewId, out var view))
+            {
+                view = new OtlpResourceView(resource, ToPairs(viewAttributes[record.ResourceViewId]));
+                views.Add(record.ResourceViewId, view);
+            }
+            if (!scopes.TryGetValue(record.ScopeId, out var scope))
+            {
+                var attributes = ToPairs(scopeAttributes[record.ScopeId]);
+                scope = record.ScopeName == OtlpScope.Empty.Name && record.ScopeVersion.Length == 0 && attributes.Length == 0
+                    ? OtlpScope.Empty
+                    : new OtlpScope(record.ScopeName, record.ScopeVersion, attributes);
+                scopes.Add(record.ScopeId, scope);
+            }
+
+            var modelSpan = new OtlpSpan(view, trace, scope)
+            {
+                SpanId = record.SpanId,
+                ParentSpanId = record.ParentSpanId,
+                Name = record.Name,
+                Kind = (OtlpSpanKind)record.Kind,
+                StartTime = new DateTime(record.StartTimeTicks, DateTimeKind.Utc),
+                EndTime = new DateTime(record.EndTimeTicks, DateTimeKind.Utc),
+                Status = (OtlpSpanStatusCode)record.Status,
+                StatusMessage = record.StatusMessage,
+                State = record.State,
+                Attributes = ToPairs(spanAttributes[record.SpanId]),
+                Events = [],
+                Links = outgoingLinks[record.SpanId].Select(CreateLink).ToList(),
+                BackLinks = incomingLinks[record.SpanId].Select(CreateLink).ToList()
+            };
+            if (record.PeerResourceId is not null)
+            {
+                modelSpan.SetUninstrumentedPeer(new OtlpResource(
+                    record.PeerResourceName!,
+                    record.PeerInstanceIdIsNull ? null : record.PeerInstanceId,
+                    uninstrumentedPeer: true,
+                    _otlpContext));
+            }
+            modelSpan.Events.AddRange(events[record.SpanId].Select(spanEvent => new OtlpSpanEvent(modelSpan)
+            {
+                InternalId = Guid.Parse(spanEvent.EventId),
+                Name = spanEvent.EventName,
+                Time = new DateTime(spanEvent.EventTimeTicks, DateTimeKind.Utc),
+                Attributes = ToPairs(eventAttributes[spanEvent.EventId])
+            }));
+            trace.AddSpan(modelSpan, skipLastUpdatedDate: true);
+        }
+        return trace;
+
+        OtlpSpanLink CreateLink(SpanLinkRecord link)
+        {
+            return new OtlpSpanLink
+            {
+                SourceTraceId = link.SourceTraceId,
+                SourceSpanId = link.SourceSpanId,
+                TraceId = link.TraceId,
+                SpanId = link.SpanId,
+                TraceState = link.TraceState,
+                Attributes = ToPairs(linkAttributes[link.LinkId])
+            };
+        }
+
+        static KeyValuePair<string, string>[] ToPairs(IEnumerable<AttributeRecord> attributes)
+        {
+            return attributes.Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray();
+        }
+    }
+
+    private void ClearSelectedTracesFromDatabase(Dictionary<string, HashSet<AspireDataType>> selectedResources)
+    {
+        using var connection = _database.OpenConnection();
+        var resources = connection.Query<TelemetryResourceRecord>("""
+            SELECT resource_name AS ResourceName, instance_id AS InstanceId, instance_id_is_null AS InstanceIdIsNull
+            FROM telemetry_resources;
+            """);
+        foreach (var resource in resources)
+        {
+            var key = new ResourceKey(resource.ResourceName, resource.InstanceIdIsNull ? null : resource.InstanceId);
+            if (selectedResources.TryGetValue(key.GetCompositeName(), out var dataTypes) &&
+                dataTypes.Contains(AspireDataType.Traces) &&
+                !dataTypes.Contains(AspireDataType.Resource))
+            {
+                ClearTracesFromDatabase(key);
+            }
+        }
+    }
+
+    private void RecalculateUninstrumentedPeers()
+    {
+        lock (_writeLock)
+        {
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
+            foreach (var traceId in connection.Query<string>("SELECT trace_id FROM telemetry_traces;", transaction: transaction))
+            {
+                var trace = MaterializeTrace(connection, traceId, transaction)!;
+                UpdateUninstrumentedPeers(connection, transaction, trace);
+                connection.Execute("""
+                    UPDATE telemetry_traces
+                    SET last_updated_timestamp_ticks = @LastUpdatedTimestampTicks
+                    WHERE trace_id = @TraceId;
+                    """, new { TraceId = traceId, LastUpdatedTimestampTicks = trace.LastUpdatedDate.Ticks }, transaction);
+            }
+            transaction.Commit();
+        }
+    }
+
+    private void ClearTracesFromDatabase(ResourceKey? resourceKey)
+    {
+        lock (_writeLock)
+        {
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
+            var parameters = new DynamicParameters();
+            var where = string.Empty;
+            if (resourceKey is not null)
+            {
+                where = " WHERE resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE";
+                parameters.Add("ResourceName", resourceKey.Value.Name);
+                if (resourceKey.Value.InstanceId is not null)
+                {
+                    where += " AND instance_id_is_null = 0 AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                    parameters.Add("InstanceId", resourceKey.Value.InstanceId);
+                }
+            }
+            parameters.Add("ClearAll", resourceKey is null);
+
+            connection.Execute($"""
+                DELETE FROM telemetry_traces
+                WHERE @ClearAll OR trace_id IN (
+                    SELECT DISTINCT trace_id
+                    FROM telemetry_spans
+                    WHERE resource_id IN (SELECT resource_id FROM telemetry_resources{where})
+                );
+
+                DELETE FROM telemetry_resource_views
+                WHERE NOT EXISTS (SELECT 1 FROM telemetry_logs WHERE telemetry_logs.resource_view_id = telemetry_resource_views.resource_view_id)
+                  AND NOT EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_view_id = telemetry_resource_views.resource_view_id);
+
+                UPDATE telemetry_resources
+                SET has_traces = EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_id = telemetry_resources.resource_id);
+                """, parameters, transaction);
+            DeleteOrphanedScopes(connection, transaction);
+            transaction.Commit();
+        }
+    }
+
+    private sealed record TraceQuery(string FromAndWhere, DynamicParameters Parameters);
+
+    private sealed class TraceAggregateRecord
+    {
+        public required int TotalItemCount { get; init; }
+        public required long MaxDurationTicks { get; init; }
+    }
+
+    private sealed class TraceSummaryRecord
+    {
+        public required string TraceId { get; init; }
+        public required long LastUpdatedTimestampTicks { get; init; }
+    }
+
+    private sealed class SpanIdentityRecord
+    {
+        public required string TraceId { get; init; }
+        public required string SpanId { get; init; }
+    }
+
+    private sealed class TraceOwnedAttributeRecord : AttributeRecord
+    {
+        public required string OwnerId { get; init; }
+    }
+
+    private sealed class TextOwnedAttributeRecord : AttributeRecord
+    {
+        public required string OwnerId { get; init; }
+    }
+
+    private sealed class LongOwnedAttributeRecord : AttributeRecord
+    {
+        public required long OwnerId { get; init; }
+    }
+
+    private sealed class SpanEventRecord
+    {
+        public required string EventId { get; init; }
+        public required string SpanId { get; init; }
+        public required string EventName { get; init; }
+        public required long EventTimeTicks { get; init; }
+    }
+
+    private sealed class SpanLinkRecord
+    {
+        public required long LinkId { get; init; }
+        public required string SourceTraceId { get; init; }
+        public required string SourceSpanId { get; init; }
+        public required string TraceId { get; init; }
+        public required string SpanId { get; init; }
+        public required string TraceState { get; init; }
+    }
+
+    private sealed class SpanRecord
+    {
+        public required string TraceId { get; init; }
+        public required string SpanId { get; init; }
+        public string? ParentSpanId { get; init; }
+        public required long ResourceId { get; init; }
+        public required long ResourceViewId { get; init; }
+        public required long ScopeId { get; init; }
+        public required string Name { get; init; }
+        public required int Kind { get; init; }
+        public required long StartTimeTicks { get; init; }
+        public required long EndTimeTicks { get; init; }
+        public required int Status { get; init; }
+        public string? StatusMessage { get; init; }
+        public string? State { get; init; }
+        public long? PeerResourceId { get; init; }
+        public required long LastUpdatedTimestampTicks { get; init; }
+        public required string ResourceName { get; init; }
+        public required string InstanceId { get; init; }
+        public required bool InstanceIdIsNull { get; init; }
+        public required bool UninstrumentedPeer { get; init; }
+        public required bool HasLogs { get; init; }
+        public required bool HasTraces { get; init; }
+        public required bool HasMetrics { get; init; }
+        public required string ScopeName { get; init; }
+        public required string ScopeVersion { get; init; }
+        public string? PeerResourceName { get; init; }
+        public string? PeerInstanceId { get; init; }
+        public bool PeerInstanceIdIsNull { get; init; }
+    }
+}

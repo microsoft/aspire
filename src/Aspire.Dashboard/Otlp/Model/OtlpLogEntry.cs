@@ -82,6 +82,38 @@ public class OtlpLogEntry
         EventName = !string.IsNullOrEmpty(record.EventName) ? record.EventName : eventNameFromAttribute;
     }
 
+    internal OtlpLogEntry(
+        long internalId,
+        DateTime timeStamp,
+        uint flags,
+        LogLevel severity,
+        int severityNumber,
+        string message,
+        string spanId,
+        string traceId,
+        string parentId,
+        string? originalFormat,
+        OtlpResourceView resourceView,
+        OtlpScope scope,
+        KeyValuePair<string, string>[] attributes,
+        string? eventName)
+    {
+        InternalId = internalId;
+        TimeStamp = timeStamp;
+        Flags = flags;
+        Severity = severity;
+        SeverityNumber = severityNumber;
+        Message = message;
+        SpanId = spanId;
+        TraceId = traceId;
+        ParentId = parentId;
+        OriginalFormat = originalFormat;
+        ResourceView = resourceView;
+        Scope = scope;
+        Attributes = attributes;
+        EventName = eventName;
+    }
+
     private static DateTime ResolveTimeStamp(LogRecord record)
     {
         // From proto docs:

@@ -44,12 +44,15 @@
     <Protobuf Include="..\Aspire.Hosting\Dashboard\proto\dashboard_service.proto">
       <Link>ServiceClient\dashboard_service.proto</Link>
     </Protobuf>
+
+    <EmbeddedResource Include="ServiceClient\DatabaseSchema\*.sql" />
   </ItemGroup>
 
   <!-- Used by publishing infrastructure to get the version to use for blob publishing -->
   <Target Name="ReturnPackageVersion" Returns="$(PackageVersion)" />
 
   <ItemGroup>
+    <PackageReference Include="Dapper" />
     <PackageReference Include="Grpc.AspNetCore" />
     <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
     <PackageReference Include="Hex1b" />
@@ -58,9 +61,11 @@
     <PackageReference Include="Semver" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Certificate" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.OpenIdConnect" />
+    <PackageReference Include="Microsoft.Data.Sqlite" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components" />
     <PackageReference Include="Microsoft.FluentUI.AspNetCore.Components.Icons" />
     <PackageReference Include="Microsoft.OpenApi" />
+    <PackageReference Include="System.IO.Hashing" />
   </ItemGroup>
 
   <ItemGroup>
