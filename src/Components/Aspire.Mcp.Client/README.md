@@ -53,7 +53,7 @@ The client resolves `https://{connectionName}/mcp` by default. If service discov
 
 ### Use inline delegates
 
-Use the overload to configure `McpClientOptions` and `HttpClientTransportOptions` inline.
+Use the overload to configure [McpClientOptions](https://github.com/modelcontextprotocol/csharp-sdk/blob/main/src/ModelContextProtocol.Core/Client/McpClientOptions.cs) and [HttpClientTransportOptions](https://github.com/modelcontextprotocol/csharp-sdk/blob/main/src/ModelContextProtocol.Core/Client/HttpClientTransportOptions.cs) inline.
 
 Use `configureClientOptions` to configure MCP client behavior, such as client metadata and initialization timeout:
 
