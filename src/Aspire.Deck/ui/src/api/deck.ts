@@ -48,14 +48,27 @@ export function isHttpBackend(): boolean {
     return false;
   }
 
-  const backend = new URLSearchParams(window.location.search).get("backend");
+  const backend = getBackendMode();
   // AOT mode is a strangler path: capabilities not yet in the versioned contract
   // deliberately continue through the existing HTTP backend until parity is proven.
   return backend === "http" || backend === "aot";
 }
 
 export function isAotBackend(): boolean {
-  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("backend") === "aot";
+  return typeof window !== "undefined" && getBackendMode() === "aot";
+}
+
+function getBackendMode(): string | null {
+  const requested = new URLSearchParams(window.location.search).get("backend");
+  if (requested !== null) {
+    return requested;
+  }
+
+  // The Native AOT host rewrites this build-time marker when it serves index.html.
+  // Vite and Tauri keep the standalone marker, preserving their existing mock/bridge defaults.
+  return document.querySelector<HTMLMetaElement>('meta[name="aspire-dashboard-backend"]')?.content === "aot"
+    ? "aot"
+    : null;
 }
 
 // Bridges Tauri's promise-returning `listen` (which resolves to an unlisten fn)

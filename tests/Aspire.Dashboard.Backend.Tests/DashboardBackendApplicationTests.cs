@@ -110,6 +110,81 @@ public class DashboardBackendApplicationTests
     }
 
     [Fact]
+    public async Task FrontendRoot_ServesHostedReactIndexWithoutCaching()
+    {
+        var assets = new TestFrontendAssetProvider(new Dictionary<string, string>
+        {
+            ["index.html"] = "<!doctype html><meta name=\"aspire-dashboard-backend\" content=\"standalone\" /><script src=\"./assets/index-AbCd1234.js\"></script><div id=\"root\"></div>"
+        });
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardFrontendAssetProvider>(assets);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync("/", TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("text/html; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
+        var html = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(
+            "<meta name=\"aspire-dashboard-backend\" content=\"aot\" />",
+            html,
+            StringComparison.Ordinal);
+        Assert.Contains("src=\"/assets/index-AbCd1234.js\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FrontendAssets_UseContentTypesAndImmutableCachingForHashedFiles()
+    {
+        var assets = new TestFrontendAssetProvider(new Dictionary<string, string>
+        {
+            ["assets/index-AbCd1234.js"] = "export const dashboard = true;"
+        });
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardFrontendAssetProvider>(assets);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            "/assets/index-AbCd1234.js",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("text/javascript; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        Assert.Equal("public, max-age=31536000, immutable", response.Headers.CacheControl?.ToString());
+        Assert.Equal(
+            "export const dashboard = true;",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("/consolelogs/resource/api", HttpStatusCode.OK)]
+    [InlineData("/missing.js", HttpStatusCode.NotFound)]
+    [InlineData("/api/not-a-dashboard-route", HttpStatusCode.NotFound)]
+    public async Task FrontendFallback_OnlyHandlesSpaRoutes(string path, HttpStatusCode expectedStatus)
+    {
+        var assets = new TestFrontendAssetProvider(new Dictionary<string, string>
+        {
+            ["index.html"] = "<meta name=\"aspire-dashboard-backend\" content=\"standalone\" />"
+        });
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardFrontendAssetProvider>(assets);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedStatus, response.StatusCode);
+    }
+
+    [Fact]
     public async Task GetResources_ReturnsSourceGeneratedSnapshotFromVersionOneRoute()
     {
         DashboardResource[] resources =
@@ -635,6 +710,16 @@ public class DashboardBackendApplicationTests
         public ValueTask<DashboardResource[]> GetSnapshotAsync(CancellationToken cancellationToken)
         {
             return ValueTask.FromResult(resources);
+        }
+    }
+
+    private sealed class TestFrontendAssetProvider(IReadOnlyDictionary<string, string> assets) : IDashboardFrontendAssetProvider
+    {
+        public Stream? Open(string path)
+        {
+            return assets.TryGetValue(path, out var content)
+                ? new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content))
+                : null;
         }
     }
 

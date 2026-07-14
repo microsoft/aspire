@@ -18,6 +18,7 @@ internal static class DashboardBackendApplication
         builder.Services.TryAddSingleton<IDashboardCommandExecutor, DashboardCommandExecutor>();
         builder.Services.TryAddSingleton<IDashboardStructuredLogSource, DashboardStructuredLogProxy>();
         builder.Services.TryAddSingleton<IDashboardConsoleLogSource, DashboardConsoleLogProxy>();
+        builder.Services.TryAddSingleton<IDashboardFrontendAssetProvider, EmbeddedDashboardFrontendAssetProvider>();
         builder.Services.AddHostedService(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.AddSignalR();
         builder.Services.Configure<JsonHubProtocolOptions>(options =>
@@ -134,6 +135,10 @@ internal static class DashboardBackendApplication
                 return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
         });
+
+        // Keep the SPA fallback last so versioned API and SignalR routes always win. Unknown
+        // /api paths remain 404s instead of being disguised as successful HTML responses.
+        DashboardFrontendAssets.Map(app);
 
         return app;
     }

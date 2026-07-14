@@ -7,7 +7,24 @@
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <DashboardFrontendDirectory>$(MSBuildProjectDirectory)/../Aspire.Deck/ui</DashboardFrontendDirectory>
+    <DashboardFrontendArchive>$(IntermediateOutputPath)dashboard-frontend.zip</DashboardFrontendArchive>
   </PropertyGroup>
+
+  <ItemGroup Condition="'$(_IsPublishing)' == 'true'">
+    <EmbeddedResource Include="$(DashboardFrontendArchive)" LogicalName="DashboardFrontend.zip" />
+  </ItemGroup>
+
+  <!-- The production dashboard is one Native AOT executable. Build the React application before
+       compilation so every generated asset becomes an assembly resource in the published binary. -->
+  <Target Name="BuildDashboardFrontend" BeforeTargets="PrepareForBuild" Condition="'$(_IsPublishing)' == 'true'">
+    <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(DashboardFrontendDirectory)" Condition="'$(SkipDashboardFrontendBuild)' != 'true'" />
+    <Exec Command="npm run build" WorkingDirectory="$(DashboardFrontendDirectory)" Condition="'$(SkipDashboardFrontendBuild)' != 'true'" />
+    <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(DashboardFrontendArchive)'))" />
+    <ZipDirectory SourceDirectory="$(DashboardFrontendDirectory)/dist"
+                  DestinationFile="$(DashboardFrontendArchive)"
+                  Overwrite="true" />
+  </Target>
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Dashboard.Backend.Tests" />
