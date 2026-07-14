@@ -153,6 +153,22 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
+    public async Task AddMcpClientDisposesHttpClientTransportOnAsyncHostDisposal()
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.AddMcpClient("mcp");
+        builder.Services.AddSingleton<IHttpClientFactory>(new TrackingHttpClientFactory(handler));
+
+        var host = builder.Build();
+        var resolveException = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.Null(resolveException);
+        await ((IAsyncDisposable)host).DisposeAsync();
+        Assert.True(handler.Disposed);
+    }
+
+    [Fact]
     public async Task AddMcpClientCancelsInFlightInitializationOnHostDisposal()
     {
         var handler = new BlockingInitializationHandler();
