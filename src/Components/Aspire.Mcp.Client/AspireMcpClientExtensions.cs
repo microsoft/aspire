@@ -22,6 +22,12 @@ public static class AspireMcpClientExtensions
     /// The server is resolved at <c>https://{connectionName}/mcp</c>. Use <c>WithReference</c> in the AppHost to
     /// provide the server endpoint to this application.
     /// </remarks>
+    /// <example>
+    /// This example registers an unkeyed MCP client for an MCP server named <c>mcp-server</c>:
+    /// <code>
+    /// builder.AddMcpClient("mcp-server");
+    /// </code>
+    /// </example>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="connectionName"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="connectionName"/> is empty.</exception>
@@ -39,6 +45,21 @@ public static class AspireMcpClientExtensions
     /// The server is resolved at <c>https://{connectionName}/mcp</c>. Use <c>WithReference</c> in the AppHost to
     /// provide the server endpoint to this application.
     /// </remarks>
+    /// <example>
+    /// This example configures an unkeyed MCP client registration:
+    /// <code>
+    /// builder.AddMcpClient(
+    ///     "mcp-server",
+    ///     clientOptions =>
+    ///     {
+    ///         // Configure client options.
+    ///     },
+    ///     transportOptions =>
+    ///     {
+    ///         transportOptions.Endpoint = new Uri("https://mcp-server/mcp");
+    ///     });
+    /// </code>
+    /// </example>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="connectionName"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="connectionName"/> is empty.</exception>
@@ -58,6 +79,12 @@ public static class AspireMcpClientExtensions
     /// The server is resolved at <c>https://{name}/mcp</c>. Use <c>WithReference</c> in the AppHost to provide the
     /// server endpoint to this application.
     /// </remarks>
+    /// <example>
+    /// This example registers a keyed MCP client where the key and service-discovery name are both <c>mcp-server</c>:
+    /// <code>
+    /// builder.AddKeyedMcpClient("mcp-server");
+    /// </code>
+    /// </example>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="name"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is empty.</exception>
@@ -80,6 +107,21 @@ public static class AspireMcpClientExtensions
     /// The server is resolved at <c>https://{name}/mcp</c>. Use <c>WithReference</c> in the AppHost to provide the
     /// server endpoint to this application.
     /// </remarks>
+    /// <example>
+    /// This example configures a keyed MCP client registration:
+    /// <code>
+    /// builder.AddKeyedMcpClient(
+    ///     "mcp-server",
+    ///     clientOptions =>
+    ///     {
+    ///         // Configure client options.
+    ///     },
+    ///     transportOptions =>
+    ///     {
+    ///         transportOptions.Endpoint = new Uri("https://mcp-server/mcp");
+    ///     });
+    /// </code>
+    /// </example>
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="name"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is empty.</exception>
