@@ -11,6 +11,8 @@ import type {
   DashboardApiVersion,
   DashboardConfiguration,
   DeckConfig,
+  CommandResponse,
+  ExecuteCommandArgs,
   Resource,
   ResourcesEvent,
 } from "./types";
@@ -20,6 +22,7 @@ const discoveryPath = "/api/dashboard";
 const configurationCapability = "configuration";
 const resourcesCapability = "resources";
 const resourceStreamCapability = "resources-live";
+const commandsCapability = "commands";
 const supportedVersions = new Set([1]);
 
 let negotiatedVersion: Promise<DashboardApiVersion> | null = null;
@@ -30,6 +33,21 @@ async function requestJson(path: string): Promise<unknown> {
     cache: "no-store",
     credentials: "same-origin",
     headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  return await response.json() as unknown;
+}
+
+async function postJson(path: string, body: unknown): Promise<unknown> {
+  const response = await fetch(path, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
   });
   if (!response.ok) {
     throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
@@ -148,6 +166,18 @@ async function listResources(): Promise<Resource[]> {
   }
 
   return payload as Resource[];
+}
+
+async function executeCommand(args: ExecuteCommandArgs): Promise<CommandResponse> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(commandsCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise the commands capability.");
+  }
+
+  return await postJson(`${version.basePath}/commands/execute`, {
+    resourceName: args.resourceName,
+    commandName: args.commandName,
+  }) as CommandResponse;
 }
 
 function isResourcesEvent(value: unknown): value is ResourcesEvent {
@@ -317,5 +347,6 @@ export const nativeBackend = {
   getConfig,
   hasCapability,
   listResources,
+  executeCommand,
   subscribeResources,
 };

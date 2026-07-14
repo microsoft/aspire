@@ -206,6 +206,54 @@ test(`${features("AOT-CONTRACT-001")} reads resources from the negotiated AOT ca
   expect(legacyResourceRequests).toBe(0);
 });
 
+test(`${features("AOT-CONTRACT-001")} executes commands through the negotiated AOT capability`, async ({ page }) => {
+  let aotCommandRequests = 0;
+  let legacyCommandRequests = 0;
+  await page.route("**/api/dashboard", async (route) => {
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [
+          { version: 1, basePath: "/api/dashboard/v1", capabilities: ["configuration", "resources", "commands"] },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    await route.fulfill({
+      json: {
+        applicationName: "Stress AOT",
+        dashboardVersion: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.route("**/api/dashboard/v1/commands/execute", async (route) => {
+    aotCommandRequests++;
+    expect(await route.request().postDataJSON()).toEqual({
+      resourceName: resource.name,
+      commandName: "check-health",
+    });
+    await route.fulfill({ json: { kind: "succeeded", message: "AOT command succeeded", result: null } });
+  });
+  await page.route("**/api/deck/commands/execute", async (route) => {
+    legacyCommandRequests++;
+    await route.fulfill({ json: { kind: "failed", message: "Legacy command used", result: null } });
+  });
+
+  await page.goto("/?backend=aot");
+  await page.getByRole("table").getByRole("row", { name: /stress-api/ }).click();
+  await page.getByRole("dialog", { name: "stress-api" })
+    .getByRole("button", { name: "Check health", exact: true }).click();
+
+  await expect(page.getByRole("status")).toContainText("Check health succeeded");
+  expect(aotCommandRequests).toBe(1);
+  expect(legacyCommandRequests).toBe(0);
+});
+
 test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes over SignalR`, async ({ page }) => {
   let negotiateRequests = 0;
   let websocketConnections = 0;
