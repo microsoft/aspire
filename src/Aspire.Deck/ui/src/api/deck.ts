@@ -350,6 +350,22 @@ export function subscribeConsoleLogs(
     };
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      let cancelled = false;
+      let unsubscribe: Unsubscribe | null = null;
+      void nativeBackend.hasCapability("console-logs-live").then((supported) => {
+        if (cancelled) return;
+        unsubscribe = supported
+          ? nativeBackend.subscribeConsoleLogs(resourceName, cb)
+          : httpBackend.subscribeConsoleLogs(resourceName, cb);
+      }).catch(() => {
+        if (!cancelled) unsubscribe = httpBackend.subscribeConsoleLogs(resourceName, cb);
+      });
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
+    }
     return httpBackend.subscribeConsoleLogs(resourceName, cb);
   }
   return mockBackend.subscribeConsoleLogs(resourceName, cb);

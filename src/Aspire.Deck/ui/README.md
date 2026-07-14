@@ -145,8 +145,9 @@ ASPIRE_DASHBOARD_AOT_URL=http://127.0.0.1:18889 \
 ```
 
 Open `http://127.0.0.1:1430/?backend=aot`. Version discovery and configuration use the new host;
-resources arrive as an authoritative snapshot followed by live changes over SignalR, and resource
-commands use the versioned backend. Telemetry, interactions, authentication, and terminals remain on the existing dashboard until their
+resources arrive as an authoritative snapshot followed by live changes over SignalR, resource-scoped
+console backlog and live output use a versioned SignalR stream, and resource commands use the versioned
+backend. Traces, metrics, interactions, authentication, and terminals remain on the existing dashboard until their
 versioned capabilities independently pass the parity inventory. The `resources` HTTP snapshot route
 remains a compatibility fallback for a version 1 host that does not advertise `resources-live`.
 
@@ -187,7 +188,7 @@ ASPIRE_DASHBOARD_BACKEND=aot \
   npm exec -- playwright test --config=playwright.stress.config.ts
 ```
 
-This verifies that version negotiation, the AOT SignalR resource stream, and the existing
+This verifies that version negotiation, the AOT SignalR resource and console streams, and the existing
 dashboard fallback for capabilities not yet migrated work together across the 23 live Stress
 behaviors. Those scenarios provide live coverage evidence for the separate 157-feature parity
 ledger enforced by the default Playwright suite.

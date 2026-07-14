@@ -150,7 +150,10 @@ export function ConsolePage({
     pendingLinesRef.current = [];
     setPendingCount(0);
     const unsubscribes = subscriptionNames.map((resourceName) =>
-      subscribeConsoleLogs(resourceName, (event) => {
+      {
+        let active = true;
+        const unsubscribe = subscribeConsoleLogs(resourceName, (event) => {
+        if (!active) return;
         const clearedThrough = clearedThroughRef.current.get(event.resourceName) ?? 0;
         const incoming = event.lines.filter((line) => line.lineNumber > clearedThrough).map((line: ConsoleLogLine) => {
           const parsed = parseConsoleLine(line.text);
@@ -165,11 +168,19 @@ export function ConsolePage({
         });
         if (pausedRef.current) {
           pendingLinesRef.current.push(...incoming);
+          if (pendingLinesRef.current.length > MAX_LINES) {
+            pendingLinesRef.current = pendingLinesRef.current.slice(-MAX_LINES);
+          }
           setPendingCount(pendingLinesRef.current.length);
         } else {
           appendLines(incoming);
         }
-      }),
+        });
+        return () => {
+          active = false;
+          unsubscribe();
+        };
+      },
     );
     return () => {
       for (const unsubscribe of unsubscribes) {

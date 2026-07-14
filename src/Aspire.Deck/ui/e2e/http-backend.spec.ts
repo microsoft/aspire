@@ -352,6 +352,72 @@ test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes
   expect(resourceRequests).toBe(0);
 });
 
+test(`${features("AOT-CONTRACT-001")} streams and deduplicates AOT resource console backlog and live output`, async ({ page }) => {
+  let sendConsoleBatch: ((lines: Array<{ lineNumber: number; text: string; isStdErr: boolean }>) => void) | null = null;
+  await page.route("**/api/dashboard", async (route) => route.fulfill({
+    json: {
+      product: "Aspire.Dashboard",
+      versions: [{
+        version: 1,
+        basePath: "/api/dashboard/v1",
+        capabilities: ["configuration", "console-logs", "console-logs-live"],
+      }],
+    },
+  }));
+  await page.route("**/api/dashboard/v1/config", async (route) => route.fulfill({
+    json: { applicationName: "Stress AOT", dashboardVersion: "13.5.0-aot", runtimeVersion: ".NET 10.0.0" },
+  }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/dashboard/v1/console-logs/live/negotiate?**", async (route) => route.fulfill({
+    json: {
+      negotiateVersion: 1,
+      connectionId: "playwright-console-connection",
+      connectionToken: "playwright-console-token",
+      availableTransports: [{ transport: "WebSockets", transferFormats: ["Text", "Binary"] }],
+    },
+  }));
+  await page.routeWebSocket("**/api/dashboard/v1/console-logs/live?id=*", (webSocket) => {
+    let invocationId: string | undefined;
+    webSocket.onMessage((message) => {
+      for (const frame of message.toString().split("\x1e").filter(Boolean)) {
+        const payload = JSON.parse(frame) as { protocol?: string; type?: number; invocationId?: string; target?: string };
+        if (payload.protocol === "json") {
+          webSocket.send("{}\x1e");
+        } else if (payload.type === 4 && payload.target === "WatchConsoleLogs") {
+          invocationId = payload.invocationId;
+        }
+      }
+    });
+    sendConsoleBatch = (lines) => {
+      if (invocationId === undefined) throw new Error("The console stream has not started.");
+      webSocket.send(`${JSON.stringify({
+        type: 2,
+        invocationId,
+        item: { resourceName: resource.name, lines },
+      })}\x1e`);
+    };
+  });
+
+  await page.goto("/?backend=aot");
+  await page.getByRole("navigation").getByRole("button", { name: /^Console/ }).click();
+  await page.getByRole("main").getByRole("combobox", { name: "Resource" }).selectOption(resource.name);
+  await expect.poll(() => sendConsoleBatch !== null).toBe(true);
+  sendConsoleBatch!([
+    { lineNumber: 1, text: "AOT backlog", isStdErr: false },
+    { lineNumber: 2, text: "AOT stderr", isStdErr: true },
+  ]);
+  const consoleRegion = page.getByRole("main").getByRole("region", { name: "Console" });
+  await expect(consoleRegion).toContainText("AOT backlog");
+  await expect(consoleRegion.locator(".log-line.stderr")).toHaveCount(1);
+
+  sendConsoleBatch!([
+    { lineNumber: 2, text: "AOT stderr", isStdErr: true },
+    { lineNumber: 3, text: "AOT live", isStdErr: false },
+  ]);
+  await expect(consoleRegion).toContainText("AOT live");
+  await expect(consoleRegion.locator(".console__footer")).toContainText("3 lines");
+});
+
 test(`${features("AOT-CONTRACT-001")} replays, filters, pauses, and resumes AOT structured logs`, async ({ page }) => {
   const otlpLog = (message: string, timeUnixNano: string) => ({
     resourceLogs: [{
