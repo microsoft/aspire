@@ -286,9 +286,27 @@ public class SealedSecretApplyStepTests
                 "generation": 7
               }
             }
-            """);
+            """, "db-creds", "app", "db-creds");
 
         Assert.Equal(7, generation);
+    }
+
+    [Fact]
+    public void ParseGeneration_MissingGeneration_Throws_ASPIRERADIUS058()
+    {
+        var ex = Assert.Throws<InvalidOperationException>(() => SealedSecretApplyStep.ParseGeneration("""
+            {
+              "apiVersion": "bitnami.com/v1alpha1",
+              "kind": "SealedSecret",
+              "metadata": {
+                "name": "db-creds"
+              }
+            }
+            """, "db-creds", "app", "db-creds"));
+
+        Assert.Contains("ASPIRERADIUS058", ex.Message);
+        Assert.Contains("app/db-creds", ex.Message);
+        Assert.Contains("db-creds", ex.Message);
     }
 
     [Fact]

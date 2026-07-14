@@ -107,7 +107,7 @@ internal sealed class SealedSecretApplyStep
         // checks the resolved namespace — so they must be pinned to the same value.
         var applyNamespace = metadata.NamespaceWasExplicit ? null : metadata.Namespace;
 
-        var appliedGeneration = await ApplyManifestAsync(manifestPath, applyNamespace, kubeContext, logger, cancellationToken)
+        var appliedGeneration = await ApplyManifestAsync(manifestPath, applyNamespace, kubeContext, store.Name, metadata.Namespace, metadata.Name, logger, cancellationToken)
             .ConfigureAwait(false);
 
         await WaitForSealedSecretSyncedAsync(
@@ -351,7 +351,7 @@ internal sealed class SealedSecretApplyStep
         return SealedSecretSyncDecision.Waiting();
     }
 
-    internal static long ParseGeneration(string json)
+    internal static long ParseGeneration(string json, string storeName, string ns, string name)
     {
         using var document = JsonDocument.Parse(json);
         if (document.RootElement.TryGetProperty("metadata", out var metadata) &&
@@ -361,7 +361,10 @@ internal sealed class SealedSecretApplyStep
             return value;
         }
 
-        throw new InvalidOperationException("kubectl apply did not return metadata.generation for the SealedSecret.");
+        throw new InvalidOperationException(
+            $"'kubectl apply' for the SealedSecret '{ns}/{name}' referenced by sealed secret store " +
+            $"'{storeName}' did not return metadata.generation (unexpected or truncated kubectl output). " +
+            "Diagnostic: ASPIRERADIUS058.");
     }
 
     internal static SealedSecretStatusSnapshot ParseSealedSecretStatus(string json)
@@ -415,7 +418,7 @@ internal sealed class SealedSecretApplyStep
         return new SealedSecretStatusSnapshot(generation, observedGeneration, conditions);
     }
 
-    private static async Task<long> ApplyManifestAsync(string manifestPath, string? @namespace, string? kubeContext, ILogger logger, CancellationToken cancellationToken)
+    private static async Task<long> ApplyManifestAsync(string manifestPath, string? @namespace, string? kubeContext, string storeName, string ns, string name, ILogger logger, CancellationToken cancellationToken)
     {
         var args = BuildApplyArgs(manifestPath, kubeContext, @namespace);
         var (exitCode, stdout, stderr) = await RunKubectlAsync(args, logger, cancellationToken, logStdout: false).ConfigureAwait(false);
@@ -425,7 +428,7 @@ internal sealed class SealedSecretApplyStep
                 $"'kubectl apply -f {manifestPath}' failed with exit code {exitCode}: {stderr.Trim()}");
         }
 
-        return ParseGeneration(stdout);
+        return ParseGeneration(stdout, storeName, ns, name);
     }
 
     private static async Task<SealedSecretStatusSnapshot> GetSealedSecretStatusAsync(string ns, string name, string? kubeContext, CancellationToken cancellationToken)
