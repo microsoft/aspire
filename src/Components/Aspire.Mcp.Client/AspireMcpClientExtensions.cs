@@ -182,7 +182,11 @@ public static class AspireMcpClientExtensions
 
             try
             {
-                var client = await McpClient.CreateAsync(transport, clientOptions, cancellationToken: _creationCancellation.Token).ConfigureAwait(false);
+                var client = await McpClient.CreateAsync(
+                    transport,
+                    clientOptions,
+                    loggerFactory: loggerFactory,
+                    cancellationToken: _creationCancellation.Token).ConfigureAwait(false);
                 if (Volatile.Read(ref _disposed) is not 0)
                 {
                     await client.DisposeAsync().ConfigureAwait(false);
