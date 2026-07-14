@@ -764,8 +764,10 @@ public static class AzureContainerAppExtensions
     /// deploying more than one environment to a single resource group), or to new deployments.
     /// </para>
     /// <para>
-    /// This option has no effect when <see cref="WithAzdResourceNaming"/> is also used, since azd naming sets
-    /// the environment name explicitly.
+    /// This option acts as a fallback after name resolvers configured through
+    /// <see cref="AzureProvisioningOptions.ProvisioningBuildOptions"/>. A configured resolver can therefore
+    /// override the generated name. This option also has no effect when <see cref="WithAzdResourceNaming"/> is
+    /// used, since azd naming sets the environment name explicitly.
     /// </para>
     /// </remarks>
     [AspireExport]
