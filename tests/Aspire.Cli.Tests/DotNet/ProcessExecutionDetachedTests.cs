@@ -352,6 +352,56 @@ wait "$child_pid"
         Assert.Equal(Path.GetFullPath(versionDirectory.FullName), (await File.ReadAllTextAsync(capturePath)).Trim());
     }
 
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
+    public async Task StartAsync_OnUnix_KeepsBundleLeaseUntilExecutionIsDisposed()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var versionDirectory = workspace.CreateDirectory("version");
+        var dcpDirectory = versionDirectory.CreateSubdirectory(BundleDiscovery.DcpDirectoryName);
+        var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName);
+        await File.WriteAllTextAsync(dcpPath, """
+#!/bin/sh
+if [ "$1" != "fork-process" ]; then
+  exit 42
+fi
+if [ "$2" != "--monitor" ]; then
+  exit 43
+fi
+if [ "$6" != "--" ]; then
+  exit 44
+fi
+sleep 60 >/dev/null 2>&1 </dev/null &
+child_pid=$!
+printf '%s\n' "$child_pid"
+wait "$child_pid"
+""");
+        File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        var layout = new LayoutConfiguration
+        {
+            LayoutPath = versionDirectory.FullName
+        };
+
+        await using var detachedProcess = CreateDetachedExecution(
+            "/bin/sh",
+            ["-c", "exit 0"],
+            workspace.WorkspaceRoot.FullName,
+            layout: layout,
+            bundleService: new AcquiringBundleService(layout),
+            executionContext: workspace.CreateExecutionContext());
+
+        Assert.True(await detachedProcess.StartAsync(CancellationToken.None));
+        Assert.True(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
+
+        await detachedProcess.DisposeAsync();
+
+        Assert.False(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
+    }
+
     private static async Task WaitForFileAsync(string path)
     {
         while (!File.Exists(path))
@@ -439,6 +489,38 @@ wait "$child_pid"
             _ = commandName;
             cancellationToken.ThrowIfCancellationRequested();
             return Task.FromResult<BundleLayoutLease?>(layoutLease);
+        }
+
+        public string? GetDefaultExtractDir(string processPath)
+        {
+            _ = processPath;
+            return null;
+        }
+    }
+
+    private sealed class AcquiringBundleService(LayoutConfiguration layout) : IBundleService
+    {
+        public bool IsBundle => true;
+
+        public Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
+        {
+            _ = destinationPath;
+            _ = force;
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(BundleExtractResult.AlreadyUpToDate);
+        }
+
+        public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            var versionLease = BundleVersionLease.Acquire(layout.LayoutPath!, holderKind, commandName);
+            return Task.FromResult<BundleLayoutLease?>(new BundleLayoutLease(layout, versionLease));
         }
 
         public string? GetDefaultExtractDir(string processPath)

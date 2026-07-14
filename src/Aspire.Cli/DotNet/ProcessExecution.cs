@@ -32,6 +32,10 @@ internal sealed class ProcessExecution : IProcessExecution
     private readonly IBundleService? _bundleService;
     private readonly CliExecutionContext? _executionContext;
     private IsolatedProcess? _process;
+    // The detached Unix launcher is DCP from the selected bundle version. Keep that lease alive
+    // after DCP reports the child PID so cleanup cannot remove the bundle before the child CLI
+    // reaches Program.Main and acquires its own lease from the handoff environment.
+    private IDisposable? _detachedUnixLauncherLease;
     private long _lastActivityTimestamp = Stopwatch.GetTimestamp();
     private int _disposed;
 
@@ -88,7 +92,7 @@ internal sealed class ProcessExecution : IProcessExecution
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        using var layoutLease = await ResolveDetachedUnixLauncherAsync(cancellationToken).ConfigureAwait(false);
+        var detachedUnixLauncherLease = await ResolveDetachedUnixLauncherAsync(cancellationToken).ConfigureAwait(false);
 
         // IsolatedProcess.StartAsync spawns the child and starts the stdout/stderr pumps. It throws on
         // spawn failure, so a successful return always means the child is running — there is no
@@ -101,12 +105,18 @@ internal sealed class ProcessExecution : IProcessExecution
         try
         {
             await process.StartAsync(cancellationToken).ConfigureAwait(false);
+            _detachedUnixLauncherLease = detachedUnixLauncherLease;
+            detachedUnixLauncherLease = null;
         }
         catch
         {
             _process = null;
             await process.DisposeAsync().ConfigureAwait(false);
             throw;
+        }
+        finally
+        {
+            detachedUnixLauncherLease?.Dispose();
         }
 
         _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, _process.Id, _startInfo.WorkingDirectory);
@@ -185,6 +195,7 @@ internal sealed class ProcessExecution : IProcessExecution
             // gets its whole budget even though the caller's token is already cancelled.
             RecordActivity();
             await DrainOutputAsync(process, CancellationToken.None).ConfigureAwait(false);
+            DisposeDetachedUnixLauncherLease();
 
             throw;
         }
@@ -197,6 +208,7 @@ internal sealed class ProcessExecution : IProcessExecution
         // ProcessExecutionTests.WaitForExitAsync_AllowsBufferedTailOutputAfterLongIdlePeriod.
         RecordActivity();
         await DrainOutputAsync(process, cancellationToken).ConfigureAwait(false);
+        DisposeDetachedUnixLauncherLease();
 
         return process.ExitCode;
     }
@@ -484,6 +496,15 @@ internal sealed class ProcessExecution : IProcessExecution
         {
             _logger.LogDebug(ex, "{FileName} IsolatedProcess dispose threw", _fileName);
         }
+        finally
+        {
+            DisposeDetachedUnixLauncherLease();
+        }
+    }
+
+    private void DisposeDetachedUnixLauncherLease()
+    {
+        Interlocked.Exchange(ref _detachedUnixLauncherLease, null)?.Dispose();
     }
 
     private void OnOutputLine(IsolatedProcess sender, string line)
