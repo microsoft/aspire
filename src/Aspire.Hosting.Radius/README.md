@@ -197,11 +197,11 @@ builder.AddRadiusSecretStore("db-creds", RadiusSecretStoreType.BasicAuthenticati
 
 // Reference an existing cluster Secret (external operator / hand-applied).
 radius.WithSecretStore("tls-cert", RadiusSecretStoreType.Certificate, s =>
-    s.FromExistingSecret("app/tls-cert", "tls.crt", "tls.key"));
+    s.WithExistingSecret("app/tls-cert", "tls.crt", "tls.key"));
 
 // GitOps sealed secrets — the encrypted manifest is applied before rad deploy and awaited.
 radius.WithSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication, s =>
-    s.FromSealedSecret("./secrets/db-creds.sealed.yaml", "username", "password"));
+    s.WithSealedSecret("./secrets/db-creds.sealed.yaml", "username", "password"));
 ```
 
 - **Scope is implied by the API form**: `builder.AddRadiusSecretStore(...)` is application-scoped
@@ -245,7 +245,7 @@ Runtime validation codes:
 | `ASPIRERADIUS010` | Provider config | A cloud-provider credential callback did not select a credential. |
 | `ASPIRERADIUS011` | Provider config | Conflicting cloud-provider credentials across environments sharing a Radius installation. |
 | `ASPIRERADIUS028` | Publish | Two recipe parameters bound to distinct Aspire parameters whose names sanitize to the same Bicep identifier. Rename one so they produce distinct identifiers. |
-| `ASPIRERADIUS040`–`ASPIRERADIUS059` | Secret-store (`AddRadiusSecretStore` / `WithSecretStore`) validation, publish, and deploy | Thrown `ArgumentException` (call site, e.g. empty/invalid name or key) / `InvalidOperationException` (fail-fast validation gate, publish, or deploy). Key codes: `041` (declare exactly one population mode), `044` (`FromSealedSecret` manifest missing/unreadable, malformed, ambiguous/duplicate-key, plaintext-capable, or not a single encrypted Bitnami `SealedSecret`), `045` (`kubectl` not on `PATH`), `046` (sealed `Secret` never materialized before deploy), `053` (`WithTerraformProviderSecret` is not yet supported), `058` (the Sealed Secrets controller never reported `Synced` for the applied `SealedSecret` generation before deploy — the controller must have status updates enabled, i.e. not `--update-status=false` / Helm `updateStatus: false`), `059` (the active `rad` workspace's Kubernetes context could not be resolved; publish/deploy fails closed rather than applying the `SealedSecret` to `kubectl`'s ambient context — configure the active `rad` workspace or set the `ASPIRE_RADIUS_KUBE_CONTEXT` override). |
+| `ASPIRERADIUS040`–`ASPIRERADIUS059` | Secret-store (`AddRadiusSecretStore` / `WithSecretStore`) validation, publish, and deploy | Thrown `ArgumentException` (call site, e.g. empty/invalid name or key) / `InvalidOperationException` (fail-fast validation gate, publish, or deploy). Key codes: `041` (declare exactly one population mode), `044` (`WithSealedSecret` manifest missing/unreadable, malformed, ambiguous/duplicate-key, plaintext-capable, or not a single encrypted Bitnami `SealedSecret`), `045` (`kubectl` not on `PATH`), `053` (`WithTerraformProviderSecret` is not yet supported), `058` (the sealed `Secret` did not materialize before deploy: the Sealed Secrets controller never reported `Synced` for the applied `SealedSecret` generation — the controller must have status updates enabled, i.e. not `--update-status=false` / Helm `updateStatus: false`), `059` (the active `rad` workspace's Kubernetes context could not be resolved; publish/deploy fails closed rather than applying the `SealedSecret` to `kubectl`'s ambient context — configure the active `rad` workspace or set the `ASPIRE_RADIUS_KUBE_CONTEXT` override). |
 | `ASPIRERADIUS056` | Publish | Two emitted constructs map to the same Bicep identifier (e.g. a resource named `app` or `recipepack` colliding with a synthesized construct, or two resource names that sanitize to the same identifier such as `my-x` and `my.x`). Bicep symbols share one flat namespace; rename the conflicting resource. |
 
 ### Known limitations

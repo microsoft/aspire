@@ -26,10 +26,10 @@ internal sealed class RadiusSecretStorePopulation
     /// <summary>Inline <c>data</c> key → secret-parameter binding (ordinal-keyed).</summary>
     public Dictionary<string, RadiusSecretKeyBinding> Data { get; } = new(StringComparer.Ordinal);
 
-    /// <summary><see langword="true"/> when <c>FromExistingSecret(...)</c> was called.</summary>
+    /// <summary><see langword="true"/> when <c>WithExistingSecret(...)</c> was called.</summary>
     public bool HasExistingSecret { get; set; }
 
-    /// <summary><see langword="true"/> when <c>FromSealedSecret(...)</c> was called.</summary>
+    /// <summary><see langword="true"/> when <c>WithSealedSecret(...)</c> was called.</summary>
     public bool HasSealedSecret { get; set; }
 
     /// <summary>
