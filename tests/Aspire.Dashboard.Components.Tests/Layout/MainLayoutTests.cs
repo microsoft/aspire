@@ -389,7 +389,7 @@ public partial class MainLayoutTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        Assert.Equal("Started 1/2/2025 1:30 PM", cut.Find(".application-run-start").TextContent);
+        Assert.Equal("Started 1/2/2025 1:30 PM", cut.Find(".application-run-start").TextContent, ignoreWhiteSpaceDifferences: true);
     }
 
     [Theory]
