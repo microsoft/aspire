@@ -99,6 +99,7 @@ public class AspireMcpClientExtensionsTests
         var exception = Record.Exception(resolveClient);
 
         Assert.NotNull(exception);
+        Assert.NotEmpty(handler.RequestUris);
         Assert.All(handler.RequestUris, uri => Assert.Equal("https://mcp/mcp", uri.ToString()));
     }
 
