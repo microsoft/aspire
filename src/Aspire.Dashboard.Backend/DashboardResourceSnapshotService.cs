@@ -171,9 +171,14 @@ internal sealed class DashboardResourceSnapshotService(
             {
                 return;
             }
-            catch (OperationCanceledException) when (!reconnect)
+            catch (OperationCanceledException ex)
             {
-                ReportInitialFailure($"The AppHost resource service did not provide an initial snapshot within {initialSnapshotTimeout}. The AOT dashboard backend will keep retrying.");
+                if (!reconnect)
+                {
+                    ReportInitialFailure($"The AppHost resource service did not provide an initial snapshot within {initialSnapshotTimeout}. The AOT dashboard backend will keep retrying.");
+                }
+
+                logger.LogWarning(ex, "The AppHost resource stream disconnected; retrying.");
             }
             catch (RpcException ex)
             {
