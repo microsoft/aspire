@@ -176,17 +176,37 @@ public class SecretStoreValidationTests
     }
 
     [Fact]
-    public void TerraformProviderSecretConsumer_Throws_ASPIRERADIUS053()
+    public void MaterializationTimeoutOnNonSealedStore_Throws_ASPIRERADIUS062()
+    {
+        WithModel(
+            b =>
+            {
+                var p = b.AddParameter("p", secret: true);
+                b.AddRadiusEnvironment("radius");
+                b.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+                    .WithData(d => d.Add("k", p))
+                    .WithMaterializationTimeout(TimeSpan.FromSeconds(30));
+            },
+            m => Assert.Contains("ASPIRERADIUS062", Validate(m)));
+    }
+
+    [Fact]
+    public void GatewayTlsConsumer_Throws_ASPIRERADIUS060()
     {
         WithModel(
             b =>
             {
                 var env = b.AddRadiusEnvironment("radius");
-                var store = b.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
-                    .WithExistingSecret("app/s", "k");
-                env.WithTerraformProviderSecret("azurerm", store);
+                var gateway = b.AddContainer("gw", "img", "latest");
+                env.WithSecretStore("tls", RadiusSecretStoreType.Certificate, store =>
+                {
+                    var crt = b.AddParameter("crt", secret: true);
+                    var key = b.AddParameter("key", secret: true);
+                    store.WithData(d => { d.Add("tls.crt", crt); d.Add("tls.key", key); });
+                    gateway.WithTlsCertificate(store);
+                });
             },
-            m => Assert.Contains("ASPIRERADIUS053", Validate(m)));
+            m => Assert.Contains("ASPIRERADIUS060", Validate(m)));
     }
 
     [Fact]

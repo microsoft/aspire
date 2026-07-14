@@ -115,7 +115,30 @@ internal sealed class SealedSecretApplyStep
             ct => GetSealedSecretStatusAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
             ct => SecretExistsAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
             cancellationToken).ConfigureAwait(false);
+
+        // The SealedSecret controller can report Synced=True and create a Secret that is missing keys
+        // the store declares (e.g. the manifest's encryptedData omits a key, or a stale Secret from a
+        // prior seal is reused). The declared keys are the contract downstream recipeConfig/envSecrets
+        // wiring reads, so verify each one is present in the materialized Secret before rad deploy.
+        if (store.Population.Keys.Count > 0)
+        {
+            var dataKeys = await GetSecretDataKeysAsync(metadata.Namespace, metadata.Name, kubeContext, cancellationToken)
+                .ConfigureAwait(false);
+            var missing = FindMissingDeclaredKeys(store.Population.Keys, dataKeys);
+            if (missing.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    $"The Secret '{metadata.Namespace}/{metadata.Name}' materialized by sealed secret store " +
+                    $"'{store.Name}' is missing the declared key(s) {string.Join(", ", missing.Select(k => $"'{k}'"))}. " +
+                    "Ensure the sealed manifest's spec.encryptedData contains every key declared with WithSealedSecret. " +
+                    "Diagnostic: ASPIRERADIUS061.");
+            }
+        }
     }
+
+    /// <summary>Returns the declared keys that are absent from the materialized Secret's data keys, preserving declared order.</summary>
+    internal static IReadOnlyList<string> FindMissingDeclaredKeys(IEnumerable<string> declaredKeys, IReadOnlySet<string> presentKeys) =>
+        declaredKeys.Where(k => !presentKeys.Contains(k)).ToList();
 
     // Prefers the self-contained published artifact (sealed-secrets/<store>/<file> under the
     // emitted app.bicep) so publish-then-deploy across machines works; falls back to the author
@@ -172,6 +195,18 @@ internal sealed class SealedSecretApplyStep
     internal static IReadOnlyList<string> BuildGetSecretArgs(string ns, string name, string? kubeContext)
     {
         var args = new List<string> { "get", "secret", name, "-n", ns, "-o", "name" };
+        AddContext(args, kubeContext);
+        return args;
+    }
+
+    /// <summary>
+    /// Builds the <c>kubectl get secret ... -o json</c> argument list used to read the materialized
+    /// Secret's <c>data</c> keys. The response contains the (base64) secret values, so its stdout is
+    /// never logged and only the key names are extracted.
+    /// </summary>
+    internal static IReadOnlyList<string> BuildGetSecretDataArgs(string ns, string name, string? kubeContext)
+    {
+        var args = new List<string> { "get", "secret", name, "-n", ns, "-o", "json" };
         AddContext(args, kubeContext);
         return args;
     }
@@ -404,6 +439,45 @@ internal sealed class SealedSecretApplyStep
         }
 
         return ParseSealedSecretStatus(stdout);
+    }
+
+    // Reads the materialized Secret's data-key names to verify the declared keys are present.
+    // The Secret's `data` values are base64 secret material, so RunKubectlAsync is called with
+    // logStdout: false and only the key names (never the values) are extracted.
+    private static async Task<IReadOnlySet<string>> GetSecretDataKeysAsync(string ns, string name, string? kubeContext, CancellationToken cancellationToken)
+    {
+        var args = BuildGetSecretDataArgs(ns, name, kubeContext);
+        var (exitCode, stdout, stderr) = await RunKubectlAsync(args, logger: null, cancellationToken, logStdout: false).ConfigureAwait(false);
+        if (exitCode != 0)
+        {
+            throw new InvalidOperationException(
+                $"Failed to query the Secret '{ns}/{name}' with 'kubectl get secret -o json': {stderr.Trim()}");
+        }
+
+        return ParseSecretDataKeys(stdout);
+    }
+
+    // Parses the `data` (and `stringData`, defensively — it is write-only and normally absent on read)
+    // object key names from a `kubectl get secret -o json` response. Values are ignored; only names
+    // are returned so no secret material leaves this method.
+    internal static IReadOnlySet<string> ParseSecretDataKeys(string json)
+    {
+        var keys = new HashSet<string>(StringComparer.Ordinal);
+        using var document = JsonDocument.Parse(json);
+        var root = document.RootElement;
+
+        foreach (var property in new[] { "data", "stringData" })
+        {
+            if (root.TryGetProperty(property, out var element) && element.ValueKind == JsonValueKind.Object)
+            {
+                foreach (var member in element.EnumerateObject())
+                {
+                    keys.Add(member.Name);
+                }
+            }
+        }
+
+        return keys;
     }
 
     private static async Task<bool> SecretExistsAsync(string ns, string name, string? kubeContext, CancellationToken cancellationToken)

@@ -26,10 +26,10 @@ public static class RadiusSecretStoreExtensions
     /// <returns>A builder for the new <see cref="RadiusSecretStoreResource"/>.</returns>
     /// <exception cref="ArgumentException">The name is empty/whitespace or not a valid resource-name segment.</exception>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; there is no polyglot ATS equivalent yet.")]
     public static IResourceBuilder<RadiusSecretStoreResource> AddRadiusSecretStore(
         this IDistributedApplicationBuilder builder,
-        string name,
+        [ResourceName] string name,
         RadiusSecretStoreType type)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -56,10 +56,10 @@ public static class RadiusSecretStoreExtensions
     /// <returns>The same environment builder for chaining.</returns>
     /// <exception cref="ArgumentException">The name is empty/whitespace or not a valid resource-name segment.</exception>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; the population callback is not ATS-compatible.")]
     public static IResourceBuilder<RadiusEnvironmentResource> WithSecretStore(
         this IResourceBuilder<RadiusEnvironmentResource> radius,
-        string name,
+        [ResourceName] string name,
         RadiusSecretStoreType type,
         Action<IResourceBuilder<RadiusSecretStoreResource>> configure)
     {
@@ -89,7 +89,7 @@ public static class RadiusSecretStoreExtensions
     /// <param name="configure">Callback binding data keys to secret parameters.</param>
     /// <returns>The same store builder for chaining.</returns>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; the data-binding callback is not ATS-compatible.")]
     public static IResourceBuilder<RadiusSecretStoreResource> WithData(
         this IResourceBuilder<RadiusSecretStoreResource> store,
         Action<RadiusSecretStoreDataBuilder> configure)
@@ -113,7 +113,7 @@ public static class RadiusSecretStoreExtensions
     /// <param name="keys">The keys to expose from the referenced <c>Secret</c>.</param>
     /// <returns>The same store builder for chaining.</returns>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; there is no polyglot ATS equivalent yet.")]
     public static IResourceBuilder<RadiusSecretStoreResource> WithExistingSecret(
         this IResourceBuilder<RadiusSecretStoreResource> store,
         string namespaceAndName,
@@ -140,7 +140,7 @@ public static class RadiusSecretStoreExtensions
     /// <param name="keys">The keys to expose from the decrypted <c>Secret</c>.</param>
     /// <returns>The same store builder for chaining.</returns>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; there is no polyglot ATS equivalent yet.")]
     public static IResourceBuilder<RadiusSecretStoreResource> WithSealedSecret(
         this IResourceBuilder<RadiusSecretStoreResource> store,
         string manifestPath,
@@ -157,15 +157,20 @@ public static class RadiusSecretStoreExtensions
     }
 
     /// <summary>
-    /// Overrides the per-store timeout for awaiting a sealed/referenced <c>Secret</c> to
-    /// materialize in-cluster before <c>rad deploy</c> (default 120 seconds).
+    /// Overrides the per-store timeout for awaiting a <b>sealed</b> <c>Secret</c> to materialize
+    /// in-cluster before <c>rad deploy</c> (default 120 seconds).
+    /// <para>
+    /// This only affects the sealed-secret deploy path (<c>WithSealedSecret</c>). Calling it on a
+    /// store that is not populated with <c>WithSealedSecret</c> is rejected by the validation gate
+    /// with <c>ASPIRERADIUS062</c> rather than silently ignored.
+    /// </para>
     /// </summary>
     /// <param name="store">The secret-store builder.</param>
     /// <param name="timeout">A positive materialization timeout.</param>
     /// <returns>The same store builder for chaining.</returns>
     /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeout"/> is not positive.</exception>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "Sealed-secret deploy-timing knob with no polyglot ATS equivalent.")]
     public static IResourceBuilder<RadiusSecretStoreResource> WithMaterializationTimeout(
         this IResourceBuilder<RadiusSecretStoreResource> store,
         TimeSpan timeout)
@@ -177,6 +182,7 @@ public static class RadiusSecretStoreExtensions
         }
 
         store.Resource.MaterializationTimeout = timeout;
+        store.Resource.MaterializationTimeoutWasSet = true;
         return store;
     }
 

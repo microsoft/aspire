@@ -41,8 +41,9 @@ internal static class RadiusSecretStoreValidation
     /// A required key is missing (<c>ASPIRERADIUS040</c>), the population mode count is not
     /// exactly one (<c>ASPIRERADIUS041</c>), an inline key binds a non-secret parameter
     /// (<c>ASPIRERADIUS042</c>), a duplicate key is declared (<c>ASPIRERADIUS043</c>), an
-    /// invalid encoding is set for the type (<c>ASPIRERADIUS047</c>), or two stores share a
-    /// name within the same scope (<c>ASPIRERADIUS048</c>).
+    /// invalid encoding is set for the type (<c>ASPIRERADIUS047</c>), two stores share a
+    /// name within the same scope (<c>ASPIRERADIUS048</c>), or a non-sealed store sets
+    /// <c>WithMaterializationTimeout</c> (<c>ASPIRERADIUS062</c>).
     /// </exception>
     internal static void Validate(DistributedApplicationModel model)
     {
@@ -129,6 +130,17 @@ internal static class RadiusSecretStoreValidation
             }
         }
 
+        // ASPIRERADIUS062 — WithMaterializationTimeout only affects the sealed-secret deploy path,
+        // which awaits the SealedSecret controller. On any other population mode it would silently
+        // no-op, so reject an explicit override rather than mislead the author.
+        if (store.MaterializationTimeoutWasSet && !population.HasSealedSecret)
+        {
+            throw new InvalidOperationException(
+                $"Secret store '{store.Name}' sets WithMaterializationTimeout but is not populated with " +
+                "WithSealedSecret. The materialization timeout only applies to sealed secrets; remove the " +
+                "call or use WithSealedSecret. Diagnostic: ASPIRERADIUS062.");
+        }
+
         // ASPIRERADIUS055 — an application-scoped existing-secret store has no single owning environment,
         // so a bare '<name>' reference has no deterministic namespace to default to (it would otherwise
         // fall back to whichever environment happens to build the store). Require a fully-qualified
@@ -153,8 +165,8 @@ internal static class RadiusSecretStoreValidation
     /// <exception cref="InvalidOperationException">
     /// A consumer kind is incompatible with the store type (<c>ASPIRERADIUS051</c>), an
     /// <c>envSecrets</c> consumer references a key the store does not declare
-    /// (<c>ASPIRERADIUS052</c>), or a Terraform provider secret is referenced
-    /// (<c>ASPIRERADIUS053</c>, not yet supported).
+    /// (<c>ASPIRERADIUS052</c>), or a gateway TLS certificate is referenced
+    /// (<c>ASPIRERADIUS060</c>, not yet supported).
     /// </exception>
     private static void ValidateConsumers(DistributedApplicationModel model)
     {
@@ -177,24 +189,25 @@ internal static class RadiusSecretStoreValidation
     {
         var store = consumer.Store;
 
-        // ASPIRERADIUS053 — Terraform provider secrets are not yet supported (see WithTerraformProviderSecret).
-        // Reject at the gate so callers get an explicit failure rather than a silent no-op at emission.
-        if (consumer.Kind == RadiusSecretStoreConsumerKind.TerraformProviderSecret)
+        // ASPIRERADIUS060 — gateway TLS (tls.certificateFrom) is not yet supported: the integration
+        // does not model Radius gateways yet, so there is no gateway resource to attach a certificate
+        // reference to. Reject at the gate so callers get an explicit failure rather than a silent
+        // no-op at emission.
+        if (consumer.Kind == RadiusSecretStoreConsumerKind.GatewayTls)
         {
             throw new InvalidOperationException(
-                $"Secret store '{store.Name}' is referenced as a Terraform provider secret for provider " +
-                $"'{consumer.Selector}', which is not yet supported. Remove the WithTerraformProviderSecret call. " +
-                "Diagnostic: ASPIRERADIUS053.");
+                $"Secret store '{store.Name}' is referenced as a gateway TLS certificate for '{consumer.Selector}', " +
+                "which is not yet supported (Radius gateways are not modeled yet). Remove the WithTlsCertificate call. " +
+                "Diagnostic: ASPIRERADIUS060.");
         }
 
         // ASPIRERADIUS051 — the consumer kind must be compatible with the store type. Bicep-registry and
-        // Terraform-git-PAT auth reference a basicAuthentication (username/password) store; gateway TLS
-        // references a certificate store. envSecrets can source from any type, so it is unconstrained.
+        // Terraform-git-PAT auth reference a basicAuthentication (username/password) store; envSecrets
+        // can source from any type, so it is unconstrained.
         var requiredType = consumer.Kind switch
         {
             RadiusSecretStoreConsumerKind.BicepRegistryAuth => (RadiusSecretStoreType?)RadiusSecretStoreType.BasicAuthentication,
             RadiusSecretStoreConsumerKind.TerraformGitPat => RadiusSecretStoreType.BasicAuthentication,
-            RadiusSecretStoreConsumerKind.GatewayTls => RadiusSecretStoreType.Certificate,
             _ => null,
         };
 
@@ -231,7 +244,6 @@ internal static class RadiusSecretStoreValidation
         RadiusSecretStoreConsumerKind.TerraformGitPat => "Terraform Git PAT authentication",
         RadiusSecretStoreConsumerKind.GatewayTls => "gateway TLS",
         RadiusSecretStoreConsumerKind.EnvSecret => "recipe environment secret",
-        RadiusSecretStoreConsumerKind.TerraformProviderSecret => "Terraform provider secret",
         _ => kind.ToString(),
     };
 

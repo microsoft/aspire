@@ -43,7 +43,7 @@ public static class RadiusRecipeParameterExtensions
     // [AspireExportIgnore]: the configure callback over a mutable dictionary is not
     // representable in the Aspire type system catalog (ASPIREEXPORT008); the method
     // is part of the public C# API surface and the export is suppressed only for ATS.
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "The configure callback over a mutable dictionary is not representable in the ATS catalog (ASPIREEXPORT008).")]
     public static IResourceBuilder<RadiusEnvironmentResource> WithRecipeParameters(
         this IResourceBuilder<RadiusEnvironmentResource> builder,
         Action<IDictionary<string, object>> configure)
@@ -75,7 +75,7 @@ public static class RadiusRecipeParameterExtensions
     /// <paramref name="resourceType"/> is empty/whitespace, or a parameter key is empty or whitespace.
     /// </exception>
     // [AspireExportIgnore]: see the environment-wide overload above (ASPIREEXPORT008).
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "The configure callback over a mutable dictionary is not representable in the ATS catalog (ASPIREEXPORT008).")]
     public static IResourceBuilder<RadiusEnvironmentResource> WithRecipeParameters(
         this IResourceBuilder<RadiusEnvironmentResource> builder,
         string resourceType,

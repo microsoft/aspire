@@ -14,9 +14,6 @@ internal enum RadiusSecretStoreConsumerKind
     /// <summary><c>recipeConfig.terraform.authentication.git.pat['&lt;host&gt;'].secret</c>.</summary>
     TerraformGitPat,
 
-    /// <summary>A Terraform provider <c>secrets</c> reference.</summary>
-    TerraformProviderSecret,
-
     /// <summary><c>recipeConfig.envSecrets['&lt;VAR&gt;'] = { source: &lt;storeId&gt;, key: &lt;k&gt; }</c>.</summary>
     EnvSecret,
 
