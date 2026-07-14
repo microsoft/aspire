@@ -237,25 +237,34 @@ public static class AspireMcpClientExtensions
             var transport = new HttpClientTransport(
                 transportOptions,
                 httpClient,
-                loggerFactory);
+                loggerFactory,
+                ownsHttpClient: true);
             var clientOptions = new McpClientOptions();
             configureClientOptions?.Invoke(clientOptions);
 
-            var client = await McpClient.CreateAsync(transport, clientOptions, cancellationToken: _creationCancellation.Token).ConfigureAwait(false);
-            if (Volatile.Read(ref _disposed) is not 0)
+            try
             {
-                await client.DisposeAsync().ConfigureAwait(false);
-                throw new ObjectDisposedException(nameof(McpClientRegistration));
-            }
+                var client = await McpClient.CreateAsync(transport, clientOptions, cancellationToken: _creationCancellation.Token).ConfigureAwait(false);
+                if (Volatile.Read(ref _disposed) is not 0)
+                {
+                    await client.DisposeAsync().ConfigureAwait(false);
+                    throw new ObjectDisposedException(nameof(McpClientRegistration));
+                }
 
-            return new DisposableMcpClient(client);
+                return new DisposableMcpClient(client, transport);
+            }
+            catch
+            {
+                await transport.DisposeAsync().ConfigureAwait(false);
+                throw;
+            }
         }
     }
 
     // The DI container disposes singleton factory results directly. Wrapping the async-only client
     // gives the host a synchronous disposal path while preserving the client API surface.
 #pragma warning disable MCPEXP002 // McpClient constructor is required to provide a wrapper that supports IDisposable.
-    private sealed class DisposableMcpClient(McpClient innerClient) : McpClient, IDisposable
+    private sealed class DisposableMcpClient(McpClient innerClient, HttpClientTransport transport) : McpClient, IDisposable
 #pragma warning restore MCPEXP002
     {
         private int _disposed;
@@ -285,7 +294,14 @@ public static class AspireMcpClientExtensions
         {
             if (Interlocked.Exchange(ref _disposed, 1) is 0)
             {
-                innerClient.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                try
+                {
+                    innerClient.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                }
+                finally
+                {
+                    transport.DisposeAsync().AsTask().GetAwaiter().GetResult();
+                }
             }
         }
 
@@ -293,10 +309,22 @@ public static class AspireMcpClientExtensions
         {
             if (Interlocked.Exchange(ref _disposed, 1) is 0)
             {
-                return innerClient.DisposeAsync();
+                return DisposeAsyncCore();
             }
 
             return ValueTask.CompletedTask;
+        }
+
+        private async ValueTask DisposeAsyncCore()
+        {
+            try
+            {
+                await innerClient.DisposeAsync().ConfigureAwait(false);
+            }
+            finally
+            {
+                await transport.DisposeAsync().ConfigureAwait(false);
+            }
         }
     }
 }

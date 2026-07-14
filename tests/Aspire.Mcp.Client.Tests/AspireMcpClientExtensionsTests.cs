@@ -136,6 +136,22 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
+    public void AddMcpClientDisposesHttpClientTransportOnHostDisposal()
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.AddMcpClient("mcp");
+        builder.Services.AddSingleton<IHttpClientFactory>(new TrackingHttpClientFactory(handler));
+
+        var host = builder.Build();
+        var resolveException = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.Null(resolveException);
+        Assert.Null(Record.Exception(host.Dispose));
+        Assert.True(handler.Disposed);
+    }
+
+    [Fact]
     public async Task AddMcpClientCancelsInFlightInitializationOnHostDisposal()
     {
         var handler = new BlockingInitializationHandler();
@@ -209,6 +225,8 @@ public class AspireMcpClientExtensionsTests
 
     private sealed class SuccessfulInitializationHandler : HttpMessageHandler
     {
+        public bool Disposed { get; private set; }
+
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
             if (request.Method == HttpMethod.Get)
@@ -256,6 +274,16 @@ public class AspireMcpClientExtensionsTests
 
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         }
+
+        protected override void Dispose(bool disposing)
+        {
+            if (disposing)
+            {
+                Disposed = true;
+            }
+
+            base.Dispose(disposing);
+        }
     }
 
     private sealed class BlockingInitializationHandler : HttpMessageHandler
@@ -293,5 +321,10 @@ public class AspireMcpClientExtensionsTests
 
             return new HttpResponseMessage(HttpStatusCode.NotFound);
         }
+    }
+
+    private sealed class TrackingHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
+    {
+        public HttpClient CreateClient(string name) => new(handler);
     }
 }
