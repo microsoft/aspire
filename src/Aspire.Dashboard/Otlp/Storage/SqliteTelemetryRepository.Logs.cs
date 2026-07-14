@@ -146,15 +146,12 @@ public sealed partial class SqliteTelemetryRepository
 
     private long GetOrAddTelemetryResource(SqliteConnection connection, IDbTransaction transaction, ResourceKey resourceKey)
     {
-        var instanceIdIsNull = resourceKey.InstanceId is null;
-        var instanceId = resourceKey.InstanceId ?? string.Empty;
         var resourceId = connection.QuerySingleOrDefault<long?>("""
             SELECT resource_id
             FROM telemetry_resources
             WHERE resource_name = @ResourceName
-              AND instance_id_is_null = @InstanceIdIsNull
-              AND instance_id = @InstanceId;
-            """, new { ResourceName = resourceKey.Name, InstanceIdIsNull = instanceIdIsNull, InstanceId = instanceId }, transaction);
+              AND instance_id IS @InstanceId;
+            """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
         if (resourceId is not null)
         {
             return resourceId.Value;
@@ -167,10 +164,10 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         return connection.QuerySingle<long>("""
-            INSERT INTO telemetry_resources (resource_name, instance_id, instance_id_is_null)
-            VALUES (@ResourceName, @InstanceId, @InstanceIdIsNull)
+            INSERT INTO telemetry_resources (resource_name, instance_id)
+            VALUES (@ResourceName, @InstanceId)
             RETURNING resource_id;
-            """, new { ResourceName = resourceKey.Name, InstanceId = instanceId, InstanceIdIsNull = instanceIdIsNull }, transaction);
+            """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
     }
 
     private static long InsertResourceView(
@@ -302,7 +299,6 @@ public sealed partial class SqliteTelemetryRepository
                 l.event_name AS EventName,
                 r.resource_name AS ResourceName,
                 r.instance_id AS InstanceId,
-                r.instance_id_is_null AS InstanceIdIsNull,
                 r.uninstrumented_peer AS UninstrumentedPeer,
                 r.has_logs AS HasLogs,
                 r.has_traces AS HasTraces,
@@ -344,7 +340,6 @@ public sealed partial class SqliteTelemetryRepository
                 l.event_name AS EventName,
                 r.resource_name AS ResourceName,
                 r.instance_id AS InstanceId,
-                r.instance_id_is_null AS InstanceIdIsNull,
                 r.uninstrumented_peer AS UninstrumentedPeer,
                 r.has_logs AS HasLogs,
                 r.has_traces AS HasTraces,
@@ -404,7 +399,7 @@ public sealed partial class SqliteTelemetryRepository
             parameters.Add("ResourceName", resourceKey.Value.Name);
             if (resourceKey.Value.InstanceId is not null)
             {
-                sql.Append(" AND r.instance_id_is_null = 0 AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE");
+                sql.Append(" AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE");
                 parameters.Add("InstanceId", resourceKey.Value.InstanceId);
             }
         }
@@ -442,7 +437,7 @@ public sealed partial class SqliteTelemetryRepository
                 parameters.Add($"ResourceName{i}", key.Name);
                 if (key.InstanceId is not null)
                 {
-                    predicate += $" AND r.instance_id_is_null = 0 AND r.instance_id = @InstanceId{i} COLLATE ORDINAL_IGNORE_CASE";
+                    predicate += $" AND r.instance_id = @InstanceId{i} COLLATE ORDINAL_IGNORE_CASE";
                     parameters.Add($"InstanceId{i}", key.InstanceId);
                 }
                 resourcePredicates.Add($"({predicate})");
@@ -632,7 +627,7 @@ public sealed partial class SqliteTelemetryRepository
             {
                 resource = new OtlpResource(
                     record.ResourceName,
-                    record.InstanceIdIsNull ? null : record.InstanceId,
+                    record.InstanceId,
                     record.UninstrumentedPeer,
                     _otlpContext)
                 {
@@ -686,12 +681,12 @@ public sealed partial class SqliteTelemetryRepository
         EnsureWritable();
         using var connection = _database.OpenConnection();
         var resources = connection.Query<TelemetryResourceRecord>("""
-            SELECT resource_name AS ResourceName, instance_id AS InstanceId, instance_id_is_null AS InstanceIdIsNull
+            SELECT resource_name AS ResourceName, instance_id AS InstanceId
             FROM telemetry_resources;
             """);
         foreach (var resource in resources)
         {
-            var key = new ResourceKey(resource.ResourceName, resource.InstanceIdIsNull ? null : resource.InstanceId);
+            var key = new ResourceKey(resource.ResourceName, resource.InstanceId);
             if (!selectedResources.TryGetValue(key.GetCompositeName(), out var dataTypes))
             {
                 continue;
@@ -722,7 +717,7 @@ public sealed partial class SqliteTelemetryRepository
             parameters.Add("ResourceName", resourceKey.Name);
             if (resourceKey.InstanceId is not null)
             {
-                sql.Append(" AND instance_id_is_null = 0 AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE");
+                sql.Append(" AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE");
                 parameters.Add("InstanceId", resourceKey.InstanceId);
             }
             sql.Append(';');
@@ -752,7 +747,7 @@ public sealed partial class SqliteTelemetryRepository
                 parameters.Add("ResourceName", resourceKey.Value.Name);
                 if (resourceKey.Value.InstanceId is not null)
                 {
-                    where += " AND instance_id_is_null = 0 AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                    where += " AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
                     parameters.Add("InstanceId", resourceKey.Value.InstanceId);
                 }
             }
@@ -795,7 +790,6 @@ public sealed partial class SqliteTelemetryRepository
             SELECT
                 resource_name AS ResourceName,
                 instance_id AS InstanceId,
-                instance_id_is_null AS InstanceIdIsNull,
                 uninstrumented_peer AS UninstrumentedPeer,
                 has_logs AS HasLogs,
                 has_traces AS HasTraces,
@@ -803,7 +797,7 @@ public sealed partial class SqliteTelemetryRepository
             FROM telemetry_resources;
             """))
         {
-            var key = new ResourceKey(record.ResourceName, record.InstanceIdIsNull ? null : record.InstanceId);
+            var key = new ResourceKey(record.ResourceName, record.InstanceId);
             var resource = _resourceCache.GetOrAdd(key, resourceKey =>
             {
                 var newResource = new OtlpResource(resourceKey.Name, resourceKey.InstanceId, record.UninstrumentedPeer, _otlpContext);
@@ -835,7 +829,7 @@ public sealed partial class SqliteTelemetryRepository
             FROM telemetry_resource_views v
             JOIN telemetry_resources r ON r.resource_id = v.resource_id
             WHERE r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE
-              AND (@InstanceId IS NULL OR (r.instance_id_is_null = 0 AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE))
+                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE)
             ORDER BY v.resource_view_id;
             """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }).AsList();
         var attributes = connection.Query<OwnedAttributeRecord>("""
@@ -907,8 +901,7 @@ public sealed partial class SqliteTelemetryRepository
         public string? OriginalFormat { get; init; }
         public string? EventName { get; init; }
         public required string ResourceName { get; init; }
-        public required string InstanceId { get; init; }
-        public required bool InstanceIdIsNull { get; init; }
+        public string? InstanceId { get; init; }
         public required bool UninstrumentedPeer { get; init; }
         public required bool HasLogs { get; init; }
         public required bool HasTraces { get; init; }
@@ -926,8 +919,7 @@ public sealed partial class SqliteTelemetryRepository
     private class TelemetryResourceRecord
     {
         public required string ResourceName { get; init; }
-        public required string InstanceId { get; init; }
-        public required bool InstanceIdIsNull { get; init; }
+        public string? InstanceId { get; init; }
     }
 
     private sealed class TelemetryResourceStateRecord : TelemetryResourceRecord

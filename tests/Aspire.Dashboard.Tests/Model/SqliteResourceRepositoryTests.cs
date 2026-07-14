@@ -229,6 +229,28 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void Resources_BulkLoadKeepsChildRecordsIsolated()
+    {
+        var databasePath = Path.Combine(_temporaryDirectory, "multiple-resources.db");
+        var resources = new[]
+        {
+            CreateResourceWithChildren("api", "API", "api-value"),
+            CreateResourceWithChildren("worker", "Worker", "worker-value")
+        };
+
+        using (var repository = CreateRepository(databasePath))
+        {
+            ((IResourceRepositoryWriter)repository).ReplaceResources(resources);
+        }
+
+        using var historicalRepository = CreateRepository(databasePath, readOnly: true);
+        var actualResources = historicalRepository.GetResources().OrderBy(resource => resource.Name).ToList();
+        Assert.Collection(actualResources,
+            resource => AssertResourceChildren(resource, "api-value"),
+            resource => AssertResourceChildren(resource, "worker-value"));
+    }
+
+    [Fact]
     public void Schema_HasNoSerializedResourceColumns()
     {
         var databasePath = Path.Combine(_temporaryDirectory, "schema.db");
@@ -295,6 +317,29 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void Schema_TelemetryResourceInstanceIdUniquenessPreservesNullAndEmpty()
+    {
+        var databasePath = Path.Combine(_temporaryDirectory, "resource-instance-ids.db");
+        using (CreateRepository(databasePath))
+        {
+        }
+
+        using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "INSERT INTO telemetry_resources (resource_name, instance_id) VALUES ('api', NULL);";
+        command.ExecuteNonQuery();
+        Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
+
+        command.CommandText = "INSERT INTO telemetry_resources (resource_name, instance_id) VALUES ('api', '');";
+        command.ExecuteNonQuery();
+        Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
+
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_resources WHERE resource_name = 'api';";
+        Assert.Equal(2L, command.ExecuteScalar());
+    }
+
+    [Fact]
     public void Schema_AllDashboardTablesAreStrict()
     {
         var databasePath = Path.Combine(_temporaryDirectory, "strict-schema.db");
@@ -340,6 +385,38 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
             Uid = $"uid-{name}",
             CreatedAt = Timestamp.FromDateTime(DateTime.UnixEpoch)
         };
+    }
+
+    private static Resource CreateResourceWithChildren(string name, string displayName, string value)
+    {
+        var resource = CreateResource(name, displayName);
+        resource.Environment.Add(new EnvironmentVariable { Name = "VALUE", Value = value });
+        resource.Properties.Add(new ResourceProperty { Name = "property", Value = Value.ForString(value) });
+        resource.Commands.Add(new ResourceCommand
+        {
+            Name = "command",
+            DisplayName = "Command",
+            ArgumentInputs =
+            {
+                new InteractionInput
+                {
+                    Name = "input",
+                    Label = "Input",
+                    Options = { [value] = value },
+                    ValidationErrors = { value }
+                }
+            }
+        });
+        return resource;
+    }
+
+    private static void AssertResourceChildren(global::Aspire.Dashboard.Model.ResourceViewModel resource, string expected)
+    {
+        Assert.Equal(expected, Assert.Single(resource.Environment).Value);
+        Assert.Equal(expected, resource.Properties["property"].Value.StringValue);
+        var input = Assert.Single(Assert.Single(resource.Commands).ArgumentInputs);
+        Assert.Equal(expected, input.Options[expected]);
+        Assert.Equal(expected, Assert.Single(input.ValidationErrors));
     }
 
     private static void AssertResource(global::Aspire.Dashboard.Model.ResourceViewModel actual, Resource expected, int replicaIndex, string? state = null)

@@ -398,8 +398,8 @@ public sealed partial class SqliteTelemetryRepository
                 if (key.InstanceId is not null)
                 {
                     parameters.Add($"InstanceId{index}", key.InstanceId);
-                    sourcePredicate += $" AND r.instance_id_is_null = 0 AND r.instance_id = @InstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
-                    peerPredicate += $" AND pr.instance_id_is_null = 0 AND pr.instance_id = @InstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                    sourcePredicate += $" AND r.instance_id = @InstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                    peerPredicate += $" AND pr.instance_id = @InstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
                 }
                 resourcePredicates.Add($"(({sourcePredicate}) OR ({peerPredicate}))");
             }
@@ -595,8 +595,8 @@ public sealed partial class SqliteTelemetryRepository
                 if (key.InstanceId is not null)
                 {
                     parameters.Add($"SpanInstanceId{index}", key.InstanceId);
-                    source += $" AND r.instance_id_is_null = 0 AND r.instance_id = @SpanInstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
-                    peer += $" AND pr.instance_id_is_null = 0 AND pr.instance_id = @SpanInstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                    source += $" AND r.instance_id = @SpanInstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                    peer += $" AND pr.instance_id = @SpanInstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
                 }
                 predicates.Add($"(({source}) OR ({peer}))");
             }
@@ -693,7 +693,7 @@ public sealed partial class SqliteTelemetryRepository
             parameters.Add("ResourceName", resourceKey.Value.Name);
             if (resourceKey.Value.InstanceId is not null)
             {
-                resourceWhere += " AND r.instance_id_is_null = 0 AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                resourceWhere += " AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
                 parameters.Add("InstanceId", resourceKey.Value.InstanceId);
             }
         }
@@ -710,10 +710,40 @@ public sealed partial class SqliteTelemetryRepository
     private Dictionary<string, int> GetTraceFieldValuesFromDatabase(string attributeName)
     {
         using var connection = _database.OpenConnection();
-        var traces = connection.Query<string>("SELECT trace_id FROM telemetry_traces ORDER BY first_span_timestamp_ticks, insertion_sequence DESC;")
-            .Select(traceId => MaterializeTrace(connection, traceId)!)
-            .ToList();
-        return OtlpSpan.GetFieldValuesFromTraces(traces, attributeName);
+        IEnumerable<string> values = attributeName switch
+        {
+            KnownResourceFields.ServiceNameField => connection.Query<string>("""
+                SELECT r.resource_name
+                FROM telemetry_spans s
+                JOIN telemetry_resources r ON r.resource_id = s.resource_id
+                UNION ALL
+                SELECT r.resource_name
+                FROM telemetry_spans s
+                JOIN telemetry_resources r ON r.resource_id = s.uninstrumented_peer_resource_id;
+                """),
+            KnownTraceFields.TraceIdField => connection.Query<string>("SELECT trace_id FROM telemetry_spans;"),
+            KnownTraceFields.SpanIdField => connection.Query<string>("SELECT span_id FROM telemetry_spans;"),
+            KnownTraceFields.KindField => connection.Query<int>("SELECT kind FROM telemetry_spans;").Select(kind => ((OtlpSpanKind)kind).ToString()),
+            KnownTraceFields.StatusField => connection.Query<int>("SELECT status FROM telemetry_spans;").Select(status => ((OtlpSpanStatusCode)status).ToString()),
+            KnownSourceFields.NameField => connection.Query<string>("""
+                SELECT sc.scope_name
+                FROM telemetry_spans s
+                JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id;
+                """),
+            KnownTraceFields.NameField => connection.Query<string>("SELECT name FROM telemetry_spans;"),
+            KnownTraceFields.DurationField => connection.Query<long>("SELECT end_time_ticks - start_time_ticks FROM telemetry_spans;")
+                .Select(ticks => TimeSpan.FromTicks(ticks).TotalMilliseconds.ToString("R", CultureInfo.InvariantCulture)),
+            KnownTraceFields.TimestampField => connection.Query<long>("SELECT start_time_ticks FROM telemetry_spans;")
+                .Select(ticks => (ticks / TimeSpan.TicksPerMillisecond).ToString(CultureInfo.InvariantCulture)),
+            _ => connection.Query<string>("""
+                SELECT attribute_value
+                FROM telemetry_span_attributes
+                WHERE attribute_key = @AttributeName COLLATE ORDINAL_IGNORE_CASE;
+                """, new { AttributeName = attributeName })
+        };
+
+        return values.GroupBy(value => value, StringComparers.OtlpAttribute)
+            .ToDictionary(group => group.Key, group => group.Count(), StringComparers.OtlpAttribute);
     }
 
     private bool HasUpdatedTraceInDatabase(OtlpTrace trace)
@@ -763,7 +793,6 @@ public sealed partial class SqliteTelemetryRepository
                 t.last_updated_timestamp_ticks AS LastUpdatedTimestampTicks,
                 r.resource_name AS ResourceName,
                 r.instance_id AS InstanceId,
-                r.instance_id_is_null AS InstanceIdIsNull,
                 r.uninstrumented_peer AS UninstrumentedPeer,
                 r.has_logs AS HasLogs,
                 r.has_traces AS HasTraces,
@@ -771,8 +800,7 @@ public sealed partial class SqliteTelemetryRepository
                 sc.scope_name AS ScopeName,
                 sc.scope_version AS ScopeVersion,
                 pr.resource_name AS PeerResourceName,
-                pr.instance_id AS PeerInstanceId,
-                pr.instance_id_is_null AS PeerInstanceIdIsNull
+                pr.instance_id AS PeerInstanceId
             FROM telemetry_spans s
             JOIN telemetry_traces t ON t.trace_id = s.trace_id
             JOIN telemetry_resources r ON r.resource_id = s.resource_id
@@ -849,7 +877,7 @@ public sealed partial class SqliteTelemetryRepository
         {
             if (!resources.TryGetValue(record.ResourceId, out var resource))
             {
-                resource = new OtlpResource(record.ResourceName, record.InstanceIdIsNull ? null : record.InstanceId, record.UninstrumentedPeer, _otlpContext)
+                resource = new OtlpResource(record.ResourceName, record.InstanceId, record.UninstrumentedPeer, _otlpContext)
                 {
                     HasLogs = record.HasLogs,
                     HasTraces = record.HasTraces,
@@ -891,7 +919,7 @@ public sealed partial class SqliteTelemetryRepository
             {
                 modelSpan.SetUninstrumentedPeer(new OtlpResource(
                     record.PeerResourceName!,
-                    record.PeerInstanceIdIsNull ? null : record.PeerInstanceId,
+                    record.PeerInstanceId,
                     uninstrumentedPeer: true,
                     _otlpContext));
             }
@@ -929,12 +957,12 @@ public sealed partial class SqliteTelemetryRepository
     {
         using var connection = _database.OpenConnection();
         var resources = connection.Query<TelemetryResourceRecord>("""
-            SELECT resource_name AS ResourceName, instance_id AS InstanceId, instance_id_is_null AS InstanceIdIsNull
+            SELECT resource_name AS ResourceName, instance_id AS InstanceId
             FROM telemetry_resources;
             """);
         foreach (var resource in resources)
         {
-            var key = new ResourceKey(resource.ResourceName, resource.InstanceIdIsNull ? null : resource.InstanceId);
+            var key = new ResourceKey(resource.ResourceName, resource.InstanceId);
             if (selectedResources.TryGetValue(key.GetCompositeName(), out var dataTypes) &&
                 dataTypes.Contains(AspireDataType.Traces) &&
                 !dataTypes.Contains(AspireDataType.Resource))
@@ -950,16 +978,85 @@ public sealed partial class SqliteTelemetryRepository
         {
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
-            foreach (var traceId in connection.Query<string>("SELECT trace_id FROM telemetry_traces;", transaction: transaction))
+            var spans = connection.Query<PeerRecalculationSpanRecord>("""
+                SELECT
+                    trace_id AS TraceId,
+                    span_id AS SpanId,
+                    parent_span_id AS ParentSpanId,
+                    kind AS Kind
+                FROM telemetry_spans;
+                """, transaction: transaction).AsList();
+            var attributes = connection.Query<PeerRecalculationAttributeRecord>("""
+                SELECT
+                    trace_id AS TraceId,
+                    span_id AS SpanId,
+                    attribute_key AS AttributeKey,
+                    attribute_value AS AttributeValue
+                FROM telemetry_span_attributes
+                ORDER BY trace_id, span_id, ordinal;
+                """, transaction: transaction).ToLookup(record => (record.TraceId, record.SpanId));
+            var parents = spans
+                .Where(span => span.ParentSpanId is not null)
+                .Select(span => (span.TraceId, SpanId: span.ParentSpanId!))
+                .ToHashSet();
+            var peerResourceIds = new Dictionary<ResourceKey, long>();
+            var spanUpdates = new List<PeerSpanUpdateRecord>(spans.Count);
+
+            foreach (var span in spans)
             {
-                var trace = MaterializeTrace(connection, traceId, transaction)!;
-                UpdateUninstrumentedPeers(connection, transaction, trace);
-                connection.Execute("""
-                    UPDATE telemetry_traces
-                    SET last_updated_timestamp_ticks = @LastUpdatedTimestampTicks
-                    WHERE trace_id = @TraceId;
-                    """, new { TraceId = traceId, LastUpdatedTimestampTicks = trace.LastUpdatedDate.Ticks }, transaction);
+                var spanAttributes = attributes[(span.TraceId, span.SpanId)]
+                    .Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue))
+                    .ToArray();
+                long? peerResourceId = null;
+                if (spanAttributes.GetPeerAddress() is not null &&
+                    (OtlpSpanKind)span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer &&
+                    !parents.Contains((span.TraceId, span.SpanId)))
+                {
+                    foreach (var resolver in _outgoingPeerResolvers)
+                    {
+                        if (!resolver.TryResolvePeer(spanAttributes, out _, out var matchedResource) || matchedResource is null)
+                        {
+                            continue;
+                        }
+
+                        var peerKey = ResourceKey.Create(matchedResource.DisplayName, matchedResource.Name);
+                        if (!peerResourceIds.TryGetValue(peerKey, out var resourceId))
+                        {
+                            resourceId = GetOrAddTelemetryResource(connection, transaction, peerKey);
+                            peerResourceIds.Add(peerKey, resourceId);
+                            connection.Execute(
+                                "UPDATE telemetry_resources SET uninstrumented_peer = 1 WHERE resource_id = @ResourceId;",
+                                new { ResourceId = resourceId },
+                                transaction);
+                        }
+                        peerResourceId = resourceId;
+                        break;
+                    }
+                }
+
+                spanUpdates.Add(new PeerSpanUpdateRecord
+                {
+                    PeerResourceId = peerResourceId,
+                    TraceId = span.TraceId,
+                    SpanId = span.SpanId
+                });
             }
+
+            connection.Execute("""
+                UPDATE telemetry_spans
+                SET uninstrumented_peer_resource_id = @PeerResourceId
+                WHERE trace_id = @TraceId AND span_id = @SpanId;
+                """, spanUpdates, transaction);
+            var lastUpdatedTimestampTicks = DateTime.UtcNow.Ticks;
+            connection.Execute("""
+                UPDATE telemetry_traces
+                SET last_updated_timestamp_ticks = @LastUpdatedTimestampTicks
+                WHERE trace_id = @TraceId;
+                """, spans.Select(span => span.TraceId).Distinct(StringComparer.Ordinal).Select(traceId => new
+            {
+                TraceId = traceId,
+                LastUpdatedTimestampTicks = lastUpdatedTimestampTicks
+            }), transaction);
             transaction.Commit();
         }
     }
@@ -978,7 +1075,7 @@ public sealed partial class SqliteTelemetryRepository
                 parameters.Add("ResourceName", resourceKey.Value.Name);
                 if (resourceKey.Value.InstanceId is not null)
                 {
-                    where += " AND instance_id_is_null = 0 AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                    where += " AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
                     parameters.Add("InstanceId", resourceKey.Value.InstanceId);
                 }
             }
@@ -1022,6 +1119,27 @@ public sealed partial class SqliteTelemetryRepository
     {
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }
+    }
+
+    private sealed class PeerRecalculationSpanRecord
+    {
+        public required string TraceId { get; init; }
+        public required string SpanId { get; init; }
+        public string? ParentSpanId { get; init; }
+        public required int Kind { get; init; }
+    }
+
+    private sealed class PeerRecalculationAttributeRecord : AttributeRecord
+    {
+        public required string TraceId { get; init; }
+        public required string SpanId { get; init; }
+    }
+
+    private sealed class PeerSpanUpdateRecord
+    {
+        public required string TraceId { get; init; }
+        public required string SpanId { get; init; }
+        public long? PeerResourceId { get; init; }
     }
 
     private sealed class TraceOwnedAttributeRecord : AttributeRecord
@@ -1075,8 +1193,7 @@ public sealed partial class SqliteTelemetryRepository
         public long? PeerResourceId { get; init; }
         public required long LastUpdatedTimestampTicks { get; init; }
         public required string ResourceName { get; init; }
-        public required string InstanceId { get; init; }
-        public required bool InstanceIdIsNull { get; init; }
+        public string? InstanceId { get; init; }
         public required bool UninstrumentedPeer { get; init; }
         public required bool HasLogs { get; init; }
         public required bool HasTraces { get; init; }
@@ -1085,6 +1202,5 @@ public sealed partial class SqliteTelemetryRepository
         public required string ScopeVersion { get; init; }
         public string? PeerResourceName { get; init; }
         public string? PeerInstanceId { get; init; }
-        public bool PeerInstanceIdIsNull { get; init; }
     }
 }

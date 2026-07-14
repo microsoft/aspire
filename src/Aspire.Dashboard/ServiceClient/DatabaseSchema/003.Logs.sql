@@ -4,14 +4,19 @@
 CREATE TABLE IF NOT EXISTS telemetry_resources (
     resource_id INTEGER PRIMARY KEY AUTOINCREMENT,
     resource_name TEXT NOT NULL,
-    instance_id TEXT NOT NULL,
-    instance_id_is_null INTEGER NOT NULL,
+    instance_id TEXT NULL,
     uninstrumented_peer INTEGER NOT NULL DEFAULT 0,
     has_logs INTEGER NOT NULL DEFAULT 0,
     has_traces INTEGER NOT NULL DEFAULT 0,
-    has_metrics INTEGER NOT NULL DEFAULT 0,
-    UNIQUE (resource_name, instance_id_is_null, instance_id)
+    has_metrics INTEGER NOT NULL DEFAULT 0
 ) STRICT;
+
+CREATE UNIQUE INDEX IF NOT EXISTS ix_telemetry_resources_name_without_instance
+    ON telemetry_resources(resource_name)
+    WHERE instance_id IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS ix_telemetry_resources_name_with_instance
+    ON telemetry_resources(resource_name, instance_id)
+    WHERE instance_id IS NOT NULL;
 
 CREATE TABLE IF NOT EXISTS telemetry_resource_views (
     resource_view_id INTEGER PRIMARY KEY AUTOINCREMENT,
