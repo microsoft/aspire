@@ -133,6 +133,11 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
             },
             e =>
             {
+                Assert.Equal(DashboardConfigNames.DashboardPersistenceModeName.EnvVarName, e.Key);
+                Assert.Equal("Runs", e.Value);
+            },
+            e =>
+            {
                 Assert.Equal(KnownConfigNames.ResourceServiceEndpointUrl, e.Key);
                 Assert.Equal("http://localhost:5000", e.Value);
             },
