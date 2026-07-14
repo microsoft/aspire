@@ -34,6 +34,53 @@ public class DashboardBackendApplicationTests
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
+    [Theory]
+    [InlineData("https://example.com")]
+    [InlineData("null")]
+    [InlineData("file://")]
+    public async Task DevelopmentAccessPolicy_RejectsNonLoopbackBrowserOrigins(string origin)
+    {
+        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, DashboardApiContract.DiscoveryPath);
+        request.Headers.TryAddWithoutValidation("Origin", origin);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
+    }
+
+    [Theory]
+    [InlineData("http://localhost:1430")]
+    [InlineData("https://Stress.dev.localhost:49985")]
+    [InlineData("http://127.0.0.1:1430")]
+    [InlineData("http://[::1]:1430")]
+    public async Task DevelopmentAccessPolicy_AllowsLoopbackBrowserOrigins(string origin)
+    {
+        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, DashboardApiContract.DiscoveryPath);
+        request.Headers.TryAddWithoutValidation("Origin", origin);
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+    }
+
+    [Theory]
+    [InlineData("127.0.0.1", true)]
+    [InlineData("127.42.0.1", true)]
+    [InlineData("::1", true)]
+    [InlineData("::ffff:127.0.0.1", true)]
+    [InlineData("192.168.1.10", false)]
+    [InlineData("2001:db8::1", false)]
+    public void DevelopmentAccessPolicy_RestrictsConnectionsToLoopback(string address, bool expected)
+    {
+        Assert.Equal(expected, DashboardDevelopmentAccessPolicy.IsLoopback(IPAddress.Parse(address)));
+    }
+
     [Fact]
     public async Task GetConfiguration_ReturnsConfiguredIdentityFromVersionOneRoute()
     {

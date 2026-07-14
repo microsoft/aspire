@@ -24,6 +24,7 @@ internal static class DashboardBackendApplication
         configureBuilder?.Invoke(builder);
 
         var app = builder.Build();
+        app.UseDashboardDevelopmentAccessPolicy();
 
         app.MapGet(DashboardApiContract.DiscoveryPath, () =>
         {
