@@ -117,15 +117,21 @@
     <div class="layout-body-container">
         <FluentBodyContent Class="custom-body-content body-content">
             <FluentToastProvider MaxToastCount="3" Timeout="5000" />
-            @Body
+            @if (_selectedRun is not null)
+            {
+                @Body
+            }
         </FluentBodyContent>
     </div>
 
     <FluentDialogProvider/>
     <FluentTooltipProvider />
     <FluentMenuProvider />
-    <InteractionsProvider />
-    <ResourceServiceConnectionProvider />
+    @if (_selectedRun is not null)
+    {
+        <InteractionsProvider />
+        <ResourceServiceConnectionProvider />
+    }
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
         <a href="" class="reload">@Loc[nameof(Layout.MainLayoutUnhandledErrorReload)]</a>

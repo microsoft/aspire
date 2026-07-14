@@ -392,6 +392,40 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal("Started 1/2/2025 1:30 PM", cut.Find(".application-run-start").TextContent, ignoreWhiteSpaceDifferences: true);
     }
 
+    [Fact]
+    public async Task RunSelectionPending_DoesNotRenderBody()
+    {
+        var runStore = new FluentUISetupHelpers.TestDashboardRunStore(
+        [
+            new(
+                RunId: "current",
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: null,
+                CleanShutdown: false,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: true)
+        ]);
+        var runSelectionSource = new TaskCompletionSource<(bool Success, object? Value)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sessionStorage = new TestSessionStorage
+        {
+            OnGetTaskAsync = _ => runSelectionSource.Task
+        };
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
+
+        var cut = RenderComponent<MainLayout>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+            builder.Add(p => p.Body, bodyBuilder => bodyBuilder.AddMarkupContent(0, "<div id=\"body-content\"></div>"));
+        });
+
+        Assert.Empty(cut.FindAll("#body-content"));
+
+        await cut.InvokeAsync(() => runSelectionSource.SetResult((false, null)));
+
+        Assert.NotNull(cut.WaitForElement("#body-content"));
+    }
+
     [Theory]
     [InlineData(true, false, "dashboard-help-button", "HelpDialog", "dashboard-navigation-button")]
     [InlineData(true, false, "dashboard-settings-button", "SettingsDialog", "dashboard-navigation-button")]

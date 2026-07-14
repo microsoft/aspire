@@ -8,20 +8,32 @@ namespace Aspire.Dashboard.ServiceClient;
 
 internal sealed class SelectedDashboardClient(DashboardClient currentClient, DashboardDataSource dataSource) : IDashboardClient
 {
-    public Task WhenConnected => currentClient.WhenConnected;
-    public bool IsEnabled => currentClient.IsEnabled;
+    public Task WhenConnected => IsReadOnly ? Task.CompletedTask : currentClient.WhenConnected;
+    public bool IsEnabled => IsReadOnly || currentClient.IsEnabled;
     public bool IsReadOnly => dataSource.IsReadOnly;
-    public DashboardConnectionState ConnectionState => currentClient.ConnectionState;
+    public DashboardConnectionState ConnectionState => IsReadOnly ? DashboardConnectionState.Connected : currentClient.ConnectionState;
     public string ApplicationName => dataSource.SelectedRun.ApplicationName ?? currentClient.ApplicationName;
-    public string? MinRequiredVersion => currentClient.MinRequiredVersion;
+    public string? MinRequiredVersion => IsReadOnly ? null : currentClient.MinRequiredVersion;
 
     public event Action<DashboardConnectionState>? ConnectionStateChanged
     {
-        add => currentClient.ConnectionStateChanged += value;
-        remove => currentClient.ConnectionStateChanged -= value;
+        add
+        {
+            if (!IsReadOnly)
+            {
+                currentClient.ConnectionStateChanged += value;
+            }
+        }
+        remove
+        {
+            if (!IsReadOnly)
+            {
+                currentClient.ConnectionStateChanged -= value;
+            }
+        }
     }
 
-    public Task ReconnectAsync() => currentClient.ReconnectAsync();
+    public Task ReconnectAsync() => IsReadOnly ? Task.CompletedTask : currentClient.ReconnectAsync();
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken) => dataSource.ResourceRepository.SubscribeResourcesAsync(cancellationToken);
     public ResourceViewModel? GetResource(string resourceName) => dataSource.ResourceRepository.GetResource(resourceName);
     public IReadOnlyList<ResourceViewModel> GetResources() => dataSource.ResourceRepository.GetResources();

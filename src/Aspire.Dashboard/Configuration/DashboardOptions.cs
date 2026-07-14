@@ -24,6 +24,7 @@ public sealed class DashboardOptions
 
 public sealed class DashboardDataOptions
 {
+    // Configure this to a location whose permissions protect persisted Dashboard data from undesirable accounts.
     public string? Directory { get; set; }
     public DashboardPersistenceMode PersistenceMode { get; set; }
 

@@ -406,6 +406,35 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         AssertDimensionValues(instrument.Dimensions, new KeyValuePair<string, string>[] { KeyValuePair.Create("key1", "value1"), KeyValuePair.Create("key2", "value1") }, valueCount: 1);
     }
 
+    [Fact]
+    public void GetInstrumentLatestEndTime()
+    {
+        var repository = CreateRepository();
+        repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test", startTime: s_testTime.AddMinutes(1)),
+                            CreateSumMetric(metricName: "test", startTime: s_testTime.AddMinutes(2), attributes: [KeyValuePair.Create("key", "value")])
+                        }
+                    }
+                }
+            }
+        });
+        var resourceKey = Assert.Single(repository.GetResources()).ResourceKey;
+
+        Assert.Equal(s_testTime.AddMinutes(2), repository.GetInstrumentLatestEndTime(resourceKey, "test-meter", "test"));
+        Assert.Null(repository.GetInstrumentLatestEndTime(resourceKey, "test-meter", "missing"));
+    }
+
     private static Exemplar CreateExemplar(DateTime startTime, double value, IEnumerable<KeyValuePair<string, string>>? attributes = null)
     {
         var exemplar = new Exemplar

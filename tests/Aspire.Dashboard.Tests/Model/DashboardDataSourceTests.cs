@@ -9,6 +9,7 @@ using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Logs.V1;
@@ -149,6 +150,30 @@ public sealed class DashboardDataSourceTests : IDisposable
     }
 
     [Fact]
+    public void RunsMode_DeletesOldestRunWhenLimitIsExceeded()
+    {
+        var applicationDirectory = Path.Combine(_temporaryDirectory, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
+        var runsDirectory = Path.Combine(applicationDirectory, "runs");
+        var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
+            .Select(index => Path.Combine(
+                runsDirectory,
+                $"{DateTimeOffset.UtcNow.AddDays(-index):yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}"))
+            .ToList();
+
+        foreach (var directory in historicalRunDirectories)
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        using var currentRunStore = new DashboardRunStore(CreateOptions());
+
+        Assert.Equal(DashboardRunStore.MaxRuns, Directory.GetDirectories(runsDirectory).Length);
+        Assert.False(Directory.Exists(historicalRunDirectories[^1]));
+        Assert.All(historicalRunDirectories[..^1], directory => Assert.True(Directory.Exists(directory)));
+        Assert.True(Directory.Exists(currentRunStore.RunDirectory));
+    }
+
+    [Fact]
     public void GetRuns_ExcludesIncompatibleDatabaseWithoutDeletingIt()
     {
         var options = CreateOptions();
@@ -193,7 +218,7 @@ public sealed class DashboardDataSourceTests : IDisposable
     }
 
     [Fact]
-    public void SelectedHistoricalRun_ReplaysDataAndRejectsMutation()
+    public async Task SelectedHistoricalRun_ReplaysDataAndRejectsMutation()
     {
         var options = CreateOptions();
         string historicalRunId;
@@ -249,6 +274,25 @@ public sealed class DashboardDataSourceTests : IDisposable
             Filters = []
         }).Items).Message);
         Assert.Throws<InvalidOperationException>(() => dataSource.TelemetryRepository.ClearMetrics());
+        Assert.Throws<InvalidOperationException>(() => dataSource.TelemetryRepository.ClearSelectedSignals([]));
+
+        await using var currentClient = new DashboardClient(
+            NullLoggerFactory.Instance,
+            new ConfigurationManager(),
+            options,
+            new MockKnownPropertyLookup(),
+            new TestStringLocalizer<Resources.Resources>());
+        IDashboardClient selectedClient = new SelectedDashboardClient(currentClient, dataSource);
+        var connectionStateChangedCount = 0;
+        selectedClient.ConnectionStateChanged += _ => connectionStateChangedCount++;
+
+        currentClient.SetConnectionStateForTesting(DashboardConnectionState.Disconnected);
+
+        Assert.True(selectedClient.IsEnabled);
+        Assert.True(selectedClient.WhenConnected.IsCompletedSuccessfully);
+        Assert.Equal(DashboardConnectionState.Connected, selectedClient.ConnectionState);
+        Assert.Equal(0, connectionStateChangedCount);
+        await selectedClient.ReconnectAsync();
     }
 
     [Fact]

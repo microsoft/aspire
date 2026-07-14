@@ -25,7 +25,7 @@ using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
-public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository
+public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, IMetricTelemetryRepository
 {
     internal const int MaxResourceViewCount = TelemetryRepositoryLimits.MaxResourceViewCount;
     internal const int MaxInstrumentCount = TelemetryRepositoryLimits.MaxInstrumentCount;
@@ -2170,6 +2170,17 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository
                 HasOverflow = hasOverflow
             };
         }
+    }
+
+    DateTime? IMetricTelemetryRepository.GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName)
+    {
+        return GetResources(resourceKey)
+            .Select(resource => resource.GetInstrument(meterName, instrumentName, DateTime.MinValue, DateTime.MaxValue))
+            .OfType<OtlpInstrument>()
+            .SelectMany(instrument => instrument.Dimensions.Values)
+            .SelectMany(dimension => dimension.Values)
+            .Select(value => (DateTime?)value.End)
+            .Max();
     }
 
     private Task OnPeerChanged()

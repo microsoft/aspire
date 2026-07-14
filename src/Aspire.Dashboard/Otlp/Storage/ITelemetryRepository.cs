@@ -63,3 +63,14 @@ public interface ITelemetryRepository : IDisposable
     void ClearStructuredLogs(ResourceKey? resourceKey = null);
     void ClearMetrics(ResourceKey? resourceKey = null);
 }
+
+internal interface IMetricTelemetryRepository
+{
+    DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName);
+}
+
+internal static class MetricTelemetryRepositoryExtensions
+{
+    public static DateTime? GetInstrumentLatestEndTime(this ITelemetryRepository repository, ResourceKey resourceKey, string meterName, string instrumentName) =>
+        ((IMetricTelemetryRepository)repository).GetInstrumentLatestEndTime(resourceKey, meterName, instrumentName);
+}

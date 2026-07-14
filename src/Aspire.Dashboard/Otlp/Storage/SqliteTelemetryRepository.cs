@@ -15,7 +15,7 @@ namespace Aspire.Dashboard.Otlp.Storage;
 /// <summary>
 /// Persists telemetry to SQLite and exposes it through the dashboard telemetry model.
 /// </summary>
-public sealed partial class SqliteTelemetryRepository : ITelemetryRepository
+public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IMetricTelemetryRepository
 {
     private readonly DashboardSqliteDatabase _database;
     private readonly OtlpContext _otlpContext;
@@ -149,8 +149,11 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository
     }
     public List<OtlpInstrumentSummary> GetInstrumentsSummaries(ResourceKey key) => GetInstrumentsSummariesFromDatabase(key);
     public OtlpInstrumentData? GetInstrument(GetInstrumentRequest request) => GetInstrumentFromDatabase(request);
+    DateTime? IMetricTelemetryRepository.GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName) =>
+        GetInstrumentLatestEndTimeFromDatabase(resourceKey, meterName, instrumentName);
     public void ClearSelectedSignals(Dictionary<string, HashSet<AspireDataType>> selectedResources)
     {
+        EnsureWritable();
         ClearSelectedLogsFromDatabase(selectedResources);
         ClearSelectedTracesFromDatabase(selectedResources);
         ClearSelectedMetricsFromDatabase(selectedResources);
