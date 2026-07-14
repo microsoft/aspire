@@ -113,8 +113,8 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     private Process? _process;
     private int? _id;
     private DateTimeOffset? _startTime;
-    private int _started;
-    private int _disposed;
+    private readonly TaskCompletionSource _startCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _lifecycleState = (int)LifecycleState.NotStarted;
 
     public IsolatedProcess(IsolatedProcessStartInfo startInfo)
     {
@@ -202,15 +202,36 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     /// <inheritdoc />
     public ValueTask DisposeAsync()
     {
-        // The caller is expected to have terminated the process by now, but we guard
-        // against double-dispose anyway because this object can land in `using` blocks
-        // and explicit cleanup paths at the same time during error recovery.
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        while (true)
         {
-            return ValueTask.CompletedTask;
-        }
+            switch ((LifecycleState)Volatile.Read(ref _lifecycleState))
+            {
+                case LifecycleState.NotStarted:
+                    if (Interlocked.CompareExchange(ref _lifecycleState, (int)LifecycleState.Disposed, (int)LifecycleState.NotStarted) == (int)LifecycleState.NotStarted)
+                    {
+                        return _disposeAsync();
+                    }
+                    break;
 
-        return _disposeAsync();
+                case LifecycleState.Starting:
+                    // StartAsync publishes _disposeAsync only after the child resources are wrapped.
+                    // Wait for that handoff so concurrent disposal cannot permanently miss them.
+                    return new ValueTask(DisposeAfterStartCompletesAsync());
+
+                case LifecycleState.Started:
+                    // The caller is expected to have terminated the process by now, but we guard
+                    // against double-dispose anyway because this object can land in `using` blocks
+                    // and explicit cleanup paths at the same time during error recovery.
+                    if (Interlocked.CompareExchange(ref _lifecycleState, (int)LifecycleState.Disposed, (int)LifecycleState.Started) == (int)LifecycleState.Started)
+                    {
+                        return _disposeAsync();
+                    }
+                    break;
+
+                case LifecycleState.Disposed:
+                    return ValueTask.CompletedTask;
+            }
+        }
     }
 
     /// <summary>
@@ -235,30 +256,53 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     public async Task<bool> StartAsync(CancellationToken cancellationToken)
     {
         cancellationToken.ThrowIfCancellationRequested();
-        if (Interlocked.Exchange(ref _started, 1) != 0)
+        var previousState = (LifecycleState)Interlocked.CompareExchange(ref _lifecycleState, (int)LifecycleState.Starting, (int)LifecycleState.NotStarted);
+        if (previousState != LifecycleState.NotStarted)
         {
-            throw new InvalidOperationException($"{nameof(IsolatedProcess)} has already been started.");
+            throw previousState == LifecycleState.Disposed
+                ? new ObjectDisposedException(nameof(IsolatedProcess))
+                : new InvalidOperationException($"{nameof(IsolatedProcess)} has already been started.");
         }
 
-        StartedProcess startedProcess;
-        if (_startInfo.Detached && !OperatingSystem.IsWindows())
+        try
         {
-            startedProcess = await StartDetachedUnixAsync(_startInfo, cancellationToken).ConfigureAwait(false);
-        }
-        // Windows parent-exit protection requires the suspended-create / assign / resume ceremony in
-        // StartWindows. Route protected helpers through that path even when they do not need a
-        // graceful CTRL+C console group; otherwise use the ordinary redirected Process.Start shape.
-        else if (OperatingSystem.IsWindows() && (_startInfo.IsolateConsole || _startInfo.KillOnParentExit || _startInfo.Detached))
-        {
-            startedProcess = StartWindows(_startInfo);
-        }
-        else
-        {
-            startedProcess = StartRedirected(_startInfo, redirectStandardInput: !_startInfo.IsolateConsole);
-        }
+            StartedProcess startedProcess;
+            if (_startInfo.Detached && !OperatingSystem.IsWindows())
+            {
+                startedProcess = await StartDetachedUnixAsync(_startInfo, cancellationToken).ConfigureAwait(false);
+            }
+            // Windows parent-exit protection requires the suspended-create / assign / resume ceremony in
+            // StartWindows. Route protected helpers through that path even when they do not need a
+            // graceful CTRL+C console group; otherwise use the ordinary redirected Process.Start shape.
+            else if (OperatingSystem.IsWindows() && (_startInfo.IsolateConsole || _startInfo.KillOnParentExit || _startInfo.Detached))
+            {
+                startedProcess = StartWindows(_startInfo);
+            }
+            else
+            {
+                startedProcess = StartRedirected(_startInfo, redirectStandardInput: !_startInfo.IsolateConsole);
+            }
 
-        InitializeStartedProcess(startedProcess);
-        return true;
+            InitializeStartedProcess(startedProcess);
+            Volatile.Write(ref _lifecycleState, (int)LifecycleState.Started);
+            return true;
+        }
+        catch
+        {
+            Volatile.Write(ref _lifecycleState, (int)LifecycleState.Disposed);
+            await _disposeAsync().ConfigureAwait(false);
+            throw;
+        }
+        finally
+        {
+            _startCompletion.TrySetResult();
+        }
+    }
+
+    private async Task DisposeAfterStartCompletesAsync()
+    {
+        await _startCompletion.Task.ConfigureAwait(false);
+        await DisposeAsync().ConfigureAwait(false);
     }
 
     /// <summary>
@@ -376,6 +420,14 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         DateTimeOffset? StartTime = null,
         bool UseProvidedStartTime = false,
         int? ProcessId = null);
+
+    private enum LifecycleState
+    {
+        NotStarted,
+        Starting,
+        Started,
+        Disposed
+    }
 
     private static DateTimeOffset? GetStartTime(Process process)
     {

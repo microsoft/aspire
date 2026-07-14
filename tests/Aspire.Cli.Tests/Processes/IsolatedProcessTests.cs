@@ -150,6 +150,27 @@ public class IsolatedProcessTests
         }
     }
 
+    [Fact]
+    public async Task StartAsync_AfterDispose_ThrowsObjectDisposedException()
+    {
+        var (fileName, arguments) = GetEchoCommand("should-not-start");
+
+        var startInfo = new IsolatedProcessStartInfo
+        {
+            FileName = fileName,
+            WorkingDirectory = Environment.CurrentDirectory,
+        };
+        foreach (var arg in arguments)
+        {
+            startInfo.ArgumentList.Add(arg);
+        }
+
+        await using var child = new IsolatedProcess(startInfo);
+        await child.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => child.StartAsync(CancellationToken.None));
+    }
+
     private static (string FileName, IReadOnlyList<string> Arguments) GetEchoCommand(string text)
     {
         if (OperatingSystem.IsWindows())
