@@ -206,16 +206,29 @@ public class SealedSecretApplyStepTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
                 "db-creds", "app", "db-creds", appliedGeneration: 4,
-                timeout: TimeSpan.FromMilliseconds(10),
+                // Use a comfortable timeout (not a tiny wall-clock budget) and drive the timeout
+                // deterministically from the probe. A previous 10ms budget was flaky under CI load:
+                // a slow cold-JIT first iteration could consume the whole budget before a second
+                // poll, so 'secretCalls > 1' occasionally saw only one call. Here the first probe
+                // reports the Secret absent (so the loop keeps waiting past one iteration), then the
+                // second probe hangs until the remaining-budget guard cancels it and surfaces the
+                // ASPIRERADIUS058 timeout — guaranteeing at least two polls regardless of runner speed.
+                timeout: TimeSpan.FromMilliseconds(250),
                 interval: TimeSpan.FromMilliseconds(1),
                 getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(
                     4,
                     4,
                     [new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null)])),
-                secretExists: _ =>
+                secretExists: async ct =>
                 {
                     secretCalls++;
-                    return Task.FromResult(false);
+                    if (secretCalls == 1)
+                    {
+                        return false;
+                    }
+
+                    await Task.Delay(Timeout.Infinite, ct).ConfigureAwait(false);
+                    return false;
                 },
                 cancellationToken: default));
 
