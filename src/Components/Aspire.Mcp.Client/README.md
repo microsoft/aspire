@@ -1,46 +1,113 @@
 # Aspire MCP Client library
 
-Registers an [MCP client](https://modelcontextprotocol.io/) that connects to a remote MCP server through Aspire service discovery.
+Registers an [McpClient](https://modelcontextprotocol.io/specification/2025-06-18/basic/architecture) in the DI container for connecting to a Model Context Protocol (MCP) server through Aspire service discovery.
 
-## Install the package
+## Getting started
+
+### Prerequisites
+
+- An MCP server exposed in your distributed application.
+- A consuming service that calls `AddServiceDefaults()` so logical service names are resolved by service discovery.
+
+### Install the package
+
+Install the Aspire MCP Client library with [NuGet](https://www.nuget.org):
 
 ```dotnetcli
 dotnet add package Aspire.Mcp.Client
 ```
 
-## Usage
+## Usage example
 
-Reference the MCP server from the consuming project in the AppHost:
-
-```csharp
-var mcp = builder.AddProject<Projects.Mcp>("mcp");
-
-builder.AddProject<Projects.Api>("api")
-    .WithReference(mcp)
-    .WaitFor(mcp);
-```
-
-In the consuming application, register the client after service defaults:
+In the _Program.cs_ file of your project, call the `AddMcpClient` extension method to register an `McpClient` for use via the dependency injection container. The method takes the MCP server connection name.
 
 ```csharp
 builder.AddServiceDefaults();
 builder.AddMcpClient("mcp");
 ```
 
-The client is registered as a singleton and can be injected directly:
+You can then retrieve the `McpClient` instance using dependency injection. For example, to retrieve the client from a Web API controller:
 
 ```csharp
-public sealed class WeatherAgent(McpClient mcpClient)
+public sealed class ToolsController(McpClient mcpClient)
 {
+    private readonly McpClient _mcpClient = mcpClient;
 }
 ```
 
-`AddMcpClient("mcp")` connects to the `https` endpoint of the `mcp` service at `/mcp`. The application must call `AddServiceDefaults` so the configured HTTP client resolves the logical service name.
+`AddMcpClient("mcp")` resolves the server endpoint as `https://mcp/mcp`.
 
-Use `AddKeyedMcpClient` when the application consumes multiple MCP servers:
+## Configuration
+
+The Aspire MCP Client library configures the server endpoint from the connection name and supports inline configuration delegates for client and transport options.
+
+### Use the connection name
+
+Provide the same connection name configured by AppHost references:
 
 ```csharp
-builder.AddKeyedMcpClient("weather");
-
-var mcpClient = serviceProvider.GetRequiredKeyedService<McpClient>("weather");
+builder.AddMcpClient("mcp");
 ```
+
+The client resolves `https://{connectionName}/mcp`.
+
+### Use inline delegates
+
+Use the overload to configure `McpClientOptions` and `HttpClientTransportOptions` inline:
+
+```csharp
+builder.AddMcpClient(
+    "mcp",
+    configureClientOptions: options =>
+    {
+        options.ClientInfo = new() { Name = "MyService", Version = "1.0.0" };
+    },
+    configureTransportOptions: options =>
+    {
+        options.Endpoint = new Uri("https://mcp/mcp", UriKind.Absolute);
+    });
+```
+
+### Use keyed registrations
+
+When your application consumes multiple MCP servers, register keyed clients:
+
+```csharp
+builder.AddServiceDefaults();
+builder.AddKeyedMcpClient("weather");
+```
+
+And resolve the keyed `McpClient`:
+
+```csharp
+var weatherClient = serviceProvider.GetRequiredKeyedService<McpClient>("weather");
+```
+
+## AppHost extensions
+
+There is no dedicated `Aspire.Hosting.Mcp` package. In the _AppHost.cs_ file of `AppHost`, register your MCP server project and reference it from the consuming service:
+
+```csharp
+var mcp = builder.AddProject<Projects.Mcp>("mcp");
+
+var api = builder.AddProject<Projects.Api>("api")
+    .WithReference(mcp)
+    .WaitFor(mcp);
+```
+
+The `WithReference` method configures a connection in the `api` project named `mcp`. In the _Program.cs_ file of `api`, consume that connection with:
+
+```csharp
+builder.AddServiceDefaults();
+builder.AddMcpClient("mcp");
+```
+
+## Additional documentation
+
+* https://modelcontextprotocol.io/
+* https://github.com/modelcontextprotocol/csharp-sdk
+* https://github.com/microsoft/aspire/tree/main/src/Components/README.md
+
+## Feedback & contributing
+
+https://github.com/microsoft/aspire
