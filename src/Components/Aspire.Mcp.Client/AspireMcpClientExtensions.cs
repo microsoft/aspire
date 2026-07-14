@@ -131,8 +131,10 @@ public static class AspireMcpClientExtensions
 
     private sealed class McpClientRegistration : IDisposable
     {
-        private readonly Lazy<Task<DisposableMcpClient>> _client;
+        private readonly object _clientLock = new();
+        private readonly Func<Task<DisposableMcpClient>> _createClient;
         private readonly CancellationTokenSource _creationCancellation = new();
+        private Task<DisposableMcpClient>? _client;
         private int _disposed;
 
         public McpClientRegistration(
@@ -142,13 +144,46 @@ public static class AspireMcpClientExtensions
             IHttpClientFactory httpClientFactory,
             ILoggerFactory loggerFactory)
         {
-            _client = new(() => CreateClientAsync(endpoint, configureClientOptions, configureTransportOptions, httpClientFactory, loggerFactory));
+            _createClient = () => CreateClientAsync(
+                endpoint,
+                configureClientOptions,
+                configureTransportOptions,
+                httpClientFactory,
+                loggerFactory);
         }
 
         public McpClient GetClient()
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) is not 0, this);
-            return _client.Value.GetAwaiter().GetResult();
+
+            var clientTask = Volatile.Read(ref _client);
+            if (clientTask is null)
+            {
+                lock (_clientLock)
+                {
+                    clientTask ??= _client ??= _createClient();
+                }
+            }
+
+            try
+            {
+                return clientTask.GetAwaiter().GetResult();
+            }
+            catch
+            {
+                if (clientTask.IsFaulted || clientTask.IsCanceled)
+                {
+                    lock (_clientLock)
+                    {
+                        if (ReferenceEquals(_client, clientTask))
+                        {
+                            _client = null;
+                        }
+                    }
+                }
+
+                throw;
+            }
         }
 
         public void Dispose()
