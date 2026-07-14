@@ -2016,6 +2016,18 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DirectlyAddedAzureContainerAppEnvironmentDoesNotRequireContainerAppsValidationStep()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureProvisioning();
+        builder.AddResource(new AzureContainerAppEnvironmentResource("env", _ => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     public async Task WithUniqueResourceNamingPreservesDigitsInManagedEnvironmentName()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

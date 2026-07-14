@@ -48,14 +48,13 @@ public class AzureContainerAppEnvironmentResource :
             // BeforeStartEvent subscribers (and downstream code) can observe the deployment targets.
             var prepareStep = new PipelineStep
             {
-                Name = $"prepare-azure-container-apps-{name}",
+                Name = $"{AzureContainerAppExtensions.PrepareContainerAppsStepNamePrefix}{name}",
                 Description = $"Prepares Azure Container Apps deployment targets for {name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
                 DependsOnSteps =
                 [
                     AzureEnvironmentResource.PrepareResourcesStepName,
-                    WellKnownPipelineSteps.ValidateComputeEnvironments,
-                    AzureContainerAppExtensions.ValidateContainerAppsStepName
+                    WellKnownPipelineSteps.ValidateComputeEnvironments
                 ],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };

@@ -29,6 +29,7 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureContainerAppExtensions
 {
+    internal const string PrepareContainerAppsStepNamePrefix = "prepare-azure-container-apps-";
     internal const string ValidateContainerAppsStepName = "validate-azure-container-apps";
 
     /// <summary>
@@ -99,6 +100,21 @@ public static class AzureContainerAppExtensions
                 },
                 dependsOn: AzureEnvironmentResource.PrepareResourcesStepName,
                 requiredBy: WellKnownPipelineSteps.BeforeStart);
+
+            builder.Pipeline.AddPipelineConfiguration(context =>
+            {
+                var validationStep = context.Steps.Single(step => step.Name == ValidateContainerAppsStepName);
+
+                foreach (var environment in context.Model.Resources.OfType<AzureContainerAppEnvironmentResource>())
+                {
+                    var prepareStep = context.GetSteps(environment)
+                        .SingleOrDefault(step => step.Name == $"{PrepareContainerAppsStepNamePrefix}{environment.Name}");
+
+                    prepareStep?.DependsOn(validationStep);
+                }
+
+                return Task.CompletedTask;
+            });
         }
 
         return builder;
