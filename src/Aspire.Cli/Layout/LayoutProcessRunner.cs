@@ -88,6 +88,9 @@ internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFact
 
         var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, effectiveOptions);
 
+        // StartAsync returns a background execution handle. Its caller owns the lifetime and must
+        // explicitly wait, kill, or dispose it; cancellation here would only abort launch setup,
+        // not define how the background process should be stopped after it starts.
         if (!await execution.StartAsync(CancellationToken.None).ConfigureAwait(false))
         {
             await execution.DisposeAsync().ConfigureAwait(false);
