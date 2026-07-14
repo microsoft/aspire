@@ -378,7 +378,7 @@ internal sealed class AppHostLauncher(
         Action<string> updateStatus,
         CancellationToken cancellationToken)
     {
-        IProcessExecution childProcess;
+        IProcessExecution? childProcess = null;
 
         using (var spawnActivity = profilingTelemetry.StartDetachedSpawnChild(executablePath, childArgs, "run"))
         {
@@ -400,12 +400,23 @@ internal sealed class AppHostLauncher(
                 await childProcess.StartAsync(cancellationToken).ConfigureAwait(false);
                 spawnActivity.SetProcessId(childProcess.ProcessId);
             }
+            catch (OperationCanceledException)
+            {
+                await DisposeAfterFailedStartAsync(childProcess).ConfigureAwait(false);
+                throw;
+            }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
+                await DisposeAfterFailedStartAsync(childProcess).ConfigureAwait(false);
                 spawnActivity.SetError(ex.Message);
                 logger.LogError(ex, "Failed to start child CLI process");
                 return new LaunchResult(null, null, null, false, 0);
             }
+        }
+
+        if (childProcess is null)
+        {
+            throw new InvalidOperationException("Failed to create child CLI process execution.");
         }
 
         var childStartedAt = childProcess.StartTime;
@@ -545,6 +556,23 @@ internal sealed class AppHostLauncher(
         waitForBackchannelActivity.SetError(launchFailureMessage ?? "Timed out waiting for AppHost startup readiness.");
         await RequestGracefulShutdownThenForceKillAsync(childProcess, childStartedAt).ConfigureAwait(false);
         return new LaunchResult(childProcess, null, dashboardUrls, false, 0, childStartedAt);
+    }
+
+    private async ValueTask DisposeAfterFailedStartAsync(IProcessExecution? childProcess)
+    {
+        if (childProcess is null)
+        {
+            return;
+        }
+
+        try
+        {
+            await childProcess.DisposeAsync().ConfigureAwait(false);
+        }
+        catch (Exception ex)
+        {
+            logger.LogDebug(ex, "Failed to dispose child CLI process execution after start failure.");
+        }
     }
 
     private Task RequestGracefulShutdownThenForceKillAsync(IProcessExecution childProcess, DateTimeOffset? childStartedAt)

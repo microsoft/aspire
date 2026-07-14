@@ -562,6 +562,33 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.True(observedToken.IsCancellationRequested);
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Empty(harness.InteractionService.DisplayedErrors);
+        Assert.Equal(1, harness.ProcessFactory.CreatedExecutionDisposeCount);
+    }
+
+    [Fact]
+    public async Task LaunchDetachedAsync_DisposesExecutionWhenDetachedStartFails()
+    {
+        using var harness = AppHostLauncherHarness.Create(outputHelper);
+        harness.ProcessFactory.StartHandler = (_, _, _, _, _, _) =>
+        {
+            throw new InvalidOperationException("start failed");
+        };
+
+        var result = await harness.Launcher.LaunchDetachedAsync(
+            harness.AppHostFile,
+            format: null,
+            isolated: false,
+            isExtensionHost: false,
+            waitForDebugger: false,
+            timeoutSeconds: 120,
+            globalArgs: [],
+            additionalArgs: [],
+            stopAfterLaunchDelay: null,
+            CancellationToken.None);
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
+        Assert.Contains(RunCommandStrings.FailedToStartAppHost, harness.InteractionService.DisplayedErrors);
+        Assert.Equal(1, harness.ProcessFactory.CreatedExecutionDisposeCount);
     }
 
     [Fact]
@@ -1033,6 +1060,10 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public Process? StartedProcess { get; private set; }
 
+        private TestDetachedProcessExecution? CreatedExecution { get; set; }
+
+        public int CreatedExecutionDisposeCount => CreatedExecution?.DisposeCount ?? 0;
+
         public Func<string, IReadOnlyList<string>, string, Func<string, bool>?, IReadOnlyDictionary<string, string>?, CancellationToken, Task<IProcessExecution>>? StartHandler { get; set; }
 
         public void StopStartedProcess()
@@ -1047,7 +1078,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         public IProcessExecution CreateExecution(string fileName, string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
         {
             var environment = env is null ? null : new Dictionary<string, string>(env);
-            return new TestDetachedProcessExecution(this, fileName, args, workingDirectory.FullName, environment, options);
+            CreatedExecution = new TestDetachedProcessExecution(this, fileName, args, workingDirectory.FullName, environment, options);
+            return CreatedExecution;
         }
 
         public IProcessExecution CreateExecution(ProcessStartInfo startInfo, ProcessInvocationOptions options)
@@ -1058,7 +1090,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 .ToDictionary(static kvp => kvp.Key, static kvp => kvp.Value!);
             var workingDirectory = string.IsNullOrEmpty(startInfo.WorkingDirectory) ? Directory.GetCurrentDirectory() : startInfo.WorkingDirectory;
 
-            return new TestDetachedProcessExecution(this, startInfo.FileName, args, workingDirectory, env, options);
+            CreatedExecution = new TestDetachedProcessExecution(this, startInfo.FileName, args, workingDirectory, env, options);
+            return CreatedExecution;
         }
 
         private Task<IProcessExecution> StartCoreAsync(
@@ -1176,6 +1209,8 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
             public int ExitCode => Inner.ExitCode;
 
+            public int DisposeCount { get; private set; }
+
             private IProcessExecution Inner =>
                 _inner ?? throw new InvalidOperationException("Test detached process has not been started.");
 
@@ -1189,7 +1224,11 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
             public void Kill(bool entireProcessTree) => Inner.Kill(entireProcessTree);
 
-            public ValueTask DisposeAsync() => Inner.DisposeAsync();
+            public ValueTask DisposeAsync()
+            {
+                DisposeCount++;
+                return _inner?.DisposeAsync() ?? ValueTask.CompletedTask;
+            }
         }
     }
 
