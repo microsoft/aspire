@@ -53,7 +53,7 @@ The client resolves `https://{connectionName}/mcp`.
 
 ### Use inline delegates
 
-Use the overload to configure `McpClientOptions` and `HttpClientTransportOptions` inline:
+Use the overload to configure `McpClientOptions` and `HttpClientTransportOptions` inline, including OAuth-protected servers, custom headers, transport mode, and timeout values:
 
 ```csharp
 builder.AddMcpClient(
@@ -61,10 +61,14 @@ builder.AddMcpClient(
     configureClientOptions: options =>
     {
         options.ClientInfo = new() { Name = "MyService", Version = "1.0.0" };
+        options.InitializationTimeout = TimeSpan.FromSeconds(60);
     },
     configureTransportOptions: options =>
     {
-        options.Endpoint = new Uri("https://mcp/mcp", UriKind.Absolute);
+        options.TransportMode = HttpTransportMode.StreamableHttp;
+        options.ConnectionTimeout = TimeSpan.FromSeconds(15);
+        options.AdditionalHeaders["x-api-key"] = "api-key-value";
+        options.OAuth = oauthProvider;
     });
 ```
 
