@@ -13,6 +13,12 @@ The React migration uses a separately runnable Native AOT backend at `/api/dashb
 contract grows capability-by-capability while the existing Blazor dashboard and its unversioned
 `/api/deck` transport remain available.
 
+The published Native AOT backend also serves the bundled React production application. Its hosted
+`index.html` marks the transport as `aot`, so the UI negotiates `/api/dashboard` on the same origin
+without a query parameter. Vite and Tauri retain the standalone build marker and their existing
+development/bridge defaults. SPA fallback handles extensionless UI routes only and never converts
+an unknown `/api/*` or missing asset request into HTML.
+
 React starts with `GET /api/dashboard` and intersects the returned versions with the versions it
 understands. It selects the highest compatible version and uses that entry's `basePath` for every
 capability advertised by the entry. A client must fail the new capability explicitly when there is

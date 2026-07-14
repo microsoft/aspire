@@ -151,6 +151,11 @@ backend. Traces, metrics, interactions, authentication, and terminals remain on 
 versioned capabilities independently pass the parity inventory. The `resources` HTTP snapshot route
 remains a compatibility fallback for a version 1 host that does not advertise `resources-live`.
 
+For the production topology, publish `src/Aspire.Dashboard.Backend` instead. Publishing runs this
+UI's locked npm build and embeds `dist` into the Native AOT executable. Opening the executable's
+root URL selects same-origin AOT mode automatically; no Vite process or `?backend=aot` query is
+required.
+
 Open `http://localhost:1430/?view=toolkit` for the standalone toolkit playground. It exercises
 the shared controls without depending on the Deck backend or mock data layer, making it the
 starting point for new dashboard UI and visual regression coverage.
