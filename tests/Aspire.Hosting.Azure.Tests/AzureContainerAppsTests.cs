@@ -2745,6 +2745,32 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task SameEnvironmentContainerAppJobIsChainedWithDependsOn()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        // "worker" publishes as a Container App Job rather than an app. Jobs are compute resources
+        // that write to the same managed environment, so they must be serialized alongside apps to
+        // avoid ContainerAppOperationInProgress failures.
+        builder.AddContainer("api", "myimage");
+        builder.AddContainer("worker", "myimage").PublishAsAzureContainerAppJob();
+        builder.AddContainer("cache", "myimage");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The job is chained into the serial order exactly like an app: api -> worker -> cache.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Equal(["api"], GetDependsOnTargets(GetComputeResource(model, "worker")));
+        Assert.Equal(["worker"], GetDependsOnTargets(GetComputeResource(model, "cache")));
+    }
+
+    [Fact]
     public async Task ContainerAppWithDependencyOnAnotherAppIsNotChainedRedundantly()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
