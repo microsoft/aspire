@@ -35,7 +35,7 @@ public sealed class ToolsController(McpClient mcpClient)
 }
 ```
 
-`AddMcpClient("mcp")` resolves the server endpoint as `https://mcp/mcp`.
+`AddMcpClient("mcp")` resolves the server endpoint as `https://mcp/mcp` by default. If service discovery only provides HTTP endpoints, it resolves `http://mcp/mcp` instead.
 
 ## Configuration
 
@@ -49,7 +49,7 @@ Provide the same connection name configured by AppHost references:
 builder.AddMcpClient("mcp");
 ```
 
-The client resolves `https://{connectionName}/mcp`.
+The client resolves `https://{connectionName}/mcp` by default. If service discovery only provides HTTP endpoints, it resolves `http://{connectionName}/mcp` instead.
 
 ### Use inline delegates
 

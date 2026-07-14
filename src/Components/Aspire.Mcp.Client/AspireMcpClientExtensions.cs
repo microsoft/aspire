@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
@@ -19,8 +20,9 @@ public static class AspireMcpClientExtensions
     /// <param name="builder">The application builder to add services to.</param>
     /// <param name="connectionName">The service-discovery name of the MCP server.</param>
     /// <remarks>
-    /// The server is resolved at <c>https://{connectionName}/mcp</c>. Use <c>WithReference</c> in the AppHost to
-    /// provide the server endpoint to this application.
+    /// The server is resolved at <c>https://{connectionName}/mcp</c> by default. When service discovery only provides
+    /// HTTP endpoints, the client uses <c>http://{connectionName}/mcp</c> instead. Use <c>WithReference</c> in the
+    /// AppHost to provide the server endpoint to this application.
     /// </remarks>
     /// <example>
     /// This example registers an unkeyed MCP client for an MCP server named <c>mcp-server</c>:
@@ -42,8 +44,9 @@ public static class AspireMcpClientExtensions
     /// <param name="configureClientOptions">An optional delegate to configure <see cref="McpClientOptions"/> before the client is created.</param>
     /// <param name="configureTransportOptions">An optional delegate to configure <see cref="HttpClientTransportOptions"/> before the transport is created.</param>
     /// <remarks>
-    /// The server is resolved at <c>https://{connectionName}/mcp</c>. Use <c>WithReference</c> in the AppHost to
-    /// provide the server endpoint to this application.
+    /// The server is resolved at <c>https://{connectionName}/mcp</c> by default. When service discovery only provides
+    /// HTTP endpoints, the client uses <c>http://{connectionName}/mcp</c> instead. Use <c>WithReference</c> in the
+    /// AppHost to provide the server endpoint to this application.
     /// </remarks>
     /// <example>
     /// This example configures an unkeyed MCP client registration:
@@ -76,8 +79,9 @@ public static class AspireMcpClientExtensions
     /// <param name="builder">The application builder to add services to.</param>
     /// <param name="name">The service-discovery name of the MCP server and the service key of the client.</param>
     /// <remarks>
-    /// The server is resolved at <c>https://{name}/mcp</c>. Use <c>WithReference</c> in the AppHost to provide the
-    /// server endpoint to this application.
+    /// The server is resolved at <c>https://{name}/mcp</c> by default. When service discovery only provides HTTP
+    /// endpoints, the client uses <c>http://{name}/mcp</c> instead. Use <c>WithReference</c> in the AppHost to provide
+    /// the server endpoint to this application.
     /// </remarks>
     /// <example>
     /// This example registers a keyed MCP client where the key and service-discovery name are both <c>mcp-server</c>:
@@ -104,8 +108,9 @@ public static class AspireMcpClientExtensions
     /// <param name="configureClientOptions">An optional delegate to configure <see cref="McpClientOptions"/> before the client is created.</param>
     /// <param name="configureTransportOptions">An optional delegate to configure <see cref="HttpClientTransportOptions"/> before the transport is created.</param>
     /// <remarks>
-    /// The server is resolved at <c>https://{name}/mcp</c>. Use <c>WithReference</c> in the AppHost to provide the
-    /// server endpoint to this application.
+    /// The server is resolved at <c>https://{name}/mcp</c> by default. When service discovery only provides HTTP
+    /// endpoints, the client uses <c>http://{name}/mcp</c> instead. Use <c>WithReference</c> in the AppHost to provide
+    /// the server endpoint to this application.
     /// </remarks>
     /// <example>
     /// This example configures a keyed MCP client registration:
@@ -147,7 +152,7 @@ public static class AspireMcpClientExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(connectionName);
 
-        var endpoint = new Uri($"https://{connectionName}/mcp", UriKind.Absolute);
+        var endpoint = CreateEndpoint(builder.Configuration, connectionName);
         var registrationKey = new object();
         builder.Services.AddHttpClient();
         builder.Services.AddKeyedSingleton<McpClientRegistration>(registrationKey, (serviceProvider, _) => new McpClientRegistration(
@@ -170,6 +175,18 @@ public static class AspireMcpClientExtensions
 
         return builder;
     }
+
+    private static Uri CreateEndpoint(IConfiguration configuration, string connectionName)
+    {
+        var servicesSection = configuration.GetSection("services").GetSection(connectionName);
+        var hasHttpsEndpoint = HasServiceDiscoveryEndpoint(servicesSection, "https");
+        var hasHttpEndpoint = HasServiceDiscoveryEndpoint(servicesSection, "http");
+        var scheme = !hasHttpsEndpoint && hasHttpEndpoint ? "http" : "https";
+        return new Uri($"{scheme}://{connectionName}/mcp", UriKind.Absolute);
+    }
+
+    private static bool HasServiceDiscoveryEndpoint(IConfigurationSection serviceSection, string scheme)
+        => serviceSection.GetSection(scheme).GetChildren().Any();
 
     private sealed class McpClientRegistration : IDisposable
     {

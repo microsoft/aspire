@@ -7,6 +7,7 @@
   <ItemGroup>
     <ProjectReference Include="..\..\src\Components\Aspire.Mcp.Client\Aspire.Mcp.Client.csproj" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
+    <PackageReference Include="Microsoft.Extensions.ServiceDiscovery" />
   </ItemGroup>
 
 </Project>

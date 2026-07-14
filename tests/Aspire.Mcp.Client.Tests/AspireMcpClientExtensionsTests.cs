@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using ModelContextProtocol.Client;
@@ -119,6 +120,30 @@ public class AspireMcpClientExtensionsTests
 
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://weather/mcp");
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://calendar/mcp");
+    }
+
+    [Fact]
+    public void McpClientResolvesHttpOnlyServiceDiscoveryEndpoint()
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["services:mcp:http:0"] = "http://resolved-mcp",
+        });
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http =>
+        {
+            http.AddServiceDiscovery();
+            http.ConfigurePrimaryHttpMessageHandler(() => handler);
+        });
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var exception = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.Null(exception);
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "http://resolved-mcp/mcp");
     }
 
     [Fact]
@@ -261,10 +286,14 @@ public class AspireMcpClientExtensionsTests
 
     private sealed class SuccessfulInitializationHandler : HttpMessageHandler
     {
+        public List<Uri> RequestUris { get; } = [];
+
         public bool Disposed { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
+            RequestUris.Add(request.RequestUri!);
+
             if (request.Method == HttpMethod.Get)
             {
                 return new HttpResponseMessage(HttpStatusCode.OK);
