@@ -51,7 +51,12 @@ public class AzureContainerAppEnvironmentResource :
                 Name = $"prepare-azure-container-apps-{name}",
                 Description = $"Prepares Azure Container Apps deployment targets for {name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
+                DependsOnSteps =
+                [
+                    AzureEnvironmentResource.PrepareResourcesStepName,
+                    WellKnownPipelineSteps.ValidateComputeEnvironments,
+                    AzureContainerAppExtensions.ValidateContainerAppsStepName
+                ],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 

@@ -1872,8 +1872,10 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "publish-manifest");
 
-        var env1 = builder.AddAzureContainerAppEnvironment("env1");
-        var env2 = builder.AddAzureContainerAppEnvironment("env2");
+        var env1 = builder.AddAzureContainerAppEnvironment("env1")
+            .WithUniqueResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("env2")
+            .WithUniqueResourceNaming();
 
         builder.AddContainer("api1", "myimage")
             .WithComputeEnvironment(env1);
@@ -1965,8 +1967,6 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        await ExecuteBeforeStartHooksAsync(app, default);
-
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         var envResources = model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
@@ -1983,6 +1983,37 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("take('cae${uniqueString(resourceGroup().id)}', 24)", name1);
         Assert.Equal(name1, name2);
+    }
+
+    [Fact]
+    public async Task MultipleAzureContainerAppEnvironmentsWithCollidingLegacyNamesFailPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1");
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2");
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
+        var validationException = Assert.IsType<InvalidOperationException>(exception.InnerException);
+
+        Assert.Equal(
+            "Azure Container App environments 'cae1', 'cae2' resolve to take('cae${uniqueString(resourceGroup().id)}', 24). " +
+            "Multiple environments with the same managed environment name cannot be deployed to one resource group. " +
+            "Call 'WithUniqueResourceNaming()' on one or more of the colliding environment resources.",
+            validationException.Message);
     }
 
     [Fact]

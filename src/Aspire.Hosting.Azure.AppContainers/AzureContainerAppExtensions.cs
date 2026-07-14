@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREAZURE001
 #pragma warning disable ASPIREAZURE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics;
@@ -28,6 +29,8 @@ namespace Aspire.Hosting;
 /// </summary>
 public static class AzureContainerAppExtensions
 {
+    internal const string ValidateContainerAppsStepName = "validate-azure-container-apps";
+
     /// <summary>
     /// Adds the necessary infrastructure for Azure Container Apps to the distributed application builder.
     /// </summary>
@@ -56,10 +59,11 @@ public static class AzureContainerAppExtensions
         // no AzureContainerAppEnvironmentResource instances in the model.
         if (builder.Services.All(d => d.ServiceType != typeof(ContainerAppsPipelineStepMarker)))
         {
-            builder.Services.AddSingleton<ContainerAppsPipelineStepMarker>();
+            var marker = new ContainerAppsPipelineStepMarker();
+            builder.Services.AddSingleton(marker);
 
             builder.Pipeline.AddStep(
-                name: ContainerAppsPipelineStepMarker.StepName,
+                name: ValidateContainerAppsStepName,
                 action: ctx =>
                 {
                     if (!ctx.ExecutionContext.IsPublishMode)
@@ -67,7 +71,8 @@ public static class AzureContainerAppExtensions
                         return Task.CompletedTask;
                     }
 
-                    if (!ctx.Model.Resources.OfType<AzureContainerAppEnvironmentResource>().Any())
+                    var environments = ctx.Model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
+                    if (environments.Count == 0)
                     {
                         foreach (var r in ctx.Model.GetComputeResources())
                         {
@@ -78,9 +83,21 @@ public static class AzureContainerAppExtensions
                             }
                         }
                     }
+                    else
+                    {
+                        // Name resolvers run while each environment's Bicep module is generated. Force evaluation
+                        // here so the shared tracker sees every legacy fallback before deployment targets are prepared.
+                        foreach (var environment in environments)
+                        {
+                            _ = environment.GetBicepTemplateString();
+                        }
+
+                        marker.ValidateManagedEnvironmentNames();
+                    }
 
                     return Task.CompletedTask;
                 },
+                dependsOn: AzureEnvironmentResource.PrepareResourcesStepName,
                 requiredBy: WellKnownPipelineSteps.BeforeStart);
         }
 
@@ -89,7 +106,50 @@ public static class AzureContainerAppExtensions
 
     private sealed class ContainerAppsPipelineStepMarker
     {
-        public const string StepName = "validate-azure-container-apps";
+        private readonly object _lock = new();
+        private readonly Dictionary<string, HashSet<string>> _environmentsByManagedEnvironmentName = new(StringComparer.Ordinal);
+
+        public void RecordManagedEnvironmentName(string environmentName, BicepValue<string> managedEnvironmentName)
+        {
+            var expression = managedEnvironmentName.ToString();
+
+            lock (_lock)
+            {
+                if (!_environmentsByManagedEnvironmentName.TryGetValue(expression, out var environmentNames))
+                {
+                    environmentNames = new HashSet<string>(StringComparer.Ordinal);
+                    _environmentsByManagedEnvironmentName.Add(expression, environmentNames);
+                }
+
+                environmentNames.Add(environmentName);
+            }
+        }
+
+        public void ValidateManagedEnvironmentNames()
+        {
+            KeyValuePair<string, HashSet<string>>[] collisions;
+
+            lock (_lock)
+            {
+                collisions = _environmentsByManagedEnvironmentName
+                    .Where(pair => pair.Value.Count > 1)
+                    .ToArray();
+            }
+
+            if (collisions.Length == 0)
+            {
+                return;
+            }
+
+            var collisionDetails = string.Join(
+                "; ",
+                collisions.Select(pair =>
+                    $"'{string.Join("', '", pair.Value.Order(StringComparer.Ordinal))}' resolve to {pair.Key}"));
+
+            throw new InvalidOperationException(
+                $"Azure Container App environments {collisionDetails}. Multiple environments with the same managed environment name cannot be deployed to one resource group. " +
+                $"Call '{nameof(WithUniqueResourceNaming)}()' on one or more of the colliding environment resources.");
+        }
     }
 
     /// <summary>
@@ -104,7 +164,13 @@ public static class AzureContainerAppExtensions
     {
         builder.AddAzureContainerAppsInfrastructureCore();
 
-        var containerAppEnvResource = new AzureContainerAppEnvironmentResource(name, static infra =>
+        var marker = builder.Services
+            .Where(descriptor => descriptor.ServiceType == typeof(ContainerAppsPipelineStepMarker))
+            .Select(descriptor => descriptor.ImplementationInstance)
+            .OfType<ContainerAppsPipelineStepMarker>()
+            .Single();
+
+        var containerAppEnvResource = new AzureContainerAppEnvironmentResource(name, infra =>
         {
             var appEnvResource = (AzureContainerAppEnvironmentResource)infra.AspireResource;
 
@@ -420,11 +486,12 @@ public static class AzureContainerAppExtensions
             // (see https://github.com/microsoft/aspire/issues/18722).
             //
             // Changing this by default would rename already-deployed environments and cause Azure to recreate
-            // them, so the digit-preserving name is opt-in via WithUniqueResourceNaming(). Applications that put
-            // multiple environments in one resource group opt in to get distinct names.
-            if (!appEnvResource.UseAzdNamingConvention && appEnvResource.UseUniqueResourceNaming)
+            // them, so the digit-preserving name is opt-in via WithUniqueResourceNaming(). The fallback resolver
+            // also records the actual generated expression so publish can reject colliding legacy names with
+            // actionable guidance instead of allowing a broken deployment.
+            if (!appEnvResource.UseAzdNamingConvention)
             {
-                AddManagedEnvironmentNameFallbackResolver(appEnvResource, containerAppEnvironment);
+                AddManagedEnvironmentNameResolver(appEnvResource, containerAppEnvironment, marker);
             }
 
             // Exposed so that callers reference the LA workspace in other bicep modules
@@ -465,7 +532,10 @@ public static class AzureContainerAppExtensions
     /// Registering a resolver rather than assigning <c>Name</c> here preserves any caller-supplied resolvers in
     /// <see cref="ProvisioningBuildOptions.InfrastructureResolvers"/> while still fixing the default fallback.
     /// </remarks>
-    private static void AddManagedEnvironmentNameFallbackResolver(AzureContainerAppEnvironmentResource appEnvResource, ContainerAppManagedEnvironment managedEnvironment)
+    private static void AddManagedEnvironmentNameResolver(
+        AzureContainerAppEnvironmentResource appEnvResource,
+        ContainerAppManagedEnvironment managedEnvironment,
+        ContainerAppsPipelineStepMarker marker)
     {
         var options = appEnvResource.ProvisioningBuildOptions ?? new ProvisioningBuildOptions();
 
@@ -482,7 +552,11 @@ public static class AzureContainerAppExtensions
         options = CloneProvisioningBuildOptions(options);
         appEnvResource.ProvisioningBuildOptions = options;
 
-        var resolver = new ManagedEnvironmentNameResolver(managedEnvironment);
+        var resolver = new ManagedEnvironmentNameResolver(
+            managedEnvironment,
+            appEnvResource.Name,
+            appEnvResource.UseUniqueResourceNaming,
+            marker);
 
         // Put Aspire's resolver after caller-configured resolvers but before Azure.Provisioning's default dynamic
         // resolver. This preserves explicit policies such as AspireV8ResourceNamePropertyResolver while preventing
@@ -747,8 +821,9 @@ public static class AzureContainerAppExtensions
     /// lowercase letters. For example, two <see cref="AddAzureContainerAppEnvironment"/> resources named
     /// <c>cae1</c> and <c>cae2</c> both drop their trailing digit and yield
     /// <c>take('cae${uniqueString(resourceGroup().id)}', 24)</c>. When they share a resource group,
-    /// that default collapses both onto a single physical environment and concurrent
-    /// container-app writes race with <c>ManagedEnvironmentOperationInProgress</c>
+    /// that default would collapse both onto a single physical environment and concurrent
+    /// container-app writes would race with <c>ManagedEnvironmentOperationInProgress</c>. Publish and deploy
+    /// detect this collision and fail with guidance to apply this method instead
     /// (see <see href="https://github.com/microsoft/aspire/issues/18722"/>).
     /// </para>
     /// <para>
@@ -889,7 +964,11 @@ public static class AzureContainerAppExtensions
         return builder;
     }
 
-    private sealed class ManagedEnvironmentNameResolver(ContainerAppManagedEnvironment managedEnvironment) : DynamicResourceNamePropertyResolver
+    private sealed class ManagedEnvironmentNameResolver(
+        ContainerAppManagedEnvironment managedEnvironment,
+        string environmentName,
+        bool useUniqueResourceNaming,
+        ContainerAppsPipelineStepMarker marker) : DynamicResourceNamePropertyResolver
     {
         // Azure Container Apps managed environment names allow lowercase letters, digits, and hyphens and are
         // 2-60 characters long. These are the managed-environment limits, not the 2-32 character container-app
@@ -919,13 +998,21 @@ public static class AzureContainerAppExtensions
                 return null;
             }
 
-            // Delegate to the standard dynamic naming algorithm, only substituting the requirements that
-            // Azure.Provisioning failed to declare. This keeps the generated name computed exactly like every
-            // other Azure resource type (sanitized prefix + separator + uniqueString(resourceGroup().id) suffix,
-            // truncated to the max length) while preserving the digits that distinguish environments. Allowing
-            // hyphens keeps the standard prefix/suffix separator; hyphens from the resource name are normalized to
-            // underscores in the Bicep identifier and then removed from the sanitized prefix (e.g. "my-cae" -> "mycae").
-            return base.ResolveName(options, resource, s_requirements);
+            // Delegate to the standard dynamic naming algorithm. The opt-in substitutes the requirements that
+            // Azure.Provisioning failed to declare; otherwise the supplied requirements preserve the legacy output
+            // byte-for-byte. Recording the returned expression here means caller-configured resolvers still take
+            // precedence and only names produced by this fallback participate in collision validation.
+            var resolvedName = base.ResolveName(
+                options,
+                resource,
+                useUniqueResourceNaming ? s_requirements : requirements);
+
+            if (resolvedName is not null)
+            {
+                marker.RecordManagedEnvironmentName(environmentName, resolvedName);
+            }
+
+            return resolvedName;
         }
     }
 
