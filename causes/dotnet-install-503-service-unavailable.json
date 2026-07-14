@@ -1,0 +1,16 @@
+{
+  "id": "dotnet-install-503-service-unavailable",
+  "type": "infra-failure",
+  "title": ".NET install script download fails with HTTP 503 Service Unavailable from builds.dotnet.microsoft.com",
+  "error_pattern": "Failed to download file \"https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.ps1\". Response status code does not indicate success: 503 (Service Unavailable).\nD:\\a\\aspire\\aspire\\tests\\Shared\\InstallSdk.targets(37,5): error MSB3923: Failed to download file",
+  "occurrences": [
+    {
+      "run_id": 29371663504,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29371663504",
+      "job": "Tests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (windows-latest)",
+      "pr_number": 18735,
+      "observed_at": "2026-07-14T22:49:18Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18783"
+}

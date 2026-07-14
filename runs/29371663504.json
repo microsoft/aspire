@@ -1,0 +1,29 @@
+{
+  "run_id": 29371663504,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29371663504",
+  "analyzed_at": "2026-07-14T22:49:18Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18735,
+    "title": "[auto-sec] Consolidate npm security remediations (vite, Angular, undici, hono, protobufjs, and more)",
+    "author": "IEvangelist",
+    "state": "closed",
+    "head_branch": "dapire/security-deps/aspire-npmfix",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18735"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_Default_NewUpAndBuildSupportProjectTemplatesTests (windows-latest)",
+      "id": 87221054475,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29371663504/job/87221054475",
+      "classification": "transient-infra",
+      "reason": "HTTP 503 Service Unavailable when downloading https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.ps1 during 'Install sdk for nuget based testing' step. This is an external download failure unrelated to PR changes.",
+      "failed_steps": ["Install sdk for nuget based testing"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["dotnet-install-503-service-unavailable"]
+}
