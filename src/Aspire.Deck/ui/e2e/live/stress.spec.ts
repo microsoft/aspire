@@ -6,6 +6,8 @@ const browserErrors = new WeakMap<Page, string[]>();
 const allowConsoleStreamAbort = new WeakSet<Page>();
 const allowNavigationAbort = new WeakSet<Page>();
 const dashboardBrowserToken = process.env.ASPIRE_DASHBOARD_BROWSER_TOKEN;
+const dashboardBackend = process.env.ASPIRE_DASHBOARD_BACKEND === "aot" ? "aot" : "http";
+const backendQuery = `backend=${dashboardBackend}`;
 
 function features(...ids: StressFeatureId[]): string {
   for (const id of ids) {
@@ -101,7 +103,7 @@ test.beforeEach(async ({ page }) => {
   if (dashboardBrowserToken) {
     await page.goto(`/login?t=${encodeURIComponent(dashboardBrowserToken)}`);
   }
-  await page.goto("/?backend=http");
+  await page.goto(`/?${backendQuery}`);
   await expect(page.getByTitle("Resources: Connected")).toBeVisible({ timeout: 30_000 });
   await expect(page.getByRole("main").locator(".page__title")).toHaveText("Resources");
 });
@@ -492,7 +494,7 @@ test(`${features("STRESS-NAVIGATION-001", "STRESS-EMPTY-METRICS-001")} reaches e
       await expect(metrics.locator(".page__subtitle")).toHaveText(/\d+ instruments/);
       await expect(metrics).not.toContainText("Loading…");
 
-      await page.goto("/metrics/resource/property-stress-resource?backend=http");
+      await page.goto(`/metrics/resource/property-stress-resource?${backendQuery}`);
       await expect(metrics.locator(".page__subtitle")).toHaveText("0 instruments");
       await expect(metrics.getByRole("heading", { name: "No meters for this resource" })).toBeVisible();
     }

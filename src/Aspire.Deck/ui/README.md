@@ -178,6 +178,19 @@ ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
   npm exec -- playwright test --config=playwright.stress.config.ts
 ```
 
+Run the same inventory through the side-by-side AOT topology after starting the AOT host:
+
+```bash
+ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
+ASPIRE_DASHBOARD_AOT_URL=http://127.0.0.1:18889 \
+ASPIRE_DASHBOARD_BACKEND=aot \
+  npm exec -- playwright test --config=playwright.stress.config.ts
+```
+
+This verifies that version negotiation, the AOT SignalR resource stream, and the existing
+dashboard fallback for capabilities not yet migrated work together against the same 157-feature
+black-box compatibility inventory.
+
 The terminal playground has a separate live HMP suite. Start `playground/Terminals`, then run:
 
 ```bash
