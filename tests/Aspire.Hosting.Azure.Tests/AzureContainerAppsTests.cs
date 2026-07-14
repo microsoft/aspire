@@ -903,10 +903,10 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         }
     }
 
-    private sealed class CustomManagedEnvironmentNameResolver : ResourceNamePropertyResolver
+    private sealed class BicepIdentifierManagedEnvironmentNameResolver : ResourceNamePropertyResolver
     {
         public override BicepValue<string>? ResolveName(ProvisioningBuildOptions options, ProvisionableResource resource, ResourceNameRequirements requirements)
-            => resource is ContainerAppManagedEnvironment ? new BicepValue<string>("customcae") : null;
+            => resource is ContainerAppManagedEnvironment ? new BicepValue<string>(resource.BicepIdentifier) : null;
     }
 
     [Fact]
@@ -2091,7 +2091,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.Services.Configure<AzureProvisioningOptions>(options =>
-            options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new CustomManagedEnvironmentNameResolver()));
+            options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new BicepIdentifierManagedEnvironmentNameResolver()));
 
         var env = builder.AddAzureContainerAppEnvironment("cae1")
             .WithUniqueResourceNaming();
@@ -2110,7 +2110,39 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var name = GetManagedEnvironmentNameExpression(bicep);
 
-        Assert.Equal("'customcae'", name);
+        Assert.Equal("'cae1'", name);
+    }
+
+    [Fact]
+    public async Task ConfiguredNameResolverPreventsFalseLegacyCollision()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        builder.Services.Configure<AzureProvisioningOptions>(options =>
+            options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new BicepIdentifierManagedEnvironmentNameResolver()));
+
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1");
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2");
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await app.RunAsync();
+    }
+
+    [Fact]
+    public void WithUniqueResourceNamingThrowsWhenBuilderIsNull()
+    {
+        Assert.Throws<ArgumentNullException>(() => AzureContainerAppExtensions.WithUniqueResourceNaming(null!));
     }
 
     [Fact]

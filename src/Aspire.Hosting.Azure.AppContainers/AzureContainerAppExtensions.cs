@@ -20,6 +20,7 @@ using Azure.Provisioning.Primitives;
 using Azure.Provisioning.Roles;
 using Azure.Provisioning.Storage;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 using FileShare = Azure.Provisioning.Storage.FileShare;
 
 namespace Aspire.Hosting;
@@ -104,9 +105,18 @@ public static class AzureContainerAppExtensions
             builder.Pipeline.AddPipelineConfiguration(context =>
             {
                 var validationStep = context.Steps.Single(step => step.Name == ValidateContainerAppsStepName);
+                var configuredBuildOptions = context.Services
+                    .GetRequiredService<IOptions<AzureProvisioningOptions>>()
+                    .Value
+                    .ProvisioningBuildOptions;
 
                 foreach (var environment in context.Model.Resources.OfType<AzureContainerAppEnvironmentResource>())
                 {
+                    // Pipeline-level configuration runs before AzureBicepResource forces template generation.
+                    // Assign configured resolvers now so the collision tracker records the final fallback name,
+                    // rather than a stale legacy expression generated before azure-prepare-resources executes.
+                    environment.ProvisioningBuildOptions ??= configuredBuildOptions;
+
                     var prepareStep = context.GetSteps(environment)
                         .SingleOrDefault(step => step.Name == $"{PrepareContainerAppsStepNamePrefix}{environment.Name}");
 
@@ -831,6 +841,7 @@ public static class AzureContainerAppExtensions
     /// <param name="builder">The <see cref="AzureContainerAppEnvironmentResource"/> to configure.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> is null.</exception>
     /// <remarks>
     /// <para>
     /// By default the managed environment relies on Azure.Provisioning's name, whose sanitizer keeps only
@@ -861,10 +872,20 @@ public static class AzureContainerAppExtensions
     /// used, since azd naming sets the environment name explicitly.
     /// </para>
     /// </remarks>
+    /// <example>
+    /// <code>
+    /// var env1 = builder.AddAzureContainerAppEnvironment("cae1")
+    ///     .WithUniqueResourceNaming();
+    /// var env2 = builder.AddAzureContainerAppEnvironment("cae2")
+    ///     .WithUniqueResourceNaming();
+    /// </code>
+    /// </example>
     [AspireExport]
     [Experimental("ASPIREACANAMING002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<AzureContainerAppEnvironmentResource> WithUniqueResourceNaming(this IResourceBuilder<AzureContainerAppEnvironmentResource> builder)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         builder.Resource.UseUniqueResourceNaming = true;
         return builder;
     }
