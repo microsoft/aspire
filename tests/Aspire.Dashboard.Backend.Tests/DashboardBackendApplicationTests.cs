@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
+using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
@@ -31,7 +32,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -195,6 +196,74 @@ public class DashboardBackendApplicationTests
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Contains("will keep retrying", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_ReturnsSourceGeneratedResponseFromVersionOneRoute()
+    {
+        var result = new DashboardCommandResponse(
+            "succeeded",
+            "Restarted",
+            new DashboardCommandResult("done", "text", true));
+        var executor = new TestCommandExecutor(result);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardCommandExecutor>(executor);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var response = await client.PostAsJsonAsync(
+            "/api/dashboard/v1/commands/execute",
+            new { resourceName = "api", commandName = "restart" },
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(new DashboardExecuteCommandRequest("api", "restart"), executor.Request);
+        Assert.Equal(
+            "{\"kind\":\"succeeded\",\"message\":\"Restarted\",\"result\":{\"value\":\"done\",\"format\":\"text\",\"displayImmediately\":true}}",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("{}")]
+    [InlineData("{\"resourceName\":\"api\",\"commandName\":\"\"}")]
+    public async Task ExecuteCommand_RejectsInvalidRequests(string content)
+    {
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardCommandExecutor>(new TestCommandExecutor(null));
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var response = await client.PostAsync(
+            "/api/dashboard/v1/commands/execute",
+            new StringContent(content, System.Text.Encoding.UTF8, "application/json"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task ExecuteCommand_ReturnsNotFoundForUnknownCommand()
+    {
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardCommandExecutor>(new TestCommandExecutor(null));
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var response = await client.PostAsJsonAsync(
+            "/api/dashboard/v1/commands/execute",
+            new { resourceName = "api", commandName = "missing" },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NotFound, response.StatusCode);
     }
 
     [Fact]
@@ -454,6 +523,19 @@ public class DashboardBackendApplicationTests
                 yield return resourceEvent;
                 await Task.Yield();
             }
+        }
+    }
+
+    private sealed class TestCommandExecutor(DashboardCommandResponse? response) : IDashboardCommandExecutor
+    {
+        public DashboardExecuteCommandRequest? Request { get; private set; }
+
+        public ValueTask<DashboardCommandResponse?> ExecuteAsync(
+            DashboardExecuteCommandRequest request,
+            CancellationToken cancellationToken)
+        {
+            Request = request;
+            return ValueTask.FromResult(response);
         }
     }
 }

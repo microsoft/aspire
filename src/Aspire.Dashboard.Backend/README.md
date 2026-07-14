@@ -5,9 +5,10 @@ It is intentionally additive: `Aspire.Dashboard` remains the default Blazor dash
 to host the existing `/api/deck` transport.
 
 The backend currently implements version discovery plus the `configuration`, read-only `resources`
-snapshot, and SignalR `resources-live` capabilities. In side-by-side mode, React reads those
-capabilities from this host and delegates telemetry, commands, interactions, authentication, and
-terminal traffic to the existing dashboard. A version must not advertise a capability until its
+snapshot, SignalR `resources-live`, and resource `commands` capabilities. In side-by-side mode,
+React reads those capabilities from this host and delegates telemetry, interactions,
+authentication, and terminal traffic to the existing dashboard. A version must not advertise a
+capability until its
 complete black-box behavior passes the 157-feature parity inventory in
 `src/Aspire.Deck/ui/e2e/parity`.
 
@@ -44,6 +45,7 @@ The host exposes:
 - `GET /api/dashboard/v1/resources` for the current AppHost resource snapshot.
 - `/api/dashboard/v1/resources/live` for the SignalR `WatchResources` server stream. Each
   subscription receives an authoritative snapshot followed by incremental upserts and deletes.
+- `POST /api/dashboard/v1/commands/execute` to execute a command from the current resource snapshot.
 
 All HTTP and SignalR JSON uses camel-case names and an explicit `JsonSerializerContext`. New
 contract payloads must be registered with source generation so Native AOT never depends on

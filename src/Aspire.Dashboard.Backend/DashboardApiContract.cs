@@ -12,6 +12,7 @@ internal static class DashboardApiContract
     public const string ConfigurationCapability = "configuration";
     public const string ResourcesCapability = "resources";
     public const string ResourceStreamCapability = "resources-live";
+    public const string CommandsCapability = "commands";
     public const string ResourceStreamPath = $"{VersionOneBasePath}/resources/live";
 }
 
@@ -111,3 +112,17 @@ internal sealed record DashboardResourcesEvent(
         upserts,
         deletes);
 }
+
+internal sealed record DashboardExecuteCommandRequest(
+    string ResourceName,
+    string CommandName);
+
+internal sealed record DashboardCommandResponse(
+    string Kind,
+    string? Message,
+    DashboardCommandResult? Result);
+
+internal sealed record DashboardCommandResult(
+    string Value,
+    string Format,
+    bool DisplayImmediately);

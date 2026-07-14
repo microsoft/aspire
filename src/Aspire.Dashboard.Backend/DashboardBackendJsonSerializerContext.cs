@@ -13,4 +13,6 @@ namespace Aspire.Dashboard.Backend;
 [JsonSerializable(typeof(DashboardConfiguration))]
 [JsonSerializable(typeof(DashboardResource[]))]
 [JsonSerializable(typeof(DashboardResourcesEvent))]
+[JsonSerializable(typeof(DashboardExecuteCommandRequest))]
+[JsonSerializable(typeof(DashboardCommandResponse))]
 internal sealed partial class DashboardBackendJsonSerializerContext : JsonSerializerContext;
