@@ -31,6 +31,12 @@ DASHBOARD__RESOURCESERVICECLIENT__APIKEY=<apphost-resource-service-key> \
 Use the same resource-service endpoint, authentication mode, and API key supplied to the existing
 dashboard process. `Unsecured` authentication requires no API-key setting.
 
+The host enforces loopback connections and loopback browser origins because this first migration
+slice does not yet own dashboard authentication. If the resource service cannot provide its first
+snapshot within 10 seconds, resource requests return `503 Service Unavailable` while the host keeps
+retrying. Set `DashboardBackend__InitialSnapshotTimeout` to a positive `TimeSpan` value to change
+that startup timeout.
+
 The host exposes:
 
 - `GET /api/dashboard` for version and capability discovery.

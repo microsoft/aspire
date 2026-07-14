@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Net;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.DashboardService.Proto.V1;
@@ -169,6 +170,60 @@ public class DashboardBackendApplicationTests
 
         Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
         Assert.Contains("ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task GetResources_ReturnsServiceUnavailableWhenConfiguredResourceServiceCannotConnect()
+    {
+        using var socket = new Socket(AddressFamily.InterNetwork, SocketType.Stream, ProtocolType.Tcp);
+        socket.Bind(new IPEndPoint(IPAddress.Loopback, 0));
+        var endpoint = (IPEndPoint)socket.LocalEndPoint!;
+
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                ["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = $"http://127.0.0.1:{endpoint.Port}",
+                ["DashboardBackend:InitialSnapshotTimeout"] = "00:00:01"
+            });
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var response = await client.GetAsync("/api/dashboard/v1/resources", TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.ServiceUnavailable, response.StatusCode);
+        Assert.Contains("will keep retrying", await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task ResourceSnapshot_RecoversAfterInitialConnectionFailure()
+    {
+        var service = new DashboardResourceSnapshotService(
+            new ConfigurationBuilder().Build(),
+            NullLoggerFactory.Instance,
+            NullLogger<DashboardResourceSnapshotService>.Instance);
+        service.ReportInitialFailure("Unavailable");
+
+        var exception = await Assert.ThrowsAsync<DashboardResourceServiceUnavailableException>(async () =>
+            await service.GetSnapshotAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("Unavailable", exception.Message);
+
+        var initialUpdate = new WatchResourcesUpdate
+        {
+            InitialData = new InitialResourceData()
+        };
+        initialUpdate.InitialData.Resources.Add(new ProtoResource
+        {
+            Name = "api",
+            DisplayName = "API",
+            ResourceType = "Project",
+            Uid = "resource-1"
+        });
+        service.ApplyUpdate(initialUpdate);
+
+        Assert.Equal("api", Assert.Single(await service.GetSnapshotAsync(TestContext.Current.CancellationToken)).Name);
     }
 
     [Fact]

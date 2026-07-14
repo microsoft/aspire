@@ -33,6 +33,7 @@ internal sealed class DashboardResourceSnapshotService(
     private const string LegacyResourceServiceEndpointKey = "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL";
     private const string ResourceServiceAuthModeKey = "Dashboard:ResourceServiceClient:AuthMode";
     private const string ResourceServiceApiKeyKey = "Dashboard:ResourceServiceClient:ApiKey";
+    private const string InitialSnapshotTimeoutKey = "DashboardBackend:InitialSnapshotTimeout";
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const int ProducerDefinedPropertySortOrderStart = 7;
     private const int SubscriberBufferCapacity = 32;
@@ -51,11 +52,13 @@ internal sealed class DashboardResourceSnapshotService(
     private readonly Dictionary<string, DashboardResource> _resources = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<ChannelWriter<DashboardResourcesEvent>> _subscribers = [];
     private readonly object _lock = new();
-    private readonly TaskCompletionSource<bool> _initialSnapshot = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private readonly TaskCompletionSource<bool> _initialStateAvailable = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private bool _hasInitialSnapshot;
+    private string? _initialFailure;
 
     public async ValueTask<DashboardResource[]> GetSnapshotAsync(CancellationToken cancellationToken)
     {
-        await _initialSnapshot.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await WaitForInitialSnapshotAsync(cancellationToken).ConfigureAwait(false);
         lock (_lock)
         {
             return CreateSnapshotLocked();
@@ -65,7 +68,7 @@ internal sealed class DashboardResourceSnapshotService(
     public async IAsyncEnumerable<DashboardResourcesEvent> WatchAsync(
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        await _initialSnapshot.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        await WaitForInitialSnapshotAsync(cancellationToken).ConfigureAwait(false);
 
         var channel = Channel.CreateBounded<DashboardResourcesEvent>(new BoundedChannelOptions(SubscriberBufferCapacity)
         {
@@ -109,10 +112,11 @@ internal sealed class DashboardResourceSnapshotService(
         var endpoint = configuration[ResourceServiceEndpointKey] ?? configuration[LegacyResourceServiceEndpointKey];
         if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var resourceServiceUri))
         {
-            _initialSnapshot.TrySetException(new DashboardResourceServiceUnavailableException(
-                $"Configure {ResourceServiceEndpointKey} with the AppHost resource-service endpoint."));
+            ReportInitialFailure($"Configure {ResourceServiceEndpointKey} with the AppHost resource-service endpoint.");
             return;
         }
+
+        var initialSnapshotTimeout = GetInitialSnapshotTimeout();
 
         using var handler = new SocketsHttpHandler
         {
@@ -136,24 +140,48 @@ internal sealed class DashboardResourceSnapshotService(
         {
             try
             {
+                using var callCancellation = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                if (!reconnect)
+                {
+                    callCancellation.CancelAfter(initialSnapshotTimeout);
+                }
+
                 // The resource service sends one complete InitialData frame, followed by
                 // upsert/delete Changes frames for the lifetime of this streaming call.
                 using var call = client.WatchResources(
                     new WatchResourcesRequest { IsReconnect = reconnect },
                     headers,
-                    cancellationToken: stoppingToken);
-                await foreach (var update in call.ResponseStream.ReadAllAsync(stoppingToken).ConfigureAwait(false))
+                    cancellationToken: callCancellation.Token);
+                await foreach (var update in call.ResponseStream.ReadAllAsync(callCancellation.Token).ConfigureAwait(false))
                 {
                     ApplyUpdate(update);
-                    reconnect = true;
+                    if (update.KindCase is WatchResourcesUpdate.KindOneofCase.InitialData)
+                    {
+                        reconnect = true;
+                        callCancellation.CancelAfter(Timeout.InfiniteTimeSpan);
+                    }
+                }
+
+                if (!reconnect)
+                {
+                    ReportInitialFailure("The AppHost resource stream ended before providing an initial snapshot. The AOT dashboard backend will keep retrying.");
                 }
             }
             catch (OperationCanceledException) when (stoppingToken.IsCancellationRequested)
             {
                 return;
             }
+            catch (OperationCanceledException) when (!reconnect)
+            {
+                ReportInitialFailure($"The AppHost resource service did not provide an initial snapshot within {initialSnapshotTimeout}. The AOT dashboard backend will keep retrying.");
+            }
             catch (RpcException ex)
             {
+                if (!reconnect)
+                {
+                    ReportInitialFailure("The AppHost resource service is unavailable. The AOT dashboard backend will keep retrying.");
+                }
+
                 logger.LogWarning(ex, "The AppHost resource stream disconnected; retrying.");
             }
 
@@ -171,6 +199,17 @@ internal sealed class DashboardResourceSnapshotService(
 
             return metadata;
         }
+
+        TimeSpan GetInitialSnapshotTimeout()
+        {
+            return TimeSpan.TryParse(
+                configuration[InitialSnapshotTimeoutKey],
+                CultureInfo.InvariantCulture,
+                out var timeout)
+                && timeout > TimeSpan.Zero
+                    ? timeout
+                    : TimeSpan.FromSeconds(10);
+        }
     }
 
     internal void ApplyUpdate(WatchResourcesUpdate update)
@@ -185,7 +224,9 @@ internal sealed class DashboardResourceSnapshotService(
                     _resources[resource.Name] = Map(resource);
                 }
 
-                _initialSnapshot.TrySetResult(true);
+                _hasInitialSnapshot = true;
+                _initialFailure = null;
+                _initialStateAvailable.TrySetResult(true);
                 PublishLocked(DashboardResourcesEvent.Snapshot(CreateSnapshotLocked()));
                 return;
             }
@@ -214,6 +255,33 @@ internal sealed class DashboardResourceSnapshotService(
             }
 
             throw new FormatException($"Unexpected {nameof(WatchResourcesUpdate)} kind: {update.KindCase}.");
+        }
+    }
+
+    internal void ReportInitialFailure(string message)
+    {
+        lock (_lock)
+        {
+            if (_hasInitialSnapshot)
+            {
+                return;
+            }
+
+            _initialFailure = message;
+            _initialStateAvailable.TrySetResult(true);
+        }
+    }
+
+    private async ValueTask WaitForInitialSnapshotAsync(CancellationToken cancellationToken)
+    {
+        await _initialStateAvailable.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+        lock (_lock)
+        {
+            if (!_hasInitialSnapshot)
+            {
+                throw new DashboardResourceServiceUnavailableException(
+                    _initialFailure ?? "The AppHost resource service has not provided an initial snapshot.");
+            }
         }
     }
 
