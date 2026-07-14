@@ -169,9 +169,12 @@ CREATE TABLE IF NOT EXISTS dashboard_resource_command_input_validation_errors (
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS console_logs (
+    console_log_id INTEGER PRIMARY KEY AUTOINCREMENT,
     resource_name TEXT NOT NULL,
     line_number INTEGER NOT NULL,
     content TEXT NOT NULL,
-    is_stderr INTEGER NOT NULL,
-    PRIMARY KEY (resource_name, line_number)
+    is_stderr INTEGER NOT NULL
 ) STRICT;
+
+CREATE INDEX IF NOT EXISTS ix_console_logs_resource_id
+ON console_logs(resource_name, console_log_id);

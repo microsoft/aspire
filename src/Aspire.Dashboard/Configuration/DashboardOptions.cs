@@ -25,6 +25,16 @@ public sealed class DashboardOptions
 public sealed class DashboardDataOptions
 {
     public string? Directory { get; set; }
+    public DashboardPersistenceMode PersistenceMode { get; set; }
+
+    internal string? PersistenceModeParseError { get; set; }
+}
+
+public enum DashboardPersistenceMode
+{
+    None,
+    Runs,
+    Append
 }
 
 // Don't set values after validating/parsing options.

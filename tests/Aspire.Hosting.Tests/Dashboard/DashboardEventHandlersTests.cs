@@ -308,8 +308,12 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("true", envVars.Single(e => e.Key == "ASPIRE_DASHBOARD_PURPLE_MONKEY_DISHWASHER").Value);
     }
 
-    [Fact]
-    public async Task ConfigureEnvironmentVariables_ConfiguresDashboardRunStorageRootAndApplicationName()
+    [Theory]
+    [InlineData(null, "None")]
+    [InlineData("Runs", "Runs")]
+    public async Task ConfigureEnvironmentVariables_ConfiguresDashboardRunStorageRootApplicationNameAndPersistenceMode(
+        string? configuredPersistenceMode,
+        string expectedPersistenceMode)
     {
         var storeDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-store-tests-");
         try
@@ -320,7 +324,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
                 .AddInMemoryCollection(new Dictionary<string, string?>
                 {
                     ["Aspire:Store:Path"] = storeDirectory.FullName,
-                    ["AppHost:DashboardApplicationName"] = "My App.AppHost"
+                    ["AppHost:DashboardApplicationName"] = "My App.AppHost",
+                    ["Aspire:Dashboard:PersistenceMode"] = configuredPersistenceMode
                 })
                 .Build();
             var dashboardOptions = Options.Create(new DashboardOptions
@@ -344,6 +349,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
                 Path.Combine(storeDirectory.FullName, ".aspire", "dashboard"),
                 environmentVariables[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName]);
             Assert.Equal("My App", environmentVariables[DashboardConfigNames.DashboardApplicationName.EnvVarName]);
+            Assert.Equal(expectedPersistenceMode, environmentVariables[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName]);
         }
         finally
         {

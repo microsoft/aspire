@@ -60,7 +60,7 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     }
 
     [Fact]
-    public async Task ConsoleLogs_AreOrderedIdempotentAndReplayable()
+    public async Task ConsoleLogs_UseInsertionOrderAndAllowLineNumbersToRestart()
     {
         var databasePath = Path.Combine(_temporaryDirectory, "console.db");
         using (var repository = CreateRepository(databasePath))
@@ -73,6 +73,13 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
             writer.AddConsoleLogs("api", [new ConsoleLogLine { LineNumber = 2, Text = "second-updated", IsStdErr = true }]);
         }
 
+        using (var restartedRepository = CreateRepository(databasePath))
+        {
+            ((IResourceRepositoryWriter)restartedRepository).AddConsoleLogs(
+                "api",
+                [new ConsoleLogLine { LineNumber = 1, Text = "first-after-restart" }]);
+        }
+
         using var historicalRepository = CreateRepository(databasePath, readOnly: true);
         var batches = new List<IReadOnlyList<global::Aspire.Dashboard.Model.ResourceLogLine>>();
         await foreach (var batch in historicalRepository.GetConsoleLogs("api", CancellationToken.None))
@@ -81,8 +88,9 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
         }
         var lines = Assert.Single(batches);
         Assert.Collection(lines,
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(2, "second-updated", true), line),
             line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(1, "first", false), line),
-            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(2, "second-updated", true), line));
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(1, "first-after-restart", false), line));
     }
 
     [Fact]
