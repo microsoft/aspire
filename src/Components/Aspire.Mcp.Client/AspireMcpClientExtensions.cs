@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire;
+using Aspire.Mcp.Client;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
@@ -14,6 +17,8 @@ namespace Microsoft.Extensions.Hosting;
 /// </summary>
 public static class AspireMcpClientExtensions
 {
+    private const string DefaultConfigSectionName = "Aspire:Mcp:Client";
+
     /// <summary>
     /// Registers an <see cref="McpClient"/> that connects to the specified MCP server through service discovery.
     /// </summary>
@@ -69,8 +74,8 @@ public static class AspireMcpClientExtensions
     public static IHostApplicationBuilder AddMcpClient(
         this IHostApplicationBuilder builder,
         string connectionName,
-        Action<McpClientOptions>? configureClientOptions,
-        Action<HttpClientTransportOptions>? configureTransportOptions)
+        Action<McpClientOptions>? configureClientOptions = null,
+        Action<HttpClientTransportOptions>? configureTransportOptions = null)
         => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions, configureTransportOptions);
 
     /// <summary>
@@ -133,8 +138,8 @@ public static class AspireMcpClientExtensions
     public static IHostApplicationBuilder AddKeyedMcpClient(
         this IHostApplicationBuilder builder,
         string name,
-        Action<McpClientOptions>? configureClientOptions,
-        Action<HttpClientTransportOptions>? configureTransportOptions)
+        Action<McpClientOptions>? configureClientOptions = null,
+        Action<HttpClientTransportOptions>? configureTransportOptions = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -152,7 +157,18 @@ public static class AspireMcpClientExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(connectionName);
 
-        var endpoint = CreateEndpoint(builder.Configuration, connectionName);
+        var settings = new McpClientSettings();
+        var configSection = builder.Configuration.GetSection(DefaultConfigSectionName);
+        var namedConfigSection = configSection.GetSection(connectionName);
+        configSection.Bind(settings);
+        namedConfigSection.Bind(settings);
+
+        if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
+        {
+            settings.ParseConnectionString(connectionString);
+        }
+
+        var endpoint = settings.Endpoint ?? CreateServiceDiscoveryEndpoint(builder.Configuration, connectionName);
         var registrationKey = new object();
         builder.Services.AddHttpClient();
         builder.Services.AddKeyedSingleton<McpClientRegistration>(registrationKey, (serviceProvider, _) => new McpClientRegistration(
@@ -173,20 +189,34 @@ public static class AspireMcpClientExtensions
                 serviceProvider.GetRequiredKeyedService<McpClientRegistration>(registrationKey).GetClient());
         }
 
+        if (!settings.DisableHealthChecks)
+        {
+            var healthCheckName = serviceKey is null ? "Mcp.Client" : $"Mcp.Client_{connectionName}";
+
+            builder.TryAddHealthCheck(new HealthCheckRegistration(
+                healthCheckName,
+                sp => new McpClientHealthCheck(sp, serviceKey),
+                failureStatus: default,
+                tags: default,
+                timeout: default));
+        }
+
         return builder;
     }
 
-    private static Uri CreateEndpoint(IConfiguration configuration, string connectionName)
+    private static Uri CreateServiceDiscoveryEndpoint(IConfiguration configuration, string connectionName)
     {
+        if (connectionName.IndexOfAny(['/', '\\', '?', '#', '@', ':']) >= 0)
+        {
+            throw new ArgumentException($"'{connectionName}' is not a valid MCP service-discovery connection name.", nameof(connectionName));
+        }
+
         var servicesSection = configuration.GetSection("services").GetSection(connectionName);
-        var hasHttpsEndpoint = HasServiceDiscoveryEndpoint(servicesSection, "https");
-        var hasHttpEndpoint = HasServiceDiscoveryEndpoint(servicesSection, "http");
+        var hasHttpsEndpoint = servicesSection.GetSection("https").GetChildren().Any();
+        var hasHttpEndpoint = servicesSection.GetSection("http").GetChildren().Any();
         var scheme = !hasHttpsEndpoint && hasHttpEndpoint ? "http" : "https";
         return new Uri($"{scheme}://{connectionName}/mcp", UriKind.Absolute);
     }
-
-    private static bool HasServiceDiscoveryEndpoint(IConfigurationSection serviceSection, string scheme)
-        => serviceSection.GetSection(scheme).GetChildren().Any();
 
     private sealed class McpClientRegistration : IDisposable
     {
@@ -263,19 +293,22 @@ public static class AspireMcpClientExtensions
             IHttpClientFactory httpClientFactory,
             ILoggerFactory loggerFactory)
         {
-            var transportOptions = new HttpClientTransportOptions { Endpoint = endpoint };
-            configureTransportOptions?.Invoke(transportOptions);
-            var clientOptions = new McpClientOptions();
-            configureClientOptions?.Invoke(clientOptions);
-            var httpClient = httpClientFactory.CreateClient();
-            var transport = new HttpClientTransport(
-                transportOptions,
-                httpClient,
-                loggerFactory,
-                ownsHttpClient: true);
+            HttpClient? httpClient = null;
+            HttpClientTransport? transport = null;
 
             try
             {
+                var transportOptions = new HttpClientTransportOptions { Endpoint = endpoint };
+                configureTransportOptions?.Invoke(transportOptions);
+                var clientOptions = new McpClientOptions();
+                configureClientOptions?.Invoke(clientOptions);
+                httpClient = httpClientFactory.CreateClient();
+                transport = new HttpClientTransport(
+                    transportOptions,
+                    httpClient,
+                    loggerFactory,
+                    ownsHttpClient: true);
+
                 var client = await McpClient.CreateAsync(
                     transport,
                     clientOptions,
@@ -291,8 +324,35 @@ public static class AspireMcpClientExtensions
             }
             catch
             {
-                await transport.DisposeAsync().ConfigureAwait(false);
+                if (transport is not null)
+                {
+                    await transport.DisposeAsync().ConfigureAwait(false);
+                }
+                else
+                {
+                    httpClient?.Dispose();
+                }
+
                 throw;
+            }
+        }
+    }
+
+    private sealed class McpClientHealthCheck(IServiceProvider serviceProvider, object? serviceKey) : IHealthCheck
+    {
+        public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+        {
+            try
+            {
+                _ = serviceKey is null
+                    ? serviceProvider.GetRequiredService<McpClient>()
+                    : serviceProvider.GetRequiredKeyedService<McpClient>(serviceKey);
+
+                return Task.FromResult(HealthCheckResult.Healthy());
+            }
+            catch (Exception ex)
+            {
+                return Task.FromResult(HealthCheckResult.Unhealthy("MCP client initialization failed.", ex));
             }
         }
     }

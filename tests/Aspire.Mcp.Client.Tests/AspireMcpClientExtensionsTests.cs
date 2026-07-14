@@ -123,6 +123,45 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
+    public void AddMcpClientSupportsConfiguringOnlyTransportOptions()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        var transportOptionsConfigured = false;
+
+        builder.AddMcpClient(
+            "mcp",
+            configureTransportOptions: options =>
+            {
+                transportOptionsConfigured = true;
+                options.Endpoint = new Uri("https://transport-only/mcp", UriKind.Absolute);
+            });
+
+        using var host = builder.Build();
+        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.True(transportOptionsConfigured);
+    }
+
+    [Fact]
+    public void AddKeyedMcpClientSupportsConfiguringOnlyClientOptions()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        var clientOptionsConfigured = false;
+
+        builder.AddKeyedMcpClient(
+            "mcp",
+            configureClientOptions: _ =>
+            {
+                clientOptionsConfigured = true;
+            });
+
+        using var host = builder.Build();
+        _ = Record.Exception(() => _ = host.Services.GetRequiredKeyedService<McpClient>("mcp"));
+
+        Assert.True(clientOptionsConfigured);
+    }
+
+    [Fact]
     public void McpClientResolvesHttpOnlyServiceDiscoveryEndpoint()
     {
         var handler = new SuccessfulInitializationHandler();
@@ -251,6 +290,16 @@ public class AspireMcpClientExtensionsTests
             : Assert.Throws<ArgumentException>(action);
 
         Assert.Equal(nameof(connectionName), exception.ParamName);
+    }
+
+    [Fact]
+    public void AddMcpClientRejectsConnectionNameWithReservedUriCharacters()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+
+        var exception = Assert.Throws<ArgumentException>(() => builder.AddMcpClient("mcp/service"));
+
+        Assert.Equal("connectionName", exception.ParamName);
     }
 
     [Theory]

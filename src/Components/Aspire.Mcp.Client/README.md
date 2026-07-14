@@ -6,7 +6,7 @@ Registers an [McpClient](https://modelcontextprotocol.io/specification/2025-06-1
 
 ### Prerequisites
 
-- An MCP server exposed in your distributed application.
+- An MCP server exposed in your distributed application, with its HTTP route mapped at `/mcp`.
 - A consuming service that calls `AddServiceDefaults()` so logical service names are resolved by service discovery.
 
 ### Install the package
@@ -39,11 +39,48 @@ public sealed class ToolsController(McpClient mcpClient)
 
 ## Configuration
 
-The Aspire MCP Client library configures the server endpoint from the connection name and supports inline configuration delegates for client and transport options.
+The Aspire MCP Client library provides multiple options to configure the endpoint and behavior based on your project requirements and configuration conventions.
+
+### Use a connection string
+
+When using a connection string from the `ConnectionStrings` configuration section, provide the connection name when calling `builder.AddMcpClient()`:
+
+```csharp
+builder.AddMcpClient("mcp");
+```
+
+And then configure the endpoint URI in the `ConnectionStrings` configuration section:
+
+```json
+{
+  "ConnectionStrings": {
+    "mcp": "https://my-mcp-server.example.com/mcp"
+  }
+}
+```
+
+### Use configuration providers
+
+The Aspire MCP Client library supports [Microsoft.Extensions.Configuration](https://learn.microsoft.com/dotnet/api/microsoft.extensions.configuration). It loads [McpClientSettings](https://github.com/microsoft/aspire/blob/main/src/Components/Aspire.Mcp.Client/McpClientSettings.cs) from configuration using the `Aspire:Mcp:Client` key:
+
+```json
+{
+  "Aspire": {
+    "Mcp": {
+      "Client": {
+        "Endpoint": "https://my-mcp-server.example.com/mcp",
+        "DisableHealthChecks": false
+      }
+    }
+  }
+}
+```
+
+You can also use named configuration (`Aspire:Mcp:Client:{connectionName}`) to override base settings for specific registrations.
 
 ### Use the connection name
 
-Provide the same connection name configured by AppHost references:
+When using `WithReference` in AppHost, provide the same connection name in your service:
 
 ```csharp
 builder.AddMcpClient("mcp");
@@ -76,7 +113,10 @@ builder.AddMcpClient(
     {
         options.TransportMode = HttpTransportMode.StreamableHttp;
         options.ConnectionTimeout = TimeSpan.FromSeconds(15);
-        options.AdditionalHeaders["x-api-key"] = "api-key-value";
+        options.AdditionalHeaders = new Dictionary<string, string>(StringComparer.Ordinal)
+        {
+            ["x-api-key"] = "api-key-value"
+        };
         options.OAuth = oauthProvider;
     });
 ```
