@@ -52,7 +52,13 @@ internal static class SealedSecretManifest
         {
             content = File.ReadAllBytes(manifestPath);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or NotSupportedException)
+        // File.ReadAllBytes surfaces an unreadable path as several exception types: IO/permission
+        // failures (IOException — includes FileNotFoundException/DirectoryNotFoundException/
+        // PathTooLongException — and UnauthorizedAccessException/NotSupportedException) as well as
+        // argument failures for an empty/whitespace/invalid-character path (ArgumentException, which
+        // covers ArgumentNullException). Normalize them all to ASPIRERADIUS044 so every "unreadable
+        // manifest" failure matches the XML-doc/README contract instead of leaking a raw exception.
+        catch (Exception ex) when (ex is IOException or PathTooLongException or UnauthorizedAccessException or NotSupportedException or ArgumentException)
         {
             throw new InvalidOperationException(
                 $"Secret store '{storeName}' references a SealedSecret manifest at '{manifestPath}' that " +

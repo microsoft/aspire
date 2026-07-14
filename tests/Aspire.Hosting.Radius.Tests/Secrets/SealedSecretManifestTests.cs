@@ -83,6 +83,20 @@ public class SealedSecretManifestTests : IDisposable
         Assert.True(metadata.NamespaceWasExplicit);
     }
 
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    [InlineData("bad\0path")]
+    public void ReadMetadata_InvalidPath_Throws_ASPIRERADIUS044(string path)
+    {
+        // File.ReadAllBytes throws ArgumentException for an empty/whitespace/invalid-character path
+        // (not IOException). That must still normalize to ASPIRERADIUS044 like a missing/unreadable file.
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS044", ex.Message);
+    }
+
     [Fact]
     public void ReadMetadata_MissingName_Throws_ASPIRERADIUS044()
     {
