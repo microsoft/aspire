@@ -820,6 +820,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
         builder.AddViteApp("test-app", appDir)
             .WithHttpsDeveloperCertificate();
+        var appHostId = builder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
 
         using var app = builder.Build();
 
@@ -854,7 +855,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         await certConfigAnnotation.Callback(context);
 
         // Verify the wrapper was written under the hoisted node_modules/.aspire (repo root, not app dir)
-        var expectedDir = Path.Combine(repoRoot, "node_modules", ".aspire", "test-app");
+        var expectedDir = Path.Combine(repoRoot, "node_modules", ".aspire", appHostId, "test-app");
         Assert.True(Directory.Exists(expectedDir), $"Expected .aspire directory at {expectedDir}");
 
         var wrapperFiles = Directory.GetFiles(expectedDir, "aspire.vite.config.ts");
@@ -870,9 +871,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         // Verify wrapper content
         var wrapperContent = File.ReadAllText(wrapperFiles[0]);
 
-        // The import path should be a relative path with forward slashes (no backslashes)
-        Assert.Contains("import config from '", wrapperContent);
-        Assert.DoesNotMatch(@"import config from '[^']*\\[^']*'", wrapperContent);
+        Assert.Contains("import config from '../../../../packages/frontend/vite.config.ts'", wrapperContent);
 
         // The console.log line should contain properly escaped backslashes for JavaScript
         var absoluteConfigPath = Path.GetFullPath(viteConfigPath);
@@ -900,6 +899,7 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         var builder = DistributedApplication.CreateBuilder();
         builder.AddViteApp("frontend-a", firstAppDirectory);
         builder.AddViteApp("frontend-b", secondAppDirectory);
+        var appHostId = builder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
 
         using var app = builder.Build();
 
@@ -934,10 +934,49 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
             configPaths[resourceName] = Assert.IsType<string>(args[configIndex + 1]);
         }
 
-        var firstWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", "frontend-a", "aspire.vite.config.ts");
-        var secondWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", "frontend-b", "aspire.vite.config.ts");
+        var firstWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", appHostId, "frontend-a", "aspire.vite.config.ts");
+        var secondWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", appHostId, "frontend-b", "aspire.vite.config.ts");
         Assert.Equal(firstWrapperPath, configPaths["frontend-a"]);
         Assert.Equal(secondWrapperPath, configPaths["frontend-b"]);
+        Assert.Contains(Path.GetFullPath(firstConfigPath).Replace("\\", "\\\\"), File.ReadAllText(firstWrapperPath));
+        Assert.Contains(Path.GetFullPath(secondConfigPath).Replace("\\", "\\\\"), File.ReadAllText(secondWrapperPath));
+    }
+
+    [Fact]
+    public async Task AddViteApp_ServerAuthCertConfig_SharedNodeModules_WritesAppHostSpecificWrappers()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var repoRoot = Path.Combine(workspace.Path, "repo");
+        var firstAppDirectory = Path.Combine(repoRoot, "apps", "first");
+        var secondAppDirectory = Path.Combine(repoRoot, "apps", "second");
+        Directory.CreateDirectory(firstAppDirectory);
+        Directory.CreateDirectory(secondAppDirectory);
+        Directory.CreateDirectory(Path.Combine(repoRoot, "node_modules"));
+
+        var firstConfigPath = Path.Combine(firstAppDirectory, "vite.config.ts");
+        var secondConfigPath = Path.Combine(secondAppDirectory, "vite.config.ts");
+        File.WriteAllText(firstConfigPath, "export default { app: 'first' }");
+        File.WriteAllText(secondConfigPath, "export default { app: 'second' }");
+
+        const string firstAppHostSha = "1111111111111111";
+        const string secondAppHostSha = "2222222222222222";
+
+        using var firstBuilder = TestDistributedApplicationBuilder.Create($"AppHostSha={firstAppHostSha}");
+        using var secondBuilder = TestDistributedApplicationBuilder.Create($"AppHostSha={secondAppHostSha}");
+        firstBuilder.AddViteApp("frontend", firstAppDirectory);
+        secondBuilder.AddViteApp("frontend", secondAppDirectory);
+
+        using var firstApp = firstBuilder.Build();
+        using var secondApp = secondBuilder.Build();
+
+        var firstWrapperPath = await GenerateViteWrapperAsync(firstApp);
+        var secondWrapperPath = await GenerateViteWrapperAsync(secondApp);
+
+        var expectedFirstWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", firstAppHostSha[..10], "frontend", "aspire.vite.config.ts");
+        var expectedSecondWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", secondAppHostSha[..10], "frontend", "aspire.vite.config.ts");
+        Assert.Equal(expectedFirstWrapperPath, firstWrapperPath);
+        Assert.Equal(expectedSecondWrapperPath, secondWrapperPath);
         Assert.Contains(Path.GetFullPath(firstConfigPath).Replace("\\", "\\\\"), File.ReadAllText(firstWrapperPath));
         Assert.Contains(Path.GetFullPath(secondConfigPath).Replace("\\", "\\\\"), File.ReadAllText(secondWrapperPath));
     }
@@ -1061,6 +1100,34 @@ public class AddViteAppTests(ITestOutputHelper outputHelper)
         var ex = await Assert.ThrowsAnyAsync<Exception>(() => pipeline.ExecuteAsync(context));
         // Verify our standalone check step fired with the right message
         Assert.Contains("output: \"standalone\"", ex.ToString());
+    }
+
+    private static async Task<string> GenerateViteWrapperAsync(DistributedApplication app)
+    {
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+        var args = new List<object> { "run", "dev", "--", "--port", "3000" };
+        var context = new HttpsCertificateConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
+            Resource = resource,
+            Arguments = args,
+            EnvironmentVariables = new Dictionary<string, object>(),
+            CertificatePath = ReferenceExpression.Create($"cert.pem"),
+            KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
+            PfxPath = ReferenceExpression.Create($"cert.pfx"),
+            Password = null,
+            CancellationToken = CancellationToken.None
+        };
+
+        var certConfigAnnotation = resource.Annotations
+            .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
+            .Single();
+        await certConfigAnnotation.Callback(context);
+
+        var configIndex = args.IndexOf("--config");
+        return Assert.IsType<string>(args[configIndex + 1]);
     }
 
     // Helper class for testing IValueProvider

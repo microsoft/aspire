@@ -1463,6 +1463,7 @@ public static class JavaScriptHostingExtensions
         ArgumentException.ThrowIfNullOrEmpty(appDirectory);
 
         appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, appDirectory));
+        var appHostId = builder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
         var resource = new ViteAppResource(name, "npm", appDirectory);
 
         var resourceBuilder = builder.CreateDefaultJavaScriptAppBuilder(
@@ -1566,7 +1567,9 @@ public static class JavaScriptHostingExtensions
                             return;
                         }
 
-                        var aspireConfigDir = Path.Join(nodeModulesDir, ".aspire", resource.Name);
+                        // Use the same per-AppHost discriminator as persistent resource names so concurrent
+                        // AppHosts sharing a hoisted node_modules directory cannot overwrite each other's wrappers.
+                        var aspireConfigDir = Path.Join(nodeModulesDir, ".aspire", appHostId, resource.Name);
                         Directory.CreateDirectory(aspireConfigDir);
 
                         // Compute the relative path from the wrapper location to the original config
