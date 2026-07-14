@@ -9,7 +9,7 @@ const coveredFeatures = new Set<HttpBackendFeatureId>();
 const browserErrors = new WeakMap<Page, string[]>();
 const allowUnavailableResponses = new WeakSet<Page>();
 const allowInterceptedImportAbort = new WeakSet<Page>();
-const allowAuthenticationNavigation = new WeakSet<Page>();
+const allowNavigationAbort = new WeakSet<Page>();
 const allowMetricSeriesAbort = new WeakSet<Page>();
 
 function features(...ids: HttpBackendFeatureId[]): string {
@@ -106,7 +106,7 @@ test.afterEach(async ({ page }) => {
   const filtered = allowInterceptedImportAbort.has(page)
     ? unexpected.filter((error) => !error.includes("/api/deck/manage-data/import (net::ERR_ABORTED)"))
     : unexpected;
-  const navigationFiltered = allowAuthenticationNavigation.has(page)
+  const navigationFiltered = allowNavigationAbort.has(page)
     ? filtered.filter((error) =>
         error !== "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
         && !(error.includes("/login?returnUrl=") && error.endsWith("(net::ERR_ABORTED)"))
@@ -369,7 +369,7 @@ test(`${features("HTTP-SHELL-UNSECURED-001")} warns about unsecured endpoints an
 
 test(`${features("HTTP-AUTH-001")} transfers an authentication challenge to the dashboard login flow`, async ({ page }) => {
   // Full-page login navigation intentionally cancels in-flight startup requests.
-  allowAuthenticationNavigation.add(page);
+  allowNavigationAbort.add(page);
   await page.route("**/api/deck/config", async (route) => route.fulfill({
     status: 302,
     headers: { Location: "/login?returnUrl=%2Fapi%2Fdeck%2Fconfig" },
@@ -391,7 +391,7 @@ test(`${features("HTTP-AUTH-001")} transfers an authentication challenge to the 
 });
 
 test(`${features("HTTP-USER-001")} shows the authenticated user and signs out`, async ({ page }) => {
-  allowAuthenticationNavigation.add(page);
+  allowNavigationAbort.add(page);
   await page.route("**/api/deck/config", async (route) => route.fulfill({
     json: {
       ...config,
@@ -431,6 +431,7 @@ test(`${features("HTTP-USER-001")} shows the authenticated user and signs out`, 
 });
 
 test(`${features("HTTP-LANGUAGE-001")} selects and applies a dashboard language`, async ({ page }) => {
+  allowNavigationAbort.add(page);
   let culture = "en";
   let requestedLanguage: string | null = null;
   await page.route("**/api/deck/config", async (route) => route.fulfill({
