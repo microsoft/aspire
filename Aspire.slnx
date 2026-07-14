@@ -46,6 +46,7 @@
   </Folder>
   <Folder Name="/Hosting/">
     <Project Path="src/Aspire.Cli/Aspire.Cli.csproj" />
+    <Project Path="src/Aspire.Dashboard.Backend/Aspire.Dashboard.Backend.csproj" />
     <Project Path="src/Aspire.Dashboard/Aspire.Dashboard.csproj" />
     <Project Path="src/Aspire.Hosting.Analyzers/Aspire.Hosting.Analyzers.csproj" />
     <Project Path="src/Aspire.Hosting.Integration.Analyzers/Aspire.Hosting.Integration.Analyzers.csproj" />
@@ -499,6 +500,7 @@
     <Project Path="tests/Aspire.StackExchange.Redis.Tests/Aspire.StackExchange.Redis.Tests.csproj" />
   </Folder>
   <Folder Name="/tests/Dashboard/">
+    <Project Path="tests/Aspire.Dashboard.Backend.Tests/Aspire.Dashboard.Backend.Tests.csproj" />
     <Project Path="tests/Aspire.Dashboard.Components.Tests/Aspire.Dashboard.Components.Tests.csproj" />
     <Project Path="tests/Aspire.Dashboard.Tests/Aspire.Dashboard.Tests.csproj" />
   </Folder>

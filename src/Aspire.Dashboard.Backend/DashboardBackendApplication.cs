@@ -1,0 +1,83 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Runtime.InteropServices;
+using Microsoft.AspNetCore.SignalR;
+using Microsoft.Extensions.DependencyInjection.Extensions;
+
+namespace Aspire.Dashboard.Backend;
+
+internal static class DashboardBackendApplication
+{
+    public static WebApplication Build(string[] args, Action<WebApplicationBuilder>? configureBuilder = null)
+    {
+        var builder = WebApplication.CreateSlimBuilder(args);
+        builder.Services.TryAddSingleton<DashboardResourceSnapshotService>();
+        builder.Services.TryAddSingleton<IDashboardResourceSnapshotProvider>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
+        builder.Services.TryAddSingleton<IDashboardResourceEventSource>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
+        builder.Services.AddHostedService(services => services.GetRequiredService<DashboardResourceSnapshotService>());
+        builder.Services.AddSignalR();
+        builder.Services.Configure<JsonHubProtocolOptions>(options =>
+        {
+            options.PayloadSerializerOptions.TypeInfoResolverChain.Insert(0, DashboardBackendJsonSerializerContext.Default);
+        });
+        configureBuilder?.Invoke(builder);
+
+        var app = builder.Build();
+        app.UseDashboardDevelopmentAccessPolicy();
+
+        app.MapGet(DashboardApiContract.DiscoveryPath, () =>
+        {
+            var discovery = new DashboardApiDiscovery(
+                DashboardApiContract.Product,
+                [
+                    new DashboardApiVersion(
+                        DashboardApiContract.CurrentVersion,
+                        DashboardApiContract.VersionOneBasePath,
+                        [
+                            DashboardApiContract.ConfigurationCapability,
+                            DashboardApiContract.ResourcesCapability,
+                            DashboardApiContract.ResourceStreamCapability
+                        ])
+                ]);
+
+            return Results.Json(
+                discovery,
+                DashboardBackendJsonSerializerContext.Default.DashboardApiDiscovery);
+        });
+
+        app.MapGet($"{DashboardApiContract.VersionOneBasePath}/config", () =>
+        {
+            var configuration = new DashboardConfiguration(
+                builder.Configuration["DashboardBackend:ApplicationName"] ?? "Aspire",
+                builder.Configuration["DashboardBackend:Version"] ?? "0.0.0-dev",
+                RuntimeInformation.FrameworkDescription);
+
+            return Results.Json(
+                configuration,
+                DashboardBackendJsonSerializerContext.Default.DashboardConfiguration);
+        });
+
+        app.MapGet($"{DashboardApiContract.VersionOneBasePath}/resources", async (
+            IDashboardResourceSnapshotProvider resourceSnapshotProvider,
+            HttpContext context) =>
+        {
+            try
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                var resources = await resourceSnapshotProvider.GetSnapshotAsync(context.RequestAborted).ConfigureAwait(false);
+                return Results.Json(
+                    resources,
+                    DashboardBackendJsonSerializerContext.Default.DashboardResourceArray);
+            }
+            catch (DashboardResourceServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
+        app.MapHub<DashboardResourcesHub>(DashboardApiContract.ResourceStreamPath);
+
+        return app;
+    }
+}

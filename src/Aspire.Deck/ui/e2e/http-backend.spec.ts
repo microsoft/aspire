@@ -9,7 +9,7 @@ const coveredFeatures = new Set<HttpBackendFeatureId>();
 const browserErrors = new WeakMap<Page, string[]>();
 const allowUnavailableResponses = new WeakSet<Page>();
 const allowInterceptedImportAbort = new WeakSet<Page>();
-const allowAuthenticationNavigation = new WeakSet<Page>();
+const allowNavigationAbort = new WeakSet<Page>();
 const allowMetricSeriesAbort = new WeakSet<Page>();
 
 function features(...ids: HttpBackendFeatureId[]): string {
@@ -106,7 +106,7 @@ test.afterEach(async ({ page }) => {
   const filtered = allowInterceptedImportAbort.has(page)
     ? unexpected.filter((error) => !error.includes("/api/deck/manage-data/import (net::ERR_ABORTED)"))
     : unexpected;
-  const navigationFiltered = allowAuthenticationNavigation.has(page)
+  const navigationFiltered = allowNavigationAbort.has(page)
     ? filtered.filter((error) =>
         error !== "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
         && !(error.includes("/login?returnUrl=") && error.endsWith("(net::ERR_ABORTED)"))
@@ -118,6 +118,190 @@ test.afterEach(async ({ page }) => {
         !(error.includes("/api/deck/telemetry/metrics/series?") && error.endsWith("(net::ERR_ABORTED)")))
     : navigationFiltered;
   expect(telemetryFiltered, "Unexpected browser errors").toEqual([]);
+});
+
+test(`${features("AOT-CONTRACT-001")} falls back when the negotiated version does not advertise resources`, async ({ page }) => {
+  let discoveryRequests = 0;
+  let aotConfigRequests = 0;
+  let legacyConfigRequests = 0;
+  let resourceRequests = 0;
+  await page.route("**/api/dashboard", async (route) => {
+    discoveryRequests++;
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [
+          { version: 99, basePath: "/api/dashboard/v99", capabilities: ["configuration"] },
+          { version: 1, basePath: "/api/dashboard/v1", capabilities: ["configuration"] },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    aotConfigRequests++;
+    await route.fulfill({
+      json: {
+        applicationName: "Stress AOT",
+        dashboardVersion: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+      },
+    });
+  });
+  await page.route("**/api/deck/config", async (route) => {
+    legacyConfigRequests++;
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    resourceRequests++;
+    await route.fulfill({ json: [resource] });
+  });
+
+  await page.goto("/?backend=aot");
+
+  await expect(page.getByRole("banner").locator(".topbar__app")).toHaveText("Stress AOT");
+  await expect(page.getByRole("navigation")).toContainText("Aspire Deck 13.5.0-aot");
+  await expect(page.getByRole("table").getByRole("row", { name: /stress-api/ })).toBeVisible();
+  expect(discoveryRequests).toBe(1);
+  expect(aotConfigRequests).toBe(1);
+  expect(legacyConfigRequests).toBe(0);
+  expect(resourceRequests).toBeGreaterThan(0);
+});
+
+test(`${features("AOT-CONTRACT-001")} reads resources from the negotiated AOT capability`, async ({ page }) => {
+  let aotResourceRequests = 0;
+  let legacyResourceRequests = 0;
+  await page.route("**/api/dashboard", async (route) => {
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [
+          { version: 1, basePath: "/api/dashboard/v1", capabilities: ["configuration", "resources"] },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    await route.fulfill({
+      json: {
+        applicationName: "Stress AOT",
+        dashboardVersion: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources", async (route) => {
+    aotResourceRequests++;
+    await route.fulfill({ json: [resource] });
+  });
+  await page.route("**/api/deck/resources", async (route) => {
+    legacyResourceRequests++;
+    await route.fulfill({ json: [] });
+  });
+
+  await page.goto("/?backend=aot");
+
+  await expect(page.getByRole("table").getByRole("row", { name: /stress-api/ })).toBeVisible();
+  await expect(page.getByTitle("Resources: Connected")).toBeVisible();
+  expect(aotResourceRequests).toBeGreaterThan(0);
+  expect(legacyResourceRequests).toBe(0);
+});
+
+test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes over SignalR`, async ({ page }) => {
+  let negotiateRequests = 0;
+  let websocketConnections = 0;
+  let streamInvocations = 0;
+  let resourceRequests = 0;
+  await page.route("**/api/dashboard", async (route) => {
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [
+          {
+            version: 1,
+            basePath: "/api/dashboard/v1",
+            capabilities: ["configuration", "resources", "resources-live"],
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    await route.fulfill({
+      json: {
+        applicationName: "Stress AOT",
+        dashboardVersion: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources/live/negotiate?**", async (route) => {
+    negotiateRequests++;
+    await route.fulfill({
+      json: {
+        negotiateVersion: 1,
+        connectionId: "playwright-signalr-connection",
+        connectionToken: "playwright-signalr-token",
+        availableTransports: [
+          { transport: "WebSockets", transferFormats: ["Text", "Binary"] },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources", async (route) => {
+    resourceRequests++;
+    await route.fulfill({ json: [] });
+  });
+  await page.routeWebSocket("**/api/dashboard/v1/resources/live?id=*", (webSocket) => {
+    websocketConnections++;
+    webSocket.onMessage((message) => {
+      // SignalR JSON messages are separated by ASCII record separators. The browser can
+      // coalesce the handshake and stream invocation, so handle every frame independently.
+      const frames = message.toString().split("\x1e").filter(Boolean);
+      for (const frame of frames) {
+        const payload = JSON.parse(frame) as {
+          protocol?: string;
+          type?: number;
+          invocationId?: string;
+          target?: string;
+        };
+        if (payload.protocol === "json") {
+          webSocket.send("{}\x1e");
+        } else if (payload.type === 4 && payload.target === "WatchResources") {
+          streamInvocations++;
+          webSocket.send(`${JSON.stringify({
+            type: 2,
+            invocationId: payload.invocationId,
+            item: { type: "snapshot", resources: [resource], upserts: null, deletes: null },
+          })}\x1e`);
+          setTimeout(() => {
+            webSocket.send(`${JSON.stringify({
+              type: 2,
+              invocationId: payload.invocationId,
+              item: {
+                type: "change",
+                resources: null,
+                upserts: [{ ...resource, state: "Stopped", stateStyle: "error" }],
+                deletes: [],
+              },
+            })}\x1e`);
+          }, 100);
+        }
+      }
+    });
+  });
+
+  await page.goto("/?backend=aot");
+
+  const resourceRow = page.getByRole("table").getByRole("row", { name: /stress-api/ });
+  await expect(resourceRow).toBeVisible();
+  await expect(resourceRow).toContainText("Stopped");
+  await expect(page.getByTitle("Resources: Connected")).toBeVisible();
+  // React strict mode can negotiate and tear down an initial connection while checking
+  // effect cleanup. Resource consumers still share one completed stream, and polling stays unused.
+  expect(negotiateRequests).toBeGreaterThan(0);
+  expect(websocketConnections).toBe(1);
+  expect(streamInvocations).toBe(1);
+  expect(resourceRequests).toBe(0);
 });
 
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {
@@ -185,7 +369,7 @@ test(`${features("HTTP-SHELL-UNSECURED-001")} warns about unsecured endpoints an
 
 test(`${features("HTTP-AUTH-001")} transfers an authentication challenge to the dashboard login flow`, async ({ page }) => {
   // Full-page login navigation intentionally cancels in-flight startup requests.
-  allowAuthenticationNavigation.add(page);
+  allowNavigationAbort.add(page);
   await page.route("**/api/deck/config", async (route) => route.fulfill({
     status: 302,
     headers: { Location: "/login?returnUrl=%2Fapi%2Fdeck%2Fconfig" },
@@ -207,7 +391,7 @@ test(`${features("HTTP-AUTH-001")} transfers an authentication challenge to the 
 });
 
 test(`${features("HTTP-USER-001")} shows the authenticated user and signs out`, async ({ page }) => {
-  allowAuthenticationNavigation.add(page);
+  allowNavigationAbort.add(page);
   await page.route("**/api/deck/config", async (route) => route.fulfill({
     json: {
       ...config,
@@ -247,6 +431,7 @@ test(`${features("HTTP-USER-001")} shows the authenticated user and signs out`, 
 });
 
 test(`${features("HTTP-LANGUAGE-001")} selects and applies a dashboard language`, async ({ page }) => {
+  allowNavigationAbort.add(page);
   let culture = "en";
   let requestedLanguage: string | null = null;
   await page.route("**/api/deck/config", async (route) => route.fulfill({

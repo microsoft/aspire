@@ -10,6 +10,10 @@ the **same** code:
 - **ASP.NET dashboard** — `?backend=http` explicitly loads configuration and resources from
   the authenticated `/api/deck` endpoints. The adapter polls for resource changes and reports
   connection failures without falling back to mock data.
+- **Versioned ASP.NET backend** — `?backend=aot` negotiates the versioned `/api/dashboard`
+  contract with the separate Native AOT host. Configuration and resources come from that host,
+  with resource snapshots and changes streamed over SignalR; every unported capability continues
+  through the existing `/api/deck` backend.
 - **Tauri-embedded** — when running inside the Tauri shell, the data layer
   (`src/api/deck.ts`) calls the real backend via `invoke(...)` / `listen(...)` exactly as
   described in [`../CONTRACT.md`](../CONTRACT.md).
@@ -131,6 +135,21 @@ Then open `http://127.0.0.1:1430/?backend=http`. The Vite proxy is enabled only
 when `ASPIRE_DASHBOARD_URL` is present, so standalone development continues to use
 the deterministic mock backend.
 
+To exercise the first side-by-side Native AOT slice, start the host documented in
+[`../../Aspire.Dashboard.Backend/README.md`](../../Aspire.Dashboard.Backend/README.md), then provide both backend URLs:
+
+```bash
+ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
+ASPIRE_DASHBOARD_AOT_URL=http://127.0.0.1:18889 \
+  npm run dev -- --host 127.0.0.1
+```
+
+Open `http://127.0.0.1:1430/?backend=aot`. Version discovery and configuration use the new host;
+resources arrive as an authoritative snapshot followed by live changes over SignalR. Telemetry,
+commands, interactions, authentication, and terminals remain on the existing dashboard until their
+versioned capabilities independently pass the parity inventory. The `resources` HTTP snapshot route
+remains a compatibility fallback for a version 1 host that does not advertise `resources-live`.
+
 Open `http://localhost:1430/?view=toolkit` for the standalone toolkit playground. It exercises
 the shared controls without depending on the Deck backend or mock data layer, making it the
 starting point for new dashboard UI and visual regression coverage.
@@ -158,6 +177,20 @@ The live Stress black-box suite requires a running Stress AppHost:
 ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
   npm exec -- playwright test --config=playwright.stress.config.ts
 ```
+
+Run the same inventory through the side-by-side AOT topology after starting the AOT host:
+
+```bash
+ASPIRE_DASHBOARD_URL=https://Stress.dev.localhost:49985 \
+ASPIRE_DASHBOARD_AOT_URL=http://127.0.0.1:18889 \
+ASPIRE_DASHBOARD_BACKEND=aot \
+  npm exec -- playwright test --config=playwright.stress.config.ts
+```
+
+This verifies that version negotiation, the AOT SignalR resource stream, and the existing
+dashboard fallback for capabilities not yet migrated work together across the 23 live Stress
+behaviors. Those scenarios provide live coverage evidence for the separate 157-feature parity
+ledger enforced by the default Playwright suite.
 
 The terminal playground has a separate live HMP suite. Start `playground/Terminals`, then run:
 
