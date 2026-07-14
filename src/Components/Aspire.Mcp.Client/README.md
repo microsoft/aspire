@@ -1,4 +1,4 @@
-# Aspire MCP Client library
+# Aspire.Mcp.Client library
 
 Registers an [McpClient](https://modelcontextprotocol.io/specification/2025-06-18/basic/architecture) in the DI container for connecting to a Model Context Protocol (MCP) server through Aspire service discovery.
 
@@ -53,7 +53,9 @@ The client resolves `https://{connectionName}/mcp`.
 
 ### Use inline delegates
 
-Use the overload to configure `McpClientOptions` and `HttpClientTransportOptions` inline, including OAuth-protected servers, custom headers, transport mode, and timeout values:
+Use the overload to configure `McpClientOptions` and `HttpClientTransportOptions` inline.
+
+Use `configureClientOptions` to configure MCP client behavior, such as client metadata and initialization timeout:
 
 ```csharp
 builder.AddMcpClient(
@@ -62,7 +64,14 @@ builder.AddMcpClient(
     {
         options.ClientInfo = new() { Name = "MyService", Version = "1.0.0" };
         options.InitializationTimeout = TimeSpan.FromSeconds(60);
-    },
+    });
+```
+
+Use `configureTransportOptions` to configure HTTP transport behavior, such as transport mode, timeout, headers, and OAuth:
+
+```csharp
+builder.AddMcpClient(
+    "mcp",
     configureTransportOptions: options =>
     {
         options.TransportMode = HttpTransportMode.StreamableHttp;
