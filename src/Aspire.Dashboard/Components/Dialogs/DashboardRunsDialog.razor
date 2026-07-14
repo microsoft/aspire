@@ -1,0 +1,17 @@
+@using Aspire.Dashboard.Resources
+@implements IDialogContentComponent<DashboardRunsDialogViewModel>
+@inject IStringLocalizer<Dialogs> Loc
+
+<FluentDialogBody>
+    <FluentStack Orientation="Orientation.Vertical" VerticalGap="12">
+        <FluentSelect TOption="DashboardRunDescriptor"
+                      ChangeOnEnterOnly="true"
+                      Position="SelectPosition.Below"
+                      Label="@FormatRunsLabel()"
+                      Items="@_runOptions"
+                      OptionValue="@(run => run!.RunId)"
+                      OptionText="FormatRunOption"
+                      @bind-SelectedOption="@Content.SelectedRun" />
+        <p class="setting-subtext">@Loc[nameof(Dialogs.SettingsDialogDashboardRunPageReloads)]</p>
+    </FluentStack>
+</FluentDialogBody>

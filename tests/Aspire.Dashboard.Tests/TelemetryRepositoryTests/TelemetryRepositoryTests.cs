@@ -8,6 +8,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -17,7 +18,7 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class TelemetryRepositoryTests
+public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -141,7 +142,6 @@ public class TelemetryRepositoryTests
     public void Subscription_MultipleDisposes_UnsubscribeOnce()
     {
         // Arrange
-        var telemetryRepository = CreateRepository();
         var unsubscribeCallCount = 0;
 
         var subscription = new Subscription(
@@ -151,7 +151,8 @@ public class TelemetryRepositoryTests
             callback: () => Task.CompletedTask,
             unsubscribe: () => unsubscribeCallCount++,
             executionContext: null,
-            telemetryRepository: telemetryRepository);
+            logger: NullLogger.Instance,
+            minExecuteInterval: TimeSpan.FromMilliseconds(100));
 
         // Act
         subscription.Dispose();
@@ -180,8 +181,6 @@ public class TelemetryRepositoryTests
             b.SetMinimumLevel(LogLevel.Trace);
         });
 
-        var telemetryRepository = CreateRepository(loggerFactory: factory);
-
         var subscription = new Subscription(
             name: "Test",
             resourceKey: null,
@@ -189,7 +188,8 @@ public class TelemetryRepositoryTests
             callback: () => Task.CompletedTask,
             unsubscribe: () => { },
             executionContext: null,
-            telemetryRepository: telemetryRepository);
+            logger: factory.CreateLogger("Test"),
+            minExecuteInterval: TimeSpan.FromMilliseconds(100));
 
         subscription.Dispose();
 
@@ -1395,7 +1395,7 @@ public class TelemetryRepositoryTests
 
     #endregion
 
-    private static void AddTestData(TelemetryRepository repository, string resourceName, string instanceId)
+    private static void AddTestData(ITelemetryRepository repository, string resourceName, string instanceId)
     {
         var compositeName = $"{resourceName}-{instanceId}";
 
@@ -1453,4 +1453,14 @@ public class TelemetryRepositoryTests
             }
         });
     }
+}
+
+public sealed class InMemoryTelemetryRepositoryTests : TelemetryRepositoryTests
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteTelemetryRepositoryTests : TelemetryRepositoryTests
+{
+    protected override bool UseSqlite => true;
 }

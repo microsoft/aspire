@@ -12,7 +12,7 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class TelemetryLimitTests
+public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -123,7 +123,7 @@ public class TelemetryLimitTests
 
         // Fill instruments up to the limit.
         var metrics = new RepeatedField<Metric>();
-        for (var i = 0; i < TelemetryRepository.MaxInstrumentCount; i++)
+        for (var i = 0; i < InMemoryTelemetryRepository.MaxInstrumentCount; i++)
         {
             metrics.Add(CreateSumMetric(metricName: $"metric{i}", startTime: s_testTime.AddMinutes(1)));
         }
@@ -149,7 +149,7 @@ public class TelemetryLimitTests
 
         var resources = repository.GetResources();
         var instruments = repository.GetInstrumentsSummaries(resources[0].ResourceKey);
-        Assert.Equal(TelemetryRepository.MaxInstrumentCount, instruments.Count);
+        Assert.Equal(InMemoryTelemetryRepository.MaxInstrumentCount, instruments.Count);
 
         // Adding one more instrument should fail.
         var failContext = new AddContext();
@@ -173,7 +173,7 @@ public class TelemetryLimitTests
         Assert.Equal(0, failContext.SuccessCount);
 
         instruments = repository.GetInstrumentsSummaries(resources[0].ResourceKey);
-        Assert.Equal(TelemetryRepository.MaxInstrumentCount, instruments.Count);
+        Assert.Equal(InMemoryTelemetryRepository.MaxInstrumentCount, instruments.Count);
     }
 
     [Fact]
@@ -366,7 +366,7 @@ public class TelemetryLimitTests
         // Fill scopes up to the limit.
         var scopeLogs = new RepeatedField<ResourceLogs>();
         var rl = new ResourceLogs { Resource = CreateResource() };
-        for (var i = 0; i < TelemetryRepository.MaxScopeCount; i++)
+        for (var i = 0; i < InMemoryTelemetryRepository.MaxScopeCount; i++)
         {
             rl.ScopeLogs.Add(new ScopeLogs
             {
@@ -414,7 +414,7 @@ public class TelemetryLimitTests
 
         // Fill scopes up to the limit.
         var rs = new ResourceSpans { Resource = CreateResource() };
-        for (var i = 0; i < TelemetryRepository.MaxScopeCount; i++)
+        for (var i = 0; i < InMemoryTelemetryRepository.MaxScopeCount; i++)
         {
             rs.ScopeSpans.Add(new ScopeSpans
             {
@@ -460,7 +460,7 @@ public class TelemetryLimitTests
 
         // Fill scopes up to the limit.
         var rm = new ResourceMetrics { Resource = CreateResource() };
-        for (var i = 0; i < TelemetryRepository.MaxScopeCount; i++)
+        for (var i = 0; i < InMemoryTelemetryRepository.MaxScopeCount; i++)
         {
             rm.ScopeMetrics.Add(new ScopeMetrics
             {
@@ -499,4 +499,14 @@ public class TelemetryLimitTests
         Assert.Equal(2, failContext.FailureCount);
         Assert.Equal(0, failContext.SuccessCount);
     }
+}
+
+public sealed class InMemoryTelemetryLimitTests : TelemetryLimitTests
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteTelemetryLimitTests : TelemetryLimitTests
+{
+    protected override bool UseSqlite => true;
 }

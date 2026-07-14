@@ -18,7 +18,7 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class TraceTests
+public abstract class TraceTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -32,7 +32,7 @@ public class TraceTests
     [InlineData(OtlpSpanKind.Unspecified, (Span.Types.SpanKind)1000)]
     public void ConvertSpanKind(OtlpSpanKind expected, Span.Types.SpanKind value)
     {
-        var result = TelemetryRepository.ConvertSpanKind(value);
+        var result = InMemoryTelemetryRepository.ConvertSpanKind(value);
         Assert.Equal(expected, result);
     }
 
@@ -664,29 +664,6 @@ public class TraceTests
                     });
             });
 
-        Assert.Collection(repository.SpanLinks,
-            l =>
-            {
-                AssertId("1", l.TraceId);
-                AssertId("1-1", l.SpanId);
-                Assert.Collection(l.Attributes,
-                    a =>
-                    {
-                        Assert.Equal("key2", a.Key);
-                        Assert.Equal("Value!", a.Value);
-                    });
-            },
-            l =>
-            {
-                AssertId("2", l.TraceId);
-                AssertId("2-1", l.SpanId);
-                Assert.Collection(l.Attributes,
-                    a =>
-                    {
-                        Assert.Equal("key1", a.Key);
-                        Assert.Equal("Value!", a.Value);
-                    });
-            });
     }
 
     [Fact]
@@ -939,10 +916,10 @@ public class TraceTests
         var expectedOrder = traces.PagedResult.Items.OrderBy(t => t.FirstSpan.StartTime).Select(t => t.TraceId).ToList();
         Assert.Equal(expectedOrder, actualOrder);
 
-        Assert.Equal(MaxTraceCount * 2, repository.SpanLinks.Count);
+        Assert.Equal(MaxTraceCount * 2, traces.PagedResult.Items.SelectMany(t => t.Spans).SelectMany(s => s.Links).Count());
     }
 
-    private static void AddTrace(TelemetryRepository repository, string traceId, DateTime startTime)
+    private static void AddTrace(ITelemetryRepository repository, string traceId, DateTime startTime)
     {
         var addContext = new AddContext();
 
@@ -3332,4 +3309,14 @@ public class TraceTests
         Assert.Collection(traces.PagedResult.Items,
             trace => AssertId("2", trace.TraceId));
     }
+}
+
+public sealed class InMemoryTraceTests : TraceTests
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteTraceTests : TraceTests
+{
+    protected override bool UseSqlite => true;
 }

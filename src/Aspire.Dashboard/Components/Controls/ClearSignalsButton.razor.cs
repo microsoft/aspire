@@ -37,6 +37,7 @@ public partial class ClearSignalsButton : ComponentBase
             Id = "clear-menu-all",
             Icon = s_clearAllResourcesIcon,
             OnClick = () => HandleClearSignal(null),
+            IsDisabled = DashboardClient.IsReadOnly,
             Text = ControlsStringsLoc[name: nameof(ControlsStrings.ClearAllResources)],
         });
 
@@ -45,7 +46,7 @@ public partial class ClearSignalsButton : ComponentBase
             Id = "clear-menu-resource",
             Icon = s_clearSelectedResourceIcon,
             OnClick = () => HandleClearSignal(SelectedResource.Id?.GetResourceKey()),
-            IsDisabled = SelectedResource.Id == null,
+            IsDisabled = DashboardClient.IsReadOnly || SelectedResource.Id == null,
             Text = SelectedResource.Id == null
                 ? ControlsStringsLoc[nameof(ControlsStrings.ClearPendingSelectedResource)]
                 : string.Format(CultureInfo.InvariantCulture, ControlsStringsLoc[name: nameof(ControlsStrings.ClearSelectedResource)], SelectedResource.Name),

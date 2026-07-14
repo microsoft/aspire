@@ -23,7 +23,7 @@ public sealed class TelemetryImportServiceTests
 {
     private static readonly DateTime s_testTime = new(2024, 1, 15, 10, 30, 0, DateTimeKind.Utc);
 
-    private static TelemetryImportService CreateImportService(TelemetryRepository repository, bool disableImport = false)
+    private static TelemetryImportService CreateImportService(InMemoryTelemetryRepository repository, bool disableImport = false)
     {
         var options = new DashboardOptions { UI = new UIOptions { DisableImport = disableImport } };
         var optionsMonitor = new TestOptionsMonitor<DashboardOptions>(options);

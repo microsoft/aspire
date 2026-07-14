@@ -700,7 +700,7 @@ public class TelemetryApiServiceTests
     /// Adds spans with sequential trace/span IDs to the repository. Each span is added in a separate
     /// AddTraces call so that it gets its own trace entry.
     /// </summary>
-    private static void AddSpans(TelemetryRepository repository, int count, int startMinuteSpacing = 1)
+    private static void AddSpans(InMemoryTelemetryRepository repository, int count, int startMinuteSpacing = 1)
     {
         for (var i = 1; i <= count; i++)
         {
@@ -713,7 +713,7 @@ public class TelemetryApiServiceTests
     /// <summary>
     /// Adds a batch of spans (as raw Span objects) to the repository under a single resource.
     /// </summary>
-    private static void AddSpansToRepository(TelemetryRepository repository, IEnumerable<Span> spans)
+    private static void AddSpansToRepository(InMemoryTelemetryRepository repository, IEnumerable<Span> spans)
     {
         repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
         {
@@ -735,7 +735,7 @@ public class TelemetryApiServiceTests
     /// <summary>
     /// Adds two traces (separate trace IDs) with OK and Error status for hasError filter tests.
     /// </summary>
-    private static void AddTracesWithStatus(TelemetryRepository repository)
+    private static void AddTracesWithStatus(InMemoryTelemetryRepository repository)
     {
         AddSpansToRepository(repository, [
             CreateSpan(traceId: "ok-trace", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1), status: new Status { Code = Status.Types.StatusCode.Ok })
@@ -748,7 +748,7 @@ public class TelemetryApiServiceTests
     /// <summary>
     /// Adds log entries with the specified messages to the repository.
     /// </summary>
-    private static void AddLogs(TelemetryRepository repository, string[] messages, SeverityNumber severity = SeverityNumber.Info)
+    private static void AddLogs(InMemoryTelemetryRepository repository, string[] messages, SeverityNumber severity = SeverityNumber.Info)
     {
         var logRecords = new RepeatedField<LogRecord>();
         for (var i = 0; i < messages.Length; i++)
@@ -762,7 +762,7 @@ public class TelemetryApiServiceTests
     /// <summary>
     /// Adds a batch of raw LogRecord objects to the repository under a single resource.
     /// </summary>
-    private static void AddLogsToRepository(TelemetryRepository repository, RepeatedField<LogRecord> logRecords)
+    private static void AddLogsToRepository(InMemoryTelemetryRepository repository, RepeatedField<LogRecord> logRecords)
     {
         repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
@@ -782,7 +782,7 @@ public class TelemetryApiServiceTests
     }
 
     private static TelemetryApiService CreateService(
-        TelemetryRepository? repository = null,
+        InMemoryTelemetryRepository? repository = null,
         IOutgoingPeerResolver[]? peerResolvers = null)
     {
         return new TelemetryApiService(

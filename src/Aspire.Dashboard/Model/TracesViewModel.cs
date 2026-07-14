@@ -9,7 +9,7 @@ namespace Aspire.Dashboard.Model;
 
 public class TracesViewModel
 {
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepository _telemetryRepository;
     private readonly List<FieldTelemetryFilter> _filters = new();
 
     private PagedResult<OtlpTrace>? _traces;
@@ -20,7 +20,7 @@ public class TracesViewModel
     private bool _currentDataHasErrors;
     private SpanType? _spanType;
 
-    public TracesViewModel(TelemetryRepository telemetryRepository)
+    public TracesViewModel(ITelemetryRepository telemetryRepository)
     {
         _telemetryRepository = telemetryRepository;
     }

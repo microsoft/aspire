@@ -1115,6 +1115,69 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("SettingsDialogDashboardLogsAndTelemetry", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select dashboard run.
+        /// </summary>
+        public static string DashboardRunsDialogLaunchButton {
+            get {
+                return ResourceManager.GetString("DashboardRunsDialogLaunchButton", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Started {0}.
+        /// </summary>
+        public static string DashboardRunsDialogStartedAt {
+            get {
+                return ResourceManager.GetString("DashboardRunsDialogStartedAt", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Dashboard runs.
+        /// </summary>
+        public static string DashboardRunsDialogTitle {
+            get {
+                return ResourceManager.GetString("DashboardRunsDialogTitle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to {0} runs:.
+        /// </summary>
+        public static string SettingsDialogDashboardRun {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardRun", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Current.
+        /// </summary>
+        public static string SettingsDialogDashboardRunCurrent {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardRunCurrent", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Historical runs are read-only. The page will reload when the selected run changes..
+        /// </summary>
+        public static string SettingsDialogDashboardRunPageReloads {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardRunPageReloads", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire.
+        /// </summary>
+        public static string SettingsDialogDashboardRunUnknownApplication {
+            get {
+                return ResourceManager.GetString("SettingsDialogDashboardRunUnknownApplication", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Runtime: {0}.

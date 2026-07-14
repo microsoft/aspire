@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Pages;
@@ -32,9 +33,13 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private const string HelpDialogId = "HelpDialog";
     private const string NotificationsDialogId = "NotificationsDialog";
     private const string AIAgentsDialogId = "AIAgentsDialog";
+    private const string DashboardRunsDialogId = "DashboardRunsDialog";
     internal const string HelpButtonId = "dashboard-help-button";
     internal const string SettingsButtonId = "dashboard-settings-button";
+    internal const string DashboardRunsButtonId = "dashboard-runs-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
+    private DashboardRunDescriptor? _selectedRun;
+    private bool _runSelectionLoaded;
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -72,11 +77,28 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
 
+    [Inject]
+    public required ISessionStorage SessionStorage { get; init; }
+
+    [Inject]
+    internal IDashboardRunStore RunStore { get; init; } = null!;
+
+    [Inject]
+    internal IDashboardRunSelection RunSelection { get; init; } = null!;
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
     protected override async Task OnInitializedAsync()
     {
+        var runs = RunStore.GetRuns();
+        var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
+        var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+        _selectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, selectedRunId, StringComparison.Ordinal))
+            ?? runs.Single(run => run.IsCurrent);
+        RunSelection.SelectRun(_selectedRun.IsCurrent ? null : _selectedRun.RunId);
+        _runSelectionLoaded = true;
+
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
         // Note that this event could be raised from a settings dialog opened in a different browser window.
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
@@ -213,6 +235,20 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private string GetDefaultReturnFocusElementId(string desktopButtonId) => ViewportInformation.IsDesktop ? desktopButtonId : NavigationButtonId;
 
+    private string? GetHistoricalRunStartText()
+    {
+        if (_selectedRun is not { IsCurrent: false } selectedRun)
+        {
+            return null;
+        }
+
+        var localStartedAt = TimeZoneInfo.ConvertTime(selectedRun.StartedAtUtc, TimeProvider.LocalTimeZone);
+        return string.Format(
+            CultureInfo.CurrentCulture,
+            DialogsLoc[nameof(Resources.Dialogs.DashboardRunsDialogStartedAt)],
+            localStartedAt.ToString("g", CultureInfo.CurrentCulture));
+    }
+
     private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)
     {
         // Dialog launchers move between the desktop header and the mobile navigation menu.
@@ -308,6 +344,44 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     public Task LaunchSettingsAsync() => LaunchSettingsAsync(GetDefaultReturnFocusElementId(SettingsButtonId));
+
+    private async Task LaunchDashboardRunsAsync()
+    {
+        var content = new DashboardRunsDialogViewModel
+        {
+            SelectedRun = _selectedRun ?? RunStore.GetRuns().Single(run => run.IsCurrent)
+        };
+        var parameters = new DialogParameters
+        {
+            Title = DialogsLoc[nameof(Resources.Dialogs.DashboardRunsDialogTitle)],
+            PrimaryAction = DialogsLoc[nameof(Resources.Dialogs.InteractionButtonOk)],
+            SecondaryAction = DialogsLoc[nameof(Resources.Dialogs.InteractionButtonCancel)],
+            TrapFocus = true,
+            Modal = true,
+            Alignment = HorizontalAlignment.Center,
+            Width = "500px",
+            Height = "auto",
+            Id = DashboardRunsDialogId,
+            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(DashboardRunsButtonId)),
+            OnDialogResult = EventCallback.Factory.Create<DialogResult>(this, async result =>
+            {
+                if (result.Cancelled || string.Equals(content.SelectedRun.RunId, _selectedRun?.RunId, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, content.SelectedRun.IsCurrent ? string.Empty : content.SelectedRun.RunId);
+                NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
+            })
+        };
+
+        if (!await CloseOpenPageDialogForReplacementAsync(DashboardRunsDialogId).ConfigureAwait(true))
+        {
+            return;
+        }
+
+        _openPageDialog = await DialogService.ShowDialogAsync<DashboardRunsDialog>(content, parameters).ConfigureAwait(true);
+    }
 
     private async Task LaunchSettingsAsync(string? returnFocusElementId)
     {

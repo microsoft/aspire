@@ -10,7 +10,7 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class ResourceTests
+public abstract class ResourceTests : TelemetryRepositoryTestBase
 {
     [Fact]
     public void GetResourceByCompositeName()
@@ -173,7 +173,7 @@ public class ResourceTests
         Assert.Equal("app1-a0e9f6ad", instance2Name);
     }
 
-    private static void AddResource(TelemetryRepository repository, string name, string? instanceId = null)
+    private static void AddResource(ITelemetryRepository repository, string name, string? instanceId = null)
     {
         var addContext = new AddContext();
         repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
@@ -186,4 +186,14 @@ public class ResourceTests
 
         Assert.Equal(0, addContext.FailureCount);
     }
+}
+
+public sealed class InMemoryResourceTests : ResourceTests
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteResourceTests : ResourceTests
+{
+    protected override bool UseSqlite => true;
 }

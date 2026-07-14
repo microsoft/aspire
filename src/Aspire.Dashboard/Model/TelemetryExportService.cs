@@ -22,7 +22,7 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class TelemetryExportService
 {
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepository _telemetryRepository;
     private readonly ConsoleLogsFetcher _consoleLogsFetcher;
     private readonly IDashboardClient _dashboardClient;
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
@@ -34,7 +34,7 @@ public sealed class TelemetryExportService
     /// <param name="consoleLogsFetcher">The console log fetcher.</param>
     /// <param name="dashboardClient">The dashboard client for fetching resources.</param>
     /// <param name="outgoingPeerResolvers">The outgoing peer resolvers for destination name resolution.</param>
-    public TelemetryExportService(TelemetryRepository telemetryRepository, ConsoleLogsFetcher consoleLogsFetcher, IDashboardClient dashboardClient, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+    public TelemetryExportService(ITelemetryRepository telemetryRepository, ConsoleLogsFetcher consoleLogsFetcher, IDashboardClient dashboardClient, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
     {
         _telemetryRepository = telemetryRepository;
         _consoleLogsFetcher = consoleLogsFetcher;

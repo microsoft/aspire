@@ -56,7 +56,7 @@
         margin-bottom: 0;
     }
 
-    ::deep.layout > header > .header-gutters > fluent-anchor {
+    ::deep.layout > header > .header-gutters > .application-header > fluent-anchor {
         font-size: var(--type-ramp-plus-2-font-size);
     }
 
@@ -152,7 +152,7 @@
         margin-bottom: 0;
     }
 
-    ::deep.layout > header > .header-gutters > fluent-anchor {
+    ::deep.layout > header > .header-gutters > .application-header > fluent-anchor {
         font-size: var(--type-ramp-plus-2-font-size);
     }
 
@@ -183,9 +183,28 @@
 
 ::deep.layout > header > .header-gutters > fluent-button[appearance=stealth]:not(:hover)::part(control),
 ::deep.layout > header > .header-gutters > fluent-anchor[appearance=stealth]:not(:hover)::part(control),
+::deep.layout > header > .header-gutters > .application-header > fluent-anchor[appearance=stealth]:not(:hover)::part(control),
 ::deep.layout > header > .header-gutters > fluent-anchor[appearance=stealth].logo::part(control),
 ::deep.layout > .aspire-icon fluent-anchor[appearance=stealth].logo::part(control) {
     background-color: var(--neutral-layer-4);
+}
+
+::deep .header-gutters .application-header {
+    display: flex;
+    align-items: center;
+    min-width: 0;
+}
+
+::deep .header-gutters .application-run-start {
+    margin-left: 8px;
+    font-size: var(--type-ramp-base-font-size);
+    white-space: nowrap;
+}
+
+::deep .header-gutters .application-run-button::part(control) {
+    width: 32px;
+    height: 32px;
+    padding: 0;
 }
 
 ::deep .header-gutters .header-button {

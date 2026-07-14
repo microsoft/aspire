@@ -231,7 +231,7 @@ internal static class TelemetryTestHelpers
         return resource;
     }
 
-    public static TelemetryRepository CreateRepository(
+    public static InMemoryTelemetryRepository CreateRepository(
         int? maxMetricsCount = null,
         int? maxAttributeCount = null,
         int? maxAttributeLength = null,
@@ -274,7 +274,7 @@ internal static class TelemetryTestHelpers
             options.MaxResourceCount = maxResourceCount.Value;
         }
 
-        var repository = new TelemetryRepository(
+        var repository = new InMemoryTelemetryRepository(
             loggerFactory ?? NullLoggerFactory.Instance,
             Options.Create(new DashboardOptions { TelemetryLimits = options }),
             pauseManager ?? new PauseManager(),

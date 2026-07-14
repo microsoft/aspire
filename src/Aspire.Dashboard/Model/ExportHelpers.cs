@@ -21,7 +21,7 @@ internal static class ExportHelpers
     /// <summary>
     /// Gets a span as a JSON export result, including associated log entries.
     /// </summary>
-    public static ExportResult GetSpanAsJson(OtlpSpan span, TelemetryRepository telemetryRepository, IOutgoingPeerResolver[] outgoingPeerResolvers)
+    public static ExportResult GetSpanAsJson(OtlpSpan span, ITelemetryRepository telemetryRepository, IOutgoingPeerResolver[] outgoingPeerResolvers)
     {
         var logs = telemetryRepository.GetLogsForSpan(span.TraceId, span.SpanId);
         var json = TelemetryExportService.ConvertSpanToJson(span, outgoingPeerResolvers, logs);
@@ -44,7 +44,7 @@ internal static class ExportHelpers
     /// <summary>
     /// Gets all spans in a trace as a JSON export result, including associated log entries.
     /// </summary>
-    public static ExportResult GetTraceAsJson(OtlpTrace trace, TelemetryRepository telemetryRepository, IOutgoingPeerResolver[] outgoingPeerResolvers)
+    public static ExportResult GetTraceAsJson(OtlpTrace trace, ITelemetryRepository telemetryRepository, IOutgoingPeerResolver[] outgoingPeerResolvers)
     {
         var logs = telemetryRepository.GetLogsForTrace(trace.TraceId);
         var json = TelemetryExportService.ConvertTraceToJson(trace, outgoingPeerResolvers, logs);

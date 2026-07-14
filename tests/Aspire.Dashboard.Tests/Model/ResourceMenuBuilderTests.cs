@@ -6,6 +6,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
@@ -35,7 +36,9 @@ public sealed class ResourceMenuBuilderTests
             dimensionManager);
     }
 
-    private ResourceMenuBuilder CreateResourceMenuBuilder(TelemetryRepository repository)
+    private ResourceMenuBuilder CreateResourceMenuBuilder(TelemetryRepository repository, TestAIContextProvider aiContextProvider)
+        InMemoryTelemetryRepository repository,
+        IDashboardClient? dashboardClient = null)
     {
         return new ResourceMenuBuilder(
             new TestNavigationManager(),
@@ -43,7 +46,8 @@ public sealed class ResourceMenuBuilderTests
             new TestStringLocalizer<ControlsStrings>(),
             new TestStringLocalizer<Resources.Resources>(),
             _iconResolver,
-            _dialogService);
+            _dialogService,
+            dashboardClient ?? new TestDashboardClient());
     }
 
     [Fact]
@@ -287,6 +291,48 @@ public sealed class ResourceMenuBuilderTests
             e => Assert.True(e.IsDivider),
             e => Assert.Equal("Start", e.Text),
             e => Assert.Equal("Stop", e.Text));
+    }
+
+    [Fact]
+    public void AddMenuItems_ReadOnly_DisablesResourceCommands()
+    {
+        var command = new CommandViewModel(
+            CommandViewModel.StartCommand,
+            CommandViewModelState.Enabled,
+            "Start",
+            "Start the resource.",
+            confirmationMessage: "",
+            argumentInputs: [],
+            isHighlighted: true,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(commands: [command]);
+        var repository = TelemetryTestHelpers.CreateRepository();
+        var resourceMenuBuilder = CreateResourceMenuBuilder(
+            repository,
+            new TestAIContextProvider(),
+            new TestDashboardClient(isReadOnly: true));
+
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: false,
+            showConsoleLogsItem: false,
+            showUrls: false);
+
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ViewJson", e.Text),
+            e => Assert.True(e.IsDivider),
+            e =>
+            {
+                Assert.Equal("Start", e.Text);
+                Assert.True(e.IsDisabled);
+            });
     }
 
     [Fact]

@@ -19,7 +19,7 @@ public sealed class SpanDetailsViewModel
     public required string Title { get; init; }
     public required List<OtlpResource> Resources { get; init; }
 
-    public static SpanDetailsViewModel Create(OtlpSpan span, TelemetryRepository telemetryRepository, List<OtlpResource> resources)
+    public static SpanDetailsViewModel Create(OtlpSpan span, ITelemetryRepository telemetryRepository, List<OtlpResource> resources)
     {
         ArgumentNullException.ThrowIfNull(span);
         ArgumentNullException.ThrowIfNull(telemetryRepository);
@@ -59,7 +59,7 @@ public sealed class SpanDetailsViewModel
         }
     }
 
-    private static SpanLinkViewModel CreateLinkViewModel(string traceId, string spanId, KeyValuePair<string, string>[] attributes, TelemetryRepository telemetryRepository, Dictionary<string, OtlpTrace> traceCache)
+    private static SpanLinkViewModel CreateLinkViewModel(string traceId, string spanId, KeyValuePair<string, string>[] attributes, ITelemetryRepository telemetryRepository, Dictionary<string, OtlpTrace> traceCache)
     {
         ref var trace = ref CollectionsMarshal.GetValueRefOrAddDefault(traceCache, traceId, out _);
         // Adds to dictionary if not present.

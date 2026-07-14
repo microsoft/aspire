@@ -599,6 +599,14 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
+        if (configuration["AppHost:DashboardApplicationName"] is { Length: > 0 } applicationName)
+        {
+            context.EnvironmentVariables[DashboardConfigNames.DashboardApplicationName.EnvVarName] = DashboardService.GetDashboardApplicationName(applicationName);
+        }
+        if (configuration["Aspire:Store:Path"] is { Length: > 0 } aspireStorePath)
+        {
+            context.EnvironmentVariables[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] = Path.Combine(aspireStorePath, ".aspire", "dashboard");
+        }
 
         PopulateDashboardUrls(context);
 

@@ -56,7 +56,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     public string? ResourceName { get; set; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required ITelemetryRepository TelemetryRepository { get; init; }
 
     [Inject]
     public required TracesViewModel TracesViewModel { get; init; }

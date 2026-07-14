@@ -33,7 +33,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         // Arrange
         SetupStructureLogsServices();
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
         telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs

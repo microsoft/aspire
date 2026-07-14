@@ -1657,7 +1657,7 @@ public sealed class GenAIVisualizerDialogViewModelTests
     }
 
     private static GenAIVisualizerDialogViewModel Create(
-        TelemetryRepository repository,
+        InMemoryTelemetryRepository repository,
         SpanDetailsViewModel spanDetailsViewModel)
     {
         return GenAIVisualizerDialogViewModel.Create(

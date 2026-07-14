@@ -7,6 +7,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.ServiceClient;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
@@ -150,15 +151,20 @@ internal static class FluentUISetupHelpers
         ISessionStorage? sessionStorage = null,
         ThemeManager? themeManager = null,
         IMessageService? messageService = null,
-        BrowserTimeProvider? browserTimeProvider = null)
+        BrowserTimeProvider? browserTimeProvider = null,
+        IDashboardRunStore? dashboardRunStore = null)
     {
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
-        context.Services.AddSingleton<TelemetryRepository>();
+        context.Services.AddSingleton<InMemoryTelemetryRepository>();
+        context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<InMemoryTelemetryRepository>());
         context.Services.AddSingleton<PauseManager>();
         context.Services.AddSingleton<IDialogService, DialogService>();
         context.Services.AddSingleton<ILocalStorage>(localStorage ?? new TestLocalStorage());
         context.Services.AddSingleton<ISessionStorage>(sessionStorage ?? new TestSessionStorage());
+        context.Services.AddSingleton<IDashboardRunStore>(dashboardRunStore ?? new TestDashboardRunStore());
+        context.Services.AddSingleton<IDashboardRunSelection, TestDashboardRunSelection>();
+        context.Services.AddSingleton<IDashboardClient, TestDashboardClient>();
         context.Services.AddSingleton<ShortcutManager>();
         context.Services.AddSingleton<LibraryConfiguration>();
         context.Services.AddSingleton<IKeyCodeService, KeyCodeService>();
@@ -178,6 +184,33 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
+    }
+
+    internal sealed class TestDashboardRunStore(IReadOnlyList<DashboardRunDescriptor>? runs = null) : IDashboardRunStore
+    {
+        private readonly IReadOnlyList<DashboardRunDescriptor> _runs = runs ??
+            [
+                new(
+                RunId: "current",
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: null,
+                CleanShutdown: false,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: true)
+            ];
+
+        public IReadOnlyList<DashboardRunDescriptor> GetRuns() => _runs;
+    }
+
+    internal sealed class TestDashboardRunSelection : IDashboardRunSelection
+    {
+        public string? SelectedRunId { get; private set; }
+
+        public void SelectRun(string? runId)
+        {
+            SelectedRunId = runId;
+        }
     }
 
     public static void SetupFluentUIComponents(TestContext context)

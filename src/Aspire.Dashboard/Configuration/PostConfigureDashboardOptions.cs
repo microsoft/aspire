@@ -26,6 +26,16 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
     {
         _logger.LogDebug($"PostConfigure {nameof(DashboardOptions)} with name '{name}'.");
 
+        if (_configuration[DashboardConfigNames.DashboardApplicationName.EnvVarName] is { Length: > 0 } applicationName)
+        {
+            options.ApplicationName = applicationName;
+        }
+
+        if (_configuration[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] is { Length: > 0 } dataDirectory)
+        {
+            options.Data.Directory = dataDirectory;
+        }
+
         // Copy aliased config values to the strongly typed options.
         if (_configuration.GetString(DashboardConfigNames.DashboardOtlpGrpcUrlName.ConfigKey,
                                      DashboardConfigNames.Legacy.DashboardOtlpGrpcUrlName.ConfigKey, fallbackOnEmpty: true) is { } otlpGrpcUrl)

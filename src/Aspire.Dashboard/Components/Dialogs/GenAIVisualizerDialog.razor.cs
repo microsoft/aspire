@@ -47,7 +47,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     public required BrowserTimeProvider TimeProvider { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required ITelemetryRepository TelemetryRepository { get; init; }
 
     [Inject]
     public required IStringLocalizer<Resources.Dialogs> Loc { get; init; }
@@ -371,7 +371,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
     public static async Task OpenDialogAsync(DashboardDialogService dialogService,
         OtlpSpan span, long? selectedLogEntryId,
-        TelemetryRepository telemetryRepository, ITelemetryErrorRecorder errorRecorder, List<OtlpResource> resources, Func<List<OtlpSpan>> getContextGenAISpans)
+        ITelemetryRepository telemetryRepository, ITelemetryErrorRecorder errorRecorder, List<OtlpResource> resources, Func<List<OtlpSpan>> getContextGenAISpans)
     {
         var title = span.Name;
         var width = dialogService.IsDesktop ? "75vw" : "100vw";

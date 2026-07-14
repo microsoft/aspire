@@ -11,7 +11,7 @@ namespace Aspire.Dashboard.Model;
 
 public class StructuredLogsViewModel
 {
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepository _telemetryRepository;
     private readonly List<FieldTelemetryFilter> _filters = new();
     // Cache span lookups for GenAI attributes to avoid repeated lookups.
     private readonly ConcurrentDictionary<SpanKey, bool> _spanGenAICache = new();
@@ -24,7 +24,7 @@ public class StructuredLogsViewModel
     private LogLevel? _logLevel;
     private bool _currentDataHasErrors;
 
-    public StructuredLogsViewModel(TelemetryRepository telemetryRepository)
+    public StructuredLogsViewModel(ITelemetryRepository telemetryRepository)
     {
         _telemetryRepository = telemetryRepository;
     }

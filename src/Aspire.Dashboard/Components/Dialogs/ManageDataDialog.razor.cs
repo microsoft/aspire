@@ -30,7 +30,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required ITelemetryRepository TelemetryRepository { get; init; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }

@@ -16,7 +16,7 @@ namespace Aspire.Dashboard.Api;
 /// Handles telemetry API requests, returning data in OTLP JSON format.
 /// </summary>
 internal sealed class TelemetryApiService(
-    TelemetryRepository telemetryRepository,
+    ITelemetryRepository telemetryRepository,
     IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
 {
     private const int DefaultLimit = 200;

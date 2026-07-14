@@ -2,6 +2,7 @@
 @namespace Aspire.Dashboard.Components.Controls
 
 @inject IStringLocalizer<ControlsStrings> Loc
+@inject IDashboardClient DashboardClient
 
 <AspireMenuButton IconStart="@(new Icons.Regular.Size16.Delete())"
                   Icon="@(new Icons.Regular.Size12.ChevronDown())"
@@ -9,4 +10,5 @@
                   Items="@_clearMenuItems"
                   ButtonAppearance="Appearance.Neutral"
                   ButtonClass="clear-button"
+                  Disabled="@DashboardClient.IsReadOnly"
                   Title="@Loc[nameof(ControlsStrings.ClearSignalsButtonTitle)]" />

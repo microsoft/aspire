@@ -27,7 +27,7 @@ public sealed class SpanMenuBuilder
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
     private readonly NavigationManager _navigationManager;
     private readonly DashboardDialogService _dialogService;
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepository _telemetryRepository;
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
 
     /// <summary>
@@ -37,7 +37,7 @@ public sealed class SpanMenuBuilder
         IStringLocalizer<ControlsStrings> controlsLoc,
         NavigationManager navigationManager,
         DashboardDialogService dialogService,
-        TelemetryRepository telemetryRepository,
+        ITelemetryRepository telemetryRepository,
         IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
     {
         _controlsLoc = controlsLoc;

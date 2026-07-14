@@ -48,6 +48,9 @@ public class OtlpResource : IOtlpResource
     private readonly Dictionary<string, OtlpScope> _meters = new();
     private readonly Dictionary<OtlpInstrumentKey, OtlpInstrument> _instruments = new();
     private readonly ConcurrentDictionary<KeyValuePair<string, string>[], OtlpResourceView> _resourceViews = new(ResourceViewKeyComparer.Instance);
+    private Func<string, string, DateTime?, DateTime?, OtlpInstrument?>? _instrumentProvider;
+    private Func<List<OtlpInstrumentSummary>>? _instrumentSummariesProvider;
+    private Func<List<OtlpResourceView>>? _resourceViewsProvider;
 
     public OtlpResource(string name, string? instanceId, bool uninstrumentedPeer, OtlpContext context)
     {
@@ -90,7 +93,7 @@ public class OtlpResource : IOtlpResource
                         {
                             instrument = existingInstrument;
                         }
-                        else if (_instruments.Count < TelemetryRepository.MaxInstrumentCount)
+                        else if (_instruments.Count < TelemetryRepositoryLimits.MaxInstrumentCount)
                         {
                             var newInstrument = new OtlpInstrument
                             {
@@ -113,7 +116,7 @@ public class OtlpResource : IOtlpResource
                         }
                         else
                         {
-                            throw new InvalidOperationException($"Instrument limit of {TelemetryRepository.MaxInstrumentCount} reached. Instrument '{metric.Name}' will not be added.");
+                            throw new InvalidOperationException($"Instrument limit of {TelemetryRepositoryLimits.MaxInstrumentCount} reached. Instrument '{metric.Name}' will not be added.");
                         }
                     }
                     catch (Exception ex)
@@ -246,6 +249,11 @@ public class OtlpResource : IOtlpResource
 
     public OtlpInstrument? GetInstrument(string meterName, string instrumentName, DateTime? valuesStart, DateTime? valuesEnd)
     {
+        if (_instrumentProvider is not null)
+        {
+            return _instrumentProvider(meterName, instrumentName, valuesStart, valuesEnd);
+        }
+
         _metricsLock.EnterReadLock();
 
         try
@@ -265,6 +273,11 @@ public class OtlpResource : IOtlpResource
 
     public List<OtlpInstrumentSummary> GetInstrumentsSummary()
     {
+        if (_instrumentSummariesProvider is not null)
+        {
+            return _instrumentSummariesProvider();
+        }
+
         _metricsLock.EnterReadLock();
 
         try
@@ -292,7 +305,17 @@ public class OtlpResource : IOtlpResource
     public static string GetResourceName(OtlpResourceView resource, IReadOnlyList<IOtlpResource> allResources) =>
         OtlpHelpers.GetResourceName(resource.Resource, allResources);
 
-    internal List<OtlpResourceView> GetViews() => _resourceViews.Values.ToList();
+    internal List<OtlpResourceView> GetViews() => _resourceViewsProvider?.Invoke() ?? _resourceViews.Values.ToList();
+
+    internal void ConfigureDataProviders(
+        Func<string, string, DateTime?, DateTime?, OtlpInstrument?> instrumentProvider,
+        Func<List<OtlpInstrumentSummary>> instrumentSummariesProvider,
+        Func<List<OtlpResourceView>> resourceViewsProvider)
+    {
+        _instrumentProvider = instrumentProvider;
+        _instrumentSummariesProvider = instrumentSummariesProvider;
+        _resourceViewsProvider = resourceViewsProvider;
+    }
 
     internal OtlpResourceView GetView(RepeatedField<KeyValue> attributes)
     {
@@ -304,9 +327,9 @@ public class OtlpResource : IOtlpResource
             return resourceView;
         }
 
-        if (_resourceViews.Count >= TelemetryRepository.MaxResourceViewCount)
+        if (_resourceViews.Count >= TelemetryRepositoryLimits.MaxResourceViewCount)
         {
-            throw new InvalidOperationException($"Resource view limit of {TelemetryRepository.MaxResourceViewCount} reached.");
+            throw new InvalidOperationException($"Resource view limit of {TelemetryRepositoryLimits.MaxResourceViewCount} reached.");
         }
 
         return _resourceViews.GetOrAdd(view.Properties, view);
@@ -371,4 +394,21 @@ public class OtlpResource : IOtlpResource
             return hashCode.ToHashCode();
         }
     }
+}
+
+/// <summary>
+/// Compares resources by their resource key.
+/// </summary>
+internal sealed class OtlpResourceEqualityComparer : IEqualityComparer<OtlpResource>
+{
+    public static readonly OtlpResourceEqualityComparer Instance = new();
+
+    private OtlpResourceEqualityComparer()
+    {
+    }
+
+    public bool Equals(OtlpResource? x, OtlpResource? y) =>
+        ReferenceEquals(x, y) || x is not null && y is not null && x.ResourceKey == y.ResourceKey;
+
+    public int GetHashCode(OtlpResource obj) => obj.ResourceKey.GetHashCode();
 }

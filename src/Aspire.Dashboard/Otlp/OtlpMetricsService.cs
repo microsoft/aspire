@@ -12,9 +12,9 @@ namespace Aspire.Dashboard.Otlp;
 public sealed class OtlpMetricsService
 {
     private readonly ILogger<OtlpMetricsService> _logger;
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepository _telemetryRepository;
 
-    public OtlpMetricsService(ILogger<OtlpMetricsService> logger, TelemetryRepository telemetryRepository)
+    public OtlpMetricsService(ILogger<OtlpMetricsService> logger, ITelemetryRepository telemetryRepository)
     {
         _logger = logger;
         _telemetryRepository = telemetryRepository;
