@@ -146,7 +146,7 @@ public static class AzureContainerAppExtensions
                 collisions.Select(pair =>
                     $"'{string.Join("', '", pair.Value.Order(StringComparer.Ordinal))}' resolve to {pair.Key}"));
 
-            throw new InvalidOperationException(
+            throw new DistributedApplicationException(
                 $"Azure Container App environments {collisionDetails}. Multiple environments with the same managed environment name cannot be deployed to one resource group. " +
                 $"Call '{nameof(WithUniqueResourceNaming)}()' on one or more of the colliding environment resources.");
         }

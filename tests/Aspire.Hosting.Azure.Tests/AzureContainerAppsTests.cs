@@ -2006,14 +2006,13 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         using var app = builder.Build();
 
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.RunAsync());
-        var validationException = Assert.IsType<InvalidOperationException>(exception.InnerException);
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
 
         Assert.Equal(
             "Azure Container App environments 'cae1', 'cae2' resolve to take('cae${uniqueString(resourceGroup().id)}', 24). " +
             "Multiple environments with the same managed environment name cannot be deployed to one resource group. " +
             "Call 'WithUniqueResourceNaming()' on one or more of the colliding environment resources.",
-            validationException.Message);
+            exception.Message);
     }
 
     [Fact]
