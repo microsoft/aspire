@@ -237,18 +237,8 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
             return;
         }
 
-        var instrument = TelemetryRepository.GetInstrument(new GetInstrumentRequest
-        {
-            ResourceKey = ResourceKey,
-            MeterName = MeterName,
-            InstrumentName = InstrumentName,
-            StartTime = DateTime.MinValue,
-            EndTime = DateTime.MaxValue,
-        });
-        var values = instrument?.Dimensions.SelectMany(dimension => dimension.Values).ToList();
-        _dataEndTime = values is { Count: > 0 }
-            ? new DateTimeOffset(values.Max(value => value.End))
-            : null;
+        var latestEndTime = TelemetryRepository.GetInstrumentLatestEndTime(ResourceKey, MeterName, InstrumentName);
+        _dataEndTime = latestEndTime is not null ? new DateTimeOffset(latestEndTime.Value) : null;
         _dataEndTimeKey = key;
     }
 

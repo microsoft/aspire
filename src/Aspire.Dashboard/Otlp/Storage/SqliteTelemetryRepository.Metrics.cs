@@ -323,14 +323,17 @@ public sealed partial class SqliteTelemetryRepository
         OtlpHelpers.CopyKeyValuePairs(pointAttributes, scope.Attributes, _otlpContext, out var copyCount, ref temporaryAttributes);
         Array.Sort(temporaryAttributes, 0, copyCount, MetricAttributeComparer.Instance);
         var attributes = temporaryAttributes.AsSpan(0, copyCount).ToArray();
-        foreach (var existingDimensionId in connection.Query<long>("SELECT dimension_id FROM telemetry_metric_dimensions WHERE instrument_id = @InstrumentId ORDER BY dimension_id;", new { InstrumentId = instrumentId }, transaction))
+        var existingDimensionIds = connection.Query<long>("SELECT dimension_id FROM telemetry_metric_dimensions WHERE instrument_id = @InstrumentId ORDER BY dimension_id;", new { InstrumentId = instrumentId }, transaction).AsList();
+        var existingAttributesByDimension = connection.Query<OwnedAttributeRecord>("""
+            SELECT a.dimension_id AS OwnerId, a.attribute_key AS AttributeKey, a.attribute_value AS AttributeValue
+            FROM telemetry_metric_dimension_attributes a
+            JOIN telemetry_metric_dimensions d ON d.dimension_id = a.dimension_id
+            WHERE d.instrument_id = @InstrumentId
+            ORDER BY a.dimension_id, a.ordinal;
+            """, new { InstrumentId = instrumentId }, transaction).ToLookup(attribute => attribute.OwnerId);
+        foreach (var existingDimensionId in existingDimensionIds)
         {
-            var existingAttributes = connection.Query<AttributeRecord>("""
-                SELECT attribute_key AS AttributeKey, attribute_value AS AttributeValue
-                FROM telemetry_metric_dimension_attributes
-                WHERE dimension_id = @DimensionId
-                ORDER BY ordinal;
-                """, new { DimensionId = existingDimensionId }, transaction)
+            var existingAttributes = existingAttributesByDimension[existingDimensionId]
                 .Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue));
             if (existingAttributes.SequenceEqual(attributes))
             {
@@ -338,8 +341,7 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
 
-        var dimensionCount = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_metric_dimensions WHERE instrument_id = @InstrumentId;", new { InstrumentId = instrumentId }, transaction);
-        if (dimensionCount >= TelemetryRepositoryLimits.MaxDimensionCount)
+        if (existingDimensionIds.Count >= TelemetryRepositoryLimits.MaxDimensionCount)
         {
             throw new InvalidOperationException($"Dimension limit of {TelemetryRepositoryLimits.MaxDimensionCount} reached.");
         }
@@ -486,6 +488,24 @@ public sealed partial class SqliteTelemetryRepository
             KnownAttributeValues = knownAttributeValues,
             HasOverflow = records.Any(record => record.HasOverflow)
         };
+    }
+
+    private DateTime? GetInstrumentLatestEndTimeFromDatabase(ResourceKey resourceKey, string meterName, string instrumentName)
+    {
+        using var connection = _database.OpenConnection();
+        var endTimeTicks = connection.QuerySingleOrDefault<long?>("""
+            SELECT MAX(p.end_time_ticks)
+            FROM telemetry_metric_points p
+            JOIN telemetry_metric_dimensions d ON d.dimension_id = p.dimension_id
+            JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
+            JOIN telemetry_resources r ON r.resource_id = i.resource_id
+            JOIN telemetry_scopes s ON s.scope_id = i.scope_id
+            WHERE r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE
+              AND (@InstanceId IS NULL OR (r.instance_id_is_null = 0 AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE))
+              AND s.scope_name = @MeterName
+              AND i.instrument_name = @InstrumentName;
+            """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId, MeterName = meterName, InstrumentName = instrumentName });
+        return endTimeTicks is not null ? new DateTime(endTimeTicks.Value, DateTimeKind.Utc) : null;
     }
 
     private OtlpInstrument? GetResourceInstrumentFromDatabase(

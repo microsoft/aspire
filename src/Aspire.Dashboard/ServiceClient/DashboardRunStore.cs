@@ -18,6 +18,7 @@ internal interface IDashboardRunStore
 internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 {
     internal const int MaxApplicationDirectoryNameLength = 80;
+    internal const int MaxRuns = 10;
     internal const int SchemaVersion = DashboardSqliteDatabase.SchemaVersion;
 
     private static readonly JsonSerializerOptions s_jsonOptions = new() { WriteIndented = true };
@@ -73,6 +74,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         if (_metadataPath is not null)
         {
             WriteMetadata(_metadata);
+            PruneRuns();
         }
     }
 
@@ -138,6 +140,20 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private void WriteMetadata(DashboardRunMetadata metadata)
     {
         File.WriteAllText(_metadataPath!, JsonSerializer.Serialize(metadata, s_jsonOptions));
+    }
+
+    private void PruneRuns()
+    {
+        // Run directory names start with a fixed-width UTC timestamp, so ordinal ordering matches creation order.
+        var expiredRunDirectories = Directory.EnumerateDirectories(_runsDirectory!)
+            .Where(directory => !string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase))
+            .OrderByDescending(Path.GetFileName, StringComparer.Ordinal)
+            .Skip(MaxRuns - 1);
+
+        foreach (var directory in expiredRunDirectories)
+        {
+            Directory.Delete(directory, recursive: true);
+        }
     }
 
     private static DashboardRunDescriptor CreateDescriptor(DashboardRunMetadata metadata, string runDirectory, bool isCurrent)
