@@ -246,16 +246,16 @@ public static class AspireMcpClientExtensions
             IHttpClientFactory httpClientFactory,
             ILoggerFactory loggerFactory)
         {
-            var httpClient = httpClientFactory.CreateClient();
             var transportOptions = new HttpClientTransportOptions { Endpoint = endpoint };
             configureTransportOptions?.Invoke(transportOptions);
+            var clientOptions = new McpClientOptions();
+            configureClientOptions?.Invoke(clientOptions);
+            var httpClient = httpClientFactory.CreateClient();
             var transport = new HttpClientTransport(
                 transportOptions,
                 httpClient,
                 loggerFactory,
                 ownsHttpClient: true);
-            var clientOptions = new McpClientOptions();
-            configureClientOptions?.Invoke(clientOptions);
 
             try
             {
