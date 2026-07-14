@@ -135,6 +135,27 @@ public class AspireMcpClientExtensionsTests
         Assert.Null(Record.Exception(host.Dispose));
     }
 
+    [Fact]
+    public async Task AddMcpClientCancelsInFlightInitializationOnHostDisposal()
+    {
+        var handler = new BlockingInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        var host = builder.Build();
+        var resolutionTask = Task.Run(() => Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>()));
+        await handler.InitializeStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        var disposeException = Record.Exception(host.Dispose);
+        var resolutionException = await resolutionTask;
+
+        Assert.Null(disposeException);
+        Assert.NotNull(resolutionException);
+        Assert.IsAssignableFrom<OperationCanceledException>(resolutionException);
+        Assert.True(handler.InitializeCanceled);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -230,6 +251,43 @@ public class AspireMcpClientExtensionsTests
                 if (string.Equals(methodElement.GetString(), "notifications/initialized", StringComparison.Ordinal))
                 {
                     return new HttpResponseMessage(HttpStatusCode.OK);
+                }
+            }
+
+            return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }
+    }
+
+    private sealed class BlockingInitializationHandler : HttpMessageHandler
+    {
+        public TaskCompletionSource InitializeStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool InitializeCanceled { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Method == HttpMethod.Get)
+            {
+                return new HttpResponseMessage(HttpStatusCode.OK);
+            }
+
+            var requestBody = request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            using var requestJson = JsonDocument.Parse(requestBody);
+            if (requestJson.RootElement.TryGetProperty("method", out var methodElement) &&
+                string.Equals(methodElement.GetString(), "initialize", StringComparison.Ordinal))
+            {
+                InitializeStarted.TrySetResult();
+                try
+                {
+                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    InitializeCanceled = true;
+                    throw;
                 }
             }
 

@@ -130,8 +130,12 @@ public static class AspireMcpClientExtensions
     }
 
     private sealed class McpClientRegistration
+        : IDisposable
+        , IAsyncDisposable
     {
         private readonly Lazy<Task<DisposableMcpClient>> _client;
+        private readonly CancellationTokenSource _creationCancellation = new();
+        private int _disposed;
 
         public McpClientRegistration(
             Uri endpoint,
@@ -145,10 +149,82 @@ public static class AspireMcpClientExtensions
 
         public McpClient GetClient()
         {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) is not 0, this);
             return _client.Value.GetAwaiter().GetResult();
         }
 
-        private static async Task<DisposableMcpClient> CreateClientAsync(
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) is not 0)
+            {
+                return;
+            }
+
+            _creationCancellation.Cancel();
+            if (!_client.IsValueCreated)
+            {
+                _creationCancellation.Dispose();
+                return;
+            }
+
+            try
+            {
+                _client.Value.GetAwaiter().GetResult().Dispose();
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception)
+            {
+                // Client creation can fail independently of host shutdown; disposal still needs to
+                // observe and drain the in-flight task without surfacing teardown-time failures.
+            }
+            finally
+            {
+                _creationCancellation.Dispose();
+            }
+        }
+
+        public async ValueTask DisposeAsync()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) is not 0)
+            {
+                return;
+            }
+
+            _creationCancellation.Cancel();
+            if (!_client.IsValueCreated)
+            {
+                _creationCancellation.Dispose();
+                return;
+            }
+
+            try
+            {
+                var client = await _client.Value.ConfigureAwait(false);
+                await client.DisposeAsync().ConfigureAwait(false);
+            }
+            catch (ObjectDisposedException)
+            {
+            }
+            catch (OperationCanceledException)
+            {
+            }
+            catch (Exception)
+            {
+                // Client creation can fail independently of host shutdown; disposal still needs to
+                // observe and drain the in-flight task without surfacing teardown-time failures.
+            }
+            finally
+            {
+                _creationCancellation.Dispose();
+            }
+        }
+
+        private async Task<DisposableMcpClient> CreateClientAsync(
             Uri endpoint,
             Action<McpClientOptions>? configureClientOptions,
             Action<HttpClientTransportOptions>? configureTransportOptions,
@@ -165,7 +241,13 @@ public static class AspireMcpClientExtensions
             var clientOptions = new McpClientOptions();
             configureClientOptions?.Invoke(clientOptions);
 
-            var client = await McpClient.CreateAsync(transport, clientOptions).ConfigureAwait(false);
+            var client = await McpClient.CreateAsync(transport, clientOptions, cancellationToken: _creationCancellation.Token).ConfigureAwait(false);
+            if (Volatile.Read(ref _disposed) is not 0)
+            {
+                await client.DisposeAsync().ConfigureAwait(false);
+                throw new ObjectDisposedException(nameof(McpClientRegistration));
+            }
+
             return new DisposableMcpClient(client);
         }
     }
