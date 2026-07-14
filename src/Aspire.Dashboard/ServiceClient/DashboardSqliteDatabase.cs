@@ -13,7 +13,7 @@ internal sealed class DashboardSqliteDatabase
 {
     private const string SchemaResourcePrefix = "Aspire.Dashboard.ServiceClient.DatabaseSchema.";
 
-    internal const int SchemaVersion = 6;
+    internal const int SchemaVersion = 7;
     internal const string OrdinalIgnoreCaseCollation = "ORDINAL_IGNORE_CASE";
     internal const string OrdinalContainsFunction = "ordinal_contains";
     internal const string OrdinalStartsWithFunction = "ordinal_starts_with";

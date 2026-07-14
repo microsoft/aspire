@@ -1096,6 +1096,96 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public void AddTraces_MissingAndEmptyInstanceIdsAreDistinct()
+    {
+        var repository = CreateRepository();
+        var missingInstanceIdResource = CreateResource(name: "resource", instanceId: "placeholder");
+        missingInstanceIdResource.Attributes.Remove(missingInstanceIdResource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
+        var addContext = new AddContext();
+
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = missingInstanceIdResource,
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "resource", instanceId: string.Empty),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+        var resources = repository.GetResources();
+        Assert.Equal(2, resources.Count);
+        Assert.Contains(resources, resource => resource.ResourceKey == new ResourceKey("resource", InstanceId: null));
+        Assert.Contains(resources, resource => resource.ResourceKey == new ResourceKey("resource", InstanceId: string.Empty));
+    }
+
+    [Fact]
+    public void GetTraceFieldValues_AllFieldsMatchMaterializedTraces()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(3), attributes: [KeyValuePair.Create("custom", "one")], kind: Span.Types.SpanKind.Client),
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(5), parentSpanId: "1-1", attributes: [KeyValuePair.Create("custom", "two")], kind: Span.Types.SpanKind.Server)
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var resource = Assert.Single(repository.GetResources());
+        var traces = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [resource.ResourceKey],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).PagedResult.Items;
+
+        foreach (var field in KnownTraceFields.AllFields.Append("custom"))
+        {
+            var expected = OtlpSpan.GetFieldValuesFromTraces(traces, field);
+            var actual = repository.GetTraceFieldValues(field);
+            Assert.Equal(expected.Count, actual.Count);
+            foreach (var (value, count) in expected)
+            {
+                Assert.Equal(count, actual[value]);
+            }
+        }
+    }
+
+    [Fact]
     public void GetTraces_AttributeFilters()
     {
         // Arrange
@@ -2109,6 +2199,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.NotNull(s.UninstrumentedPeer);
                 Assert.Equal("TestPeer", s.UninstrumentedPeer.ResourceName);
             });
+
+            var serviceNames = repository.GetTraceFieldValues(KnownResourceFields.ServiceNameField);
+            Assert.Equal(2, serviceNames["TestService"]);
+            Assert.Equal(1, serviceNames["TestPeer"]);
     }
 
     [Fact]

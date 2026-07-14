@@ -501,7 +501,7 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_resources r ON r.resource_id = i.resource_id
             JOIN telemetry_scopes s ON s.scope_id = i.scope_id
             WHERE r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE
-              AND (@InstanceId IS NULL OR (r.instance_id_is_null = 0 AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE))
+                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE)
               AND s.scope_name = @MeterName
               AND i.instrument_name = @InstrumentName;
             """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId, MeterName = meterName, InstrumentName = instrumentName });
@@ -565,7 +565,7 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_resources r ON r.resource_id = i.resource_id
             JOIN telemetry_scopes s ON s.scope_id = i.scope_id
             WHERE r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE
-              AND (@InstanceId IS NULL OR (r.instance_id_is_null = 0 AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE))
+                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE)
               AND (@MeterName IS NULL OR s.scope_name = @MeterName)
               AND (@InstrumentName IS NULL OR i.instrument_name = @InstrumentName)
             ORDER BY i.instrument_id;
@@ -711,9 +711,9 @@ public sealed partial class SqliteTelemetryRepository
     private void ClearSelectedMetricsFromDatabase(Dictionary<string, HashSet<AspireDataType>> selectedResources)
     {
         using var connection = _database.OpenConnection();
-        foreach (var resource in connection.Query<TelemetryResourceRecord>("SELECT resource_name AS ResourceName, instance_id AS InstanceId, instance_id_is_null AS InstanceIdIsNull FROM telemetry_resources;"))
+        foreach (var resource in connection.Query<TelemetryResourceRecord>("SELECT resource_name AS ResourceName, instance_id AS InstanceId FROM telemetry_resources;"))
         {
-            var key = new ResourceKey(resource.ResourceName, resource.InstanceIdIsNull ? null : resource.InstanceId);
+            var key = new ResourceKey(resource.ResourceName, resource.InstanceId);
             if (selectedResources.TryGetValue(key.GetCompositeName(), out var dataTypes) && dataTypes.Contains(AspireDataType.Metrics) && !dataTypes.Contains(AspireDataType.Resource))
             {
                 ClearMetricsFromDatabase(key);
@@ -735,7 +735,7 @@ public sealed partial class SqliteTelemetryRepository
                 parameters.Add("ResourceName", resourceKey.Value.Name);
                 if (resourceKey.Value.InstanceId is not null)
                 {
-                    where += " AND instance_id_is_null = 0 AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                    where += " AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
                     parameters.Add("InstanceId", resourceKey.Value.InstanceId);
                 }
             }
