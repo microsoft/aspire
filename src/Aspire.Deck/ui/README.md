@@ -188,8 +188,9 @@ ASPIRE_DASHBOARD_BACKEND=aot \
 ```
 
 This verifies that version negotiation, the AOT SignalR resource stream, and the existing
-dashboard fallback for capabilities not yet migrated work together against the same 157-feature
-black-box compatibility inventory.
+dashboard fallback for capabilities not yet migrated work together across the 23 live Stress
+behaviors. Those scenarios provide live coverage evidence for the separate 157-feature parity
+ledger enforced by the default Playwright suite.
 
 The terminal playground has a separate live HMP suite. Start `playground/Terminals`, then run:
 
