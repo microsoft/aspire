@@ -26,6 +26,7 @@
     <Project Path="src/Components/Aspire.Microsoft.EntityFrameworkCore.SqlServer/Aspire.Microsoft.EntityFrameworkCore.SqlServer.csproj" />
     <Project Path="src/Components/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.csproj" />
     <Project Path="src/Components/Aspire.Milvus.Client/Aspire.Milvus.Client.csproj" />
+    <Project Path="src/Components/Aspire.Mcp.Client/Aspire.Mcp.Client.csproj" />
     <Project Path="src/Components/Aspire.MongoDB.Driver.v2/Aspire.MongoDB.Driver.v2.csproj" />
     <Project Path="src/Components/Aspire.MongoDB.Driver/Aspire.MongoDB.Driver.csproj" />
     <Project Path="src/Components/Aspire.MongoDB.EntityFrameworkCore/Aspire.MongoDB.EntityFrameworkCore.csproj" Id="61b0efc4-439c-4d09-a336-b4c5763c6bd7" />
@@ -489,6 +490,7 @@
     <Project Path="tests/Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests/Aspire.Microsoft.EntityFrameworkCore.SqlServer.Tests.csproj" />
     <Project Path="tests/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.Tests/Aspire.Microsoft.Extensions.Configuration.AzureAppConfiguration.Tests.csproj" />
     <Project Path="tests/Aspire.Milvus.Client.Tests/Aspire.Milvus.Client.Tests.csproj" />
+    <Project Path="tests/Aspire.Mcp.Client.Tests/Aspire.Mcp.Client.Tests.csproj" />
     <Project Path="tests/Aspire.MongoDB.Driver.Tests/Aspire.MongoDB.Driver.Tests.csproj" />
     <Project Path="tests/Aspire.MongoDB.Driver.v2.Tests/Aspire.MongoDB.Driver.v2.Tests.csproj" />
     <Project Path="tests/Aspire.MongoDB.EntityFrameworkCore.Tests/Aspire.MongoDB.EntityFrameworkCore.Tests.csproj" Id="79ef6bd3-8f2b-4b42-8993-6707fd8be598" />
