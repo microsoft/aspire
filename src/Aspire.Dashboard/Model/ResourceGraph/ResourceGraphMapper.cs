@@ -12,7 +12,7 @@ namespace Aspire.Dashboard.Model.ResourceGraph;
 
 public static class ResourceGraphMapper
 {
-    public static ResourceDto MapResource(ResourceViewModel r, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver)
+    public static ResourceDto MapResource(ResourceViewModel r, IEnumerable<ResourceViewModel> graphResources, IDictionary<string, ResourceViewModel> resourcesByName, IStringLocalizer<Columns> columnsLoc, bool showHiddenResources, IconResolver iconResolver)
     {
         var resolvedNames = new List<string>();
 
@@ -21,7 +21,7 @@ public static class ResourceGraphMapper
 
         foreach (var resourceRelationships in filteredRelationships.GroupBy(r => r.ResourceName, StringComparers.ResourceName))
         {
-            var matches = resourcesByName.Values
+            var matches = graphResources
                 .Where(r => string.Equals(r.DisplayName, resourceRelationships.Key, StringComparisons.ResourceName))
                 .Where(r => !r.IsResourceHidden(showHiddenResources))
                 .ToList();
@@ -34,7 +34,7 @@ public static class ResourceGraphMapper
 
         var endpoint = ResourceUrlHelpers.GetUrls(r, includeInternalUrls: false, includeNonEndpointUrls: false).FirstOrDefault()
             ?? ResourceUrlHelpers.GetUrls(r, includeInternalUrls: false, includeNonEndpointUrls: true).FirstOrDefault();
-        var resolvedEndpointText = ResolvedEndpointText(endpoint);
+        var resolvedEndpointText = r.IsParameter ? null : ResolvedEndpointText(endpoint);
         var resourceName = ResourceViewModel.GetResourceName(r, resourcesByName);
         var color = ColorGenerator.Instance.GetColorVariableByKey(resourceName);
 
@@ -61,7 +61,7 @@ public static class ResourceGraphMapper
                 Tooltip = stateIcon.Text ?? r.State
             },
             ReferencedNames = resolvedNames.Distinct().OrderBy(n => n).ToImmutableArray(),
-            EndpointUrl = endpoint?.Url,
+            EndpointUrl = r.IsParameter ? null : endpoint?.Url,
             EndpointText = resolvedEndpointText
         };
 

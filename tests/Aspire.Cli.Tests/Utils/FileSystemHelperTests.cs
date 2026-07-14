@@ -11,7 +11,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithSimpleFiles_CopiesAllFiles()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -38,7 +38,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithSubdirectories_CopiesRecursively()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -70,7 +70,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithEmptyDirectory_CreatesDestination()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("empty_source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "empty_destination");
 
@@ -87,7 +87,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithNonExistentSource_ThrowsDirectoryNotFoundException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var nonExistentSource = Path.Combine(workspace.WorkspaceRoot.FullName, "nonexistent");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -100,7 +100,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithNullSource_ThrowsArgumentNullException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
         // Act & Assert
@@ -112,7 +112,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithNullDestination_ThrowsArgumentNullException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
 
         // Act & Assert
@@ -124,7 +124,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithEmptySource_ThrowsArgumentException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
         // Act & Assert
@@ -136,7 +136,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithEmptyDestination_ThrowsArgumentException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
 
         // Act & Assert
@@ -148,7 +148,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_PreservesFileContent_WithBinaryFiles()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -173,7 +173,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithMultipleLevelsOfSubdirectories_CopiesAll()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -204,7 +204,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithExistingDestinationFiles_OverwritesThem()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -239,7 +239,7 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
     public void CopyDirectory_WithExistingDestinationFilesAndOverwriteFalse_ThrowsIOException()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var sourceDir = workspace.CreateDirectory("source");
         var destDir = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
 
@@ -253,5 +253,215 @@ public class FileSystemHelperTests(ITestOutputHelper outputHelper)
         // Act & Assert - should throw IOException when overwrite is false
         Assert.Throws<IOException>(() => 
             FileSystemHelper.CopyDirectory(sourceDir.FullName, destDir, overwrite: false));
+    }
+
+    [Fact]
+    public void ShortenPaths_UniqueFilenames_ReturnsJustFilename()
+    {
+        var paths = new List<string>
+        {
+            "/home/user/folder1/App1.AppHost.csproj",
+            "/home/user/folder2/App2.AppHost.csproj"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal("App1.AppHost.csproj", result[paths[0]]);
+        Assert.Equal("App2.AppHost.csproj", result[paths[1]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_DuplicateFilenames_AddsParentDirectoryToDisambiguate()
+    {
+        var paths = new List<string>
+        {
+            "/home/user/folder1/Project.csproj",
+            "/home/user/folder2/Project.csproj"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(Path.Combine("folder1", "Project.csproj"), result[paths[0]]);
+        Assert.Equal(Path.Combine("folder2", "Project.csproj"), result[paths[1]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_DuplicateFilenamesWithBackslashes_AddsParentDirectoryToDisambiguate()
+    {
+        var paths = new List<string>
+        {
+            @"C:\folder1\Project.csproj",
+            @"C:\folder2\Project.csproj"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(Path.Combine("folder1", "Project.csproj"), result[paths[0]]);
+        Assert.Equal(Path.Combine("folder2", "Project.csproj"), result[paths[1]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_DuplicateFilenamesWithSameParent_AddsMoreSegments()
+    {
+        var paths = new List<string>
+        {
+            "/home/a/shared/Project.csproj",
+            "/home/b/shared/Project.csproj"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(Path.Combine("a", "shared", "Project.csproj"), result[paths[0]]);
+        Assert.Equal(Path.Combine("b", "shared", "Project.csproj"), result[paths[1]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_SinglePath_CsFile_ReturnsParentAndFilename()
+    {
+        var paths = new List<string> { "/home/user/repos/MyApp/AppHost.cs" };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(Path.Combine("MyApp", "AppHost.cs"), result[paths[0]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_SinglePath_Csproj_ReturnsJustFilename()
+    {
+        var paths = new List<string> { "/home/user/repos/MyApp/MyApp.AppHost.csproj" };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal("MyApp.AppHost.csproj", result[paths[0]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_SingleCsFile_ReturnsParentAndFilename()
+    {
+        var paths = new List<string>
+        {
+            "/home/user/App1/AppHost.cs"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(Path.Combine("App1", "AppHost.cs"), result[paths[0]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_UniqueCsFiles_ReturnsParentAndFilename()
+    {
+        var paths = new List<string>
+        {
+            "/home/user/App1/AppHost.cs",
+            "/home/user/App2/AppHost.cs"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(Path.Combine("App1", "AppHost.cs"), result[paths[0]]);
+        Assert.Equal(Path.Combine("App2", "AppHost.cs"), result[paths[1]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_DuplicateCsFiles_AddMoreSegments()
+    {
+        var paths = new List<string>
+        {
+            "/home/user/a/src/AppHost.cs",
+            "/home/user/b/src/AppHost.cs"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(Path.Combine("a", "src", "AppHost.cs"), result[paths[0]]);
+        Assert.Equal(Path.Combine("b", "src", "AppHost.cs"), result[paths[1]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_MixedCsprojAndCsFiles()
+    {
+        var paths = new List<string>
+        {
+            "/home/user/App1/App1.AppHost.csproj",
+            "/home/user/App2/AppHost.cs"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal("App1.AppHost.csproj", result[paths[0]]);
+        Assert.Equal(Path.Combine("App2", "AppHost.cs"), result[paths[1]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_EmptyList_ReturnsEmptyDictionary()
+    {
+        var result = FileSystemHelper.ShortenPaths(Array.Empty<string>(), new TestEnvironment());
+
+        Assert.Empty(result);
+    }
+
+    [Fact]
+    public void ShortenPaths_MixOfUniqueAndDuplicateFilenames()
+    {
+        var paths = new List<string>
+        {
+            "/a/folder1/Project.csproj",
+            "/a/folder2/Project.csproj",
+            "/a/folder3/Unique.csproj"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(Path.Combine("folder1", "Project.csproj"), result[paths[0]]);
+        Assert.Equal(Path.Combine("folder2", "Project.csproj"), result[paths[1]]);
+        Assert.Equal("Unique.csproj", result[paths[2]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_DuplicateFilenamesExhaustSegments_ReturnsFullPath()
+    {
+        var paths = new List<string>
+        {
+            @"C:\folder\Project.csproj",
+            @"D:\folder\Project.csproj"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(@"C:\folder\Project.csproj", result[paths[0]]);
+        Assert.Equal(@"D:\folder\Project.csproj", result[paths[1]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_PathsDifferingOnlyByCase_TreatedAsDistinctOnCaseSensitiveOS()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "Case-sensitive filesystem test only runs on Linux.");
+
+        var paths = new List<string>
+        {
+            "/repo/Folder/Project.csproj",
+            "/repo/folder/Project.csproj"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Equal(Path.Combine("Folder", "Project.csproj"), result[paths[0]]);
+        Assert.Equal(Path.Combine("folder", "Project.csproj"), result[paths[1]]);
+    }
+
+    [Fact]
+    public void ShortenPaths_DuplicatePaths_ReturnsSingleEntry()
+    {
+        var paths = new List<string>
+        {
+            "/home/user/folder1/Project.csproj",
+            "/home/user/folder1/Project.csproj"
+        };
+
+        var result = FileSystemHelper.ShortenPaths(paths, new TestEnvironment());
+
+        Assert.Single(result);
+        Assert.Equal("Project.csproj", result[paths[0]]);
     }
 }

@@ -1,0 +1,22 @@
+{
+  "run_info": {
+    "run_started_at": "2026-01-15T10:00:00Z",
+    "updated_at": "2026-01-15T10:30:00Z",
+    "conclusion": null,
+    "status": "in_progress",
+    "run_attempt": 1
+  },
+  "jobs": [
+    {
+      "name": "Build (ubuntu-latest)",
+      "status": "completed",
+      "conclusion": "success",
+      "created_at": "2026-01-15T10:00:00Z",
+      "started_at": "2026-01-15T10:01:00Z",
+      "completed_at": "2026-01-15T10:15:00Z",
+      "runner_name": "runner-1",
+      "html_url": "https://github.com/test/run/1",
+      "labels": ["ubuntu-latest"]
+    }
+  ]
+}

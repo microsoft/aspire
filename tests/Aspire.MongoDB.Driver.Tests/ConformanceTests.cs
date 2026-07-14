@@ -52,10 +52,11 @@ public class ConformanceTests : ConformanceTests<IMongoClient, MongoDBSettings>,
         ("""{"Aspire": { "MongoDB":{ "Driver": { "DisableTracing": "true"}}}}""", "Value is \"string\" but should be \"boolean\""),
     };
 
-    protected override string[] RequiredLogCategories => [
-        "MongoDB.SDAM",
-        "MongoDB.ServerSelection",
-        "MongoDB.Connection",
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("MongoDB.SDAM"),
+        new("MongoDB.ServerSelection"),
+        new("MongoDB.Connection"),
     ];
 
     protected override void PopulateConfiguration(ConfigurationManager configuration, string? key = null)

@@ -1,26 +1,37 @@
-# Aspire.Hosting.Qdrant library
+# Qdrant hosting integration
 
-Provides extension methods and resource definitions for an Aspire AppHost to configure a Qdrant vector database resource.
+Use this integration to model, configure, and orchestrate a Qdrant vector database resource in an Aspire solution.
 
 ## Getting started
 
-### Install the package
+### Add the integration
 
-In your AppHost project, install the Aspire Qdrant Hosting library with [NuGet](https://www.nuget.org):
+From your AppHost directory, add the `Aspire.Hosting.Qdrant` integration with the Aspire CLI:
 
-```dotnetcli
-dotnet add package Aspire.Hosting.Qdrant
+```bash
+aspire add Aspire.Hosting.Qdrant
 ```
 
 ## Usage example
 
-Then, in the _AppHost.cs_ file of `AppHost`, add a Qdrant resource and consume the connection using the following methods:
+In the AppHost, add a Qdrant resource and reference it from another resource with either C# or TypeScript:
+
+**C#**
 
 ```csharp
 var qdrant = builder.AddQdrant("qdrant");
 
 var myService = builder.AddProject<Projects.MyService>()
                        .WithReference(qdrant);
+```
+
+**TypeScript**
+
+```typescript
+const qdrant = await builder.addQdrant("qdrant");
+
+const myService = await builder.addNodeApp("myService", "../my-service", "server.js")
+                       .withReference(qdrant);
 ```
 
 ## Connection Properties
@@ -45,6 +56,8 @@ Aspire exposes each property as an environment variable named `[RESOURCE]_[PROPE
 
 ## Additional documentation
 
+* https://aspire.dev/integrations/gallery/
+* https://aspire.dev/integrations/databases/qdrant/qdrant-host/
 * https://qdrant.tech/documentation
 
 ## Feedback & contributing

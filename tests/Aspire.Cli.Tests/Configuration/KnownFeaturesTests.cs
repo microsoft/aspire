@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Configuration;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Tests.TestServices;
 using Microsoft.Extensions.Configuration;
 
 namespace Aspire.Cli.Tests.Configuration;
@@ -12,7 +12,7 @@ public class KnownFeaturesTests
     [Fact]
     public void IsStagingChannelEnabled_ReturnsTrue_WhenChannelIsStaging()
     {
-        var features = new TestFeatures(stagingChannelEnabled: false);
+        var features = new TestFeatures();
         var configuration = BuildConfiguration(channel: PackageChannelNames.Staging);
 
         Assert.True(KnownFeatures.IsStagingChannelEnabled(features, configuration));
@@ -21,7 +21,7 @@ public class KnownFeaturesTests
     [Fact]
     public void IsStagingChannelEnabled_ReturnsTrue_WhenFeatureFlagIsTrue()
     {
-        var features = new TestFeatures(stagingChannelEnabled: true);
+        var features = new TestFeatures().SetFeature(KnownFeatures.StagingChannelEnabled, true);
         var configuration = BuildConfiguration(channel: PackageChannelNames.Stable);
 
         Assert.True(KnownFeatures.IsStagingChannelEnabled(features, configuration));
@@ -30,7 +30,7 @@ public class KnownFeaturesTests
     [Fact]
     public void IsStagingChannelEnabled_ReturnsTrue_WhenBothChannelIsStagingAndFlagIsTrue()
     {
-        var features = new TestFeatures(stagingChannelEnabled: true);
+        var features = new TestFeatures().SetFeature(KnownFeatures.StagingChannelEnabled, true);
         var configuration = BuildConfiguration(channel: PackageChannelNames.Staging);
 
         Assert.True(KnownFeatures.IsStagingChannelEnabled(features, configuration));
@@ -39,7 +39,7 @@ public class KnownFeaturesTests
     [Fact]
     public void IsStagingChannelEnabled_ReturnsFalse_WhenChannelIsNotStagingAndFlagNotSet()
     {
-        var features = new TestFeatures(stagingChannelEnabled: false);
+        var features = new TestFeatures();
         var configuration = BuildConfiguration(channel: PackageChannelNames.Stable);
 
         Assert.False(KnownFeatures.IsStagingChannelEnabled(features, configuration));
@@ -48,7 +48,7 @@ public class KnownFeaturesTests
     [Fact]
     public void IsStagingChannelEnabled_ReturnsFalse_WhenChannelIsNullAndFlagNotSet()
     {
-        var features = new TestFeatures(stagingChannelEnabled: false);
+        var features = new TestFeatures();
         var configuration = BuildConfiguration(channel: null);
 
         Assert.False(KnownFeatures.IsStagingChannelEnabled(features, configuration));
@@ -57,7 +57,7 @@ public class KnownFeaturesTests
     [Fact]
     public void IsStagingChannelEnabled_IsCaseInsensitive_ForChannelValue()
     {
-        var features = new TestFeatures(stagingChannelEnabled: false);
+        var features = new TestFeatures();
         var configuration = BuildConfiguration(channel: "Staging");
 
         Assert.True(KnownFeatures.IsStagingChannelEnabled(features, configuration));
@@ -66,7 +66,7 @@ public class KnownFeaturesTests
     [Fact]
     public void IsStagingChannelEnabled_IsCaseInsensitive_ForUppercaseChannelValue()
     {
-        var features = new TestFeatures(stagingChannelEnabled: false);
+        var features = new TestFeatures();
         var configuration = BuildConfiguration(channel: "STAGING");
 
         Assert.True(KnownFeatures.IsStagingChannelEnabled(features, configuration));
@@ -75,7 +75,7 @@ public class KnownFeaturesTests
     [Fact]
     public void IsStagingChannelEnabled_ReturnsFalse_WhenChannelIsDailyAndFlagNotSet()
     {
-        var features = new TestFeatures(stagingChannelEnabled: false);
+        var features = new TestFeatures();
         var configuration = BuildConfiguration(channel: PackageChannelNames.Daily);
 
         Assert.False(KnownFeatures.IsStagingChannelEnabled(features, configuration));
@@ -95,16 +95,4 @@ public class KnownFeaturesTests
             .Build();
     }
 
-    private sealed class TestFeatures(bool stagingChannelEnabled) : IFeatures
-    {
-        public bool IsFeatureEnabled(string featureFlag, bool defaultValue)
-        {
-            if (featureFlag == KnownFeatures.StagingChannelEnabled)
-            {
-                return stagingChannelEnabled;
-            }
-
-            return defaultValue;
-        }
-    }
 }

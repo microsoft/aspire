@@ -1,6 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/template",
   "author": "Microsoft",
+  "generatorVersions": "1.0.0.0",
   "classifications": [
     "Common",
     "Aspire",
@@ -12,7 +13,7 @@
     "TypeScript",
     "React"
   ],
-  "name": "Aspire Starter App (ASP.NET Core/React)",
+  "name": "Aspire Starter App (ASP.NET Core/React, C# AppHost)",
   "defaultName": "AspireApp",
   "description": "A project template for creating an Aspire app with a React frontend and a C# Minimal API backend service, with optional Redis caching.",
   "shortName": "aspire-ts-cs-starter",
@@ -361,7 +362,7 @@
     {
       "id": "set-startup-project",
       "description": "Sets the startup project in the solution",
-      "manualInstructions": [],
+      "manualInstructions": [{ "text": "" }],
       "actionId": "5BECCC32-4D5A-4476-A0F9-BD2E81AF0689",
       "condition": "(hostIdentifier == \"vs\")",
       "args": {

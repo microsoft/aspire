@@ -9,10 +9,21 @@
 .interaction-input-dialog .interaction-input ::deep fluent-text-field,
 .interaction-input-dialog .interaction-input ::deep fluent-select,
 .interaction-input-dialog .interaction-input ::deep fluent-combobox,
+.interaction-input-dialog .interaction-input ::deep .uploaded-files-list,
 .interaction-input-dialog .interaction-input ::deep label {
     width: 75%;
     /* Prevent long select/combox controls from extending outside the dialog. This can happen when there is very long placeholder text */
     max-width: 500px;
+}
+
+.interaction-input-dialog .interaction-input ::deep .uploaded-files-list {
+    display: flex;
+    flex-direction: column;
+    row-gap: 4px;
+}
+
+.interaction-input-dialog .interaction-input ::deep .input-description {
+    margin-top: 2px;
 }
 
 .interaction-input-dialog .interaction-input ::deep .input-description,
@@ -35,6 +46,10 @@
 
 .interaction-input-dialog .interaction-input ::deep .secret-text-toggle-button::part(control) {
     background-color: transparent;
+}
+
+.interaction-input-dialog .interaction-input ::deep fluent-checkbox {
+    margin-top: 4px;
 }
 
 .interaction-input-dialog .interaction-input ::deep fluent-text-field::part(end) {

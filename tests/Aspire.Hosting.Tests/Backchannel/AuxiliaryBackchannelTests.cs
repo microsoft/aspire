@@ -8,6 +8,7 @@ using System.Text.Json;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -271,10 +272,8 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task SocketPathUsesAuxiPrefix()
+    public async Task SocketPathUsesCompactFormat()
     {
-        // This test verifies that the socket path uses "auxi.sock." prefix instead of "aux.sock."
-        // to avoid Windows reserved device name issues (AUX is reserved on Windows < 11)
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
 
         using var app = builder.Build();
@@ -286,11 +285,16 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         await service.ListeningTask.DefaultTimeout();
         Assert.NotNull(service.SocketPath);
 
-        // Verify that the socket path uses "auxi.sock." prefix
         var fileName = Path.GetFileName(service.SocketPath);
-        Assert.StartsWith("auxi.sock.", fileName);
+        Assert.Matches("^[A-Za-z0-9_-]{19}\\.[0-9]+$", fileName);
 
-        // Verify that the socket file can be created (not blocked by Windows reserved names)
+        var directory = Path.GetDirectoryName(service.SocketPath);
+        Assert.NotNull(directory);
+        Assert.EndsWith(Path.Combine(".aspire", "cli", "bch"), directory);
+        Assert.True(
+            BackchannelConstants.GetSocketPathByteCountIncludingNull(service.SocketPath) <= BackchannelConstants.GetMaxSocketPathBytesIncludingNull(),
+            $"Socket path should fit the platform byte limit: {service.SocketPath}");
+
         Assert.True(File.Exists(service.SocketPath), $"Socket file should exist at: {service.SocketPath}");
 
         outputHelper.WriteLine($"Socket path: {service.SocketPath}");
@@ -430,9 +434,9 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetCapabilitiesAsyncReturnsV1AndV2()
+    public async Task GetCapabilitiesAsyncReturnsCurrentCapabilities()
     {
-        // This test verifies that GetCapabilitiesAsync returns both v1 and v2 capabilities
+        // This test verifies that GetCapabilitiesAsync returns the current capabilities.
         using var builder = TestDistributedApplicationBuilder.CreateWithTestContainerRegistry(outputHelper);
 
         using var app = builder.Build();
@@ -449,20 +453,23 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         var endpoint = new UnixDomainSocketEndPoint(service.SocketPath);
         await socket.ConnectAsync(endpoint).DefaultTimeout();
 
-        using var stream = new NetworkStream(socket, ownsSocket: true);
-        using var rpc = JsonRpc.Attach(stream);
+        {
+            using var stream = new NetworkStream(socket, ownsSocket: true);
+            using var rpc = JsonRpc.Attach(stream);
 
-        // Invoke the GetCapabilitiesAsync RPC method
-        var response = await rpc.InvokeAsync<GetCapabilitiesResponse>(
-            "GetCapabilitiesAsync",
-            new object?[] { null }
-        ).DefaultTimeout();
+            // Invoke the GetCapabilitiesAsync RPC method
+            var response = await rpc.InvokeAsync<GetCapabilitiesResponse>(
+                "GetCapabilitiesAsync",
+                new object?[] { null }
+            ).DefaultTimeout();
 
-        // Verify capabilities include both v1 and v2
-        Assert.NotNull(response);
-        Assert.NotNull(response.Capabilities);
-        Assert.Contains(AuxiliaryBackchannelCapabilities.V1, response.Capabilities);
-        Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
+            // Verify the current capability set.
+            Assert.NotNull(response);
+            Assert.NotNull(response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.V1, response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.V2, response.Capabilities);
+            Assert.Contains(AuxiliaryBackchannelCapabilities.V3, response.Capabilities);
+        }
 
         await app.StopAsync().DefaultTimeout();
     }
@@ -603,5 +610,45 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         }, "Expected a Debug log for client disconnect and no Error logs from AuxiliaryBackchannelService");
 
         await app.StopAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public void GetSocketKeyAppHostPath_ResolvesSymlinksSoSocketKeyMatchesCli()
+    {
+        // The CLI resolves symlinks before searching for an AppHost's backchannel socket
+        // (AppHostHelper.FindMatchingNonOrphanedSockets), so the AppHost must key its socket off the same
+        // symlink-resolved physical path. File-based AppHosts otherwise report AppHost:FilePath as
+        // Path.GetFullPath(EntryPointFilePath), which leaves intermediate symlinks unresolved and made
+        // 'aspire describe/stop --apphost' miss the AppHost. See https://github.com/microsoft/aspire/issues/17618.
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        var tempRoot = Directory.CreateTempSubdirectory("aspire-auxbch-symlink-");
+        try
+        {
+            var realDirectory = Directory.CreateDirectory(Path.Combine(tempRoot.FullName, "real"));
+            var symlinkDirectory = Path.Combine(tempRoot.FullName, "link");
+            Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+
+            var appHostFileViaSymlink = Path.Combine(symlinkDirectory, "apphost.cs");
+            File.WriteAllText(appHostFileViaSymlink, "// apphost");
+
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    ["AppHost:FilePath"] = appHostFileViaSymlink,
+                })
+                .Build();
+
+            var socketKeyPath = AuxiliaryBackchannelService.GetSocketKeyAppHostPath(configuration);
+
+            Assert.Equal(PathNormalizer.ResolveSymlinks(appHostFileViaSymlink), socketKeyPath);
+            // Guards against the symlink not actually being unwrapped (otherwise the assertion above is vacuous).
+            Assert.NotEqual(appHostFileViaSymlink, socketKeyPath);
+        }
+        finally
+        {
+            tempRoot.Delete(recursive: true);
+        }
     }
 }

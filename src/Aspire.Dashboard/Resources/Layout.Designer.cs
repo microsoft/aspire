@@ -97,6 +97,24 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Notifications.
+        /// </summary>
+        public static string MainLayoutLaunchNotifications {
+            get {
+                return ResourceManager.GetString("MainLayoutLaunchNotifications", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Notifications.
+        /// </summary>
+        public static string MainLayoutNotificationCenterTitle {
+            get {
+                return ResourceManager.GetString("MainLayoutNotificationCenterTitle", resourceCulture);
+            }
+        }
+        
+        /// <summary>
         ///   Looks up a localized string similar to Close.
         /// </summary>
         public static string MainLayoutSettingsDialogClose {
@@ -223,38 +241,11 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Failed to rejoin.&lt;br /&gt;Please retry or reload the page..
+        ///   Looks up a localized string similar to AI agents.
         /// </summary>
-        public static string ReconnectFailedText {
+        public static string MainLayoutLaunchAIAgents {
             get {
-                return ResourceManager.GetString("ReconnectFailedText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Rejoining the server....
-        /// </summary>
-        public static string ReconnectFirstAttemptText {
-            get {
-                return ResourceManager.GetString("ReconnectFirstAttemptText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Rejoin failed... trying again in &lt;span id=&quot;components-seconds-to-next-attempt&quot;&gt;&lt;/span&gt; seconds..
-        /// </summary>
-        public static string ReconnectRepeatedAttemptText {
-            get {
-                return ResourceManager.GetString("ReconnectRepeatedAttemptText", resourceCulture);
-            }
-        }
-        
-        /// <summary>
-        ///   Looks up a localized string similar to Retry.
-        /// </summary>
-        public static string ReconnectRetryButtonText {
-            get {
-                return ResourceManager.GetString("ReconnectRetryButtonText", resourceCulture);
+                return ResourceManager.GetString("MainLayoutLaunchAIAgents", resourceCulture);
             }
         }
     }

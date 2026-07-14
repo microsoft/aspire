@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import type { AspireDebugSession, DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 
 export interface ErrorResponse {
     error: ErrorDetails;
@@ -38,21 +38,49 @@ export interface PythonLaunchConfiguration extends ExecutableLaunchConfiguration
 
     module?: string;
     interpreter_path?: string;
+    working_directory?: string;
 }
 
 export function isPythonLaunchConfiguration(obj: any): obj is PythonLaunchConfiguration {
     return obj && obj.type === 'python';
 }
 
-export interface NodeLaunchConfiguration extends ExecutableLaunchConfiguration {
-    type: "node"; // Provided by VS Code's built-in js-debug, no extension needed
+export interface GoLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "go";
+    program?: string;
+    working_directory?: string;
+    build_flags?: string;
+}
+
+export function isGoLaunchConfiguration(obj: any): obj is GoLaunchConfiguration {
+    return obj && obj.type === 'go';
+}
+
+export interface JavaScriptRuntimeLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "node" | "bun";
     script_path?: string;
     runtime_executable?: string;
     working_directory?: string;
+    // Optional on purpose: an older AppHost (version skew vs the extension) won't emit this field at
+    // all, leaving it undefined. Undefined is the legitimate legacy signal that tells the extension to
+    // fall back to positional/runtime inference. Do not make it required.
+    launch_method?: "direct" | "package-manager";
 }
+
+export function isJavaScriptRuntimeLaunchConfiguration(obj: any): obj is JavaScriptRuntimeLaunchConfiguration {
+    return obj && (obj.type === 'node' || obj.type === 'bun');
+}
+
+export type NodeLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "node" };
 
 export function isNodeLaunchConfiguration(obj: any): obj is NodeLaunchConfiguration {
     return obj && obj.type === 'node';
+}
+
+export type BunLaunchConfiguration = JavaScriptRuntimeLaunchConfiguration & { type: "bun" };
+
+export function isBunLaunchConfiguration(obj: any): obj is BunLaunchConfiguration {
+    return obj && obj.type === 'bun';
 }
 
 export interface BrowserLaunchConfiguration extends ExecutableLaunchConfiguration {
@@ -73,6 +101,21 @@ export interface AzureFunctionsLaunchConfiguration extends ExecutableLaunchConfi
 
 export function isAzureFunctionsLaunchConfiguration(obj: any): obj is AzureFunctionsLaunchConfiguration {
     return obj && obj.type === 'azure-functions';
+}
+
+export interface MauiLaunchConfiguration extends ExecutableLaunchConfiguration {
+    type: "maui";
+    project_path: string;
+    target_framework?: string;
+    platform?: string;
+    target_kind?: string;
+    device?: string;
+    runtime_identifier?: string;
+    msbuild_properties?: Record<string, string>;
+}
+
+export function isMauiLaunchConfiguration(obj: any): obj is MauiLaunchConfiguration {
+    return obj && obj.type === 'maui';
 }
 
 export interface EnvVar {
@@ -161,8 +204,11 @@ export interface AspireExtendedDebugConfiguration extends vscode.DebugConfigurat
     program: string;
     debuggers?: AspireDebuggersConfiguration;
     command?: AspireCommandType;
+    dashboardBrowser?: DashboardLaunchBehavior;
     args?: string[];
     step?: string;
+    skipCliAvailabilityCheck?: boolean;
+    env?: { [key: string]: string };
 }
 
 interface AspireDebuggersConfiguration {

@@ -21,7 +21,8 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     IResourceWithConnectionString,
     IResourceWithEndpoints,
     IResourceWithAzureFunctionsConfig,
-    IAzurePrivateEndpointTarget
+    IAzurePrivateEndpointTarget,
+    IAzureNspAssociationTarget
 {
     internal List<AzureCosmosDBDatabaseResource> Databases { get; } = [];
 
@@ -87,9 +88,9 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     public bool IsEmulator => this.IsContainer();
 
     /// <summary>
-    /// Is this instance running a preview emulator version?
+    /// Is this instance running the Linux-based (vNext) emulator?
     /// </summary>
-    internal bool IsPreviewEmulator
+    internal bool IsVNextEmulator
     {
         get => IsEmulator && field;
         set => field = value;
@@ -124,7 +125,7 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
     /// </summary>
     public ReferenceExpression ConnectionStringExpression =>
         IsEmulator ?
-            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsPreviewEmulator) :
+            AzureCosmosDBEmulatorConnectionString.Create(EmulatorEndpoint, IsVNextEmulator) :
             UseAccessKeyAuthentication ?
                 ReferenceExpression.Create($"{ConnectionStringSecretOutput}") :
                 ReferenceExpression.Create($"{ConnectionStringOutput}");
@@ -265,5 +266,5 @@ public class AzureCosmosDBResource(string name, Action<AzureResourceInfrastructu
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["Sql"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.documents.azure.com";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.documents.azure.com"];
 }

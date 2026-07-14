@@ -15,7 +15,7 @@ public class AzureLogAnalyticsWorkspaceExtensionsTests
         var logAnalyticsWorkspace = builder.AddAzureLogAnalyticsWorkspace("logAnalyticsWorkspace");
 
         Assert.Equal("logAnalyticsWorkspace", logAnalyticsWorkspace.Resource.Name);
-        Assert.Equal("{logAnalyticsWorkspace.outputs.logAnalyticsWorkspaceId}", logAnalyticsWorkspace.Resource.WorkspaceId.ValueExpression);
+        Assert.Equal("{logAnalyticsWorkspace.outputs.logAnalyticsWorkspaceId}", logAnalyticsWorkspace.Resource.Id.ValueExpression);
 
         var appInsightsManifest = await AzureManifestUtils.GetManifestWithBicep(logAnalyticsWorkspace.Resource);
         var expectedManifest = """

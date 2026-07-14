@@ -121,19 +121,28 @@
     <value>Stop a running AppHost</value>
   </data>
   <data name="ProjectArgumentDescription" xml:space="preserve">
-    <value>The path to the Aspire AppHost project file</value>
+    <value>The path to the Aspire AppHost project file or a directory to search</value>
   </data>
   <data name="StoppingAppHost" xml:space="preserve">
-    <value>Stopping Aspire AppHost...</value>
+    <value>Stopping {0}...</value>
   </data>
   <data name="AppHostStoppedSuccessfully" xml:space="preserve">
-    <value>AppHost stopped successfully.</value>
+    <value>{0} stopped successfully.</value>
+  </data>
+  <data name="AppHostIdentifierWithProcessId" xml:space="preserve">
+    <value>{0} (PID {1})</value>
   </data>
   <data name="MultipleAppHostsRunning" xml:space="preserve">
     <value>Multiple AppHosts are running. Use --apphost to specify which one to stop, or select one:</value>
   </data>
   <data name="FailedToStopAppHost" xml:space="preserve">
-    <value>Failed to stop the AppHost.</value>
+    <value>Failed to stop {0}.</value>
+  </data>
+  <data name="FoundRunningAppHost" xml:space="preserve">
+    <value>Found running AppHost: {0}</value>
+  </data>
+  <data name="SendingStopSignal" xml:space="preserve">
+    <value>Sending stop signal to {0}...</value>
   </data>
   <data name="SelectAppHostAction" xml:space="preserve">
     <value>stop</value>

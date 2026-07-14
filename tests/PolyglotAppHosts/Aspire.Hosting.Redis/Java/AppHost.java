@@ -3,19 +3,22 @@ import aspire.*;
 void main() throws Exception {
         var builder = DistributedApplication.CreateBuilder();
         // addRedis - full overload with port and password parameter
-        var password = builder.addParameter("redis-password", true);
+        var password = builder.addParameter("redis-password", new AddParameterOptions().secret(true));
         var cache = builder.addRedis("cache", new AddRedisOptions().password(password));
-        // addRedisWithPort - overload with explicit port
-        var cache2 = builder.addRedisWithPort("cache2", 6380.0);
+        // addRedis - overload with explicit port
+        var cache2 = builder.addRedis("cache2", new AddRedisOptions().port(6380.0));
         // withDataVolume + withPersistence - fluent chaining on RedisResource
         cache.withDataVolume(new WithDataVolumeOptions().name("redis-data"));
         cache.withPersistence(new WithPersistenceOptions().interval(600000000.0).keysChangedThreshold(5.0));
         // withDataBindMount on RedisResource
         cache2.withDataBindMount("/tmp/redis-data");
+        // withModule on RedisResource - well-known and custom module paths
+        cache.withModule(RedisModules.Json);
+        cache.withModule("/opt/redis/custom-module.so");
         // withHostPort on RedisResource
         cache.withHostPort(6379.0);
         // withPassword on RedisResource
-        var newPassword = builder.addParameter("new-redis-password", true);
+        var newPassword = builder.addParameter("new-redis-password", new AddParameterOptions().secret(true));
         cache2.withPassword(newPassword);
         // withRedisCommander - with configureContainer callback exercising withHostPort
         cache.withRedisCommander(new WithRedisCommanderOptions().configureContainer((commander) -> {

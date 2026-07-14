@@ -21,6 +21,10 @@
     line-height: 1;
 }
 
+::deep .tracedetails-grid-container {
+    overflow: auto;
+}
+
 ::deep .trace-view-grid {
 }
 
@@ -205,6 +209,7 @@
 ::deep .trace-header-filters {
     grid-area: filters;
     display: flex;
+    align-items: center;
 }
 
 ::deep .span-button-container {

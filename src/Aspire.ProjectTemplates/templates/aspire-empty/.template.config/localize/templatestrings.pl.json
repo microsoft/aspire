@@ -21,6 +21,7 @@
   "symbols/LocalhostTld/displayName": "Użyj pliku .dev.localhost TLD w adresie URL aplikacji",
   "symbols/LocalhostTld/description": "Określa, czy połączyć nazwę projektu z TLD .dev.localhost w adresie URL aplikacji na potrzeby lokalnego programowania, np. https://myapp.dev.localhost:12345. Obsługiwane na platformie .NET 10 lub nowszej.",
   "postActions/set-startup-project/description": "Ustawia projekt startowy w rozwiązaniu",
+  "postActions/set-startup-project/manualInstructions/default/text": "",
   "postActions/restore/description": "Przywróć pakiety NuGet wymagane przez ten projekt.",
   "postActions/restore/manualInstructions/default/text": "Uruchom polecenie \"dotnet restore\""
 }

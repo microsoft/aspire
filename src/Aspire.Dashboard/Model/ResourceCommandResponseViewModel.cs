@@ -7,8 +7,18 @@ public class ResourceCommandResponseViewModel
 {
     public required ResourceCommandResponseKind Kind { get; init; }
     public string? ErrorMessage { get; init; }
-    public string? Result { get; init; }
-    public CommandResultFormat? ResultFormat { get; init; }
+    public string? Message { get; init; }
+    public ResourceCommandResultViewModel? Result { get; init; }
+}
+
+/// <summary>
+/// Represents a value produced by a command.
+/// </summary>
+public class ResourceCommandResultViewModel
+{
+    public required string Value { get; init; }
+    public CommandResultFormat Format { get; init; }
+    public bool DisplayImmediately { get; init; }
 }
 
 // Must be kept in sync with ResourceCommandResponseKind in the resource_service.proto file
@@ -17,7 +27,8 @@ public enum ResourceCommandResponseKind
     Undefined = 0,
     Succeeded = 1,
     Failed = 2,
-    Cancelled = 3
+    Cancelled = 3,
+    InvalidArguments = 4
 }
 
 /// <summary>
@@ -33,5 +44,10 @@ public enum CommandResultFormat
     /// <summary>
     /// JSON result.
     /// </summary>
-    Json
+    Json,
+
+    /// <summary>
+    /// Markdown result.
+    /// </summary>
+    Markdown
 }

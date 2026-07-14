@@ -1,13 +1,26 @@
-# Runtime parameters for VS Code extension publishing (shown in "Run pipeline" UI)
 parameters:
-  - name: publishVSCodeExtension
-    displayName: 'Publish VS Code Extension to Marketplace'
+  - name: packageVSCodeExtensionAsPreRelease
+    displayName: 'Package VS Code Extension as Pre-Release'
     type: boolean
     default: false
-  - name: vscePublishPreRelease
-    displayName: 'Publish as Pre-Release'
-    type: boolean
-    default: false
+  # Operator-controlled override for the AspireCliChannel baked into native CLI
+  # binaries by build_sign_native.yml. The default 'auto' lets the pipeline pick
+  # stable / staging / daily / pr-<N> from Build.Reason and Build.SourceBranch
+  # (where release/* and internal/release/* branches always resolve to 'staging'
+  # so stabilizing dogfood builds aren't mis-baked as 'stable' — see
+  # https://github.com/microsoft/aspire/issues/17527). Set this to 'stable' when
+  # kicking off the official GA ship build from a release/* branch so the
+  # distributed binary identifies as stable and `aspire init` writes a
+  # nuget.org-only nuget.config matching the promoted package set.
+  - name: aspireCliChannelOverride
+    displayName: 'Aspire CLI channel override (auto = derive from branch; set to stable for the GA ship build)'
+    type: string
+    default: 'auto'
+    values:
+      - auto
+      - stable
+      - staging
+      - daily
 
 trigger:
   batch: true
@@ -50,10 +63,6 @@ pr:
 variables:
   - template: /eng/pipelines/common-variables.yml@self
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
-
-  # Variable group containing VscePublishToken for VS Code Marketplace publishing
-  - ${{ if eq(parameters.publishVSCodeExtension, true) }}:
-    - group: Aspire-Release-Secrets
 
   - name: _BuildConfig
     value: Release
@@ -160,6 +169,7 @@ extends:
             - osx-x64
           codeSign: true
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
@@ -174,34 +184,113 @@ extends:
             - linux-musl-x64
           # no need to sign ELF binaries on linux
           codeSign: false
+          # Have the linux-x64 native job compute installer-pipeline vars
+          # (aspireVersion / aspireArtifactVersion / installerChannel) at the
+          # end of its build. Lets prepare_installers depend on
+          # build_sign_native instead of assemble — see the ComputeVars step
+          # comment in build_sign_native.yml for the full rationale.
+          computeVarsRid: linux-x64
           teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
+          extraBuildArgs: >-
+            /p:Configuration=$(_BuildConfig)
+            $(_OfficialBuildIdArgs)
+
+      - template: /eng/pipelines/templates/build_sign_native.yml@self
+        parameters:
+          agentOs: windows
+          targetRidsForSameOS:
+            - win-x64
+            - win-arm64
+          codeSign: true
+          teamName: $(_TeamName)
+          aspireCliChannelOverride: ${{ parameters.aspireCliChannelOverride }}
           extraBuildArgs: >-
             /p:Configuration=$(_BuildConfig)
             $(_SignArgs)
             $(_OfficialBuildIdArgs)
 
     # ----------------------------------------------------------------
-    # This stage performs build, test, packaging
+    # Builds the VS Code extension VSIX in parallel with `build` and
+    # `build_sign_native`. Extracted from the managed Windows `build` job
+    # because the extension's only inputs are extension/ (Node.js / yarn /
+    # vsce) and signVsix.proj; it does not consume any managed nupkg or
+    # native CLI archive. See eng/pipelines/templates/build_extension.yml
+    # for the full job. Assemble pulls the resulting aspire-vscode-extension
+    # pipeline artifact, same as before.
+    # ----------------------------------------------------------------
+    - stage: build_extension
+      displayName: Build VS Code Extension
+      dependsOn: []
+      jobs:
+      - template: /eng/pipelines/templates/build_extension.yml@self
+        parameters:
+          packageVSCodeExtensionAsPreRelease: ${{ parameters.packageVSCodeExtensionAsPreRelease }}
+
+    # ----------------------------------------------------------------
+    # Source indexing for https://source.dot.net. This is self-contained:
+    # the SourceIndexStage1 job runs its OWN full repo build to produce a
+    # binlog and then uploads the resulting index. It consumes nothing from
+    # the other stages and nothing depends on it (dependsOn: []), so it runs
+    # fully in parallel and never gates the publish path — previously it was
+    # an extra job inside the `build` stage, which put its redundant rebuild
+    # on the critical path to `assemble`/publish.
+    # main-only: the whole stage compiles out on PR/non-main builds, matching
+    # the prior `enableSourceIndex` gating. The Azure upload step is already
+    # guarded to internal, non-PR builds inside source-index-stage1-publish.yml.
+    # ----------------------------------------------------------------
+    - ${{ if eq(variables['Build.SourceBranch'], 'refs/heads/main') }}:
+      - stage: source_index
+        displayName: Source Index
+        dependsOn: []
+        jobs:
+        - template: /eng/common/templates-official/jobs/jobs.yml@self
+          parameters:
+            enableMicrobuild: false
+            enablePublishUsingPipelines: false
+            enablePublishBuildAssets: false
+            publishAssetsImmediately: false
+            enableTelemetry: true
+            enablePublishBuildArtifacts: false
+            enablePublishTestResults: false
+            enableSourceIndex: true
+            workspace:
+              clean: all
+            jobs: []
+
+    # ----------------------------------------------------------------
+    # This stage performs the managed build, sign, pack, and template
+    # tests. It runs IN PARALLEL with build_sign_native and
+    # build_extension — the managed compile/sign/pack does not consume
+    # any native CLI artifacts or VS Code extension artifacts (those are
+    # stitched into the unified BAR manifest by the assemble stage at
+    # publish time).
     # ----------------------------------------------------------------
     - stage: build
       displayName: Build
-      dependsOn:
-      - build_sign_native
+      dependsOn: []
       jobs:
       - template: /eng/common/templates-official/jobs/jobs.yml@self
         parameters:
           enableMicrobuild: true
-          # Publish NuGet packages using v3
-          # https://github.com/dotnet/arcade/blob/main/Documentation/CorePackages/Publishing.md#basic-onboarding-scenario-for-new-repositories-to-the-current-publishing-version-v3
-          enablePublishUsingPipelines: true
-          enablePublishBuildAssets: true
+          # Publishing (AssetManifest emit, PublishBuildAssets, darc) runs in the
+          # downstream `assemble` stage once both the managed build (this stage)
+          # and the native CLI archives (build_sign_native) are available together.
+          enablePublishUsingPipelines: false
+          enablePublishBuildAssets: false
+          publishAssetsImmediately: false
           enableTelemetry: true
-          enableSourceIndex: ${{ eq(variables['Build.SourceBranch'], 'refs/heads/main') }}
-          publishAssetsImmediately: true
+          # Source indexing is intentionally NOT enabled here. It runs in its own
+          # `source_index` stage (dependsOn: []) so its full repo rebuild stays off
+          # the critical path and never gates the downstream publish.
+          enableSourceIndex: false
           # Publish build logs
           enablePublishBuildArtifacts: true
-          # Publish test logs
-          enablePublishTestResults: true
+          # Test results publishing is owned by the template_tests stage —
+          # the Windows job here no longer runs tests inline, so leaving
+          # this on would emit a "no test results found" warning on every
+          # build. Cosmetic, but worth keeping the log clean.
+          enablePublishTestResults: false
           workspace:
             clean: all
 
@@ -230,54 +319,23 @@ extends:
                 clean: true
 
             steps:
-              - task: DownloadPipelineArtifact@2
-                displayName: 🟣Download All Native Archives
-                inputs:
-                  itemPattern: |
-                    **/aspire-cli-*.zip
-                    **/aspire-cli-*.tar.gz
-                  targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)'
-
-              - task: PowerShell@2
-                displayName: 🟣List artifacts packages contents
-                inputs:
-                  targetType: 'inline'
-                  script: |
-                    Get-ChildItem -Path "$(Build.SourcesDirectory)\artifacts\packages" -File -Recurse | Select-Object FullName, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB,2)}} | Format-Table -AutoSize
-
-              - task: NodeTool@0
-                displayName: 🟣Install node.js
-                inputs:
-                  versionSpec: '20.x'
-
-              - task: npmAuthenticate@0
-                displayName: 🟣NPM authenticate
-                inputs:
-                  workingFile: $(Build.SourcesDirectory)\.npmrc
-
-              - task: PowerShell@2
-                displayName: 🟣Set .npmrc environment
-                inputs:
-                  targetType: 'inline'
-                  script: Write-Host "##vso[task.setvariable variable=NPM_CONFIG_USERCONFIG]$(Build.SourcesDirectory)\.npmrc"
-
-              - task: PowerShell@2
-                displayName: 🟣Install yarn
-                inputs:
-                  targetType: 'inline'
-                  script: |
-                    npm install -g yarn@1.22.22
-                    yarn --version
-                  workingDirectory: '$(Build.SourcesDirectory)'
-
-              - task: PowerShell@2
-                displayName: 🟣Install vsce
-                inputs:
-                  targetType: 'inline'
-                  script: |
-                    npm install -g @vscode/vsce@3.7.1
-                    vsce --version
-                  workingDirectory: '$(Build.SourcesDirectory)'
+              # NOTE: Native CLI archive + per-RID nupkg downloads (Aspire.Cli.*)
+              # were here, but moved to the assemble stage. The managed Windows
+              # build does NOT consume native artifacts during compile/sign/pack;
+              # native artifacts only matter at -publish time (Publishing.props
+              # _PublishBlobItems globs the Shipping dir). Splitting the native
+              # download + -publish into a downstream `assemble` stage lets this
+              # job start in parallel with build_sign_native. The
+              # download_native_symbols template (aspire.pdb + .symbols.nupkg)
+              # likewise runs in assemble alongside download-native-archives.ps1
+              # so the -publish call there routes symbols to MSDL/SymWeb.
+              #
+              # Node.js / npm / vsce / corepack setup that used to live here
+              # was extension-build scaffolding. It moved to the parallel
+              # `build_extension` stage along with the extension build / sign
+              # / verify / publish steps (see buildExtension: false below).
+              # validateNpmPackageSignatures is also off for this job, so this
+              # path has no remaining npm tooling dependency.
 
               - template: /eng/pipelines/templates/BuildAndTest.yml
                 parameters:
@@ -288,107 +346,430 @@ extends:
                   repoLogPath: $(Build.Arcade.LogsPath)
                   repoTestResultsPath: $(Build.Arcade.TestResultsPath)
                   isWindows: true
-                  targetRids:
-                    - win-x64
-                    - win-arm64
-                  publishVSCodeExtension: ${{ parameters.publishVSCodeExtension }}
-                  vscePublishToken: $(VscePublishToken)
-                  vscePublishPreRelease: ${{ parameters.vscePublishPreRelease }}
+                  packageVSCodeExtensionAsPreRelease: ${{ parameters.packageVSCodeExtensionAsPreRelease }}
+                  # Split C moves native pack + npm-tgz staging to the downstream
+                  # Assemble stage, so no microsoft-aspire-cli*.tgz files exist
+                  # under this job's Shipping directory at signature-validation
+                  # time. The Assemble stage owns the equivalent check after it
+                  # stages the signed tarballs from the per-RID native artifacts.
+                  validateNpmPackageSignatures: false
+                  # VS Code extension build / sign / verify / publish moved to
+                  # the parallel `build_extension` stage so it does not sit on
+                  # the Windows managed-build critical path through Assemble.
+                  buildExtension: false
 
-              # Extract the Aspire version from a generated nupkg filename so downstream
-              # stages can use it. Aspire.Hosting.AppHost has no RID in its filename and
-              # does not suppress final package version stabilization, so stripping the
-              # prefix cleanly yields the stable version for installer publishing.
-              - pwsh: |
-                  $ErrorActionPreference = 'Stop'
-                  $shippingDir = "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
-                  $nupkg = Get-ChildItem -Path $shippingDir -Filter "Aspire.Hosting.AppHost.*.nupkg" -ErrorAction SilentlyContinue |
-                    Where-Object { $_.Name -notmatch '\.symbols\.' } |
-                    Select-Object -First 1
+              # Upload the packed managed Shipping artifacts so the downstream
+              # assemble stage can stage them next to the native CLI archives
+              # and run a single unified -publish that emits the BAR manifest
+              # covering everything.
+              # IMPORTANT: This artifact is ALSO consumed by the `template_tests`
+              # stage. It must contain every Aspire.* nupkg the templates
+              # transitively reference — including per-RID arch-specific
+              # Aspire.Hosting.Orchestration.<rid> and Aspire.Dashboard.Sdk.<rid>
+              # packages produced by the managed build. If a future refactor
+              # moves any of those out of Shipping/, template_tests will start
+              # failing with restore errors.
+              - task: 1ES.PublishPipelineArtifact@1
+                displayName: 🟣Publish managed packages for assemble
+                inputs:
+                  path: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping'
+                  artifactName: managed_packages_shipping
 
-                  if (-not $nupkg) {
-                    Write-Error "Could not find Aspire.Hosting.AppHost nupkg in $shippingDir"
-                    exit 1
-                  }
+              # Dashboard runtime zips ship from artifacts/DashboardArtifacts/<config>/<rid>/
+              # (per eng/dashboardpack/Common.projitems) and are picked up by
+              # Publishing.props _DashboardFilesToPublish. They sit outside packages/,
+              # so they need their own pipeline-artifact handoff to assemble.
+              - task: 1ES.PublishPipelineArtifact@1
+                displayName: 🟣Publish dashboard artifacts for assemble
+                inputs:
+                  path: '$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)'
+                  artifactName: managed_dashboard_artifacts
 
-                  $version = $nupkg.Name -replace '^Aspire\.Hosting\.AppHost\.', '' -replace '\.nupkg$', ''
-
-                  if ($version -notmatch '^\d+\.\d+\.\d+') {
-                    Write-Error "Extracted version '$version' does not look like a valid semver. Check the nupkg name."
-                    exit 1
-                  }
-
-                  Write-Host "Detected Aspire version: $version (from $($nupkg.Name))"
-                  Write-Host "##vso[task.setvariable variable=aspireVersion;isOutput=true]$version"
-                name: computeVersion
-                displayName: 🟣Compute Aspire version from nupkg
-
-              - pwsh: |
-                  $ErrorActionPreference = 'Stop'
-                  $artifactVersion = dotnet msbuild "$(Build.SourcesDirectory)/src/Aspire.Dashboard/Aspire.Dashboard.csproj" -getProperty:PackageVersion -property:SuppressFinalPackageVersion=true -property:OfficialBuildId=$(BUILD.BUILDNUMBER)
-                  $artifactVersion = $artifactVersion.Trim()
-
-                  if ($artifactVersion -notmatch '^\d+\.\d+\.\d+') {
-                    Write-Error "Computed artifact version '$artifactVersion' does not look like a valid semver. Check PackageVersion evaluation."
-                    exit 1
-                  }
-
-                  Write-Host "Detected installer artifact version: $artifactVersion"
-                  Write-Host "##vso[task.setvariable variable=aspireArtifactVersion;isOutput=true]$artifactVersion"
-                name: computeArtifactVersion
-                displayName: 🟣Compute installer artifact version
-
-              # Determine stable vs prerelease for installer pipelines.
-              - pwsh: |
-                  $ErrorActionPreference = 'Stop'
-                  $versionKind = dotnet msbuild "$(Build.SourcesDirectory)/eng/Versions.props" -getProperty:DotNetFinalVersionKind
-                  $versionKind = $versionKind.Trim()
-                  Write-Host "DotNetFinalVersionKind: '$versionKind'"
-
-                  if ($versionKind -eq 'release') {
-                    $channel = 'stable'
-                  } else {
-                    $channel = 'prerelease'
-                  }
-
-                  Write-Host "Installer channel: $channel"
-                  Write-Host "##vso[task.setvariable variable=installerChannel;isOutput=true]$channel"
-                name: computeChannel
-                displayName: 🟣Determine installer channel
-
-      # OneLocBuild is temporarily disabled while we work with the loc team
-      # to reconfigure it after the repo migration from dotnet/aspire to microsoft/aspire.
-      # - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
-      #   - template: /eng/common/templates-official/job/onelocbuild.yml@self
-      #     parameters:
-      #       LclSource: lclFilesfromPackage
-      #       LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
-      #       GitHubOrg: microsoft
-      #       MirrorRepo: aspire
-      #       MirrorBranch: main
+      - ${{ if and(notin(variables['Build.Reason'], 'PullRequest'), eq(variables['Build.SourceBranch'], 'refs/heads/main')) }}:
+        - template: /eng/common/templates-official/job/onelocbuild.yml@self
+          parameters:
+            LclSource: lclFilesfromPackage
+            LclPackageId: 'LCL-JUNO-PROD-ASPIRE'
+            CreatePr: false
+            GitHubOrg: microsoft
+            MirrorRepo: aspire
+            MirrorBranch: main
 
     # ----------------------------------------------------------------
-    # Generate and test installer packages (WinGet + Homebrew).
+    # Template tests: validate that the packed Aspire.* nupkgs produce
+    # working `aspire new` projects. These are a quality gate, not a
+    # shipping dependency — assemble + prepare_installers do NOT wait
+    # for this stage. If templates fail, the overall build is reported
+    # failed (so the release pipeline won't promote), but the artifacts
+    # can still be inspected from BAR.
+    # ----------------------------------------------------------------
+    - stage: template_tests
+      displayName: Template Tests
+      dependsOn:
+        - build
+      jobs:
+      - template: /eng/common/templates-official/jobs/jobs.yml@self
+        parameters:
+          enableMicrobuild: false
+          enablePublishUsingPipelines: false
+          enablePublishBuildAssets: false
+          publishAssetsImmediately: false
+          enableTelemetry: true
+          enablePublishBuildArtifacts: true
+          enablePublishTestResults: true
+          workspace:
+            clean: all
+
+          jobs:
+          - job: TemplateTests
+            displayName: Template Tests
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+
+            variables:
+              - name: _buildScript
+                value: $(Build.SourcesDirectory)/build.cmd -ci
+
+            preSteps:
+              - checkout: self
+                fetchDepth: 1
+                clean: true
+
+            steps:
+              # The packed Aspire.* nupkgs were uploaded as managed_packages_shipping
+              # by the build stage's Windows job. Drop them back into the canonical
+              # Shipping path so the Templates test's nuget.config (which points at
+              # this directory as a local feed) can resolve Aspire.* references.
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download managed packages
+                inputs:
+                  artifact: managed_packages_shipping
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping'
+
+              - script: $(Build.SourcesDirectory)/dotnet.cmd
+                        build
+                        tests/workloads.proj
+                        /p:SkipPackageCheckForTemplatesTesting=true
+                displayName: 🟣Prepare sdks for templates testing
+
+              - script: $(_buildScript)
+                        -build
+                        -restore
+                        -test
+                        -configuration $(_BuildConfig)
+                        /bl:$(Build.Arcade.LogsPath)/BuildTemplatesTests.binlog
+                        $(_OfficialBuildIdArgs)
+                        $(_InternalBuildArgs)
+                        /p:SkipTests=false
+                        -projects $(Build.SourcesDirectory)\tests\Aspire.Templates.Tests\Aspire.Templates.Tests.csproj
+                env:
+                  RunOnlyBasicBuildTemplateTests: true
+                  DEV_TEMP: $(Build.SourcesDirectory)\..
+                  DOTNET_ROOT: $(Build.SourcesDirectory)\.dotnet
+                  TEST_LOG_PATH: $(Build.SourcesDirectory)\artifacts\log\$(_BuildConfig)\Aspire.Templates.Tests
+                displayName: 🟣Run Template tests
+
+    # ----------------------------------------------------------------
+    # Assemble: stage native CLI archives + managed packages together,
+    # run the unified -publish (emits the BAR AssetManifest covering
+    # everything), and the auto-injected PublishBuildAssets job pushes
+    # the manifest to BAR/darc.
+    # NOTE: This stage does NOT depend on template_tests. Templates is a
+    # validation signal, not a shipping dependency — running it in
+    # parallel keeps the critical path off it.
+    # ----------------------------------------------------------------
+    - stage: assemble
+      displayName: Assemble + Publish
+      dependsOn:
+        - build_sign_native
+        - build
+        - build_extension
+      jobs:
+      - template: /eng/common/templates-official/jobs/jobs.yml@self
+        parameters:
+          # Enable MicroBuild signing on the Assemble pool so we can sign the
+          # npm tgz files staged from per-RID native artifacts (see "Sign npm
+          # package tarballs" step below). The per-RID native jobs cannot sign
+          # them because PackDotnetTool (eng/AfterSigning.targets) runs AFTER
+          # Arcade's Sign target — by name and design, the npm tgz files only
+          # exist after Sign has already completed. Upstream signs them in the
+          # Windows BuildAndTest job which runs `-sign` again after staging;
+          # Split C moves that second sign pass here so the parallelism
+          # between `build` and `build_sign_native` is preserved. The Assemble
+          # job runs on Windows because Authenticode signing of aspire.js
+          # (MicrosoftDotNet500 cert in eng/Signing.props) is rejected by
+          # Linux ESRP with "This file format cannot be signed because it is
+          # not recognized."
+          enableMicrobuild: true
+          enablePublishUsingPipelines: true
+          # Asset_Registry_Publish (BAR publish) needs MaestroAccessToken from
+          # the Publish-Build-Assets variable group, which is only loaded on
+          # main / release / internal-release branches because of the AzDO
+          # ACL on that group. Skip the publish job entirely on contributor
+          # branches so jobs.yml does not inject Asset_Registry_Publish and
+          # fail at runtime for a missing token (and so the assemble stage
+          # does not trip an additional 1ES Branch control checkpoint).
+          ${{ if or(eq(variables['Build.SourceBranch'], 'refs/heads/main'), startsWith(variables['Build.SourceBranch'], 'refs/heads/release/'), startsWith(variables['Build.SourceBranch'], 'refs/heads/internal/release/')) }}:
+            enablePublishBuildAssets: true
+            publishAssetsImmediately: true
+          ${{ else }}:
+            enablePublishBuildAssets: false
+            publishAssetsImmediately: false
+          enableTelemetry: true
+          enablePublishBuildArtifacts: true
+          workspace:
+            clean: all
+
+          jobs:
+          - job: Assemble
+            timeoutInMinutes: 60
+            # Windows agent: required for MicroBuild signing of aspire.js via
+            # MicrosoftDotNet500 (Authenticode). Linux ESRP rejects that cert
+            # for JS, so we cannot run the sign step on Linux even though the
+            # surrounding download/stage/publish work is cross-platform.
+            pool:
+              name: NetCore1ESPool-Internal
+              image: windows.vs2026preview.scout.amd64
+              os: windows
+
+            variables:
+              - name: _buildScript
+                value: $(Build.SourcesDirectory)/build.cmd -ci
+
+            preSteps:
+              - checkout: self
+                fetchDepth: 1
+                clean: true
+
+            steps:
+              # Parallelize the 7 native_archives_<rid> downloads. AzDO runs
+              # steps serially within a job and DownloadPipelineArtifact@2 with
+              # itemPattern: downloads each artifact ONCE PER SLICE (both
+              # *.zip|*.tar.gz and Aspire.Cli*.nupkg slices walk the same
+              # artifact independently), so the previous two-task design
+              # serialized to ~156s wall-clock.
+              #
+              # See eng/scripts/download-native-archives.ps1 for the
+              # extraction logic, error handling, and debug-info contract.
+              # Scope is only Container-typed artifacts (BuildArtifacts
+              # published via 1ES.PublishBuildArtifacts@1); the three
+              # PipelineArtifact downloads below stay on
+              # DownloadPipelineArtifact@2 because that API uses a different
+              # protocol that Bearer + Invoke-WebRequest does not handle.
+              - pwsh: |
+                  & "$(Build.SourcesDirectory)/eng/scripts/download-native-archives.ps1" `
+                    -CollectionUri '$(System.CollectionUri)' `
+                    -Project '$(System.TeamProject)' `
+                    -BuildId '$(Build.BuildId)' `
+                    -ArchivesTargetDir "$(Build.SourcesDirectory)/artifacts/signed-archives/$(_BuildConfig)" `
+                    -NupkgsTargetDir "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)"
+                displayName: 🟣Download native archives (parallel)
+                env:
+                  SYSTEM_ACCESSTOKEN: $(System.AccessToken)
+
+              # Stage and sign the npm tgz files BEFORE downloading managed
+              # packages. SignToolTask walks every container under
+              # $(ArtifactsShippingPackagesDir) looking for nested signable
+              # items, and Arcade's default `<ItemsToSign Include="...**\*.nupkg" />`
+              # would re-sign every managed Aspire.Hosting.*.nupkg already
+              # signed upstream — including
+              # Aspire.Hosting.Orchestration.<rid>.nupkg whose nested
+              # manifest.cat would be re-submitted to ESRP. Keeping Shipping
+              # limited to native CLI staged content at sign time avoids that.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  & "$(Build.SourcesDirectory)/eng/scripts/stage-native-cli-tool-packages.ps1" `
+                    -DownloadRoot "$(Build.SourcesDirectory)/artifacts/native-cli-packages/$(_BuildConfig)" `
+                    -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping" `
+                    -RequireNpmPackages
+                displayName: 🟣Stage Native CLI Packages
+
+              # Sign the npm tgz files now that they are staged in Shipping.
+              # PackDotnetTool runs in eng/AfterSigning.targets — after Arcade's
+              # Sign target — so the per-RID native jobs cannot sign the tgz
+              # files themselves. Upstream signs them on the Windows
+              # BuildAndTest job which runs a second `-sign` after staging;
+              # Split C does the same here so Sign.proj picks up the tgz files
+              # via ItemsToSign in eng/Signing.props (LinuxSign500180PGP cert,
+              # detached PGP sidecar). `-restore` is required for Arcade's
+              # Toolset.proj; we scope per-project Restore to a single small
+              # csproj for the same reason as the publish call below.
+              - script: $(_buildScript)
+                        -restore
+                        -sign $(_SignArgs)
+                        -configuration $(_BuildConfig)
+                        /bl:$(Build.Arcade.LogsPath)/AssembleSign.binlog
+                        $(_OfficialBuildIdArgs)
+                        $(_InternalBuildArgs)
+                        /p:SkipNativeBuild=true
+                        /p:SkipManagedBuild=true
+                        /p:SkipTestProjects=true
+                        -projects $(Build.SourcesDirectory)/src/Aspire.Hosting/Aspire.Hosting.csproj
+                displayName: 🟣Sign npm package tarballs
+                condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+                env:
+                  SYSTEM_ACCESSTOKEN: $(System.AccessToken) # Needed for the signing task
+
+              # Verify each staged microsoft-aspire-cli*.tgz has a sibling .sig
+              # file with a plausible PGP signature. Signing happens in the
+              # step above; this check is the catch-net for the silent failure
+              # mode where Arcade/ESRP emits an empty or malformed sidecar.
+              # Only meaningful when real signing happened.
+              - pwsh: |
+                  & "$(Build.SourcesDirectory)/eng/scripts/validate-npm-package-signatures.ps1" `
+                    -ShippingDir "$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping"
+                displayName: 🟣Validate npm package signatures
+                condition: and(succeeded(), eq(variables['_SignType'], 'real'))
+
+              # Managed-side artifacts use PipelineArtifact (1ES.PublishPipelineArtifact@1)
+              # which DownloadPipelineArtifact@2 handles natively. Combined size is
+              # small (~30s sequential) so parallelizing them isn't worth the
+              # complexity of branching on resource.type in the pwsh script above.
+              # Downloaded AFTER the npm sign step above so SignToolTask doesn't
+              # re-process the already-signed managed Aspire.Hosting.*.nupkg
+              # files (see comment on staging step). The native AOT symbols
+              # template stages .symbols.nupkg into Shipping for the same reason
+              # — kept after sign even though current ItemsToSign rules in
+              # eng/Signing.props don't match symbols.nupkg, the convention is
+              # "only what we want signed lives in Shipping at sign time".
+              - template: /eng/pipelines/templates/download_native_symbols.yml@self
+
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download managed packages
+                inputs:
+                  artifact: managed_packages_shipping
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/Shipping'
+
+              # VS Code extension VSIX + manifest live at packages/<config>/vscode/
+              # (not Shipping). The aspire-vscode-extension artifact is uploaded
+              # earlier by BuildAndTest.yml after signing — pull it back into the
+              # same path here so _PublishBlobItems' VSIX-count validation passes.
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download VS Code extension
+                inputs:
+                  artifact: aspire-vscode-extension
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/packages/$(_BuildConfig)/vscode'
+
+              # Dashboard runtime zips originate at artifacts/DashboardArtifacts/<config>/
+              # and are scanned by _DashboardFilesToPublish at publish time.
+              - task: DownloadPipelineArtifact@2
+                displayName: 🟣Download dashboard artifacts
+                inputs:
+                  artifact: managed_dashboard_artifacts
+                  targetPath: '$(Build.SourcesDirectory)/artifacts/DashboardArtifacts/$(_BuildConfig)'
+
+              - pwsh: |
+                  Get-ChildItem -Path "$(Build.SourcesDirectory)/artifacts/packages" -File -Recurse |
+                    Select-Object FullName, @{Name="Size(MB)";Expression={[math]::Round($_.Length/1MB,2)}} |
+                    Format-Table -AutoSize
+                displayName: 🟣List staged Shipping contents
+
+              # Run only Arcade's Publish target. -build/-pack/-sign are off so we
+              # don't recompile or re-sign anything (the inputs already arrived
+              # signed from upstream stages).
+              #
+              # "Unified" = one AssetManifest covering every shipping output of
+              # this build: managed nupkgs (from the build stage), native CLI
+              # archives (from build_sign_native), dashboard runtime zips, and
+              # the signed VS Code extension. Publishing.props's
+              # _PublishBlobItems scans ArtifactsShippingPackagesDir +
+              # _SignedArchivesDir + DashboardPublishedArtifactsOutputDir +
+              # the staged VSIX folder, and writes one manifest.xml.
+              #
+              # The Publish Assets job that jobs.yml auto-injects after this
+              # stage uploads that manifest to BAR (Build Asset Registry /
+              # Maestro), which is what release-publish-nuget.yml and downstream
+              # promotion pipelines read to know what NuGet packages, native
+              # archives, and other blobs this build shipped.
+              #
+              # `-restore` is required for Arcade's Toolset.proj (dropping it
+              # causes "Toolset version 10.0.0-beta... has not been restored"
+              # in InitializeToolset). But we narrow the per-project Restore
+              # traversal to a single small csproj via `-projects` instead of
+              # letting it walk the full ProjectToBuild (~393 projects / 120s).
+              # Arcade restores Tools.proj independently inside
+              # InitializeCustomToolset on top of the -projects scope.
+              - script: $(_buildScript)
+                        -restore
+                        -publish $(_PublishArgs)
+                        -configuration $(_BuildConfig)
+                        /bl:$(Build.Arcade.LogsPath)/AssemblePublish.binlog
+                        $(_OfficialBuildIdArgs)
+                        $(_InternalBuildArgs)
+                        /p:SkipNativeBuild=true
+                        /p:SkipManagedBuild=true
+                        /p:SkipTestProjects=true
+                        -projects $(Build.SourcesDirectory)/src/Aspire.Hosting/Aspire.Hosting.csproj
+                displayName: 🟣Publish unified asset manifest
+
+              # Sanity check: with -restore dropped from the publish call above,
+              # there's a real failure mode where Arcade's Publish target silently
+              # doesn't fire (or fires but emits an empty AssetManifest), the
+              # downstream PublishBuildAssets job pushes an empty manifest to BAR,
+              # and the build goes green having shipped nothing. Catch that here
+              # with a hard error. If this check ever fires after a working baseline,
+              # restoring `-restore -projects <small-csproj>` is the safe fallback.
+              - pwsh: |
+                  $ErrorActionPreference = 'Stop'
+                  $manifestRoot = "$(Build.SourcesDirectory)/artifacts/log/$(_BuildConfig)/AssetManifest"
+                  if (-not (Test-Path $manifestRoot)) {
+                    throw "AssetManifest directory '$manifestRoot' does not exist — Arcade Publish target did not fire."
+                  }
+                  $manifests = @(Get-ChildItem -Path $manifestRoot -Filter '*.xml' -File -Recurse -ErrorAction SilentlyContinue)
+                  if ($manifests.Count -eq 0) {
+                    throw "No AssetManifest .xml files found under '$manifestRoot'."
+                  }
+                  $totalItems = 0
+                  foreach ($m in $manifests) {
+                    [xml]$xml = Get-Content -LiteralPath $m.FullName -Raw
+                    $packages = @($xml.SelectNodes('//Package'))
+                    $blobs = @($xml.SelectNodes('//Blob'))
+                    $count = $packages.Count + $blobs.Count
+                    $totalItems += $count
+                    Write-Host "  $($m.Name): packages=$($packages.Count) blobs=$($blobs.Count)"
+                  }
+                  if ($totalItems -lt 50) {
+                    throw "AssetManifest has only $totalItems items across $($manifests.Count) file(s) — expected >= 50 (full Aspire build). Publish target may have run with an empty input set. Restore the '-restore' flag on the publish call as a fallback."
+                  }
+                  Write-Host "AssetManifest sanity check OK: $totalItems items across $($manifests.Count) manifest file(s)."
+                displayName: 🟣Verify AssetManifest is non-trivial
+
+    # ----------------------------------------------------------------
+    # Generate installer packages (WinGet + Homebrew) and validate npm install.
     # Artifacts are consumed by release-publish-nuget.yml for stable
     # publishing. No publishing happens from this pipeline.
+    #
+    # Depends on build_sign_native — NOT assemble — so this work can run in
+    # parallel with the assemble stage. The three installer-pipeline vars
+    # (aspireVersion / aspireArtifactVersion / installerChannel) are produced
+    # by the ComputeVars step on the linux-x64 native job (see
+    # build_sign_native.yml's `computeVarsRid` parameter). The per-RID
+    # native_archives_* artifacts already contain the npm tgz / nupkg /
+    # archive files this stage's jobs consume; nothing here needs assemble's
+    # BlobArtifacts.
     # ----------------------------------------------------------------
     - stage: prepare_installers
       displayName: Prepare Installers
       dependsOn:
-        - build
+        - build_sign_native
       variables:
-        aspireVersion: $[ stageDependencies.build.Windows.outputs['computeVersion.aspireVersion'] ]
-        aspireArtifactVersion: $[ stageDependencies.build.Windows.outputs['computeArtifactVersion.aspireArtifactVersion'] ]
-        installerChannel: $[ stageDependencies.build.Windows.outputs['computeChannel.installerChannel'] ]
+        aspireVersion: $[ stageDependencies.build_sign_native.BuildNative_linux_x64.outputs['ComputeVars.aspireVersion'] ]
+        aspireArtifactVersion: $[ stageDependencies.build_sign_native.BuildNative_linux_x64.outputs['ComputeVars.aspireArtifactVersion'] ]
+        installerChannel: $[ stageDependencies.build_sign_native.BuildNative_linux_x64.outputs['ComputeVars.installerChannel'] ]
       condition: |
         and(
           succeeded(),
-          ne(variables['Build.Reason'], 'PullRequest'),
           or(
-            ne(dependencies.build.outputs['Windows.computeChannel.installerChannel'], 'stable'),
+            eq(variables['Build.Reason'], 'PullRequest'),
             or(
-              eq(variables['Build.SourceBranch'], 'refs/heads/main'),
-              startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+              ne(dependencies.build_sign_native.outputs['BuildNative_linux_x64.ComputeVars.installerChannel'], 'stable'),
+              or(
+                eq(variables['Build.SourceBranch'], 'refs/heads/main'),
+                startsWith(variables['Build.SourceBranch'], 'refs/heads/release/')
+              )
             )
           )
         )
@@ -398,7 +779,11 @@ extends:
           enableMicrobuild: false
           enablePublishUsingPipelines: false
           enablePublishBuildAssets: false
-          enablePublishBuildArtifacts: true
+          # WinGet and Homebrew jobs only consume previously-built CLI archives;
+          # they don't run the repo build, so artifacts/log/$(_BuildConfig) is
+          # never created. Leaving this 'true' makes the 1ES Publish Logs output
+          # fail because its targetPath doesn't exist.
+          enablePublishBuildArtifacts: false
           enableTelemetry: true
           workspace:
             clean: all
@@ -413,16 +798,26 @@ extends:
             steps:
             - checkout: self
               fetchDepth: 1
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (win-x64)
+              inputs:
+                artifact: native_archives_win_x64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_win_x64'
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (win-arm64)
+              inputs:
+                artifact: native_archives_win_arm64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_win_arm64'
             - template: /eng/pipelines/templates/prepare-winget-manifest.yml@self
               parameters:
                 version: $(aspireVersion)
                 artifactVersion: $(aspireArtifactVersion)
                 channel: $(installerChannel)
+                archiveRoot: $(Pipeline.Workspace)/native-archives
 
           - job: Homebrew
             displayName: Homebrew Cask
             timeoutInMinutes: 30
-            condition: and(succeeded(), eq(variables['installerChannel'], 'stable'))
             pool:
               name: Azure Pipelines
               vmImage: macOS-latest-internal
@@ -430,7 +825,87 @@ extends:
             steps:
             - checkout: self
               fetchDepth: 1
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (osx-x64)
+              inputs:
+                artifact: native_archives_osx_x64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_osx_x64'
+            - task: DownloadPipelineArtifact@2
+              displayName: 🟣Download CLI archives (osx-arm64)
+              inputs:
+                artifact: native_archives_osx_arm64
+                targetPath: '$(Pipeline.Workspace)/native-archives/native_archives_osx_arm64'
             - template: /eng/pipelines/templates/prepare-homebrew-cask.yml@self
               parameters:
                 version: $(aspireVersion)
-                artifactVersion: $(aspireArtifactVersion)
+                channel: $(installerChannel)
+                archiveRoot: $(Pipeline.Workspace)/native-archives
+
+          - job: NpmInstall_Windows_x64
+            displayName: npm install validation (win-x64)
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: 1es-windows-2022
+              os: windows
+            steps:
+              - template: /eng/pipelines/templates/npm-cli-install-validation-steps.yml@self
+                parameters:
+                  rid: win-x64
+                  nativeArchiveArtifactName: native_archives_win_x64
+                  validationSummaryArtifactName: $(NPM_VALIDATION_SUMMARY_WIN_X64_ARTIFACT)
+
+          - job: NpmInstall_Linux_x64
+            displayName: npm install validation (linux-x64)
+            timeoutInMinutes: 30
+            pool:
+              name: NetCore1ESPool-Internal
+              image: 1es-ubuntu-2204
+              os: linux
+            steps:
+              - template: /eng/pipelines/templates/npm-cli-install-validation-steps.yml@self
+                parameters:
+                  rid: linux-x64
+                  nativeArchiveArtifactName: native_archives_linux_x64
+                  validationSummaryArtifactName: $(NPM_VALIDATION_SUMMARY_LINUX_X64_ARTIFACT)
+
+          - job: NpmInstall_macOS
+            displayName: npm install validation (macOS native RID)
+            timeoutInMinutes: 30
+            pool:
+              name: Azure Pipelines
+              vmImage: macOS-latest-internal
+              os: macOS
+            steps:
+              - template: /eng/pipelines/templates/npm-cli-install-validation-steps.yml@self
+                parameters:
+                  rid: $(NpmValidationRid)
+                  validationSummaryArtifactName: $(NPM_VALIDATION_SUMMARY_OSX_ARTIFACT)
+                  # The macOS native_archives_* artifact name is computed at
+                  # runtime in the preStep (the agent's architecture decides
+                  # osx-arm64 vs osx-x64) and threaded in as the underscored
+                  # form. AzDO ${{ }} template substitution runs at compile
+                  # time and cannot see runtime variables, so the default
+                  # `native_archives_${{ replace(rid, '-', '_') }}` would
+                  # resolve to the literal `native_archives_$(NpmValidationRid)`
+                  # and fail the artifact download.
+                  nativeArchiveArtifactName: $(NpmValidationArtifactName)
+                  preSteps:
+                    - pwsh: |
+                        $ErrorActionPreference = 'Stop'
+                        $rid = switch ('$(Agent.OSArchitecture)') {
+                          'ARM64' { 'osx-arm64' }
+                          'X64' { 'osx-x64' }
+                          default { throw "Unsupported macOS agent architecture '$(Agent.OSArchitecture)'." }
+                        }
+
+                        Write-Host "Resolved macOS npm validation RID: $rid"
+                        Write-Host "##vso[task.setvariable variable=NpmValidationRid]$rid"
+
+                        # Pre-compute the underscored artifact-name form
+                        # for DownloadPipelineArtifact@2 (it reads the
+                        # value at task runtime, which is fine).
+                        $artifactName = "native_archives_" + $rid.Replace('-', '_')
+                        Write-Host "Resolved macOS npm validation artifact: $artifactName"
+                        Write-Host "##vso[task.setvariable variable=NpmValidationArtifactName]$artifactName"
+                      displayName: 🟣Resolve native macOS RID

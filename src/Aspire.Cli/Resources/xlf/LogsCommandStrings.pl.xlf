@@ -12,9 +12,19 @@
         <target state="needs-review-translation">Przesyłaj dzienniki w czasie rzeczywistym podczas ich zapisywania.</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Dzienniki wyjściowe w formacie JSON (NDJSON).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -35,6 +45,11 @@
       <trans-unit id="ResourceRequiredWithoutFollow">
         <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
         <target state="translated">Nazwa zasobu jest wymagana, jeśli nie używasz opcji --follow. Użyj opcji --follow, aby przesyłać strumieniowo dzienniki ze wszystkich zasobów.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
+        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

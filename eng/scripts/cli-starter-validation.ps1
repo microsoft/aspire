@@ -114,7 +114,7 @@ foreach ($template in $templates)
     {
         try
         {
-            aspire new $templateId --name $projectName --output $projectRoot --channel "pr-$PRNumber" --non-interactive --nologo
+            aspire new $templateId --name $projectName --output $projectRoot --channel "pr-$PRNumber" --non-interactive --nologo --suppress-agent-init
 
             try
             {

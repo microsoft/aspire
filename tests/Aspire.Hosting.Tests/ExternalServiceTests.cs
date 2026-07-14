@@ -54,11 +54,8 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
     [Theory]
     [InlineData("not-a-url")]
     [InlineData("")]
-    [InlineData("https://example.com/path")]  // Invalid: missing trailing slash
     [InlineData("https://example.com/path?query=value")]  // Invalid: has query string
     [InlineData("https://example.com#fragment")]  // Invalid: has fragment
-    [InlineData("https://example.com/service")]  // Invalid: missing trailing slash
-    [InlineData("https://example.com/service/sub")]  // Invalid: missing trailing slash
     [InlineData("https://example.com/?query=1")]  // Invalid: has query string
     public void AddExternalServiceThrowsWithInvalidUrl(string invalidUrl)
     {
@@ -79,13 +76,15 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void AddExternalServiceThrowsWithUriWithoutTrailingSlash()
+    public void AddExternalServiceAcceptsUriWithoutTrailingSlash()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
 
         var uriWithPath = new Uri("https://api.example.com/api/v1");
-        var ex = Assert.Throws<ArgumentException>(() => builder.AddExternalService("nuget", uriWithPath));
-        Assert.Contains("absolute path must end with '/'", ex.Message);
+        var externalService = builder.AddExternalService("nuget", uriWithPath);
+
+        Assert.Equal("nuget", externalService.Resource.Name);
+        Assert.Equal(uriWithPath, externalService.Resource.Uri);
     }
 
     [Theory]
@@ -191,10 +190,31 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
                              .WithReference(externalService);
 
         // Should throw when trying to evaluate environment variables with invalid parameter value
-        await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
         {
             await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
         });
+
+        Assert.Equal("The URL parameter 'nuget-url' for source resource 'nuget' is invalid while configuring target resource 'project': The URL for the external service must be an absolute URI.", ex.Message);
+    }
+
+    [Fact]
+    public async Task ExternalServiceEnvironmentWithInvalidParameterThrowsInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        builder.Configuration["Parameters:nuget-url"] = "invalid-url";
+
+        var urlParam = builder.AddParameter("nuget-url");
+        var externalService = builder.AddExternalService("nuget", urlParam);
+        var project = builder.AddProject<TestProject>("project")
+                             .WithEnvironment("NUGET_URL", externalService);
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
+        {
+            await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(project.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
+        });
+
+        Assert.Equal("The URL parameter 'nuget-url' for source resource 'nuget' is invalid while configuring target resource 'project': The URL for the external service must be an absolute URI.", ex.Message);
     }
 
     [Fact]
@@ -280,10 +300,9 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
         Assert.NotNull(invalidMessage);
         Assert.Contains("absolute URI", invalidMessage);
 
-        Assert.False(ExternalServiceResource.UrlIsValidForExternalService("https://nuget.org/path", out var pathUri, out var pathMessage));
-        Assert.Null(pathUri);
-        Assert.NotNull(pathMessage);
-        Assert.Contains("absolute path must end with '/'", pathMessage);
+        Assert.True(ExternalServiceResource.UrlIsValidForExternalService("https://nuget.org/path", out var pathUri, out var pathMessage));
+        Assert.Equal("https://nuget.org/path", pathUri!.ToString());
+        Assert.Null(pathMessage);
 
         // Test valid paths with trailing slash
         Assert.True(ExternalServiceResource.UrlIsValidForExternalService("https://gateway/orders-service/", out var validPathUri, out var validPathMessage));
@@ -493,13 +512,15 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
     [InlineData("https://host/service")]
     [InlineData("https://host/service/sub")]
     [InlineData("https://host/api")]
-    [InlineData("https://host/service?query=1")]
-    public void ExternalServiceRejectsPathsWithoutTrailingSlash(string invalidUrl)
+    [InlineData("http://gateway:8080/api/v1")]
+    public void ExternalServiceAcceptsPathsWithoutTrailingSlash(string validUrl)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var ex = Assert.Throws<ArgumentException>(() => builder.AddExternalService("service", invalidUrl));
-        Assert.Contains("absolute path must end with '/'", ex.Message);
+        var externalService = builder.AddExternalService("service", validUrl);
+
+        Assert.Equal("service", externalService.Resource.Name);
+        Assert.Equal(validUrl, externalService.Resource.Uri?.ToString());
     }
 
     [Theory]
@@ -544,15 +565,42 @@ public class ExternalServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void WithReferenceThrowsForUriWithoutTrailingSlash()
+    public void WithReferenceAcceptsUriWithoutTrailingSlash()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var project = builder.AddProject<TestProject>("project");
 
         var uri = new Uri("https://api.example.com/service");
+        project.WithReference("api", uri);
+    }
+
+    [Fact]
+    public void WithReferenceThrowsForUriWithFragment()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var project = builder.AddProject<TestProject>("project");
+
+        var uri = new Uri("https://api.example.com/service/#fragment");
         var ex = Assert.Throws<InvalidOperationException>(() => project.WithReference("api", uri));
-        Assert.Contains("absolute path must end with '/'", ex.Message);
+        Assert.Contains("reference 'api'", ex.Message);
+        Assert.Contains("target resource 'project'", ex.Message);
+        Assert.Contains("fragment", ex.Message);
+    }
+
+    [Fact]
+    public void WithReferenceThrowsForUriWithQueryString()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var project = builder.AddProject<TestProject>("project");
+
+        var uri = new Uri("https://api.example.com/service/?query=1");
+        var ex = Assert.Throws<InvalidOperationException>(() => project.WithReference("api", uri));
+        Assert.Contains("reference 'api'", ex.Message);
+        Assert.Contains("target resource 'project'", ex.Message);
+        Assert.Contains("query string", ex.Message);
     }
 
     [Fact]

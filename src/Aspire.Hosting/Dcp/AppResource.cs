@@ -7,21 +7,41 @@ using System.Diagnostics;
 
 namespace Aspire.Hosting.Dcp;
 
-[DebuggerDisplay("DcpResourceName = {DcpResourceName}, DcpResourceKind = {DcpResourceKind}")]
-internal class AppResource: IEquatable<AppResource>
+internal interface IAppResource : IDisposable
 {
-    public CustomResource DcpResource { get; }
+    CustomResource DcpResource { get; }
+    string DcpResourceName { get; }
+    string DcpResourceKind { get; }
+    SemaphoreSlim SerializedOpSemaphore { get; }
+    Task Initialized { get; }
+
+    void MarkInitialized();
+}
+
+[DebuggerDisplay("DcpResourceName = {DcpResourceName}, DcpResourceKind = {DcpResourceKind}")]
+internal class AppResource<TDcpResource> : IAppResource, IDisposable, IEquatable<AppResource<TDcpResource>> where TDcpResource : CustomResource, IKubernetesStaticMetadata
+{
+    public TDcpResource DcpResource { get; }
     public string DcpResourceName => DcpResource.Metadata.Name;
-    public string DcpResourceKind => DcpResource.Kind;
-    
-    public AppResource(CustomResource dcpResource)
+    public string DcpResourceKind => TDcpResource.ObjectKind;
+
+    // Semaphore to serialize operations on this resource. For example, it can be used to ensure 
+    // that resources are not restarted concurrently, nor can they be restarted before their initial setup is complete.
+    public SemaphoreSlim SerializedOpSemaphore { get; } = new SemaphoreSlim(1, 1);
+
+    public Task Initialized => _initializedTcs.Task;
+
+    private readonly TaskCompletionSource _initializedTcs;
+
+    CustomResource IAppResource.DcpResource => DcpResource;
+
+    public AppResource(TDcpResource dcpResource)
     {
         DcpResource = dcpResource;
+        _initializedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
-    public virtual List<ServiceAppResource> ServicesProduced { get; } = [];
-
-    public bool Equals(AppResource? other)
+    public bool Equals(AppResource<TDcpResource>? other)
     {
         if (other is null)
         {
@@ -33,37 +53,35 @@ internal class AppResource: IEquatable<AppResource>
             dr.Metadata.Name == odr.Metadata.Name &&
             dr.Metadata.NamespaceProperty == odr.Metadata.NamespaceProperty;
     }
+
+    public void MarkInitialized()
+    {
+        _initializedTcs.TrySetResult();
+    }
+
+    public void Dispose()
+    {
+        SerializedOpSemaphore.Dispose();
+    }
 }
 
-internal class ServiceAppResource : AppResource
-{
-    public Service Service => (Service)DcpResource;
-    public ServiceAppResource(Service service) : base(service)
-    {
-    }
-    public override List<ServiceAppResource> ServicesProduced
-    {
-        get { throw new InvalidOperationException("Service resources do not produce any services"); }
-    }
-}   
-
 [DebuggerDisplay("ModelResource = {ModelResource}, DcpResourceName = {DcpResourceName}, DcpResourceKind = {DcpResourceKind}")]
-internal class RenderedModelResource : AppResource, IResourceReference
+internal class RenderedModelResource<TDcpResource> : AppResource<TDcpResource>, IResourceReference where TDcpResource : CustomResource, IKubernetesStaticMetadata
 {
     public IResource ModelResource { get; }
-    
-    public RenderedModelResource(IResource modelResource, CustomResource dcpResource): base(dcpResource)
+
+    public RenderedModelResource(IResource modelResource, TDcpResource dcpResource) : base(dcpResource)
     {
         ModelResource = modelResource;
     }
 
-    public new virtual List<ServiceWithModelResource> ServicesProduced { get; } = [];
+    public virtual List<ServiceWithModelResource> ServicesProduced { get; } = [];
     public virtual List<ServiceWithModelResource> ServicesConsumed { get; } = [];
 }
 
-internal sealed class ServiceWithModelResource : RenderedModelResource
+internal sealed class ServiceWithModelResource : RenderedModelResource<Service>
 {
-    public Service Service => (Service)DcpResource;
+    public Service Service => DcpResource;
     public EndpointAnnotation EndpointAnnotation { get; }
 
     public override List<ServiceWithModelResource> ServicesProduced

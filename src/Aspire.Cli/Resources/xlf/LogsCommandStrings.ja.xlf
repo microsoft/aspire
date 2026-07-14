@@ -12,9 +12,19 @@
         <target state="needs-review-translation">ログが書き込まれると同時にリアルタイムでストリームします。</target>
         <note />
       </trans-unit>
+      <trans-unit id="IncludeHiddenOptionDescription">
+        <source>Include hidden resources in the output</source>
+        <target state="new">Include hidden resources in the output</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">ログを JSON 形式 (NDJSON) で出力します。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoLogsFound">
+        <source>No logs found.</source>
+        <target state="new">No logs found.</target>
         <note />
       </trans-unit>
       <trans-unit id="NoResourcesFound">
@@ -35,6 +45,11 @@
       <trans-unit id="ResourceRequiredWithoutFollow">
         <source>A resource name is required when not using --follow. Use --follow to stream logs from all resources.</source>
         <target state="translated">--follow を使わない場合はリソース名の指定が必須です。--follow を使う場合、すべてのリソースのログがストリーミングされます。</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="SearchOptionDescription">
+        <source>Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</source>
+        <target state="new">Full-text search to filter log content. See https://aka.ms/aspire/cli-search for more details</target>
         <note />
       </trans-unit>
       <trans-unit id="SelectAppHostAction">

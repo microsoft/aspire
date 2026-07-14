@@ -1,4 +1,5 @@
 <Project>
+  <Import Project="$(MSBuildThisFileDirectory)/../testing/CITestsProperties.props" />
   <!--
     TestEnumerationRunsheetBuilder - Test Project Metadata Generation
 
@@ -41,11 +42,39 @@
   <Target Name="RunTests"
           Outputs="%(TestToRun.ResultsStdOutPath)"
           Condition="'$(_ShouldSkipProject)' != 'true' and '$(IsGitHubActionsRunner)' == 'true' and '$(RunOnGithubActions)' == 'true'">
-    <!-- Build and generate test partitions for split test projects -->
+    <!-- Split-test partition discovery without compiling the closure.
+
+         For SplitTestsOnCI projects we first try to read [Trait("Partition","<n>")]
+         literals straight from source (no build). Partition-mode projects such as
+         Aspire.Hosting.Tests reference the whole hosting "god-edge" closure (~40
+         integrations); building that closure just to reflect partition traits off
+         the test DLL is the bulk of the enumerate-tests step. The trait values are
+         compile-time string literals, so a source scan yields the identical set,
+         and build-test-matrix.ps1 always appends an "uncollected:*" entry (which
+         maps to filter-not-trait Partition=*) so any class the scan misses runs.
+
+         The scan writes the .tests-partitions.json only when it finds partitions.
+         If none are found (class-mode projects like Aspire.Cli.EndToEnd.Tests /
+         Aspire.Templates.Tests, which enumerate classes against the built assembly),
+         the file is absent and we fall back to the original Build + class discovery.
+         GenerateTestPartitionsForCI itself is untouched, so the AzDO/Helix prepare
+         path that calls it directly is unaffected. -->
+    <PropertyGroup Condition="'$(SplitTestsOnCI)' == 'true'">
+      <_SourcePartitionScanScript>$(MSBuildThisFileDirectory)../scripts/scan-test-partitions-from-source.ps1</_SourcePartitionScanScript>
+      <_SourcePartitionsJsonPath>$([MSBuild]::NormalizePath('$(RepoRoot)', '$(TestArchiveTestsDir)$(MSBuildProjectName).tests-partitions.json'))</_SourcePartitionsJsonPath>
+    </PropertyGroup>
+
+    <Exec Condition="'$(SplitTestsOnCI)' == 'true'"
+          Command="pwsh -NoProfile -ExecutionPolicy Bypass -File &quot;$(_SourcePartitionScanScript)&quot; -ProjectDirectory &quot;$(MSBuildProjectDirectory)&quot; -TestPartitionsJsonFile &quot;$(_SourcePartitionsJsonPath)&quot;"
+          IgnoreExitCode="false"
+          WorkingDirectory="$(RepoRoot)" />
+
+    <!-- Class-mode fallback (and any partition-mode project where the scan found nothing):
+         build the project + its closure and discover via the original DLL-based path. -->
     <MSBuild Projects="$(MSBuildProjectFullPath)"
              Properties="GenerateCIPartitions=true;BuildOs=$(BuildOs)"
              Targets="Build;GenerateTestPartitionsForCI"
-             Condition="'$(SplitTestsOnCI)' == 'true'" />
+             Condition="'$(SplitTestsOnCI)' == 'true' and '$(TestEnumerationMetadataOnly)' != 'true' and !Exists('$(_SourcePartitionsJsonPath)')" />
 
     <!-- Write .tests-metadata.json file -->
     <PropertyGroup>
@@ -53,22 +82,6 @@
       <_RelativeProjectPath>$([System.String]::Copy('$(MSBuildProjectFullPath)').Replace('$(RepoRoot)', ''))</_RelativeProjectPath>
       <!-- Remove leading slash/backslash if present -->
       <_RelativeProjectPath Condition="$(_RelativeProjectPath.StartsWith('/')) or $(_RelativeProjectPath.StartsWith('\\'))">$(_RelativeProjectPath.Substring(1))</_RelativeProjectPath>
-
-      <!-- Determine requiresNugets based on project properties -->
-      <_RequiresNugets>false</_RequiresNugets>
-      <_RequiresNugets Condition="'$(RequiresNugets)' == 'true'">true</_RequiresNugets>
-
-      <!-- Determine requiresTestSdk based on project properties -->
-      <_RequiresTestSdk>false</_RequiresTestSdk>
-      <_RequiresTestSdk Condition="'$(RequiresTestSdk)' == 'true'">true</_RequiresTestSdk>
-
-      <!-- Determine requiresCliArchive based on project properties -->
-      <_RequiresCliArchive>false</_RequiresCliArchive>
-      <_RequiresCliArchive Condition="'$(RequiresCliArchive)' == 'true'">true</_RequiresCliArchive>
-
-      <!-- Determine enablePlaywrightInstall based on project properties -->
-      <_EnablePlaywrightInstall>false</_EnablePlaywrightInstall>
-      <_EnablePlaywrightInstall Condition="'$(EnablePlaywrightInstall)' == 'true'">true</_EnablePlaywrightInstall>
 
       <!-- Build JSON array of supported OSes -->
       <_SupportedOSesJson />
@@ -79,10 +92,6 @@
       <_SupportedOSesJson Condition="'$(_SupportedOSesJson)' != ''">$(_SupportedOSesJson.TrimEnd(','))</_SupportedOSesJson>
 
       <!-- Use custom timeout values if provided, otherwise use defaults -->
-      <_TestSessionTimeout Condition="'$(TestSessionTimeout)' != ''">$(TestSessionTimeout)</_TestSessionTimeout>
-      <_TestSessionTimeout Condition="'$(TestSessionTimeout)' == ''">20m</_TestSessionTimeout>
-      <_TestHangTimeout Condition="'$(TestHangTimeout)' != ''">$(TestHangTimeout)</_TestHangTimeout>
-      <_TestHangTimeout Condition="'$(TestHangTimeout)' == ''">10m</_TestHangTimeout>
       <_UncollectedTestsSessionTimeout Condition="'$(UncollectedTestsSessionTimeout)' != ''">$(UncollectedTestsSessionTimeout)</_UncollectedTestsSessionTimeout>
       <_UncollectedTestsSessionTimeout Condition="'$(UncollectedTestsSessionTimeout)' == ''">15m</_UncollectedTestsSessionTimeout>
       <_UncollectedTestsHangTimeout Condition="'$(UncollectedTestsHangTimeout)' != ''">$(UncollectedTestsHangTimeout)</_UncollectedTestsHangTimeout>
@@ -96,6 +105,19 @@
       <_RunnersJsonParts Condition="'$(_RunnersJsonParts)' != ''">$(_RunnersJsonParts.TrimEnd(','))</_RunnersJsonParts>
       <_RunnersJsonLine Condition="'$(_RunnersJsonParts)' != ''">,
   "runners": {$(_RunnersJsonParts)}</_RunnersJsonLine>
+    </PropertyGroup>
+
+    <!-- Resolve CI test properties dynamically from CITestsProperties.props -->
+    <ItemGroup>
+      <_ResolvedCITestsProperty Include="@(CITestsProperty)">
+        <Value Condition="'$(%(CITestsProperty.MSBuildProp))' == 'true'">true</Value>
+        <Value Condition="'$(%(CITestsProperty.MSBuildProp))' != 'true'">%(CITestsProperty.Default)</Value>
+      </_ResolvedCITestsProperty>
+    </ItemGroup>
+
+    <PropertyGroup>
+      <_PropertiesJsonInner>@(_ResolvedCITestsProperty -> '    &quot;%(Identity)&quot;: %(Value)', ',
+')</_PropertiesJsonInner>
 
       <!-- Build metadata JSON -->
       <_MetadataJson>{
@@ -103,16 +125,13 @@
   "shortName": "$(_ShortName)",
   "testClassNamesPrefix": "$(MSBuildProjectName)",
   "testProjectPath": "$(_RelativeProjectPath)",
-  "requiresNugets": "$(_RequiresNugets.ToLowerInvariant())",
-  "requiresTestSdk": "$(_RequiresTestSdk.ToLowerInvariant())",
-  "requiresCliArchive": "$(_RequiresCliArchive.ToLowerInvariant())",
-  "enablePlaywrightInstall": "$(_EnablePlaywrightInstall.ToLowerInvariant())",
+  "properties": {
+$(_PropertiesJsonInner)
+  },
   "splitTests": "$(SplitTestsOnCI)",
   "supportedOSes": [$(_SupportedOSesJson)],
-  "testSessionTimeout": "$(_TestSessionTimeout)",
-  "testHangTimeout": "$(_TestHangTimeout)",
-  "uncollectedTestsSessionTimeout": "$(_UncollectedTestsSessionTimeout)",
-  "uncollectedTestsHangTimeout": "$(_UncollectedTestsHangTimeout)"$(_RunnersJsonLine)
+  "mtpBaseArgs": "$(MtpBaseArgs)",
+  "uncollectedMtpBaseArgs": "$(_UncollectedMtpBaseArgs)"$(_RunnersJsonLine)
 }</_MetadataJson>
 
       <!-- Use TestArchiveTestsDir if set (for Templates/EndToEnd tests), otherwise use default helix dir -->
@@ -125,7 +144,7 @@
     <MakeDir Directories="$(_MetadataOutputDir)" />
     <WriteLinesToFile File="$(_MetadataFile)" Overwrite="true" Lines="$(_MetadataJson)" />
 
-    <Message Text="Wrote test metadata: $(_MetadataFile) (requiresNugets=$(_RequiresNugets), requiresTestSdk=$(_RequiresTestSdk), requiresCliArchive=$(_RequiresCliArchive), enablePlaywright=$(_EnablePlaywrightInstall), supportedOSes=$(_SupportedOSesJson), path=$(_RelativeProjectPath))" Importance="Low" />
+    <Message Text="Wrote test metadata: $(_MetadataFile) (properties=$(_PropertiesJsonInner), supportedOSes=$(_SupportedOSesJson), path=$(_RelativeProjectPath))" Importance="Low" />
   </Target>
 
 </Project>

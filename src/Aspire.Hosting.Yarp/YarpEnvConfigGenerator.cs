@@ -25,9 +25,10 @@ internal class YarpEnvConfigGenerator
         foreach (var cluster in clusters)
         {
             FlattenToEnvVars(environmentVariables, cluster.ClusterConfig, $"{Prefix}CLUSTERS__{cluster.ClusterConfig.ClusterId}");
-            for (var i =0; i < cluster.Targets.Length; i++)
+            var targets = cluster.GetResolvedTargets();
+            for (var i = 0; i < targets.Length; i++)
             {
-                environmentVariables[$"{Prefix}CLUSTERS__{cluster.ClusterConfig.ClusterId}__DESTINATIONS__destination{i + 1}__ADDRESS"] = cluster.Targets[i];
+                environmentVariables[$"{Prefix}CLUSTERS__{cluster.ClusterConfig.ClusterId}__DESTINATIONS__destination{i + 1}__ADDRESS"] = targets[i];
             }
             // Hack: YARP throws if ClusterConfig.ClusterId is populated in the config.
             // YARP will get the ClusterId from the config key and populate the value in the ClusterConfig itself.

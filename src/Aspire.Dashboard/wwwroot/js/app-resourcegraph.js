@@ -358,7 +358,7 @@ class ResourceGraph {
             .attr("class", "resource-node-border");
         var iconTransform = newNodesContainer
             .append("g")
-            .attr("transform", "translate(-24,-37)")
+            .attr("transform", n => n.endpointText ? "translate(-24,-37)" : "translate(-24,-24)")
         var iconPath = iconTransform
             .append("path");
         iconPath
@@ -389,7 +389,8 @@ class ResourceGraph {
         var endpointGroup = newNodesContainer
             .append("g")
             .attr("transform", "translate(0,28)")
-            .attr("class", "resource-endpoint");
+            .attr("class", "resource-endpoint")
+            .style("display", n => n.endpointText ? null : "none");
         endpointGroup.append("text");
         endpointGroup.append("title");
 
@@ -429,13 +430,14 @@ class ResourceGraph {
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-endpoint")
+            .style("display", n => n.endpointText ? null : "none")
             .select("text")
             .text(n => trimText(n.endpointText, 15));
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-endpoint")
             .select("title")
-            .text(n => n.endpointText);
+            .text(n => n.endpointText || "");
         this.nodeElementsG
             .selectAll(".resource-group")
             .select(".resource-status-circle")
@@ -489,6 +491,9 @@ class ResourceGraph {
         this.simulation.restart();
 
         function trimText(text, maxLength) {
+            if (!text) {
+                return "";
+            }
             if (text.length > maxLength) {
                 return text.slice(0, maxLength) + "\u2026";
             }

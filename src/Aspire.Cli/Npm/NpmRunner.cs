@@ -3,6 +3,7 @@
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Cli.Telemetry;
 using Microsoft.Extensions.Logging;
 using Semver;
 
@@ -11,7 +12,7 @@ namespace Aspire.Cli.Npm;
 /// <summary>
 /// Runs npm CLI commands for package management operations.
 /// </summary>
-internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
+internal sealed class NpmRunner(IEnvironment environment, ILogger<NpmRunner> logger, ProfilingTelemetry profilingTelemetry) : INpmRunner
 {
     /// <summary>
     /// The public npm registry URL. Commands that resolve packages from the registry
@@ -249,9 +250,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
     private static string CreateIsolatedTempDirectory()
     {
-        var tempDir = Path.Combine(Path.GetTempPath(), $"aspire-npm-{Guid.NewGuid():N}");
-        Directory.CreateDirectory(tempDir);
-        return tempDir;
+        return Directory.CreateTempSubdirectory("aspire-npm-").FullName;
     }
 
     private void CleanupTempDirectory(string tempDir)
@@ -273,7 +272,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
     /// Creates a <see cref="ProcessStartInfo"/> configured to run an npm command.
     /// On Windows, .cmd files are invoked via cmd.exe /c for reliable stdout redirection.
     /// </summary>
-    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory)
+    internal static ProcessStartInfo CreateNpmProcessStartInfo(string npmPath, string[] args, string workingDirectory, IEnvironment environment)
     {
         var startInfo = new ProcessStartInfo
         {
@@ -291,7 +290,7 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
         // with ArgumentList (which individually quotes each argument). We must use
         // the Arguments string property and wrap the entire command in an outer set
         // of quotes so cmd.exe preserves interior quoting correctly.
-        if (OperatingSystem.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
+        if (environment.IsWindows() && npmPath.EndsWith(".cmd", StringComparison.OrdinalIgnoreCase))
         {
             startInfo.FileName = "cmd.exe";
             startInfo.Arguments = @$"/c """"{npmPath}"" {string.Join(" ", args.Select(a => @$"""{a}"""))}""";
@@ -353,18 +352,22 @@ internal sealed class NpmRunner(ILogger<NpmRunner> logger) : INpmRunner
 
         try
         {
-            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory);
+            var startInfo = CreateNpmProcessStartInfo(npmPath, args, workingDirectory, environment);
 
             using var process = new Process { StartInfo = startInfo };
+            using var activity = profilingTelemetry.StartNpmCommand(npmPath, args, workingDirectory);
             process.Start();
+            activity.SetProcessId(process.Id);
 
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
 
             await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
+            activity.SetProcessExitCode(process.ExitCode);
 
             if (process.ExitCode != 0)
             {
+                activity.SetError($"npm exited with code {process.ExitCode}.");
                 var errorOutput = await errorTask.ConfigureAwait(false);
                 logger.LogDebug("npm {Args} returned non-zero exit code {ExitCode}: {Error}", argsString, process.ExitCode, errorOutput.Trim());
                 return null;

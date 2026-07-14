@@ -1,0 +1,919 @@
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Collections.Concurrent;
+using System.Globalization;
+using System.Text.Json;
+using System.Threading.Channels;
+using Aspire.Hosting.Dashboard;
+using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Devcontainers.Codespaces;
+using Aspire.Hosting.Tests.Utils;
+using Aspire.Shared.ConsoleLogs;
+using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
+using Microsoft.Extensions.Options;
+
+namespace Aspire.Hosting.Tests.Dashboard;
+
+[Trait("Partition", "3")]
+public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
+{
+    [Theory]
+    [MemberData(nameof(Data))]
+    public async Task WatchDashboardLogs_WrittenToHostLoggerFactory(DateTime? timestamp, string logMessage, string expectedMessage, string expectedCategory, LogLevel expectedLevel)
+    {
+        // Arrange
+        var testSink = new TestSink();
+        var factory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Trace);
+            b.AddProvider(new TestLoggerProvider(testSink));
+            b.AddXunit(testOutputHelper);
+        });
+        var logChannel = Channel.CreateUnbounded<WriteContext>();
+        testSink.MessageLogged += c => logChannel.Writer.TryWrite(c);
+
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create(logger: factory.CreateLogger<ResourceNotificationService>());
+        var configuration = new ConfigurationBuilder().Build();
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, loggerFactory: factory);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+
+        // Get the resource ID from the DCP instances annotation that was added during OnBeforeStartAsync.
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+        var resourceId = dashboardResource.GetResolvedResourceNames()[0];
+
+        // Act
+        // Add the log before publishing the notification. The log is stored in-memory and will be
+        // replayed when WatchResourceLogsAsync subscribes after receiving the notification.
+        var dashboardLoggerState = resourceLoggerService.GetResourceLoggerState(resourceId);
+        dashboardLoggerState.AddLog(LogEntry.Create(timestamp, logMessage, isErrorMessage: false), inMemorySource: true);
+
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s).DefaultTimeout();
+
+        // Assert
+        while (true)
+        {
+            var logContext = await logChannel.Reader.ReadAsync().DefaultTimeout();
+            if (logContext.LoggerName == expectedCategory)
+            {
+                Assert.Equal(expectedMessage, logContext.Message);
+                Assert.Equal(expectedLevel, logContext.LogLevel);
+                break;
+            }
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(LogLevelFilteringData))]
+    public async Task WatchDashboardLogs_AspireDashboardWarningsShown_ThirdPartyWarningsSuppressed(
+        string category, LogLevel logLevel, bool expectLogged, string? expectedCategory)
+    {
+        // Use the real DistributedApplicationBuilder to set up logging filters so the test
+        // exercises the actual production configuration rather than mirroring it.
+        var testSink = new TestSink();
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
+        appBuilder.Services.AddSingleton<ILoggerProvider>(new TestLoggerProvider(testSink));
+        using var app = appBuilder.Build();
+
+        var factory = app.Services.GetRequiredService<ILoggerFactory>();
+        var resourceLoggerService = app.Services.GetRequiredService<ResourceLoggerService>();
+        var resourceNotificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        var configuration = app.Services.GetRequiredService<IConfiguration>();
+
+        var logChannel = Channel.CreateUnbounded<WriteContext>();
+        testSink.MessageLogged += c => logChannel.Writer.TryWrite(c);
+
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, loggerFactory: factory);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+        var resourceId = dashboardResource.GetResolvedResourceNames()[0];
+
+        var timestamp = new DateTime(2001, 12, 29, 23, 59, 59, DateTimeKind.Utc);
+        var message = new DashboardLogMessage
+        {
+            LogLevel = logLevel,
+            Category = category,
+            Message = $"Test message from {category}",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        var messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        var dashboardLoggerState = resourceLoggerService.GetResourceLoggerState(resourceId);
+        dashboardLoggerState.AddLog(LogEntry.Create(timestamp, messageJson, isErrorMessage: false), inMemorySource: true);
+
+        // Add a sentinel log that always passes filters (Error level under Aspire.Dashboard.*
+        // routes to Aspire.Hosting.Dashboard.Sentinel, which is above the Warning threshold).
+        // Since logs are processed in order, observing the sentinel in the channel guarantees
+        // that the preceding test log has already been processed (either logged or filtered).
+        const string SentinelMessage = "SENTINEL_LOG_SYNC";
+        var sentinelMessage = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "Aspire.Dashboard.Sentinel",
+            Message = SentinelMessage,
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        var sentinelJson = JsonSerializer.Serialize(sentinelMessage, DashboardLogMessageContext.Default.DashboardLogMessage);
+        dashboardLoggerState.AddLog(LogEntry.Create(timestamp, sentinelJson, isErrorMessage: false), inMemorySource: true);
+
+        await resourceNotificationService.PublishUpdateAsync(dashboardResource, s => s).DefaultTimeout();
+
+        // Wait for the sentinel to arrive, which confirms all preceding logs have been processed.
+        var logs = new List<WriteContext>();
+        while (true)
+        {
+            var logContext = await logChannel.Reader.ReadAsync().DefaultTimeout();
+            logs.Add(logContext);
+            if (logContext.Message == SentinelMessage)
+            {
+                break;
+            }
+        }
+
+        await hook.DisposeAsync();
+
+        var matchingLogs = logs.Where(l => l.Message == $"Test message from {category}").ToList();
+
+        if (expectLogged)
+        {
+            var matchingLog = Assert.Single(matchingLogs);
+            Assert.Equal(logLevel, matchingLog.LogLevel);
+            Assert.Equal(expectedCategory, matchingLog.LoggerName);
+        }
+        else
+        {
+            Assert.Empty(matchingLogs);
+        }
+    }
+
+    public static IEnumerable<object?[]> LogLevelFilteringData()
+    {
+        // Aspire.Dashboard.* categories: Warning+ should be logged. Prefix is trimmed.
+        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Warning, true, "Aspire.Hosting.Dashboard.Model.IconResolver"];
+        yield return ["Aspire.Dashboard.Model.IconResolver", LogLevel.Error, true, "Aspire.Hosting.Dashboard.Model.IconResolver"];
+        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Information, false, null];
+        yield return ["Aspire.Dashboard.Components.SomePage", LogLevel.Debug, false, null];
+
+        // Third-party categories: only Error+ should be logged. Routed under ThirdParty.
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error, true, "Aspire.Hosting.Dashboard.ThirdParty.Microsoft.AspNetCore.Server.Kestrel"];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Critical, true, "Aspire.Hosting.Dashboard.ThirdParty.Microsoft.AspNetCore.Server.Kestrel"];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Warning, false, null];
+        yield return ["Microsoft.AspNetCore.Server.Kestrel", LogLevel.Information, false, null];
+        yield return ["Grpc.AspNetCore.Server", LogLevel.Warning, false, null];
+        yield return ["Grpc.AspNetCore.Server", LogLevel.Error, true, "Aspire.Hosting.Dashboard.ThirdParty.Grpc.AspNetCore.Server"];
+        yield return ["System.Net.Http.HttpClient", LogLevel.Warning, false, null];
+    }
+
+    [Fact]
+    public async Task BeforeStartAsync_ExcludeLifecycleCommands_CommandsNotAddedToDashboard()
+    {
+        // Arrange
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+
+        // Act
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+        dashboardResource.AddLifeCycleCommands();
+
+        // Assert
+        Assert.Single(dashboardResource.Annotations.OfType<ExcludeLifecycleCommandsAnnotation>());
+        Assert.Empty(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>());
+    }
+
+    [Theory]
+    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123-", "aspire-extension-run-123-dashboard", true)]
+    [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123", "aspire-extension-run-123-dashboard", false)]
+    [InlineData(null, null, null, null, null, null, null)]
+    public async Task BeforeStartAsync_DashboardContainsDebugSessionInfo(string? debugSessionPort, int? expectedDebugSessionPort, string? debugSessionToken, string? debugSessionCert, string? dcpInstanceIdPrefix, string? expectedDcpInstanceId, bool? telemetryEnabled)
+    {
+        // Arrange
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configurationBuilder = new ConfigurationBuilder();
+
+        if (debugSessionPort is not null)
+        {
+            configurationBuilder.AddInMemoryCollection([new KeyValuePair<string, string?>("DEBUG_SESSION_PORT", debugSessionPort)]);
+        }
+
+        if (debugSessionToken is not null)
+        {
+            configurationBuilder.AddInMemoryCollection([new KeyValuePair<string, string?>("DEBUG_SESSION_TOKEN", debugSessionToken)]);
+        }
+
+        if (debugSessionCert is not null)
+        {
+            configurationBuilder.AddInMemoryCollection([new KeyValuePair<string, string?>("DEBUG_SESSION_SERVER_CERTIFICATE", debugSessionCert)]);
+        }
+
+        if (dcpInstanceIdPrefix is not null)
+        {
+            configurationBuilder.AddInMemoryCollection([new KeyValuePair<string, string?>(KnownConfigNames.DcpInstanceIdPrefix, dcpInstanceIdPrefix)]);
+        }
+
+        var configuration = configurationBuilder.Build();
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            TelemetryOptOut = telemetryEnabled,
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:8080",
+            OtlpGrpcEndpointUrl = "http://localhost:4317"
+        });
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+
+        // Act
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+        var dashboardResource = (IResourceWithEndpoints)model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+
+        var httpEndpoint = new EndpointReference(dashboardResource, "http");
+        httpEndpoint.EndpointAnnotation.AllocatedEndpoint = new(httpEndpoint.EndpointAnnotation, "localhost", 8080);
+        var otlpGrpcEndpoint = new EndpointReference(dashboardResource, KnownEndpointNames.OtlpGrpcEndpointName);
+        otlpGrpcEndpoint.EndpointAnnotation.AllocatedEndpoint = new(otlpGrpcEndpoint.EndpointAnnotation, "localhost", 4317);
+
+        var dashboardEnvironmentVariables = new ConcurrentDictionary<string, string?>();
+
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(model)
+        });
+        var dashboardEnvironment = await ExecutionConfigurationBuilder.Create(dashboardResource)
+            .WithEnvironmentVariablesConfig()
+            .BuildAsync(context, new FakeLogger(), CancellationToken.None)
+            .DefaultTimeout();
+
+        var environmentVariables = dashboardEnvironment.EnvironmentVariables.ToDictionary();
+
+        // Assert
+        Assert.Equal(expectedDebugSessionPort?.ToString(), environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionPortName.EnvVarName));
+        Assert.Equal(debugSessionToken, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTokenName.EnvVarName));
+        Assert.Equal(debugSessionCert, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionServerCertificateName.EnvVarName));
+        Assert.Equal(expectedDcpInstanceId, environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionDcpInstanceIdName.EnvVarName));
+        Assert.Equal(telemetryEnabled, bool.TryParse(environmentVariables.GetValueOrDefault(DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName), out var b) ? b : null);
+    }
+
+    [Fact]
+    public async Task ConfigureEnvironmentVariables_HasAspireDashboardEnvVars_CopiedToDashboard()
+    {
+        // Arrange
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configurationBuilder = new ConfigurationBuilder();
+        configurationBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            { "ASPIRE_DASHBOARD_PURPLE_MONKEY_DISHWASHER", "true" }
+        });
+        var configuration = configurationBuilder.Build();
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:8080",
+            OtlpGrpcEndpointUrl = "http://localhost:4317",
+        });
+        var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+        var envVars = new Dictionary<string, object>();
+
+        var dashboardResource = new ExecutableResource("aspire-dashboard", "dashboard.exe", ".");
+        var model = new DistributedApplicationModel([dashboardResource]);
+
+        var context = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = new TestServiceProvider().AddService(model)
+        });
+        // Act
+        await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: envVars, resource: dashboardResource));
+
+        // Assert
+        Assert.Equal("true", envVars.Single(e => e.Key == "ASPIRE_DASHBOARD_PURPLE_MONKEY_DISHWASHER").Value);
+    }
+
+    [Theory]
+    [InlineData("https://localhost:17131", "localhost", 9999, "https", "localhost")]
+    [InlineData("https://aspire-dashboard.dev.localhost:17131", "aspire-dashboard.dev.localhost", 9999, "https", "aspire-dashboard.dev.localhost")]
+    [InlineData("http://myapp.localhost:8080", "myapp.localhost", 5555, "http", "localhost")]
+    public async Task ResourceReadyEvent_LogsDashboardUrlFromAllocatedEndpoint(string configuredUrl, string expectedHost, int allocatedPort, string expectedScheme, string expectedOtlpHost)
+    {
+        // Arrange
+        var testSink = new TestSink();
+        var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Information);
+            b.AddProvider(new TestLoggerProvider(testSink));
+            b.AddXunit(testOutputHelper);
+        });
+        var distributedAppLogger = loggerFactory.CreateLogger<DistributedApplication>();
+
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configurationBuilder = new ConfigurationBuilder();
+        var configuration = configurationBuilder.Build();
+
+        // Configure dashboard with a specific URL - we'll allocate a different port
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = configuredUrl,
+            DashboardToken = "test-token",
+        });
+
+        var eventing = new Hosting.Eventing.DistributedApplicationEventing();
+
+        var hook = CreateHook(
+            resourceLoggerService,
+            resourceNotificationService,
+            configuration,
+            dashboardOptions: dashboardOptions,
+            eventing: eventing,
+            distributedApplicationLogger: distributedAppLogger);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+
+        // Act - Create the dashboard resource
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+
+        // Set up allocated endpoint - DCP allocates "localhost" as the address since localhost TLD binds to localhost
+        var endpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == expectedScheme);
+        endpointAnnotation.AllocatedEndpoint = new(endpointAnnotation, "localhost", allocatedPort, targetPortExpression: allocatedPort.ToString());
+        var otlpGrpcEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        otlpGrpcEndpointAnnotation.AllocatedEndpoint = new(otlpGrpcEndpointAnnotation, "localhost", 4317, targetPortExpression: "4317");
+        var otlpHttpEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        otlpHttpEndpointAnnotation.AllocatedEndpoint = new(otlpHttpEndpointAnnotation, "localhost", 4318, targetPortExpression: "4318");
+
+        // Fire the ResourceReadyEvent
+        var readyEvent = new ResourceReadyEvent(dashboardResource, new TestServiceProvider());
+        await eventing.PublishAsync(readyEvent, CancellationToken.None).DefaultTimeout();
+
+        // Assert - Find the "Now listening on: {DashboardUrl}" log entry by matching the template
+        var listeningLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString() == "Now listening on: {DashboardUrl}");
+
+        Assert.NotNull(listeningLog);
+
+        // Extract the DashboardUrl from the structured log state
+        var dashboardUrlValue = LogTestHelpers.GetValue(listeningLog, "DashboardUrl")?.ToString();
+        Assert.NotNull(dashboardUrlValue);
+
+        // Parse the URL and verify it uses the expected host (configured TLD if applicable) and allocated port
+        var uri = new Uri(dashboardUrlValue);
+        Assert.Equal(expectedHost, uri.Host);
+        Assert.Equal(allocatedPort, uri.Port);
+        Assert.Equal(expectedScheme, uri.Scheme);
+
+        var loginLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString() == "Login to the dashboard at {LoginUrl}");
+
+        Assert.NotNull(loginLog);
+        Assert.Equal($"{expectedScheme}://{expectedHost}:{allocatedPort}/login?t=test-token", LogTestHelpers.GetValue(loginLog, "LoginUrl"));
+
+        var summaryLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
+
+        Assert.NotNull(summaryLog);
+        Assert.Equal($"https://{expectedOtlpHost}:4317", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
+        Assert.Equal($"https://{expectedOtlpHost}:4318", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
+    }
+
+    [Fact]
+    public async Task ResourceReadyEvent_LogsConfiguredOtlpUrlsWhenConfigured()
+    {
+        var testSink = new TestSink();
+        var loggerFactory = LoggerFactory.Create(b =>
+        {
+            b.SetMinimumLevel(LogLevel.Information);
+            b.AddProvider(new TestLoggerProvider(testSink));
+            b.AddXunit(testOutputHelper);
+        });
+        var distributedAppLogger = loggerFactory.CreateLogger<DistributedApplication>();
+
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+
+        var dashboardOptions = Options.Create(new DashboardOptions
+        {
+            DashboardPath = "test.dll",
+            DashboardUrl = "http://localhost:18888",
+            DashboardToken = "test-token",
+            OtlpGrpcEndpointUrl = "http://otel-grpc.example.com:1234",
+            OtlpHttpEndpointUrl = "http://otel-http.example.com:5678",
+        });
+
+        var eventing = new Hosting.Eventing.DistributedApplicationEventing();
+
+        var hook = CreateHook(
+            resourceLoggerService,
+            resourceNotificationService,
+            configuration,
+            dashboardOptions: dashboardOptions,
+            eventing: eventing,
+            distributedApplicationLogger: distributedAppLogger);
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+
+        var httpEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "http");
+        httpEndpointAnnotation.AllocatedEndpoint = new(httpEndpointAnnotation, "localhost", 18888, targetPortExpression: "18888");
+        var otlpGrpcEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        otlpGrpcEndpointAnnotation.AllocatedEndpoint = new(otlpGrpcEndpointAnnotation, "localhost", 4317, targetPortExpression: "4317");
+        var otlpHttpEndpointAnnotation = dashboardResource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpHttpEndpointName);
+        otlpHttpEndpointAnnotation.AllocatedEndpoint = new(otlpHttpEndpointAnnotation, "localhost", 4318, targetPortExpression: "4318");
+
+        var readyEvent = new ResourceReadyEvent(dashboardResource, new TestServiceProvider());
+        await eventing.PublishAsync(readyEvent, CancellationToken.None).DefaultTimeout();
+
+        var summaryLog = testSink.Writes.FirstOrDefault(l =>
+            LogTestHelpers.GetValue(l, "{OriginalFormat}")?.ToString()?.Contains("OTLP/gRPC:") == true);
+
+        Assert.NotNull(summaryLog);
+        // Endpoint-resolved URLs take priority over configured URLs (consistent with frontend URL behavior)
+        Assert.Equal("http://localhost:4317", LogTestHelpers.GetValue(summaryLog, "OtlpGrpcUrl"));
+        Assert.Equal("http://localhost:4318", LogTestHelpers.GetValue(summaryLog, "OtlpHttpUrl"));
+    }
+
+    [Fact]
+    public async Task AddDashboardResource_CreatesExecutableResourceWithCustomRuntimeConfig()
+    {
+        // Arrange
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+
+        // Create a temporary test dashboard directory with a dll and runtimeconfig.json
+        var tempDir = Path.GetTempFileName();
+        File.Delete(tempDir);
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var dashboardDll = Path.Combine(tempDir, "Aspire.Dashboard.dll");
+            var runtimeConfig = Path.Combine(tempDir, "Aspire.Dashboard.runtimeconfig.json");
+
+            // Create a mock DLL file
+            File.WriteAllText(dashboardDll, "mock dll content");
+
+            // Create a mock runtime config similar to the real one
+            var originalConfig = new
+            {
+                runtimeOptions = new
+                {
+                    tfm = "net8.0",
+                    rollForward = "Major",
+                    frameworks = new[]
+                    {
+                        new { name = "Microsoft.NETCore.App", version = "8.0.0" },
+                        new { name = "Microsoft.AspNetCore.App", version = "8.0.0" }
+                    },
+                    configProperties = new
+                    {
+                        SystemGCServer = true,
+                        SystemGCDynamicAdaptationMode = 1,
+                        SystemRuntimeSerializationEnableUnsafeBinaryFormatterSerialization = false
+                    }
+                }
+            };
+
+            File.WriteAllText(runtimeConfig, JsonSerializer.Serialize(originalConfig, new JsonSerializerOptions { WriteIndented = true }));
+
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardDll });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+            var model = new DistributedApplicationModel(new ResourceCollection());
+
+            // Act
+            await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None);
+
+            // Assert
+            var dashboardResource = Assert.Single(model.Resources);
+            Assert.Equal(KnownResourceNames.AspireDashboard, dashboardResource.Name);
+
+            var executableResource = Assert.IsType<ExecutableResource>(dashboardResource);
+            Assert.Equal("dotnet", executableResource.Command);
+
+            // Verify the command line arguments include exec --runtimeconfig
+            var argsAnnotation = executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().Single();
+            var args = new List<object>();
+            await argsAnnotation.Callback(new CommandLineArgsCallbackContext(args));
+
+            Assert.Equal(4, args.Count);
+            Assert.Equal("exec", args[0]);
+            Assert.Equal("--runtimeconfig", args[1]);
+            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(dashboardDll, args[3]);
+
+            // Verify that the custom runtime config has been updated with current framework versions
+            var customConfigContent = File.ReadAllText((string)args[2]);
+            var customConfig = JsonSerializer.Deserialize<JsonElement>(customConfigContent);
+
+            var frameworks = customConfig.GetProperty("runtimeOptions").GetProperty("frameworks").EnumerateArray().ToArray();
+            var netCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.NETCore.App");
+            var aspNetCoreFramework = frameworks.First(f => f.GetProperty("name").GetString() == "Microsoft.AspNetCore.App");
+
+            Assert.Equal("8.0.0", netCoreFramework.GetProperty("version").GetString());
+            Assert.Equal("8.0.0", aspNetCoreFramework.GetProperty("version").GetString());
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AddDashboardResource_WithExecutablePath_CreatesCorrectArguments()
+    {
+        // Arrange
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+
+        var tempDir = Path.GetTempFileName();
+        File.Delete(tempDir);
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var dashboardExe = Path.Combine(tempDir, "Aspire.Dashboard.exe");
+            var dashboardDll = Path.Combine(tempDir, "Aspire.Dashboard.dll");
+            var runtimeConfig = Path.Combine(tempDir, "Aspire.Dashboard.runtimeconfig.json");
+
+            File.WriteAllText(dashboardExe, "mock exe content");
+            File.WriteAllText(dashboardDll, "mock dll content");
+
+            var originalConfig = new
+            {
+                runtimeOptions = new
+                {
+                    tfm = "net8.0",
+                    rollForward = "Major",
+                    frameworks = new[]
+                    {
+                        new { name = "Microsoft.NETCore.App", version = "8.0.0" },
+                        new { name = "Microsoft.AspNetCore.App", version = "8.0.0" }
+                    }
+                }
+            };
+
+            File.WriteAllText(runtimeConfig, JsonSerializer.Serialize(originalConfig, new JsonSerializerOptions { WriteIndented = true }));
+
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardExe });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+            var model = new DistributedApplicationModel(new ResourceCollection());
+
+            // Act
+            await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None);
+
+            // Assert
+            var dashboardResource = Assert.Single(model.Resources);
+            var executableResource = Assert.IsType<ExecutableResource>(dashboardResource);
+            Assert.Equal("dotnet", executableResource.Command);
+
+            var argsAnnotation = executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().Single();
+            var args = new List<object>();
+            await argsAnnotation.Callback(new CommandLineArgsCallbackContext(args));
+
+            Assert.Equal(4, args.Count);
+            Assert.Equal("exec", args[0]);
+            Assert.Equal("--runtimeconfig", args[1]);
+            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(dashboardDll, args[3]);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AddDashboardResource_WithUnixExecutablePath_CreatesCorrectArguments()
+    {
+        // Arrange
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+
+        var tempDir = Path.GetTempFileName();
+        File.Delete(tempDir);
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var dashboardExe = Path.Combine(tempDir, "Aspire.Dashboard");
+            var dashboardDll = Path.Combine(tempDir, "Aspire.Dashboard.dll");
+            var runtimeConfig = Path.Combine(tempDir, "Aspire.Dashboard.runtimeconfig.json");
+
+            File.WriteAllText(dashboardExe, "mock exe content");
+            File.WriteAllText(dashboardDll, "mock dll content");
+
+            var originalConfig = new
+            {
+                runtimeOptions = new
+                {
+                    tfm = "net8.0",
+                    rollForward = "Major",
+                    frameworks = new[]
+                    {
+                        new { name = "Microsoft.NETCore.App", version = "8.0.0" },
+                        new { name = "Microsoft.AspNetCore.App", version = "8.0.0" }
+                    }
+                }
+            };
+
+            File.WriteAllText(runtimeConfig, JsonSerializer.Serialize(originalConfig, new JsonSerializerOptions { WriteIndented = true }));
+
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardExe });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+            var model = new DistributedApplicationModel(new ResourceCollection());
+
+            // Act
+            await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None);
+
+            // Assert
+            var dashboardResource = Assert.Single(model.Resources);
+            var executableResource = Assert.IsType<ExecutableResource>(dashboardResource);
+            Assert.Equal("dotnet", executableResource.Command);
+
+            var argsAnnotation = executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().Single();
+            var args = new List<object>();
+            await argsAnnotation.Callback(new CommandLineArgsCallbackContext(args));
+
+            Assert.Equal(4, args.Count);
+            Assert.Equal("exec", args[0]);
+            Assert.Equal("--runtimeconfig", args[1]);
+            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(dashboardDll, args[3]);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public async Task AddDashboardResource_WithDirectDllPath_CreatesCorrectArguments()
+    {
+        // Arrange
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+
+        var tempDir = Path.GetTempFileName();
+        File.Delete(tempDir);
+        Directory.CreateDirectory(tempDir);
+
+        try
+        {
+            var dashboardDll = Path.Combine(tempDir, "Aspire.Dashboard.dll");
+            var runtimeConfig = Path.Combine(tempDir, "Aspire.Dashboard.runtimeconfig.json");
+
+            File.WriteAllText(dashboardDll, "mock dll content");
+
+            var originalConfig = new
+            {
+                runtimeOptions = new
+                {
+                    tfm = "net8.0",
+                    rollForward = "Major",
+                    frameworks = new[]
+                    {
+                        new { name = "Microsoft.NETCore.App", version = "8.0.0" },
+                        new { name = "Microsoft.AspNetCore.App", version = "8.0.0" }
+                    }
+                }
+            };
+
+            File.WriteAllText(runtimeConfig, JsonSerializer.Serialize(originalConfig, new JsonSerializerOptions { WriteIndented = true }));
+
+            var dashboardOptions = Options.Create(new DashboardOptions { DashboardPath = dashboardDll });
+            var hook = CreateHook(resourceLoggerService, resourceNotificationService, configuration, dashboardOptions: dashboardOptions);
+
+            var model = new DistributedApplicationModel(new ResourceCollection());
+
+            // Act
+            await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None);
+
+            // Assert
+            var dashboardResource = Assert.Single(model.Resources);
+            var executableResource = Assert.IsType<ExecutableResource>(dashboardResource);
+            Assert.Equal("dotnet", executableResource.Command);
+
+            var argsAnnotation = executableResource.Annotations.OfType<CommandLineArgsCallbackAnnotation>().Single();
+            var args = new List<object>();
+            await argsAnnotation.Callback(new CommandLineArgsCallbackContext(args));
+
+            Assert.Equal(4, args.Count);
+            Assert.Equal("exec", args[0]);
+            Assert.Equal("--runtimeconfig", args[1]);
+            Assert.True(File.Exists((string)args[2]), "Custom runtime config file should exist");
+            Assert.Equal(dashboardDll, args[3]);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    private static DashboardEventHandlers CreateHook(
+        ResourceLoggerService resourceLoggerService,
+        ResourceNotificationService resourceNotificationService,
+        IConfiguration configuration,
+        ILoggerFactory? loggerFactory = null,
+        IOptions<CodespacesOptions>? codespacesOptions = null,
+        IOptions<DashboardOptions>? dashboardOptions = null,
+        Hosting.Eventing.DistributedApplicationEventing? eventing = null,
+        ILogger<DistributedApplication>? distributedApplicationLogger = null
+        )
+    {
+        codespacesOptions ??= Options.Create(new CodespacesOptions());
+        dashboardOptions ??= Options.Create(new DashboardOptions { DashboardPath = "test.dll" });
+        var rewriter = new CodespacesUrlRewriter(codespacesOptions);
+        var executionContextServiceProvider = new TestServiceProvider(configuration)
+            .AddService<IDeveloperCertificateService>(new TestDeveloperCertificateService([], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+        var executionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+        {
+            Services = executionContextServiceProvider
+        });
+
+        return new DashboardEventHandlers(
+            configuration,
+            dashboardOptions,
+            distributedApplicationLogger ?? NullLogger<DistributedApplication>.Instance,
+            new TestDashboardEndpointProvider(),
+            executionContext,
+            resourceNotificationService,
+            resourceLoggerService,
+            loggerFactory ?? NullLoggerFactory.Instance,
+            new DcpNameGenerator(configuration, Options.Create(new DcpOptions())),
+            new TestHostApplicationLifetime(),
+            eventing ?? new Hosting.Eventing.DistributedApplicationEventing(),
+            rewriter,
+            new FileSystemService(configuration)
+            );
+    }
+
+    public static IEnumerable<object?[]> Data()
+    {
+        var timestamp = new DateTime(2001, 12, 29, 23, 59, 59, DateTimeKind.Utc);
+
+        // Third-party category (not prefixed with Aspire.Dashboard.) gets routed under ThirdParty.
+        var message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "TestCategory",
+            Message = "Hello world",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        var messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            DateTime.UtcNow,
+            messageJson,
+            "Hello world",
+            "Aspire.Hosting.Dashboard.ThirdParty.TestCategory",
+            LogLevel.Error
+        };
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Hello world",
+            "Aspire.Hosting.Dashboard.ThirdParty.TestCategory",
+            LogLevel.Error
+        };
+
+        // Third-party sub-category with exception.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Critical,
+            Category = "TestCategory.TestSubCategory",
+            Message = "Error message",
+            Exception = new InvalidOperationException("Error!").ToString(),
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            $"Error message{Environment.NewLine}System.InvalidOperationException: Error!",
+            "Aspire.Hosting.Dashboard.ThirdParty.TestCategory.TestSubCategory",
+            LogLevel.Critical
+        };
+
+        // Aspire.Dashboard category — prefix is trimmed and no ThirdParty segment is added.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Warning,
+            Category = "Aspire.Dashboard.Model.IconResolver",
+            Message = "Icon could not be resolved",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Icon could not be resolved",
+            "Aspire.Hosting.Dashboard.Model.IconResolver",
+            LogLevel.Warning
+        };
+
+        // Aspire.Dashboard top-level category.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "Aspire.Dashboard.Components.SomePage",
+            Message = "Component error",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Component error",
+            "Aspire.Hosting.Dashboard.Components.SomePage",
+            LogLevel.Error
+        };
+
+        // Third-party Microsoft.AspNetCore category.
+        message = new DashboardLogMessage
+        {
+            LogLevel = LogLevel.Error,
+            Category = "Microsoft.AspNetCore.Server.Kestrel",
+            Message = "Kestrel error",
+            Timestamp = timestamp.ToString(KnownFormats.ConsoleLogsTimestampFormat, CultureInfo.InvariantCulture),
+        };
+        messageJson = JsonSerializer.Serialize(message, DashboardLogMessageContext.Default.DashboardLogMessage);
+
+        yield return new object?[]
+        {
+            null,
+            messageJson,
+            "Kestrel error",
+            "Aspire.Hosting.Dashboard.ThirdParty.Microsoft.AspNetCore.Server.Kestrel",
+            LogLevel.Error
+        };
+    }
+
+    private sealed class TestDashboardEndpointProvider : IDashboardEndpointProvider
+    {
+        public Task<string> GetResourceServiceUriAsync(CancellationToken cancellationToken = default)
+        {
+            return Task.FromResult("http://localhost:1010");
+        }
+    }
+
+    private sealed class TestHostApplicationLifetime : IHostApplicationLifetime
+    {
+        public CancellationToken ApplicationStarted { get; }
+        public CancellationToken ApplicationStopped { get; }
+        public CancellationToken ApplicationStopping { get; }
+
+        public void StopApplication()
+        {
+        }
+    }
+}

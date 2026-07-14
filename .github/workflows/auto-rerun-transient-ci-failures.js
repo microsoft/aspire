@@ -1,4 +1,28 @@
 // Shared matcher, summary, and rerun helpers for the transient CI rerun workflow.
+//
+// TEMPORARY — FORCE_RERUN_ALL (revert when no longer needed):
+// When the YAML `FORCE_RERUN_ALL` env var is 'true', the workflow runs in force mode:
+// it is a plain short-circuit. If a CI run failed and has a currently-open associated
+// PR, it reruns the failed jobs — full stop. No job is fetched or classified, the
+// patterns config is not consulted, and there is no job-count cap.
+//
+// The two hard gates are already enforced by the YAML trigger `if`, so force mode does
+// not re-implement them:
+//   * "CI failed"      -> trigger only fires on `workflow_run.conclusion == 'failure'`,
+//                         which also means a run that was merely *cancelled* never
+//                         triggers a rerun (its conclusion is 'cancelled', not 'failure').
+//   * "max 3 reruns"   -> trigger gates on `run_attempt <= 3`; computeRerunEligibility
+//                         re-checks the same attempt cap for the manual-dispatch path.
+//
+// Force mode still KEEPS the open-PR requirement (no point spending CI on a run whose
+// PRs are all closed/merged). `forceRerunAll` defaults to false everywhere, so the
+// normal transient-failure classification/eligibility path — and its tests — are
+// unchanged when the flag is off.
+//
+// To disable: flip FORCE_RERUN_ALL to 'false' (or remove the env var) on both jobs in
+// the YAML. See docs/ci/auto-rerun-transient-ci-failures.md.
+const fs = require('node:fs');
+
 const failureConclusions = new Set(['failure', 'cancelled', 'timed_out', 'startup_failure']);
 const ignoredJobs = new Set(['Final Results', 'Tests / Final Test Results']);
 const defaultMaxRetryableJobs = 5;
@@ -91,6 +115,7 @@ const infrastructureNetworkFailureLogOverridePatterns = [
     /expected 'packfile'/i,
     /\bRPC failed\b/i,
     /\bRecv failure\b/i,
+    /Unable to read data from the transport connection: Connection reset by peer/i,
 ];
 
 function matchesAny(value, patterns) {
@@ -257,6 +282,10 @@ function getFailureStepSignals(failedSteps) {
 
 function canUseInfrastructureNetworkLogOverride(failedSteps) {
     return failedSteps.length > 0 && !failedSteps.some(step => matchesAny(step, testExecutionFailureStepPatterns));
+}
+
+function hasTestExecutionFailureStep(failedSteps) {
+    return failedSteps.some(step => matchesAny(step, testExecutionFailureStepPatterns));
 }
 
 function formatFailedStepLabel(failedSteps, failedStepText) {
@@ -428,6 +457,7 @@ async function analyzeFailedJobs({
     getAnnotationsForJob,
     getJobLogTextForJob,
     maxRetryableJobs = defaultMaxRetryableJobs,
+    retryPatternsConfig = null,
 }) {
     const normalizedMaxRetryableJobs =
         Number.isInteger(maxRetryableJobs) && maxRetryableJobs >= 0
@@ -436,6 +466,7 @@ async function analyzeFailedJobs({
     const failedJobs = (jobs || []).filter(job => failureConclusions.has(job.conclusion) && !ignoredJobs.has(job.name));
     const retryableJobs = [];
     const skippedJobs = [];
+    const jobFailurePatterns = retryPatternsConfig?.jobFailurePatterns;
 
     for (const job of failedJobs) {
         const failedSteps = getFailedSteps(job);
@@ -466,6 +497,27 @@ async function analyzeFailedJobs({
             );
         }
 
+        // Third classification pass: configurable job log patterns for test execution failures
+        if (
+            !classification.retryable &&
+            getJobLogTextForJob &&
+            Array.isArray(jobFailurePatterns) &&
+            jobFailurePatterns.length > 0 &&
+            hasTestExecutionFailureStep(failedSteps)
+        ) {
+            const jobLogText = await getJobLogTextForJob(job);
+            const match = matchJobLogPattern(job.name, jobLogText, jobFailurePatterns);
+
+            if (match) {
+                const failedStepText = failedSteps.join(' | ');
+                classification = {
+                    retryable: true,
+                    failedSteps,
+                    reason: `${formatFailedStepLabel(failedSteps, failedStepText)} will be retried because the job log matched a configurable test-retry pattern: ${match.reason}`,
+                };
+            }
+        }
+
         const jobResult = {
             id: job.id,
             name: job.name,
@@ -489,9 +541,23 @@ function computeRerunEligibility({
     retryableCount,
     maxRetryableJobs = defaultMaxRetryableJobs,
     runAttempt = 1,
-    maxRunAttempt = defaultMaxRunAttempt
+    maxRunAttempt = defaultMaxRunAttempt,
+    forceRerunAll = false
 }) {
-    if (retryableCount <= 0 || runAttempt > maxRunAttempt) {
+    // The attempt cap applies in every mode: never rerun past maxRunAttempt source
+    // attempts (up to 3 auto-reruns / 4 total attempts).
+    if (runAttempt > maxRunAttempt) {
+        return false;
+    }
+
+    // FORCE_RERUN_ALL short-circuit: the run failed (YAML trigger gate) and has an open
+    // PR (checked in the workflow), so it is eligible — only the attempt cap above
+    // matters. There is no job-count analysis. See the file-level comment to disable.
+    if (forceRerunAll) {
+        return true;
+    }
+
+    if (retryableCount <= 0) {
         return false;
     }
 
@@ -508,9 +574,10 @@ function computeRerunExecutionEligibility({
     retryableCount,
     maxRetryableJobs = defaultMaxRetryableJobs,
     runAttempt = 1,
-    maxRunAttempt = defaultMaxRunAttempt
+    maxRunAttempt = defaultMaxRunAttempt,
+    forceRerunAll = false
 }) {
-    return !dryRun && computeRerunEligibility({ retryableCount, maxRetryableJobs, runAttempt, maxRunAttempt });
+    return !dryRun && computeRerunEligibility({ retryableCount, maxRetryableJobs, runAttempt, maxRunAttempt, forceRerunAll });
 }
 
 function buildSummaryReference(url, text) {
@@ -564,6 +631,7 @@ async function writeAnalysisSummary({
     rerunEligible,
     sourceRunUrl,
     sourceRunAttempt,
+    testPatternMatchedTests = [],
 }) {
     const analyzedRunReference = buildSummaryReference(
         buildWorkflowRunAttemptUrl(sourceRunUrl, sourceRunAttempt),
@@ -609,6 +677,19 @@ async function writeAnalysisSummary({
         ]);
     }
 
+    if (testPatternMatchedTests.length > 0) {
+        await summary.addHeading('Matched test failure patterns', 2);
+        const displayedTests = testPatternMatchedTests.slice(0, 25);
+        await summary.addTable([
+            [{ data: 'Test', header: true }, { data: 'Reason', header: true }],
+            ...displayedTests.map(test => [test.testName, test.reason]),
+        ]);
+
+        if (testPatternMatchedTests.length > 25) {
+            summary.addRaw(`...and ${testPatternMatchedTests.length - 25} more matched test(s).`).addBreak();
+        }
+    }
+
     if (skippedJobs.length > 0) {
         await summary.addHeading('Skipped jobs', 2);
         await summary.addTable([
@@ -616,6 +697,61 @@ async function writeAnalysisSummary({
             ...skippedJobs.slice(0, 25).map(job => [job.name, job.reason]),
         ]);
     }
+
+    await summary.write();
+}
+
+// FORCE_RERUN_ALL summary. Force mode does not enumerate or classify jobs, so the
+// analyze-step summary is intentionally minimal: it records the eligibility decision
+// (the attempt cap is the only force-mode eligibility rule) and the analyzed run, with
+// no job/skip tables.
+async function writeForceRerunSummary({
+    summary,
+    rerunEligible,
+    dryRun,
+    sourceRunUrl,
+    sourceRunAttempt,
+    runAttempt,
+    maxRunAttempt = defaultMaxRunAttempt,
+    openPullRequestNumbers = [],
+}) {
+    const analyzedRunReference = buildSummaryReference(
+        buildWorkflowRunAttemptUrl(sourceRunUrl, sourceRunAttempt),
+        Number.isInteger(sourceRunAttempt) && sourceRunAttempt > 0
+            ? `workflow run attempt ${sourceRunAttempt}`
+            : 'workflow run'
+    );
+    const outcome = rerunEligible ? 'Rerun eligible' : 'Rerun skipped';
+    // In force mode the only way to be ineligible is the attempt cap: this summary runs
+    // after the open-PR gate (the zero-PR case returns earlier), and force-mode
+    // computeRerunEligibility returns false solely when runAttempt > maxRunAttempt. The
+    // skipped case is reachable only via a manual workflow_dispatch on a run past the cap
+    // (the workflow_run trigger gates run_attempt <= 3, so the auto path is always eligible).
+    const outcomeDetails = rerunEligible
+        ? dryRun
+            ? 'Force-rerun mode: the failed jobs would be rerun if dry run were disabled (transient-failure analysis bypassed).'
+            : 'Force-rerun mode: re-running the failed jobs (transient-failure analysis bypassed).'
+        : `Force-rerun mode: the attempt cap was reached (attempt ${runAttempt} > ${maxRunAttempt}); no rerun was requested.`;
+
+    const summaryRows = [
+        [{ data: 'Category', header: true }, { data: 'Value', header: true }],
+        ['Mode', 'Force rerun (transient-failure analysis bypassed)'],
+        ['Outcome', outcome],
+        ['Source run attempt', String(Number.isInteger(runAttempt) ? runAttempt : sourceRunAttempt ?? 'unknown')],
+        ['Max run attempt', String(maxRunAttempt)],
+        ['Associated pull requests', String(openPullRequestNumbers.length)],
+        ['Dry run', String(dryRun)],
+        ['Eligible to rerun', String(rerunEligible)],
+    ];
+
+    await summary
+        .addHeading(outcome)
+        .addTable(summaryRows);
+
+    addSummaryReference(summary, 'Analyzed run', analyzedRunReference)
+        .addRaw(outcomeDetails)
+        .addBreak()
+        .addBreak();
 
     await summary.write();
 }
@@ -685,12 +821,26 @@ async function getLatestRunAttempt({ github, owner, repo, runId }) {
     }
 }
 
+function sanitizeMarkdown(text) {
+    // Escape backticks and pipe characters to prevent markdown injection
+    return String(text).replace(/[`|]/g, ch => `\\${ch}`);
+}
+
 function buildPullRequestCommentBody({
     failedAttemptUrl,
     rerunAttemptUrl,
     retryableJobs,
+    testPatternMatchedTests = [],
+    forceRerunAll = false,
 }) {
-    return [
+    // FORCE_RERUN_ALL: force mode is a plain short-circuit — no jobs are fetched or
+    // classified, so there is no job list to show. Keep the comment to a single short
+    // line: the failed jobs are being retried. See the file-level comment.
+    if (forceRerunAll) {
+        return `Retrying the failed CI jobs for this pull request from ${formatMarkdownLink('the CI run attempt', failedAttemptUrl)}. The rerun is being tracked in ${formatMarkdownLink('the rerun attempt', rerunAttemptUrl)}.`;
+    }
+
+    const lines = [
         `Re-running the failed jobs in the CI workflow for this pull request because ${retryableJobs.length} job${retryableJobs.length === 1 ? ' was' : 's were'} identified as retry-safe transient failures in ${formatMarkdownLink('the CI run attempt', failedAttemptUrl)}.`,
         `GitHub was asked to rerun all failed jobs for that attempt, and the rerun is being tracked in ${formatMarkdownLink('the rerun attempt', rerunAttemptUrl)}.`,
         'The job links below point to the failed attempt jobs that matched the retry-safe transient failure rules.',
@@ -702,7 +852,25 @@ function buildPullRequestCommentBody({
 
             return `- ${jobReference} - ${job.reason}`;
         }),
-    ].join('\n');
+    ];
+
+    if (testPatternMatchedTests.length > 0) {
+        const displayedTests = testPatternMatchedTests.slice(0, 10);
+        lines.push(
+            '',
+            `<details><summary>Matched test failure patterns (${testPatternMatchedTests.length} test${testPatternMatchedTests.length === 1 ? '' : 's'})</summary>`,
+            '',
+            ...displayedTests.map(test => `- \`${sanitizeMarkdown(test.testName)}\` — ${test.reason}`),
+        );
+
+        if (testPatternMatchedTests.length > 10) {
+            lines.push(`- ...and ${testPatternMatchedTests.length - 10} more`);
+        }
+
+        lines.push('', '</details>');
+    }
+
+    return lines.join('\n');
 }
 
 async function addPullRequestComments({ github, owner, repo, pullRequestNumbers, body }) {
@@ -735,8 +903,13 @@ async function rerunMatchedJobs({
     sourceRunId,
     sourceRunUrl,
     sourceRunAttempt,
+    testPatternMatchedTests = [],
+    forceRerunAll = false,
 }) {
-    if (retryableJobs.length === 0) {
+    // Normal mode lists retry-safe jobs first; an empty list means nothing to rerun.
+    // Force mode is a short-circuit that does not enumerate jobs (retryableJobs is
+    // empty by design), so it must proceed to the rerun regardless.
+    if (!forceRerunAll && retryableJobs.length === 0) {
         return;
     }
 
@@ -747,6 +920,9 @@ async function rerunMatchedJobs({
         pullRequestNumbers,
     });
 
+    // The open-PR gate applies in all modes (including force mode): a rerun is
+    // skipped when every associated PR is closed. There is no value in spending CI on
+    // a closed/merged PR, so force mode does NOT bypass this.
     if (pullRequestNumbers.length > 0 && openPullRequestNumbers.length === 0) {
         const failedAttemptReference = buildWorkflowRunReference(sourceRunUrl, sourceRunAttempt);
         await summary
@@ -801,6 +977,8 @@ async function rerunMatchedJobs({
                 failedAttemptUrl: failedAttemptReference.url,
                 rerunAttemptUrl: rerunAttemptReference.url,
                 retryableJobs,
+                testPatternMatchedTests,
+                forceRerunAll,
             }),
         });
     }
@@ -810,7 +988,20 @@ async function rerunMatchedJobs({
 
     addSummaryReference(summaryBuilder, 'Failed attempt', failedAttemptReference);
     addSummaryReference(summaryBuilder, 'Rerun attempt', rerunAttemptReference);
-    addSummaryCommentReferences(summaryBuilder, postedComments)
+    addSummaryCommentReferences(summaryBuilder, postedComments);
+
+    // Force mode does not enumerate jobs, so there is no retry-safe job table to show.
+    if (forceRerunAll) {
+        summaryBuilder
+            .addBreak()
+            .addRaw('Force-rerun mode: the CI run failed, so GitHub was asked to rerun all failed jobs for the failed attempt. Transient-failure analysis was bypassed.')
+            .addBreak();
+
+        await summaryBuilder.write();
+        return;
+    }
+
+    summaryBuilder
         .addBreak()
         .addRaw('The matched jobs below made the run eligible for rerun. GitHub was asked to rerun all failed jobs for the failed attempt.')
         .addBreak()
@@ -826,22 +1017,465 @@ async function rerunMatchedJobs({
     await summaryBuilder.write();
 }
 
+// --- Test failure retry pattern matching ---
+
+const maxTestOutputLength = 10 * 1024; // 10KB cap for test output to prevent ReDoS
+
+function loadRetryPatternsConfig(configPath) {
+    try {
+        const content = fs.readFileSync(configPath, 'utf8');
+        const config = JSON.parse(content);
+        const validation = validateRetryPatternsConfig(config);
+
+        if (!validation.valid) {
+            return { config: null, errors: validation.errors };
+        }
+
+        const warnings = compileRetryPatterns(config);
+
+        return { config, errors: [], warnings };
+    }
+    catch (error) {
+        return { config: null, errors: [`Failed to load config: ${error.message}`] };
+    }
+}
+
+function compileRetryPatterns(config) {
+    const warnings = [];
+    const allRules = [
+        ...(config.testFailurePatterns || []),
+        ...(config.jobFailurePatterns || []),
+    ];
+
+    for (const rule of allRules) {
+        for (const value of Object.values(rule)) {
+            if (value && typeof value === 'object' && typeof value.regex === 'string') {
+                try {
+                    value._compiledRegex = new RegExp(value.regex, 'i');
+                }
+                catch (error) {
+                    warnings.push(`Invalid regex '${value.regex}': ${error.message} — rule will be skipped.`);
+                    rule.enabled = false;
+                }
+            }
+        }
+    }
+
+    return warnings;
+}
+
+function validateRetryPatternsConfig(config) {
+    const errors = [];
+
+    if (!config || typeof config !== 'object' || Array.isArray(config)) {
+        errors.push('Config must be a non-null object.');
+        return { valid: false, errors };
+    }
+
+    const allowedTopLevel = new Set(['version', 'testFailurePatterns', 'jobFailurePatterns']);
+    for (const key of Object.keys(config)) {
+        if (!allowedTopLevel.has(key)) {
+            errors.push(`Unknown top-level property '${key}'.`);
+        }
+    }
+
+    if (config.version !== 1) {
+        errors.push(`Expected version 1, got ${JSON.stringify(config.version)}.`);
+    }
+
+    const testPatternAllowedFields = new Set(['testName', 'testProject', 'output', 'reason', 'enabled']);
+    const jobPatternAllowedFields = new Set(['jobName', 'output', 'reason', 'enabled']);
+    const testPatternMatcherFields = ['testName', 'testProject', 'output'];
+    const jobPatternMatcherFields = ['jobName', 'output'];
+
+    if (config.testFailurePatterns !== undefined) {
+        if (!Array.isArray(config.testFailurePatterns)) {
+            errors.push('testFailurePatterns must be an array.');
+        }
+        else {
+            config.testFailurePatterns.forEach((rule, i) => {
+                validatePatternRule(rule, `testFailurePatterns[${i}]`, testPatternAllowedFields, testPatternMatcherFields, errors);
+            });
+        }
+    }
+
+    if (config.jobFailurePatterns !== undefined) {
+        if (!Array.isArray(config.jobFailurePatterns)) {
+            errors.push('jobFailurePatterns must be an array.');
+        }
+        else {
+            config.jobFailurePatterns.forEach((rule, i) => {
+                validatePatternRule(rule, `jobFailurePatterns[${i}]`, jobPatternAllowedFields, jobPatternMatcherFields, errors);
+            });
+        }
+    }
+
+    return { valid: errors.length === 0, errors };
+}
+
+function validatePatternRule(rule, path, allowedFields, matcherFields, errors) {
+    if (!rule || typeof rule !== 'object' || Array.isArray(rule)) {
+        errors.push(`${path}: must be a non-null object.`);
+        return;
+    }
+
+    for (const key of Object.keys(rule)) {
+        if (!allowedFields.has(key)) {
+            errors.push(`${path}: unknown field '${key}'.`);
+        }
+    }
+
+    if (typeof rule.reason !== 'string' || rule.reason.trim().length === 0) {
+        errors.push(`${path}: 'reason' must be a non-empty string.`);
+    }
+
+    if (rule.enabled !== undefined && typeof rule.enabled !== 'boolean') {
+        errors.push(`${path}: 'enabled' must be a boolean.`);
+    }
+
+    const hasMatcherField = matcherFields.some(field => rule[field] !== undefined);
+    if (!hasMatcherField) {
+        errors.push(`${path}: must contain at least one matcher field (${matcherFields.join(', ')}).`);
+    }
+
+    for (const field of matcherFields) {
+        if (rule[field] !== undefined) {
+            validatePatternValue(rule[field], `${path}.${field}`, errors);
+        }
+    }
+}
+
+function validatePatternValue(value, path, errors) {
+    if (typeof value === 'string') {
+        if (value.length === 0) {
+            errors.push(`${path}: string pattern must be non-empty.`);
+        }
+        return;
+    }
+
+    if (value && typeof value === 'object' && !Array.isArray(value)) {
+        if (typeof value.regex !== 'string' || value.regex.length === 0) {
+            errors.push(`${path}: regex pattern must have a non-empty 'regex' string.`);
+            return;
+        }
+
+        const allowedRegexKeys = new Set(['regex']);
+        for (const key of Object.keys(value)) {
+            if (!allowedRegexKeys.has(key)) {
+                errors.push(`${path}: unknown regex property '${key}'.`);
+            }
+        }
+
+        try {
+            new RegExp(value.regex, 'i');
+        }
+        catch (regexError) {
+            errors.push(`${path}: invalid regex '${value.regex}': ${regexError.message}`);
+        }
+
+        return;
+    }
+
+    errors.push(`${path}: must be a string or { "regex": "..." } object.`);
+}
+
+function matchesRetryPattern(text, patternValue) {
+    if (!text || !patternValue) {
+        return false;
+    }
+
+    if (typeof patternValue === 'string') {
+        return text.toLowerCase().includes(patternValue.toLowerCase());
+    }
+
+    if (patternValue && typeof patternValue === 'object') {
+        if (patternValue._compiledRegex) {
+            return patternValue._compiledRegex.test(text);
+        }
+
+        if (typeof patternValue.regex === 'string') {
+            try {
+                return new RegExp(patternValue.regex, 'i').test(text);
+            }
+            catch {
+                return false;
+            }
+        }
+    }
+
+    return false;
+}
+
+function isPatternEnabled(rule) {
+    return rule.enabled !== false;
+}
+
+function matchTestFailurePatterns(failedTests, testProject, patterns) {
+    if (!Array.isArray(failedTests) || failedTests.length === 0 || !Array.isArray(patterns) || patterns.length === 0) {
+        return { shouldRetry: false, matchedTests: [] };
+    }
+
+    const enabledPatterns = patterns.filter(isPatternEnabled);
+    if (enabledPatterns.length === 0) {
+        return { shouldRetry: false, matchedTests: [] };
+    }
+
+    const matchedTests = [];
+
+    for (const test of failedTests) {
+        for (const pattern of enabledPatterns) {
+            if (matchesSingleTestPattern(test, testProject, pattern)) {
+                const matchedSnippet = extractMatchedSnippet(test.output, pattern.output);
+                matchedTests.push({
+                    testName: test.testName,
+                    reason: pattern.reason,
+                    matchedSnippet,
+                });
+                break; // first matching rule wins per test
+            }
+        }
+    }
+
+    return { shouldRetry: matchedTests.length > 0, matchedTests };
+}
+
+function matchesSingleTestPattern(test, testProject, pattern) {
+    if (pattern.testName !== undefined && !matchesRetryPattern(test.testName, pattern.testName)) {
+        return false;
+    }
+
+    if (pattern.testProject !== undefined && !matchesRetryPattern(testProject, pattern.testProject)) {
+        return false;
+    }
+
+    if (pattern.output !== undefined && !matchesRetryPattern(test.output, pattern.output)) {
+        return false;
+    }
+
+    return true;
+}
+
+function extractMatchedSnippet(output, patternOutput) {
+    if (!output || !patternOutput) {
+        return '';
+    }
+
+    const maxSnippetLength = 200;
+    const searchTerm = typeof patternOutput === 'string' ? patternOutput : null;
+
+    if (searchTerm) {
+        const lowerOutput = output.toLowerCase();
+        const lowerSearch = searchTerm.toLowerCase();
+        const index = lowerOutput.indexOf(lowerSearch);
+
+        if (index >= 0) {
+            const start = Math.max(0, index - 40);
+            const end = Math.min(output.length, index + searchTerm.length + 40);
+            let snippet = output.slice(start, end);
+
+            if (start > 0) {
+                snippet = '...' + snippet;
+            }
+
+            if (end < output.length) {
+                snippet = snippet + '...';
+            }
+
+            return snippet.length > maxSnippetLength
+                ? snippet.slice(0, maxSnippetLength - 3) + '...'
+                : snippet;
+        }
+    }
+
+    return output.length > maxSnippetLength
+        ? output.slice(0, maxSnippetLength - 3) + '...'
+        : output;
+}
+
+function matchJobLogPattern(jobName, jobLogText, patterns) {
+    if (!Array.isArray(patterns) || patterns.length === 0) {
+        return null;
+    }
+
+    const enabledPatterns = patterns.filter(isPatternEnabled);
+
+    for (const pattern of enabledPatterns) {
+        if (pattern.jobName !== undefined && !matchesRetryPattern(jobName, pattern.jobName)) {
+            continue;
+        }
+
+        if (pattern.output !== undefined && !matchesRetryPattern(jobLogText, pattern.output)) {
+            continue;
+        }
+
+        return { matched: true, reason: pattern.reason };
+    }
+
+    return null;
+}
+
+function extractFailedTestsFromTrx(trxContent) {
+    if (!trxContent || typeof trxContent !== 'string') {
+        return [];
+    }
+
+    const failedTests = [];
+
+    // Match UnitTestResult elements with outcome="Failed" (handles attribute order variation)
+    const resultRegex = /<UnitTestResult\b[^>]*\boutcome\s*=\s*"Failed"[^>]*>[\s\S]*?<\/UnitTestResult>/gi;
+    let resultMatch;
+
+    while ((resultMatch = resultRegex.exec(trxContent)) !== null) {
+        const block = resultMatch[0];
+        const testNameMatch = block.match(/\btestName\s*=\s*"([^"]*)"/i);
+
+        if (!testNameMatch) {
+            continue;
+        }
+
+        const testName = decodeXmlEntities(testNameMatch[1]);
+        const message = extractXmlElementContent(block, 'Message');
+        const stackTrace = extractXmlElementContent(block, 'StackTrace');
+        const stdOut = extractXmlElementContent(block, 'StdOut');
+
+        let output = [message, stackTrace, stdOut].filter(Boolean).join('\n');
+
+        if (output.length > maxTestOutputLength) {
+            output = output.slice(0, maxTestOutputLength);
+        }
+
+        failedTests.push({ testName, output });
+    }
+
+    return failedTests;
+}
+
+function extractXmlElementContent(xml, elementName) {
+    const regex = new RegExp(`<${elementName}>([\\s\\S]*?)</${elementName}>`, 'i');
+    const match = xml.match(regex);
+    return match ? decodeXmlEntities(match[1].trim()) : '';
+}
+
+function decodeXmlEntities(text) {
+    if (!text) {
+        return '';
+    }
+
+    return text
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&apos;/g, "'")
+        .replace(/&amp;/g, '&');
+}
+
+function analyzeTrxFiles(trxFileContents, testFailurePatterns) {
+    if (!Array.isArray(trxFileContents) || trxFileContents.length === 0 || !Array.isArray(testFailurePatterns) || testFailurePatterns.length === 0) {
+        return { allMatchedTests: [] };
+    }
+
+    const allMatchedTests = [];
+    const seenTestNames = new Set();
+
+    for (const { fileName, content } of trxFileContents) {
+        const failedTests = extractFailedTestsFromTrx(content);
+        const testProject = String(fileName || '').replace(/\.trx$/i, '');
+        const { matchedTests } = matchTestFailurePatterns(failedTests, testProject, testFailurePatterns);
+
+        for (const match of matchedTests) {
+            if (!seenTestNames.has(match.testName)) {
+                seenTestNames.add(match.testName);
+                allMatchedTests.push({ ...match, testProject });
+            }
+        }
+    }
+
+    return { allMatchedTests };
+}
+
+function promoteTestExecutionFailureJobs(retryableJobs, skippedJobs, allMatchedTests) {
+    if (!Array.isArray(allMatchedTests) || allMatchedTests.length === 0) {
+        return { retryableJobs, skippedJobs, promotedJobs: [] };
+    }
+
+    const matchSummary = [...new Set(allMatchedTests.map(m => m.reason))].join(', ');
+    const promotedJobs = [];
+    const remainingSkippedJobs = [];
+
+    for (const job of skippedJobs) {
+        if (hasTestExecutionFailureStep(job.failedSteps)) {
+            promotedJobs.push({
+                ...job,
+                reason: `Test execution failure will be retried because ${allMatchedTests.length} failed test(s) matched transient test failure patterns (${matchSummary}).`,
+                matchedTests: allMatchedTests,
+            });
+        }
+        else {
+            remainingSkippedJobs.push(job);
+        }
+    }
+
+    return {
+        retryableJobs: [...retryableJobs, ...promotedJobs],
+        skippedJobs: remainingSkippedJobs,
+        promotedJobs,
+    };
+}
+
+function selectTestResultsArtifact(artifacts) {
+    if (!Array.isArray(artifacts) || artifacts.length === 0) {
+        return null;
+    }
+
+    const maxArtifactBytes = 100 * 1024 * 1024; // 100MB cap
+    const candidates = artifacts
+        .filter(a => a.name === 'All-TestResults' && !a.expired)
+        .sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+
+    if (candidates.length === 0) {
+        return null;
+    }
+
+    const selected = candidates[0];
+
+    if (selected.size_in_bytes > maxArtifactBytes) {
+        return null;
+    }
+
+    return selected;
+}
+
 module.exports = {
     addPullRequestComments,
     analyzeFailedJobs,
+    analyzeTrxFiles,
     annotationText,
     buildPullRequestCommentBody,
     classifyFailedJob,
+    compileRetryPatterns,
     computeRerunEligibility,
     computeRerunExecutionEligibility,
+    decodeXmlEntities,
     defaultMaxRetryableJobs,
+    extractFailedTestsFromTrx,
+    extractMatchedSnippet,
     formatMatchedPatternForMarkdown,
     findInfrastructureNetworkLogOverridePattern,
     getAssociatedPullRequestNumbers,
     getCheckRunIdForJob,
     getOpenPullRequestNumbers,
     getLatestRunAttempt,
+    hasTestExecutionFailureStep,
     listPullRequestsByHead,
+    loadRetryPatternsConfig,
+    matchesRetryPattern,
+    matchJobLogPattern,
+    matchTestFailurePatterns,
+    promoteTestExecutionFailureJobs,
     rerunMatchedJobs,
+    selectTestResultsArtifact,
+    testExecutionFailureStepPatterns,
+    validateRetryPatternsConfig,
     writeAnalysisSummary,
+    writeForceRerunSummary,
 };

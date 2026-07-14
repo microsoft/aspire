@@ -150,7 +150,10 @@
   <data name="HeaderHealth" xml:space="preserve">
     <value>Health</value>
   </data>
-  <data name="HeaderEndpoints" xml:space="preserve">
-    <value>Endpoints</value>
+  <data name="IncludeHiddenOptionDescription" xml:space="preserve">
+    <value>Include hidden resources in the output</value>
+  </data>
+  <data name="HeaderURLs" xml:space="preserve">
+    <value>URLs</value>
   </data>
 </root>

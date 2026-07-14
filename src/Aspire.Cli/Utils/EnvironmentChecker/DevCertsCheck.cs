@@ -13,8 +13,12 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// <summary>
 /// Checks if the HTTPS development certificate is trusted and detects multiple certificates.
 /// </summary>
-internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateToolRunner certificateToolRunner) : IEnvironmentCheck
+internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateToolRunner certificateToolRunner, IEnvironment environment) : IEnvironmentCheck
 {
+    internal const string CheckName = "dev-certs";
+    internal const string VersionCheckName = "dev-certs-version";
+    internal const string CertUtilCheckName = "dev-certs-certutil";
+
     public int Order => 35; // After SDK check (30), before container checks (40+)
 
     private static readonly string s_trustFixCommand = string.Format(CultureInfo.InvariantCulture, DoctorCommandStrings.DevCertsTrustFixFormat, "aspire certs trust");
@@ -25,7 +29,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         try
         {
             var trustResult = certificateToolRunner.CheckHttpCertificate();
-            var results = EvaluateCertificateResults(trustResult.Certificates);
+            var results = EvaluateCertificateResults(trustResult.Certificates, environment);
+            AddLinuxCertificateToolWarnings(results, environment);
 
             return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>(results);
         }
@@ -34,8 +39,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             logger.LogDebug(ex, "Error checking dev-certs");
             return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = "Unable to check HTTPS development certificate",
                 Details = ex.Message
@@ -47,16 +52,17 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     /// Evaluates certificate information and produces the appropriate check results.
     /// </summary>
     /// <param name="certInfos">Certificate information from <see cref="ICertificateToolRunner.CheckHttpCertificate"/>.</param>
+    /// <param name="environment">The environment abstraction for reading environment variables.</param>
     /// <returns>The list of environment check results.</returns>
     internal static List<EnvironmentCheckResult> EvaluateCertificateResults(
-        IReadOnlyList<DevCertInfo> certInfos)
+        IReadOnlyList<DevCertInfo> certInfos, IEnvironment environment)
     {
         if (certInfos.Count == 0)
         {
             return [new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.DevCertsNoCertificateMessage,
                 Details = DoctorCommandStrings.DevCertsNoCertificateDetails,
@@ -96,8 +102,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             {
                 results.Add(new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "dev-certs",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Warning,
                     Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsMultipleNoneTrustedMessageFormat, certInfos.Count),
                     Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsMultipleNoneTrustedDetailsFormat, certDetails),
@@ -110,8 +116,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             {
                 results.Add(new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "dev-certs",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Warning,
                     Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsMultipleSomeUntrustedMessageFormat, certInfos.Count),
                     Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsMultipleSomeUntrustedDetailsFormat, certDetails),
@@ -125,8 +131,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             {
                 results.Add(new EnvironmentCheckResult
                 {
-                    Category = "environment",
-                    Name = "dev-certs",
+                    Category = EnvironmentCheckCategories.Environment,
+                    Name = CheckName,
                     Status = EnvironmentCheckStatus.Pass,
                     Message = DoctorCommandStrings.DevCertsTrustedMessage,
                     Metadata = metadata
@@ -139,8 +145,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             var cert = certInfos[0];
             results.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.DevCertsNotTrustedMessage,
                 Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsNotTrustedDetailsFormat, cert.Thumbprint ?? "unknown"),
@@ -152,15 +158,15 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         else if (partiallyTrustedCount > 0 && fullyTrustedCount == 0)
         {
             // Certificate is partially trusted (Linux with SSL_CERT_DIR not configured)
-            var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath();
+            var devCertsTrustPath = CertificateHelpers.GetDevCertsTrustPath(environment);
             results.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = DoctorCommandStrings.DevCertsPartiallyTrustedMessage,
                 Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsPartiallyTrustedDetailsFormat, devCertsTrustPath),
-                Fix = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsPartiallyTrustedFixFormat, BuildSslCertDirFixCommand(devCertsTrustPath)),
+                Fix = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsPartiallyTrustedFixFormat, BuildSslCertDirFixCommand(devCertsTrustPath, environment)),
                 Link = "https://aka.ms/aspire-prerequisites#dev-certs",
                 Metadata = metadata
             });
@@ -170,8 +176,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             // Trusted certificate - success case
             results.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = CheckName,
                 Status = EnvironmentCheckStatus.Pass,
                 Message = DoctorCommandStrings.DevCertsTrustedMessage,
                 Metadata = metadata
@@ -184,8 +190,8 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             var versions = string.Join(", ", oldTrustedVersions.Select(v => $"v{v}"));
             results.Add(new EnvironmentCheckResult
             {
-                Category = "environment",
-                Name = "dev-certs-version",
+                Category = EnvironmentCheckCategories.Environment,
+                Name = VersionCheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOldVersionMessageFormat, versions),
                 Details = string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOldVersionDetailsFormat, CertificateManager.CurrentMinimumAspNetCoreCertificateVersion),
@@ -195,6 +201,34 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         }
 
         return results;
+    }
+
+    private static void AddLinuxCertificateToolWarnings(List<EnvironmentCheckResult> results, IEnvironment environment)
+    {
+        if (!environment.IsLinux())
+        {
+            return;
+        }
+
+        var environmentVariables = environment.GetEnvironmentVariables()
+            .Where(kv => kv.Value is not null)
+            .ToDictionary(kv => kv.Name, kv => kv.Value!);
+
+        if (PathLookupHelper.TryResolveExecutablePath(CertificateHelpers.CertUtilCommand, out _, environmentVariables))
+        {
+            return;
+        }
+
+        results.Add(new EnvironmentCheckResult
+        {
+            Category = EnvironmentCheckCategories.Environment,
+            Name = CertUtilCheckName,
+            Status = EnvironmentCheckStatus.Warning,
+            Message = DoctorCommandStrings.DevCertsMissingCertUtilMessage,
+            Details = DoctorCommandStrings.DevCertsMissingCertUtilDetails,
+            Fix = DoctorCommandStrings.DevCertsMissingCertUtilFix,
+            Link = "https://aka.ms/aspire-prerequisites#dev-certs"
+        });
     }
 
     /// <summary>
@@ -236,9 +270,9 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     /// locations, matching the behavior of <see cref="Aspire.Cli.Certificates.CertificateService"/>.
     /// </para>
     /// </remarks>
-    private static string BuildSslCertDirFixCommand(string devCertsTrustPath)
+    private static string BuildSslCertDirFixCommand(string devCertsTrustPath, IEnvironment environment)
     {
-        var currentSslCertDir = Environment.GetEnvironmentVariable("SSL_CERT_DIR");
+        var currentSslCertDir = environment.GetEnvironmentVariable("SSL_CERT_DIR");
 
         if (!string.IsNullOrEmpty(currentSslCertDir))
         {

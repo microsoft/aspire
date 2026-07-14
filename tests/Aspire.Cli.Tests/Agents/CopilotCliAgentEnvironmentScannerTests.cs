@@ -19,10 +19,10 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ScanAsync_WhenCopilotCliInstalled_ReturnsApplicator()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
+        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -35,7 +35,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ApplyAsync_CreatesMcpConfigJsonWithCorrectConfiguration()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         
         // Create a temporary .copilot folder in the workspace to avoid modifying the user's home directory
         var copilotFolder = workspace.CreateDirectory(".copilot");
@@ -43,7 +43,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
         // Create a scanner that writes to a known test location
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
+        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -93,7 +93,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ApplyAsync_PreservesExistingMcpConfigContent()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var copilotFolder = workspace.CreateDirectory(".copilot");
         
         // Create an existing mcp-config.json with another server
@@ -112,7 +112,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
+        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -133,7 +133,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ScanAsync_WhenAspireAlreadyConfigured_ReturnsPlaywrightCliApplicatorOnly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var copilotFolder = workspace.CreateDirectory(".copilot");
         
         // Create an existing mcp-config.json with aspire already configured
@@ -152,7 +152,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
+        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -165,10 +165,11 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ScanAsync_WhenInVSCode_ReturnsApplicatorWithoutCallingRunner()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var copilotCliRunner = new FakeCopilotCliRunner(null); // Return null to verify it's not called
-        var executionContext = CreateExecutionContextWithVSCode(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
+        var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
+        var vsCodeEnvironment = new TestEnvironment(new Dictionary<string, string?> { ["TERM_PROGRAM"] = "vscode" });
+        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, vsCodeEnvironment, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -191,41 +192,16 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
     private static CliExecutionContext CreateExecutionContext(DirectoryInfo workingDirectory)
     {
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: workingDirectory,
-            cacheDirectory: workingDirectory,
-            sdksDirectory: workingDirectory,
-            logsDirectory: workingDirectory,
-            logFilePath: "test.log",
+        return TestExecutionContextHelper.CreateExecutionContext(
+            workingDirectory,
             debugMode: false,
-            environmentVariables: new Dictionary<string, string?>(),
-            homeDirectory: workingDirectory);
-    }
-
-    private static CliExecutionContext CreateExecutionContextWithVSCode(DirectoryInfo workingDirectory)
-    {
-        var environmentVariables = new Dictionary<string, string?>
-        {
-            ["TERM_PROGRAM"] = "vscode"
-        };
-        
-        return new CliExecutionContext(
-            workingDirectory: workingDirectory,
-            hivesDirectory: workingDirectory,
-            cacheDirectory: workingDirectory,
-            sdksDirectory: workingDirectory,
-            logsDirectory: workingDirectory,
-            logFilePath: "test.log",
-            debugMode: false,
-            environmentVariables: environmentVariables,
             homeDirectory: workingDirectory);
     }
 
     [Fact]
     public async Task ApplyAsync_WithMalformedMcpJson_ThrowsInvalidOperationException()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var copilotFolder = workspace.CreateDirectory(".copilot");
 
         // Create a malformed mcp-config.json
@@ -234,7 +210,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
+        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -253,7 +229,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ApplyAsync_WithEmptyMcpJson_ThrowsInvalidOperationException()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var copilotFolder = workspace.CreateDirectory(".copilot");
 
         // Create an empty mcp-config.json
@@ -262,7 +238,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
+        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();
@@ -278,7 +254,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
     [Fact]
     public async Task ApplyAsync_WithMalformedMcpJson_DoesNotOverwriteFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var copilotFolder = workspace.CreateDirectory(".copilot");
 
         // Create a malformed mcp-config.json with content the user may want to preserve
@@ -288,7 +264,7 @@ public class CopilotCliAgentEnvironmentScannerTests(ITestOutputHelper outputHelp
 
         var copilotCliRunner = new FakeCopilotCliRunner(new SemVersion(1, 0, 0));
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
-        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
+        var scanner = new CopilotCliAgentEnvironmentScanner(copilotCliRunner, CreatePlaywrightCliInstaller(), executionContext, new TestEnvironment(), NullLogger<CopilotCliAgentEnvironmentScanner>.Instance);
         var context = CreateScanContext(workspace.WorkspaceRoot);
 
         await scanner.ScanAsync(context, CancellationToken.None).DefaultTimeout();

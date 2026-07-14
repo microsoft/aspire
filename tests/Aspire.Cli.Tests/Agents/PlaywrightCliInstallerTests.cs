@@ -431,6 +431,44 @@ public class PlaywrightCliInstallerTests
     }
 
     [Fact]
+    public async Task InstallAsync_WorkflowRefValidator_AcceptsBothTagFormats()
+    {
+        var tempDir = CreateTestRepoRoot();
+
+        try
+        {
+            var version = SemVersion.Parse("0.1.7", SemVersionStyles.Strict);
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = version, Integrity = "sha512-abc123" }
+            };
+            var provenanceChecker = new TestNpmProvenanceChecker();
+            var playwrightRunner = new TestPlaywrightCliRunner();
+            var installer = new PlaywrightCliInstaller(npmRunner, provenanceChecker, playwrightRunner, new TestInteractionService(), new ConfigurationBuilder().Build(), NullLogger<PlaywrightCliInstaller>.Instance);
+
+            await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+
+            Assert.True(provenanceChecker.ProvenanceCalled);
+            Assert.NotNull(provenanceChecker.CapturedValidateWorkflowRef);
+
+            // Accept tags without 'v' prefix (0.1.7+)
+            Assert.True(WorkflowRefInfo.TryParse($"refs/tags/{version}", out var refWithout));
+            Assert.True(provenanceChecker.CapturedValidateWorkflowRef(refWithout!));
+
+            // Accept tags with 'v' prefix (pre-0.1.7)
+            Assert.True(WorkflowRefInfo.TryParse($"refs/tags/v{version}", out var refWith));
+            Assert.True(provenanceChecker.CapturedValidateWorkflowRef(refWith!));
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public async Task InstallAsync_WhenProvenanceCheckFails_ReturnsErrorMessage()
     {
         var tempDir = CreateTestRepoRoot();
@@ -538,6 +576,47 @@ public class PlaywrightCliInstallerTests
             await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
 
             Assert.Equal("0.2.0", npmRunner.ResolvedVersionRange);
+        }
+        finally
+        {
+            if (Directory.Exists(tempDir))
+            {
+                Directory.Delete(tempDir, recursive: true);
+            }
+        }
+    }
+
+    [Theory]
+    [InlineData(">=0.2.0")]
+    [InlineData("latest")]
+    [InlineData("0.2")]
+    [InlineData("not-a-version")]
+    [InlineData("v0.2.0")]
+    public async Task InstallAsync_WhenVersionOverrideIsNotStrictSemVer_ReturnsFailed(string invalidVersion)
+    {
+        var tempDir = CreateTestRepoRoot();
+
+        try
+        {
+            var npmRunner = new TestNpmRunner
+            {
+                ResolveResult = new NpmPackageInfo { Version = SemVersion.Parse("0.2.0", SemVersionStyles.Strict), Integrity = "sha512-abc123" }
+            };
+            var playwrightRunner = new TestPlaywrightCliRunner();
+            var configuration = new ConfigurationBuilder()
+                .AddInMemoryCollection(new Dictionary<string, string?>
+                {
+                    [PlaywrightCliInstaller.VersionOverrideKey] = invalidVersion
+                })
+                .Build();
+            var installer = new PlaywrightCliInstaller(npmRunner, new TestNpmProvenanceChecker(), playwrightRunner, new TestInteractionService(), configuration, NullLogger<PlaywrightCliInstaller>.Instance);
+
+            var (status, message) = await installer.InstallAsync(tempDir, s_emptySkillDirs, CancellationToken.None);
+
+            Assert.Equal(PlaywrightInstallStatus.Failed, status);
+            Assert.NotNull(message);
+            Assert.Contains(invalidVersion, message);
+            Assert.Null(npmRunner.ResolvedVersionRange);
         }
         finally
         {
@@ -962,6 +1041,7 @@ public class PlaywrightCliInstallerTests
     private sealed class TestNpmRunner : INpmRunner
     {
         public bool IsAvailable => true;
+
         public NpmPackageInfo? ResolveResult { get; set; }
         public string? PackResult { get; set; }
         public bool AuditResult { get; set; } = true;
@@ -997,10 +1077,12 @@ public class PlaywrightCliInstallerTests
     {
         public ProvenanceVerificationOutcome ProvenanceOutcome { get; set; } = ProvenanceVerificationOutcome.Verified;
         public bool ProvenanceCalled { get; private set; }
+        public Func<WorkflowRefInfo, bool>? CapturedValidateWorkflowRef { get; private set; }
 
-        public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, CancellationToken cancellationToken, string? sriIntegrity = null)
+        public Task<ProvenanceVerificationResult> VerifyProvenanceAsync(string packageName, string version, string expectedSourceRepository, string expectedWorkflowPath, string expectedBuildType, Func<WorkflowRefInfo, bool>? validateWorkflowRef, string? sriIntegrity, CancellationToken cancellationToken)
         {
             ProvenanceCalled = true;
+            CapturedValidateWorkflowRef = validateWorkflowRef;
             return Task.FromResult(new ProvenanceVerificationResult
             {
                 Outcome = ProvenanceOutcome,

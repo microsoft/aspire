@@ -17,9 +17,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
         var values = new Dictionary<string,string?>();
         configure?.Invoke(values);
         var configuration = new ConfigurationBuilder().AddInMemoryCollection(values).Build();
-        var hives = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
-        var cacheDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cache"));
-        var ctx = new CliExecutionContext(workspace.WorkspaceRoot, hives, cacheDir, new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-runtimes")), new DirectoryInfo(Path.Combine(Path.GetTempPath(), "aspire-test-logs")), "test.log");
+        var ctx = workspace.CreateExecutionContext();
         var loggerFactory = NullLoggerFactory.Instance; // no-op logging is fine here
         var logger = loggerFactory.CreateLogger<DiskCache>();
         return new DiskCache(logger, ctx, configuration);
@@ -28,7 +26,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CacheMissThenHit()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace);
         var key = "query=foo|prerelease=False|take=10|skip=0|nugetConfigHash=abc|cliVersion=1.0";
 
@@ -43,7 +41,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ExpiredEntryReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // Force very small expiry window (1 second)
         var cache = CreateCache(workspace, cfg =>
         {
@@ -63,7 +61,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewerEntrySupersedesOlder()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace, cfg =>
         {
             cfg["PackageSearchCacheExpirySeconds"] = "60";
@@ -90,7 +88,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ClearRemovesEntries()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var cache = CreateCache(workspace);
         var key = "query=clear|prerelease=False|take=10|skip=0|nugetConfigHash=jkl|cliVersion=1.0";
         await cache.SetAsync(key, "VALUE", CancellationToken.None).DefaultTimeout();
@@ -104,7 +102,7 @@ public class DiskCacheTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task OldFilesBeyondMaxAgeAreDeletedOnAccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         // Max age = 1 second so we can simulate cleanup; expiry large to still treat as hit if not cleaned
         var cache = CreateCache(workspace, cfg =>
         {

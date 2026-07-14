@@ -256,12 +256,36 @@ public sealed record RelationshipSnapshot(string ResourceName, string Type);
 public sealed record ResourcePropertySnapshot(string Name, object? Value)
 {
     /// <summary>
+    /// The display name visible in UI.
+    /// </summary>
+    /// <remarks>
+    /// If not specified, clients may use the <see cref="Name"/> as the display name.
+    /// </remarks>
+    public string? DisplayName { get; init; }
+
+    /// <summary>
     /// Whether this property is considered sensitive or not.
     /// </summary>
     /// <remarks>
     /// Sensitive properties are masked when displayed in UI and require an explicit user action to reveal.
     /// </remarks>
     public bool IsSensitive { get; init; }
+
+    /// <summary>
+    /// A flag indicating whether the property is highlighted in the UI.
+    /// </summary>
+    /// <remarks>
+    /// Highlighted properties are shown by default even if the client does not otherwise recognize the property name.
+    /// </remarks>
+    public bool IsHighlighted { get; init; }
+
+    /// <summary>
+    /// Gets the optional sort order used when displaying the property in UI.
+    /// </summary>
+    /// <remarks>
+    /// Properties with lower values are displayed before properties with higher values.
+    /// </remarks>
+    public int? SortOrder { get; init; }
 
     internal void Deconstruct(out string name, out object? value, out bool isSensitive)
     {
@@ -282,7 +306,7 @@ public sealed record ResourcePropertySnapshot(string Name, object? Value)
 /// Could be used as a tooltip. May be localized.
 /// </param>
 /// <param name="Parameter">
-/// Optional parameter that configures the command in some way.
+/// Obsolete optional parameter that configures the command in some way.
 /// Clients must return any value provided by the server when invoking the command.
 /// </param>
 /// <param name="ConfirmationMessage">
@@ -293,7 +317,18 @@ public sealed record ResourcePropertySnapshot(string Name, object? Value)
 /// <param name="IconVariant">The icon variant.</param>
 /// <param name="IsHighlighted">A flag indicating whether the command is highlighted in the UI.</param>
 [DebuggerDisplay(null, Name = "{Name}")]
-public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState State, string DisplayName, string? DisplayDescription, object? Parameter, string? ConfirmationMessage, string? IconName, IconVariant? IconVariant, bool IsHighlighted);
+public sealed record ResourceCommandSnapshot(string Name, ResourceCommandState State, string DisplayName, string? DisplayDescription, [property: Obsolete("Use Arguments to describe invocation arguments.")] object? Parameter, string? ConfirmationMessage, string? IconName, IconVariant? IconVariant, bool IsHighlighted)
+{
+    /// <summary>
+    /// Gets the invocation arguments accepted by the command.
+    /// </summary>
+    public IReadOnlyList<InteractionInput> Arguments { get; init; } = [];
+
+    /// <summary>
+    /// Gets where the command is visible to users and clients.
+    /// </summary>
+    public ResourceCommandVisibility Visibility { get; init; } = ResourceCommandVisibility.UI | ResourceCommandVisibility.Api;
+}
 
 /// <summary>
 /// A report produced by a health check about a resource.
@@ -328,6 +363,28 @@ public enum ResourceCommandState
     /// Command is hidden.
     /// </summary>
     Hidden
+}
+
+/// <summary>
+/// Describes where a resource command is visible.
+/// </summary>
+[Flags]
+public enum ResourceCommandVisibility
+{
+    /// <summary>
+    /// The command is not visible to any clients.
+    /// </summary>
+    None = 0,
+
+    /// <summary>
+    /// The command is displayed in UI clients.
+    /// </summary>
+    UI = 1 << 0,
+
+    /// <summary>
+    /// The command is exposed through resource command API discovery.
+    /// </summary>
+    Api = 1 << 1
 }
 
 /// <summary>
@@ -416,6 +473,11 @@ public static class KnownResourceStates
     /// The building state. Useful for showing the resource is being rebuilt.
     /// </summary>
     public static readonly string Building = nameof(Building);
+
+    /// <summary>
+    /// The value missing state. Useful for showing a parameter resource is waiting for a value.
+    /// </summary>
+    public static readonly string ValueMissing = nameof(ValueMissing);
 
     /// <summary>
     /// The not active state. Useful for resources without a lifetime.

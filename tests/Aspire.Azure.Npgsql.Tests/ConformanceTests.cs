@@ -21,15 +21,15 @@ public class ConformanceTests : ConformanceTests<NpgsqlDataSource, AzureNpgsqlSe
     // https://github.com/npgsql/npgsql/blob/ef9db1ffe9e432c1562d855b46dfac3514726b1b/src/Npgsql.OpenTelemetry/TracerProviderBuilderExtensions.cs#L18
     protected override string ActivitySourceName => "Npgsql";
 
-    protected override string[] RequiredLogCategories => new string[]
-    {
-        "Npgsql.Connection",
-        "Npgsql.Command",
-        "Npgsql.Transaction",
-        "Npgsql.Copy",
-        "Npgsql.Replication",
-        "Npgsql.Exception"
-    };
+    protected override RequiredLogCategory[] RequiredLogCategories =>
+    [
+        new("Npgsql.Connection"),
+        new("Npgsql.Command"),
+        new("Npgsql.Transaction"),
+        new("Npgsql.Copy"),
+        new("Npgsql.Replication"),
+        new("Npgsql.Exception"),
+    ];
 
     protected override bool SupportsKeyedRegistrations => true;
 

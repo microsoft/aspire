@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui;
 
 namespace Aspire.Hosting;
@@ -18,6 +19,7 @@ public static class MauiProjectExtensions
     /// <param name="name">The name of the resource.</param>
     /// <param name="projectPath">The path to the .NET MAUI project file (.csproj). This can be a relative or absolute path.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method creates a parent MAUI project resource that serves as a container for platform-specific
     /// resources such as Windows, Android, iOS, and macOS. The actual platform instances are added using
@@ -42,7 +44,7 @@ public static class MauiProjectExtensions
     /// builder.Build().Run();
     /// </code>
     /// </example>
-    [AspireExport(Description = "Adds a .NET MAUI project to the application model.")]
+    [AspireExport]
     public static IResourceBuilder<MauiProjectResource> AddMauiProject(
         this IDistributedApplicationBuilder builder,
         [ResourceName] string name,
@@ -60,6 +62,11 @@ public static class MauiProjectExtensions
         // Do not register the logical grouping resource with AddResource so it stays invisible in the dashboard
         // Only MAUI project targets added through their extension methods will show up
         var resource = new MauiProjectResource(name, projectPath);
+
+        // Add the build queue annotation eagerly so it's ready before any platform resources start.
+        // This avoids a race condition when multiple platforms start concurrently.
+        resource.Annotations.Add(new MauiBuildQueueAnnotation());
+
         return builder.CreateResourceBuilder(resource);
     }
 }

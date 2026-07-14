@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using System.Text.Json;
 using System.Text.Json.Serialization;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Layout;
+using Aspire.Cli.Resources;
 using Microsoft.Extensions.Logging;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -18,15 +20,18 @@ namespace Aspire.Cli.NuGet;
 internal sealed class BundleNuGetPackageCache : INuGetPackageCache
 {
     private readonly IBundleService _bundleService;
+    private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly ILogger<BundleNuGetPackageCache> _logger;
     private readonly IFeatures _features;
 
     public BundleNuGetPackageCache(
         IBundleService bundleService,
+        LayoutProcessRunner layoutProcessRunner,
         ILogger<BundleNuGetPackageCache> logger,
         IFeatures features)
     {
         _bundleService = bundleService;
+        _layoutProcessRunner = layoutProcessRunner;
         _logger = logger;
         _features = features;
     }
@@ -39,7 +44,8 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     {
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
-            "Aspire.ProjectTemplates",
+            query: "Aspire.ProjectTemplates",
+            exactMatch: false,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -55,7 +61,8 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     {
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
-            "Aspire.Hosting",
+            query: "Aspire.Hosting",
+            exactMatch: false,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -71,7 +78,8 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     {
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
-            "Aspire.Cli",
+            query: "Aspire.Cli",
+            exactMatch: false,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -90,7 +98,8 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
     {
         var packages = await SearchPackagesInternalAsync(
             workingDirectory,
-            packageId,
+            query: packageId,
+            exactMatch: false,
             prerelease,
             nugetConfigFile,
             cancellationToken).ConfigureAwait(false);
@@ -98,15 +107,37 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         return FilterPackages(packages, filter);
     }
 
+    public async Task<IEnumerable<NuGetPackage>> GetPackageVersionsAsync(
+        DirectoryInfo workingDirectory,
+        string exactPackageId,
+        bool prerelease,
+        FileInfo? nugetConfigFile,
+        bool useCache,
+        CancellationToken cancellationToken)
+    {
+        var packages = await SearchPackagesInternalAsync(
+            workingDirectory,
+            query: exactPackageId,
+            exactMatch: true,
+            prerelease,
+            nugetConfigFile,
+            cancellationToken).ConfigureAwait(false);
+
+        bool FilterExactIdMatch(string? id) => string.Equals(id, exactPackageId, StringComparison.Ordinal);
+        return FilterPackages(packages, FilterExactIdMatch);
+    }
+
     private async Task<IEnumerable<NuGetPackage>> SearchPackagesInternalAsync(
         DirectoryInfo workingDirectory,
         string query,
+        bool exactMatch,
         bool prerelease,
         FileInfo? nugetConfigFile,
         CancellationToken cancellationToken)
     {
-        // Ensure the bundle is extracted and get the layout in a single call
-        var layout = await _bundleService.EnsureExtractedAndGetLayoutAsync(cancellationToken).ConfigureAwait(false);
+        // Ensure the bundle is extracted and lease the version before launching aspire-managed.
+        using var layoutLease = await _bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "nuget-search", cancellationToken).ConfigureAwait(false);
+        var layout = layoutLease?.Layout;
         if (layout is null)
         {
             throw new InvalidOperationException("Bundle layout not found. Cannot perform NuGet search in bundle mode.");
@@ -155,10 +186,18 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         _logger.LogDebug("NuGet search args: {Args}", string.Join(" ", args));
         _logger.LogDebug("Working directory: {WorkingDir}", workingDirectory.FullName);
 
-        var (exitCode, output, error) = await LayoutProcessRunner.RunAsync(
+        var environmentVariables = new Dictionary<string, string>();
+        layoutLease?.AddEnvironment(environmentVariables);
+
+        var (exitCode, output, error) = await _layoutProcessRunner.RunAsync(
             managedPath,
             args,
             workingDirectory: workingDirectory.FullName,
+            environmentVariables: environmentVariables,
+            // A package search against a slow/unresponsive NuGet source can hang. LayoutProcessRunner uses
+            // this to bind the helper to the CLI's Windows kill-on-close job (and, on non-Windows, to
+            // instead arm the cooperative parent-liveness watchdog) so a hard-killed CLI cannot leak it.
+            killOnParentExit: true,
             ct: cancellationToken).ConfigureAwait(false);
 
         // Log stderr output (verbose info from NuGetHelper)
@@ -172,7 +211,7 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             _logger.LogError("NuGet search failed with exit code {ExitCode}", exitCode);
             _logger.LogError("NuGet search stderr: {Error}", error);
             _logger.LogError("NuGet search stdout: {Output}", output);
-            throw new NuGetPackageCacheException($"Package search failed: {error}");
+            throw new NuGetPackageCacheException(string.Format(CultureInfo.CurrentCulture, ErrorStrings.FailedToSearchForPackages, exitCode));
         }
 
         _logger.LogDebug("NuGet search returned {Length} bytes", output?.Length ?? 0);
@@ -192,22 +231,41 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
             }
 
             // Convert to NuGetPackage format
-            return result.Packages.Select(p => new NuGetPackage
+            if (!exactMatch)
             {
-                Id = p.Id,
-                Version = p.Version,
-                Source = p.Source ?? string.Empty
-            }).ToList();
+                return result.Packages.Select(p => new NuGetPackage
+                {
+                    Id = p.Id,
+                    Version = p.Version,
+                    Source = p.Source ?? string.Empty
+                }).ToList();
+            }
+            else
+            {
+                var exactMatchResultPackage = result.Packages
+                    .FirstOrDefault(p => p.Id.Equals(query, StringComparison.Ordinal));
+                if (exactMatchResultPackage is null || exactMatchResultPackage.AllVersions is null)
+                {
+                    return [];
+                }
+                return exactMatchResultPackage.AllVersions.Select(packageVersion => new NuGetPackage
+                {
+                    Id = exactMatchResultPackage.Id,
+                    Version = packageVersion,
+                    Source = exactMatchResultPackage.Source ?? string.Empty
+                }).ToList();
+            }
         }
         catch (JsonException ex)
         {
             _logger.LogError(ex, "Failed to parse search results");
-            throw new NuGetPackageCacheException($"Failed to parse search results: {ex.Message}");
+            throw new NuGetPackageCacheException(ErrorStrings.FailedToParsePackageSearchResults);
         }
     }
 
     private IEnumerable<NuGetPackage> FilterPackages(IEnumerable<NuGetPackage> packages, Func<string, bool>? filter)
     {
+        var showDeprecatedPackages = _features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false);
         var effectiveFilter = (NuGetPackage p) =>
         {
             if (filter is not null)
@@ -215,10 +273,10 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
                 return filter(p.Id);
             }
 
-            var isOfficialPackage = IsOfficialOrCommunityToolkitPackage(p.Id);
+            var isOfficialPackage = PackageIdFilters.IsOfficialOrCommunityToolkitPackage(p.Id);
 
             // Apply deprecated package filter unless the user wants to show deprecated packages
-            if (isOfficialPackage && !_features.IsFeatureEnabled(KnownFeatures.ShowDeprecatedPackages, defaultValue: false))
+            if (isOfficialPackage && !showDeprecatedPackages)
             {
                 return !DeprecatedPackages.IsDeprecated(p.Id);
             }
@@ -227,22 +285,6 @@ internal sealed class BundleNuGetPackageCache : INuGetPackageCache
         };
 
         return packages.Where(effectiveFilter);
-    }
-
-    private static bool IsOfficialOrCommunityToolkitPackage(string packageName)
-    {
-        var isHostingOrCommunityToolkitNamespaced = packageName.StartsWith("Aspire.Hosting.", StringComparison.Ordinal) ||
-               packageName.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.Ordinal) ||
-               packageName.Equals("Aspire.ProjectTemplates", StringComparison.Ordinal) ||
-               packageName.Equals("Aspire.Cli", StringComparison.Ordinal);
-
-        var isExcluded = packageName.StartsWith("Aspire.Hosting.AppHost") ||
-                         packageName.StartsWith("Aspire.Hosting.Sdk") ||
-                         packageName.StartsWith("Aspire.Hosting.Orchestration") ||
-                         packageName.StartsWith("Aspire.Hosting.Testing") ||
-                         packageName.StartsWith("Aspire.Hosting.Msi");
-
-        return isHostingOrCommunityToolkitNamespaced && !isExcluded;
     }
 }
 
@@ -273,4 +315,3 @@ internal sealed partial class BundleSearchJsonContext : JsonSerializerContext
 }
 
 #endregion
-

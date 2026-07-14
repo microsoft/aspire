@@ -13,7 +13,7 @@ namespace Aspire.Hosting.Azure;
 /// When this annotation is present, the annotated resource should be configured to deny public network access.
 /// </remarks>
 /// <param name="privateEndpointResource">The private endpoint resource associated with the annotated Azure resource.</param>
-[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/dotnet/aspire/diagnostics#{0}")]
+[Experimental("ASPIREAZURE003", UrlFormat = "https://aka.ms/aspire/diagnostics#{0}")]
 public sealed class PrivateEndpointTargetAnnotation(AzureProvisioningResource privateEndpointResource) : IResourceAnnotation
 {
     /// <summary>

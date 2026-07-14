@@ -5,6 +5,7 @@ using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Utilities;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
@@ -22,7 +23,7 @@ public partial class AspireMenu : FluentComponentBase
     public bool Anchored { get; set; } = true;
 
     [Parameter]
-    public int VerticalThreshold { get; set; } = 200;
+    public int? VerticalThreshold { get; set; }
 
     /// <summary>
     /// Raised when the <see cref="Open"/> property changed.
@@ -32,6 +33,25 @@ public partial class AspireMenu : FluentComponentBase
 
     [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether focus should return to <see cref="Anchor"/> after a menu item is clicked.
+    /// </summary>
+    /// <remarks>
+    /// Use this only for button-anchored menus where <see cref="Anchor"/> identifies the element that opened the menu.
+    /// Do not enable it for cursor-positioned or context menus where <see cref="Anchor"/> is only used for positioning.
+    /// </remarks>
+    [Parameter]
+    public bool RestoreFocusOnItemClick { get; set; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
+
+    // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
+    private const int EstimatedItemHeight = 32;
+    private const int MenuVerticalPadding = 16;
+
+    private int CalculatedVerticalThreshold => VerticalThreshold ?? (Items.Count * EstimatedItemHeight + MenuVerticalPadding);
 
     public async Task CloseAsync()
     {
@@ -62,7 +82,7 @@ public partial class AspireMenu : FluentComponentBase
                 left = clientX;
             }
 
-            if (clientY + menu.VerticalThreshold > screenHeight)
+            if (clientY + CalculatedVerticalThreshold > screenHeight)
             {
                 bottom = screenHeight - clientY;
             }
@@ -77,17 +97,13 @@ public partial class AspireMenu : FluentComponentBase
                 .AddStyle("right", $"{right}px", right != 0)
                 .AddStyle("top", $"{top}px", top != 0)
                 .AddStyle("bottom", $"{bottom}px", bottom != 0)
-                // max-width and min-width values come from fluentui-blazor stylesheet
-                // explicitly set to override min-width: fit-content applied by library to some menus
-                .AddStyle("max-width", "368px")
+                // Width values come from fluentui-blazor stylesheet; max-width uses an app CSS variable so nested submenus stay in sync.
+                // Explicitly set to override min-width: fit-content applied by library to some menus.
+                .AddStyle("max-width", "var(--aspire-menu-max-width)")
                 .AddStyle("min-width", "64px")
                 .Build();
 
-            Open = true;
-            if (OpenChanged.HasDelegate)
-            {
-                await OpenChanged.InvokeAsync(Open);
-            }
+            await SetOpenAsync(true);
 
             StateHasChanged();
         }
@@ -99,15 +115,26 @@ public partial class AspireMenu : FluentComponentBase
         {
             await onClick();
         }
-        Open = false;
+        await SetOpenAsync(false);
+
+        if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
+        {
+            await JS.InvokeVoidAsync("focusElement", Anchor);
+        }
     }
 
-    private Task OnOpenChanged(bool open)
+    private async Task OnOpenChanged(bool open)
+    {
+        await SetOpenAsync(open);
+    }
+
+    private async Task SetOpenAsync(bool open)
     {
         Open = open;
 
-        return OpenChanged.HasDelegate
-            ? OpenChanged.InvokeAsync(open)
-            : Task.CompletedTask;
+        if (OpenChanged.HasDelegate)
+        {
+            await OpenChanged.InvokeAsync(open);
+        }
     }
 }

@@ -3,13 +3,18 @@
 
 using System.Text.Encodings.Web;
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using System.Text.Json.Nodes;
+using System.Text.Json.Serialization;
+using Aspire.Cli.Acquisition;
+using Aspire.Cli.Caching;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.ApiDocs;
+using Aspire.Cli.Documentation.Docs;
 using Aspire.Cli.Mcp.Tools;
+using Aspire.Cli.Projects;
+using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils.EnvironmentChecker;
 
 namespace Aspire.Cli;
@@ -19,6 +24,8 @@ namespace Aspire.Cli;
     DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
     AllowTrailingCommas = true,
     ReadCommentHandling = JsonCommentHandling.Skip,
+    PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
+    PropertyNameCaseInsensitive = true,
     Converters = [typeof(FlexibleBooleanConverter)])]
 [JsonSerializable(typeof(CliSettings))]
 [JsonSerializable(typeof(JsonObject))]
@@ -27,7 +34,6 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(DoctorCheckResponse))]
 [JsonSerializable(typeof(EnvironmentCheckResult))]
 [JsonSerializable(typeof(DoctorCheckSummary))]
-[JsonSerializable(typeof(ContainerVersionJson))]
 [JsonSerializable(typeof(AspireJsonConfiguration))]
 [JsonSerializable(typeof(AspireConfigFile))]
 [JsonSerializable(typeof(List<DevCertInfo>))]
@@ -40,9 +46,22 @@ namespace Aspire.Cli;
 [JsonSerializable(typeof(DocsListItem[]))]
 [JsonSerializable(typeof(SearchResult[]))]
 [JsonSerializable(typeof(DocsContent))]
+[JsonSerializable(typeof(ApiReferenceItem[]))]
+[JsonSerializable(typeof(ApiListItem[]))]
+[JsonSerializable(typeof(ApiSearchResult[]))]
+[JsonSerializable(typeof(ApiContent))]
+[JsonSerializable(typeof(IntegrationSearchResult[]))]
+[JsonSerializable(typeof(string[]))]
+[JsonSerializable(typeof(CandidateAppHostDisplayInfo))]
+[JsonSerializable(typeof(List<CandidateAppHostDisplayInfo>))]
+[JsonSerializable(typeof(InstallationInfo))]
+[JsonSerializable(typeof(AppHostInfoCacheEntry))]
+[JsonSerializable(typeof(AppHostProjectInspectionOutput))]
+[JsonSerializable(typeof(InternalMicrosoftDetectorCacheEntry))]
 internal partial class JsonSourceGenerationContext : JsonSerializerContext
 {
     private static JsonSourceGenerationContext? s_relaxedEscaping;
+    private static JsonSourceGenerationContext? s_streaming;
 
     /// <summary>
     /// Gets a context configured with relaxed JSON escaping that preserves non-ASCII characters
@@ -56,6 +75,21 @@ internal partial class JsonSourceGenerationContext : JsonSerializerContext
         AllowTrailingCommas = true,
         ReadCommentHandling = JsonCommentHandling.Skip,
         PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    });
+
+    /// <summary>
+    /// Gets a context configured for newline-delimited JSON output.
+    /// </summary>
+    public static JsonSourceGenerationContext Streaming => s_streaming ??= new(new JsonSerializerOptions
+    {
+        WriteIndented = false,
+        DefaultIgnoreCondition = JsonIgnoreCondition.WhenWritingNull,
+        AllowTrailingCommas = true,
+        ReadCommentHandling = JsonCommentHandling.Skip,
+        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
+        PropertyNameCaseInsensitive = true,
         Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
     });
 }

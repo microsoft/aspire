@@ -3,13 +3,10 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
-using System.Globalization;
-using System.Text;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.ResourceGraph;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Telemetry;
@@ -17,8 +14,6 @@ using Aspire.Dashboard.Utils;
 using Aspire.Hosting.Utils;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
-using Microsoft.Extensions.Diagnostics.HealthChecks;
-using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -28,6 +23,8 @@ namespace Aspire.Dashboard.Components.Pages;
 
 public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncDisposable, IPageWithSessionAndUrlState<Resources.ResourcesViewModel, Resources.ResourcesPageState>
 {
+    private const string ScrollContainerId = "resourcesScrollContainer";
+    private const string GraphContainerId = "resourcesGraphContainer";
     private const string TypeColumn = nameof(TypeColumn);
     private const string NameColumn = nameof(NameColumn);
     private const string StateColumn = nameof(StateColumn);
@@ -62,17 +59,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
     [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
-    [Inject]
     public required IOptionsMonitor<DashboardOptions> DashboardOptions { get; init; }
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
     [Inject]
     public required ILogger<Resources> Logger { get; init; }
-    [Inject]
-    public required IStringLocalizer<Dashboard.Resources.AIAssistant> AIAssistantLoc { get; init; }
-    [Inject]
-    public required IStringLocalizer<Dashboard.Resources.AIPrompts> AIPromptsLoc { get; init; }
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
     [Inject]
@@ -111,16 +102,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     [SupplyParameterFromQuery(Name = "resource")]
     public string? ResourceName { get; set; }
 
-    private ResourceViewModel? SelectedResource { get; set; }
-
-    private readonly CancellationTokenSource _watchTaskCancellationTokenSource = new();
+    private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
     private readonly TaskCompletionSource _loadingTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
-    private string _filter = "";
     private bool _isFilterPopupVisible;
     private Task? _resourceSubscriptionTask;
     private string? _elementIdBeforeDetailsViewOpened;
+    private string? _pendingFocusElementId;
     private FluentDataGrid<ResourceGridViewModel> _dataGrid = null!;
     private GridColumnManager _manager = null!;
     private int _maxHighlightedCount;
@@ -140,30 +129,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
     private ColumnSortLabels _sortLabels = ColumnSortLabels.Default;
     private bool _showResourceTypeColumn;
-    private AIContext? _aiContext;
-    private bool _showHiddenResources;
 
-    private bool Filter(ResourceViewModel resource)
-    {
-        // In Parameters view, only show parameters; in Table view, exclude parameters
-        if (PageViewModel.SelectedViewKind == ResourceViewKind.Parameters && !resource.IsParameter)
-        {
-            return false;
-        }
-        if (PageViewModel.SelectedViewKind == ResourceViewKind.Table && resource.IsParameter)
-        {
-            return false;
-        }
-
-        // In Parameters view, ignore resource type filtering since we always show only parameters
-        return (PageViewModel.SelectedViewKind == ResourceViewKind.Parameters || IsKeyValueTrue(resource.ResourceType, PageViewModel.ResourceTypesToVisibility))
-               && IsKeyValueTrue(resource.State ?? string.Empty, PageViewModel.ResourceStatesToVisibility)
-               && IsKeyValueTrue(resource.HealthStatus?.Humanize() ?? string.Empty, PageViewModel.ResourceHealthStatusesToVisibility)
-               && (_filter.Length == 0 || resource.MatchesFilter(_filter))
-               && !resource.IsResourceHidden(_showHiddenResources);
-
-        static bool IsKeyValueTrue(string key, IDictionary<string, bool> dictionary) => dictionary.TryGetValue(key, out var value) && value;
-    }
+    private bool Filter(ResourceViewModel resource) => PageViewModel.Filter(resource);
 
     private async Task OnAllFilterVisibilityCheckedChangedAsync()
     {
@@ -187,7 +154,15 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task VisibleResourcesChangedAsync()
     {
         await UpdateResourceGraphResourcesAsync();
-        await ClearSelectedResourceAsync();
+
+        // Only clear the selected resource if it no longer passes the current filter.
+        // This preserves the selection when a filter is removed (result set expands) and
+        // the selected resource is still visible.
+        if (PageViewModel.SelectedResource is null || !Filter(PageViewModel.SelectedResource))
+        {
+            await ClearSelectedResourceAsync();
+        }
+
         await _dataGrid.SafeRefreshDataAsync();
     }
 
@@ -211,17 +186,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         TelemetryContextProvider.Initialize(TelemetryContext);
-        _aiContext = AIContextProvider.AddNew(nameof(Resources), c =>
-        {
-            c.BuildIceBreakers = (builder, context) =>
-            {
-                var hasUnhealthyResources = _resourceByName.Values
-                    .Where(r => !r.IsResourceHidden(_showHiddenResources))
-                    .Any(r => r.KnownState != KnownResourceState.Running || r.HealthStatus is HealthStatus.Unhealthy or HealthStatus.Degraded);
-
-                builder.Resources(context, hasUnhealthyResources);
-            };
-        });
 
         (_resizeLabels, _sortLabels) = DashboardUIHelpers.CreateGridLabels(ControlsStringsLoc);
 
@@ -257,7 +221,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         var showHiddenResources = await SessionStorage.GetAsync<bool>(BrowserStorageKeys.ResourcesShowHiddenResources);
         if (showHiddenResources.Success)
         {
-            _showHiddenResources = showHiddenResources.Value;
+            PageViewModel.ShowHiddenResources = showHiddenResources.Value;
         }
         UpdateMenuButtons();
 
@@ -292,7 +256,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         async Task SubscribeResourcesAsync()
         {
-            var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_watchTaskCancellationTokenSource.Token);
+            var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_cts.Token);
 
             // Apply snapshot.
             foreach (var resource in snapshot)
@@ -307,7 +271,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             // Listen for updates and apply.
             _resourceSubscriptionTask = Task.Run(async () =>
             {
-                await foreach (var changes in subscription.WithCancellation(_watchTaskCancellationTokenSource.Token).ConfigureAwait(false))
+                await foreach (var changes in subscription.WithCancellation(_cts.Token).ConfigureAwait(false))
                 {
                     var selectedResourceHasChanged = false;
 
@@ -324,9 +288,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                                 s => !PageViewModel.ResourceStatesToVisibility.TryGetValue(s, out var value) || value,
                                 s => !PageViewModel.ResourceHealthStatusesToVisibility.TryGetValue(s, out var value) || value);
 
-                            if (string.Equals(SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
+                            if (string.Equals(PageViewModel.SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
                             {
-                                SelectedResource = resource;
+                                PageViewModel.SelectedResource = resource;
                                 selectedResourceHasChanged = true;
                             }
                         }
@@ -338,7 +302,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                     }
 
                     UpdateMaxHighlightedCount();
-                    _aiContext?.ContextHasChanged();
                     await UpdateResourceGraphResourcesAsync();
                     await InvokeAsync(async () =>
                     {
@@ -382,7 +345,12 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             added = _resourceByName.TryAdd(resource.Name, resource);
         }
 
-        PageViewModel.ResourceTypesToVisibility.AddOrUpdate(resource.ResourceType, resourceTypeVisible(resource.ResourceType), (_, _) => resourceTypeVisible(resource.ResourceType));
+        // Don't add Parameter to resource type filters. Parameters have their own dedicated view
+        // and are excluded from the Table and Graph views regardless of the type filter.
+        if (!resource.IsParameter)
+        {
+            PageViewModel.ResourceTypesToVisibility.AddOrUpdate(resource.ResourceType, resourceTypeVisible(resource.ResourceType), (_, _) => resourceTypeVisible(resource.ResourceType));
+        }
         PageViewModel.ResourceStatesToVisibility.AddOrUpdate(resource.State ?? string.Empty, stateVisible(resource.State ?? string.Empty), (_, _) => stateVisible(resource.State ?? string.Empty));
         PageViewModel.ResourceHealthStatusesToVisibility.AddOrUpdate(resource.HealthStatus?.Humanize() ?? string.Empty, healthStatusVisible(resource.HealthStatus?.Humanize() ?? string.Empty), (_, _) => healthStatusVisible(resource.HealthStatus?.Humanize() ?? string.Empty));
 
@@ -398,6 +366,18 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         if (_dataGrid != null && FluentDataGridHelper<ResourceGridViewModel>.TrySetMaxItemCount(_dataGrid, 10_000))
         {
             StateHasChanged();
+        }
+
+        if (firstRender)
+        {
+            var initialFocusElementId = PageViewModel.SelectedViewKind == ResourceViewKind.Graph ? GraphContainerId : ScrollContainerId;
+            await JS.InvokeVoidAsync("focusElement", initialFocusElementId, true);
+        }
+
+        if (_pendingFocusElementId is { } pendingFocusElementId)
+        {
+            _pendingFocusElementId = null;
+            await JS.InvokeVoidAsync("focusElement", pendingFocusElementId);
         }
 
         if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph && !_graphInitialized)
@@ -423,7 +403,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
 
         var activeResources = _resourceByName.Values.Where(Filter).OrderBy(e => e.ResourceType).ThenBy(e => e.Name).ToList();
-        var resources = activeResources.Select(r => ResourceGraphMapper.MapResource(r, _resourceByName, ColumnsLoc, _showHiddenResources, IconResolver)).ToList();
+        var resources = activeResources.Select(r => ResourceGraphMapper.MapResource(r, activeResources, _resourceByName, ColumnsLoc, PageViewModel.ShowHiddenResources, IconResolver)).ToList();
         await _jsModule.InvokeVoidAsync("updateResourcesGraph", resources);
     }
 
@@ -538,14 +518,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         CommonMenuItems.AddToggleHiddenResourcesMenuItem(
             _resourcesMenuItems,
             ControlsStringsLoc,
-            _showHiddenResources,
+            PageViewModel.ShowHiddenResources,
             _resourceByName.Values,
             SessionStorage,
             EventCallback.Factory.Create<bool>(
                 this,
                 async value =>
                 {
-                    _showHiddenResources = value;
+                    PageViewModel.ShowHiddenResources = value;
                     UpdateMenuButtons();
 
                     await VisibleResourcesChangedAsync();
@@ -554,7 +534,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private bool HasCollapsedResources()
     {
-        return _resourceByName.Any(r => !r.Value.IsResourceHidden(_showHiddenResources) && _collapsedResourceNames.Contains(r.Value.PersistentKey));
+        return _resourceByName.Any(r => !r.Value.IsResourceHidden(PageViewModel.ShowHiddenResources) && _collapsedResourceNames.Contains(r.Value.PersistentKey));
     }
 
     private void UpdateMaxHighlightedCount()
@@ -600,14 +580,16 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         {
             if (_resourceByName.TryGetValue(ResourceName, out var selectedResource))
             {
-                await ShowResourceDetailsAsync(selectedResource, buttonId: null);
+                await ShowResourceDetailsAsync(selectedResource, focusElementId: null);
             }
             else
             {
                 Logger.LogDebug("Can't navigate to {ResourceName} from URL. Resource not found.", ResourceName);
             }
 
-            // Navigate to remove ?resource=xxx in the URL.
+            // Navigate to remove ?resource=xxx in the URL. A small delay is required here, otherwise the page rendering breaks.
+            await Task.Delay(200, _cts.Token);
+
             NavigationManager.NavigateTo(DashboardUrls.ResourcesUrl(), new NavigationOptions { ReplaceHistoryEntry = true });
         }
 
@@ -644,7 +626,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 _contextMenuItems,
                 resource,
                 _resourceByName,
-                EventCallback.Factory.Create(this, () => ShowResourceDetailsAsync(resource, buttonId: null)),
+                EventCallback.Factory.Create(this, () => ShowResourceDetailsAsync(resource, focusElementId: null)),
                 EventCallback.Factory.Create<CommandViewModel>(this, (command) => ExecuteResourceCommandAsync(resource, command)),
                 (resource, command) => DashboardCommandExecutor.IsExecuting(resource.Name, command.Name),
                 showViewDetails: true,
@@ -664,19 +646,19 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
     }
 
-    private async Task ShowResourceDetailsAsync(ResourceViewModel resource, string? buttonId)
+    private async Task ShowResourceDetailsAsync(ResourceViewModel resource, string? focusElementId)
     {
         Logger.LogDebug("Showing details for resource {ResourceName}.", resource.Name);
 
-        _elementIdBeforeDetailsViewOpened = buttonId;
+        _elementIdBeforeDetailsViewOpened = focusElementId;
 
-        if (string.Equals(SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
+        if (string.Equals(PageViewModel.SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
         {
             await ClearSelectedResourceAsync();
         }
         else
         {
-            SelectedResource = resource;
+            PageViewModel.SelectedResource = resource;
 
             // Ensure that the selected resource is visible in the grid. All parents must be expanded.
             var current = resource;
@@ -694,14 +676,14 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 break;
             }
 
-            if (PageViewModel.SelectedViewKind == ResourceViewKind.Graph)
+            var resourceViewKind = GetVisibleViewKindForSelectedResource(PageViewModel.SelectedViewKind, resource);
+            if (resourceViewKind == ResourceViewKind.Graph)
             {
                 await UpdateResourceGraphSelectedAsync();
             }
             else
             {
                 // Parameters have their own view. If required, switch view so the selected resource is visible.
-                var resourceViewKind = (resource.IsParameter) ? ResourceViewKind.Parameters : ResourceViewKind.Table;
                 if (resourceViewKind != PageViewModel.SelectedViewKind)
                 {
                     PageViewModel.SelectedViewKind = resourceViewKind;
@@ -717,7 +699,13 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         Logger.LogDebug("Clearing selected resource.");
 
-        SelectedResource = null;
+        PageViewModel.SelectedResource = null;
+        if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
+        {
+            _pendingFocusElementId = _elementIdBeforeDetailsViewOpened;
+        }
+
+        _elementIdBeforeDetailsViewOpened = null;
 
         await InvokeAsync(StateHasChanged);
 
@@ -725,13 +713,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         {
             await UpdateResourceGraphSelectedAsync();
         }
-
-        if (_elementIdBeforeDetailsViewOpened is not null && causedByUserAction)
-        {
-            await JS.InvokeVoidAsync("focusElement", _elementIdBeforeDetailsViewOpened);
-        }
-
-        _elementIdBeforeDetailsViewOpened = null;
     }
 
     private string GetResourceName(ResourceViewModel resource) => ResourceViewModel.GetResourceName(resource, _resourceByName);
@@ -741,7 +722,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         var count = 0;
         foreach (var (_, item) in _resourceByName)
         {
-            if (item.IsResourceHidden(_showHiddenResources))
+            if (item.IsResourceHidden(PageViewModel.ShowHiddenResources))
             {
                 continue;
             }
@@ -760,7 +741,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     }
 
     private string GetRowClass(ResourceViewModel resource)
-        => string.Equals(resource.Name, SelectedResource?.Name, StringComparisons.ResourceName) ? "selected-row resource-row" : "resource-row";
+        => string.Equals(resource.Name, PageViewModel.SelectedResource?.Name, StringComparisons.ResourceName) ? "selected-row resource-row" : "resource-row";
 
     private async Task ExecuteResourceCommandAsync(ResourceViewModel resource, CommandViewModel command)
     {
@@ -778,31 +759,6 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             return (value, property.IsValueSensitive, isUnresolved);
         }
         return (null, false, isUnresolved);
-    }
-
-    private static string GetUrlsTooltip(ResourceViewModel resource)
-    {
-        var displayedUrls = GetDisplayedUrls(resource);
-
-        if (displayedUrls.Count == 0)
-        {
-            return string.Empty;
-        }
-
-        if (displayedUrls.Count == 1)
-        {
-            return displayedUrls[0].Text;
-        }
-
-        var maxShownUrls = 3;
-        var tooltipBuilder = new StringBuilder(string.Join(", ", displayedUrls.Take(maxShownUrls).Select(url => url.Text)));
-
-        if (displayedUrls.Count > maxShownUrls)
-        {
-            tooltipBuilder.Append(CultureInfo.CurrentCulture, $" + {displayedUrls.Count - maxShownUrls}");
-        }
-
-        return tooltipBuilder.ToString();
     }
 
     private async Task OnToggleCollapse(ResourceGridViewModel viewModel)
@@ -828,7 +784,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     private async Task OnToggleCollapseAll()
     {
         var resourcesWithChildren = _resourceByName.Values
-            .Where(r => !r.IsResourceHidden(_showHiddenResources))
+            .Where(r => !r.IsResourceHidden(PageViewModel.ShowHiddenResources))
             .Where(r => _resourceByName.Values.Any(nested => nested.GetResourcePropertyValue(KnownProperties.Resource.ParentName) == r.Name))
             .ToList();
 
@@ -894,6 +850,8 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private async Task OnViewChangedAsync(ResourceViewKind newView)
     {
+        newView = GetVisibleViewKindForViewChange(newView, PageViewModel.SelectedResource);
+
         PageViewModel.SelectedViewKind = newView;
         await this.AfterViewModelChangedAsync(_contentLayout, waitToApplyMobileChange: true);
 
@@ -911,20 +869,62 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
     }
 
+    internal static ResourceViewKind GetVisibleViewKindForSelectedResource(ResourceViewKind selectedViewKind, ResourceViewModel resource)
+    {
+        return (selectedViewKind, resource.IsParameter) switch
+        {
+            (ResourceViewKind.Graph, false) => ResourceViewKind.Graph,
+            (_, true) => ResourceViewKind.Parameters,
+            _ => ResourceViewKind.Table
+        };
+    }
+
+    internal static ResourceViewKind GetVisibleViewKindForViewChange(ResourceViewKind requestedViewKind, ResourceViewModel? selectedResource)
+    {
+        return requestedViewKind == ResourceViewKind.Graph && selectedResource?.IsParameter == true
+            ? ResourceViewKind.Parameters
+            : requestedViewKind;
+    }
+
     private async Task UpdateResourceGraphSelectedAsync()
     {
         if (_jsModule != null)
         {
-            await _jsModule.InvokeVoidAsync("updateResourcesGraphSelected", SelectedResource?.Name);
+            await _jsModule.InvokeVoidAsync("updateResourcesGraphSelected", PageViewModel.SelectedResource?.Name);
         }
     }
 
     public sealed class ResourcesViewModel
     {
         public required ResourceViewKind SelectedViewKind { get; set; }
+        public ResourceViewModel? SelectedResource { get; set; }
+        public string TextFilter { get; set; } = "";
+        public bool ShowHiddenResources { get; set; }
         public ConcurrentDictionary<string, bool> ResourceTypesToVisibility { get; } = new(StringComparers.ResourceName);
         public ConcurrentDictionary<string, bool> ResourceStatesToVisibility { get; } = new(StringComparers.ResourceState);
         public ConcurrentDictionary<string, bool> ResourceHealthStatusesToVisibility { get; } = new(StringComparer.Ordinal);
+
+        public bool Filter(ResourceViewModel resource)
+        {
+            // In Parameters view, only show parameters; in Table and Graph views, exclude parameters
+            if (SelectedViewKind == ResourceViewKind.Parameters && !resource.IsParameter)
+            {
+                return false;
+            }
+            if (SelectedViewKind is ResourceViewKind.Table or ResourceViewKind.Graph && resource.IsParameter)
+            {
+                return false;
+            }
+
+            // In Parameters view, ignore resource type filtering since we always show only parameters
+            return (SelectedViewKind == ResourceViewKind.Parameters || IsKeyValueTrue(resource.ResourceType, ResourceTypesToVisibility))
+                   && IsKeyValueTrue(resource.State ?? string.Empty, ResourceStatesToVisibility)
+                   && IsKeyValueTrue(resource.HealthStatus?.Humanize() ?? string.Empty, ResourceHealthStatusesToVisibility)
+                   && (TextFilter.Length == 0 || resource.MatchesFilter(TextFilter))
+                   && !resource.IsResourceHidden(ShowHiddenResources);
+
+            static bool IsKeyValueTrue(string key, IDictionary<string, bool> dictionary) => dictionary.TryGetValue(key, out var value) && value;
+        }
     }
 
     public class ResourcesPageState
@@ -982,10 +982,10 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     public async ValueTask DisposeAsync()
     {
-        _aiContext?.Dispose();
+        CompleteContextMenuClosed();
 
         _resourcesInteropReference?.Dispose();
-        _watchTaskCancellationTokenSource.Cancel();
+        _cts.Cancel();
         _logsSubscription?.Dispose();
         TelemetryContext.Dispose();
         await JSInteropHelpers.SafeDisposeAsync(_jsModule);
@@ -993,13 +993,39 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         await TaskHelpers.WaitIgnoreCancelAsync(_resourceSubscriptionTask);
     }
 
-    private async Task ContextMenuClosed(Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
+    private async Task ContextMenuClosedAsync(Microsoft.AspNetCore.Components.Web.MouseEventArgs args)
     {
-        if (_contextMenu is { } menu)
+        await CloseContextMenuAsync(closeMenu: true);
+    }
+
+    private async Task ContextMenuOpenChangedAsync(bool open)
+    {
+        if (open)
         {
-            await menu.CloseAsync();
+            _contextMenuOpen = true;
+            return;
         }
 
+        await CloseContextMenuAsync(closeMenu: false);
+    }
+
+    private async Task CloseContextMenuAsync(bool closeMenu)
+    {
+        _contextMenuOpen = false;
+
+        if (_contextMenu is { } menu)
+        {
+            if (closeMenu)
+            {
+                await menu.CloseAsync();
+            }
+        }
+
+        CompleteContextMenuClosed();
+    }
+
+    private void CompleteContextMenuClosed()
+    {
         _contextMenuClosedTcs?.TrySetResult();
         _contextMenuClosedTcs = null;
     }

@@ -56,6 +56,8 @@ namespace Aspire.Hosting;
 /// </code>
 /// </example>
 /// </remarks>
+/// <ats-remarks />
+/// <ats-summary>A builder for creating instances of <ats-see cref="!:type:DistributedApplication" />.</ats-summary>
 [AspireExport(ExposeProperties = true)]
 public interface IDistributedApplicationBuilder
 {
@@ -76,6 +78,7 @@ public interface IDistributedApplicationBuilder
     public IHostEnvironment Environment { get; }
 
     /// <inheritdoc cref="HostApplicationBuilder.Services" />
+    [AspireExportIgnore(Reason = "IServiceCollection is not exported to ATS. Use IDistributedApplicationBuilder.addEventingSubscriber or tryAddEventingSubscriber for ATS event subscriber registration.")]
     public IServiceCollection Services { get; }
 
     /// <summary>
@@ -119,6 +122,10 @@ public interface IDistributedApplicationBuilder
     /// </code>
     /// </example>
     /// </remarks>
+    /// <ats-remarks>
+    /// Use this property to determine whether the app host is running locally or publishing
+    /// deployment artifacts, and adjust the application model accordingly.
+    /// </ats-remarks>
     public DistributedApplicationExecutionContext ExecutionContext { get; }
 
     /// <summary>
@@ -259,6 +266,7 @@ public interface IDistributedApplicationBuilder
     /// <summary>
     /// Builds and returns a new <see cref="DistributedApplication"/> instance. This can only be called once.
     /// </summary>
+    /// <ats-summary>Builds the distributed application</ats-summary>
     /// <returns>A new <see cref="DistributedApplication"/> instance.</returns>
     /// <remarks>
     /// <para>
@@ -269,6 +277,6 @@ public interface IDistributedApplicationBuilder
     /// when the process exists.
     /// </para>
     /// </remarks>
-    [AspireExport(Description = "Builds the distributed application")]
+    [AspireExport]
     DistributedApplication Build();
 }

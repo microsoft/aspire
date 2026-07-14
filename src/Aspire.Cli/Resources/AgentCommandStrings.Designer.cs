@@ -10,8 +10,8 @@
 
 namespace Aspire.Cli.Resources {
     using System;
-    
-    
+
+
     /// <summary>
     ///   A strongly-typed resource class, for looking up localized strings, etc.
     /// </summary>
@@ -23,15 +23,15 @@ namespace Aspire.Cli.Resources {
     [global::System.Diagnostics.DebuggerNonUserCodeAttribute()]
     [global::System.Runtime.CompilerServices.CompilerGeneratedAttribute()]
     internal class AgentCommandStrings {
-        
+
         private static global::System.Resources.ResourceManager resourceMan;
-        
+
         private static global::System.Globalization.CultureInfo resourceCulture;
-        
+
         [global::System.Diagnostics.CodeAnalysis.SuppressMessageAttribute("Microsoft.Performance", "CA1811:AvoidUncalledPrivateCode")]
         internal AgentCommandStrings() {
         }
-        
+
         /// <summary>
         ///   Returns the cached ResourceManager instance used by this class.
         /// </summary>
@@ -45,7 +45,7 @@ namespace Aspire.Cli.Resources {
                 return resourceMan;
             }
         }
-        
+
         /// <summary>
         ///   Overrides the current thread's CurrentUICulture property for all
         ///   resource lookups using this strongly typed resource class.
@@ -59,7 +59,7 @@ namespace Aspire.Cli.Resources {
                 resourceCulture = value;
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Manage AI agent environment configuration..
         /// </summary>
@@ -68,7 +68,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Start the MCP (Model Context Protocol) server..
         /// </summary>
@@ -77,7 +77,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("McpCommand_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Initialize agent environment configuration for detected agents..
         /// </summary>
@@ -86,7 +86,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InitCommand_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Update {0} config to use new 'agent mcp' command.
         /// </summary>
@@ -95,7 +95,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeprecatedConfigUpdate_Description", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to {0} config uses deprecated 'mcp start' command.
         /// </summary>
@@ -104,7 +104,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeprecatedConfigWarning", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Run 'aspire agent init' to update configuration.
         /// </summary>
@@ -113,7 +113,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DeprecatedConfigFix", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to The following agent configurations use the deprecated 'mcp start' command. Update them?.
         /// </summary>
@@ -122,7 +122,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigUpdatesSelectPrompt", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to The configuration file '{0}' contains malformed JSON. Please fix the file manually and re-run the command..
         /// </summary>
@@ -131,7 +131,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("MalformedConfigFileError", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Skipping update of '{0}'..
         /// </summary>
@@ -140,7 +140,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SkippedMalformedConfigFile", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Configuration completed with errors. Please fix the reported issues and re-run the command..
         /// </summary>
@@ -149,7 +149,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("ConfigurationCompletedWithErrors", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to None — skip.
         /// </summary>
@@ -158,7 +158,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SkipNoneDescription", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Where should skill files be installed?.
         /// </summary>
@@ -176,7 +176,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InitCommand_SelectSkills", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Install Aspire MCP server.
         /// </summary>
@@ -185,7 +185,7 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("InitCommand_ConfigureMcpServer", resourceCulture);
             }
         }
-        
+
         /// <summary>
         ///   Looks up a localized string similar to Installed Playwright CLI..
         /// </summary>
@@ -205,11 +205,29 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Installed {0} skill ({1})..
+        ///   Looks up a localized string similar to Installed Aspire agent skills:.
         /// </summary>
-        internal static string InitCommand_InstalledSkill {
+        internal static string InitCommand_InstalledSkillsSummary {
             get {
-                return ResourceManager.GetString("InitCommand_InstalledSkill", resourceCulture);
+                return ResourceManager.GetString("InitCommand_InstalledSkillsSummary", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skills: {0}.
+        /// </summary>
+        internal static string InitCommand_InstalledSkillsSummarySkills {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledSkillsSummarySkills", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Locations: {0}.
+        /// </summary>
+        internal static string InitCommand_InstalledSkillsSummaryLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_InstalledSkillsSummaryLocations", resourceCulture);
             }
         }
 
@@ -232,11 +250,56 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Installed Aspire agent telemetry hooks for: {0}. Only Aspire skill, MCP tool, and reference-file usage is recorded. Opt out anytime by setting ASPIRE_CLI_TELEMETRY_OPTOUT=true..
+        /// </summary>
+        internal static string InitCommand_TelemetryHooksInstalled {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHooksInstalled", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration file contains malformed JSON..
+        /// </summary>
+        internal static string InitCommand_TelemetryHookSkippedMalformedConfig {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHookSkippedMalformedConfig", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration has an unexpected shape..
+        /// </summary>
+        internal static string InitCommand_TelemetryHookSkippedUnexpectedShape {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHookSkippedUnexpectedShape", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Skipped the telemetry hook for {0} because its configuration could not be written..
+        /// </summary>
+        internal static string InitCommand_TelemetryHookWriteFailed {
+            get {
+                return ResourceManager.GetString("InitCommand_TelemetryHookWriteFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Aspire CLI commands and workflows for distributed apps.
         /// </summary>
         internal static string SkillDescription_Aspire {
             get {
                 return ResourceManager.GetString("SkillDescription_Aspire", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire deployment target selection, preflight, publish, and deploy workflows.
+        /// </summary>
+        internal static string SkillDescription_AspireDeployment {
+            get {
+                return ResourceManager.GetString("SkillDescription_AspireDeployment", resourceCulture);
             }
         }
 
@@ -255,6 +318,15 @@ namespace Aspire.Cli.Resources {
         internal static string SkillDescription_DotnetInspect {
             get {
                 return ResourceManager.GetString("SkillDescription_DotnetInspect", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to One-time setup: wire up AppHost with discovered projects.
+        /// </summary>
+        internal static string SkillDescription_Aspireify {
+            get {
+                return ResourceManager.GetString("SkillDescription_Aspireify", resourceCulture);
             }
         }
 
@@ -331,6 +403,96 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Installing Aspire skills....
+        /// </summary>
+        internal static string AspireSkillsInstaller_InstallingStatus {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_InstallingStatus", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire skills could not be downloaded from the verified GitHub release asset, and no valid cached or embedded bundle is available..
+        /// </summary>
+        internal static string AspireSkillsInstaller_GitHubUnavailable {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_GitHubUnavailable", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire skills bundle is invalid: {0}.
+        /// </summary>
+        internal static string AspireSkillsInstaller_InvalidBundle {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_InvalidBundle", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills bundle metadata is invalid: {0}.
+        /// </summary>
+        internal static string AspireSkillsInstaller_InvalidMetadata {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_InvalidMetadata", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a version..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MissingMetadataVersion {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataVersion", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata repository '{0}' does not match expected repository '{1}'..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MetadataRepositoryMismatch {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MetadataRepositoryMismatch", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a GitHub release tag..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MissingMetadataTag {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataTag", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify a release asset name..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MissingMetadataAssetName {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataAssetName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills metadata must specify the release asset SHA-256 hash..
+        /// </summary>
+        internal static string AspireSkillsInstaller_MissingMetadataSha256 {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_MissingMetadataSha256", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Embedded Aspire skills archive failed SHA-256 verification. Expected '{0}', got '{1}'..
+        /// </summary>
+        internal static string AspireSkillsInstaller_ArchiveHashVerificationFailed {
+            get {
+                return ResourceManager.GetString("AspireSkillsInstaller_ArchiveHashVerificationFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Installing Playwright CLI....
         /// </summary>
         internal static string PlaywrightCliInstaller_InstallingStatus {
@@ -345,6 +507,15 @@ namespace Aspire.Cli.Resources {
         internal static string PlaywrightCliInstaller_FailedToResolvePackage {
             get {
                 return ResourceManager.GetString("PlaywrightCliInstaller_FailedToResolvePackage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The value of configuration setting &apos;{0}&apos; (&apos;{1}&apos;) is not a valid SemVer 2.0 version..
+        /// </summary>
+        internal static string PlaywrightCliInstaller_InvalidVersionOverride {
+            get {
+                return ResourceManager.GetString("PlaywrightCliInstaller_InvalidVersionOverride", resourceCulture);
             }
         }
 
@@ -399,6 +570,105 @@ namespace Aspire.Cli.Resources {
         internal static string PlaywrightCliInstaller_InstalledWithMirrorWarnings {
             get {
                 return ResourceManager.GetString("PlaywrightCliInstaller_InstalledWithMirrorWarnings", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Path to the workspace root directory.
+        /// </summary>
+        internal static string InitCommand_WorkspaceRootOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_WorkspaceRootOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'.
+        /// </summary>
+        internal static string InitCommand_SkillLocationsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_SkillLocationsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'.
+        /// </summary>
+        internal static string InitCommand_SkillsOptionDescription {
+            get {
+                return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly..
+        /// </summary>
+        internal static string AgentTelemetryCommand_Description {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_Description", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The telemetry event type (skill_invocation, tool_invocation, or reference_file_read).
+        /// </summary>
+        internal static string AgentTelemetryCommand_EventTypeDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_EventTypeDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The AI agent client that produced the event (for example copilot-cli, claude-code, or vscode).
+        /// </summary>
+        internal static string AgentTelemetryCommand_ClientNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_ClientNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The opaque AI agent session identifier.
+        /// </summary>
+        internal static string AgentTelemetryCommand_SessionIdDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_SessionIdDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire skill name for a skill_invocation event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_SkillNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_SkillNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire MCP tool name for a tool_invocation event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_ToolNameDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_ToolNameDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The Aspire skills-relative reference file path for a reference_file_read event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_FileReferenceDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_FileReferenceDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The timestamp recorded for the event.
+        /// </summary>
+        internal static string AgentTelemetryCommand_TimestampDescription {
+            get {
+                return ResourceManager.GetString("AgentTelemetryCommand_TimestampDescription", resourceCulture);
             }
         }
     }

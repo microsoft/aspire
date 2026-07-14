@@ -9,7 +9,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
-public class PackageInstallationTests
+public class PackageInstallationTests(ITestOutputHelper outputHelper)
 {
     /// <summary>
     /// This test validates that the WithNpm method creates
@@ -454,12 +454,12 @@ public class PackageInstallationTests
     [Fact]
     public void WithNpm_DefaultsArgsInPublishMode()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "package-lock.json"), "empty");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "package-lock.json"), "empty");
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var app = builder.AddViteApp("test-app", tempDir.Path)
+        var app = builder.AddViteApp("test-app", workspace.Path)
             .WithNpm();
 
         Assert.True(app.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand));
@@ -481,18 +481,18 @@ public class PackageInstallationTests
     [Fact]
     public void WithYarn_DefaultsArgsInPublishMode()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "yarn.lock"), "empty");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "yarn.lock"), "empty");
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var app = builder.AddViteApp("test-app", tempDir.Path)
+        var app = builder.AddViteApp("test-app", workspace.Path)
             .WithYarn();
 
         Assert.True(app.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand));
         Assert.Equal(["install", "--frozen-lockfile"], installCommand.Args);
 
-        var app2 = builder.AddViteApp("test-app2", tempDir.Path)
+        var app2 = builder.AddViteApp("test-app2", workspace.Path)
             .WithYarn(installArgs: ["--immutable-cache"]);
 
         Assert.True(app2.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out installCommand));
@@ -502,13 +502,13 @@ public class PackageInstallationTests
     [Fact]
     public void WithYarn_ReturnsImmutable_WhenYarnRcYmlExists()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "yarn.lock"), "empty");
-        File.WriteAllText(Path.Combine(tempDir.Path, ".yarnrc.yml"), "empty");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "yarn.lock"), "empty");
+        File.WriteAllText(Path.Combine(workspace.Path, ".yarnrc.yml"), "empty");
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var app = builder.AddViteApp("test-app", tempDir.Path)
+        var app = builder.AddViteApp("test-app", workspace.Path)
             .WithYarn();
 
         Assert.True(app.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand));
@@ -518,13 +518,13 @@ public class PackageInstallationTests
     [Fact]
     public void WithYarn_ReturnsImmutable_WhenYarnReleasesDirExists()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "yarn.lock"), "empty");
-        Directory.CreateDirectory(Path.Combine(tempDir.Path, ".yarn", "releases"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "yarn.lock"), "empty");
+        Directory.CreateDirectory(Path.Combine(workspace.Path, ".yarn", "releases"));
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var app = builder.AddViteApp("test-app", tempDir.Path)
+        var app = builder.AddViteApp("test-app", workspace.Path)
             .WithYarn();
 
         Assert.True(app.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand));
@@ -534,12 +534,12 @@ public class PackageInstallationTests
     [Fact]
     public void WithPnpm_DefaultsArgsInPublishMode()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "pnpm-lock.yaml"), "empty");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "pnpm-lock.yaml"), "empty");
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var app = builder.AddViteApp("test-app", tempDir.Path)
+        var app = builder.AddViteApp("test-app", workspace.Path)
             .WithPnpm();
 
         Assert.True(app.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand));
@@ -549,16 +549,32 @@ public class PackageInstallationTests
     [Fact]
     public void WithBun_DefaultsArgsInPublishMode()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "bun.lock"), "empty");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "bun.lock"), "empty");
 
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
-        var app = builder.AddViteApp("test-app", tempDir.Path)
+        var app = builder.AddViteApp("test-app", workspace.Path)
             .WithBun();
 
         Assert.True(app.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCommand));
         Assert.Equal(["install", "--frozen-lockfile"], installCommand.Args);
+    }
+
+    [Fact]
+    public void InstallerResourceHasNameValidationPolicyAnnotation()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddJavaScriptApp("nodeApp", "./test-app")
+            .WithNpm(install: true);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var installerResource = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+        Assert.True(installerResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]

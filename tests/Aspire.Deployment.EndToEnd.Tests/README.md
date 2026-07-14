@@ -158,13 +158,70 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── AzureServiceBusDeploymentTests.cs      # Azure Service Bus resource
 ├── AzureStorageDeploymentTests.cs         # Azure Storage resource
 ├── PythonFastApiDeploymentTests.cs        # Python FastAPI to Azure Container Apps
+├── RadiusStarterDeploymentTests.cs        # Starter template to Radius on AKS (rad deploy)
+├── TypeScriptAzureContainerAppJobDeploymentTests.cs # TypeScript AppHost ACA jobs
 ├── xunit.runner.json                  # Test runner config
 └── README.md                          # This file
 ```
 
+## Radius deployment coverage
+
+`RadiusStarterDeploymentTests.DeployStarterTemplateToRadiusOnAks` is the live counterpart to the
+`Aspire.Hosting.Radius` unit/snapshot tests. Those prove the Bicep serializer output; this test
+proves that `aspire publish` + `rad deploy app.bicep` produce a working deployment. It provisions an
+AKS cluster + ACR, installs the Radius control plane onto the cluster, deploys the starter app
+(`AddRadiusEnvironment`), and verifies the workloads become ready and serve HTTP traffic.
+
+Radius-specific notes:
+
+- **`rad` CLI installation.** `aspire deploy` against a Radius environment shells out to `rad`.
+  `RadiusStarterDeploymentTests.DeployStarterTemplateToRadiusOnAks` installs the pinned rad CLI
+  version into the test workspace's `radbin` directory and prepends it to `PATH`, so CI and local
+  runs do not require a machine-wide `rad` installation.
+- **Images must be pre-pushed.** The Radius publisher does not build or push images for project
+  resources yet (<https://github.com/microsoft/aspire/issues/16844>). The test builds/pushes the
+  starter images to ACR and attaches them with `WithContainerImage` (Experimental
+  `ASPIRERADIUS057`) so the generated `app.bicep` references pullable images.
+- **Verifies the Radius.Core UDT app, not just Redis.** Graph validation uses
+  `rad app graph -a app --preview` (the legacy `rad app graph` routes to Applications.Core, which
+  the Redis-only legacy `app` satisfies on its own) and asserts the graph names both project
+  containers. Each container is then probed on its own HTTP endpoint via `kubectl port-forward`:
+  `apiservice`'s `/weatherforecast` and `webfrontend`'s home page (`/`).
+- **Cross-container connectivity is not asserted (current Radius limitation).** The `webfrontend`
+  `/weather` page fans out to `apiservice` through the Redis output cache, but Radius 0.59 does not
+  synthesize a Kubernetes `Service` for a `Radius.Compute/containers` workload, so the
+  service-discovery hostname Aspire emits for `apiservice`
+  (`apiservice.<namespace>.svc.cluster.local`) does not resolve in-cluster (`rad app graph` shows
+  `webfrontend` wired only to the cache). The test therefore validates each container in isolation
+  rather than the `/weather` end-to-end path until that connectivity is supported.
+
+## TypeScript deployment coverage
+
+TypeScript AppHost publish APIs are first type-checked in `tests/PolyglotAppHosts/**/TypeScript/apphost.ts`. The deployment E2E tests below provide the smaller set of real Azure validations used to catch target-specific deployment regressions.
+
+| TypeScript publish pattern | Polyglot coverage | Real deployment coverage | Notes |
+|----------------------------|-------------------|--------------------------|-------|
+| Azure Container Apps environment + standard app resources | `tests/PolyglotAppHosts/Aspire.Hosting.Azure.AppContainers/TypeScript/apphost.ts` | `TypeScriptExpressDeploymentTests.DeployTypeScriptExpressTemplateToAzureContainerApps` | Verifies the TypeScript Express/React template deploys to Azure Container Apps and serves traffic. |
+| JavaScript app publishing to Azure Container Apps | `tests/PolyglotAppHosts/Aspire.Hosting.JavaScript/TypeScript/apphost.ts` | `TypeScriptJavaScriptHostingDeploymentTests.DeployTypeScriptStaticWebsiteWithNodeApiToAzureContainerApps` | Verifies `publishAsStaticWebsite` with a Node API target from a TypeScript AppHost. |
+| Azure Container App jobs | `tests/PolyglotAppHosts/Aspire.Hosting.Azure.AppContainers/TypeScript/apphost.ts` | `TypeScriptAzureContainerAppJobDeploymentTests.DeployTypeScriptContainerAppJobsToAzureContainerApps` | Verifies manual and scheduled Container App Job resources are deployed with the expected trigger configuration. |
+| Azure infrastructure dependencies used from TypeScript | `tests/PolyglotAppHosts/Aspire.Hosting.Azure.Sql/TypeScript/apphost.ts` and Azure support package apphosts | `TypeScriptVnetSqlServerInfraDeploymentTests.DeployTypeScriptVnetSqlServerInfrastructure` | Verifies Azure SQL Server, VNet, private endpoint, and deployment-script subnet wiring from TypeScript. |
+| Azure Kubernetes Environment gateway and cert-manager | `tests/PolyglotAppHosts/Aspire.Hosting.Kubernetes/TypeScript/apphost.ts` | `AksAzureKubernetesEnvironmentCertManagerTypeScriptDeploymentTests.DeployTypeScriptApiWithCertManagerToAzureKubernetesEnvironment` | Verifies AKS provisioning, AGC gateway routing, cert-manager issuer configuration, and HTTPS traffic from TypeScript. |
+| Kubernetes service and custom manifest publishing | `tests/PolyglotAppHosts/Aspire.Hosting.Kubernetes/TypeScript/apphost.ts` | `AksAzureKubernetesEnvironmentCertManagerTypeScriptDeploymentTests.DeployTypeScriptApiWithCertManagerToAzureKubernetesEnvironment` | The TypeScript AKS test also deploys a Redis service via `publishAsKubernetesService` and verifies a custom ConfigMap manifest. |
+
+### Intentional TypeScript deployment gaps
+
+The following TypeScript publish paths remain type-checked by the polyglot apphosts but are not each covered by a dedicated real deployment test:
+
+| Gap | Rationale |
+|-----|-----------|
+| Azure Container Apps custom domain and certificate binding | The TypeScript AppContainers polyglot apphost validates the exported shape, while real custom-domain deployment requires owned DNS and certificate setup that would make the deployment test tenant-specific and difficult to clean up reliably. |
+| Starting and asserting Azure Container App job executions | The real deployment test validates the deployed job resources and trigger configuration. It does not start jobs because the current coverage goal is deployment-shape validation and scheduled jobs are not practical to wait for deterministically. |
+| Every Kubernetes custom resource shape accepted by `addManifest` | The real TypeScript AKS test validates that custom manifests are emitted and applied using a core `ConfigMap`. CRD-backed examples such as KEDA `ScaledObject` stay in polyglot type-check coverage because installing every CRD would substantially increase runtime and failure modes. |
+| Docker Compose, Dockerfile, App Service, YARP, Entity Framework migration, and Foundry publish APIs from TypeScript | These APIs are type-checked in their package-specific TypeScript polyglot apphosts. Real deployment coverage is either target-specific outside Azure deployment E2E, already covered through C# scenarios, or would require additional external services and quotas not justified for the TypeScript smoke matrix. |
+
 ## Writing New Tests
 
-See the [Deployment E2E Testing Skill](../../.github/skills/deployment-e2e-testing/SKILL.md) for detailed patterns and guidance.
+See the [Deployment E2E Testing Skill](../../.agents/skills/deployment-e2e-testing/SKILL.md) for detailed patterns and guidance.
 
 Basic test structure:
 

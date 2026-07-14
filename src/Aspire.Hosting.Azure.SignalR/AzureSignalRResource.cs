@@ -96,5 +96,5 @@ public class AzureSignalRResource(string name, Action<AzureResourceInfrastructur
 
     IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateLinkGroupIds() => ["signalr"];
 
-    string IAzurePrivateEndpointTarget.GetPrivateDnsZoneName() => "privatelink.service.signalr.net";
+    IEnumerable<string> IAzurePrivateEndpointTarget.GetPrivateDnsZoneNames() => ["privatelink.service.signalr.net"];
 }

@@ -20,17 +20,19 @@ partial class Resource
     {
         try
         {
+            var resourceType = ValidateNotNull(ResourceType);
+
             return new()
             {
                 Name = ValidateNotNull(Name),
-                ResourceType = ValidateNotNull(ResourceType),
+                ResourceType = resourceType,
                 DisplayName = ValidateNotNull(DisplayName),
                 Uid = ValidateNotNull(Uid),
                 ReplicaIndex = replicaIndex,
                 CreationTimeStamp = ValidateNotNull(CreatedAt).ToDateTime(),
                 StartTimeStamp = StartedAt?.ToDateTime(),
                 StopTimeStamp = StoppedAt?.ToDateTime(),
-                Properties = CreatePropertyViewModels(Properties, knownPropertyLookup, logger),
+                Properties = CreatePropertyViewModels(resourceType, Properties, knownPropertyLookup, logger),
                 Environment = GetEnvironment(),
                 Urls = GetUrls(),
                 Volumes = GetVolumes(),
@@ -117,7 +119,7 @@ partial class Resource
         ImmutableArray<CommandViewModel> GetCommands()
         {
             return Commands
-                .Select(c => new CommandViewModel(c.Name, MapState(c.State), c.DisplayName, c.DisplayDescription, c.ConfirmationMessage, c.Parameter, c.IsHighlighted, c.IconName, MapIconVariant(c.IconVariant)))
+                .Select(c => new CommandViewModel(c.Name, MapState(c.State), c.DisplayName, c.DisplayDescription, c.ConfirmationMessage, c.ArgumentInputs.ToImmutableArray(), c.IsHighlighted, c.IconName, MapIconVariant(c.IconVariant)))
                 .ToImmutableArray();
 
             static CommandViewModelState MapState(ResourceCommandState state)
@@ -153,19 +155,24 @@ partial class Resource
         }
     }
 
-    private ImmutableDictionary<string, ResourcePropertyViewModel> CreatePropertyViewModels(RepeatedField<ResourceProperty> properties, IKnownPropertyLookup knownPropertyLookup, ILogger logger)
+    private ImmutableDictionary<string, ResourcePropertyViewModel> CreatePropertyViewModels(string resourceType, RepeatedField<ResourceProperty> properties, IKnownPropertyLookup knownPropertyLookup, ILogger logger)
     {
         var builder = ImmutableDictionary.CreateBuilder<string, ResourcePropertyViewModel>(StringComparers.ResourcePropertyName);
+        var useLegacyMetadata = ShouldUseLegacyResourcePropertyMetadata(resourceType, properties);
 
         foreach (var property in properties)
         {
-            var (priority, knownProperty) = knownPropertyLookup.FindProperty(ResourceType, property.Name);
+            var (sortOrder, knownProperty) = knownPropertyLookup.FindProperty(property.Name);
+            var legacyMetadata = useLegacyMetadata ? LegacyResourcePropertyMetadata.Get(resourceType, property.Name) : null;
+
             var propertyViewModel = new ResourcePropertyViewModel(
                 name: ValidateNotNull(property.Name),
                 value: ValidateNotNull(property.Value),
                 isValueSensitive: property.IsSensitive,
-                knownProperty: knownProperty,
-                priority: priority)
+                knownProperty: knownProperty ?? legacyMetadata?.KnownProperty,
+                sortOrder: GetDisplaySortOrder(property, knownProperty, legacyMetadata?.SortOrder, sortOrder),
+                displayName: property.HasDisplayName ? property.DisplayName : null,
+                isHighlighted: property.IsHighlighted)
             {
                 IsValueMasked = property.IsSensitive
             };
@@ -179,6 +186,66 @@ partial class Resource
         }
 
         return builder.ToImmutable();
+    }
+
+    private static int GetDisplaySortOrder(ResourceProperty property, KnownProperty? knownProperty, int? legacySortOrder, int knownSortOrder)
+    {
+        if (legacySortOrder is { } legacyOrder)
+        {
+            // Legacy fallback metadata represents built-in producer-specific properties from
+            // older resource servers, so treat its order as producer-local.
+            return ToProducerDefinedDisplaySortOrder(legacyOrder);
+        }
+
+        if (knownProperty is not null)
+        {
+            // Generic dashboard-known properties keep their fixed dashboard sort order.
+            return knownSortOrder;
+        }
+
+        // Unknown properties with producer metadata use producer-local ordering. Unknown
+        // properties without metadata keep the default "sort last" order from the caller.
+        return property.HasSortOrder ? ToProducerDefinedDisplaySortOrder(property.SortOrder) : knownSortOrder;
+    }
+
+    private static int ToProducerDefinedDisplaySortOrder(int producerSortOrder)
+    {
+        // Producers use local sort orders for their own resource-specific properties. The
+        // dashboard normalizes those values after the generic dashboard-owned properties.
+        var producerDefinedStart = KnownResourcePropertySortOrder.GetProducerDefinedStart();
+        if (producerSortOrder <= 0)
+        {
+            return producerDefinedStart;
+        }
+
+        var sortOrder = producerDefinedStart + (long)producerSortOrder;
+        return sortOrder > int.MaxValue ? int.MaxValue : (int)sortOrder;
+    }
+
+    private static bool ShouldUseLegacyResourcePropertyMetadata(string resourceType, RepeatedField<ResourceProperty> properties)
+    {
+        // Compatibility shim for dashboards connected to resource servers that predate
+        // ResourceProperty.DisplayName/IsHighlighted/SortOrder. If any resource-specific
+        // property already carries producer metadata, trust the producer and do not apply
+        // dashboard fallback metadata to the rest of the resource.
+        var hasLegacyResourceSpecificProperty = false;
+
+        foreach (var property in properties)
+        {
+            if (LegacyResourcePropertyMetadata.Get(resourceType, property.Name) is null)
+            {
+                continue;
+            }
+
+            hasLegacyResourceSpecificProperty = true;
+
+            if (property.HasDisplayName || property.IsHighlighted || property.HasSortOrder)
+            {
+                return false;
+            }
+        }
+
+        return hasLegacyResourceSpecificProperty;
     }
 
     private T ValidateNotNull<T>(T value, [CallerArgumentExpression(nameof(value))] string? expression = null) where T : class
@@ -196,17 +263,28 @@ partial class ResourceCommandResponse
 {
     public ResourceCommandResponseViewModel ToViewModel()
     {
+        // Map deprecated error_message to message for backward compatibility.
+#pragma warning disable CS0612 // Type or member is obsolete
+        var resolvedMessage = HasMessage ? Message : ErrorMessage;
+#pragma warning restore CS0612 // Type or member is obsolete
+
         return new ResourceCommandResponseViewModel()
         {
-            ErrorMessage = ErrorMessage,
+            ErrorMessage = resolvedMessage,
+            Message = resolvedMessage,
             Kind = (Dashboard.Model.ResourceCommandResponseKind)Kind,
-            Result = HasResult ? Result : null,
-            ResultFormat = ResultFormat switch
+            Result = Result is not null ? new ResourceCommandResultViewModel
             {
-                CommandResultFormat.Text => Dashboard.Model.CommandResultFormat.Text,
-                CommandResultFormat.Json => Dashboard.Model.CommandResultFormat.Json,
-                _ => null
-            }
+                Value = Result.Value,
+                Format = Result.Format switch
+                {
+                    CommandResultFormat.Text => Dashboard.Model.CommandResultFormat.Text,
+                    CommandResultFormat.Json => Dashboard.Model.CommandResultFormat.Json,
+                    CommandResultFormat.Markdown => Dashboard.Model.CommandResultFormat.Markdown,
+                    _ => Dashboard.Model.CommandResultFormat.Text
+                },
+                DisplayImmediately = Result.DisplayImmediately
+            } : null
         };
     }
 }

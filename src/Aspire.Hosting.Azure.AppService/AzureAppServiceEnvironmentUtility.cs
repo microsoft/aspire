@@ -22,13 +22,16 @@ internal static class AzureAppServiceEnvironmentUtility
     }
 
     public static WebSite AddDashboard(AzureResourceInfrastructure infra,
-        UserAssignedIdentity otelIdentity,
+        BicepValue<string> webAppIdentityClientId,
         BicepValue<ResourceIdentifier> appServicePlanId)
     {
-        // This ACR identity is used by the dashboard to authorize the telemetry data
-        // coming from the dotnet web apps. This identity is being assigned to every web app
-        // in the aspire project and can be safely reused for authorization in the dashboard. 
-        var otelClientId = otelIdentity.ClientId;
+        // The webAppIdentityClientId is the client id of the user-assigned identity that is attached
+        // to every web app in the aspire project. That identity serves two roles in the deployed
+        // environment, and both are wired up from this single client id:
+        //   1. ACR pull: it holds the AcrPull role on the container registry, and the dashboard
+        //      website itself reuses it via SiteConfig.AcrUserManagedIdentityId to pull its image.
+        //   2. Telemetry auth: it is the identity the web apps present when sending OTLP telemetry
+        //      to the dashboard, so the dashboard authorizes it via ALLOWED_MANAGED_IDENTITIES.
         var prefix = infra.AspireResource.Name;
         var contributorIdentity = new UserAssignedIdentity(Infrastructure.NormalizeBicepIdentifier($"{prefix}-contributor-mi"));
 
@@ -60,7 +63,7 @@ internal static class AzureAppServiceEnvironmentUtility
             SiteConfig = new SiteConfigProperties()
             {
                 LinuxFxVersion = "ASPIREDASHBOARD|1.0",
-                AcrUserManagedIdentityId = otelClientId,
+                AcrUserManagedIdentityId = webAppIdentityClientId,
                 UseManagedIdentityCreds = true,
                 IsHttp20Enabled = true,
                 Http20ProxyFlag = 1,
@@ -93,7 +96,7 @@ internal static class AzureAppServiceEnvironmentUtility
         dashboard.SiteConfig.AppSettings.Add(new AppServiceNameValuePair { Name = "WEBSITE_START_SCM_WITH_PRELOAD", Value = "true" });
         // Appsettings related to managed identity for auth
         dashboard.SiteConfig.AppSettings.Add(new AppServiceNameValuePair { Name = "AZURE_CLIENT_ID", Value = contributorIdentity.ClientId });
-        dashboard.SiteConfig.AppSettings.Add(new AppServiceNameValuePair { Name = "ALLOWED_MANAGED_IDENTITIES", Value = otelClientId });
+        dashboard.SiteConfig.AppSettings.Add(new AppServiceNameValuePair { Name = "ALLOWED_MANAGED_IDENTITIES", Value = webAppIdentityClientId });
         // Added appsetting to identify the resources in a specific aspire environment
         dashboard.SiteConfig.AppSettings.Add(new AppServiceNameValuePair { Name = "ASPIRE_ENVIRONMENT_NAME", Value = infra.AspireResource.Name });
 

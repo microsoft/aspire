@@ -6,7 +6,6 @@
     <PackageTags>aspire integration hosting azure network vnet virtual-network subnet nat-gateway public-ip cloud</PackageTags>
     <Description>Azure Virtual Network resource types for Aspire.</Description>
     <PackageIconFullPath>$(SharedDir)Azure_256x.png</PackageIconFullPath>
-    <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
     <NoWarn>$(NoWarn);AZPROVISION001;ASPIREAZURE003</NoWarn>
   </PropertyGroup>
 

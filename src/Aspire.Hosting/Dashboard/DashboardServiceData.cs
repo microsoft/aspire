@@ -8,8 +8,6 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.Dashboard;
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-
 /// <summary>
 /// Models the state for <see cref="DashboardService"/>, as that service is constructed
 /// for each gRPC request. This long-lived object holds state across requests.
@@ -21,24 +19,54 @@ internal sealed class DashboardServiceData : IDisposable
     private readonly ResourceCommandService _resourceCommandService;
     private readonly InteractionService _interactionService;
     private readonly ResourceLoggerService _resourceLoggerService;
+    private readonly IFileUploadStore _fileUploadStore;
+    private readonly ILogger<DashboardServiceData> _logger;
 
     public DashboardServiceData(
         ResourceNotificationService resourceNotificationService,
         ResourceLoggerService resourceLoggerService,
         ILogger<DashboardServiceData> logger,
         ResourceCommandService resourceCommandService,
-        InteractionService interactionService)
+        InteractionService interactionService,
+        IFileUploadStore fileUploadStore)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourcePublisher = new ResourcePublisher(_cts.Token);
         _resourceCommandService = resourceCommandService;
         _interactionService = interactionService;
+        _fileUploadStore = fileUploadStore;
+        _logger = logger;
         var cancellationToken = _cts.Token;
 
         Task.Run(async () =>
         {
             static GenericResourceSnapshot CreateResourceSnapshot(IResource resource, string resourceId, DateTime creationTimestamp, CustomResourceSnapshot snapshot)
             {
+                // If the resource has a TerminalAnnotation, stamp the per-replica terminal
+                // properties onto the snapshot so the Dashboard can:
+                //   * detect that a terminal is available (HasTerminal),
+                //   * build a /api/terminal?resource=<name>&replica=<index> URL pointing
+                //     at the right replica (TryGetTerminalReplicaInfo).
+                //
+                // The dashboard never *follows* this path itself - it only displays it
+                // (masked) in the resource details panel and uses it via
+                // ITerminalConnectionResolver, which resolves replica -> UDS server-side
+                // so an authenticated browser cannot coerce the dashboard into
+                // connecting to arbitrary UDS endpoints by tampering with the path.
+                //
+                // The same stamping is applied on the auxiliary backchannel path so that
+                // `aspire describe` and the VS Code extension observe identical terminal
+                // metadata; both call sites share TerminalResourceSnapshotProperties.
+                var terminalProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceId, snapshot.Properties);
+
+                // ImmutableArray's == operator compares the underlying array reference, so this is
+                // true only when AddTerminalProperties returned the original array unchanged (no
+                // TerminalAnnotation). Avoid rebuilding the snapshot in that common case.
+                if (terminalProperties != snapshot.Properties)
+                {
+                    snapshot = snapshot with { Properties = terminalProperties };
+                }
+
                 return new GenericResourceSnapshot(snapshot)
                 {
                     Uid = resourceId,
@@ -94,16 +122,27 @@ internal sealed class DashboardServiceData : IDisposable
         _cts.Dispose();
     }
 
-    internal async Task<(ExecuteCommandResultType result, string? errorMessage, string? commandResult, ApplicationModel.CommandResultFormat? resultFormat)> ExecuteCommandAsync(string resourceId, string type, CancellationToken cancellationToken)
+    internal async Task<(ExecuteCommandResultType result, string? message, ApplicationModel.CommandResultData? value, InteractionInputCollection? invalidArguments)> ExecuteCommandAsync(string resourceId, string type, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(options);
+
         try
         {
-            var result = await _resourceCommandService.ExecuteCommandAsync(resourceId, type, cancellationToken).ConfigureAwait(false);
+            var result = await _resourceCommandService.ExecuteCommandAsync(
+                resourceId,
+                type,
+                new ResourceCommandExecutionOptions
+                {
+                    ArgumentValues = options.ArgumentValues,
+                    ArgumentsProvided = options.ArgumentValues is not null,
+                    NonInteractive = options.NonInteractive
+                },
+                cancellationToken).ConfigureAwait(false);
             if (result.Canceled)
             {
-                return (ExecuteCommandResultType.Canceled, result.ErrorMessage, null, null);
+                return (ExecuteCommandResultType.Canceled, result.Message, null, null);
             }
-            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.ErrorMessage, result.Result, result.ResultFormat);
+            return (result.Success ? ExecuteCommandResultType.Success : ExecuteCommandResultType.Failure, result.Message, result.Data, result.InvalidArguments);
         }
         catch
         {
@@ -168,6 +207,8 @@ internal sealed class DashboardServiceData : IDisposable
                         return new InteractionCompletionState { Complete = true, State = request.MessageBox.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.Notification:
                         return new InteractionCompletionState { Complete = true, State = request.Notification.Result };
+                    case WatchInteractionsRequestUpdate.KindOneofCase.PromptProgress:
+                        return new InteractionCompletionState { Complete = true, State = request.PromptProgress.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog:
                         var inputsInfo = (Interaction.InputsInteractionInfo)interaction.InteractionInfo;
                         var options = (InputsDialogInteractionOptions)interaction.Options;
@@ -176,7 +217,7 @@ internal sealed class DashboardServiceData : IDisposable
                             serviceProvider,
                             logger,
                             inputsInfo,
-                            request.InputsDialog.InputItems.Select(i => new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType))).ToList(),
+                            request.InputsDialog.InputItems.Select(i => MapInputDto(i)).ToList(),
                             request.ResponseUpdate,
                             interaction.CancellationToken);
 
@@ -189,7 +230,27 @@ internal sealed class DashboardServiceData : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
-    public record InputDto(string Name, string Value, InputType InputType);
+    private InputDto MapInputDto(Aspire.DashboardService.Proto.V1.InteractionInput i)
+    {
+        var inputType = DashboardService.MapInputType(i.InputType);
+
+        // For file inputs, Value contains a JSON array of objects with file IDs and names.
+        // Resolve each ID to the temp file path and build InputFileDto entries.
+        if (inputType == InputType.File)
+        {
+            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, i.Name, _logger);
+            if (files is not null)
+            {
+                return new InputDto(i.Name, i.Value, inputType, files);
+            }
+        }
+
+        return new InputDto(i.Name, i.Value, inputType);
+    }
+
+    public record InputFileDto(string Id, string Name, string FilePath);
+
+    public record InputDto(string Name, string Value, InputType InputType, IReadOnlyList<InputFileDto>? Files = null);
 
     public static void ProcessInputs(IServiceProvider serviceProvider, ILogger logger, Interaction.InputsInteractionInfo inputsInfo, List<InputDto> inputDtos, bool dependencyChange, CancellationToken cancellationToken)
     {
@@ -215,9 +276,31 @@ internal sealed class DashboardServiceData : IDisposable
             {
                 modelInput.Value = incomingValue;
 
+                // For File inputs, build InteractionFile instances from the resolved file info.
+                if (requestInput.InputType == InputType.File)
+                {
+                    if (requestInput.Files is { Count: > 0 })
+                    {
+                        var interactionFiles = requestInput.Files
+                            .Select(f => new InteractionFile(f.Id, f.Name, f.FilePath))
+                            .ToArray();
+                        modelInput.SetFiles(interactionFiles);
+                    }
+                    else
+                    {
+                        // Clear stale file references when the selection is empty.
+                        modelInput.SetFiles([]);
+                    }
+                }
+
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.
                 if (dependencyChange)
                 {
+                    // Response updates are sent by the dashboard when an input marked
+                    // UpdateStateOnChange changes. Only queue dependents whose source value actually
+                    // changed; otherwise a validation/update roundtrip for one field could repeatedly
+                    // restart unrelated dynamic loads. Inputs that need an initial load before any user
+                    // change must opt into AlwaysLoadOnStart.
                     var dependentInputs = inputsInfo.Inputs.Where(
                         i => i.DynamicLoading is { } dynamic &&
                         (dynamic.DependsOnInputs?.Any(d => string.Equals(modelInput.Name, d, StringComparisons.InteractionInputName)) ?? false));
@@ -239,6 +322,13 @@ internal sealed class DashboardServiceData : IDisposable
     }
 }
 
+internal sealed class ExecuteResourceCommandOptions
+{
+    public IReadOnlyDictionary<string, string?>? ArgumentValues { get; init; }
+
+    public bool NonInteractive { get; init; }
+}
+
 internal enum ExecuteCommandResultType
 {
     Success,
@@ -246,4 +336,3 @@ internal enum ExecuteCommandResultType
     Canceled
 }
 
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.

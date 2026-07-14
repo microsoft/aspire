@@ -13,6 +13,7 @@ using Aspire.Otlp.Serialization;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.DependencyInjection.Extensions;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Commands;
 
@@ -21,64 +22,58 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryCommand_WithoutSubcommand_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
 
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse("otel");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.InvalidCommand, exitCode);
+        Assert.Equal(CliExitCodes.InvalidCommand, exitCode);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithNoResources_ReturnsEmptyString()
+    public void TelemetryLogsApiUrl_WithNoParams_ReturnsBaseUrl()
     {
-        var result = DashboardUrls.BuildResourceQueryString(null);
-        Assert.Equal("", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000");
+        Assert.Equal("https://localhost:5000/api/telemetry/logs", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithSingleResource_ReturnsCorrectQueryString()
+    public void TelemetryLogsApiUrl_WithSingleResource_ReturnsCorrectUrl()
     {
-        var result = DashboardUrls.BuildResourceQueryString(["frontend"]);
-        Assert.Equal("?resource=frontend", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend"]);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithMultipleResources_ReturnsAllResourceParams()
+    public void TelemetryLogsApiUrl_WithMultipleResources_ReturnsAllResourceParams()
     {
-        var result = DashboardUrls.BuildResourceQueryString(["frontend-abc123", "frontend-xyz789"]);
-        Assert.Equal("?resource=frontend-abc123&resource=frontend-xyz789", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend-abc123", "frontend-xyz789"]);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend-abc123&resource=frontend-xyz789", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithResourcesAndAdditionalParams_CombinesCorrectly()
+    public void TelemetryLogsApiUrl_WithAllParams_CombinesCorrectly()
     {
-        var result = DashboardUrls.BuildResourceQueryString(
-            ["frontend"],
-            ("traceId", "abc123"),
-            ("limit", "10"));
-        Assert.Equal("?resource=frontend&traceId=abc123&limit=10", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend"], traceId: "abc123", severity: "Error", limit: 10, follow: true);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend&traceId=abc123&severity=Error&limit=10&follow=true", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithNullAdditionalParams_SkipsNullValues()
+    public void TelemetryLogsApiUrl_WithNullParams_SkipsNullValues()
     {
-        var result = DashboardUrls.BuildResourceQueryString(
-            ["frontend"],
-            ("traceId", null),
-            ("limit", "10"));
-        Assert.Equal("?resource=frontend&limit=10", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["frontend"], traceId: null, limit: 10);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=frontend&limit=10", result);
     }
 
     [Fact]
-    public void BuildResourceQueryString_WithSpecialCharacters_EncodesCorrectly()
+    public void TelemetryLogsApiUrl_WithSpecialCharacters_EncodesCorrectly()
     {
-        var result = DashboardUrls.BuildResourceQueryString(["service with spaces"]);
-        Assert.Equal("?resource=service%20with%20spaces", result);
+        var result = DashboardUrls.TelemetryLogsApiUrl("https://localhost:5000", ["service with spaces"]);
+        Assert.Equal("https://localhost:5000/api/telemetry/logs?resource=service%20with%20spaces", result);
     }
 
     [Fact]
@@ -132,20 +127,28 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FormatTraceLink_WithDashboardUrl_ReturnsHyperlink()
     {
-        var result = TelemetryCommandHelpers.FormatTraceLink("http://localhost:18888", "abc123456789");
+        var interactionService = new TestInteractionService { SupportsLinks = true };
+        var result = TelemetryCommandHelpers.FormatTraceLink(interactionService, "http://localhost:18888", "abc123456789");
 
-        Assert.Contains("[link=", result);
-        Assert.Contains("/traces/detail/abc123456789", result);
-        Assert.Contains("abc1234", result); // Shortened ID
+        Assert.Equal("[link=http://localhost:18888/traces/detail/abc123456789]abc1234[/]", result);
     }
 
     [Fact]
     public void FormatTraceLink_WithNullDashboardUrl_ReturnsPlainText()
     {
-        var result = TelemetryCommandHelpers.FormatTraceLink(null, "abc123456789");
+        var interactionService = new TestInteractionService();
+        var result = TelemetryCommandHelpers.FormatTraceLink(interactionService, null, "abc123456789");
 
-        Assert.DoesNotContain("[link=", result);
         Assert.Equal("abc1234", result); // Just the shortened ID
+    }
+
+    [Fact]
+    public void FormatTraceLink_WithDashboardUrlAndNoLinkSupport_ReturnsFallbackWithUrl()
+    {
+        var interactionService = new TestInteractionService { SupportsLinks = false };
+        var result = TelemetryCommandHelpers.FormatTraceLink(interactionService, "http://localhost:18888", "abc123456789");
+
+        Assert.Equal("abc1234 (http://localhost:18888/traces/detail/abc123456789)", result);
     }
 
     [Fact]
@@ -170,6 +173,65 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
 
         // Empty input yields empty output
         Assert.Empty(TelemetryCommandHelpers.ToOtlpResources([]));
+    }
+
+    [Fact]
+    public void ResolveResourceNameMatches_WithResourceNameMatchingCompositeResourceName_ReturnsNoMatches()
+    {
+        var resources = new SimpleOtlpResource[]
+        {
+            new("api-1", "standalone"),
+            new("api", "1"),
+        };
+
+        var matches = OtlpHelpers.ResolveResourceNameMatches("API-1", resources);
+
+        Assert.Empty(matches);
+    }
+
+    [Fact]
+    public void TryResolveResourceNames_WithAmbiguousCompositeResourceName_ReturnsFalse()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api-a", InstanceId = "1" },
+            new() { Name = "api", InstanceId = "a-1" },
+        };
+
+        var result = TelemetryCommandHelpers.TryResolveResourceNames("api-a-1", resources, out var resolvedResources);
+
+        Assert.False(result);
+        Assert.Null(resolvedResources);
+    }
+
+    [Fact]
+    public void TryResolveResourceNames_WithBaseResourceName_ResolvesAllReplicas()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api", InstanceId = "1" },
+            new() { Name = "api", InstanceId = "2" },
+        };
+
+        var result = TelemetryCommandHelpers.TryResolveResourceNames("API", resources, out var resolvedResources);
+
+        Assert.True(result);
+        Assert.Equal(["api-1", "api-2"], resolvedResources);
+    }
+
+    [Fact]
+    public void TryResolveResourceNames_WithBaseResourceNameAndMixedInstanceIds_ResolvesAllResources()
+    {
+        var resources = new ResourceInfoJson[]
+        {
+            new() { Name = "api", InstanceId = null },
+            new() { Name = "api", InstanceId = "1" },
+        };
+
+        var result = TelemetryCommandHelpers.TryResolveResourceNames("api", resources, out var resolvedResources);
+
+        Assert.True(result);
+        Assert.Equal(["api", "api-1"], resolvedResources);
     }
 
     [Theory]
@@ -199,8 +261,8 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         yield return [MakeResource("apiservice", null), new IOtlpResource[] { new SimpleOtlpResource("apiservice", null) }, "apiservice"];
         // replicas with non-GUID instance id → name-instanceId
         yield return [MakeResource("frontend", "abc123"), new IOtlpResource[] { new SimpleOtlpResource("frontend", "abc123"), new SimpleOtlpResource("frontend", "xyz789") }, "frontend-abc123"];
-        // replicas with GUID instance id → name-shortened8chars
-        yield return [MakeResource("worker", guidStr), new IOtlpResource[] { new SimpleOtlpResource("worker", guidStr), new SimpleOtlpResource("worker", Guid.NewGuid().ToString()) }, $"worker-{guid:N}"[..15]];
+        // replicas with GUID instance id → name-last8chars
+        yield return [MakeResource("worker", guidStr), new IOtlpResource[] { new SimpleOtlpResource("worker", guidStr), new SimpleOtlpResource("worker", Guid.NewGuid().ToString()) }, $"worker-{guid.ToString("N")[^8..]}"];
     }
 
     [Theory]
@@ -208,7 +270,7 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
     public async Task TelemetryCommand_WithDashboardUrl_InvalidTelemetryApiResponse_DisplaysErrorMessage(
         string otelCommand, HttpStatusCode? statusCode, string? contentType, string? body, HttpStatusCode? baseProbeStatusCode, string expectedMessageKey)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -221,13 +283,13 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
         services.AddSingleton(handler);
         services.Replace(ServiceDescriptor.Singleton<IHttpClientFactory>(new MockHttpClientFactory(handler)));
 
-        var provider = services.BuildServiceProvider();
+        using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
         var result = command.Parse($"otel {otelCommand} --dashboard-url http://localhost:18888");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
-        Assert.Equal(ExitCodeConstants.DashboardFailure, exitCode);
+        Assert.Equal(CliExitCodes.DashboardFailure, exitCode);
         var errorMessage = Assert.Single(testInteractionService.DisplayedErrors);
         var expectedMessage = GetExpectedErrorMessage(expectedMessageKey);
         Assert.Equal(expectedMessage, errorMessage);
@@ -270,6 +332,12 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
                     Content = new StringContent("[]", System.Text.Encoding.UTF8, "application/json")
                 };
             }
+            // The validateToken probe (POST) is used to distinguish "API not enabled" from "auth required".
+            // Return 404 to indicate the API is not enabled.
+            if (url.Contains("/api/telemetry/validateToken"))
+            {
+                return new HttpResponseMessage(HttpStatusCode.NotFound);
+            }
             if (url.Contains("/api/telemetry/"))
             {
                 if (statusCode is null)
@@ -311,5 +379,134 @@ public class TelemetryCommandTests(ITestOutputHelper outputHelper)
             attrs.Add(new() { Key = "service.instance.id", Value = new OtlpAnyValueJson { StringValue = instanceId } });
         }
         return new OtlpResourceJson { Attributes = [.. attrs] };
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsApiKey_WhenResponseContainsKey()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"apiKey":"test-api-key-123"}""", System.Text.Encoding.UTF8, "application/json")
+        };
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Equal("test-api-key-123", result.ApiKey);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsNullApiKey_WhenApiKeyIsNull()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"apiKey":null}""", System.Text.Encoding.UTF8, "application/json")
+        };
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.True(result.Success);
+        Assert.Null(result.ApiKey);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsFailed_WhenUnauthorized()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.Unauthorized);
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "wrong-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(TokenExchangeFailureKind.TokenRejected, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsFailed_WhenNotFound()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.NotFound);
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(TokenExchangeFailureKind.ApiNotEnabled, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsConnectionError_WhenConnectionFails()
+    {
+        using var handler = new MockHttpMessageHandler(new HttpRequestException("Connection refused"));
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(TokenExchangeFailureKind.ConnectionError, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_ReturnsOther_WhenUnexpectedStatusCode()
+    {
+        var response = new HttpResponseMessage(HttpStatusCode.InternalServerError);
+        using var handler = new MockHttpMessageHandler(response);
+        var factory = new MockHttpClientFactory(handler);
+
+        var result = await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "browser-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.False(result.Success);
+        Assert.Equal(TokenExchangeFailureKind.Other, result.FailureKind);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_SendsTokenAsJsonBody()
+    {
+        string? capturedBody = null;
+        using var handler = new MockHttpMessageHandler(request =>
+        {
+            capturedBody = request.Content!.ReadAsStringAsync().GetAwaiter().GetResult();
+            return new HttpResponseMessage(HttpStatusCode.OK)
+            {
+                Content = new StringContent("""{"apiKey":"key"}""", System.Text.Encoding.UTF8, "application/json")
+            };
+        });
+        var factory = new MockHttpClientFactory(handler);
+
+        await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "my-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.Equal("""{"token":"my-token"}""", capturedBody);
+    }
+
+    [Fact]
+    public async Task ExchangeLoginTokenForApiKeyAsync_CallsCorrectUrl()
+    {
+        string? capturedUrl = null;
+        var response = new HttpResponseMessage(HttpStatusCode.OK)
+        {
+            Content = new StringContent("""{"apiKey":"key"}""", System.Text.Encoding.UTF8, "application/json")
+        };
+        using var handler = new MockHttpMessageHandler(response, request =>
+        {
+            capturedUrl = request.RequestUri?.ToString();
+        });
+        var factory = new MockHttpClientFactory(handler);
+
+        await TelemetryCommandHelpers.ExchangeLoginTokenForApiKeyAsync(
+            factory, "http://localhost:18888", "my-token", NullLogger.Instance, CancellationToken.None);
+
+        Assert.Equal("http://localhost:18888/api/telemetry/validateToken", capturedUrl);
     }
 }

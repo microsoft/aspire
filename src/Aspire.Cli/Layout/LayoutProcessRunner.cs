@@ -1,115 +1,115 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
-using Aspire.Shared;
+using System.Text;
+using Aspire.Cli.DotNet;
+using Aspire.Cli.Processes;
 
 namespace Aspire.Cli.Layout;
 
 /// <summary>
-/// Helper to detect the current runtime identifier.
-/// Delegates to shared BundleDiscovery for consistent behavior.
+/// Runs processes using layout tools via an <see cref="IProcessExecutionFactory"/>.
 /// </summary>
-internal static class RuntimeIdentifierHelper
+internal sealed class LayoutProcessRunner(IProcessExecutionFactory executionFactory)
 {
-    /// <summary>
-    /// Gets the current platform's runtime identifier.
-    /// </summary>
-    public static string GetCurrent() => BundleDiscovery.GetCurrentRuntimeIdentifier();
-
-    /// <summary>
-    /// Gets the archive extension for the current platform.
-    /// </summary>
-    public static string GetArchiveExtension() => BundleDiscovery.GetArchiveExtension();
-}
-
-/// <summary>
-/// Utilities for running processes using layout tools.
-/// All layout tools are self-contained executables — no muxer needed.
-/// </summary>
-internal static class LayoutProcessRunner
-{
-    /// <summary>
-    /// Runs a tool and captures output. The tool is always run directly as a native executable.
-    /// </summary>
-    public static async Task<(int ExitCode, string Output, string Error)> RunAsync(
+    /// <inheritdoc />
+    public async Task<(int ExitCode, string Output, string Error)> RunAsync(
         string toolPath,
         IEnumerable<string> arguments,
         string? workingDirectory = null,
         IDictionary<string, string>? environmentVariables = null,
+        bool killOnParentExit = false,
         CancellationToken ct = default)
     {
-        using var process = CreateProcess(toolPath, arguments, workingDirectory, environmentVariables, redirectOutput: true);
+        var outputBuilder = new StringBuilder();
+        var errorBuilder = new StringBuilder();
 
-        process.Start();
+        var options = new ProcessInvocationOptions
+        {
+            SuppressLogging = true,
+            StandardOutputCallback = line => outputBuilder.AppendLine(line),
+            StandardErrorCallback = line => errorBuilder.AppendLine(line),
+            KillOnParentExit = killOnParentExit,
+        };
 
-        var outputTask = process.StandardOutput.ReadToEndAsync(ct);
-        var errorTask = process.StandardError.ReadToEndAsync(ct);
+        var args = arguments.ToArray();
+        var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
 
-        await process.WaitForExitAsync(ct);
+        // The Windows kill-on-close job (KillOnParentExit, above) and the cross-platform cooperative
+        // parent-liveness watchdog (activated by the ASPIRE_CLI_PID identity that
+        // WithOrphanDetectionEnvironment stamps) are two implementations of the SAME "don't outlive the
+        // CLI" policy. Arming BOTH on one child races the job's kernel TerminateProcess against the
+        // watchdog's Environment.Exit(124) when the CLI exits, which can get the child stuck mid-teardown.
+        // So we use exactly one mechanism per child: on Windows the kill-on-close
+        // job is authoritative (kernel-enforced), and we do not use the watchdog.
+        // Everywhere else KillOnParentExit is a no-op, and the cooperative watchdog remains the sole mechanism 
+        // and MUST have relevant environment variables set.
+        var effectiveEnvironment = options.KillOnParentExit && OperatingSystem.IsWindows()
+            ? CopyEnvironment(environmentVariables)
+            : WithOrphanDetectionEnvironment(environmentVariables);
 
-        return (process.ExitCode, await outputTask, await errorTask);
+        await using var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, options);
+
+        if (!execution.Start())
+        {
+            throw new InvalidOperationException($"Failed to start process: {toolPath}");
+        }
+
+        var exitCode = await execution.WaitForExitAsync(ct).ConfigureAwait(false);
+
+        return (exitCode, outputBuilder.ToString(), errorBuilder.ToString());
     }
 
-    /// <summary>
-    /// Starts a process without waiting for it to exit.
-    /// Returns the Process object for the caller to manage.
-    /// </summary>
-    public static Process Start(
+    /// <inheritdoc />
+    public async Task<IProcessExecution> StartAsync(
         string toolPath,
         IEnumerable<string> arguments,
         string? workingDirectory = null,
         IDictionary<string, string>? environmentVariables = null,
-        bool redirectOutput = false)
+        ProcessInvocationOptions? options = null,
+        bool killOnParentExit = false)
     {
-        var process = CreateProcess(toolPath, arguments, workingDirectory, environmentVariables, redirectOutput);
-        process.Start();
-        return process;
+        var args = arguments.ToArray();
+        var workDir = new DirectoryInfo(workingDirectory ?? Directory.GetCurrentDirectory());
+
+        // Clone so the KillOnParentExit flip below never mutates the caller's options instance — the
+        // caller may reuse it across invocations. Falls back to a fresh instance when none was passed.
+        var effectiveOptions = options?.Clone() ?? new ProcessInvocationOptions();
+
+        if (killOnParentExit)
+        {
+            effectiveOptions.KillOnParentExit = true;
+        }
+
+        // Compare with RunAsync: the same logic applies here.
+        var effectiveEnvironment = effectiveOptions.KillOnParentExit && OperatingSystem.IsWindows()
+            ? CopyEnvironment(environmentVariables)
+            : WithOrphanDetectionEnvironment(environmentVariables);
+
+        var execution = executionFactory.CreateExecution(toolPath, args, effectiveEnvironment, workDir, effectiveOptions);
+
+        if (!execution.Start())
+        {
+            await execution.DisposeAsync().ConfigureAwait(false);
+            throw new InvalidOperationException($"Failed to start process: {toolPath}");
+        }
+
+        return execution;
     }
 
-    /// <summary>
-    /// Creates a configured Process for running a bundle tool.
-    /// Tools are always self-contained executables — run directly.
-    /// </summary>
-    private static Process CreateProcess(
-        string toolPath,
-        IEnumerable<string> arguments,
-        string? workingDirectory,
-        IDictionary<string, string>? environmentVariables,
-        bool redirectOutput)
+    private static IDictionary<string, string> WithOrphanDetectionEnvironment(IDictionary<string, string>? environmentVariables)
     {
-        var process = new Process();
+        var environment = CopyEnvironment(environmentVariables);
 
-        process.StartInfo.UseShellExecute = false;
-        process.StartInfo.CreateNoWindow = true;
-        process.StartInfo.FileName = toolPath;
+        // Stamp the launching CLI's identity, but never override values the caller already supplied
+        // so an explicit caller override always wins.
+        OrphanDetectionEnvironment.ApplyCurrentProcess(environment, overwrite: false);
 
-        if (redirectOutput)
-        {
-            process.StartInfo.RedirectStandardOutput = true;
-            process.StartInfo.RedirectStandardError = true;
-        }
-
-        // Add custom environment variables
-        if (environmentVariables is not null)
-        {
-            foreach (var (key, value) in environmentVariables)
-            {
-                process.StartInfo.Environment[key] = value;
-            }
-        }
-
-        if (workingDirectory is not null)
-        {
-            process.StartInfo.WorkingDirectory = workingDirectory;
-        }
-
-        // Add arguments
-        foreach (var arg in arguments)
-        {
-            process.StartInfo.ArgumentList.Add(arg);
-        }
-
-        return process;
+        return environment;
     }
+
+    private static IDictionary<string, string> CopyEnvironment(IDictionary<string, string>? environmentVariables)
+        => environmentVariables is null
+            ? new Dictionary<string, string>(StringComparer.Ordinal)
+            : new Dictionary<string, string>(environmentVariables, StringComparer.Ordinal);
 }

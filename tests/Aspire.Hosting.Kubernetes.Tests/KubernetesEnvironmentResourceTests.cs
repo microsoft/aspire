@@ -5,18 +5,18 @@
 using System.Runtime.CompilerServices;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Kubernetes;
 using Aspire.Hosting.Utils;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
-public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
+public class KubernetesEnvironmentResourceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task PublishingKubernetesEnvironmentPublishesFile()
     {
-        var tempDir = Directory.CreateTempSubdirectory(".k8s-test");
-        output.WriteLine($"Temp directory: {tempDir.FullName}");
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.FullName);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddKubernetesEnvironment("env");
 
@@ -26,15 +26,13 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
         var app = builder.Build();
         app.Run();
 
-        var chartYaml = Path.Combine(tempDir.FullName, "Chart.yaml");
-        var valuesYaml = Path.Combine(tempDir.FullName, "values.yaml");
-        var deploymentYaml = Path.Combine(tempDir.FullName, "templates", "service", "deployment.yaml");
+        var chartYaml = Path.Combine(workspace.Path, "Chart.yaml");
+        var valuesYaml = Path.Combine(workspace.Path, "values.yaml");
+        var deploymentYaml = Path.Combine(workspace.Path, "templates", "service", "deployment.yaml");
 
         await Verify(File.ReadAllText(chartYaml), "yaml")
             .AppendContentAsFile(File.ReadAllText(valuesYaml), "yaml")
             .AppendContentAsFile(File.ReadAllText(deploymentYaml), "yaml");
-
-        tempDir.Delete(recursive: true);
     }
 
     [Fact]
@@ -70,12 +68,33 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public async Task ValidateKubernetes_DoesNotThrowInRunMode()
+    {
+        // Regression test for https://github.com/microsoft/aspire/issues/16940.
+        // In run mode, AddKubernetesEnvironment does not add the env resource to the model.
+        // If a compute resource still ends up with a KubernetesServiceCustomizationAnnotation
+        // (e.g. via WithAnnotation), the validation step should not throw at 'aspire run' time —
+        // PublishAs* customizations are only meaningful at publish/deploy time.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddKubernetesEnvironment("env");
+
+        builder.AddContainer("api", "myimage")
+            .WithAnnotation(new KubernetesServiceCustomizationAnnotation((_) => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
     [ActiveIssue("https://github.com/microsoft/aspire/issues/11818", typeof(PlatformDetection), nameof(PlatformDetection.IsRunningFromAzdo))]
     public async Task MultipleKubernetesEnvironmentsSupported()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var outputPath = Path.Combine(workspace.Path, "output");
 
-        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath);
 
         var env1 = builder.AddKubernetesEnvironment("env1");
         var env2 = builder.AddKubernetesEnvironment("env2");
@@ -91,7 +110,7 @@ public class KubernetesEnvironmentResourceTests(ITestOutputHelper output)
         // Publishing will stop the app when it is done
         await app.RunAsync();
 
-        await VerifyDirectory(tempDir.Path);
+        await VerifyDirectory(outputPath);
     }
 
     [Fact]

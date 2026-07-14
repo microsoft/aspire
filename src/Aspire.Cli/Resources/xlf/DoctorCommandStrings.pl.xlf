@@ -2,15 +2,210 @@
 <xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
   <file datatype="xml" source-language="en" target-language="pl" original="../DoctorCommandStrings.resx">
     <body>
+      <trans-unit id="AppHostCategoryHeader">
+        <source>AppHost</source>
+        <target state="new">AppHost</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostVersionCheckFailedMessage">
+        <source>Could not determine AppHost version</source>
+        <target state="new">Could not determine AppHost version</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="AppHostVersionMessageFormat">
+        <source>AppHost version {0} ({1})</source>
+        <target state="new">AppHost version {0} ({1})</target>
+        <note>{0} is the AppHost Aspire.Hosting version. {1} is the AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="AppHostVersionUnknownMessageFormat">
+        <source>Could not determine AppHost version ({0})</source>
+        <target state="new">Could not determine AppHost version ({0})</target>
+        <note>{0} is the AppHost project path.</note>
+      </trans-unit>
+      <trans-unit id="AspireCategoryHeader">
+        <source>Aspire</source>
+        <target state="new">Aspire</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ChannelSuffixFormat">
+        <source> (channel: {0})</source>
+        <target state="new"> (channel: {0})</target>
+        <note>{0} is the Aspire channel name (e.g., "stable", "staging", "daily", "local", "pr-1234"). Appended to CLI / AppHost version messages.</note>
+      </trans-unit>
       <trans-unit id="CheckingPrerequisites">
         <source>Checking Aspire environment...</source>
         <target state="translated">Sprawdzanie środowiska Aspire...</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="CliVersionMessageFormat">
+        <source>Aspire CLI version {0}</source>
+        <target state="new">Aspire CLI version {0}</target>
+        <note>{0} is the current Aspire CLI version.</note>
+      </trans-unit>
+      <trans-unit id="CliVersionOutOfDateFixFormat">
+        <source>Run '{0}' to update Aspire CLI.</source>
+        <target state="new">Run '{0}' to update Aspire CLI.</target>
+        <note>{0} is the command to update Aspire CLI.</note>
+      </trans-unit>
+      <trans-unit id="CliVersionOutOfDateMessageFormat">
+        <source>Aspire CLI version {0} is out of date. Latest version is {1}</source>
+        <target state="new">Aspire CLI version {0} is out of date. Latest version is {1}</target>
+        <note>{0} is the current Aspire CLI version. {1} is the latest available Aspire CLI version.</note>
+      </trans-unit>
+      <trans-unit id="CliVersionUpdateCheckFailedMessage">
+        <source>Could not check for Aspire CLI updates</source>
+        <target state="new">Could not check for Aspire CLI updates</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnChannel">
+        <source>Channel</source>
+        <target state="new">Channel</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnPath">
+        <source>Path</source>
+        <target state="new">Path</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnPathStatus">
+        <source>PATH status</source>
+        <target state="new">PATH status</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnRoute">
+        <source>Route</source>
+        <target state="new">Route</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ColumnVersion">
+        <source>Version</source>
+        <target state="new">Version</target>
         <note />
       </trans-unit>
       <trans-unit id="ContainerCategoryHeader">
         <source>Container Runtime</source>
         <target state="translated">Środowisko uruchomieniowe kontenera</target>
         <note />
+      </trans-unit>
+      <trans-unit id="DcpApiServerReturnedHttpStatusMessageFormat">
+        <source>Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</source>
+        <target state="new">Developer Control Plane (DCP) API server returned HTTP {0} ({1}).</target>
+        <note>{0} is the numeric HTTP status code. {1} is the HTTP status code name.</note>
+      </trans-unit>
+      <trans-unit id="DcpBundleNotFoundDetails">
+        <source>The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</source>
+        <target state="new">The running Aspire CLI is not associated with a bundle layout that contains the Developer Control Plane (DCP).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpBundleNotFoundMessage">
+        <source>Developer Control Plane (DCP) bundle not found; skipping connection health checks</source>
+        <target state="new">Developer Control Plane (DCP) bundle not found; skipping connection health checks</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpConnectionCheckFailedMessage">
+        <source>Failed to check Developer Control Plane (DCP) connection health</source>
+        <target state="new">Failed to check Developer Control Plane (DCP) connection health</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpConnectionSucceededMessage">
+        <source>Developer Control Plane (DCP) connection health checks succeeded</source>
+        <target state="new">Developer Control Plane (DCP) connection health checks succeeded</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpConnectionTimedOutMessageFormat">
+        <source>Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</source>
+        <target state="new">Timed out after {0} seconds while checking Developer Control Plane (DCP) connection health.</target>
+        <note>{0} is the timeout in seconds.</note>
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateConnectionFailedMessage">
+        <source>Developer Control Plane (DCP) connection using the developer certificate failed</source>
+        <target state="new">Developer Control Plane (DCP) connection using the developer certificate failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateConnectionSucceededMessage">
+        <source>Developer Control Plane (DCP) connection using the developer certificate succeeded</source>
+        <target state="new">Developer Control Plane (DCP) connection using the developer certificate succeeded</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateInvalidForCacheDetails">
+        <source>The developer certificate could not be cached because it was not valid.</source>
+        <target state="new">The developer certificate could not be cached because it was not valid.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateMissingThumbprintDetails">
+        <source>The developer certificate did not have a thumbprint.</source>
+        <target state="new">The developer certificate did not have a thumbprint.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateNoTrustedExportableDetails">
+        <source>No fully trusted exportable developer certificate with a private key was found.</source>
+        <target state="new">No fully trusted exportable developer certificate with a private key was found.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateRepairTrustFix">
+        <source>Run `aspire certs trust` to repair developer certificate trust.</source>
+        <target state="new">Run `aspire certs trust` to repair developer certificate trust.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateTrustFix">
+        <source>Run `aspire certs trust` to create and trust a developer certificate.</source>
+        <target state="new">Run `aspire certs trust` to create and trust a developer certificate.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateUnavailableMessage">
+        <source>No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</source>
+        <target state="new">No trusted developer certificate was available for the Developer Control Plane (DCP) developer certificate connection check</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpDeveloperCertificateUserProfileMissingDetails">
+        <source>The developer certificate could not be cached because the user profile directory could not be determined.</source>
+        <target state="new">The developer certificate could not be cached because the user profile directory could not be determined.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpEphemeralCertificateConnectionFailedMessage">
+        <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</source>
+        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate failed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpEphemeralCertificateConnectionSucceededMessage">
+        <source>Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</source>
+        <target state="new">Developer Control Plane (DCP) connection using an ephemeral DCP-managed certificate succeeded</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpExecutableNotFoundDetailsFormat">
+        <source>Expected Developer Control Plane (DCP) executable at '{0}'.</source>
+        <target state="new">Expected Developer Control Plane (DCP) executable at '{0}'.</target>
+        <note>{0} is the expected DCP executable path.</note>
+      </trans-unit>
+      <trans-unit id="DcpExecutableNotFoundMessage">
+        <source>Developer Control Plane (DCP) executable not found</source>
+        <target state="new">Developer Control Plane (DCP) executable not found</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpExitedBeforeKubeconfigDetailsFormat">
+        <source>Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</source>
+        <target state="new">Developer Control Plane (DCP) exited before writing kubeconfig. Exit code: {0}.{1}{2}</target>
+        <note>{0} is the DCP process exit code. {1} is a newline. {2} is recent DCP process output.</note>
+      </trans-unit>
+      <trans-unit id="DcpKubeconfigMissingServerDetails">
+        <source>Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</source>
+        <target state="new">Developer Control Plane (DCP) kubeconfig did not contain a valid server URI.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpNoOutputDetails">
+        <source>Developer Control Plane (DCP) did not write any output.</source>
+        <target state="new">Developer Control Plane (DCP) did not write any output.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpStartFailedMessage">
+        <source>Failed to start Developer Control Plane (DCP).</source>
+        <target state="new">Failed to start Developer Control Plane (DCP).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpTlsAuthenticationFailedDetailsFormat">
+        <source>TLS authentication failed: {0}</source>
+        <target state="new">TLS authentication failed: {0}</target>
+        <note>{0} is the TLS authentication error message.</note>
       </trans-unit>
       <trans-unit id="Description">
         <source>Diagnose Aspire environment issues and verify setup</source>
@@ -26,6 +221,21 @@
         <source>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</source>
         <target state="new">Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</target>
         <note>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</note>
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilDetails">
+        <source>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</source>
+        <target state="new">Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilFix">
+        <source>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</source>
+        <target state="new">Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilMessage">
+        <source>certutil is not available; browser certificate trust may be incomplete</source>
+        <target state="new">certutil is not available; browser certificate trust may be incomplete</target>
+        <note />
       </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion.</source>
@@ -112,6 +322,11 @@
         <target state="new">HTTPS development certificate is trusted</target>
         <note />
       </trans-unit>
+      <trans-unit id="DevelopmentToolsCategoryHeader">
+        <source>Development Tools</source>
+        <target state="new">Development Tools</target>
+        <note />
+      </trans-unit>
       <trans-unit id="EnvironmentCategoryHeader">
         <source>Environment</source>
         <target state="translated">Środowisko</target>
@@ -122,9 +337,48 @@
         <target state="translated">Sprawdzanie środowiska Aspire</target>
         <note />
       </trans-unit>
+      <trans-unit id="HeaderInstallations">
+        <source>Aspire CLI Installations</source>
+        <target state="new">Aspire CLI Installations</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InstallationDiscoveryFailedReason">
+        <source>Install discovery failed. See the Aspire CLI logs for details.</source>
+        <target state="new">Install discovery failed. See the Aspire CLI logs for details.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="JsonOptionDescription">
         <source>Output format (Table or Json)</source>
         <target state="needs-review-translation">Wyświetl wyniki jako JSON na potrzeby integracji z narzędziami</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LegacySettingsDetectedFix">
+        <source>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</source>
+        <target state="new">Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
+The legacy file continues to work — this is a non-blocking warning.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="LegacySettingsDetectedMessageFormat">
+        <source>Legacy .aspire/settings.json detected at {0}</source>
+        <target state="new">Legacy .aspire/settings.json detected at {0}</target>
+        <note>{0} is the full path to the legacy settings file.</note>
+      </trans-unit>
+      <trans-unit id="LegacyTypeScriptAppHostMessageFormat">
+        <source>Legacy 'apphost.ts' layout detected at {0}</source>
+        <target state="new">Legacy 'apphost.ts' layout detected at {0}</target>
+        <note>{0} is the full path to the legacy apphost.ts file.</note>
+      </trans-unit>
+      <trans-unit id="OperatingSystemMessageFormat">
+        <source>Operating system: {0}</source>
+        <target state="new">Operating system: {0}</target>
+        <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
+      </trans-unit>
+      <trans-unit id="PendingMigrationFix">
+        <source>Run 'aspire update --migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</source>
+        <target state="new">Run 'aspire update --migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</target>
         <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">
@@ -135,6 +389,61 @@
       <trans-unit id="SummaryFormat">
         <source>Summary: {0} passed, {1} warnings, {2} failed</source>
         <target state="translated">Podsumowanie: zaliczone {0}, ostrzeżenia {1}, niezaliczone {2}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ValueCurrentMarker">
+        <source>(current)</source>
+        <target state="new">(current)</target>
+        <note>Suffix appended to the running CLI's path so the user can identify which install is themselves.</note>
+      </trans-unit>
+      <trans-unit id="ValueNotProbed">
+        <source>(not probed)</source>
+        <target state="new">(not probed)</target>
+        <note>Placeholder shown in the table when an install was found but not asked to self-describe (e.g., trust gate).</note>
+      </trans-unit>
+      <trans-unit id="ValuePathActive">
+        <source>active</source>
+        <target state="new">active</target>
+        <note>Shown when an install is the first Aspire CLI resolved from PATH.</note>
+      </trans-unit>
+      <trans-unit id="ValuePathNotOnPath">
+        <source>not on PATH</source>
+        <target state="new">not on PATH</target>
+        <note>Shown when an install was not discovered from PATH.</note>
+      </trans-unit>
+      <trans-unit id="ValuePathShadowed">
+        <source>shadowed</source>
+        <target state="new">shadowed</target>
+        <note>Shown when an install is on PATH but an earlier Aspire CLI entry shadows it.</note>
+      </trans-unit>
+      <trans-unit id="ValueProbeFailed">
+        <source>(probe failed)</source>
+        <target state="new">(probe failed)</target>
+        <note>Placeholder shown in the table when an install was probed but did not return usable data.</note>
+      </trans-unit>
+      <trans-unit id="ValueUnknown">
+        <source>(unknown)</source>
+        <target state="new">(unknown)</target>
+        <note>Placeholder shown in the table when a field could not be determined for a discovered install.</note>
+      </trans-unit>
+      <trans-unit id="VersionUnknown">
+        <source>unknown</source>
+        <target state="new">unknown</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionInstalledMessage">
+        <source>Aspire extension for VS Code is installed</source>
+        <target state="new">Aspire extension for VS Code is installed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionMissingFix">
+        <source>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</source>
+        <target state="new">Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionMissingMessage">
+        <source>VS Code is installed, but the Aspire extension is not installed</source>
+        <target state="new">VS Code is installed, but the Aspire extension is not installed</target>
         <note />
       </trans-unit>
     </body>

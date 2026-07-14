@@ -1,4 +1,4 @@
-﻿@using Aspire.Dashboard.Components.Controls.Chart
+@using Aspire.Dashboard.Components.Controls.Chart
 @using Aspire.Dashboard.Model.Interaction
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
@@ -44,6 +44,7 @@
                                                  Placeholder="@input.ViewModel.Input.Placeholder"
                                                  Required="input.ViewModel.Input.Required"
                                                  Immediate="true"
+                                                 AutoComplete="off"
                                                  Disabled="input.ViewModel.InputDisabled"
                                                  aria-describedby="@input.DescriptionId"
                                                  Maxlength="@InteractionHelpers.GetMaxLength(input.ViewModel.Input.MaxLength)" />
@@ -89,7 +90,8 @@
                                 *@
                                 @if (!localItem.Input.AllowCustomChoice)
                                 {
-                                    <FluentSelect TOption="SelectViewModel<string>"
+                                    <FluentSelect @key="input.ViewModel.InputKey"
+                                                  TOption="SelectViewModel<string>"
                                                   @ref="@_elementRefs[input.ViewModel]"
                                                   @bind-Value="input.ViewModel.Value"
                                                   Placeholder="@input.ViewModel.Input.Placeholder"
@@ -106,7 +108,8 @@
                                 }
                                 else
                                 {
-                                    <FluentCombobox TOption="SelectViewModel<string>"
+                                    <FluentCombobox @key="input.ViewModel.InputKey"
+                                                    TOption="SelectViewModel<string>"
                                                     @ref="@_elementRefs[input.ViewModel]"
                                                     @bind-Value="input.ViewModel.Value"
                                                     Placeholder="@input.ViewModel.Input.Placeholder"
@@ -137,7 +140,7 @@
                                                 @bind-Value="input.ViewModel.IsChecked"
                                                 Label="@input.ViewModel.Input.Label"
                                                 Placeholder="@input.ViewModel.Input.Placeholder"
-                                                AriaLabel="@input.ViewModel.Input.Description"
+                                                AriaLabel="@input.ViewModel.Input.Label"
                                                 Disabled="input.ViewModel.InputDisabled"
                                                 aria-describedby="@input.DescriptionId" />
                             </InteractionInputField>
@@ -156,6 +159,42 @@
                                                    Immediate="true"
                                                    Disabled="input.ViewModel.InputDisabled"
                                                    aria-describedby="@input.DescriptionId" />
+                            </InteractionInputField>
+                            break;
+                        case InputType.File:
+                            var inputId = $"{_elementRefs[localItem]?.Id}-FileUploadButton";
+                            <InteractionInputField ForId="@inputId"
+                                                   InputViewModel="@localItem"
+                                                   MarkdownProcessor="@_markdownProcessor"
+                                                   Context="input">
+                                <FluentInputFile @ref="@_elementRefs[input.ViewModel]"
+                                                 DragDropZoneVisible="false"
+                                                 Mode="InputFileMode.Stream"
+                                                 AnchorId="@inputId"
+                                                 Accept="@input.ViewModel.Input.FileFilter"
+                                                 Multiple="@input.ViewModel.Input.AllowMultipleFiles"
+                                                 MaximumFileSize="@GetMaxFileSize(input.ViewModel)"
+                                                 OnInputFileChange="@(args => OnInputFileChangeAsync(input.ViewModel, args))" />
+                                @if (input.ViewModel.FileReferences.Any(f => f.Id is not null))
+                                {
+                                    <div class="uploaded-files-list">
+                                        @foreach (var fileRef in input.ViewModel.FileReferences.Where(f => f.Id is not null))
+                                        {
+                                            <div class="uploaded-file-container">
+                                                <FluentIcon Icon="Icons.Filled.Size16.Document" Style="vertical-align: text-bottom;" Color="Color.Accent" />
+                                                <span>@fileRef.Name</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <FluentButton Id="@inputId" Appearance="Appearance.Accent"
+                                                  IconStart="@(new Icons.Regular.Size16.FolderOpen())"
+                                                  aria-label="@input.ViewModel.Input.Label">
+                                        @GetFileButtonText(input.ViewModel)
+                                    </FluentButton>
+                                }
                             </InteractionInputField>
                             break;
                         default:
@@ -182,24 +221,3 @@
         </FluentButton>
     }
 </FluentDialogFooter>
-
-@code {
-    private RenderFragment? GetDescriptionContent(InteractionInput vm, string? id)
-    {
-        @if (!string.IsNullOrEmpty(vm.Description))
-        {
-            return
-            @<div class="input-description" id="@id">
-            @if (vm.EnableDescriptionMarkdown)
-            {
-                    <MarkdownRenderer MarkdownProcessor="@_markdownProcessor" Markdown="@vm.Description" SuppressParagraphOnNewLines="true" />
-            }
-            else
-            {
-                    <span>@vm.Description</span>
-            }
-            </div>;
-        }
-        return null;
-    }
-}

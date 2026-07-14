@@ -2,18 +2,22 @@ import { MessageConnection } from 'vscode-jsonrpc';
 import * as vscode from 'vscode';
 import * as fs from 'fs/promises';
 import { getRelativePathToWorkspace, isFolderOpenInWorkspace } from '../utils/workspace';
-import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle } from '../loc/strings';
+import { yesLabel, noLabel, directLink, codespacesLink, openAspireDashboard, settingsLabel, failedToShowPromptEmpty, incompatibleAppHostError, aspireHostingSdkVersion, aspireCliVersion, requiredCapability, fieldRequired, aspireDebugSessionNotInitialized, errorMessage, failedToStartDebugSession, dashboard, codespaces, selectDirectoryTitle, selectFileTitle, unableToAddFolderToWorkspace, dashboardLaunchBehaviorChanged, changelogLabel } from '../loc/strings';
 import { ICliRpcClient } from './rpcClient';
 import { ProgressNotifier } from './progressNotifier';
 import { applyTextStyle, formatText } from '../utils/strings';
 import { extensionLogOutputChannel } from '../utils/logging';
 import { AspireExtendedDebugConfiguration, EnvVar } from '../dcp/types';
-import { AnsiColors, AspireTerminal } from '../utils/AspireTerminalProvider';
-import { AspireDebugSession, DashboardBrowserType } from '../debugger/AspireDebugSession';
+import { AnsiColors } from '../utils/AspireTerminalProvider';
+import { AspireDebugSession } from '../debugger/AspireDebugSession';
+import type { DashboardLaunchBehavior } from '../debugger/AspireDebugSession';
 import { isDirectory } from '../utils/io';
+import { sendTelemetryEvent } from '../utils/telemetry';
+import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';
 
 export interface IInteractionService {
     showStatus: (statusText: string | null) => void;
+    clearProgressNotification: () => void;
     promptForString: (promptText: string, defaultValue: string | null, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForSecretString: (promptText: string, required: boolean, rpcClient: ICliRpcClient) => Promise<string | null>;
     promptForFilePath: (promptText: string, defaultValue: string | null, directory: boolean) => Promise<string | null>;
@@ -41,6 +45,12 @@ export interface IInteractionService {
 }
 
 type CSLogLevel = 'Trace' | 'Debug' | 'Information' | 'Warn' | 'Error' | 'Critical';
+const preOptInDefaultDashboardBrowser: DashboardLaunchBehavior = 'integratedBrowser';
+type DashboardLaunchBehaviorSource = 'debugConfiguration' | 'globalConfiguration' | 'legacyConfiguration' | 'default';
+type ResolvedDashboardLaunchBehavior = {
+    behavior: DashboardLaunchBehavior;
+    source: DashboardLaunchBehaviorSource;
+};
 
 // Support both PascalCase (old) and camelCase (new) for backwards compatibility
 // with different versions of the CLI/AppHost.
@@ -75,6 +85,60 @@ function getDashboardUrlProperty(urls: DashboardUrls, property: 'baseUrl' | 'cod
     }
 }
 
+function sanitizeDashboardUrlForLog(url: string): string {
+    try {
+        return new URL(url).origin;
+    } catch {
+        return '<redacted dashboard URL>';
+    }
+}
+
+function normalizeDashboardLaunchBehavior(value: unknown): DashboardLaunchBehavior | undefined {
+    return value === 'none'
+        || value === 'notification'
+        || value === 'openExternalBrowser'
+        || value === 'integratedBrowser'
+        || value === 'debugChrome'
+        || value === 'debugEdge'
+        || value === 'debugFirefox'
+        ? value
+        : undefined;
+}
+
+function getConfiguredLegacyDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): 'launch' | 'notification' | 'none' | undefined {
+    const inspection = aspireConfig.inspect<unknown>('enableAspireDashboardAutoLaunch');
+    const configuredValue = inspection?.workspaceFolderValue
+        ?? inspection?.workspaceValue
+        ?? inspection?.globalValue;
+
+    if (configuredValue === undefined) {
+        return undefined;
+    }
+
+    if (configuredValue === true || configuredValue === 'launch') {
+        return 'launch';
+    }
+
+    if (configuredValue === false || configuredValue === 'notification') {
+        return 'notification';
+    }
+
+    if (configuredValue === 'off') {
+        return 'none';
+    }
+
+    return undefined;
+}
+
+function getConfiguredDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): DashboardLaunchBehavior | undefined {
+    const inspection = aspireConfig.inspect<unknown>('dashboardBrowser');
+    const configuredValue = inspection?.workspaceFolderValue
+        ?? inspection?.workspaceValue
+        ?? inspection?.globalValue;
+
+    return normalizeDashboardLaunchBehavior(configuredValue);
+}
+
 // Support both PascalCase (old) and camelCase (new) for backwards compatibility.
 // DisplayLineState is serialized with ModelContextProtocol.McpJsonUtilities.DefaultOptions
 // which changed to camelCase in version 0.2.0+
@@ -100,19 +164,18 @@ type DebugSessionOptions = {
 
 export class InteractionService implements IInteractionService {
     private _getAspireDebugSession: () => AspireDebugSession | null;
-    private _getAspireTerminal?: () => AspireTerminal;
 
     private _rpcClient?: ICliRpcClient;
     private _progressNotifier: ProgressNotifier;
 
-    constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, getAspireTerminal?: () => AspireTerminal) {
+    constructor(getAspireDebugSession: () => AspireDebugSession | null, rpcClient: ICliRpcClient, private readonly _globalState?: vscode.Memento) {
         this._getAspireDebugSession = getAspireDebugSession;
-        this._getAspireTerminal = getAspireTerminal;
         this._rpcClient = rpcClient;
         this._progressNotifier = new ProgressNotifier(this._rpcClient);
     }
 
     showStatus(statusText: string | null) {
+        delayStatusForE2E();
         this._progressNotifier.show(statusText);
     }
 
@@ -285,6 +348,7 @@ export class InteractionService implements IInteractionService {
         }
 
         extensionLogOutputChannel.info(`Displaying message: ${emoji} ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -297,6 +361,7 @@ export class InteractionService implements IInteractionService {
         }
 
         extensionLogOutputChannel.info(`Displaying success message: ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -312,6 +377,7 @@ export class InteractionService implements IInteractionService {
 
     displayPlainText(message: string) {
         extensionLogOutputChannel.info(`Displaying plain text: ${message}`);
+        this.clearProgressNotification();
         vscode.window.showInformationMessage(formatText(message));
     }
 
@@ -321,51 +387,47 @@ export class InteractionService implements IInteractionService {
     }
 
     async displayDashboardUrls(dashboardUrls: DashboardUrls) {
-        extensionLogOutputChannel.info(`Displaying dashboard URLs: ${JSON.stringify(dashboardUrls)}`);
+        extensionLogOutputChannel.info('Displaying dashboard URLs.');
 
         const baseUrl = getDashboardUrlProperty(dashboardUrls, 'baseUrl');
         const codespacesUrl = getDashboardUrlProperty(dashboardUrls, 'codespacesUrl');
 
+        extensionLogOutputChannel.info(`${dashboard}: ${sanitizeDashboardUrlForLog(baseUrl)}`);
         this.writeDebugSessionMessage(`${dashboard}: `, true, AnsiColors.Green, false);
         this.writeDebugSessionMessage(baseUrl, true, AnsiColors.Blue);
 
         if (codespacesUrl) {
+            extensionLogOutputChannel.info(`${codespaces}: ${sanitizeDashboardUrlForLog(codespacesUrl)}`);
             this.writeDebugSessionMessage(`${codespaces}: `, true, AnsiColors.Green, false);
             this.writeDebugSessionMessage(codespacesUrl, true, AnsiColors.Blue);
         }
 
-        // Refresh the Aspire panel so it picks up dashboard URLs for the running app host
-        vscode.commands.executeCommand('aspire-vscode.refreshRunningAppHosts');
+        // Refresh live AppHost state without re-running full workspace discovery. Startup already
+        // resolved the AppHost path, and re-discovering here can add another `aspire ls` after the
+        // dashboard is ready.
+        void Promise.resolve(vscode.commands.executeCommand('aspire-vscode.refreshAppHostRuntimeState')).then(undefined, error => {
+            extensionLogOutputChannel.warn(`Failed to refresh AppHost runtime state after dashboard URL display: ${error}`);
+        });
 
-        //  If aspire.enableAspireDashboardAutoLaunch is 'launch', the dashboard will be launched automatically.
-        //  If 'notification', a notification is shown with a link. If 'off', do nothing.
         const aspireConfig = vscode.workspace.getConfiguration('aspire');
-        const rawDashboardAutoLaunch = aspireConfig.get<unknown>('enableAspireDashboardAutoLaunch', 'launch');
+        const dashboardLaunchBehavior = this.getDashboardLaunchBehavior(aspireConfig);
+        sendTelemetryEvent('dashboard/launch/resolved', {
+            behavior: dashboardLaunchBehavior.behavior,
+            source: dashboardLaunchBehavior.source,
+        });
 
-        // Handle legacy boolean values from before this setting was changed to an enum
-        let dashboardAutoLaunch: 'launch' | 'notification' | 'off';
-        if (rawDashboardAutoLaunch === true) {
-            dashboardAutoLaunch = 'launch';
-        } else if (rawDashboardAutoLaunch === false) {
-            dashboardAutoLaunch = 'notification';
-        } else if (rawDashboardAutoLaunch === 'launch' || rawDashboardAutoLaunch === 'notification' || rawDashboardAutoLaunch === 'off') {
-            dashboardAutoLaunch = rawDashboardAutoLaunch;
-        } else {
-            dashboardAutoLaunch = 'launch';
+        if (dashboardLaunchBehavior.behavior === 'none') {
+            await this.showDashboardDefaultChangedNotificationIfNeeded(dashboardLaunchBehavior.source);
+            return;
         }
 
-        if (dashboardAutoLaunch === 'launch') {
+        if (dashboardLaunchBehavior.behavior !== 'notification') {
             // Open the dashboard URL in the configured browser. Prefer codespaces URL if available.
             const urlToOpen = codespacesUrl || baseUrl;
             const debugSession = this._getAspireDebugSession();
             if (debugSession) {
-                const browserType = aspireConfig.get<DashboardBrowserType>('dashboardBrowser', 'openExternalBrowser');
-                await debugSession.openDashboard(urlToOpen, browserType);
+                await debugSession.openDashboard(urlToOpen, dashboardLaunchBehavior.behavior);
             }
-            return;
-        }
-
-        if (dashboardAutoLaunch === 'off') {
             return;
         }
 
@@ -399,42 +461,137 @@ export class InteractionService implements IInteractionService {
                     vscode.env.openExternal(vscode.Uri.parse(codespacesUrl));
                 }
                 else if (selected.title === settingsLabel) {
-                    vscode.commands.executeCommand('workbench.action.openSettings', 'aspire.enableAspireDashboardAutoLaunch');
+                    this.openDashboardLaunchBehaviorSettings(dashboardLaunchBehavior.source);
                 }
             });
         }, 1000);
     }
 
-    async displayLines(lines: ConsoleLine[]) {
+    private getDashboardLaunchBehavior(aspireConfig: vscode.WorkspaceConfiguration): ResolvedDashboardLaunchBehavior {
         const debugSession = this._getAspireDebugSession();
-        const aspireTerminal = !debugSession ? this._getAspireTerminal?.() : undefined;
+        const debugConfigurationBehavior = normalizeDashboardLaunchBehavior(debugSession?.configuration.dashboardBrowser);
+        if (debugConfigurationBehavior) {
+            return { behavior: debugConfigurationBehavior, source: 'debugConfiguration' };
+        }
+
+        const configuredGlobalBehavior = getConfiguredDashboardLaunchBehavior(aspireConfig);
+        if (configuredGlobalBehavior === 'none' || configuredGlobalBehavior === 'notification') {
+            return { behavior: configuredGlobalBehavior, source: 'globalConfiguration' };
+        }
+
+        // Migration precedence is intentionally conservative:
+        // - per-launch `dashboardBrowser` always wins because it only affects this debug run;
+        // - explicit global `none`/`notification` always wins so users can opt out or opt into the toast;
+        // - legacy `notification`/`off` keeps the less intrusive historical behavior even if a new
+        //   browser preference is also configured;
+        // - legacy `launch` falls through to the new browser preference, or to the pinned pre-opt-in
+        //   integrated-browser default when no new preference exists.
+        const legacyBehavior = getConfiguredLegacyDashboardLaunchBehavior(aspireConfig);
+
+        if (legacyBehavior) {
+            if (legacyBehavior === 'notification' || legacyBehavior === 'none') {
+                return { behavior: legacyBehavior, source: 'legacyConfiguration' };
+            }
+
+            return {
+                behavior: configuredGlobalBehavior ?? preOptInDefaultDashboardBrowser,
+                source: configuredGlobalBehavior ? 'globalConfiguration' : 'legacyConfiguration'
+            };
+        }
+
+        if (configuredGlobalBehavior) {
+            return { behavior: configuredGlobalBehavior, source: 'globalConfiguration' };
+        }
+
+        return {
+            behavior: normalizeDashboardLaunchBehavior(aspireConfig.get<unknown>('dashboardBrowser', 'none')) ?? 'none',
+            source: 'default'
+        };
+    }
+
+    private async showDashboardDefaultChangedNotificationIfNeeded(source: DashboardLaunchBehaviorSource): Promise<void> {
+        if (!this._globalState || this._globalState.get<boolean>(dashboardDefaultChangedNotificationKey, false)) {
+            return;
+        }
+
+        if (source !== 'default') {
+            return;
+        }
+
+        await this._globalState.update(dashboardDefaultChangedNotificationKey, true);
+        sendTelemetryEvent('dashboard/launch/migration', { action: 'shown' });
+        vscode.window.showInformationMessage(dashboardLaunchBehaviorChanged, settingsLabel, changelogLabel).then(selected => {
+            if (selected === settingsLabel) {
+                sendTelemetryEvent('dashboard/launch/migration', { action: 'settings' });
+                this.openDashboardLaunchBehaviorSettings(source);
+            }
+            else if (selected === changelogLabel) {
+                sendTelemetryEvent('dashboard/launch/migration', { action: 'changelog' });
+                vscode.env.openExternal(vscode.Uri.parse('https://github.com/microsoft/aspire/blob/main/extension/CHANGELOG.md'));
+            }
+            else {
+                sendTelemetryEvent('dashboard/launch/migration', { action: 'dismissed' });
+            }
+        });
+    }
+
+    private openDashboardLaunchBehaviorSettings(source: DashboardLaunchBehaviorSource): void {
+        if (source === 'debugConfiguration') {
+            vscode.commands.executeCommand('workbench.action.debug.configure');
+            return;
+        }
+
+        vscode.commands.executeCommand(
+            'workbench.action.openSettings',
+            source === 'legacyConfiguration'
+                ? 'aspire.enableAspireDashboardAutoLaunch'
+                : 'aspire.dashboardBrowser');
+    }
+
+    async displayLines(lines: ConsoleLine[]) {
+        this.clearProgressNotification();
+
+        const debugSession = this._getAspireDebugSession();
         for (const line of lines) {
             const text = getConsoleLineText(line);
             const stream = line.stream ?? line.Stream;
             extensionLogOutputChannel.info(formatText(text));
             if (debugSession) {
                 debugSession.sendMessage(text, true, stream !== 'stderr' ? 'stdout' : 'stderr');
-            } else if (aspireTerminal) {
-                aspireTerminal.terminal.sendText(text, true);
             }
+        }
+
+        if (!debugSession && lines.length > 0) {
+            extensionLogOutputChannel.show(true);
         }
     }
 
     displayCancellationMessage() {
         extensionLogOutputChannel.info(`Cancelled Aspire operation.`);
+        this.clearProgressNotification();
     }
 
     async openEditor(path: string) {
         extensionLogOutputChannel.info(`Opening path: ${path}`);
 
-        // check if is folder
         if (await isDirectory(path)) {
             if (isFolderOpenInWorkspace(path)) {
                 return;
             }
 
             const uri = vscode.Uri.file(path);
-            vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: false });
+            const workspaceFolders = vscode.workspace.workspaceFolders;
+            if (workspaceFolders && workspaceFolders.length > 0) {
+                if (!vscode.workspace.updateWorkspaceFolders(workspaceFolders.length, 0, { uri })) {
+                    const message = unableToAddFolderToWorkspace(path);
+                    extensionLogOutputChannel.warn(message);
+                    vscode.window.showWarningMessage(message);
+                }
+
+                return;
+            }
+
+            await vscode.commands.executeCommand('vscode.openFolder', uri, { forceNewWindow: false });
         }
         else {
             const fileUri = vscode.Uri.file(path);
@@ -581,4 +738,29 @@ export function addInteractionServiceEndpoints(connection: MessageConnection, in
     connection.onRequest("notifyAppHostStartupCompleted", middleware('notifyAppHostStartupCompleted', interactionService.notifyAppHostStartupCompleted.bind(interactionService)));
     connection.onRequest("startDebugSession", middleware('startDebugSession', async (workingDirectory: string, projectFile: string | null, debug: boolean, options?: DebugSessionOptions) => interactionService.startDebugSession(workingDirectory, projectFile, debug, options)));
     connection.onRequest("writeDebugSessionMessage", middleware('writeDebugSessionMessage', interactionService.writeDebugSessionMessage.bind(interactionService)));
+}
+
+function delayStatusForE2E(): void {
+    if (process.env.ASPIRE_EXTENSION_E2E_ENABLE_BRIDGE !== 'true' ||
+        !process.env.ASPIRE_EXTENSION_E2E_STATE_FILE ||
+        !process.env.ASPIRE_EXTENSION_E2E_CONTROL_FILE) {
+        return;
+    }
+
+    const rawDelayMs = process.env.ASPIRE_EXTENSION_E2E_SHOW_STATUS_DELAY_MS;
+    if (!rawDelayMs) {
+        return;
+    }
+
+    const delayMs = Number(rawDelayMs);
+    if (!Number.isFinite(delayMs) || delayMs <= 0) {
+        return;
+    }
+
+    // This is intentionally synchronous and E2E-only. The regression test needs to
+    // block the JSON-RPC response that the CLI queued before build diagnostics, so
+    // a timer-based delay would let the request return and fail to exercise the
+    // CLI-side flush path.
+    const buffer = new SharedArrayBuffer(4);
+    Atomics.wait(new Int32Array(buffer), 0, 0, Math.min(delayMs, 10000));
 }

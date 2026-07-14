@@ -8,7 +8,6 @@
 @inject IStringLocalizer<Dashboard.Resources.Traces> Loc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
-@inject IStringLocalizer<AIPrompts> AIPromptsLoc
 @inject IStringLocalizer<Dialogs> DialogsLoc
 
 @implements IDisposable
@@ -38,9 +37,9 @@
                                   OnPausedChanged="@PauseManager.SetTracesPaused"
                                   SelectedResource="@PageViewModel.SelectedResource" />
 
-            <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@TracesViewModel.HasErrors()" />
             <FluentSearch @bind-Value="_filter"
                           @bind-Value:after="HandleAfterFilterBindAsync"
+                          Name="traces-search"
                           Immediate="true"
                           ImmediateDelay="@FluentUIExtensions.InputDelay"
                           Placeholder="@ControlsStringsLoc[nameof(ControlsStrings.FilterPlaceholder)]"
@@ -86,7 +85,7 @@
             }
         </ToolbarSection>
         <MainSection>
-            <div class="datagrid-overflow-area continuous-scroll-overflow" tabindex="-1">
+            <div id="@ScrollContainerId" class="datagrid-overflow-area continuous-scroll-overflow" tabindex="0" role="region" aria-label="@Loc[nameof(Dashboard.Resources.Traces.TracesHeader)]">
                 <GridColumnManager @ref="_manager" Columns="@_gridColumns">
                     <FluentDataGrid @ref="_dataGrid"
                                     ColumnResizeLabels="@_resizeLabels"

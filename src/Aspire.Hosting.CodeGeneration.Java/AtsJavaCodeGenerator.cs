@@ -4,9 +4,18 @@
 using System.Globalization;
 using System.Reflection;
 using System.Text;
+using System.Text.Json.Nodes;
+using Aspire.Shared.Json;
 using Aspire.TypeSystem;
 
 namespace Aspire.Hosting.CodeGeneration.Java;
+
+internal sealed class JavaExportedValueTreeNode
+{
+    public Dictionary<string, JavaExportedValueTreeNode> Children { get; } = new(StringComparer.Ordinal);
+
+    public AtsExportedValueInfo? Value { get; set; }
+}
 
 /// <summary>
 /// Generates a Java SDK using the ATS (Aspire Type System) capability-based API.
@@ -33,6 +42,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
     private readonly Dictionary<string, string> _capabilityOptionsClassMap = new(StringComparer.Ordinal);
     private readonly HashSet<string> _resourceBuilderHandleClasses = new(StringComparer.Ordinal);
 
+    private const string InteractionInputCollectionTypeId = "Aspire.Hosting/Aspire.Hosting.InteractionInputCollection";
+
     /// <inheritdoc />
     public string Language => "Java";
 
@@ -50,7 +61,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             files.Keys
                 .Where(static key => key.EndsWith(".java", StringComparison.Ordinal))
                 .OrderBy(static key => key, StringComparer.Ordinal)
-                .Select(static key => $".modules/{key}")) + '\n';
+                .Select(static key => $".aspire/modules/{key}")) + '\n';
 
         return files;
     }
@@ -395,6 +406,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         var capabilities = context.Capabilities;
         var dtoTypes = context.DtoTypes;
         var enumTypes = context.EnumTypes;
+        var exportedValues = context.ExportedValues;
 
         _enumNames.Clear();
         foreach (var enumType in enumTypes)
@@ -419,6 +431,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteHeader();
         GenerateEnumTypes(enumTypes);
         GenerateDtoTypes(dtoTypes);
+        GenerateExportedValues(exportedValues, dtoTypes.ToDictionary(dto => dto.TypeId, StringComparer.Ordinal));
         GenerateOptionTypes();
         GenerateHandleTypes(handleTypes, capabilitiesByTarget);
         GenerateHandleWrapperRegistrations(handleTypes, collectionTypes);
@@ -517,13 +530,13 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
             var dtoName = _dtoNames[dto.TypeId];
             WriteLine($"/** {dto.Name} DTO. */");
-            WriteLine($"class {dtoName} {{");
+            WriteLine($"class {dtoName} implements JsonSerializable {{");
             
             // Fields
             foreach (var property in dto.Properties)
             {
                 var fieldName = ToCamelCase(property.Name);
-                var fieldType = MapTypeRefToJava(property.Type, property.IsOptional);
+                var fieldType = MapDtoFieldTypeToJava(property);
                 WriteLine($"    private {fieldType} {fieldName};");
             }
             WriteLine();
@@ -533,11 +546,33 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             {
                 var fieldName = ToCamelCase(property.Name);
                 var methodName = ToPascalCase(property.Name);
-                var fieldType = MapTypeRefToJava(property.Type, property.IsOptional);
+                var fieldType = MapDtoFieldTypeToJava(property);
                 
                 WriteLine($"    public {fieldType} get{methodName}() {{ return {fieldName}; }}");
                 WriteLine($"    public void set{methodName}({fieldType} value) {{ this.{fieldName} = value; }}");
             }
+            WriteLine();
+
+            WriteLine("    @SuppressWarnings(\"unchecked\")");
+            WriteLine($"    public static {dtoName} fromMap(Map<String, Object> map) {{");
+            WriteLine($"        var value = new {dtoName}();");
+            foreach (var property in dto.Properties)
+            {
+                // Strongly-typed callback properties cannot be reconstructed from transport data:
+                // callbacks only flow from client to host, never back. Skip them in fromMap so the
+                // generated code does not pass a raw transport value to the typed setter.
+                if (IsStronglyTypedDtoCallback(property))
+                {
+                    continue;
+                }
+                var fieldName = ToCamelCase(property.Name);
+                var methodName = ToPascalCase(property.Name);
+                var transportValueName = $"{fieldName}Value";
+                WriteLine($"        var {transportValueName} = map.get(\"{property.Name}\");");
+                WriteLine($"        value.set{methodName}({RenderJavaDtoPropertyTransportValueConversion(property.Type, transportValueName, property.IsOptional)});");
+            }
+            WriteLine("        return value;");
+            WriteLine("    }");
             WriteLine();
 
             // toMap method for serialization
@@ -546,7 +581,14 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             foreach (var property in dto.Properties)
             {
                 var fieldName = ToCamelCase(property.Name);
-                WriteLine($"        map.put(\"{property.Name}\", AspireClient.serializeValue({fieldName}));");
+                if (IsStronglyTypedDtoCallback(property))
+                {
+                    EmitJavaDtoCallbackToMap(property);
+                }
+                else
+                {
+                    WriteLine($"        map.put(\"{property.Name}\", AspireClient.serializeValue({fieldName}));");
+                }
             }
             WriteLine("        return map;");
             WriteLine("    }");
@@ -554,6 +596,144 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine("}");
             WriteLine();
         }
+    }
+
+    private void GenerateExportedValues(
+        IReadOnlyList<AtsExportedValueInfo> exportedValues,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        if (exportedValues.Count == 0)
+        {
+            return;
+        }
+
+        var root = BuildExportedValueTree(exportedValues);
+
+        WriteLine("// ============================================================================");
+        WriteLine("// Exported Values");
+        WriteLine("// ============================================================================");
+        WriteLine();
+
+        foreach (var (name, node) in root.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            WriteLine($"final class {name} {{");
+            WriteLine($"    private {name}() {{ }}");
+            WriteLine();
+            WriteJavaExportedValueChildren(node, dtoTypesById, indentLevel: 1);
+            WriteLine("}");
+            WriteLine();
+        }
+    }
+
+    private void WriteJavaExportedValueChildren(
+        JavaExportedValueTreeNode node,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById,
+        int indentLevel)
+    {
+        var indent = new string(' ', indentLevel * 4);
+
+        foreach (var (name, child) in node.Children.OrderBy(pair => pair.Key, StringComparer.Ordinal))
+        {
+            if (child.Value is { } valueInfo)
+            {
+                if (!string.IsNullOrWhiteSpace(valueInfo.Description))
+                {
+                    WriteLine($"{indent}/** {valueInfo.Description} */");
+                }
+
+                var javaType = MapTypeRefToJava(valueInfo.Type, isOptional: false, useBoxedTypes: true);
+                var expression = RenderJavaExportedValue(valueInfo.Value, valueInfo.Type, dtoTypesById);
+                WriteLine($"{indent}public static final {javaType} {name} = {expression};");
+            }
+            else
+            {
+                WriteLine($"{indent}public static final class {name} {{");
+                WriteLine($"{indent}    private {name}() {{ }}");
+                WriteLine();
+                WriteJavaExportedValueChildren(child, dtoTypesById, indentLevel + 1);
+                WriteLine($"{indent}}}");
+            }
+
+            WriteLine();
+        }
+    }
+
+    private string RenderJavaExportedValue(
+        JsonNode? value,
+        AtsTypeRef typeRef,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        if (value is null)
+        {
+            return "null";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => value.ToRelaxedJsonString(),
+            AtsTypeCategory.Enum => $"{MapTypeRefToJava(typeRef, false)}.fromValue({value.ToRelaxedJsonString()})",
+            AtsTypeCategory.Dto when value is JsonObject obj && dtoTypesById.TryGetValue(typeRef.TypeId, out var dtoInfo)
+                => RenderJavaDtoValue(obj, dtoInfo, dtoTypesById),
+            AtsTypeCategory.Array when value is JsonArray arr
+                => $"new {MapTypeRefToJava(typeRef.ElementType, false)}[] {{ {string.Join(", ", arr.Select(item => RenderJavaExportedValue(item, typeRef.ElementType!, dtoTypesById)))} }}",
+            AtsTypeCategory.List when value is JsonArray arr
+                => $"({MapTypeRefToJava(typeRef, false, useBoxedTypes: true)})(Object)new ArrayList<>(List.of({string.Join(", ", arr.Select(item => RenderJavaExportedValue(item, typeRef.ElementType!, dtoTypesById)))}))",
+            AtsTypeCategory.Dict when value is JsonObject obj
+                => $"({MapTypeRefToJava(typeRef, false, useBoxedTypes: true)})(Object)new HashMap<>(Map.ofEntries({string.Join(", ", obj.Select(pair => $"Map.entry({AtsJsonCodeWriter.ToRelaxedJsonString(pair.Key)}, {RenderJavaExportedValue(pair.Value, typeRef.ValueType!, dtoTypesById)})"))}))",
+            _ => value.ToRelaxedJsonString()
+        };
+    }
+
+    private string RenderJavaDtoValue(
+        JsonObject value,
+        AtsDtoTypeInfo dtoInfo,
+        IReadOnlyDictionary<string, AtsDtoTypeInfo> dtoTypesById)
+    {
+        var sb = new StringBuilder();
+        sb.Append("new ");
+        sb.Append(_dtoNames[dtoInfo.TypeId]);
+        sb.Append("() {{ ");
+
+        foreach (var property in dtoInfo.Properties)
+        {
+            if (!value.TryGetPropertyValue(property.Name, out var propertyValue))
+            {
+                continue;
+            }
+
+            sb.Append("set");
+            sb.Append(ToPascalCase(property.Name));
+            sb.Append('(');
+            sb.Append(RenderJavaExportedValue(propertyValue, property.Type, dtoTypesById));
+            sb.Append("); ");
+        }
+
+        sb.Append("}}");
+        return sb.ToString();
+    }
+
+    private static JavaExportedValueTreeNode BuildExportedValueTree(IReadOnlyList<AtsExportedValueInfo> exportedValues)
+    {
+        var root = new JavaExportedValueTreeNode();
+
+        foreach (var exportedValue in exportedValues)
+        {
+            var current = root;
+            foreach (var segment in exportedValue.PathSegments)
+            {
+                if (!current.Children.TryGetValue(segment, out var child))
+                {
+                    child = new JavaExportedValueTreeNode();
+                    current.Children[segment] = child;
+                }
+
+                current = child;
+            }
+
+            current.Value = exportedValue;
+        }
+
+        return root;
     }
 
     private void CollectOptionsClasses(IReadOnlyList<AtsCapabilityInfo> capabilities)
@@ -869,9 +1049,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
 
         foreach (var handleType in handleTypes.OrderBy(t => t.ClassName, StringComparer.Ordinal))
         {
-            var baseClass = handleType.IsResourceBuilder ? "ResourceBuilderBase" : "HandleWrapperBase";
             WriteLine($"/** Wrapper for {handleType.TypeId}. */");
-            WriteLine($"class {handleType.ClassName} extends {baseClass} {{");
+            WriteLine($"class {handleType.ClassName} extends {handleType.BaseClassName} {{");
             WriteLine($"    {handleType.ClassName}(Handle handle, AspireClient client) {{");
             WriteLine("        super(handle, client);");
             WriteLine("    }");
@@ -885,6 +1064,11 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 }
             }
 
+            if (string.Equals(handleType.TypeId, InteractionInputCollectionTypeId, StringComparison.Ordinal))
+            {
+                GenerateInteractionInputCollectionAccessors();
+            }
+
             if (string.Equals(handleType.ClassName, "DistributedApplication", StringComparison.Ordinal))
             {
                 GenerateDistributedApplicationBuilderHelpers();
@@ -893,6 +1077,44 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             WriteLine("}");
             WriteLine();
         }
+    }
+
+    private void GenerateInteractionInputCollectionAccessors()
+    {
+        // These accessors are hand-authored on top of the generated toArray capability for parity with .NET and TypeScript.
+        WriteLine("    /** Gets the input with the specified name, or null if no input matches. */");
+        WriteLine("    public InteractionInput get(String name) {");
+        WriteLine("        for (var input : toArray()) {");
+        WriteLine("            if (input.getName() != null && input.getName().equalsIgnoreCase(name)) {");
+        WriteLine("                return input;");
+        WriteLine("            }");
+        WriteLine("        }");
+        WriteLine("        return null;");
+        WriteLine("    }");
+        WriteLine();
+
+        WriteLine("    /** Gets the input with the specified name, or throws if no input matches. */");
+        WriteLine("    public InteractionInput required(String name) {");
+        WriteLine("        var input = get(name);");
+        WriteLine("        if (input == null) {");
+        WriteLine("            throw new IllegalArgumentException(\"no input with name '\" + name + \"' was found\");");
+        WriteLine("        }");
+        WriteLine("        return input;");
+        WriteLine("    }");
+        WriteLine();
+
+        WriteLine("    /** Gets the value of the input with the specified name, or an empty string if no input matches or it has no value. */");
+        WriteLine("    public String value(String name) {");
+        WriteLine("        var input = get(name);");
+        WriteLine("        return input == null || input.getValue() == null ? \"\" : input.getValue();");
+        WriteLine("    }");
+        WriteLine();
+
+        WriteLine("    /** Gets the value of the input with the specified name, or throws if no input matches. */");
+        WriteLine("    public String requiredValue(String name) {");
+        WriteLine("        return required(name).getValue();");
+        WriteLine("    }");
+        WriteLine();
     }
 
     private void GenerateDistributedApplicationBuilderHelpers()
@@ -958,12 +1180,25 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
     private void GenerateUnionOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters)
     {
         var unionParameters = parameters.Where(p => IsUnionType(p.Type)).ToList();
-        if (unionParameters.Count != 1)
+        if (unionParameters.Count == 0)
         {
             return;
         }
 
-        var unionParameter = unionParameters[0];
+        if (unionParameters.Count == 1)
+        {
+            GenerateSingleUnionOverloads(returnInfo, methodName, parameters, unionParameters[0]);
+            return;
+        }
+
+        // Multiple union parameters: generate overloads for each combination of concrete types.
+        // E.g. runAsExisting(AspireUnion name, AspireUnion resourceGroup) where both are string|ParameterResource
+        // generates 4 overloads: (String,String), (String,ParameterResource), (ParameterResource,String), (ParameterResource,ParameterResource)
+        GenerateMultiUnionOverloads(returnInfo, methodName, parameters, unionParameters);
+    }
+
+    private void GenerateSingleUnionOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters, AtsParameterInfo unionParameter)
+    {
         var unionTypes = unionParameter.Type?.UnionTypes;
         if (unionTypes is null || unionTypes.Count == 0)
         {
@@ -1015,6 +1250,77 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
     }
 
+    private void GenerateMultiUnionOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters, List<AtsParameterInfo> unionParameters)
+    {
+        // Build the list of distinct Java types for each union parameter.
+        var unionTypesByParam = unionParameters
+            .Select(up => up.Type?.UnionTypes?
+                .Select(t => new { Type = t, JavaType = MapInputTypeToJava(t, up.IsOptional || up.IsNullable) })
+                .DistinctBy(x => x.JavaType, StringComparer.Ordinal)
+                .Select(x => x.Type)
+                .ToList() ?? [])
+            .ToList();
+
+        // Generate the Cartesian product of all union type combinations.
+        var combinations = CartesianProduct(unionTypesByParam);
+
+        foreach (var combination in combinations)
+        {
+            // Build parameter list for this overload.
+            var overloadParameters = new StringBuilder();
+            foreach (var parameter in parameters)
+            {
+                if (overloadParameters.Length > 0)
+                {
+                    overloadParameters.Append(", ");
+                }
+
+                var unionIndex = unionParameters.IndexOf(parameter);
+                var parameterType = unionIndex >= 0
+                    ? MapInputTypeToJava(combination[unionIndex], parameter.IsOptional || parameter.IsNullable)
+                    : MapParameterToJava(parameter);
+                overloadParameters.Append(CultureInfo.InvariantCulture, $"{parameterType} {ToCamelCase(parameter.Name)}");
+            }
+
+            // Build call arguments, wrapping union parameters with AspireUnion.of().
+            var callArguments = string.Join(", ", parameters.Select(parameter =>
+                unionParameters.Contains(parameter)
+                    ? $"AspireUnion.of({ToCamelCase(parameter.Name)})"
+                    : ToCamelCase(parameter.Name)));
+
+            WriteLine($"    public {returnInfo.ReturnType} {methodName}({overloadParameters}) {{");
+            if (returnInfo.HasReturn)
+            {
+                WriteLine($"        return {methodName}({callArguments});");
+            }
+            else
+            {
+                WriteLine($"        {methodName}({callArguments});");
+            }
+            WriteLine("    }");
+            WriteLine();
+        }
+    }
+
+    private static List<List<AtsTypeRef>> CartesianProduct(List<List<AtsTypeRef>> lists)
+    {
+        var result = new List<List<AtsTypeRef>> { new() };
+        foreach (var list in lists)
+        {
+            var temp = new List<List<AtsTypeRef>>();
+            foreach (var existing in result)
+            {
+                foreach (var item in list)
+                {
+                    var combined = new List<AtsTypeRef>(existing) { item };
+                    temp.Add(combined);
+                }
+            }
+            result = temp;
+        }
+        return result;
+    }
+
     private void GenerateOptionalOverloads(JavaCapabilityReturnInfo returnInfo, string methodName, List<AtsParameterInfo> parameters)
     {
         var trailingOptionalCount = parameters.AsEnumerable().Reverse().TakeWhile(IsOmittableParameter).Count();
@@ -1038,7 +1344,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 }
                 else
                 {
-                    callArguments.Add("null");
+                    callArguments.Add(GetOmittedOptionalArgument(parameter));
                 }
             }
 
@@ -1059,6 +1365,11 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
                 CreateMethodParameters(visibleParameters),
                 returnInfo.HasReturn);
         }
+    }
+
+    private static string GetOmittedOptionalArgument(AtsParameterInfo parameter)
+    {
+        return IsUnionType(parameter.Type) ? "(AspireUnion) null" : "null";
     }
 
     private void GenerateUnionOverloadsWithOptions(
@@ -1189,9 +1500,14 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         string optionsClassName)
     {
         var requiredParameterList = string.Join(", ", requiredParameters.Select(parameter => $"{MapParameterToJava(parameter)} {ToCamelCase(parameter.Name)}"));
+        // Name the options-bag parameter "optionsBag" rather than "options" to avoid colliding with a flattened
+        // local. Some capabilities have an optional parameter literally named "options" (for example the interaction
+        // prompts), and the flattening below declares "var options = optionsBag.getOptions()". Sharing the name would
+        // make the local shadow the parameter, which is a Java compile error. This matches the TypeScript generator,
+        // which also uses "optionsBag".
         var publicParameterList = string.IsNullOrEmpty(requiredParameterList)
-            ? $"{optionsClassName} options"
-            : $"{requiredParameterList}, {optionsClassName} options";
+            ? $"{optionsClassName} optionsBag"
+            : $"{requiredParameterList}, {optionsClassName} optionsBag";
 
         if (!string.IsNullOrEmpty(capability.Description))
         {
@@ -1202,7 +1518,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         foreach (var parameter in optionalParameters)
         {
             var paramName = ToCamelCase(parameter.Name);
-            WriteLine($"        var {paramName} = options == null ? null : options.{GetOptionGetterName(parameter)}();");
+            WriteLine($"        var {paramName} = optionsBag == null ? null : optionsBag.{GetOptionGetterName(parameter)}();");
         }
 
         var implementationArguments = requiredParameters
@@ -1309,14 +1625,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
         else if (returnInfo.HasReturn)
         {
-            if (IsUnionType(capability.ReturnType))
-            {
-                WriteLine($"        return AspireUnion.of(getClient().invokeCapability(\"{capability.CapabilityId}\", reqArgs));");
-            }
-            else
-            {
-                WriteLine($"        return ({returnInfo.ReturnType}) getClient().invokeCapability(\"{capability.CapabilityId}\", reqArgs);");
-            }
+            WriteLine($"        var result = getClient().invokeCapability(\"{capability.CapabilityId}\", reqArgs);");
+            WriteLine($"        return {RenderJavaTransportValueConversion(capability.ReturnType, "result", capability.ReturnType?.IsNullable == true)};");
         }
         else
         {
@@ -1421,19 +1731,168 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         }
     }
 
+    // A DTO callback property is rendered with a strong functional-interface type only when it has
+    // at most one parameter. The runtime marshaller registers DTO-embedded callbacks as a single-arg
+    // Function (args[0] only), so multi-parameter DTO callbacks must keep the weak Object fallback to
+    // avoid generating a strongly-typed API that silently drops arguments. All current DTO callbacks
+    // (e.g. validation/prepare-request contexts) are single-parameter.
+    private static bool IsStronglyTypedDtoCallback(AtsDtoPropertyInfo property)
+        => property.IsCallback && (property.CallbackParameters?.Count ?? 0) <= 1;
+
+    private string MapDtoFieldTypeToJava(AtsDtoPropertyInfo property)
+        => IsStronglyTypedDtoCallback(property)
+            ? GenerateCallbackTypeSignature(property.CallbackParameters, property.CallbackReturnType)
+            : MapDtoPropertyTypeToJava(property.Type, property.IsOptional);
+
+    // Serializes a strongly-typed DTO callback property by wrapping the user's AspireAction/AspireFunc
+    // in a java.util.function.Function. The client's marshalTransportValue detects Function values in
+    // the serialized DTO map and registers them, invoking the Function with the unwrapped first
+    // argument. This mirrors the typed arg-conversion used for method-parameter callbacks.
+    private void EmitJavaDtoCallbackToMap(AtsDtoPropertyInfo property)
+    {
+        var fieldName = ToCamelCase(property.Name);
+        var hasReturnType = property.CallbackReturnType != null && property.CallbackReturnType.TypeId != AtsConstants.Void;
+        var callbackParameter = property.CallbackParameters is { Count: 1 } ? property.CallbackParameters[0] : null;
+
+        WriteLine($"        map.put(\"{property.Name}\", {fieldName} == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {{");
+        var invocationArgument = string.Empty;
+        if (callbackParameter is not null)
+        {
+            var callbackParameterName = ToCamelCase(callbackParameter.Name);
+            WriteLine($"            var {callbackParameterName} = {GetCallbackArgumentExpression(callbackParameter, "transportArg")};");
+            invocationArgument = callbackParameterName;
+        }
+
+        var invocation = $"{fieldName}.invoke({invocationArgument})";
+        if (hasReturnType)
+        {
+            WriteLine($"            return AspireClient.awaitValue({invocation});");
+        }
+        else
+        {
+            WriteLine($"            {invocation};");
+            WriteLine("            return null;");
+        }
+        WriteLine("        }));");
+    }
+
     private string GetCallbackArgumentExpression(AtsCallbackParameterInfo callbackParameter, int index)
+        => GetCallbackArgumentExpression(callbackParameter, $"args[{index}]");
+
+    private string GetCallbackArgumentExpression(AtsCallbackParameterInfo callbackParameter, string argumentExpression)
     {
         if (callbackParameter.Type?.TypeId == AtsConstants.CancellationToken)
         {
-            return $"CancellationToken.fromValue(args[{index}])";
+            return $"CancellationToken.fromValue({argumentExpression})";
         }
 
         if (IsUnionType(callbackParameter.Type))
         {
-            return $"AspireUnion.of(args[{index}])";
+            return $"AspireUnion.of({argumentExpression})";
         }
 
-        return $"({MapCallbackTypeToJava(callbackParameter.Type)}) args[{index}]";
+        return RenderJavaTransportValueConversion(callbackParameter.Type, argumentExpression, callbackParameter.Type?.IsNullable == true);
+    }
+
+    private string RenderJavaTransportValueConversion(AtsTypeRef? typeRef, string valueExpression, bool isOptional, int depth = 0)
+    {
+        if (typeRef is null)
+        {
+            return valueExpression;
+        }
+
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        {
+            return $"(ReferenceExpression) {valueExpression}";
+        }
+
+        if (IsCancellationTokenTypeId(typeRef.TypeId))
+        {
+            return $"(CancellationToken) {valueExpression}";
+        }
+
+        var allowNull = isOptional || typeRef.IsNullable == true;
+        var converted = typeRef.Category switch
+        {
+            AtsTypeCategory.Primitive => RenderJavaPrimitiveTransportValueConversion(typeRef.TypeId, valueExpression, allowNull),
+            AtsTypeCategory.Enum => RenderJavaEnumTransportValueConversion(typeRef.TypeId, valueExpression, allowNull),
+            AtsTypeCategory.Dto => RenderJavaDtoTransportValueConversion(typeRef.TypeId, valueExpression, allowNull),
+            AtsTypeCategory.Handle => $"({MapTypeRefToJava(typeRef, allowNull)}) {valueExpression}",
+            AtsTypeCategory.Array => $"({MapTypeRefToJava(typeRef, allowNull)}) {valueExpression}",
+            AtsTypeCategory.List => RenderJavaListTransportValueConversion(typeRef, valueExpression, allowNull, depth),
+            AtsTypeCategory.Dict => $"({MapTypeRefToJava(typeRef, allowNull, useBoxedTypes: true)}) {valueExpression}",
+            AtsTypeCategory.Union => $"AspireUnion.of({valueExpression})",
+            _ => valueExpression
+        };
+
+        return converted;
+    }
+
+    private string RenderJavaDtoPropertyTransportValueConversion(AtsTypeRef? typeRef, string valueExpression, bool isOptional)
+    {
+        if (typeRef?.Category != AtsTypeCategory.Dict)
+        {
+            return RenderJavaTransportValueConversion(typeRef, valueExpression, isOptional);
+        }
+
+        var allowNull = isOptional || typeRef.IsNullable == true;
+        var converted = $"({MapDtoPropertyTypeToJava(typeRef, allowNull, useBoxedTypes: true)}) {valueExpression}";
+
+        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
+    }
+
+    private static string RenderJavaPrimitiveTransportValueConversion(string typeId, string valueExpression, bool allowNull)
+    {
+        var converted = typeId switch
+        {
+            AtsConstants.String or AtsConstants.Char or
+                AtsConstants.DateTime or AtsConstants.DateTimeOffset or
+                AtsConstants.DateOnly or AtsConstants.TimeOnly or
+                AtsConstants.Guid or AtsConstants.Uri => $"(String) {valueExpression}",
+            AtsConstants.Number or AtsConstants.TimeSpan => $"((Number) {valueExpression}).doubleValue()",
+            AtsConstants.Boolean => $"(Boolean) {valueExpression}",
+            AtsConstants.Void => "null",
+            _ => valueExpression
+        };
+
+        return allowNull && !string.Equals(converted, valueExpression, StringComparison.Ordinal)
+            ? $"{valueExpression} == null ? null : {converted}"
+            : converted;
+    }
+
+    private string RenderJavaEnumTransportValueConversion(string typeId, string valueExpression, bool allowNull)
+    {
+        if (!_enumNames.TryGetValue(typeId, out var enumName))
+        {
+            return $"(String) {valueExpression}";
+        }
+
+        var converted = $"{enumName}.fromValue((String) {valueExpression})";
+        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
+    }
+
+    private string RenderJavaDtoTransportValueConversion(string typeId, string valueExpression, bool allowNull)
+    {
+        if (!_dtoNames.TryGetValue(typeId, out var dtoName))
+        {
+            return $"(Map<String, Object>) {valueExpression}";
+        }
+
+        var converted = $"{dtoName}.fromMap((Map<String, Object>) {valueExpression})";
+        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
+    }
+
+    private string RenderJavaListTransportValueConversion(AtsTypeRef typeRef, string valueExpression, bool allowNull, int depth)
+    {
+        var itemName = $"item{depth}";
+        var convertedItem = RenderJavaTransportValueConversion(
+            typeRef.ElementType,
+            itemName,
+            typeRef.ElementType?.IsNullable == true,
+            depth + 1);
+        var converted = $"((List<Object>) {valueExpression}).stream().map({itemName} -> {convertedItem}).toList()";
+
+        return allowNull ? $"{valueExpression} == null ? null : {converted}" : converted;
     }
 
     private string MapCallbackTypeToJava(AtsTypeRef? typeRef)
@@ -1603,8 +2062,14 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            // Note: Java doesn't have easy access to command line args from here");
         WriteLine("            resolvedOptions.put(\"Args\", new String[0]);");
         WriteLine("        }");
+        // ASPIRE_PROJECT_DIRECTORY is set by the CLI so the host reports the correct project
+        // directory (not the JVM's user.dir) when matching --apphost <directory> requests.
         WriteLine("        if (resolvedOptions.get(\"ProjectDirectory\") == null) {");
-        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", System.getProperty(\"user.dir\"));");
+        WriteLine("            String projectDirectory = System.getenv(\"ASPIRE_PROJECT_DIRECTORY\");");
+        WriteLine("            if (projectDirectory == null || projectDirectory.isEmpty()) {");
+        WriteLine("                projectDirectory = System.getProperty(\"user.dir\");");
+        WriteLine("            }");
+        WriteLine("            resolvedOptions.put(\"ProjectDirectory\", projectDirectory);");
         WriteLine("        }");
         WriteLine("        if (resolvedOptions.get(\"AppHostFilePath\") == null) {");
         WriteLine("            String appHostFilePath = System.getenv(\"ASPIRE_APPHOST_FILEPATH\");");
@@ -1613,8 +2078,8 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         WriteLine("            }");
         WriteLine("        }");
         WriteLine("        Map<String, Object> args = new HashMap<>();");
-        WriteLine("        args.put(\"options\", resolvedOptions);");
-        WriteLine($"        return ({builderClassName}) client.invokeCapability(\"Aspire.Hosting/createBuilderWithOptions\", args);");
+        WriteLine("        args.put(\"argsOrOptions\", resolvedOptions);");
+        WriteLine($"        return ({builderClassName}) client.invokeCapability(\"Aspire.Hosting/createBuilder\", args);");
         WriteLine("    }");
         WriteLine("}");
         WriteLine();
@@ -1663,18 +2128,43 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             _classNames[typeId] = CreateClassName(typeId);
         }
 
-        var handleTypeMap = context.HandleTypes.ToDictionary(t => t.AtsTypeId, StringComparer.Ordinal);
+        var handleTypeMap = context.HandleTypes
+            .GroupBy(t => t.AtsTypeId, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.Any(t => t.IsResourceBuilder),
+                StringComparer.Ordinal);
+        var handleTypeInfoMap = context.HandleTypes
+            .GroupBy(t => t.AtsTypeId, StringComparer.Ordinal)
+            .ToDictionary(
+                g => g.Key,
+                g => g.First(),
+                StringComparer.Ordinal);
         var results = new List<JavaHandleType>();
         foreach (var typeId in handleTypeIds)
         {
             var isResourceBuilder = false;
             if (handleTypeMap.TryGetValue(typeId, out var typeInfo))
             {
-                isResourceBuilder = typeInfo.IsResourceBuilder;
+                isResourceBuilder = typeInfo;
             }
 
             var className = _classNames[typeId];
-            results.Add(new JavaHandleType(typeId, className, isResourceBuilder));
+            var baseClassName = isResourceBuilder ? "ResourceBuilderBase" : "HandleWrapperBase";
+
+            if (handleTypeInfoMap.TryGetValue(typeId, out var handleTypeInfo))
+            {
+                var exportedBaseType = handleTypeInfo.BaseTypeHierarchy
+                    .FirstOrDefault(baseType => !string.Equals(baseType.TypeId, typeId, StringComparison.Ordinal)
+                        && _classNames.ContainsKey(baseType.TypeId));
+
+                if (exportedBaseType is not null)
+                {
+                    baseClassName = _classNames[exportedBaseType.TypeId];
+                }
+            }
+
+            results.Add(new JavaHandleType(typeId, className, isResourceBuilder, baseClassName));
             if (isResourceBuilder)
             {
                 _resourceBuilderHandleClasses.Add(className);
@@ -1774,6 +2264,28 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
             AtsTypeCategory.Union => "AspireUnion",
             AtsTypeCategory.Unknown => "Object",
             _ => "Object"
+        };
+    }
+
+    private string MapDtoPropertyTypeToJava(AtsTypeRef? typeRef, bool isOptional, bool useBoxedTypes = false)
+    {
+        if (typeRef is null)
+        {
+            return "Object";
+        }
+
+        if (typeRef.TypeId == AtsConstants.ReferenceExpressionTypeId)
+        {
+            return "ReferenceExpression";
+        }
+
+        return typeRef.Category switch
+        {
+            AtsTypeCategory.Array => $"{MapDtoPropertyTypeToJava(typeRef.ElementType, false)}[]",
+            AtsTypeCategory.List => $"List<{MapDtoPropertyTypeToJava(typeRef.ElementType, false, useBoxedTypes: true)}>",
+            AtsTypeCategory.Dict => $"Map<{MapDtoPropertyTypeToJava(typeRef.KeyType, false, useBoxedTypes: true)}, {MapDtoPropertyTypeToJava(typeRef.ValueType, false, useBoxedTypes: true)}>",
+            AtsTypeCategory.Union => "AspireUnion",
+            _ => MapTypeRefToJava(typeRef, isOptional, useBoxedTypes)
         };
     }
 
@@ -1997,7 +2509,7 @@ internal sealed class AtsJavaCodeGenerator : ICodeGenerator
         _writer.WriteLine(value);
     }
 
-    private sealed record JavaHandleType(string TypeId, string ClassName, bool IsResourceBuilder);
+    private sealed record JavaHandleType(string TypeId, string ClassName, bool IsResourceBuilder, string BaseClassName);
     private sealed record JavaMethodParameter(
         string Type,
         string Name,

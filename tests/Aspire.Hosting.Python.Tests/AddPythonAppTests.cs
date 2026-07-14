@@ -4,6 +4,7 @@
 #pragma warning disable CS0612
 #pragma warning disable CS0618 // Type or member is obsolete
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREEXTENSION001 // SupportsDebuggingAnnotation is experimental
 
 using Microsoft.Extensions.DependencyInjection;
 using Aspire.Hosting.Utils;
@@ -98,7 +99,6 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
     [Fact]
     [RequiresTools(["python"])]
-    [ActiveIssue("https://github.com/microsoft/aspire/issues/8466")]
     public async Task PythonResourceFinishesSuccessfully()
     {
         var (projectDirectory, _, scriptName) = CreateTempPythonProject(outputHelper);
@@ -110,7 +110,8 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         await app.StartAsync();
 
-        await app.ResourceNotifications.WaitForResourceAsync("pyproj", "Finished").WaitAsync(TimeSpan.FromSeconds(30));
+        var timeout = TimeSpan.FromSeconds(PlatformDetection.IsRunningOnCI ? 180 : 45);
+        await app.ResourceNotifications.WaitForResourceAsync("pyproj", KnownResourceStates.Finished).WaitAsync(timeout);
 
         await app.StopAsync();
 
@@ -389,11 +390,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void AddPythonApp_DoesNotThrowOnMissingVirtualEnvironment()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Should not throw - validation is deferred until runtime
         var exception = Record.Exception(() =>
-            builder.AddPythonApp("pythonProject", tempDir.Path, "main.py"));
+            builder.AddPythonApp("pythonProject", workspace.Path, "main.py"));
 
         Assert.Null(exception);
     }
@@ -402,11 +403,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithVirtualEnvironment_UpdatesCommandToUseNewVirtualEnvironment()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
-        builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+        builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
             .WithVirtualEnvironment("custom-venv");
 
         var app = builder.Build();
@@ -415,7 +416,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
 
-        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempDir.Path));
+        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, workspace.Path));
 
         if (OperatingSystem.IsWindows())
         {
@@ -434,13 +435,13 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithVirtualEnvironment_SupportsAbsolutePath()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
-        using var tempVenvDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var venvDir = workspace.CreateDirectory("venv");
 
         var scriptName = "main.py";
 
-        builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
-            .WithVirtualEnvironment(tempVenvDir.Path);
+        builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
+            .WithVirtualEnvironment(venvDir.FullName);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -450,11 +451,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         if (OperatingSystem.IsWindows())
         {
-            Assert.Equal(Path.Join(tempVenvDir.Path, "Scripts", "python.exe"), pythonProjectResource.Command);
+            Assert.Equal(Path.Join(venvDir.FullName, "Scripts", "python.exe"), pythonProjectResource.Command);
         }
         else
         {
-            Assert.Equal(Path.Join(tempVenvDir.Path, "bin", "python"), pythonProjectResource.Command);
+            Assert.Equal(Path.Join(venvDir.FullName, "bin", "python"), pythonProjectResource.Command);
         }
 
         var commandArguments = await ArgumentEvaluator.GetArgumentListAsync(pythonProjectResource, TestServiceProvider.Instance);
@@ -476,10 +477,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithVirtualEnvironment_ThrowsOnNullOrEmptyPath()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
-        var resourceBuilder = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName);
+        var resourceBuilder = builder.AddPythonApp("pythonProject", workspace.Path, scriptName);
 
         var nullException = Assert.Throws<ArgumentNullException>(() =>
             resourceBuilder.WithVirtualEnvironment(null!));
@@ -494,11 +495,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithVirtualEnvironment_CanBeChainedWithOtherExtensions()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
-        var resourceBuilder = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+        var resourceBuilder = builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
             .WithVirtualEnvironment(".venv")
             .WithArgs("arg1", "arg2")
             .WithEnvironment("TEST_VAR", "test_value");
@@ -524,14 +525,15 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithVirtualEnvironment_UsesAppDirectoryWhenVenvExistsThere()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempAppDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appDir = workspace.CreateDirectory("app");
 
         // Create .venv in the app directory
-        var appVenvPath = Path.Combine(tempAppDir.Path, ".venv");
+        var appVenvPath = Path.Combine(appDir.FullName, ".venv");
         Directory.CreateDirectory(appVenvPath);
 
         var scriptName = "main.py";
-        var resourceBuilder = builder.AddPythonApp("pythonProject", tempAppDir.Path, scriptName);
+        var resourceBuilder = builder.AddPythonApp("pythonProject", appDir.FullName, scriptName);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -540,7 +542,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
 
         // Should use the app directory .venv since it exists there
-        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempAppDir.Path));
+        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, appDir.FullName));
         var expectedVenvPath = Path.Combine(expectedProjectDirectory, ".venv");
 
         AssertPythonCommandPath(expectedVenvPath, pythonProjectResource.Command);
@@ -549,10 +551,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WithVirtualEnvironment_UsesAppHostDirectoryWhenVenvOnlyExistsThere()
     {
-        using var tempProjectDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(options =>
         {
-            options.ProjectDirectory = tempProjectDir.Path;
+            options.ProjectDirectory = workspace.Path;
         }).WithTestAndResourceLogging(outputHelper);
         
         // Create app directory as a subdirectory of AppHost (realistic scenario)
@@ -595,10 +597,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WithVirtualEnvironment_PrefersAppDirectoryWhenVenvExistsInBoth()
     {
-        using var tempProjectDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(options =>
         {
-            options.ProjectDirectory = tempProjectDir.Path;
+            options.ProjectDirectory = workspace.Path;
         }).WithTestAndResourceLogging(outputHelper);
         
         // Create app directory as a subdirectory of AppHost (realistic scenario)
@@ -645,12 +647,13 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithVirtualEnvironment_DefaultsToAppDirectoryWhenVenvExistsInNeither()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempAppDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appDir = workspace.CreateDirectory("app");
 
         // Don't create .venv in either directory
 
         var scriptName = "main.py";
-        var resourceBuilder = builder.AddPythonApp("pythonProject", tempAppDir.Path, scriptName);
+        var resourceBuilder = builder.AddPythonApp("pythonProject", appDir.FullName, scriptName);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -659,7 +662,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
 
         // Should default to app directory when it doesn't exist in either location
-        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempAppDir.Path));
+        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, appDir.FullName));
         var expectedVenvPath = Path.Combine(expectedProjectDirectory, ".venv");
 
         AssertPythonCommandPath(expectedVenvPath, pythonProjectResource.Command);
@@ -668,10 +671,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WithVirtualEnvironment_ExplicitPath_UsesVerbatim()
     {
-        using var tempProjectDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(options =>
         {
-            options.ProjectDirectory = tempProjectDir.Path;
+            options.ProjectDirectory = workspace.Path;
         }).WithTestAndResourceLogging(outputHelper);
         
         // Create app directory as a subdirectory of AppHost
@@ -722,11 +725,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithUv_CreatesUvEnvironmentResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
             .WithUv();
 
         var app = builder.Build();
@@ -736,7 +739,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         var installerResource = appModel.Resources.OfType<PythonInstallerResource>().Single();
         Assert.Equal("pythonProject-installer", installerResource.Name);
 
-        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempDir.Path));
+        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, workspace.Path));
         Assert.Equal(expectedProjectDirectory, installerResource.WorkingDirectory);
 
         // Verify the package manager annotation
@@ -753,11 +756,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithUv_AddsUvSyncArgument()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
             .WithUv();
 
         var app = builder.Build();
@@ -773,11 +776,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithUv_AddsWaitForCompletionRelationship()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
-        builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+        builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
             .WithUv();
 
         var app = builder.Build();
@@ -810,12 +813,12 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithUv_IsIdempotent()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
         // Call WithUv twice
-        var pythonBuilder = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+        var pythonBuilder = builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
             .WithUv()
             .WithUv();
 
@@ -831,11 +834,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void InstallerResourceHasCertificateTrustScopeNone()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
             .WithPip();
 
         var app = builder.Build();
@@ -854,12 +857,12 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithPip_AfterWithUv_ReplacesPackageManager()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
         // Call WithUv then WithPip - WithPip should replace WithUv
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
             .WithUv()
             .WithPip();
 
@@ -885,12 +888,12 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithUv_AfterWithPip_ReplacesPackageManager()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
         // Call WithPip then WithUv - WithUv should replace WithPip
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
             .WithPip()
             .WithUv();
 
@@ -915,9 +918,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void AddPythonApp_CreatesResourceWithScriptEntrypoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var pythonBuilder = builder.AddPythonApp("python-script", tempDir.Path, "main.py");
+        var pythonBuilder = builder.AddPythonApp("python-script", workspace.Path, "main.py");
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -934,9 +937,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void AddPythonModule_CreatesResourceWithModuleEntrypoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var pythonBuilder = builder.AddPythonModule("flask-app", tempDir.Path, "flask");
+        var pythonBuilder = builder.AddPythonModule("flask-app", workspace.Path, "flask");
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -953,9 +956,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void AddPythonExecutable_CreatesResourceWithExecutableEntrypoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var pythonBuilder = builder.AddPythonExecutable("pytest", tempDir.Path, "pytest");
+        var pythonBuilder = builder.AddPythonExecutable("pytest", workspace.Path, "pytest");
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -972,11 +975,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task AddPythonApp_SetsCorrectCommandAndArguments()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
 
-        builder.AddPythonApp("pythonProject", tempDir.Path, scriptName);
+        builder.AddPythonApp("pythonProject", workspace.Path, scriptName);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -986,7 +989,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("pythonProject", pythonProjectResource.Name);
 
-        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempDir.Path));
+        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, workspace.Path));
         Assert.Equal(expectedProjectDirectory, pythonProjectResource.WorkingDirectory);
 
         if (OperatingSystem.IsWindows())
@@ -1008,11 +1011,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task AddPythonModule_SetsCorrectCommandAndArguments()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var moduleName = "flask";
 
-        builder.AddPythonModule("pythonProject", tempDir.Path, moduleName);
+        builder.AddPythonModule("pythonProject", workspace.Path, moduleName);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -1020,7 +1023,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
 
-        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempDir.Path));
+        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, workspace.Path));
 
         if (OperatingSystem.IsWindows())
         {
@@ -1042,11 +1045,11 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task AddPythonExecutable_SetsCorrectCommandAndArguments()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var executableName = "pytest";
 
-        builder.AddPythonExecutable("pythonProject", tempDir.Path, executableName);
+        builder.AddPythonExecutable("pythonProject", workspace.Path, executableName);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -1054,7 +1057,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var pythonProjectResource = Assert.Single(executableResources.OfType<PythonAppResource>());
 
-        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, tempDir.Path));
+        var expectedProjectDirectory = Path.GetFullPath(Path.Combine(builder.AppHostDirectory, workspace.Path));
 
         if (OperatingSystem.IsWindows())
         {
@@ -1075,9 +1078,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task AddPythonModule_WithArgs_AddsArgumentsCorrectly()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var pythonBuilder = builder.AddPythonModule("flask-app", tempDir.Path, "flask")
+        var pythonBuilder = builder.AddPythonModule("flask-app", workspace.Path, "flask")
             .WithArgs("run", "--debug", "--host=0.0.0.0");
 
         var app = builder.Build();
@@ -1099,9 +1102,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task AddPythonApp_WithArgs_AddsArgumentsCorrectly()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var pythonBuilder = builder.AddPythonApp("python-app", tempDir.Path, "main.py")
+        var pythonBuilder = builder.AddPythonApp("python-app", workspace.Path, "main.py")
             .WithArgs("arg1", "arg2");
 
         var app = builder.Build();
@@ -1121,9 +1124,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task AddPythonExecutable_WithArgs_AddsArgumentsCorrectly()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var pythonBuilder = builder.AddPythonExecutable("pytest", tempDir.Path, "pytest")
+        var pythonBuilder = builder.AddPythonExecutable("pytest", workspace.Path, "pytest")
             .WithArgs("-q", "--verbose");
 
         var app = builder.Build();
@@ -1142,10 +1145,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithEntrypoint_ChangesEntrypointTypeAndValue()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Start with a script
-        var pythonBuilder = builder.AddPythonApp("python-app", tempDir.Path, "main.py")
+        var pythonBuilder = builder.AddPythonApp("python-app", workspace.Path, "main.py")
             .WithArgs("arg1", "arg2");
 
         // Change to a module
@@ -1176,10 +1179,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithEntrypoint_UpdatesCommandForExecutableType()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Start with a script
-        var pythonBuilder = builder.AddPythonApp("python-app", tempDir.Path, "main.py");
+        var pythonBuilder = builder.AddPythonApp("python-app", workspace.Path, "main.py");
 
         // Get the initial command (should be python executable)
         var initialCommand = pythonBuilder.Resource.Command;
@@ -1224,9 +1227,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithEntrypoint_ThrowsOnNullOrEmptyEntrypoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var resourceBuilder = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py");
+        var resourceBuilder = builder.AddPythonApp("pythonProject", workspace.Path, "main.py");
 
         var nullException = Assert.Throws<ArgumentNullException>(() =>
             resourceBuilder.WithEntrypoint(EntrypointType.Module, null!));
@@ -1240,9 +1243,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithUv_GeneratesDockerfileInPublishMode()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var projectDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var projectDirectory = sourceDir.FullName;
 
         // Create a UV-based Python project with pyproject.toml and uv.lock
         var pyprojectContent = """
@@ -1272,7 +1276,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var manifestPath = Path.Combine(projectDirectory, "aspire-manifest.json");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         // Add Python resources with different entrypoint types
         builder.AddPythonApp("script-app", projectDirectory, "main.py")
@@ -1289,13 +1293,13 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Verify that Dockerfiles were generated for each entrypoint type
-        var scriptDockerfilePath = Path.Combine(outputDir.Path, "script-app.Dockerfile");
+        var scriptDockerfilePath = Path.Combine(outputDir.FullName, "script-app.Dockerfile");
         Assert.True(File.Exists(scriptDockerfilePath), "Dockerfile should be generated for script entrypoint");
 
-        var moduleDockerfilePath = Path.Combine(outputDir.Path, "module-app.Dockerfile");
+        var moduleDockerfilePath = Path.Combine(outputDir.FullName, "module-app.Dockerfile");
         Assert.True(File.Exists(moduleDockerfilePath), "Dockerfile should be generated for module entrypoint");
 
-        var executableDockerfilePath = Path.Combine(outputDir.Path, "executable-app.Dockerfile");
+        var executableDockerfilePath = Path.Combine(outputDir.FullName, "executable-app.Dockerfile");
         Assert.True(File.Exists(executableDockerfilePath), "Dockerfile should be generated for executable entrypoint");
 
         var scriptDockerfileContent = File.ReadAllText(scriptDockerfilePath);
@@ -1310,9 +1314,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithUv_GeneratesDockerfileInPublishMode_WithoutUvLock()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var projectDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var projectDirectory = sourceDir.FullName;
 
         // Create a UV-based Python project with pyproject.toml but NO uv.lock
         var pyprojectContent = """
@@ -1337,7 +1342,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         var manifestPath = Path.Combine(projectDirectory, "aspire-manifest.json");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         // Add Python resources with different entrypoint types
         builder.AddPythonApp("script-app", projectDirectory, "main.py")
@@ -1354,13 +1359,13 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Verify that Dockerfiles were generated for each entrypoint type
-        var scriptDockerfilePath = Path.Combine(outputDir.Path, "script-app.Dockerfile");
+        var scriptDockerfilePath = Path.Combine(outputDir.FullName, "script-app.Dockerfile");
         Assert.True(File.Exists(scriptDockerfilePath), "Dockerfile should be generated for script entrypoint");
 
-        var moduleDockerfilePath = Path.Combine(outputDir.Path, "module-app.Dockerfile");
+        var moduleDockerfilePath = Path.Combine(outputDir.FullName, "module-app.Dockerfile");
         Assert.True(File.Exists(moduleDockerfilePath), "Dockerfile should be generated for module entrypoint");
 
-        var executableDockerfilePath = Path.Combine(outputDir.Path, "executable-app.Dockerfile");
+        var executableDockerfilePath = Path.Combine(outputDir.FullName, "executable-app.Dockerfile");
         Assert.True(File.Exists(executableDockerfilePath), "Dockerfile should be generated for executable entrypoint");
 
         var scriptDockerfileContent = File.ReadAllText(scriptDockerfilePath);
@@ -1381,7 +1386,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithDebugSupport_RemovesScriptArgumentForScriptEntrypoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var runSessionInfo = new RunSessionInfo
         {
@@ -1393,9 +1398,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
 
-        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
         Directory.CreateDirectory(appDirectory);
-        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
         Directory.CreateDirectory(virtualEnvironmentPath);
         var scriptPath = "main.py";
 
@@ -1420,7 +1425,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithDebugSupport_DoesntRemoveScriptArgumentForScriptEntrypoint_WhenResourceTypeNotSupported()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Set DEBUG_SESSION_INFO to trigger VS Code debug support callback
         var runSessionInfo = new RunSessionInfo
@@ -1431,9 +1436,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
 
-        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
         Directory.CreateDirectory(appDirectory);
-        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
         Directory.CreateDirectory(virtualEnvironmentPath);
         var scriptPath = "main.py";
 
@@ -1459,7 +1464,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithDebugSupport_RemovesModuleArgumentsForModuleEntrypoint()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var runSessionInfo = new RunSessionInfo
         {
@@ -1471,9 +1476,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
 
-        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
         Directory.CreateDirectory(appDirectory);
-        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
         Directory.CreateDirectory(virtualEnvironmentPath);
         var moduleName = "flask";
 
@@ -1494,10 +1499,144 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void WithDebugSupport_PopulatesWorkingDirectory_ForScriptEntrypoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+
+        var pythonApp = builder.AddPythonApp("myapp", appDirectory, "main.py")
+            .WithVirtualEnvironment(virtualEnvironmentPath);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal(Path.Combine(appDirectory, "main.py"), launchConfig.ProgramPath);
+        Assert.Equal(string.Empty, launchConfig.Module);
+    }
+
+    [Fact]
+    public void WithDebugSupport_PopulatesWorkingDirectory_ForModuleEntrypoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+
+        var pythonApp = builder.AddPythonModule("myapp", appDirectory, "flask")
+            .WithVirtualEnvironment(virtualEnvironmentPath);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal("flask", launchConfig.Module);
+        // ProgramPath continues to mirror the working directory for module entrypoints to
+        // preserve compatibility with older VS Code extensions that derive cwd from program_path
+        // when they don't yet understand the new working_directory field.
+        Assert.Equal(appDirectory, launchConfig.ProgramPath);
+    }
+
+    [Fact]
+    public void WithDebugSupport_PopulatesWorkingDirectory_ForExecutableEntrypoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+
+        var pythonApp = builder.AddPythonExecutable("myapp", appDirectory, "uvicorn")
+            .WithVirtualEnvironment(virtualEnvironmentPath)
+            .WithDebugging();
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        Assert.Equal(appDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal("uvicorn", launchConfig.Module);
+        // ProgramPath continues to mirror the working directory for executable entrypoints (same code
+        // path as Module) to preserve compatibility with older VS Code extensions.
+        Assert.Equal(appDirectory, launchConfig.ProgramPath);
+    }
+
+    [Fact]
+    public void WithDebugSupport_PropagatesWorkingDirectoryOverride_ForExecutableEntrypoint()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+        var customWorkingDirectory = Path.Combine(workspace.Path, "custom");
+        Directory.CreateDirectory(customWorkingDirectory);
+
+        var pythonApp = builder.AddPythonExecutable("myapp", appDirectory, "uvicorn")
+            .WithVirtualEnvironment(virtualEnvironmentPath)
+            .WithDebugging()
+            .WithWorkingDirectory(customWorkingDirectory);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        var expectedWorkingDirectory = PathNormalizer.NormalizePathForCurrentPlatform(
+            Path.Combine(builder.AppHostDirectory, customWorkingDirectory));
+        Assert.Equal(expectedWorkingDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal("uvicorn", launchConfig.Module);
+        Assert.Equal(expectedWorkingDirectory, launchConfig.ProgramPath);
+    }
+
+    [Fact]
+    public void WithDebugSupport_PropagatesWorkingDirectoryOverride()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
+        Directory.CreateDirectory(appDirectory);
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
+        Directory.CreateDirectory(virtualEnvironmentPath);
+        var customWorkingDirectory = Path.Combine(workspace.Path, "custom");
+        Directory.CreateDirectory(customWorkingDirectory);
+
+        var pythonApp = builder.AddPythonApp("myapp", appDirectory, "main.py")
+            .WithVirtualEnvironment(virtualEnvironmentPath)
+            .WithWorkingDirectory(customWorkingDirectory);
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(pythonApp.Resource);
+
+        var expectedWorkingDirectory = PathNormalizer.NormalizePathForCurrentPlatform(
+            Path.Combine(builder.AppHostDirectory, customWorkingDirectory));
+        Assert.Equal(expectedWorkingDirectory, launchConfig.WorkingDirectory);
+        Assert.Equal(Path.Combine(expectedWorkingDirectory, "main.py"), launchConfig.ProgramPath);
+    }
+
+    private static PythonLaunchConfiguration InvokeLaunchConfigurationAnnotator(IResource resource)
+    {
+        Assert.True(resource.TryGetLastAnnotation<SupportsDebuggingAnnotation>(out var supportsDebugging));
+
+        var exe = Executable.Create("test", "python");
+        supportsDebugging.LaunchConfigurationAnnotator(exe, ExecutableLaunchMode.Debug);
+
+        Assert.True(exe.TryGetAnnotationAsObjectList<PythonLaunchConfiguration>(
+            Executable.LaunchConfigurationsAnnotation,
+            out var launchConfigs));
+        return Assert.Single(launchConfigs);
+    }
+
+    [Fact]
     public async Task WithDebugSupport_DoesntRemoveModuleArgumentsForModuleEntrypoint_WhenResourceTypeNotSupported()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var runSessionInfo = new RunSessionInfo
         {
@@ -1508,9 +1647,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         builder.Configuration["DEBUG_SESSION_INFO"] = JsonSerializer.Serialize(runSessionInfo);
         builder.Configuration["DEBUG_SESSION_PORT"] = "5678";
 
-        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
         Directory.CreateDirectory(appDirectory);
-        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
         Directory.CreateDirectory(virtualEnvironmentPath);
         var moduleName = "flask";
 
@@ -1536,14 +1675,14 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithDebugSupport_ExecutableTypeDoesNotModifyArgs()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Set DEBUG_SESSION_INFO to trigger VS Code debug support callback
         builder.Configuration["DEBUG_SESSION_INFO"] = "{}";
 
-        var appDirectory = Path.Combine(tempDir.Path, "myapp");
+        var appDirectory = Path.Combine(workspace.Path, "myapp");
         Directory.CreateDirectory(appDirectory);
-        var virtualEnvironmentPath = Path.Combine(tempDir.Path, ".venv");
+        var virtualEnvironmentPath = Path.Combine(workspace.Path, ".venv");
         Directory.CreateDirectory(virtualEnvironmentPath);
         var executableName = "myexe";
 
@@ -1568,9 +1707,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task PythonApp_SetsPythonUtf8EnvironmentVariable_OnWindowsInRunMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run).WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py");
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py");
 
         var app = builder.Build();
         var environmentVariables = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -1590,9 +1729,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task PythonApp_DoesNotSetPythonUtf8EnvironmentVariable_OnNonWindowsPlatforms()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run).WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py");
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py");
 
         var app = builder.Build();
         var environmentVariables = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -1608,9 +1747,9 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task PythonApp_DoesNotSetPythonUtf8EnvironmentVariable_InPublishMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish).WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py");
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py");
 
         var app = builder.Build();
         var environmentVariables = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
@@ -1623,9 +1762,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WithUv_CustomBaseImages_GeneratesDockerfileWithCustomImages()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var projectDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var projectDirectory = sourceDir.FullName;
 
         // Create a UV-based Python project with pyproject.toml and uv.lock
         var pyprojectContent = """
@@ -1653,7 +1793,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(projectDirectory, "uv.lock"), uvLockContent);
         File.WriteAllText(Path.Combine(projectDirectory, "main.py"), scriptContent);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         // Add Python resource with custom base images
         builder.AddPythonApp("custom-images-app", projectDirectory, "main.py")
@@ -1666,7 +1806,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Verify that Dockerfile was generated
-        var dockerfilePath = Path.Combine(outputDir.Path, "custom-images-app.Dockerfile");
+        var dockerfilePath = Path.Combine(outputDir.FullName, "custom-images-app.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), "Dockerfile should be generated");
 
         var dockerfileContent = File.ReadAllText(dockerfilePath);
@@ -1681,9 +1821,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FallbackDockerfile_GeneratesDockerfileWithoutUv_WithRequirementsTxt()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var projectDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var projectDirectory = sourceDir.FullName;
 
         // Create a Python project without UV but with requirements.txt
         var requirementsContent = """
@@ -1698,7 +1839,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(projectDirectory, "requirements.txt"), requirementsContent);
         File.WriteAllText(Path.Combine(projectDirectory, "main.py"), scriptContent);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         // Add Python resources without UV environment
         builder.AddPythonApp("script-app", projectDirectory, "main.py");
@@ -1707,7 +1848,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Verify that Dockerfile was generated
-        var dockerfilePath = Path.Combine(outputDir.Path, "script-app.Dockerfile");
+        var dockerfilePath = Path.Combine(outputDir.FullName, "script-app.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), "Dockerfile should be generated for non-UV Python app");
 
         var dockerfileContent = File.ReadAllText(dockerfilePath);
@@ -1728,9 +1869,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FallbackDockerfile_GeneratesDockerfileWithPyprojectToml()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var projectDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var projectDirectory = sourceDir.FullName;
 
         // Create a Python project without UV but with pyproject.toml
         var scriptContent = """
@@ -1747,7 +1889,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(projectDirectory, "main.py"), scriptContent);
         File.WriteAllText(Path.Combine(projectDirectory, "pyproject.toml"), pyprojectContent);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         // Add Python resources without UV environment
         builder.AddPythonApp("script-app", projectDirectory, "main.py");
@@ -1756,7 +1898,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Verify that Dockerfile was generated
-        var dockerfilePath = Path.Combine(outputDir.Path, "script-app.Dockerfile");
+        var dockerfilePath = Path.Combine(outputDir.FullName, "script-app.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), "Dockerfile should be generated for non-UV Python app");
 
         var dockerfileContent = File.ReadAllText(dockerfilePath);
@@ -1767,9 +1909,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FallbackDockerfile_GeneratesDockerfileWithoutAnyDependencyFiles()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var projectDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var projectDirectory = sourceDir.FullName;
 
         // Create a Python project with NO pyproject.toml and NO requirements.txt
         var scriptContent = """
@@ -1778,7 +1921,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
 
         File.WriteAllText(Path.Combine(projectDirectory, "main.py"), scriptContent);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         // Add Python resources without UV environment
         builder.AddPythonApp("script-app", projectDirectory, "main.py");
@@ -1787,7 +1930,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Verify that Dockerfile was generated
-        var dockerfilePath = Path.Combine(outputDir.Path, "script-app.Dockerfile");
+        var dockerfilePath = Path.Combine(outputDir.FullName, "script-app.Dockerfile");
         Assert.True(File.Exists(dockerfilePath), "Dockerfile should be generated for Python app");
 
         var dockerfileContent = File.ReadAllText(dockerfilePath);
@@ -1798,9 +1941,10 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task FallbackDockerfile_GeneratesDockerfileForAllEntrypointTypes()
     {
-        using var sourceDir = new TestTempDirectory();
-        using var outputDir = new TestTempDirectory();
-        var projectDirectory = sourceDir.Path;
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var sourceDir = workspace.CreateDirectory("source");
+        var outputDir = workspace.CreateDirectory("output");
+        var projectDirectory = sourceDir.FullName;
 
         // Create a Python project without UV
         var scriptContent = """
@@ -1812,7 +1956,7 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         File.WriteAllText(Path.Combine(projectDirectory, "main.py"), scriptContent);
         File.WriteAllText(Path.Combine(projectDirectory, ".python-version"), pythonVersionContent);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.Path, step: "publish-manifest");
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputDir.FullName, step: "publish-manifest");
 
         // Add Python resources with different entrypoint types, none using UV
         builder.AddPythonApp("script-app", projectDirectory, "main.py");
@@ -1823,13 +1967,13 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         app.Run();
 
         // Verify that Dockerfiles were generated for each entrypoint type
-        var scriptDockerfilePath = Path.Combine(outputDir.Path, "script-app.Dockerfile");
+        var scriptDockerfilePath = Path.Combine(outputDir.FullName, "script-app.Dockerfile");
         Assert.True(File.Exists(scriptDockerfilePath), "Dockerfile should be generated for script entrypoint");
 
-        var moduleDockerfilePath = Path.Combine(outputDir.Path, "module-app.Dockerfile");
+        var moduleDockerfilePath = Path.Combine(outputDir.FullName, "module-app.Dockerfile");
         Assert.True(File.Exists(moduleDockerfilePath), "Dockerfile should be generated for module entrypoint");
 
-        var executableDockerfilePath = Path.Combine(outputDir.Path, "executable-app.Dockerfile");
+        var executableDockerfilePath = Path.Combine(outputDir.FullName, "executable-app.Dockerfile");
         Assert.True(File.Exists(executableDockerfilePath), "Dockerfile should be generated for executable entrypoint");
 
         var scriptDockerfileContent = File.ReadAllText(scriptDockerfilePath);
@@ -1855,17 +1999,17 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void AutoDetection_PyprojectToml_AddsPip()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
-        var scriptPath = Path.Combine(tempDir.Path, scriptName);
+        var scriptPath = Path.Combine(workspace.Path, scriptName);
         File.WriteAllText(scriptPath, "print('Hello')");
 
         // Create a pyproject.toml file
-        var pyprojectPath = Path.Combine(tempDir.Path, "pyproject.toml");
+        var pyprojectPath = Path.Combine(workspace.Path, "pyproject.toml");
         File.WriteAllText(pyprojectPath, "[project]\nname = \"test\"");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName);
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName);
 
         var app = builder.Build();
 
@@ -1889,17 +2033,17 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void AutoDetection_RequirementsTxt_AddsPip()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
-        var scriptPath = Path.Combine(tempDir.Path, scriptName);
+        var scriptPath = Path.Combine(workspace.Path, scriptName);
         File.WriteAllText(scriptPath, "print('Hello')");
 
         // Create a requirements.txt file
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests==2.31.0");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName);
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName);
 
         var app = builder.Build();
 
@@ -1924,19 +2068,19 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void AutoDetection_PyprojectToml_TakesPrecedenceOverRequirementsTxt()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
-        var scriptPath = Path.Combine(tempDir.Path, scriptName);
+        var scriptPath = Path.Combine(workspace.Path, scriptName);
         File.WriteAllText(scriptPath, "print('Hello')");
 
         // Create both pyproject.toml and requirements.txt
-        var pyprojectPath = Path.Combine(tempDir.Path, "pyproject.toml");
+        var pyprojectPath = Path.Combine(workspace.Path, "pyproject.toml");
         File.WriteAllText(pyprojectPath, "[project]\nname = \"test\"");
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests==2.31.0");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName);
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName);
 
         var app = builder.Build();
 
@@ -1954,13 +2098,13 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void AutoDetection_NoConfigFile_DoesNotAddPackageManager()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var scriptName = "main.py";
-        var scriptPath = Path.Combine(tempDir.Path, scriptName);
+        var scriptPath = Path.Combine(workspace.Path, scriptName);
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, scriptName);
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, scriptName);
 
         var app = builder.Build();
 
@@ -1977,16 +2121,16 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithVirtualEnvironment_DisableCreation_DoesNotCreateVenvCreator()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
-        using var tempVenvDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var venvDir = workspace.CreateDirectory("venv");
 
         var scriptName = "main.py";
-        var scriptPath = Path.Combine(tempDir.Path, scriptName);
+        var scriptPath = Path.Combine(workspace.Path, scriptName);
         File.WriteAllText(scriptPath, "print('Hello')");
 
         // Add Python script with venv but disable automatic creation
-        builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
-            .WithVirtualEnvironment(tempVenvDir.Path, createIfNotExists: false);
+        builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
+            .WithVirtualEnvironment(venvDir.FullName, createIfNotExists: false);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -2000,20 +2144,20 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithVirtualEnvironment_EnableCreation_CreatesVenvCreator()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
-        using var tempVenvDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var venvDir = workspace.CreateDirectory("venv");
 
         var scriptName = "main.py";
-        var scriptPath = Path.Combine(tempDir.Path, scriptName);
+        var scriptPath = Path.Combine(workspace.Path, scriptName);
         File.WriteAllText(scriptPath, "print('Hello')");
 
         // Create a requirements.txt to trigger pip installation
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
         // Add Python script with venv and enable automatic creation (default)
-        builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
-            .WithVirtualEnvironment(tempVenvDir.Path, createIfNotExists: true);
+        builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
+            .WithVirtualEnvironment(venvDir.FullName, createIfNotExists: true);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -2028,20 +2172,20 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithVirtualEnvironment_DefaultBehavior_CreatesVenvCreator()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
-        using var tempVenvDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var venvDir = workspace.CreateDirectory("venv");
 
         var scriptName = "main.py";
-        var scriptPath = Path.Combine(tempDir.Path, scriptName);
+        var scriptPath = Path.Combine(workspace.Path, scriptName);
         File.WriteAllText(scriptPath, "print('Hello')");
 
         // Create a requirements.txt to trigger pip installation
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
         // Add Python script with venv using default behavior (createIfNotExists defaults to true)
-        builder.AddPythonApp("pythonProject", tempDir.Path, scriptName)
-            .WithVirtualEnvironment(tempVenvDir.Path);
+        builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
+            .WithVirtualEnvironment(venvDir.FullName);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -2059,12 +2203,12 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithUv_DisablesVenvCreation_And_SetsPackageManager()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithUv();
 
         var app = builder.Build();
@@ -2087,16 +2231,16 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithPip_CreatesDefaultVenv_And_WaitsForVenvCreation()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
         // Create requirements.txt
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithPip();
 
         var app = builder.Build();
@@ -2129,18 +2273,18 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithPip_ThenWithVirtualEnvironment_CreateIfNotExistsTrue_CreatesVenv()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
-        using var tempVenvDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var venvDir = workspace.CreateDirectory("venv");
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithPip()
-            .WithVirtualEnvironment(tempVenvDir.Path, createIfNotExists: true);
+            .WithVirtualEnvironment(venvDir.FullName, createIfNotExists: true);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -2159,18 +2303,18 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void WithPip_ThenWithVirtualEnvironment_CreateIfNotExistsFalse_DoesNotCreateVenv()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
-        using var tempVenvDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var venvDir = workspace.CreateDirectory("venv");
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithPip()
-            .WithVirtualEnvironment(tempVenvDir.Path, createIfNotExists: false);
+            .WithVirtualEnvironment(venvDir.FullName, createIfNotExists: false);
 
         var app = builder.Build();
         var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
@@ -2193,19 +2337,19 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task MethodOrdering_WithPip_WithVirtualEnvironment_CreateTrue_WithPip_CreatesVenv()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
-        using var tempVenvDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var venvDir = workspace.CreateDirectory("venv");
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
         // WithPip → WithVirtualEnvironment(createIfNotExists: true) → WithPip again
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithPip()
-            .WithVirtualEnvironment(tempVenvDir.Path, createIfNotExists: true)
+            .WithVirtualEnvironment(venvDir.FullName, createIfNotExists: true)
             .WithPip();
 
         var app = builder.Build();
@@ -2229,19 +2373,19 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void MethodOrdering_WithPip_WithVirtualEnvironment_CreateFalse_WithPip_DoesNotCreateVenv()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
-        using var tempVenvDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var venvDir = workspace.CreateDirectory("venv");
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
         // WithPip → WithVirtualEnvironment(createIfNotExists: false) → WithPip again
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithPip()
-            .WithVirtualEnvironment(tempVenvDir.Path, createIfNotExists: false)
+            .WithVirtualEnvironment(venvDir.FullName, createIfNotExists: false)
             .WithPip();
 
         var app = builder.Build();
@@ -2260,16 +2404,16 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void MethodOrdering_WithPip_ThenWithUv_ReplacesPackageManager_And_DisablesVenvCreation()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
         // WithPip → WithUv (uv should replace pip and disable venv creation)
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithPip()
             .WithUv();
 
@@ -2292,16 +2436,16 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public void MethodOrdering_WithUv_ThenWithPip_ReplacesPackageManager_And_EnablesVenvCreation()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
         // WithUv → WithPip (pip should replace uv and enable venv creation)
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithUv()
             .WithPip();
 
@@ -2324,15 +2468,15 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithPip_InstallFalse_CreatesInstallerWithExplicitStart()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var requirementsPath = Path.Combine(tempDir.Path, "requirements.txt");
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
         File.WriteAllText(requirementsPath, "requests");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithPip(install: false);
 
         var app = builder.Build();
@@ -2360,12 +2504,12 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
     public async Task WithUv_InstallFalse_CreatesInstallerWithExplicitStart()
     {
         using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var scriptPath = Path.Combine(tempDir.Path, "main.py");
+        var scriptPath = Path.Combine(workspace.Path, "main.py");
         File.WriteAllText(scriptPath, "print('Hello')");
 
-        var pythonApp = builder.AddPythonApp("pythonProject", tempDir.Path, "main.py")
+        var pythonApp = builder.AddPythonApp("pythonProject", workspace.Path, "main.py")
             .WithUv(install: false);
 
         var app = builder.Build();
@@ -2387,6 +2531,51 @@ public class AddPythonAppTests(ITestOutputHelper outputHelper)
         
         // Should not have any wait annotations since uv doesn't create venv
         Assert.Empty(waitAnnotations);
+    }
+
+    [Fact]
+    public void InstallerResourceHasNameValidationPolicyAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var scriptName = "main.py";
+
+        builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
+            .WithPip();
+
+        var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var installerResource = appModel.Resources.OfType<PythonInstallerResource>().Single();
+        Assert.True(installerResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
+    }
+
+    [Fact]
+    public void VenvCreatorResourceHasNameValidationPolicyAnnotation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create().WithTestAndResourceLogging(outputHelper);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var venvDir = workspace.CreateDirectory("venv");
+
+        var scriptName = "main.py";
+        var scriptPath = Path.Combine(workspace.Path, scriptName);
+        File.WriteAllText(scriptPath, "print('Hello')");
+
+        var requirementsPath = Path.Combine(workspace.Path, "requirements.txt");
+        File.WriteAllText(requirementsPath, "requests");
+
+        builder.AddPythonApp("pythonProject", workspace.Path, scriptName)
+            .WithVirtualEnvironment(venvDir.FullName, createIfNotExists: true);
+
+        var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var venvCreatorResource = appModel.Resources.OfType<PythonVenvCreatorResource>().SingleOrDefault();
+        Assert.NotNull(venvCreatorResource);
+        Assert.True(venvCreatorResource.TryGetLastAnnotation<NameValidationPolicyAnnotation>(out var policy));
+        Assert.Same(NameValidationPolicyAnnotation.None, policy);
     }
 
     /// <summary>

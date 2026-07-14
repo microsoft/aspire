@@ -14,7 +14,10 @@ public class PublishAsConnectionStringTests
     {
         var builder = DistributedApplication.CreateBuilder();
 
-        var redis = builder.AddRedis("redis").PublishAsConnectionString();
+#pragma warning disable CS0618 // Test intentionally covers obsolete PublishAsConnectionString manifest behavior.
+        var redis = builder.AddRedis("redis")
+            .PublishAsConnectionString();
+#pragma warning restore CS0618
 
         Assert.True(redis.Resource.TryGetLastAnnotation<ManifestPublishingCallbackAnnotation>(out _));
 

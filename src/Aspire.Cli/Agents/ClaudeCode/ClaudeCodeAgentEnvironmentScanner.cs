@@ -55,6 +55,8 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
 
         if (claudeCodeFolder is not null)
         {
+            context.AddDetectedClient(AgentClientKind.ClaudeCode);
+
             // If .claude folder is found, override the workspace root with its parent directory
             var workspaceRoot = claudeCodeFolder.Parent ?? context.RepositoryRoot;
             _logger.LogDebug("Inferred workspace root from .claude folder parent: {WorkspaceRoot}", workspaceRoot.FullName);
@@ -84,7 +86,9 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
             if (claudeCodeVersion is not null)
             {
                 _logger.LogDebug("Found Claude Code CLI version: {Version}", claudeCodeVersion);
-                
+
+                context.AddDetectedClient(AgentClientKind.ClaudeCode);
+
                 // Claude Code is installed - offer to create config at workspace root
                 if (!HasAspireServerConfigured(context.RepositoryRoot))
                 {
@@ -197,7 +201,7 @@ internal sealed class ClaudeCodeAgentEnvironmentScanner : IAgentEnvironmentScann
         CancellationToken cancellationToken)
     {
         var configFilePath = Path.Combine(repoRoot.FullName, McpConfigFileName);
-        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, cancellationToken);
+        var config = await McpConfigFileHelper.ReadConfigAsync(configFilePath, null, cancellationToken);
 
         // Ensure "mcpServers" object exists
         if (!config.ContainsKey("mcpServers") || config["mcpServers"] is not JsonObject)

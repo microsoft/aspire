@@ -1,10 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Cli.Mcp.Docs;
+using Aspire.Cli.Documentation.Docs;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
 
-namespace Aspire.Cli.Tests.Mcp.Docs;
+namespace Aspire.Cli.Tests.Documentation.Docs;
 
 public class DocsSearchServiceTests
 {
@@ -18,6 +19,7 @@ public class DocsSearchServiceTests
         return new DocsIndexService(
             fetcher ?? new MockDocsFetcher(null),
             cache ?? new NullDocsCache(),
+            new ConfigurationBuilder().Build(),
             NullLogger<DocsIndexService>.Instance);
     }
 
@@ -423,6 +425,8 @@ public class DocsSearchServiceTests
         public Task SetETagAsync(string url, string? etag, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task<LlmsDocument[]?> GetIndexAsync(CancellationToken cancellationToken = default) => Task.FromResult<LlmsDocument[]?>(null);
         public Task SetIndexAsync(LlmsDocument[] documents, CancellationToken cancellationToken = default) => Task.CompletedTask;
+        public Task<string?> GetIndexSourceFingerprintAsync(CancellationToken cancellationToken = default) => Task.FromResult<string?>(null);
+        public Task SetIndexSourceFingerprintAsync(string fingerprint, CancellationToken cancellationToken = default) => Task.CompletedTask;
         public Task InvalidateAsync(string key, CancellationToken cancellationToken = default) => Task.CompletedTask;
     }
 }

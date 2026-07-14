@@ -1,0 +1,57 @@
+name: Update Azure VM Sizes
+
+# No 'workflow_dispatch' trigger by design: this workflow mints the aspire-repo-bot
+# token and opens a PR, so it must only ever run as the reviewed copy on the default
+# branch. 'schedule' runs solely on the default branch and cannot be invoked against
+# an arbitrary ref, which keeps unreviewed branch code from ever wielding the bot token.
+on:
+  schedule:
+    - cron: '0 6 * * *' # Daily at 06:00 UTC
+
+permissions:
+  contents: write
+  pull-requests: write
+  id-token: write # For OIDC Azure login
+
+jobs:
+  generate-and-pr:
+    runs-on: ubuntu-latest
+    # 'schedule' only ever runs on the default branch, so the owner guard is the
+    # only condition needed here.
+    if: ${{ github.repository_owner == 'microsoft' }}
+    environment: deployment-testing
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+
+      - name: Azure Login (OIDC)
+        uses: azure/login@532459ea530d8321f2fb9bb10d1e0bcf23869a43 # v3.0.0
+        with:
+          client-id: ${{ secrets.AZURE_DEPLOYMENT_TEST_CLIENT_ID }}
+          tenant-id: ${{ secrets.AZURE_DEPLOYMENT_TEST_TENANT_ID }}
+          subscription-id: ${{ secrets.AZURE_DEPLOYMENT_TEST_SUBSCRIPTION_ID }}
+
+      - name: Generate updated Azure VM size descriptors
+        working-directory: src/Aspire.Hosting.Azure.Kubernetes/tools
+        run: |
+          set -e
+          "$GITHUB_WORKSPACE/dotnet.sh" run GenVmSizes.cs
+
+      - name: Generate GitHub App Token
+        id: app-token
+        uses: actions/create-github-app-token@1b10c78c7865c340bc4f6099eb2f838309f1e8c3 # v3.1.1
+        with:
+          app-id: ${{ secrets.ASPIRE_BOT_APP_ID }}
+          private-key: ${{ secrets.ASPIRE_BOT_PRIVATE_KEY }}
+
+      - name: Create or update pull request
+        uses: ./.github/actions/create-pull-request
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          branch: update-azure-vm-sizes
+          base: main
+          commit-message: "[Automated] Update Azure VM Sizes"
+          labels: |
+            area-integrations
+            area-engineering-systems
+          title: "[Automated] Update Azure VM Sizes"
+          body: "Auto-generated update of Azure VM size descriptors (AksNodeVmSizes.Generated.cs)."

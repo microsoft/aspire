@@ -2,20 +2,27 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Reflection;
 using System.Threading.Channels;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Bunit;
 using ProtobufValue = Google.Protobuf.WellKnownTypes.Value;
+using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
+using TelemetryTestHelpers = Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
@@ -208,6 +215,115 @@ public partial class ResourcesTests : DashboardTestContext
 
         // Assert
         Assert.Single(initializeGraphInvocationHandler.Invocations);
+        var focusInvocation = JSInterop.Invocations.Single(i => i.Identifier == "focusElement");
+        Assert.Equal("resourcesGraphContainer", focusInvocation.Arguments[0]);
+        Assert.Equal(true, focusInvocation.Arguments[1]);
+    }
+
+    [Fact]
+    public async Task ResourceGraphContextMenu_MenuCloseCompletesBrowserCallback()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var resource = CreateResource(
+            "Resource1",
+            "Type1",
+            "Running",
+            ImmutableArray.Create(new HealthReportViewModel("Null", null, "Description1", null)));
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [resource], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            viewport,
+            dashboardClient);
+
+        var resourceGraphModule = JSInterop.SetupModule("/js/app-resourcegraph.js");
+        resourceGraphModule.SetupVoid("initializeResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("updateResourcesGraph", _ => true);
+        resourceGraphModule.SetupVoid("selectResource", _ => true);
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ResourcesUrl(view: "Graph"));
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var showContextMenuAsync = typeof(Components.Pages.Resources)
+            .GetMethod("ShowContextMenuAsync", BindingFlags.Instance | BindingFlags.NonPublic)!;
+
+        Task? showContextMenuTask = null;
+        await cut.InvokeAsync(() =>
+        {
+            showContextMenuTask = (Task)showContextMenuAsync.Invoke(cut.Instance, [resource, 1024, 768, 20, 20])!;
+        });
+        Assert.NotNull(showContextMenuTask);
+        cut.WaitForAssertion(() => Assert.True(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open));
+
+        var contextMenu = cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored);
+        await cut.InvokeAsync(() => contextMenu.Instance.OpenChanged.InvokeAsync(false));
+
+        await showContextMenuTask.WaitAsync(TimeSpan.FromSeconds(1));
+        Assert.False(cut.FindComponents<AspireMenu>().Single(m => !m.Instance.Anchored).Instance.Open);
+    }
+
+    [Fact]
+    public void TableView_FocusesAccessibleScrollContainerOnInitialRender()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var scrollContainer = cut.Find("#resourcesScrollContainer");
+        var loc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.Resources>>();
+
+        Assert.Equal("0", scrollContainer.GetAttribute("tabindex"));
+        Assert.Equal("region", scrollContainer.GetAttribute("role"));
+        Assert.Equal(loc[nameof(Dashboard.Resources.Resources.ResourcesHeader)].Value, scrollContainer.GetAttribute("aria-label"));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Contains(JSInterop.Invocations, invocation =>
+                invocation.Identifier == "focusElement" &&
+                invocation.Arguments.Count == 2 &&
+                string.Equals(invocation.Arguments[0]?.ToString(), "resourcesScrollContainer", StringComparison.Ordinal) &&
+                string.Equals(invocation.Arguments[1]?.ToString(), bool.TrueString, StringComparison.OrdinalIgnoreCase));
+        });
+    }
+
+    [Theory]
+    [InlineData(false, true, "vertical")]
+    [InlineData(true, true, "vertical")]
+    [InlineData(false, false, "horizontal")]
+    [InlineData(true, false, "horizontal")]
+    public void ResourceTabs_OrientationRespondsToUltraLowWidth(bool isDesktop, bool isUltraLowWidth, string expectedOrientation)
+    {
+        var viewport = new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: isUltraLowWidth);
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource(
+                "Resource1",
+                "Type1",
+                "Running",
+                ImmutableArray.Create(new HealthReportViewModel("Null", null, "Description1", null))),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(
+            this,
+            viewport,
+            dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        var tabs = cut.Find("fluent-tabs.resources-tab-header");
+        Assert.Equal(expectedOrientation, tabs.GetAttribute("orientation"));
+        Assert.All(cut.FindAll("fluent-tab"), tab => Assert.True(tab.HasAttribute("fixed")));
     }
 
     [Fact]
@@ -354,6 +470,30 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Contains(filteredResources, r => r.Name == "Resource3");
     }
 
+    [Fact]
+    public void UnreadLogErrorsBadge_StopsKeyboardPropagation()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentAnchor(this);
+
+        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
+        AddErrorLog(telemetryRepository, resourceName: "Resource1");
+        var unviewedErrorCounts = telemetryRepository.GetResourceUnviewedErrorLogsCount();
+        var resourceKey = Assert.Single(unviewedErrorCounts.Keys);
+        var resource = CreateResource(resourceKey.GetCompositeName(), "Type1", "Running", null);
+        Assert.NotNull(telemetryRepository.GetResourceByCompositeName(resource.Name));
+
+        var cut = RenderComponent<UnreadLogErrorsBadge>(builder =>
+        {
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.UnviewedErrorCounts, unviewedErrorCounts);
+        });
+
+        var badge = cut.Find(".unread-logs-errors-link");
+        Assert.Contains("onkeydown:stoppropagation", badge.OuterHtml, StringComparison.OrdinalIgnoreCase);
+    }
+
     private static ResourceViewModel CreateResource(
         string name,
         string type,
@@ -389,8 +529,36 @@ public partial class ResourcesTests : DashboardTestContext
         };
     }
 
+    private static void AddErrorLog(TelemetryRepository repository, string resourceName)
+    {
+        var addContext = new AddContext();
+        var logs = new RepeatedField<ResourceLogs>();
+        logs.Add(new ResourceLogs
+        {
+            Resource = TelemetryTestHelpers.CreateResource(name: resourceName, instanceId: resourceName),
+            ScopeLogs =
+            {
+                new ScopeLogs
+                {
+                    Scope = TelemetryTestHelpers.CreateScope("TestLogger"),
+                    LogRecords =
+                    {
+                        TelemetryTestHelpers.CreateLogRecord(
+                            time: DateTime.UtcNow,
+                            message: "Error",
+                            severity: SeverityNumber.Error)
+                    }
+                }
+            }
+        });
+
+        repository.AddLogs(addContext, logs);
+
+        Assert.Equal(0, addContext.FailureCount);
+    }
+
     [Fact]
-    public void ViewOptionsMenuIsVisibleWhenHiddenResourcesExist()
+    public void ViewOptionsMenu_WiresFocusRestorationWhenHiddenResourcesExist()
     {
         // Arrange
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -411,9 +579,8 @@ public partial class ResourcesTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
-        // Assert - the menu button should be present (it contains the "Show hidden resources" option)
         var menuButton = cut.FindComponent<AspireMenuButton>();
-        Assert.NotNull(menuButton);
+        Assert.True(menuButton.Instance.RestoreFocusOnItemClick);
     }
 
     [Fact]
@@ -442,7 +609,6 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(2, filteredResources.Count);
         Assert.Contains(filteredResources, r => r.Name == "myapp");
         Assert.Contains(filteredResources, r => r.Name == "mycontainer");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myparameter");
     }
 
     [Fact]
@@ -474,8 +640,6 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(2, filteredResources.Count);
         Assert.Contains(filteredResources, r => r.Name == "myparameter1");
         Assert.Contains(filteredResources, r => r.Name == "myparameter2");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myapp");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "mycontainer");
     }
 
     [Fact]
@@ -509,11 +673,10 @@ public partial class ResourcesTests : DashboardTestContext
         Assert.Equal(2, filteredResources.Count);
         Assert.Contains(filteredResources, r => r.Name == "myparameter1");
         Assert.Contains(filteredResources, r => r.Name == "myparameter2");
-        Assert.DoesNotContain(filteredResources, r => r.Name == "myapp");
     }
 
     [Fact]
-    public void GraphView_ShowsAllResources()
+    public void GraphView_ExcludesParameters()
     {
         // Arrange
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
@@ -539,11 +702,50 @@ public partial class ResourcesTests : DashboardTestContext
         cut.Instance.PageViewModel.SelectedViewKind = Components.Pages.Resources.ResourceViewKind.Graph;
         cut.Render();
 
-        // Assert - Graph view should show all resources (no parameter filtering)
+        // Assert - Graph view should exclude parameters (they have their own dedicated view)
         var filteredResources = cut.Instance.GetFilteredResources().ToList();
-        Assert.Equal(2, filteredResources.Count);
+        Assert.Single(filteredResources);
         Assert.Contains(filteredResources, r => r.Name == "myapp");
-        Assert.Contains(filteredResources, r => r.Name == "myparameter");
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForSelectedResource_GraphParameter_ReturnsParameters()
+    {
+        var parameter = CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForSelectedResource(Components.Pages.Resources.ResourceViewKind.Graph, parameter);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, viewKind);
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForSelectedResource_GraphNonParameter_ReturnsGraph()
+    {
+        var resource = CreateResource("myapp", "Project", "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForSelectedResource(Components.Pages.Resources.ResourceViewKind.Graph, resource);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Graph, viewKind);
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForViewChange_GraphParameter_ReturnsParameters()
+    {
+        var parameter = CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForViewChange(Components.Pages.Resources.ResourceViewKind.Graph, parameter);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, viewKind);
+    }
+
+    [Fact]
+    public void GetVisibleViewKindForViewChange_ParametersNonParameter_ReturnsParameters()
+    {
+        var resource = CreateResource("myapp", "Project", "Running", null);
+
+        var viewKind = Components.Pages.Resources.GetVisibleViewKindForViewChange(Components.Pages.Resources.ResourceViewKind.Parameters, resource);
+
+        Assert.Equal(Components.Pages.Resources.ResourceViewKind.Parameters, viewKind);
     }
 
     [Fact]
@@ -557,7 +759,9 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("my-secret-value"),
                 isValueSensitive: true,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {
@@ -589,6 +793,37 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public void ParametersView_UrlValueStopsClickPropagation()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parameterProperties = ImmutableDictionary<string, ResourcePropertyViewModel>.Empty
+            .Add(KnownProperties.Parameter.Value, new ResourcePropertyViewModel(
+                KnownProperties.Parameter.Value,
+                ProtobufValue.ForString("https://example.com"),
+                isValueSensitive: false,
+                knownProperty: null,
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
+
+        var initialResources = new List<ResourceViewModel>
+        {
+            CreateResource("myparameter", KnownResourceTypes.Parameter, "Running", null, properties: parameterProperties),
+        };
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+        var setCellTextClickHandler = JSInterop.SetupVoid("setCellTextClickHandler", _ => true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(DashboardUrls.ResourcesUrl(view: "Parameters"));
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() => Assert.Single(setCellTextClickHandler.Invocations));
+    }
+
+    [Fact]
     public void ParametersView_IncludesUnresolvedParameters()
     {
         // Arrange
@@ -601,11 +836,13 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("Parameter 'myparameter' not found in configuration."),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {
-            CreateResource("myparameter", KnownResourceTypes.Parameter, "Value missing", null, stateStyle: "warning", properties: parameterProperties),
+            CreateResource("myparameter", KnownResourceTypes.Parameter, nameof(KnownResourceState.ValueMissing), null, stateStyle: "warning", properties: parameterProperties),
         };
         var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: initialResources, resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
@@ -627,7 +864,7 @@ public partial class ResourcesTests : DashboardTestContext
         // Verify the resource has warning stateStyle (triggers "Value not set" display)
         var resource = filteredResources[0];
         Assert.Equal("warning", resource.StateStyle);
-        Assert.Equal("Value missing", resource.State);
+        Assert.Equal(nameof(KnownResourceState.ValueMissing), resource.State);
     }
 
     [Fact]
@@ -643,7 +880,9 @@ public partial class ResourcesTests : DashboardTestContext
                 ProtobufValue.ForString("Error initializing parameter"),
                 isValueSensitive: false,
                 knownProperty: null,
-                priority: 0));
+                sortOrder: 0,
+                displayName: null,
+                isHighlighted: false));
 
         var initialResources = new List<ResourceViewModel>
         {

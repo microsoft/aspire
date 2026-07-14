@@ -37,15 +37,15 @@ aspire add Aspire.Hosting.Redis --non-interactive -d 2>&1 || {
     fi
 }
 
-# Insert Redis line into apphost.ts
-echo "Configuring apphost.ts with Redis..."
-if grep -q "builder.build().run()" apphost.ts; then
-    sed -i '/builder.build().run()/i\// Add Redis cache resource\nconst redis = await builder.addRedis("cache").withImageRegistry("netaspireci.azurecr.io");' apphost.ts
-    echo "✅ Redis configuration added to apphost.ts"
+# Insert Redis line into apphost.mts
+echo "Configuring apphost.mts with Redis..."
+if grep -q "builder.build().run()" apphost.mts; then
+    sed -i '/builder.build().run()/i\// Add Redis cache resource\nconst redis = await builder.addRedis("cache").withImageRegistry("netaspireci.azurecr.io");' apphost.mts
+    echo "✅ Redis configuration added to apphost.mts"
 fi
 
-echo "=== apphost.ts ==="
-cat apphost.ts
+echo "=== apphost.mts ==="
+cat apphost.mts
 
 # Run the apphost in background
 echo "Starting apphost in background..."

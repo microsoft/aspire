@@ -21,6 +21,7 @@ public static class McpServerResourceBuilderExtensions
     /// <param name="path">An optional path to append to the endpoint URL when forming the MCP server address. Defaults to <c>"/mcp"</c>.</param>
     /// <param name="endpointName">An optional name of the endpoint that hosts the MCP server. If not specified, defaults to the first HTTPS or HTTP endpoint.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/> for chaining additional configuration.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method adds an <see cref="McpServerEndpointAnnotation"/> to the resource, enabling the Aspire tooling
     /// to discover and proxy the MCP server exposed by the resource.
@@ -38,7 +39,7 @@ public static class McpServerResourceBuilderExtensions
     /// </code>
     /// </example>
     [Experimental("ASPIREMCP001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExport(Description = "Configures an MCP server endpoint on the resource")]
+    [AspireExport]
     public static IResourceBuilder<T> WithMcpServer<T>(
         this IResourceBuilder<T> builder,
         string? path = "/mcp",

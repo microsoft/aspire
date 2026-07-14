@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using System.Text.Json.Nodes;
+using System.Text.Json;
 using Aspire.TestUtilities;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -16,6 +16,13 @@ using Xunit;
 using Microsoft.DotNet.RemoteExecutor;
 
 namespace Aspire.Components.ConformanceTests;
+
+/// <summary>
+/// Describes a logger category that must appear during a conformance test.
+/// When <see cref="AllowPrefixMatch"/> is <see langword="true"/>, any logged
+/// category that starts with <see cref="Name"/> satisfies the requirement.
+/// </summary>
+public readonly record struct RequiredLogCategory(string Name, bool AllowPrefixMatch = false);
 
 public abstract class ConformanceTests<TService, TOptions>
     where TService : class
@@ -52,7 +59,7 @@ public abstract class ConformanceTests<TService, TOptions>
 
     protected virtual (string json, string error)[] InvalidJsonToErrorMessage => Array.Empty<(string json, string error)>();
 
-    protected abstract string[] RequiredLogCategories { get; }
+    protected abstract RequiredLogCategory[] RequiredLogCategories { get; }
 
     protected virtual string[] NotAcceptableLogCategories => Array.Empty<string>();
 
@@ -334,10 +341,13 @@ public abstract class ConformanceTests<TService, TOptions>
             }
             Output.WriteLine("");
             Output.WriteLine("=== Required Categories ===");
-            foreach (var category in RequiredLogCategories.OrderBy(c => c))
+            foreach (var req in RequiredLogCategories.OrderBy(c => c.Name))
             {
-                var found = loggerFactory.Categories.Contains(category);
-                Output.WriteLine($"  {(found ? "✓" : "✗")} {category}");
+                var found = req.AllowPrefixMatch
+                    ? loggerFactory.Categories.Any(c => c.StartsWith(req.Name, StringComparison.Ordinal))
+                    : loggerFactory.Categories.Contains(req.Name);
+                var suffix = req.AllowPrefixMatch ? " (prefix)" : "";
+                Output.WriteLine($"  {(found ? "✓" : "✗")} {req.Name}{suffix}");
             }
             if (NotAcceptableLogCategories.Length > 0)
             {
@@ -352,9 +362,16 @@ public abstract class ConformanceTests<TService, TOptions>
             Output.WriteLine("");
         }
 
-        foreach (string logCategory in RequiredLogCategories)
+        foreach (var req in RequiredLogCategories)
         {
-            Assert.Contains(logCategory, loggerFactory.Categories);
+            if (req.AllowPrefixMatch)
+            {
+                Assert.Contains(loggerFactory.Categories, c => c.StartsWith(req.Name, StringComparison.Ordinal));
+            }
+            else
+            {
+                Assert.Contains(req.Name, loggerFactory.Categories);
+            }
         }
 
         foreach (string logCategory in NotAcceptableLogCategories)
@@ -385,13 +402,22 @@ public abstract class ConformanceTests<TService, TOptions>
         Assert.Contains(healthReport.Entries, entry => entry.Value.Status == expected);
     }
 
+    // Component ConfigurationSchema.json files don't declare $schema, so JsonSchema.Net 9.x
+    // defaults to Draft 2020-12 (where `definitions` was replaced by `$defs`) and rejects
+    // the older keywords. Pin the build to Draft 7 explicitly so existing schemas keep working.
+    // Use a fresh local SchemaRegistry per call so re-loading the same schema across tests
+    // doesn't fail with "Overwriting registered schemas is not permitted" against the global registry.
+    private static BuildOptions CreateBuildOptions() =>
+        new() { Dialect = Dialect.Draft07, SchemaRegistry = new SchemaRegistry() };
+
     [Fact]
     public void ConfigurationSchemaValidJsonConfigTest()
     {
-        var schema = JsonSchema.FromFile(JsonSchemaPath);
-        var config = JsonNode.Parse(ValidJsonConfig);
+        var schema = JsonSchema.FromFile(JsonSchemaPath, CreateBuildOptions());
+        // JsonSchema.Net 8.x changed JsonSchema.Evaluate to take JsonElement instead of JsonNode.
+        using var config = JsonDocument.Parse(ValidJsonConfig);
 
-        var results = schema.Evaluate(config);
+        var results = schema.Evaluate(config.RootElement);
 
         Assert.True(results.IsValid);
     }
@@ -399,13 +425,14 @@ public abstract class ConformanceTests<TService, TOptions>
     [Fact]
     public void ConfigurationSchemaInvalidJsonConfigTest()
     {
-        var schema = JsonSchema.FromFile(JsonSchemaPath);
+        var schema = JsonSchema.FromFile(JsonSchemaPath, CreateBuildOptions());
 
         foreach ((string json, string error) in InvalidJsonToErrorMessage)
         {
-            var config = JsonNode.Parse(json);
-            var results = schema.Evaluate(config, DefaultEvaluationOptions);
-            var detail = results.Details.FirstOrDefault(x => x.HasErrors);
+            using var config = JsonDocument.Parse(json);
+            var results = schema.Evaluate(config.RootElement, DefaultEvaluationOptions);
+            // EvaluationResults.HasErrors was removed in JsonSchema.Net 8.x; use the Errors dictionary directly.
+            var detail = results.Details?.FirstOrDefault(x => x.Errors is { Count: > 0 });
 
             Assert.NotNull(detail);
             Assert.Equal(error, detail.Errors!.First().Value);

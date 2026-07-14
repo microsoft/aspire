@@ -19,7 +19,7 @@ namespace Infrastructure.Tests;
 /// </summary>
 public class SplitTestProjectsTests : IDisposable
 {
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _scriptPath;
     private readonly string _repoRoot;
     private readonly ITestOutputHelper _output;
@@ -27,24 +27,25 @@ public class SplitTestProjectsTests : IDisposable
     public SplitTestProjectsTests(ITestOutputHelper output)
     {
         _output = output;
-        _repoRoot = FindRepoRoot();
+        _workspace = TemporaryWorkspace.Create(output);
+        _repoRoot = RepoRoot.Path;
         _scriptPath = Path.Combine(_repoRoot, "eng", "scripts", "split-test-projects-for-ci.ps1");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["pwsh"])]
     public async Task UsesCollectionModeWithPartitions()
     {
         // Arrange - Create a mock assembly with partition attributes
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithPartitions(
             assemblyPath,
             ("TestClass1", "PartitionA"),
             ("TestClass2", "PartitionB"));
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.json");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.json");
 
         // Act (the script builds ExtractTestPartitions tool internally if needed)
         var result = await RunScript(
@@ -68,12 +69,12 @@ public class SplitTestProjectsTests : IDisposable
     public async Task IncludesUncollectedEntry()
     {
         // Arrange
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithPartitions(
             assemblyPath,
             ("TestClass1", "OnlyPartition"));
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.json");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.json");
 
         // Act
         var result = await RunScript(
@@ -96,13 +97,13 @@ public class SplitTestProjectsTests : IDisposable
     public async Task OutputsValidJson()
     {
         // Arrange
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithPartitions(
             assemblyPath,
             ("TestClass1", "Part1"),
             ("TestClass2", "Part2"));
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.json");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.json");
 
         // Act
         var result = await RunScript(
@@ -127,14 +128,14 @@ public class SplitTestProjectsTests : IDisposable
     public async Task SortsPartitionsAlphabetically()
     {
         // Arrange
-        var assemblyPath = Path.Combine(_tempDir.Path, "TestAssembly.dll");
+        var assemblyPath = Path.Combine(_workspace.Path, "TestAssembly.dll");
         MockAssemblyBuilder.CreateAssemblyWithPartitions(
             assemblyPath,
             ("TestZ", "Zebra"),
             ("TestA", "Apple"),
             ("TestM", "Mango"));
 
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.json");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.json");
 
         // Act
         var result = await RunScript(
@@ -162,8 +163,8 @@ public class SplitTestProjectsTests : IDisposable
     public async Task FailsWhenAssemblyNotFound()
     {
         // Arrange
-        var nonExistentPath = Path.Combine(_tempDir.Path, "DoesNotExist.dll");
-        var outputFile = Path.Combine(_tempDir.Path, "partitions.json");
+        var nonExistentPath = Path.Combine(_workspace.Path, "DoesNotExist.dll");
+        var outputFile = Path.Combine(_workspace.Path, "partitions.json");
 
         // Act
         var result = await RunScript(
@@ -205,20 +206,6 @@ public class SplitTestProjectsTests : IDisposable
         {
             PropertyNameCaseInsensitive = true
         }) ?? throw new InvalidOperationException("Failed to parse partitions JSON");
-    }
-
-    private static string FindRepoRoot()
-    {
-        var dir = new DirectoryInfo(AppContext.BaseDirectory);
-        while (dir is not null)
-        {
-            if (File.Exists(Path.Combine(dir.FullName, "Aspire.slnx")))
-            {
-                return dir.FullName;
-            }
-            dir = dir.Parent;
-        }
-        throw new InvalidOperationException("Could not find repository root");
     }
 
     private sealed class TestPartitionsJson

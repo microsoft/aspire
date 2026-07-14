@@ -17,7 +17,7 @@ public static class DistributedApplicationHostingTestingExtensions
     /// </summary>
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resourceName of the resource.</param>
-    /// <param name="endpointName">The resourceName of the endpoint on the resource to communicate with.</param>
+    /// <param name="endpointName">The optional endpoint name. If none is specified, the "https" endpoint is preferred when available, falling back to "http".</param>
     /// <remarks>This method is not available in polyglot app hosts.</remarks>
     /// <returns>The <see cref="HttpClient"/>.</returns>
     [AspireExportIgnore(Reason = "HttpClient is not ATS-compatible.")]
@@ -65,7 +65,7 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <param name="resourceName">The resource name.</param>
     /// <returns>The connection string for the specified resource.</returns>
     /// <exception cref="ArgumentException">The resource was not found or does not expose a connection string.</exception>
-    [AspireExport("getConnectionString", Description = "Gets the connection string for the specified resource.")]
+    [AspireExport("getConnectionString")]
     internal static Task<string?> GetConnectionStringAsyncExport(this DistributedApplication app, string resourceName)
     {
         return app.GetConnectionStringAsync(resourceName, default).AsTask();
@@ -76,11 +76,11 @@ public static class DistributedApplicationHostingTestingExtensions
     /// </summary>
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resource name.</param>
-    /// <param name="endpointName">The optional endpoint name. If none are specified, the single defined endpoint is returned.</param>
+    /// <param name="endpointName">The optional endpoint name. If none is specified, the "https" endpoint is preferred when available, falling back to "http".</param>
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
     /// <exception cref="InvalidOperationException">The resource has no endpoints.</exception>
-    [AspireExport(Description = "Gets the endpoint for the specified resource.")]
+    [AspireExport]
     public static Uri GetEndpoint(this DistributedApplication app, string resourceName, string? endpointName = default)
     {
         ArgumentNullException.ThrowIfNull(app);
@@ -95,7 +95,7 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resource name.</param>
     /// <param name="networkIdentifier">The optional network identifier. If none is specified, the default network is used.</param>
-    /// <param name="endpointName">The optional endpoint name. If none are specified, the single defined endpoint is returned.</param>
+    /// <param name="endpointName">The optional endpoint name. If none is specified, the "https" endpoint is preferred when available, falling back to "http".</param>
     /// <remarks>This overload is not available in polyglot app hosts. Use the exported overload that accepts a network identifier string instead.</remarks>
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
@@ -115,11 +115,11 @@ public static class DistributedApplicationHostingTestingExtensions
     /// <param name="app">The application.</param>
     /// <param name="resourceName">The resource name.</param>
     /// <param name="networkIdentifier">The optional network identifier string. If none is specified, the default network is used.</param>
-    /// <param name="endpointName">The optional endpoint name. If none are specified, the single defined endpoint is returned.</param>
+    /// <param name="endpointName">The optional endpoint name. If none is specified, the "https" endpoint is preferred when available, falling back to "http".</param>
     /// <returns>A URI representation of the endpoint.</returns>
     /// <exception cref="ArgumentException">The resource was not found, no matching endpoint was found, or multiple endpoints were found.</exception>
     /// <exception cref="InvalidOperationException">The resource has no endpoints.</exception>
-    [AspireExport(Description = "Gets the endpoint for the specified resource in the specified network context.")]
+    [AspireExport]
     internal static Uri GetEndpointForNetworkExport(this DistributedApplication app, string resourceName, string? networkIdentifier = default, string? endpointName = default)
     {
         return app.GetEndpointForNetwork(resourceName, networkIdentifier is null ? null : new NetworkIdentifier(networkIdentifier), endpointName);
@@ -130,10 +130,7 @@ public static class DistributedApplicationHostingTestingExtensions
         ThrowIfNotStarted(app);
         var applicationModel = app.Services.GetRequiredService<DistributedApplicationModel>();
 
-        var resources = applicationModel.Resources;
-        var resource = resources.SingleOrDefault(r => string.Equals(r.Name, resourceName, StringComparison.OrdinalIgnoreCase));
-
-        if (resource is null)
+        if (!applicationModel.Resources.TryGetByName(resourceName, out var resource))
         {
             throw new ArgumentException(string.Format(CultureInfo.InvariantCulture, Properties.Resources.ResourceNotFoundExceptionMessage, resourceName), nameof(resourceName));
         }
@@ -156,7 +153,9 @@ public static class DistributedApplicationHostingTestingExtensions
         }
         else
         {
-            endpoint = GetEndpointOrDefault(resourceWithEndpoints, "http", networkIdentifier) ?? GetEndpointOrDefault(resourceWithEndpoints, "https", networkIdentifier);
+            // Prefer https over http to match the default service discovery behavior (https+http://),
+            // where https is tried first.
+            endpoint = GetEndpointOrDefault(resourceWithEndpoints, "https", networkIdentifier) ?? GetEndpointOrDefault(resourceWithEndpoints, "http", networkIdentifier);
         }
 
         if (endpoint is null)

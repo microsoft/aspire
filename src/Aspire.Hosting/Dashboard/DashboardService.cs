@@ -2,7 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
+using System.Globalization;
 using Aspire.DashboardService.Proto.V1;
+using Google.Protobuf.Collections;
+using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Microsoft.AspNetCore.Authorization;
 using Microsoft.Extensions.Configuration;
@@ -20,12 +23,18 @@ namespace Aspire.Hosting.Dashboard;
 /// required beyond a single request. Longer-scoped data is stored in <see cref="DashboardServiceData"/>.
 /// </remarks>
 [Authorize(Policy = ResourceServiceApiKeyAuthorization.PolicyName)]
-internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger)
+internal sealed partial class DashboardService(DashboardServiceData serviceData, IHostEnvironment hostEnvironment, IHostApplicationLifetime hostApplicationLifetime, IConfiguration configuration, ILogger<DashboardService> logger, IFileUploadStore fileUploadStore)
     : Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceBase
 {
     // gRPC has a maximum receive size of 4MB. Force logs into batches to avoid exceeding receive size.
     // Protobuf sends strings as UTF8. Be conservative and assume the average character byte size is 2.
     public const int LogMaxBatchCharacters = 1024 * 1024 * 2;
+
+    /// <summary>
+    /// The minimum dashboard version required by this AppHost build.
+    /// Bump this when a new AppHost feature requires a newer dashboard.
+    /// </summary>
+    internal const string MinRequiredDashboardVersion = "13.5.0";
 
     // Calls that consume or produce streams must create a linked cancellation token
     // with IHostApplicationLifetime.ApplicationStopping to ensure eager cancellation
@@ -40,10 +49,11 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
     {
         // Read the application name from configuration if available, otherwise fall back to the environment
         var applicationName = configuration["AppHost:DashboardApplicationName"] ?? hostEnvironment.ApplicationName;
-        
+
         return Task.FromResult(new ApplicationInformationResponse
         {
-            ApplicationName = ComputeApplicationName(applicationName)
+            ApplicationName = ComputeApplicationName(applicationName),
+            MinDashboardVersion = MinRequiredDashboardVersion
         });
 
         static string ComputeApplicationName(string applicationName)
@@ -125,52 +135,13 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
                                 .SelectMany(i => i.DynamicLoading?.DependsOnInputs ?? [])
                                 .ToList();
 
-                            var inputInstances = inputs.Inputs.Select(input =>
-                            {
-                                var updateStateOnChange = updateStateOnChangeInputs.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName));
-
-                                var dto = new Aspire.DashboardService.Proto.V1.InteractionInput
-                                {
-                                    Name = input.Name,
-                                    InputType = MapInputType(input.InputType),
-                                    Required = input.Required,
-                                    AllowCustomChoice = input.AllowCustomChoice,
-                                    UpdateStateOnChange = updateStateOnChange,
-                                    Disabled = input.Disabled
-                                };
-                                if (input.EffectiveLabel != null)
-                                {
-                                    dto.Label = input.EffectiveLabel;
-                                }
-                                if (input.Description != null)
-                                {
-                                    dto.Description = input.Description;
-                                    dto.EnableDescriptionMarkdown = input.EnableDescriptionMarkdown;
-                                }
-                                if (input.Placeholder != null)
-                                {
-                                    dto.Placeholder = input.Placeholder;
-                                }
-                                if (input.Value != null)
-                                {
-                                    dto.Value = input.Value;
-                                }
-                                if (input.Options != null)
-                                {
-                                    dto.Options.Add(input.Options.ToDictionary());
-                                }
-                                if (input.DynamicLoadingState is { } providerState)
-                                {
-                                    dto.Loading = providerState.Loading;
-                                }
-                                if (input.MaxLength != null)
-                                {
-                                    dto.MaxLength = input.MaxLength.Value;
-                                }
-                                dto.ValidationErrors.AddRange(input.ValidationErrors);
-                                return dto;
-                            }).ToList();
+                            var maxFileUploadSize = FileUploadHelpers.GetMaxFileUploadSize(configuration);
+                            var inputInstances = inputs.Inputs.Select(input => CreateInteractionInputDto(input, updateStateOnChangeInputs, maxFileUploadSize)).ToList();
                             change.InputsDialog.InputItems.AddRange(inputInstances);
+                        }
+                        else if (interaction.InteractionInfo is ProgressInteractionInfo)
+                        {
+                            change.PromptProgress = new InteractionPromptProgress();
                         }
 
                         await responseStream.WriteAsync(change, cts.Token).ConfigureAwait(false);
@@ -202,7 +173,6 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         }
     }
 
-#pragma warning disable ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
     private static Aspire.DashboardService.Proto.V1.MessageIntent MapMessageIntent(Aspire.Hosting.MessageIntent? intent)
     {
         if (intent is null)
@@ -221,7 +191,74 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         };
     }
 
-    private static Aspire.DashboardService.Proto.V1.InputType MapInputType(Aspire.Hosting.InputType inputType)
+    internal static Aspire.DashboardService.Proto.V1.InteractionInput CreateInteractionInputDto(Aspire.Hosting.InteractionInput input, IReadOnlyList<string>? updateStateOnChangeInputs = null, long? maxFileUploadSize = null)
+    {
+        var updateStateOnChange = updateStateOnChangeInputs?.Any(i => string.Equals(i, input.Name, StringComparisons.InteractionInputName)) == true;
+
+        var dto = new Aspire.DashboardService.Proto.V1.InteractionInput
+        {
+            Name = input.Name,
+            InputType = MapInputType(input.InputType),
+            Required = input.Required,
+            AllowCustomChoice = input.AllowCustomChoice,
+            UpdateStateOnChange = updateStateOnChange,
+            Disabled = input.Disabled
+        };
+        if (input.EffectiveLabel != null)
+        {
+            dto.Label = input.EffectiveLabel;
+        }
+        if (input.Description != null)
+        {
+            dto.Description = input.Description;
+            dto.EnableDescriptionMarkdown = input.EnableDescriptionMarkdown;
+        }
+        if (input.Placeholder != null)
+        {
+            dto.Placeholder = input.Placeholder;
+        }
+        if (input.Value != null)
+        {
+            dto.Value = input.Value;
+        }
+        if (input.Options != null)
+        {
+            dto.Options.Add(input.Options.ToDictionary());
+        }
+        if (input.DynamicLoadingState is { } providerState)
+        {
+            dto.Loading = providerState.Loading;
+        }
+        if (input.MaxLength != null)
+        {
+            dto.MaxLength = input.MaxLength.Value;
+        }
+        if (input.MaxFileSize != null)
+        {
+            // Cap the per-input MaxFileSize at the configured server-side upload limit.
+            var effectiveMaxFileSize = maxFileUploadSize.HasValue
+                ? Math.Min(input.MaxFileSize.Value, maxFileUploadSize.Value)
+                : input.MaxFileSize.Value;
+            dto.MaxFileSize = effectiveMaxFileSize;
+        }
+        else if (maxFileUploadSize.HasValue && input.InputType == InputType.File)
+        {
+            // If no per-input limit is set but a server-side limit exists, apply it.
+            dto.MaxFileSize = maxFileUploadSize.Value;
+        }
+        if (input.AllowMultipleFiles)
+        {
+            dto.AllowMultipleFiles = true;
+        }
+        if (!string.IsNullOrEmpty(input.FileFilter))
+        {
+            dto.FileFilter = input.FileFilter;
+        }
+        dto.ValidationErrors.AddRange(input.ValidationErrors);
+        return dto;
+    }
+
+    internal static Aspire.DashboardService.Proto.V1.InputType MapInputType(Aspire.Hosting.InputType inputType)
     {
         return inputType switch
         {
@@ -230,6 +267,7 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.Hosting.InputType.Choice => Aspire.DashboardService.Proto.V1.InputType.Choice,
             Aspire.Hosting.InputType.Boolean => Aspire.DashboardService.Proto.V1.InputType.Boolean,
             Aspire.Hosting.InputType.Number => Aspire.DashboardService.Proto.V1.InputType.Number,
+            Aspire.Hosting.InputType.File => Aspire.DashboardService.Proto.V1.InputType.File,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
@@ -243,11 +281,10 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             Aspire.DashboardService.Proto.V1.InputType.Choice => InputType.Choice,
             Aspire.DashboardService.Proto.V1.InputType.Boolean => InputType.Boolean,
             Aspire.DashboardService.Proto.V1.InputType.Number => InputType.Number,
+            Aspire.DashboardService.Proto.V1.InputType.File => InputType.File,
             _ => throw new InvalidOperationException($"Unexpected input type: {inputType}"),
         };
     }
-
-#pragma warning restore ASPIREINTERACTION001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
     public override async Task WatchResources(
         WatchResourcesRequest request,
@@ -360,11 +397,20 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
     public override async Task<ResourceCommandResponse> ExecuteResourceCommand(ResourceCommandRequest request, ServerCallContext context)
     {
-        var (result, errorMessage, commandResult, resultFormat) = await serviceData.ExecuteCommandAsync(request.ResourceName, request.CommandName, context.CancellationToken).ConfigureAwait(false);
+        var (result, message, value, invalidArguments) = await serviceData.ExecuteCommandAsync(
+            request.ResourceName,
+            request.CommandName,
+            new ExecuteResourceCommandOptions
+            {
+                ArgumentValues = ConvertArgumentValues(request.Arguments),
+                NonInteractive = request.NonInteractive
+            },
+            context.CancellationToken).ConfigureAwait(false);
         var responseKind = result switch
         {
             ExecuteCommandResultType.Success => ResourceCommandResponseKind.Succeeded,
             ExecuteCommandResultType.Canceled => ResourceCommandResponseKind.Cancelled,
+            ExecuteCommandResultType.Failure when invalidArguments is not null => ResourceCommandResponseKind.InvalidArguments,
             ExecuteCommandResultType.Failure => ResourceCommandResponseKind.Failed,
             _ => ResourceCommandResponseKind.Undefined
         };
@@ -372,21 +418,60 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
         var response = new ResourceCommandResponse
         {
             Kind = responseKind,
-            ErrorMessage = errorMessage ?? string.Empty,
-            ResultFormat = resultFormat switch
+            Message = message ?? string.Empty,
+        };
+
+#pragma warning disable CS0612 // Type or member is obsolete
+        response.ErrorMessage = message ?? string.Empty;
+#pragma warning restore CS0612 // Type or member is obsolete
+
+        if (value is not null)
+        {
+            static Aspire.DashboardService.Proto.V1.CommandResultFormat MapFormat(ApplicationModel.CommandResultFormat format) => format switch
             {
                 ApplicationModel.CommandResultFormat.Text => Aspire.DashboardService.Proto.V1.CommandResultFormat.Text,
                 ApplicationModel.CommandResultFormat.Json => Aspire.DashboardService.Proto.V1.CommandResultFormat.Json,
+                ApplicationModel.CommandResultFormat.Markdown => Aspire.DashboardService.Proto.V1.CommandResultFormat.Markdown,
                 _ => Aspire.DashboardService.Proto.V1.CommandResultFormat.None
-            }
-        };
+            };
 
-        if (commandResult is not null)
-        {
-            response.Result = commandResult;
+            response.Result = new ResourceCommandResult
+            {
+                Value = value.Value,
+                Format = MapFormat(value.Format),
+                DisplayImmediately = value.DisplayImmediately
+            };
         }
 
         return response;
+    }
+
+    private static IReadOnlyDictionary<string, string?>? ConvertArgumentValues(MapField<string, Value> arguments)
+    {
+        if (arguments.Count == 0)
+        {
+            return null;
+        }
+
+        var values = new Dictionary<string, string?>(StringComparers.InteractionInputName);
+        foreach (var field in arguments)
+        {
+            values[field.Key] = ConvertArgumentValue(field.Key, field.Value);
+        }
+
+        return values;
+    }
+
+    private static string? ConvertArgumentValue(string name, Value value)
+    {
+        return value.KindCase switch
+        {
+            Value.KindOneofCase.StringValue => value.StringValue,
+            Value.KindOneofCase.NumberValue => value.NumberValue.ToString("R", CultureInfo.InvariantCulture),
+            Value.KindOneofCase.BoolValue => value.BoolValue ? "true" : "false",
+            Value.KindOneofCase.NullValue => null,
+            _ => throw new RpcException(new Status(StatusCode.InvalidArgument, $"Resource command argument '{name}' must be a string, number, boolean, or null."))
+        };
     }
 
     private async Task ExecuteAsync(Func<CancellationToken, Task> execute, ServerCallContext serverCallContext)
@@ -410,5 +495,78 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
             logger.LogError(ex, "Error executing service method '{Method}'.", serverCallContext.Method);
             throw;
         }
+    }
+
+    public override async Task<UploadFileResponse> UploadFile(IAsyncStreamReader<UploadFileChunk> requestStream, ServerCallContext context)
+    {
+        var maxTotalUploadBytes = FileUploadHelpers.GetMaxFileUploadSize(configuration);
+
+        var cancellationToken = context.CancellationToken;
+        long totalBytesWritten = 0;
+        string? fileId = null;
+        FileStream? fileStream = null;
+
+        try
+        {
+            while (await requestStream.MoveNext(cancellationToken).ConfigureAwait(false))
+            {
+                var chunk = requestStream.Current;
+
+                // The first chunk carries the file name — create the store entry and file stream.
+                if (fileStream is null)
+                {
+                    if (string.IsNullOrEmpty(chunk.FileName))
+                    {
+                        throw new RpcException(new Status(StatusCode.InvalidArgument, "First chunk must include a file name."));
+                    }
+
+                    string path;
+                    (fileId, path) = fileUploadStore.CreateEntry(chunk.FileName);
+                    fileStream = new FileStream(path, FileMode.Create, FileAccess.Write, FileShare.None, bufferSize: 81920, useAsync: true);
+                }
+
+                if (!chunk.Data.IsEmpty)
+                {
+                    totalBytesWritten += chunk.Data.Length;
+                    if (totalBytesWritten > maxTotalUploadBytes)
+                    {
+                        throw new RpcException(new Status(StatusCode.ResourceExhausted, $"Upload exceeds maximum allowed size of {maxTotalUploadBytes} bytes."));
+                    }
+
+                    await fileStream.WriteAsync(chunk.Data.Memory, cancellationToken).ConfigureAwait(false);
+                }
+            }
+
+            if (fileStream is null)
+            {
+                throw new RpcException(new Status(StatusCode.InvalidArgument, "Upload stream is empty."));
+            }
+        }
+        catch
+        {
+            // Dispose the stream before removing the entry so the file handle is closed
+            // before attempting deletion — on Windows, open handles prevent file deletion.
+            if (fileStream is not null)
+            {
+                await fileStream.DisposeAsync().ConfigureAwait(false);
+                fileStream = null;
+            }
+
+            if (fileId is not null)
+            {
+                fileUploadStore.RemoveEntry(fileId);
+            }
+
+            throw;
+        }
+        finally
+        {
+            if (fileStream is not null)
+            {
+                await fileStream.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+
+        return new UploadFileResponse { FileId = fileId };
     }
 }
