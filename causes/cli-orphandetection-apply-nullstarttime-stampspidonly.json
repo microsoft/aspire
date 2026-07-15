@@ -1,0 +1,17 @@
+{
+  "id": "cli-orphandetection-apply-nullstarttime-stampspidonly",
+  "type": "flaky-test",
+  "title": "Flaky: OrphanDetectionEnvironmentTests.Apply_WithNullStartTime_StampsPidOnly fails with Assert.False on macOS",
+  "test_name": "Aspire.Cli.Tests.Processes.OrphanDetectionEnvironmentTests.Apply_WithNullStartTime_StampsPidOnly",
+  "error_pattern": "Assert.False() Failure\nExpected: False\nActual:   True\n   at Aspire.Cli.Tests.Processes.OrphanDetectionEnvironmentTests.Apply_WithNullStartTime_StampsPidOnly() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Processes/OrphanDetectionEnvironmentTests.cs:line 101",
+  "occurrences": [
+    {
+      "run_id": 29456677302,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29456677302",
+      "job": "Tests / RabbitMQ.Client.v6 / RabbitMQ.Client.v6 (windows-latest)",
+      "pr_number": 18799,
+      "observed_at": "2026-07-15T23:20:00Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18800"
+}

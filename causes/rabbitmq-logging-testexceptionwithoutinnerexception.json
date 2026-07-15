@@ -1,0 +1,17 @@
+{
+  "id": "rabbitmq-logging-testexceptionwithoutinnerexception",
+  "type": "flaky-test",
+  "title": "Flaky: AspireRabbitMQLoggingTests.TestExceptionWithoutInnerException fails with empty collection",
+  "test_name": "Aspire.RabbitMQ.Client.Tests.AspireRabbitMQLoggingTests.TestExceptionWithoutInnerException",
+  "error_pattern": "Assert.Single() Failure: The collection was empty\n   at Aspire.RabbitMQ.Client.Tests.AspireRabbitMQLoggingTests.TestExceptionWithoutInnerException() in /_/tests/Aspire.RabbitMQ.Client.Tests/AspireRabbitMQLoggingTests.cs:line 164",
+  "occurrences": [
+    {
+      "run_id": 29456677302,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29456677302",
+      "job": "Tests / RabbitMQ.Client.v6 / RabbitMQ.Client.v6 (windows-latest)",
+      "pr_number": 18799,
+      "observed_at": "2026-07-15T23:20:00Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18801"
+}

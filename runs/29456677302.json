@@ -1,0 +1,58 @@
+{
+  "run_id": 29456677302,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29456677302",
+  "analyzed_at": "2026-07-15T23:20:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18799,
+    "title": "Update dependencies from microsoft/dcp",
+    "author": "dotnet-maestro[bot]",
+    "state": "closed",
+    "head_branch": "darc-main-c8748cdc-eb3d-4674-bfbb-2c92a11f43c2",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18799"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / RabbitMQ.Client.v6 / RabbitMQ.Client.v6 (windows-latest)",
+      "id": 87491646494,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29456677302/job/87491646494",
+      "classification": "flaky-test",
+      "reason": "TestExceptionWithoutInnerException failed with 'Assert.Single() Failure: The collection was empty' in a test area unrelated to PR changes (only eng/Version.Details.xml and eng/Versions.props were modified).",
+      "failed_steps": ["Run tests (Windows)"]
+    },
+    {
+      "name": "Tests / Cli / Cli (macos-latest)",
+      "id": 87491651040,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29456677302/job/87491651040",
+      "classification": "flaky-test",
+      "reason": "Apply_WithNullStartTime_StampsPidOnly failed with 'Assert.False() Failure' in CLI tests, an area unrelated to PR changes (only eng/Version.Details.xml and eng/Versions.props were modified).",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.RabbitMQ.Client.Tests.AspireRabbitMQLoggingTests.TestExceptionWithoutInnerException",
+      "job": "Tests / RabbitMQ.Client.v6 / RabbitMQ.Client.v6 (windows-latest)",
+      "error": "Assert.Single() Failure: The collection was empty",
+      "stack_trace": "at Aspire.RabbitMQ.Client.Tests.AspireRabbitMQLoggingTests.TestExceptionWithoutInnerException() in /_/tests/Aspire.RabbitMQ.Client.Tests/AspireRabbitMQLoggingTests.cs:line 164\n   at System.RuntimeMethodHandle.InvokeMethod(Object target, Void** arguments, Signature sig, Boolean isConstructor)\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)",
+      "classification": "flaky",
+      "reason": "The PR only modifies dependency version files. This RabbitMQ logging test failure is unrelated to PR changes and the empty collection assertion suggests an intermittent environmental or timing issue."
+    },
+    {
+      "name": "Aspire.Cli.Tests.Processes.OrphanDetectionEnvironmentTests.Apply_WithNullStartTime_StampsPidOnly",
+      "job": "Tests / Cli / Cli (macos-latest)",
+      "error": "Assert.False() Failure\nExpected: False\nActual:   True",
+      "stack_trace": "at Aspire.Cli.Tests.Processes.OrphanDetectionEnvironmentTests.Apply_WithNullStartTime_StampsPidOnly() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Processes/OrphanDetectionEnvironmentTests.cs:line 101\n   at System.Reflection.MethodBaseInvoker.InterpretedInvoke_Method(Object obj, IntPtr* args)\n   at System.Reflection.MethodBaseInvoker.InvokeWithNoArgs(Object obj, BindingFlags invokeAttr)",
+      "classification": "flaky",
+      "reason": "The PR only modifies dependency version files. This CLI orphan detection test is in an unrelated area and the assertion failure on macOS suggests an environment-specific or timing-sensitive issue."
+    }
+  ],
+  "causes": [
+    "rabbitmq-logging-testexceptionwithoutinnerexception",
+    "cli-orphandetection-apply-nullstarttime-stampspidonly"
+  ]
+}
