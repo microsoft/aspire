@@ -384,7 +384,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private static TraceQuery BuildTraceQuery(GetTracesRequest context)
     {
-        var sql = new StringBuilder("FROM telemetry_traces t WHERE EXISTS (SELECT 1 FROM telemetry_spans existing_span WHERE existing_span.trace_id = t.trace_id)");
+        var sql = new StringBuilder("FROM telemetry_traces t WHERE 1 = 1");
         var parameters = new DynamicParameters();
         if (context.ResourceKeys.Count > 0)
         {

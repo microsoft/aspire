@@ -100,32 +100,6 @@ public class TracesViewModel
         return traces;
     }
 
-    // First check if there were any errors in already available data. Avoid fetching data again.
-    public bool HasErrors() => _currentDataHasErrors || GetErrorTraces(count: 0).TotalItemCount > 0;
-
-    public PagedResult<OtlpTrace> GetErrorTraces(int count)
-    {
-        var filters = Filters.Cast<TelemetryFilter>().ToList();
-
-        if (SpanType?.Filter is { } typeFilter)
-        {
-            filters.Add(typeFilter);
-        }
-
-        filters.Add(new FieldTelemetryFilter { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = OtlpSpanStatusCode.Error.ToString() });
-
-        var errorTraces = _telemetryRepository.GetTraces(new GetTracesRequest
-        {
-            ResourceKeys = ResourceKey is { } key ? [key] : [],
-            StartIndex = 0,
-            Count = count,
-            Filters = filters,
-            TraceNameFilterText = FilterText
-        });
-
-        return errorTraces.PagedResult;
-    }
-
     private List<TelemetryFilter> GetFilters()
     {
         var filters = Filters.Cast<TelemetryFilter>().ToList();

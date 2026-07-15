@@ -2536,6 +2536,59 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         AssertId("1-2", result.PagedResult.Items[0].SpanId);
     }
 
+    [Theory]
+    [InlineData(FilterCondition.Equals, "1", "3")]
+    [InlineData(FilterCondition.NotEqual, "2")]
+    public void GetTraces_StatusFilter_ReturnsMatchingTraces(FilterCondition condition, params string[] expectedTraceIds)
+    {
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(2), status: new Status { Code = Status.Types.StatusCode.Error }),
+                            CreateSpan(traceId: "2", spanId: "2-1", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3), status: new Status { Code = Status.Types.StatusCode.Ok }),
+                            CreateSpan(traceId: "3", spanId: "3-1", startTime: s_testTime.AddMinutes(3), endTime: s_testTime.AddMinutes(4), status: new Status { Code = Status.Types.StatusCode.Error }),
+                            CreateSpan(traceId: "3", spanId: "3-2", startTime: s_testTime.AddMinutes(4), endTime: s_testTime.AddMinutes(5), status: new Status { Code = Status.Types.StatusCode.Ok })
+                        }
+                    }
+                }
+            }
+        });
+
+        var result = repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownTraceFields.StatusField,
+                    Value = nameof(OtlpSpanStatusCode.Error),
+                    Condition = condition
+                }
+            ]
+        });
+
+        Assert.Equal(expectedTraceIds.Length, result.PagedResult.TotalItemCount);
+        Assert.Equal(expectedTraceIds.Length, result.PagedResult.Items.Count);
+        for (var index = 0; index < expectedTraceIds.Length; index++)
+        {
+            AssertId(expectedTraceIds[index], result.PagedResult.Items[index].TraceId);
+        }
+    }
+
     [Fact]
     public void GetSpans_FilterByResource_ReturnsMatchingSpans()
     {

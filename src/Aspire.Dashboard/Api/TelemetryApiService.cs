@@ -96,6 +96,15 @@ internal sealed class TelemetryApiService(
 
         // Convert structured search qualifiers into TelemetryFilter objects for repository-level filtering
         var traceFilters = new List<TelemetryFilter>();
+        if (hasError is not null)
+        {
+            traceFilters.Add(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.StatusField,
+                Value = nameof(OtlpSpanStatusCode.Error),
+                Condition = hasError.Value ? FilterCondition.Equals : FilterCondition.NotEqual
+            });
+        }
         var searchTextFragments = ParseAndApplySearchFilters(search, traceFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
         // Get traces for all resource keys (empty list means no filter / all resources)
@@ -107,21 +116,8 @@ internal sealed class TelemetryApiService(
             Filters = traceFilters,
             TextFragments = searchTextFragments
         });
-        var allTraces = result.PagedResult.Items;
-
-        var traces = allTraces;
-
-        // Filter traces by hasError
-        if (hasError == true)
-        {
-            traces = traces.Where(t => t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
-        }
-        else if (hasError == false)
-        {
-            traces = traces.Where(t => !t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
-        }
-
-        var totalCount = traces.Count;
+        var traces = result.PagedResult.Items;
+        var totalCount = result.PagedResult.TotalItemCount;
 
         // Apply limit (take from end for most recent)
         if (traces.Count > effectiveLimit)
