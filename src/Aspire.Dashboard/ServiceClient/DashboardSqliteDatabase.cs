@@ -60,7 +60,13 @@ internal sealed class DashboardSqliteDatabase
         {
             var database = new DashboardSqliteDatabase(databasePath, readOnly: true);
             using var connection = database.OpenConnection();
-            var version = connection.QuerySingleOrDefault<int?>("SELECT version FROM dashboard_schema;");
+            var version = connection.QuerySingleOrDefault<int?>("""
+                SELECT CASE
+                    WHEN COUNT(*) = 1 AND typeof(MAX(version)) = 'integer' THEN MAX(version)
+                    ELSE NULL
+                END
+                FROM dashboard_schema;
+                """);
             return version == SchemaVersion;
         }
         catch (SqliteException)

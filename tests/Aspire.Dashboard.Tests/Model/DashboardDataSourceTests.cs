@@ -101,6 +101,23 @@ public sealed class DashboardDataSourceTests : IDisposable
         Assert.True(DashboardSqliteDatabase.IsCompatible(databasePath));
     }
 
+    [Theory]
+    [InlineData("CREATE TABLE dashboard_schema (version INTEGER NOT NULL); INSERT INTO dashboard_schema VALUES (7), (7);")]
+    [InlineData("CREATE TABLE dashboard_schema (version); INSERT INTO dashboard_schema VALUES ('invalid');")]
+    public void IsCompatible_ReturnsFalseForMalformedSchema(string schemaSql)
+    {
+        var databasePath = Path.Combine(_temporaryDirectory, $"malformed-{Guid.NewGuid():N}.db");
+        using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = schemaSql;
+            command.ExecuteNonQuery();
+        }
+
+        Assert.False(DashboardSqliteDatabase.IsCompatible(databasePath));
+    }
+
     [Fact]
     public void ApplicationDirectoryName_IsSafeBoundedAndUnique()
     {

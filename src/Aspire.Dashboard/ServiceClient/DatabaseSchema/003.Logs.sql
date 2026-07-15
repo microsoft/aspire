@@ -23,6 +23,9 @@ CREATE TABLE IF NOT EXISTS telemetry_resource_views (
     resource_id INTEGER NOT NULL REFERENCES telemetry_resources(resource_id) ON DELETE CASCADE
 ) STRICT;
 
+CREATE INDEX IF NOT EXISTS ix_telemetry_resource_views_resource
+    ON telemetry_resource_views(resource_id);
+
 CREATE TABLE IF NOT EXISTS telemetry_resource_view_attributes (
     resource_view_id INTEGER NOT NULL REFERENCES telemetry_resource_views(resource_view_id) ON DELETE CASCADE,
     ordinal INTEGER NOT NULL,

@@ -518,7 +518,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _activeView = ConsoleLogsView.Console;
         }
 
-        if (!isAllSelected && selectedResourceName is not null &&
+        if (!DashboardClient.IsReadOnly &&
+            !isAllSelected && selectedResourceName is not null &&
             _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
             selectedResource.HasTerminal() &&
             selectedResource.TryGetTerminalReplicaInfo(out var replicaIndex, out _))

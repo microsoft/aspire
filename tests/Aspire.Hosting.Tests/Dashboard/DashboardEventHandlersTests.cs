@@ -310,6 +310,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
     [Theory]
     [InlineData(null, "Runs")]
+    [InlineData("", "Runs")]
+    [InlineData("   ", "Runs")]
     [InlineData("Runs", "Runs")]
     public async Task ConfigureEnvironmentVariables_ConfiguresDashboardRunStorageRootApplicationNameAndPersistenceMode(
         string? configuredPersistenceMode,
