@@ -193,6 +193,23 @@ public class TextVisualizerDialogTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_TextVisualizerDialog_MarkdownFormat_HidesWrapLinesCheckboxAsync()
+    {
+        const string rawText = "# heading";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var formatSelect = cut.FindComponent<FluentSelect<SelectViewModel<string>>>();
+        var markdownOption = (formatSelect.Instance.Items ?? throw new InvalidOperationException("Expected format options."))
+            .Single(o => o.Id == DashboardUIHelpers.MarkdownFormat);
+        await formatSelect.InvokeAsync(() => formatSelect.Instance.SelectedOptionChanged.InvokeAsync(markdownOption));
+
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindComponents<FluentCheckbox>()));
+    }
+
+    [Fact]
     public async Task Render_TextVisualizerDialog_WithDownloadFile_RendersWrapLinesBeforeActionsAsync()
     {
         const string rawText = "line 1\nline 2";
@@ -333,6 +350,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         var module = JSInterop.SetupModule("/Components/Controls/TextVisualizer.razor.js");
         module.SetupVoid();
+        JSInterop.SetupModule("/Components/Controls/MarkdownRenderer.razor.js").SetupVoid();
 
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);

@@ -283,6 +283,39 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         return Task.CompletedTask;
     }
 
+    private static bool CanToggleWrapLines(GenAIItemViewModel selectedItem, ItemViewKind selectedView)
+    {
+        return selectedView switch
+        {
+            ItemViewKind.Raw => selectedItem.ItemParts.Count > 0,
+            ItemViewKind.Preview => selectedItem.ItemParts.Any(IsPreviewPartRenderedByTextVisualizer),
+            _ => false
+        };
+    }
+
+    private static bool IsPreviewPartRenderedByTextVisualizer(GenAIItemPartViewModel itemPart)
+    {
+        if (itemPart.ErrorMessage == itemPart.TextVisualizerViewModel.Text)
+        {
+            return false;
+        }
+
+        if (TryGetDataPart(itemPart, MimeTypeHelpers.SupportedImageTypes, out _)
+            || TryGetDataPart(itemPart, MimeTypeHelpers.SupportedAudioTypes, out _)
+            || TryGetDataPart(itemPart, MimeTypeHelpers.SupportedVideoTypes, out _)
+            || TryGetDataPart(itemPart, matchingMimeTypes: null, out _))
+        {
+            return false;
+        }
+
+        if (itemPart.AdditionalProperties is { Count: > 0 })
+        {
+            return false;
+        }
+
+        return itemPart.TextVisualizerViewModel.FormatKind is not DashboardUIHelpers.PlaintextFormat and not DashboardUIHelpers.MarkdownFormat;
+    }
+
     private static string GetToolHeadingTooltip(ToolDefinitionViewModel vm)
     {
         if (string.IsNullOrEmpty(vm.ToolDefinition.Description))
