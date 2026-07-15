@@ -566,4 +566,28 @@ public class AzureKubernetesEnvironmentExtensionsTests
         Assert.Null(lb2.Resource.DisplacedDelegationServiceName);
     }
 
+    [Fact]
+    public void AddLoadBalancer_OnSubnetWithMultipleDirectDelegations_CollapsesToSingle()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+
+        // AzureSubnetServiceDelegationAnnotation is public, so a subnet can carry several directly-appended
+        // delegations. AddLoadBalancer must read the last one (last-write-wins) without throwing on the
+        // duplicates and then collapse them to AGC's single required delegation.
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24")
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("First", "Microsoft.Netapp/volumes"))
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("Second", "Microsoft.Sql/managedInstances"));
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb", albSubnet);
+
+        var delegation = Assert.Single(albSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation.ServiceName);
+
+        // The last of the user's delegations is surfaced as displaced so the LB pipeline step can warn.
+        Assert.Equal("Microsoft.Sql/managedInstances", lb.Resource.DisplacedDelegationServiceName);
+    }
+
 }

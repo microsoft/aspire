@@ -3,8 +3,6 @@
 @using Aspire.Dashboard.Components.Controls.Grid
 @using Aspire.Dashboard.Resources
 @using System.Diagnostics
-@inject IStringLocalizer<AIAssistant> AIAssistantLoc
-@inject IStringLocalizer<AIPrompts> AIPromptsLoc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<Dialogs> DialogsLoc
 
@@ -35,17 +33,6 @@
                     <div slot="" class="trace-header">
                         @GetTraceDetailsFragment()
                         <div class="trace-header-filters">
-                            @if (AIContextProvider.Enabled)
-                            {
-                                <FluentButton Title="@AIAssistantLoc[nameof(AIAssistant.ExplainTraceButtonText)]" aria-label="@AIAssistantLoc[nameof(AIAssistant.ExplainTraceButtonText)]" OnClick="ExplainTraceAsync">
-                                    <span slot="start">
-                                        <FluentIcon Icon="Aspire.Dashboard.Components.CustomIcons.AspireIcons.Size16.GitHubCopilot" Slot="start" Style="vertical-align: sub;" />
-                                    </span>
-                                    @AIAssistantLoc[nameof(AIAssistant.ExplainTraceButtonText)]
-                                </FluentButton>
-
-                                <DesktopToolbarDivider />
-                            }
                             <FluentSearch @bind-Value="PageViewModel.Filter"
                                           @bind-Value:after="HandleAfterFilterBindAsync"
                                           Name="spans-search"

@@ -4,6 +4,7 @@
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
+    <NoWarn>$(NoWarn);IDE0161;IDE0005</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>

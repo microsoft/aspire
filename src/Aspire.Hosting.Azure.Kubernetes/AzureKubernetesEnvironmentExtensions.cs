@@ -430,17 +430,17 @@ public static class AzureKubernetesEnvironmentExtensions
         // delegation only applies to user-supplied ALB subnets.
         //
         // AzureSubnetResource emits a single delegation in its provisioning entity and honors
-        // only the last AzureSubnetServiceDelegationAnnotation on the subnet. All service-
-        // delegation producers route through WithServiceDelegation, which uses Replace, so a
-        // subnet carries at most one delegation annotation (hence the SingleOrDefault below).
+        // only the last AzureSubnetServiceDelegationAnnotation on the subnet. The public annotation
+        // lets callers append several directly, so read the last one (last-write-wins) rather than
+        // assuming a single annotation — SingleOrDefault would throw when duplicates exist.
         //
         // If the caller had already delegated the subnet to something else (e.g.
         // Microsoft.NetApp/volumes), AGC's required trafficControllers delegation displaces it.
         // Capture the displaced service name first so the LB pipeline step can warn the user at
         // deploy time that their explicit delegation was overridden. We can't log here because no
         // ILogger is available during model construction; the resource's apply-alb-crd pipeline
-        // step has access to context.Logger.
-        var existingDelegation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        // step has access to context.Logger. WithServiceDelegation below collapses any duplicates.
+        var existingDelegation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().LastOrDefault();
         var displacedDelegationServiceName =
             existingDelegation is not null
             && !string.Equals(existingDelegation.ServiceName, "Microsoft.ServiceNetworking/trafficControllers", StringComparison.Ordinal)

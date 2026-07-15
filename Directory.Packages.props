@@ -194,7 +194,7 @@
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask.AzureManaged" Version="1.8.0" />
     <!-- playground apps dependencies for javascript -->
     <!-- Pinned versions for Component Governance - Remove when root dependencies are updated -->
-    <PackageVersion Include="Azure.Core" Version="1.55.0" />
+    <PackageVersion Include="Azure.Core" Version="1.57.0" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <!-- https://github.com/Azure/azure-cosmos-dotnet-v3/pull/3313 -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />

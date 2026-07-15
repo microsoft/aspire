@@ -726,6 +726,44 @@ public class EFMigrationPipelineTests
         Assert.Contains(WellKnownPipelineSteps.Publish, generateStep.RequiredBySteps);
     }
 
+    [Fact]
+    public void GetToolEnvironmentVariablesOmitsConnectionStringPlaceholdersInPublishMode()
+    {
+        var db = new TestDatabaseResource("postgresdb");
+        var config = new TestExecutionConfigurationResult
+        {
+            EnvironmentVariablesWithUnprocessed =
+            [
+                new("ConnectionStrings__postgresdb", (new ConnectionStringReference(db, optional: false), "{postgresdb.connectionString}")),
+                new("OTHER", ("not-a-connection-string", "value")),
+            ]
+        };
+
+        var result = EFResourceBuilderExtensions.GetToolEnvironmentVariables(config, isPublishMode: true).ToList();
+
+        // The connection string placeholder is omitted so the EF tool doesn't receive an invalid value.
+        Assert.DoesNotContain(result, kvp => kvp.Key == "ConnectionStrings__postgresdb");
+        Assert.Contains(result, kvp => kvp.Key == "OTHER" && kvp.Value == "value");
+    }
+
+    [Fact]
+    public void GetToolEnvironmentVariablesKeepsConnectionStringsInRunMode()
+    {
+        var db = new TestDatabaseResource("postgresdb");
+        var config = new TestExecutionConfigurationResult
+        {
+            EnvironmentVariablesWithUnprocessed =
+            [
+                new("ConnectionStrings__postgresdb", (new ConnectionStringReference(db, optional: false), "Host=localhost;Database=postgresdb")),
+            ]
+        };
+
+        var result = EFResourceBuilderExtensions.GetToolEnvironmentVariables(config, isPublishMode: false).ToList();
+
+        // In run mode the connection string resolves to a real value and must be forwarded to the tool.
+        Assert.Contains(result, kvp => kvp.Key == "ConnectionStrings__postgresdb" && kvp.Value == "Host=localhost;Database=postgresdb");
+    }
+
     private static async Task<List<PipelineStep>> CreateStepsAsync(
         IDistributedApplicationTestingBuilder builder,
         EFMigrationResource migrationResource)
@@ -777,5 +815,20 @@ public class EFMigrationPipelineTests
 
         public ReferenceExpression ConnectionStringExpression =>
             ReferenceExpression.Create($"{Parent};Database={Name}");
+    }
+
+    /// <summary>
+    /// A minimal <see cref="IExecutionConfigurationResult"/> used to exercise environment-variable
+    /// selection without starting a real EF tool process.
+    /// </summary>
+    private sealed class TestExecutionConfigurationResult : IExecutionConfigurationResult
+    {
+        public IEnumerable<object> References { get; init; } = [];
+        public IEnumerable<(object Unprocessed, string Processed, bool IsSensitive)> ArgumentsWithUnprocessed { get; init; } = [];
+        public IEnumerable<(string Value, bool IsSensitive)> Arguments => ArgumentsWithUnprocessed.Select(a => (a.Processed, a.IsSensitive));
+        public IEnumerable<KeyValuePair<string, (object Unprocessed, string Processed)>> EnvironmentVariablesWithUnprocessed { get; init; } = [];
+        public IEnumerable<KeyValuePair<string, string>> EnvironmentVariables => EnvironmentVariablesWithUnprocessed.Select(kvp => new KeyValuePair<string, string>(kvp.Key, kvp.Value.Processed));
+        public IEnumerable<IExecutionConfigurationData> AdditionalConfigurationData { get; init; } = [];
+        public Exception? Exception { get; init; }
     }
 }

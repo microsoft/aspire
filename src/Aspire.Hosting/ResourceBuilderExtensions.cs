@@ -1265,11 +1265,6 @@ public static class ResourceBuilderExtensions
             throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': it must be absolute.");
         }
 
-        if (!uri.AbsolutePath.EndsWith('/'))
-        {
-            throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': the absolute path must end with '/'.");
-        }
-
         if (!string.IsNullOrEmpty(uri.Fragment))
         {
             throw new InvalidOperationException($"The URI for service reference '{name}' is invalid while configuring target resource '{builder.Resource.Name}': it cannot contain a fragment.");
