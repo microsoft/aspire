@@ -202,7 +202,6 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public async Task BeforeStartAsync_DisabledDashboard_AddsOnlyStartLifecycleCommand()
     {
-        // Arrange
         var resourceLoggerService = new ResourceLoggerService();
         var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
         var configuration = new ConfigurationBuilder().Build();
@@ -214,12 +213,10 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         var model = new DistributedApplicationModel(new ResourceCollection());
 
-        // Act
         await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
         var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
         dashboardResource.AddLifeCycleCommands();
 
-        // Assert
         Assert.Single(dashboardResource.Annotations.OfType<ExcludeLifecycleCommandsAnnotation>());
         var commands = Assert.Single(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>());
         Assert.Equal(KnownResourceCommands.StartCommand, commands.Name);

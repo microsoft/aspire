@@ -899,7 +899,7 @@ export interface CreateBuilderOptions {
     appHostFilePath?: string | null;
     /** When containers are used, use this value to override the container registry. */
     containerRegistryOverride?: string | null;
-    /** Determines whether the dashboard should be disabled at app host startup. */
+    /** Determines whether dashboard auto-start should be disabled at app host startup. The dashboard resource is still added and can be started explicitly later. */
     disableDashboard?: boolean;
     /** The application name to display in the dashboard. */
     dashboardApplicationName?: string | null;
