@@ -27,7 +27,7 @@ internal static class CommandsConfigurationExtensions
             {
                 var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
 
-                await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
+                await orchestrator.RequestStartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
                 return new ExecuteCommandResult { Success = true, Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, resource.GetResolvedDisplayResourceName(context.ResourceName)) };
             },
             updateState: context =>
@@ -70,7 +70,7 @@ internal static class CommandsConfigurationExtensions
                 {
                     return ResourceCommandState.Disabled;
                 }
-                else if (!IsStopped(state) && !IsStarting(state) && !IsWaiting(state) && !IsBuilding(state) && !IsRuntimeUnhealthy(state) && !HasNoState(state))
+                else if (!IsStopped(state) && !IsStarting(state) && !IsBuilding(state) && !IsRuntimeUnhealthy(state) && !HasNoState(state))
                 {
                     return ResourceCommandState.Enabled;
                 }
