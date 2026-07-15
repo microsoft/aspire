@@ -353,7 +353,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
             Description = "Validates compute resource bindings before startup.",
             Action = static context =>
             {
-                ValidateComputeEnvironmentBindings(context.Model);
+                ValidateComputeEnvironmentBindings(context.Model, context.ExecutionContext);
                 return Task.CompletedTask;
             },
             RequiredBySteps = [WellKnownPipelineSteps.BeforeStart],
@@ -381,7 +381,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         });
     }
 
-    private static void ValidateComputeEnvironmentBindings(DistributedApplicationModel model)
+    private static void ValidateComputeEnvironmentBindings(DistributedApplicationModel model, DistributedApplicationExecutionContext executionContext)
     {
         // With multiple compute environments there is no unambiguous default. Surface a clear
         // error for any compute resource that hasn't been explicitly bound, rather than letting
@@ -400,8 +400,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 resource.GetComputeEnvironment() is null &&
                 // When DisableDashboard=true, the dashboard resource remains in the model with
                 // ExplicitStartupAnnotation so users can start it on demand. It is intentionally
-                // not auto-assigned to publish compute environments and should not block validation.
+                // not auto-assigned to run-mode compute environments and should not block validation.
                 !(string.Equals(resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName) &&
+                  executionContext.IsRunMode &&
                   resource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _)))
             .ToList();
 

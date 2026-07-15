@@ -221,9 +221,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
 
         // Assert
         Assert.Single(dashboardResource.Annotations.OfType<ExcludeLifecycleCommandsAnnotation>());
-        _ = Assert.Single(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == KnownResourceCommands.StartCommand);
-        Assert.DoesNotContain(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == KnownResourceCommands.StopCommand);
-        Assert.DoesNotContain(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>(), c => c.Name == KnownResourceCommands.RestartCommand);
+        var commands = Assert.Single(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.Equal(KnownResourceCommands.StartCommand, commands.Name);
     }
 
     [Theory]
