@@ -56,6 +56,29 @@ public sealed class TraceMenuBuilder
         OtlpTrace trace,
         bool showViewDetails = true)
     {
+        AddMenuItems(menuItems, trace.TraceId, () => trace, showViewDetails);
+    }
+
+    /// <summary>
+    /// Adds menu items for a trace summary to the provided list.
+    /// </summary>
+    /// <param name="menuItems">The list to add menu items to.</param>
+    /// <param name="summary">The trace summary to create menu items for.</param>
+    /// <param name="showViewDetails">Whether to include the View Details menu item. Defaults to <c>true</c>.</param>
+    public void AddMenuItems(
+        List<MenuButtonItem> menuItems,
+        TraceSummary summary,
+        bool showViewDetails = true)
+    {
+        AddMenuItems(menuItems, summary.TraceId, () => _telemetryRepository.GetTrace(summary.TraceId), showViewDetails);
+    }
+
+    private void AddMenuItems(
+        List<MenuButtonItem> menuItems,
+        string traceId,
+        Func<OtlpTrace?> getTrace,
+        bool showViewDetails)
+    {
         if (showViewDetails)
         {
             menuItems.Add(new MenuButtonItem
@@ -64,7 +87,7 @@ public sealed class TraceMenuBuilder
                 Icon = s_viewDetailsIcon,
                 OnClick = () =>
                 {
-                    _navigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(trace.TraceId));
+                    _navigationManager.NavigateTo(DashboardUrls.TraceDetailUrl(traceId));
                     return Task.CompletedTask;
                 }
             });
@@ -76,7 +99,7 @@ public sealed class TraceMenuBuilder
             Icon = s_structuredLogsIcon,
             OnClick = () =>
             {
-                _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(traceId: trace.TraceId));
+                _navigationManager.NavigateTo(DashboardUrls.StructuredLogsUrl(traceId: traceId));
                 return Task.CompletedTask;
             }
         });
@@ -87,6 +110,12 @@ public sealed class TraceMenuBuilder
             Icon = s_bracesIcon,
             OnClick = async () =>
             {
+                var trace = getTrace();
+                if (trace is null)
+                {
+                    return;
+                }
+
                 var result = ExportHelpers.GetTraceAsJson(trace, _telemetryRepository, _outgoingPeerResolvers);
                 await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                 {

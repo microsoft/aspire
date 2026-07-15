@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model.Otlp;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 
 namespace Aspire.Dashboard.Model;
@@ -12,12 +11,11 @@ public class TracesViewModel
     private readonly ITelemetryRepository _telemetryRepository;
     private readonly List<FieldTelemetryFilter> _filters = new();
 
-    private PagedResult<OtlpTrace>? _traces;
+    private PagedResult<TraceSummary>? _traces;
     private ResourceKey? _resourceKey;
     private string _filterText = string.Empty;
     private int _startIndex;
     private int _count;
-    private bool _currentDataHasErrors;
     private SpanType? _spanType;
 
     public TracesViewModel(ITelemetryRepository telemetryRepository)
@@ -75,14 +73,14 @@ public class TracesViewModel
         _traces = null;
     }
 
-    public PagedResult<OtlpTrace> GetTraces()
+    public PagedResult<TraceSummary> GetTraces()
     {
         var traces = _traces;
         if (traces == null)
         {
             var filters = GetFilters();
 
-            var result = _telemetryRepository.GetTraces(new GetTracesRequest
+            var result = _telemetryRepository.GetTraceSummaries(new GetTracesRequest
             {
                 ResourceKeys = ResourceKey is { } key ? [key] : [],
                 StartIndex = StartIndex,
@@ -93,8 +91,6 @@ public class TracesViewModel
 
             traces = result.PagedResult;
             MaxDuration = result.MaxDuration;
-
-            _currentDataHasErrors = result.PagedResult.Items.Any(t => t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error));
         }
 
         return traces;

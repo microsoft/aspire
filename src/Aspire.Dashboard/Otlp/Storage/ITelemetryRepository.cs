@@ -45,6 +45,7 @@ public interface ITelemetryRepository : IDisposable
     List<string> GetLogPropertyKeys(ResourceKey? resourceKey);
     List<string> GetTracePropertyKeys(ResourceKey? resourceKey);
     GetTracesResponse GetTraces(GetTracesRequest context);
+    GetTraceSummariesResponse GetTraceSummaries(GetTracesRequest context);
     GetSpansResponse GetSpans(GetSpansRequest context);
     Dictionary<string, int> GetTraceFieldValues(string attributeName);
     Dictionary<string, int> GetLogsFieldValues(string attributeName);
