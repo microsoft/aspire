@@ -32,7 +32,7 @@ internal sealed class CreateBuilderOptions
 
     /// <summary>
     /// Determines whether dashboard auto-start should be disabled at app host startup.
-    /// The dashboard resource is still added and can be started explicitly later.
+    /// In run mode, the dashboard resource is still added and can be started explicitly later.
     /// </summary>
     public bool DisableDashboard { get; set; }
 
