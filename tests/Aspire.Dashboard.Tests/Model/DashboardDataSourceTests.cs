@@ -10,7 +10,9 @@ using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
@@ -27,7 +29,7 @@ public sealed class DashboardDataSourceTests : IDisposable
     {
         var options = CreateOptions("My Dashboard");
 
-        using var runStore = new DashboardRunStore(options);
+        using var runStore = CreateRunStore(options);
 
         var applicationDirectoryName = DashboardRunStore.GetApplicationDirectoryName("My Dashboard");
         var expectedRunsDirectory = Path.Combine(_temporaryDirectory, applicationDirectoryName, "runs");
@@ -41,7 +43,7 @@ public sealed class DashboardDataSourceTests : IDisposable
         string runDirectory;
         string databasePath;
 
-        using (var runStore = new DashboardRunStore(options))
+        using (var runStore = CreateRunStore(options))
         {
             runDirectory = runStore.RunDirectory;
             databasePath = runStore.DatabasePath;
@@ -63,13 +65,13 @@ public sealed class DashboardDataSourceTests : IDisposable
         var options = CreateOptions("My Dashboard", DashboardPersistenceMode.Append);
         string firstDatabasePath;
 
-        using (var firstRunStore = new DashboardRunStore(options))
+        using (var firstRunStore = CreateRunStore(options))
         {
             firstDatabasePath = firstRunStore.DatabasePath;
             new DashboardSqliteDatabase(firstDatabasePath).InitializeSchema();
         }
 
-        using var secondRunStore = new DashboardRunStore(options);
+        using var secondRunStore = CreateRunStore(options);
 
         Assert.Equal(firstDatabasePath, secondRunStore.DatabasePath);
         Assert.False(secondRunStore.SupportsRunSelection);
@@ -83,7 +85,7 @@ public sealed class DashboardDataSourceTests : IDisposable
         var options = CreateOptions(persistenceMode: DashboardPersistenceMode.Append);
         string databasePath;
 
-        using (var firstRunStore = new DashboardRunStore(options))
+        using (var firstRunStore = CreateRunStore(options))
         {
             databasePath = firstRunStore.DatabasePath;
             using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
@@ -93,7 +95,7 @@ public sealed class DashboardDataSourceTests : IDisposable
             command.ExecuteNonQuery();
         }
 
-        using var secondRunStore = new DashboardRunStore(options);
+        using var secondRunStore = CreateRunStore(options);
 
         Assert.Equal(databasePath, secondRunStore.DatabasePath);
         Assert.False(File.Exists(databasePath));
@@ -141,13 +143,13 @@ public sealed class DashboardDataSourceTests : IDisposable
         var options = CreateOptions();
         string historicalRunId;
 
-        using (var historicalRunStore = new DashboardRunStore(options))
+        using (var historicalRunStore = CreateRunStore(options))
         {
             historicalRunId = historicalRunStore.RunId;
             using var telemetryRepository = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
         }
 
-        using var currentRunStore = new DashboardRunStore(options);
+        using var currentRunStore = CreateRunStore(options);
         using var currentTelemetryRepository = CreateTelemetryRepository(currentRunStore.DatabasePath, options);
 
         Assert.Collection(
@@ -182,11 +184,46 @@ public sealed class DashboardDataSourceTests : IDisposable
             Directory.CreateDirectory(directory);
         }
 
-        using var currentRunStore = new DashboardRunStore(CreateOptions());
+        using var currentRunStore = CreateRunStore(CreateOptions());
 
         Assert.Equal(DashboardRunStore.MaxRuns, Directory.GetDirectories(runsDirectory).Length);
         Assert.False(Directory.Exists(historicalRunDirectories[^1]));
         Assert.All(historicalRunDirectories[..^1], directory => Assert.True(Directory.Exists(directory)));
+        Assert.True(Directory.Exists(currentRunStore.RunDirectory));
+    }
+
+    [Fact]
+    public void RunsMode_DeleteExpiredRunFails_LogsWarningAndContinues()
+    {
+        var applicationDirectory = Path.Combine(_temporaryDirectory, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
+        var runsDirectory = Path.Combine(applicationDirectory, "runs");
+        var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
+            .Select(index => Path.Combine(
+                runsDirectory,
+                $"{DateTimeOffset.UtcNow.AddDays(-index):yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}"))
+            .ToList();
+
+        foreach (var directory in historicalRunDirectories)
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var testSink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder => builder.AddProvider(new TestLoggerProvider(testSink)));
+        var logger = loggerFactory.CreateLogger<DashboardRunStore>();
+        var expiredRunDirectory = historicalRunDirectories[^1];
+
+        using var currentRunStore = new DashboardRunStore(
+            CreateOptions(),
+            logger,
+            directory => throw new IOException($"The directory '{directory}' is in use."));
+
+        var warning = Assert.Single(testSink.Writes);
+        Assert.Equal(LogLevel.Warning, warning.LogLevel);
+        Assert.Equal(typeof(DashboardRunStore).FullName, warning.LoggerName);
+        Assert.Contains(expiredRunDirectory, warning.Message, StringComparison.Ordinal);
+        Assert.IsType<IOException>(warning.Exception);
+        Assert.True(Directory.Exists(expiredRunDirectory));
         Assert.True(Directory.Exists(currentRunStore.RunDirectory));
     }
 
@@ -196,7 +233,7 @@ public sealed class DashboardDataSourceTests : IDisposable
         var options = CreateOptions();
         string incompatibleDatabasePath;
 
-        using (var incompatibleRunStore = new DashboardRunStore(options))
+        using (var incompatibleRunStore = CreateRunStore(options))
         {
             incompatibleDatabasePath = incompatibleRunStore.DatabasePath;
             using var connection = new SqliteConnection($"Data Source={incompatibleDatabasePath};Pooling=False");
@@ -206,7 +243,7 @@ public sealed class DashboardDataSourceTests : IDisposable
             command.ExecuteNonQuery();
         }
 
-        using var currentRunStore = new DashboardRunStore(options);
+        using var currentRunStore = CreateRunStore(options);
 
         Assert.Collection(currentRunStore.GetRuns(), run => Assert.True(run.IsCurrent));
         Assert.True(File.Exists(incompatibleDatabasePath));
@@ -240,7 +277,7 @@ public sealed class DashboardDataSourceTests : IDisposable
         var options = CreateOptions();
         string historicalRunId;
 
-        using (var historicalRunStore = new DashboardRunStore(options))
+        using (var historicalRunStore = CreateRunStore(options))
         {
             historicalRunId = historicalRunStore.RunId;
             using var telemetryRepository = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
@@ -269,7 +306,7 @@ public sealed class DashboardDataSourceTests : IDisposable
             }]);
         }
 
-        using var currentRunStore = new DashboardRunStore(options);
+        using var currentRunStore = CreateRunStore(options);
         using var currentTelemetryRepository = CreateTelemetryRepository(currentRunStore.DatabasePath, options);
         using var currentResourceRepository = CreateResourceRepository(currentRunStore.DatabasePath);
         using var dataSource = CreateDataSource(
@@ -316,7 +353,7 @@ public sealed class DashboardDataSourceTests : IDisposable
     public void UnknownRunId_SelectsCurrentRun()
     {
         var options = CreateOptions();
-        using var currentRunStore = new DashboardRunStore(options);
+        using var currentRunStore = CreateRunStore(options);
         using var currentTelemetryRepository = CreateTelemetryRepository(currentRunStore.DatabasePath, options);
         using var currentResourceRepository = CreateResourceRepository(currentRunStore.DatabasePath);
         using var dataSource = CreateDataSource(
@@ -361,6 +398,11 @@ public sealed class DashboardDataSourceTests : IDisposable
     private static SqliteResourceRepository CreateResourceRepository(string databasePath)
     {
         return new SqliteResourceRepository(databasePath, new MockKnownPropertyLookup(), NullLoggerFactory.Instance);
+    }
+
+    private static DashboardRunStore CreateRunStore(IOptions<DashboardOptions> options)
+    {
+        return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance);
     }
 
     private static DashboardDataSource CreateDataSource(
