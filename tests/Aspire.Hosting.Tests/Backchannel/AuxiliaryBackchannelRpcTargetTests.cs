@@ -2053,13 +2053,22 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task GetDashboardUrlsAsync_ReturnsUnhealthy_WhenDashboardIsExplicitStart()
     {
-        // When the dashboard auto-start is disabled, the dashboard resource is present but not started.
+        // When the dashboard auto-start is disabled, use a real NotStarted snapshot.
         // URL lookup should still return promptly as unhealthy.
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = true,
             outputHelper);
 
         using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources, r => r.Name == KnownResourceNames.AspireDashboard);
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(dashboard, snapshot => snapshot with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null)
+        }).DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -2071,6 +2080,42 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.False(result.DashboardHealthy);
         Assert.Null(result.BaseUrlWithLoginToken);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_ValidateOnly_AllowsDashboardStart_WhenDashboardIsExplicitStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true,
+            outputHelper);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var startResponse = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = KnownResourceNames.AspireDashboard,
+            CommandName = KnownResourceCommands.StartCommand,
+            ValidateOnly = true
+        }).DefaultTimeout();
+
+        Assert.True(startResponse.Success);
+
+        var stopResponse = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = KnownResourceNames.AspireDashboard,
+            CommandName = KnownResourceCommands.StopCommand,
+            ValidateOnly = true
+        }).DefaultTimeout();
+
+        Assert.False(stopResponse.Success);
+        Assert.Equal($"Command '{KnownResourceCommands.StopCommand}' not available for resource '{KnownResourceNames.AspireDashboard}'.", stopResponse.Message);
     }
 
     [Fact]

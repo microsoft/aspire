@@ -47,6 +47,15 @@ internal static class DashboardUrlsHelper
         using var activity = profilingTelemetry.StartDashboardGetConnectionInfo();
         var resourceNotificationService = serviceProvider.GetRequiredService<ResourceNotificationService>();
 
+        if (dashboardResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _) &&
+            resourceNotificationService.TryGetCurrentState(KnownResourceNames.AspireDashboard, out var dashboardEvent) &&
+            dashboardEvent.Snapshot.State?.Text == KnownResourceStates.NotStarted)
+        {
+            logger.LogDebug("Dashboard resource is in NotStarted explicit-start state. Returning unavailable state.");
+            activity.SetDashboardHealthy(false);
+            return DashboardConnectionInfo.Unhealthy;
+        }
+
         // Wait for the dashboard to be healthy
         using (var waitActivity = profilingTelemetry.StartDashboardWaitHealthy())
         {
