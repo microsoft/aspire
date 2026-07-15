@@ -158,7 +158,7 @@
                                         }
                                         else
                                         {
-                                            <TextVisualizer ViewModel="@itemPart.TextVisualizerViewModel" HideLineNumbers="true" Virtualize="false" />
+                                            <TextVisualizer ViewModel="@itemPart.TextVisualizerViewModel" HideLineNumbers="true" Virtualize="false" NoWrap="@_noWrap" />
                                         }
 
                                         if (itemPart.MessagePart is ToolCallRequestPart toolCallPart && !string.IsNullOrEmpty(toolCallPart.Name))
@@ -214,28 +214,36 @@
                             <div class="tab-container">
                                 @foreach (var itemPart in selectedItem.ItemParts)
                                 {
-                                    <TextVisualizer ViewModel="@itemPart.TextVisualizerViewModel" DisplayUnformatted="true" Virtualize="false" />
+                                    <TextVisualizer ViewModel="@itemPart.TextVisualizerViewModel" DisplayUnformatted="true" Virtualize="false" NoWrap="@_noWrap" />
                                 }
                             </div>
                         }
                         var copyButtonLabel = ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)];
+                        var wrapLinesLabel = ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)];
                         var copyButtonAttributes = FluentUIExtensions.GetClipboardCopyAdditionalAttributes(
                             string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)),
                             copyButtonLabel,
                             ControlsStringsLoc[nameof(ControlsStrings.GridValueCopied)]);
                         copyButtonAttributes["aria-label"] = copyButtonLabel;
 
-                        <FluentButton Id="@_copyButtonId"
-                                      Class="message-copy-button"
-                                      Appearance="Appearance.Stealth"
-                                      Title="@copyButtonLabel"
-                                      AdditionalAttributes="@copyButtonAttributes">
-                            <span slot="start">
-                                <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
-                                <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
-                            </span>
-                            @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
-                        </FluentButton>
+                        <div class="message-actions">
+                            <FluentCheckbox Class="word-wrap-checkbox"
+                                            Value="@(!_noWrap)"
+                                            ValueChanged="SetWrapLines"
+                                            Label="@wrapLinesLabel"
+                                            AriaLabel="@wrapLinesLabel" />
+                            <FluentButton Id="@_copyButtonId"
+                                          Class="message-copy-button"
+                                          Appearance="Appearance.Stealth"
+                                          Title="@copyButtonLabel"
+                                          AdditionalAttributes="@copyButtonAttributes">
+                                <span slot="start">
+                                    <FluentIcon Class="copy-icon" Style="display:inline; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Copy" Slot="start" />
+                                    <FluentIcon Class="checkmark-icon" Style="display:none; vertical-align: text-bottom" Icon="Icons.Regular.Size16.Checkmark" Slot="start" />
+                                </span>
+                                @ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)]
+                            </FluentButton>
+                        </div>
                     }
                     else
                     {
@@ -515,7 +523,7 @@
                                 // Don't display text if it is a copy of the error message
                                 if (itemPart.ErrorMessage != itemPart.TextVisualizerViewModel.Text)
                                 {
-                                    <TextVisualizer ViewModel="@itemPart.TextVisualizerViewModel" HideLineNumbers="true" Virtualize="false" />
+                                    <TextVisualizer ViewModel="@itemPart.TextVisualizerViewModel" HideLineNumbers="true" Virtualize="false" NoWrap="@_noWrap" />
                                 }
                             }
                         }

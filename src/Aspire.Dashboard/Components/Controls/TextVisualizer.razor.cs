@@ -36,6 +36,9 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
     [Parameter]
     public bool Virtualize { get; set; } = true;
 
+    [Parameter]
+    public bool NoWrap { get; set; }
+
     private Virtualize<StringLogLine>? VirtualizeRef
     {
         get => field;
@@ -121,5 +124,10 @@ public partial class TextVisualizer : ComponentBase, IAsyncDisposable
         }
 
         return (MarkupString)WebUtility.HtmlEncode(line.Content);
+    }
+
+    private string GetLogContainerClass()
+    {
+        return $"log-container {(NoWrap ? "wrap-log-container" : null)}";
     }
 }

@@ -243,10 +243,23 @@
     padding-bottom: 12px;
 }
 
-::deep .message-copy-button {
+::deep .message-actions {
+    display: flex;
+    align-items: center;
+    gap: 8px;
     margin-left: auto;
     margin-top: 4px;
     margin-right: 4px;
+}
+
+::deep .message-copy-button {
+    margin-left: 0;
+    margin-top: 0;
+    margin-right: 0;
+}
+
+::deep .word-wrap-checkbox::part(label) {
+    white-space: nowrap;
 }
 
 ::deep .markdown-container {

@@ -19,6 +19,7 @@ public partial class TextVisualizerDialog : ComponentBase
     private List<SelectViewModel<string>> _options = null!;
     private SelectViewModel<string> _selectedFormat = null!;
     private bool _isLoading = true;
+    private bool _noWrap;
     private MarkdownProcessor? _markdownProcessor;
     private TextVisualizerDialogViewModel? _previousContent;
     internal TextVisualizerViewModel TextVisualizerViewModel { get; set; } = default!;
@@ -153,6 +154,12 @@ public partial class TextVisualizerDialog : ComponentBase
         {
             await JS.DownloadFileAsync(Content.DownloadFileName, TextVisualizerViewModel.FormattedText);
         }
+    }
+
+    private Task SetWrapLines(bool wrapLines)
+    {
+        _noWrap = !wrapLines;
+        return Task.CompletedTask;
     }
 
     internal sealed record TextVisualizerDialogSettings(bool SecretsWarningAcknowledged);

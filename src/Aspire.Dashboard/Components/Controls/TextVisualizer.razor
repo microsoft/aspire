@@ -4,7 +4,7 @@
 @if (Virtualize)
 {
     <div class="log-overflow">
-        <div class="log-container" @ref="_containerElement">
+        <div class="@GetLogContainerClass()" @ref="_containerElement">
             <Virtualize @ref="VirtualizeRef" Items="@(!DisplayUnformatted ? ViewModel.FormattedLines : ViewModel.Lines)" ItemSize="20" OverscanCount="200" ItemContent="@RenderLogLine">
             </Virtualize>
         </div>
@@ -12,7 +12,7 @@
 }
 else
 {
-    <div class="log-container" @ref="_containerElement">
+    <div class="@GetLogContainerClass()" @ref="_containerElement">
         @foreach (var item in !DisplayUnformatted ? ViewModel.FormattedLines : ViewModel.Lines)
         {
             @RenderLogLine(item)

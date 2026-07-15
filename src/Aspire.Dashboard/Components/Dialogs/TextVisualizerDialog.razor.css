@@ -19,20 +19,31 @@
 
 .text-visualizer-container ::deep.button-container-right {
     display: flex;
+    align-items: center;
     gap: 8px;
     margin-left: auto;
+}
+
+.text-visualizer-container ::deep.word-wrap-checkbox::part(label) {
+    white-space: nowrap;
 }
 
 .text-visualizer-container {
     display: flex;
     flex-direction: column;
     width: 100%;
+    max-width: 100%;
+    min-width: 0;
     min-height: 120px;
 }
 
 .text-visualizer-container ::deep.log-overflow {
+    width: 0;
+    max-width: 100%;
     max-height: 60vh;
     margin-bottom: 16px;
+    overflow-x: auto;
+    min-width: 100%;
 }
 
 .markdown-content {

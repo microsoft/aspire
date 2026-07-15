@@ -33,6 +33,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
     private List<OtlpSpan> _contextSpans = default!;
     private int _currentSpanContextIndex;
+    private bool _noWrap;
     private GenAIVisualizerDialogViewModel? _content;
 
     private GenAIItemViewModel? SelectedItem { get; set; }
@@ -276,6 +277,12 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         return true;
     }
 
+    private Task SetWrapLines(bool wrapLines)
+    {
+        _noWrap = !wrapLines;
+        return Task.CompletedTask;
+    }
+
     private static string GetToolHeadingTooltip(ToolDefinitionViewModel vm)
     {
         if (string.IsNullOrEmpty(vm.ToolDefinition.Description))
@@ -391,4 +398,3 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         await dialogService.ShowDialogAsync<GenAIVisualizerDialog>(dialogViewModel, parameters);
     }
 }
-

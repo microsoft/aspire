@@ -362,6 +362,9 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         FluentUISetupHelpers.SetupDialogInfrastructure(this);
         FluentUISetupHelpers.SetupFluentTab(this);
         FluentUISetupHelpers.SetupFluentOverflow(this);
+        FluentUISetupHelpers.SetupFluentCheckbox(this);
+        JSInterop.SetupModule("/Components/Controls/MarkdownRenderer.razor.js").SetupVoid();
+        JSInterop.SetupModule("/Components/Controls/TextVisualizer.razor.js").SetupVoid();
 
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));

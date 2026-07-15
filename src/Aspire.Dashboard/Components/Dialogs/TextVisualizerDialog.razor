@@ -45,7 +45,7 @@
             }
             else
             {
-                <TextVisualizer ViewModel="TextVisualizerViewModel" />
+                <TextVisualizer ViewModel="TextVisualizerViewModel" NoWrap="@_noWrap" />
             }
         }
         else if (ShowSecretsWarning is true)
@@ -73,6 +73,12 @@
             }
 
             <div class="button-container-right">
+                <FluentCheckbox Class="word-wrap-checkbox"
+                                Value="@(!_noWrap)"
+                                ValueChanged="SetWrapLines"
+                                Label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)]"
+                                AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)]" />
+
                 @if (Content.DownloadFileName is not null)
                 {
                     <FluentButton OnClick="@DownloadAsync"

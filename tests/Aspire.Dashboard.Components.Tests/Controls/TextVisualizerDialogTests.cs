@@ -5,10 +5,12 @@ using System.Collections.Immutable;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -168,6 +170,45 @@ public class TextVisualizerDialogTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Render_TextVisualizerDialog_ToggleWrapLines_UpdatesTextVisualizerClassAsync()
+    {
+        const string rawText = "line 1\nline 2";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>()
+            [nameof(ControlsStrings.GridValueWrapLines)].Value;
+        var wrapCheckbox = cut.FindComponent<FluentCheckbox>();
+
+        Assert.Equal(wrapLinesLabel, wrapCheckbox.Instance.Label);
+        Assert.Empty(cut.FindAll(".wrap-log-container"));
+
+        await wrapCheckbox.InvokeAsync(() => wrapCheckbox.Instance.ValueChanged.InvokeAsync(false));
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".wrap-log-container")));
+
+        await wrapCheckbox.InvokeAsync(() => wrapCheckbox.Instance.ValueChanged.InvokeAsync(true));
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".wrap-log-container")));
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_WithDownloadFile_RendersWrapLinesBeforeActionsAsync()
+    {
+        const string rawText = "line 1\nline 2";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false, DownloadFileName: "test.txt"), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var controlsStrings = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+        var actions = cut.Find(".button-container-right").Children;
+        Assert.Equal("fluent-checkbox", actions[0].LocalName);
+        Assert.Contains(controlsStrings[nameof(ControlsStrings.Download)].Value, actions[1].TextContent);
+        Assert.Contains(controlsStrings[nameof(ControlsStrings.GridValueCopyToClipboard)].Value, actions[2].TextContent);
+    }
+
+    [Fact]
     public async Task Render_TextVisualizerDialog_WithDifferentThemes_LineClassesChange()
     {
         var xml = @"<hello><!-- world --></hello>";
@@ -297,6 +338,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentList(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentCheckbox(this);
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);
 
