@@ -69,16 +69,6 @@ internal sealed class DcpOptions
     public string? ResourceNameSuffix { get; set; }
 
     /// <summary>
-    /// Optional DCP lifecycle mode override for resources with persistent Aspire lifetimes.
-    /// </summary>
-    public string? ResourceLifecycleMode { get; set; }
-
-    /// <summary>
-    /// Whether to render DCP resources in cleanup mode instead of starting them.
-    /// </summary>
-    public bool ResourceCleanupMode { get; set; }
-
-    /// <summary>
     /// Whether to randomize ports used by resources during orchestration.
     /// </summary>
     public bool RandomizePorts { get; set; }
@@ -150,29 +140,6 @@ internal sealed class DcpOptions
     /// Enables Aspire container tunnel for container-to-host connectivity across all container orchestrators.
     /// </summary>
     public bool EnableAspireContainerTunnel { get; set; } = true;
-
-    internal string GetPersistentResourceLifecycleMode()
-    {
-        if (ResourceCleanupMode)
-        {
-            return Model.ResourceLifecycleMode.Cleanup;
-        }
-
-        if (string.IsNullOrEmpty(ResourceLifecycleMode) ||
-            string.Equals(ResourceLifecycleMode, Model.ResourceLifecycleMode.Persistent, StringComparison.OrdinalIgnoreCase))
-        {
-            return Model.ResourceLifecycleMode.Persistent;
-        }
-
-        if (string.Equals(ResourceLifecycleMode, Model.ResourceLifecycleMode.Cleanup, StringComparison.OrdinalIgnoreCase))
-        {
-            return Model.ResourceLifecycleMode.Cleanup;
-        }
-
-        throw new InvalidOperationException($"Invalid value \"{ResourceLifecycleMode}\" for \"DcpPublisher:{nameof(ResourceLifecycleMode)}\". Expected \"{Model.ResourceLifecycleMode.Persistent}\" or \"{Model.ResourceLifecycleMode.Cleanup}\".");
-    }
-
-    internal bool ShouldStopResourceOnCreation() => ResourceCleanupMode;
 }
 
 internal class ValidateDcpOptions : IValidateOptions<DcpOptions>
@@ -204,12 +171,6 @@ internal class ValidateDcpOptions : IValidateOptions<DcpOptions>
         if (options.ProxylessEndpointPortRangeStart > options.ProxylessEndpointPortRangeEnd)
         {
             builder.AddError("The proxyless endpoint port range start must be less than or equal to the range end.", nameof(options.ProxylessEndpointPortRangeStart));
-        }
-
-        if (!string.IsNullOrEmpty(options.ResourceLifecycleMode) &&
-            !Model.ResourceLifecycleMode.IsSupportedPersistentResourceOverride(options.ResourceLifecycleMode))
-        {
-            builder.AddError($"The resource lifecycle mode must be '{Model.ResourceLifecycleMode.Persistent}' or '{Model.ResourceLifecycleMode.Cleanup}'.", nameof(options.ResourceLifecycleMode));
         }
 
         return builder.Build();
@@ -374,11 +335,6 @@ internal class ConfigureDefaultDcpOptions(
             options.ResourceNameSuffix = dcpPublisherConfiguration[nameof(options.ResourceNameSuffix)];
         }
 
-        if (!string.IsNullOrEmpty(dcpPublisherConfiguration[nameof(options.ResourceLifecycleMode)]))
-        {
-            options.ResourceLifecycleMode = dcpPublisherConfiguration[nameof(options.ResourceLifecycleMode)];
-        }
-        options.ResourceCleanupMode = dcpPublisherConfiguration.GetValue(nameof(options.ResourceCleanupMode), options.ResourceCleanupMode);
         options.RandomizePorts = dcpPublisherConfiguration.GetValue(nameof(options.RandomizePorts), options.RandomizePorts);
         options.ProxylessEndpointPortRangeStart = dcpPublisherConfiguration.GetValue(nameof(options.ProxylessEndpointPortRangeStart), options.ProxylessEndpointPortRangeStart);
         options.ProxylessEndpointPortRangeEnd = dcpPublisherConfiguration.GetValue(nameof(options.ProxylessEndpointPortRangeEnd), options.ProxylessEndpointPortRangeEnd);

@@ -4,12 +4,8 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using System.Net.Sockets;
-using Aspire.Hosting.Diagnostics;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
-using Microsoft.Extensions.Configuration;
-using Microsoft.Extensions.Hosting;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.VisualStudio.Threading;
 using StreamJsonRpc;
 
@@ -102,60 +98,6 @@ public class AppHostBackchannelTests(ITestOutputHelper outputHelper)
         }
 
         await app.StopAsync().WaitAsync(TimeSpan.FromSeconds(60));
-    }
-
-    [Fact]
-    public async Task WaitForResourcesCreatedWaitsForApplicationStarted()
-    {
-        using var lifetime = new TestHostApplicationLifetime();
-        var target = CreateRpcTarget(lifetime);
-
-        var waitTask = target.WaitForResourcesCreatedAsync(CancellationToken.None);
-
-        Assert.False(waitTask.IsCompleted);
-        lifetime.NotifyStarted();
-        await waitTask.WaitAsync(TimeSpan.FromSeconds(10));
-    }
-
-    private static AppHostRpcTarget CreateRpcTarget(IHostApplicationLifetime lifetime)
-    {
-        var configuration = new ConfigurationBuilder().Build();
-
-        return new AppHostRpcTarget(
-            NullLogger<AppHostRpcTarget>.Instance,
-            null!,
-            null!,
-            new ProfilingTelemetry(configuration),
-            null!,
-            lifetime,
-            new DistributedApplicationOptions(),
-            null!,
-            null!,
-            configuration);
-    }
-
-    private sealed class TestHostApplicationLifetime : IHostApplicationLifetime, IDisposable
-    {
-        private readonly CancellationTokenSource _started = new();
-        private readonly CancellationTokenSource _stopping = new();
-        private readonly CancellationTokenSource _stopped = new();
-
-        public CancellationToken ApplicationStarted => _started.Token;
-
-        public CancellationToken ApplicationStopping => _stopping.Token;
-
-        public CancellationToken ApplicationStopped => _stopped.Token;
-
-        public void NotifyStarted() => _started.Cancel();
-
-        public void StopApplication() => _stopping.Cancel();
-
-        public void Dispose()
-        {
-            _started.Dispose();
-            _stopping.Dispose();
-            _stopped.Dispose();
-        }
     }
 }
 

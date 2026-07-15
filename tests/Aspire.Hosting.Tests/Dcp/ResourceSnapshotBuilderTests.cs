@@ -21,7 +21,7 @@ public class ResourceSnapshotBuilderTests
         var container = Container.Create("container", "redis:latest");
         container.Spec.Command = "redis-server";
         container.Spec.Ports = [new() { ContainerPort = 6379 }];
-        container.Spec.Mode = ResourceLifecycleMode.Persistent;
+        container.Spec.Persistent = true;
         container.Status = new ContainerStatus
         {
             ContainerId = "1234567890abcdef",
@@ -35,21 +35,6 @@ public class ResourceSnapshotBuilderTests
         AssertHighlightedProperty(snapshot, KnownProperties.Container.Args, "Container arguments", isSensitive: true, sortOrder: 3);
         AssertHighlightedProperty(snapshot, KnownProperties.Container.Ports, "Container ports", isSensitive: false, sortOrder: 4);
         AssertHighlightedProperty(snapshot, KnownProperties.Container.Lifetime, "Container lifetime", isSensitive: false, sortOrder: 5);
-    }
-
-    [Theory]
-    [InlineData(null, ContainerLifetime.Session)]
-    [InlineData(ResourceLifecycleMode.Session, ContainerLifetime.Session)]
-    [InlineData(ResourceLifecycleMode.Persistent, ContainerLifetime.Persistent)]
-    [InlineData(ResourceLifecycleMode.Cleanup, ContainerLifetime.Persistent)]
-    public void ContainerSnapshotMapsLifecycleModeToContainerLifetime(string? mode, ContainerLifetime expectedLifetime)
-    {
-        var container = Container.Create("container", "redis:latest");
-        container.Spec.Mode = mode;
-
-        var snapshot = CreateSnapshotBuilder().ToSnapshot(container, CreatePreviousSnapshot());
-
-        Assert.Equal(expectedLifetime, GetProperty(snapshot, KnownProperties.Container.Lifetime).Value);
     }
 
     [Fact]

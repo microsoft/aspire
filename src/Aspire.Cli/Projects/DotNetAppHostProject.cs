@@ -543,15 +543,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             ConfigureSingleFileRunEnvironment(effectiveAppHostFile, env, args: context.UnmatchedTokens);
         }
 
+        env[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(effectiveAppHostFile, _environment.IsWindows());
+
         var directRun = !isSingleFileAppHost && !watch && !isExtensionHost
             ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, cancellationToken)
             : null;
-
-        ApplyResourceCleanupEnvironmentOverrides(env, context.EnvironmentVariables);
-        if (directRun is not null)
-        {
-            ApplyResourceCleanupEnvironmentOverrides(directRun.Environment, context.EnvironmentVariables);
-        }
 
         // Start the apphost - the runner will signal the backchannel when ready
         try
@@ -599,19 +595,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             {
                 IsolatedUserSecretsHelper.CleanupIsolatedUserSecrets(isolatedUserSecretsId);
             }
-        }
-    }
-
-    private static void ApplyResourceCleanupEnvironmentOverrides(IDictionary<string, string> target, IDictionary<string, string> source)
-    {
-        if (source.TryGetValue(KnownConfigNames.DcpResourceCleanupMode, out var resourceCleanupMode))
-        {
-            target[KnownConfigNames.DcpResourceCleanupMode] = resourceCleanupMode;
-        }
-
-        if (source.TryGetValue(KnownConfigNames.DcpWaitForResourceCleanup, out var waitForResourceCleanup))
-        {
-            target[KnownConfigNames.DcpWaitForResourceCleanup] = waitForResourceCleanup;
         }
     }
 

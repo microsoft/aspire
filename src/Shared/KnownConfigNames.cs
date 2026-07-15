@@ -51,7 +51,6 @@ internal static class KnownConfigNames
 
     public const string CliLogFilePath = "ASPIRE_CLI_LOG_FILE";
     public const string CliRunDetached = "ASPIRE_CLI_RUN_DETACHED";
-    public const string CliAppHostArguments = "ASPIRE_CLI_APPHOST_ARGS";
     public const string CliGenerateHttpsCertificate = "ASPIRE_CLI_GENERATE_HTTPS_CERTIFICATE";
     public const string SuppressCliRunHook = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
     public const string IntegrationLibsPath = "ASPIRE_INTEGRATION_LIBS_PATH";
@@ -109,8 +108,6 @@ internal static class KnownConfigNames
     public const string DeveloperCertificateDefaultTrust = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_TRUST";
     public const string DeveloperCertificateDefaultHttpsTermination = "ASPIRE_DEVELOPER_CERTIFICATE_DEFAULT_HTTPS_TERMINATION";
     public const string DcpDeveloperCertificate = "ASPIRE_DCP_USE_DEVELOPER_CERTIFICATE";
-    public const string DcpResourceCleanupMode = "DcpPublisher__ResourceCleanupMode";
-    public const string DcpWaitForResourceCleanup = "DcpPublisher__WaitForResourceCleanup";
 
     public const string DebugSessionInfo = "DEBUG_SESSION_INFO";
     public const string DebugSessionRunMode = "DEBUG_SESSION_RUN_MODE";
@@ -118,6 +115,7 @@ internal static class KnownConfigNames
     public const string DebugSessionToken = "DEBUG_SESSION_TOKEN";
     public const string DebugSessionServerCertificate = "DEBUG_SESSION_SERVER_CERTIFICATE";
     public const string DcpInstanceIdPrefix = "DCP_INSTANCE_ID_PREFIX";
+    public const string DcpWorkloadId = "DCP_WORKLOAD_ID";
 
     public static class Legacy
     {

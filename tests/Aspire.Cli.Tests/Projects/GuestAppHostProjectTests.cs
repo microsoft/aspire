@@ -928,10 +928,12 @@ public class GuestAppHostProjectTests : IDisposable
     }
 
     [Fact]
-    public async Task RunAsync_PassesResourceCleanupSettingsToAppHostServerEnvironment()
+    public async Task RunAsync_PassesWorkloadIdToAppHostServerEnvironment()
     {
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
+        var appHostFile = new FileInfo(appHostPath);
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
 
         var projectFactory = new TestAppHostServerProjectFactory
         {
@@ -954,13 +956,9 @@ public class GuestAppHostProjectTests : IDisposable
 
         var context = new AppHostProjectContext
         {
-            AppHostFile = new FileInfo(appHostPath),
+            AppHostFile = appHostFile,
             WorkingDirectory = _workspace.WorkspaceRoot,
-            EnvironmentVariables = new Dictionary<string, string>
-            {
-                [KnownConfigNames.DcpResourceCleanupMode] = "true",
-                [KnownConfigNames.DcpWaitForResourceCleanup] = "true"
-            }
+            EnvironmentVariables = new Dictionary<string, string>()
         };
 
         var exitCode = await project.RunAsync(context, CancellationToken.None);
@@ -968,8 +966,7 @@ public class GuestAppHostProjectTests : IDisposable
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
         Assert.True(serverSession.StartAsyncCalled);
         Assert.NotNull(sessionFactory.CapturedEnvironmentVariables);
-        Assert.Equal("true", sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpResourceCleanupMode]);
-        Assert.Equal("true", sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWaitForResourceCleanup]);
+        Assert.Equal(expectedWorkloadId, sessionFactory.CapturedEnvironmentVariables[KnownConfigNames.DcpWorkloadId]);
     }
 
     [Fact]

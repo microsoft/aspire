@@ -156,14 +156,20 @@
   <data name="CouldNotDetermineAppHostPath" xml:space="preserve">
     <value>Could not determine the AppHost project path.</value>
   </data>
-  <data name="ForceCleanupUnsupportedWarning" xml:space="preserve">
-    <value>The AppHost uses Aspire.Hosting {0}, which does not support persistent resource cleanup. Update the AppHost SDK to Aspire {1} or newer; --force only stopped the AppHost.</value>
+  <data name="CleaningPersistentResources" xml:space="preserve">
+    <value>Cleaning up persistent resources for {0}...</value>
   </data>
-  <data name="TimeoutWaitingForAppHostCleanupShutdown" xml:space="preserve">
-    <value>Timed out waiting {0}s for AppHost resource cleanup to stop.</value>
+  <data name="PersistentResourcesCleaned" xml:space="preserve">
+    <value>Persistent resources for {0} cleaned up.</value>
   </data>
-  <data name="UnknownAspireHostingVersion" xml:space="preserve">
-    <value>unknown</value>
+  <data name="DcpCleanupUnavailable" xml:space="preserve">
+    <value>Could not find the DCP executable needed to clean up persistent resources.</value>
+  </data>
+  <data name="DcpCleanupFailed" xml:space="preserve">
+    <value>Failed to clean up persistent resources for {0}. {1}</value>
+  </data>
+  <data name="DcpCleanupExitCode" xml:space="preserve">
+    <value>DCP cleanup exited with code {0}.</value>
   </data>
   <data name="MultipleAppHostsNonInteractive" xml:space="preserve">
     <value>Multiple AppHosts are running. Use {0} to specify which one to stop, or use {1} to stop all of them.</value>

@@ -13,7 +13,6 @@ using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Dcp;
 
@@ -31,7 +30,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
     private readonly DistributedApplicationExecutionContext _executionContext;
     private readonly Locations _locations;
     private readonly IAspireStore _aspireStore;
-    private readonly IOptions<DcpOptions> _options;
     private readonly ILogger<ExecutableCreator> _logger;
     private readonly DcpAppResourceStore _appResources;
 
@@ -43,7 +41,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         DistributedApplicationExecutionContext executionContext,
         Locations locations,
         IAspireStore aspireStore,
-        IOptions<DcpOptions> options,
         ILogger<ExecutableCreator> logger,
         DcpAppResourceStore appResources)
     {
@@ -54,7 +51,6 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         _executionContext = executionContext;
         _locations = locations;
         _aspireStore = aspireStore;
-        _options = options;
         _logger = logger;
         _appResources = appResources;
     }
@@ -68,8 +64,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
     public bool IsReadyToCreate(RenderedModelResource<Executable> resource, EmptyCreationContext context)
     {
-        return _options.Value.ShouldStopResourceOnCreation() ||
-            !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
+        return !DcpModelUtilities.ShouldDeferCreateForExplicitStart(resource.ModelResource, resource.DcpResource.Spec.Start);
     }
 
     public async Task CreateObjectAsync(RenderedModelResource<Executable> er, EmptyCreationContext context, ILogger resourceLogger, IDcpObjectFactory factory, CancellationToken cancellationToken)
@@ -227,18 +222,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 #pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
                 project.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var launchOverride);
 #pragma warning restore ASPIREPROJECTS001
+                exe.Spec.Persistent = persistent;
                 if (persistent)
                 {
-                    exe.Spec.Mode = _options.Value.GetPersistentResourceLifecycleMode();
-                    if (exe.Spec.Mode == ResourceLifecycleMode.Persistent)
-                    {
-                        ApplyMonitorProcess(project, exe.Spec);
-                    }
-                }
-
-                if (_options.Value.ShouldStopResourceOnCreation())
-                {
-                    exe.Spec.Stop = true;
+                    ApplyMonitorProcess(project, exe.Spec);
                 }
 
                 if (launchOverride is not null)
@@ -413,16 +400,8 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             var persistent = executable.GetLifetimeType() == Lifetime.Persistent;
             if (persistent)
             {
-                exe.Spec.Mode = _options.Value.GetPersistentResourceLifecycleMode();
-                if (exe.Spec.Mode == ResourceLifecycleMode.Persistent)
-                {
-                    ApplyMonitorProcess(executable, exe.Spec);
-                }
-            }
-
-            if (_options.Value.ShouldStopResourceOnCreation())
-            {
-                exe.Spec.Stop = true;
+                exe.Spec.Persistent = true;
+                ApplyMonitorProcess(executable, exe.Spec);
             }
 
             if (!persistent

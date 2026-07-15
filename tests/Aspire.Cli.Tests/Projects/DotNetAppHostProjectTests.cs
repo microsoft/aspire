@@ -270,6 +270,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public async Task RunAsync_SingleFileAppHostWithoutRunJsonPassesDevelopmentEnvironmentToRunner()
     {
         var appHostFile = CreateSingleFileAppHost();
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
         var runner = new TestDotNetCliRunner();
         var project = CreateDotNetAppHostProject(runner);
 
@@ -283,6 +284,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal("Development", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
             Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
             Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
+            Assert.Equal(expectedWorkloadId, env[KnownConfigNames.DcpWorkloadId]);
             return Task.FromResult(0);
         };
 
@@ -697,10 +699,11 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     }
 
     [Fact]
-    public async Task RunAsync_ResourceCleanupSettingsPreserveLaunchProfileInputs()
+    public async Task RunAsync_ProjectAppHostDirectLaunchSetsWorkloadIdAndPreservesLaunchProfileInputs()
     {
         var appHostFile = CreateProjectAppHost();
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
         Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
         File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
             {
@@ -709,7 +712,8 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
                   "commandName": "Project",
                   "commandLineArgs": "--from-profile profile-value",
                   "environmentVariables": {
-                    "CUSTOM_ENV": "from-profile"
+                    "CUSTOM_ENV": "from-profile",
+                    "DCP_WORKLOAD_ID": "from-profile"
                   }
                 }
               }
@@ -732,8 +736,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.NotNull(env);
             Assert.Equal("http", env["DOTNET_LAUNCH_PROFILE"]);
             Assert.Equal("from-profile", env["CUSTOM_ENV"]);
-            Assert.Equal("true", env[KnownConfigNames.DcpResourceCleanupMode]);
-            Assert.Equal("true", env[KnownConfigNames.DcpWaitForResourceCleanup]);
+            Assert.Equal(expectedWorkloadId, env[KnownConfigNames.DcpWorkloadId]);
             return Task.FromResult(124);
         };
 
@@ -743,11 +746,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             NoBuild = false,
             NoRestore = false,
             WorkingDirectory = _workspace.WorkspaceRoot,
-            EnvironmentVariables = new Dictionary<string, string>
-            {
-                [KnownConfigNames.DcpResourceCleanupMode] = "true",
-                [KnownConfigNames.DcpWaitForResourceCleanup] = "true"
-            }
+            EnvironmentVariables = new Dictionary<string, string>()
         }, CancellationToken.None);
 
         Assert.Equal(124, exitCode);
@@ -1861,6 +1860,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Action<CliServiceCollectionTestOptions>? configureServices = null)
     {
         var appHostFile = CreateProjectAppHost();
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
         var runner = new TestDotNetCliRunner
         {
             BuildAsyncCallback = (_, _, _, _) => 0,
@@ -1869,13 +1869,15 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         };
         var project = CreateDotNetAppHostProject(runner, configureServices: configureServices);
 
-        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, _, _, _, _) =>
+        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, _, _, _) =>
         {
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
             Assert.Equal(expectedWatch, watch);
             Assert.Equal(!expectedWatch, noBuild);
             Assert.False(noRestore);
             Assert.Empty(args);
+            Assert.NotNull(env);
+            Assert.Equal(expectedWorkloadId, env[KnownConfigNames.DcpWorkloadId]);
             return Task.FromResult(77);
         };
 

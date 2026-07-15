@@ -16,7 +16,6 @@ internal interface IAppHostCliBackchannel
 {
     Task RequestStopAsync(CancellationToken cancellationToken);
     Task NotifyAppHostReadyAsync(CancellationToken cancellationToken);
-    Task WaitForResourcesCreatedAsync(CancellationToken cancellationToken);
     Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<BackchannelLogEntry> GetAppHostLogEntriesAsync(CancellationToken cancellationToken);
     IAsyncEnumerable<RpcResourceState> GetResourceStatesAsync(CancellationToken cancellationToken);
@@ -106,20 +105,6 @@ internal sealed class AppHostCliBackchannel(
         {
             logger.LogDebug(ex, "NotifyAppHostReadyAsync RPC method not available on the remote AppHost. The AppHost may be running an older version.");
         }
-    }
-
-    public async Task WaitForResourcesCreatedAsync(CancellationToken cancellationToken)
-    {
-        var rpc = await GetRpcTaskAsync().WaitAsync(cancellationToken).ConfigureAwait(false);
-
-        logger.LogDebug("Waiting for AppHost resources to be created");
-
-        await rpc.InvokeWithProfilingAsync(
-            profilingTelemetry,
-            "apphost",
-            "WaitForResourcesCreatedAsync",
-            [],
-            cancellationToken);
     }
 
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)

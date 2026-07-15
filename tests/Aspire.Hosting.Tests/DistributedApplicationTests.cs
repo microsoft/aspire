@@ -2012,14 +2012,11 @@ public class DistributedApplicationTests
 
         if (createPersistentContainer)
         {
-            var network = Assert.Single(networks, n => n.Spec.Mode == ResourceLifecycleMode.Persistent);
-            Assert.Null(network.Spec.Persistent);
+            Assert.Single(networks, n => n.Spec.Persistent == true);
         }
         else
         {
-            var network = Assert.Single(networks);
-            Assert.Null(network.Spec.Mode);
-            Assert.Null(network.Spec.Persistent);
+            Assert.Single(networks, n => n.Spec.Persistent.GetValueOrDefault(false) == false);
         }
     }
 
@@ -2055,8 +2052,7 @@ public class DistributedApplicationTests
         var containers = await kubernetes.ListAsync<Container>(cancellationToken: token)
             .DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
         var dcpContainer = Assert.Single(containers, c => c.AppModelResourceName == container.Resource.Name);
-        Assert.Equal(ResourceLifecycleMode.Persistent, dcpContainer.Spec.Mode);
-        Assert.Null(dcpContainer.Spec.Persistent);
+        Assert.True(dcpContainer.Spec.Persistent.GetValueOrDefault());
         Assert.Equal(parentProcessIdentity.ProcessId, dcpContainer.Spec.MonitorPid);
         Assert.NotNull(dcpContainer.Spec.MonitorTimestamp);
         Assert.InRange((dcpContainer.Spec.MonitorTimestamp.Value - parentProcessIdentity.Timestamp).Duration(), TimeSpan.Zero, TimeSpan.FromMilliseconds(1));
@@ -2065,8 +2061,7 @@ public class DistributedApplicationTests
         var executables = await kubernetes.ListAsync<Executable>(cancellationToken: token)
             .DefaultTimeout(TestConstants.DefaultOrchestratorTestLongTimeout);
         var dcpExecutable = Assert.Single(executables, e => e.AppModelResourceName == executable.Resource.Name);
-        Assert.Equal(ResourceLifecycleMode.Persistent, dcpExecutable.Spec.Mode);
-        Assert.Null(dcpExecutable.Spec.Persistent);
+        Assert.True(dcpExecutable.Spec.Persistent.GetValueOrDefault());
         Assert.Equal(parentProcessIdentity.ProcessId, dcpExecutable.Spec.MonitorPid);
         Assert.NotNull(dcpExecutable.Spec.MonitorTimestamp);
         Assert.InRange((dcpExecutable.Spec.MonitorTimestamp.Value - parentProcessIdentity.Timestamp).Duration(), TimeSpan.Zero, TimeSpan.FromMilliseconds(1));

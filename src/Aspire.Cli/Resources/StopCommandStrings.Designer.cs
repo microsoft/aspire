@@ -123,21 +123,33 @@ namespace Aspire.Cli.Resources {
             }
         }
 
-        public static string ForceCleanupUnsupportedWarning {
+        public static string CleaningPersistentResources {
             get {
-                return ResourceManager.GetString("ForceCleanupUnsupportedWarning", resourceCulture);
+                return ResourceManager.GetString("CleaningPersistentResources", resourceCulture);
             }
         }
 
-        public static string TimeoutWaitingForAppHostCleanupShutdown {
+        public static string PersistentResourcesCleaned {
             get {
-                return ResourceManager.GetString("TimeoutWaitingForAppHostCleanupShutdown", resourceCulture);
+                return ResourceManager.GetString("PersistentResourcesCleaned", resourceCulture);
             }
         }
 
-        public static string UnknownAspireHostingVersion {
+        public static string DcpCleanupUnavailable {
             get {
-                return ResourceManager.GetString("UnknownAspireHostingVersion", resourceCulture);
+                return ResourceManager.GetString("DcpCleanupUnavailable", resourceCulture);
+            }
+        }
+
+        public static string DcpCleanupFailed {
+            get {
+                return ResourceManager.GetString("DcpCleanupFailed", resourceCulture);
+            }
+        }
+
+        public static string DcpCleanupExitCode {
+            get {
+                return ResourceManager.GetString("DcpCleanupExitCode", resourceCulture);
             }
         }
 

@@ -17,14 +17,8 @@ internal sealed class ContainerNetworkSpec
     public bool? IPV6 { get; set; }
 
     // Should this network be created and persisted between DCP runs?
-    // Deprecated by Mode, but kept for compatibility with older DCP versions.
     [JsonPropertyName("persistent")]
     public bool? Persistent { get; set; }
-
-    // Controls how the network is created, reused, and cleaned up.
-    // Ignored by DCP when Persistent is true.
-    [JsonPropertyName("mode")]
-    public string? Mode { get; set; }
 }
 
 internal sealed record ContainerNetworkStatus : V1Status

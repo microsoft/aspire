@@ -296,11 +296,6 @@ internal sealed class RunCommand : BaseCommand
                 BackchannelCompletionSource = backchannelCompletionSource,
             };
             ProfilingTelemetry.AddCurrentContextToEnvironment(context.EnvironmentVariables);
-            if (context.UnmatchedTokens.Length > 0)
-            {
-                context.EnvironmentVariables[KnownConfigNames.CliAppHostArguments] = JsonSerializer.Serialize(context.UnmatchedTokens, JsonSourceGenerationContext.Default.StringArray);
-            }
-
             if (captureProfile)
             {
                 ProfileCaptureEnvironment.AddCurrentToEnvironment(context.EnvironmentVariables);

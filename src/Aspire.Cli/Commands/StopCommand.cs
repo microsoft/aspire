@@ -10,9 +10,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
-using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Semver;
 
 namespace Aspire.Cli.Commands;
 
@@ -30,10 +28,7 @@ internal sealed class StopCommand : BaseCommand
     private readonly OrphanedAppHostCollector _collector;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IProjectLocator _projectLocator;
-    private readonly IAppHostProjectFactory _projectFactory;
-    private readonly AppHostCleanupLauncher _cleanupLauncher;
-    private readonly IConfiguration _configuration;
-    private static readonly SemVersion s_minimumResourceCleanupVersion = SemVersion.Parse("13.5.0");
+    private readonly DcpWorkloadCleanupService _dcpCleanupService;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
 
@@ -53,9 +48,7 @@ internal sealed class StopCommand : BaseCommand
         IEnvironment environment,
         ProcessTreeGracefulShutdownService processShutdownService,
         IProjectLocator projectLocator,
-        IAppHostProjectFactory projectFactory,
-        AppHostCleanupLauncher cleanupLauncher,
-        IConfiguration configuration,
+        DcpWorkloadCleanupService dcpCleanupService,
         OrphanedAppHostCollector collector,
         ILogger<StopCommand> logger,
         ProfilingTelemetry profilingTelemetry,
@@ -67,9 +60,7 @@ internal sealed class StopCommand : BaseCommand
         _environment = environment;
         _processShutdownService = processShutdownService;
         _projectLocator = projectLocator;
-        _projectFactory = projectFactory;
-        _cleanupLauncher = cleanupLauncher;
-        _configuration = configuration;
+        _dcpCleanupService = dcpCleanupService;
         _collector = collector;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
@@ -142,57 +133,7 @@ internal sealed class StopCommand : BaseCommand
             return CliExitCodes.FailedToFindProject;
         }
 
-        var project = _projectFactory.TryGetProject(appHostFile);
-        if (project is null)
-        {
-            InteractionService.DisplayError(RestoreCommandStrings.UnrecognizedAppHostType);
-            return CliExitCodes.FailedToFindProject;
-        }
-
-        var aspireHostingVersion = await TryGetAspireHostingVersionAsync(project, appHostFile, cancellationToken).ConfigureAwait(false);
-        if (!SupportsResourceCleanup(aspireHostingVersion))
-        {
-            InteractionService.DisplayMessage(
-                KnownEmojis.Warning,
-                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.ForceCleanupUnsupportedWarning, aspireHostingVersion ?? StopCommandStrings.UnknownAspireHostingVersion, s_minimumResourceCleanupVersion));
-            return CliExitCodes.Success;
-        }
-
-        if (!AppHostStartupTimeout.TryGetTimeoutSeconds(_configuration, InteractionService, out var timeoutSeconds))
-        {
-            return CliExitCodes.InvalidCommand;
-        }
-
-        return await _cleanupLauncher.CleanupAsync(project, appHostFile, timeoutSeconds, stopResult.AppHostArguments, cancellationToken).ConfigureAwait(false);
-    }
-
-    private async Task<string?> TryGetAspireHostingVersionAsync(IAppHostProject project, FileInfo appHostFile, CancellationToken cancellationToken)
-    {
-        try
-        {
-            return await project.GetAspireHostingVersionAsync(appHostFile, cancellationToken).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogDebug(ex, "Failed to inspect Aspire.Hosting version for resource cleanup.");
-            return null;
-        }
-    }
-
-    private static bool SupportsResourceCleanup(string? aspireHostingVersion)
-    {
-        if (!SemVersion.TryParse(aspireHostingVersion, out var version))
-        {
-            return false;
-        }
-
-        return version.Major > s_minimumResourceCleanupVersion.Major ||
-            version.Major == s_minimumResourceCleanupVersion.Major && version.Minor > s_minimumResourceCleanupVersion.Minor ||
-            version.Major == s_minimumResourceCleanupVersion.Major && version.Minor == s_minimumResourceCleanupVersion.Minor && version.Patch >= s_minimumResourceCleanupVersion.Patch;
+        return await CleanupPersistentResourcesAsync(appHostFile, cancellationToken).ConfigureAwait(false);
     }
 
     private async Task<FileInfo?> TryResolveAppHostFileAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
@@ -256,11 +197,11 @@ internal sealed class StopCommand : BaseCommand
             if (treatNotRunningAsSuccess)
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
-                return new StopAppHostResult(CliExitCodes.Success, null, []);
+                return new StopAppHostResult(CliExitCodes.Success, null);
             }
 
             InteractionService.DisplayError(SharedCommandStrings.AppHostNotRunning);
-            return new StopAppHostResult(CliExitCodes.FailedToFindProject, null, []);
+            return new StopAppHostResult(CliExitCodes.FailedToFindProject, null);
         }
 
         // In non-interactive mode, only consider in-scope AppHosts (under current directory)
@@ -269,7 +210,7 @@ internal sealed class StopCommand : BaseCommand
         if (inScopeConnections.Length == 0 && treatNotRunningAsSuccess)
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
-            return new StopAppHostResult(CliExitCodes.Success, null, []);
+            return new StopAppHostResult(CliExitCodes.Success, null);
         }
 
         // Single in-scope AppHost: auto-select it
@@ -278,12 +219,12 @@ internal sealed class StopCommand : BaseCommand
             var connection = inScopeConnections[0].Connection!;
             _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
             var exitCode = await StopAppHostAsync(connection, GetSingleAppHostDisplayPath(connection), cancellationToken).ConfigureAwait(false);
-            return new StopAppHostResult(exitCode, GetAppHostFile(connection), GetAppHostArguments(connection));
+            return new StopAppHostResult(exitCode, GetAppHostFile(connection));
         }
 
         // Multiple in-scope AppHosts or none in scope: error with guidance
         InteractionService.DisplayError(string.Format(CultureInfo.InvariantCulture, StopCommandStrings.MultipleAppHostsNonInteractive, s_appHostOption.Name, s_allOption.Name));
-        return new StopAppHostResult(CliExitCodes.FailedToFindProject, null, []);
+        return new StopAppHostResult(CliExitCodes.FailedToFindProject, null);
     }
 
     /// <summary>
@@ -306,12 +247,41 @@ internal sealed class StopCommand : BaseCommand
 
         if (!result.Success)
         {
-            return new StopAppHostResult(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, InteractionService), null, []);
+            return new StopAppHostResult(AppHostConnectionResultHandler.DisplayFailureAsInformation(result, InteractionService), null);
         }
 
         _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
         var exitCode = await StopAppHostAsync(result.Connection!, GetSingleAppHostDisplayPath(result.Connection!), cancellationToken).ConfigureAwait(false);
-        return new StopAppHostResult(exitCode, GetAppHostFile(result.Connection!), GetAppHostArguments(result.Connection!));
+        return new StopAppHostResult(exitCode, GetAppHostFile(result.Connection!));
+    }
+
+    private async Task<int> CleanupPersistentResourcesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        var appHostPath = appHostFile.FullName;
+        var appHostDisplayPath = FileSystemHelper.ShortenPaths([appHostPath], _environment)[appHostPath];
+        var workloadId = AppHostWorkloadId.Create(appHostFile, _environment.IsWindows());
+        var cleanupResult = await InteractionService.ShowStatusAsync(
+            string.Format(CultureInfo.CurrentCulture, StopCommandStrings.CleaningPersistentResources, appHostDisplayPath),
+            () => _dcpCleanupService.CleanupAsync(workloadId, cancellationToken),
+            emoji: KnownEmojis.Gear).ConfigureAwait(false);
+
+        InteractionService.DisplayPlainText("");
+
+        if (!cleanupResult.DcpFound)
+        {
+            InteractionService.DisplayError(StopCommandStrings.DcpCleanupUnavailable);
+            return CliExitCodes.FailedToDotnetRunAppHost;
+        }
+
+        if (cleanupResult.ExitCode != 0)
+        {
+            var details = GetDcpCleanupErrorDetails(cleanupResult);
+            InteractionService.DisplayError(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.DcpCleanupFailed, appHostDisplayPath, details));
+            return CliExitCodes.FailedToDotnetRunAppHost;
+        }
+
+        InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.PersistentResourcesCleaned, appHostDisplayPath));
+        return CliExitCodes.Success;
     }
 
     /// <summary>
@@ -445,9 +415,15 @@ internal sealed class StopCommand : BaseCommand
             : new FileInfo(connection.AppHostInfo.AppHostPath);
     }
 
-    private static string[] GetAppHostArguments(IAppHostAuxiliaryBackchannel connection)
+    private static string GetDcpCleanupErrorDetails(DcpWorkloadCleanupResult cleanupResult)
     {
-        return connection.AppHostInfo?.AppHostArguments ?? [];
+        var details = !string.IsNullOrWhiteSpace(cleanupResult.Error)
+            ? cleanupResult.Error
+            : cleanupResult.Output;
+
+        return string.IsNullOrWhiteSpace(details)
+            ? string.Format(CultureInfo.CurrentCulture, StopCommandStrings.DcpCleanupExitCode, cleanupResult.ExitCode)
+            : details.Trim();
     }
 
     private StringComparer GetAppHostPathComparer()
@@ -464,5 +440,5 @@ internal sealed class StopCommand : BaseCommand
             : displayPath;
     }
 
-    private sealed record StopAppHostResult(int ExitCode, FileInfo? AppHostFile, string[] AppHostArguments);
+    private sealed record StopAppHostResult(int ExitCode, FileInfo? AppHostFile);
 }

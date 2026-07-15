@@ -245,7 +245,7 @@ internal static class CliTestHelper
         services.AddTransient<NewCommand>();
         services.AddTransient<InitCommand>();
         services.AddTransient<AppHostLauncher>();
-        services.AddTransient<AppHostCleanupLauncher>();
+        services.AddTransient<DcpWorkloadCleanupService>();
         services.AddTransient<RunCommand>();
         services.AddTransient<StopCommand>();
         services.AddTransient<StartCommand>();

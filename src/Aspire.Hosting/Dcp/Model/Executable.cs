@@ -60,21 +60,13 @@ internal sealed class ExecutableSpec
     /// <summary>
     /// Should this Executable be created and persisted between DCP runs?
     /// Persistent executables are only compatible with the Process execution type.
-    /// Deprecated by <see cref="Mode"/>, but kept for compatibility with older DCP versions.
     /// </summary>
     [JsonPropertyName("persistent")]
     public bool? Persistent { get; set; }
 
     /// <summary>
-    /// Controls how the Executable process is created, reused, and cleaned up.
-    /// Ignored by DCP when <see cref="Persistent"/> is true.
-    /// </summary>
-    [JsonPropertyName("mode")]
-    public string? Mode { get; set; }
-
-    /// <summary>
     /// Optional parent process PID used to scope persistent Executable cleanup to a process lifecycle.
-    /// When set, <see cref="MonitorTimestamp"/> must also be set and the effective lifecycle mode must be persistent.
+    /// When set, <see cref="MonitorTimestamp"/> must also be set and <see cref="Persistent"/> must be true.
     /// </summary>
     [JsonPropertyName("monitorPid")]
     public int? MonitorPid { get; set; }

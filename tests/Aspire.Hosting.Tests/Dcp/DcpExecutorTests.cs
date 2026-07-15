@@ -3213,7 +3213,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "TestExecutable");
         Assert.Equal("TestExecutable-12345678", exe.Metadata.Name);
-        AssertPersistentMode(exe.Spec);
+        Assert.True(exe.Spec.Persistent.GetValueOrDefault());
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
         Assert.Null(exe.Spec.FallbackExecutionTypes);
     }
@@ -3247,12 +3247,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         await appExecutor.RunApplicationAsync();
 
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
-        AssertPersistentMode(container.Spec);
+        Assert.True(container.Spec.Persistent.GetValueOrDefault());
         Assert.Null(container.Spec.MonitorPid);
         Assert.Null(container.Spec.MonitorTimestamp);
-
-        var network = Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetwork>());
-        AssertPersistentMode(network.Spec);
 
         var executables = kubernetesService.CreatedResources.OfType<Executable>()
             .Where(e => e.AppModelResourceName is "worker" or "project")
@@ -3260,162 +3257,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, executables.Length);
         Assert.All(executables, exe =>
         {
-            AssertPersistentMode(exe.Spec);
+            Assert.True(exe.Spec.Persistent.GetValueOrDefault());
             Assert.Null(exe.Spec.MonitorPid);
             Assert.Null(exe.Spec.MonitorTimestamp);
             Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
         });
-    }
-
-    [Fact]
-    public async Task PersistentDcpResourcesUseCleanupModeWhenResourceLifecycleModeIsOverridden()
-    {
-        var builder = DistributedApplication.CreateBuilder();
-
-        builder.AddContainer("database", "image")
-            .WithPersistentLifetime();
-        builder.AddExecutable("worker", "worker", Environment.CurrentDirectory)
-            .WithPersistentLifetime();
-        builder.AddProject<TestProject>("project", launchProfileName: null)
-            .WithPersistentLifetime();
-
-        var configDict = new Dictionary<string, string?>
-        {
-            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-        };
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
-        var dcpOptions = new DcpOptions
-        {
-            DashboardPath = "./dashboard",
-            ResourceLifecycleMode = ResourceLifecycleMode.Cleanup
-        };
-
-        var kubernetesService = new TestKubernetesService();
-        using var app = builder.Build();
-        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(
-            distributedAppModel,
-            kubernetesService: kubernetesService,
-            configuration: configuration,
-            dcpOptions: dcpOptions);
-
-        await appExecutor.RunApplicationAsync();
-
-        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
-        AssertCleanupMode(container.Spec);
-        Assert.Null(container.Spec.MonitorPid);
-        Assert.Null(container.Spec.MonitorTimestamp);
-
-        var network = Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetwork>());
-        AssertCleanupMode(network.Spec);
-
-        var executables = kubernetesService.CreatedResources.OfType<Executable>()
-            .Where(e => e.AppModelResourceName is "worker" or "project")
-            .ToArray();
-        Assert.Equal(2, executables.Length);
-        Assert.All(executables, exe =>
-        {
-            AssertCleanupMode(exe.Spec);
-            Assert.Null(exe.Spec.MonitorPid);
-            Assert.Null(exe.Spec.MonitorTimestamp);
-            Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
-        });
-    }
-
-    [Fact]
-    public async Task ResourceCleanupModeStopsAllCreatedResourcesAndUsesCleanupModeForPersistentResources()
-    {
-        var builder = DistributedApplication.CreateBuilder();
-
-        builder.AddContainer("database", "image")
-            .WithPersistentLifetime();
-        builder.AddContainer("sessioncontainer", "image")
-            .WithExplicitStart();
-        builder.AddExecutable("worker", "worker", Environment.CurrentDirectory)
-            .WithPersistentLifetime();
-        builder.AddExecutable("sessionworker", "worker", Environment.CurrentDirectory)
-            .WithExplicitStart();
-        builder.AddProject<TestProject>("project", launchProfileName: null)
-            .WithPersistentLifetime();
-
-        var configDict = new Dictionary<string, string?>
-        {
-            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-        };
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
-        var dcpOptions = new DcpOptions
-        {
-            DashboardPath = "./dashboard",
-            ResourceCleanupMode = true
-        };
-
-        var kubernetesService = new TestKubernetesService();
-        using var app = builder.Build();
-        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(
-            distributedAppModel,
-            kubernetesService: kubernetesService,
-            configuration: configuration,
-            dcpOptions: dcpOptions);
-
-        await appExecutor.RunApplicationAsync();
-
-        var containers = kubernetesService.CreatedResources.OfType<Container>().ToArray();
-        Assert.Equal(2, containers.Length);
-        Assert.All(containers, container => Assert.True(container.Spec.Stop == true));
-        AssertCleanupMode(Assert.Single(containers, c => c.AppModelResourceName == "database").Spec);
-        Assert.Null(Assert.Single(containers, c => c.AppModelResourceName == "sessioncontainer").Spec.Mode);
-
-        var network = Assert.Single(kubernetesService.CreatedResources.OfType<ContainerNetwork>());
-        AssertCleanupMode(network.Spec);
-
-        var executables = kubernetesService.CreatedResources.OfType<Executable>()
-            .Where(e => e.AppModelResourceName is "worker" or "sessionworker" or "project")
-            .ToArray();
-        Assert.Equal(3, executables.Length);
-        Assert.All(executables, executable => Assert.True(executable.Spec.Stop == true));
-        Assert.All(executables.Where(e => e.AppModelResourceName is "worker" or "project"), executable => AssertCleanupMode(executable.Spec));
-        Assert.Null(Assert.Single(executables, e => e.AppModelResourceName == "sessionworker").Spec.Mode);
-    }
-
-    [Fact]
-    public async Task WaitForResourceCleanupPropagatesCleanupFailures()
-    {
-        var builder = DistributedApplication.CreateBuilder();
-
-        builder.AddContainer("database", "image")
-            .WithPersistentLifetime();
-
-        var configDict = new Dictionary<string, string?>
-        {
-            ["AppHost:Sha256"] = "1234567890abcdef1234567890abcdef1234567890abcdef1234567890abcdef"
-        };
-        var configuration = new ConfigurationBuilder().AddInMemoryCollection(configDict).Build();
-        var dcpOptions = new DcpOptions
-        {
-            DashboardPath = "./dashboard",
-            ResourceCleanupMode = true,
-            WaitForResourceCleanup = true
-        };
-
-        var expectedException = new InvalidOperationException("DCP cleanup failed.");
-        var kubernetesService = new TestKubernetesService
-        {
-            CleanupResourcesAsyncCallback = _ => Task.FromException(expectedException)
-        };
-        using var app = builder.Build();
-        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(
-            distributedAppModel,
-            kubernetesService: kubernetesService,
-            configuration: configuration,
-            dcpOptions: dcpOptions);
-
-        await appExecutor.RunApplicationAsync();
-
-        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => appExecutor.StopAsync(CancellationToken.None));
-        Assert.Same(expectedException, exception);
-        Assert.Equal(1, kubernetesService.StopServerCallCount);
     }
 
     [Fact]
@@ -3554,7 +3400,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         await appExecutor.RunApplicationAsync();
 
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
-        AssertPersistentMode(container.Spec);
+        Assert.True(container.Spec.Persistent.GetValueOrDefault());
         Assert.Equal(parentProcessIdentity.ProcessId, container.Spec.MonitorPid);
         Assert.Equal(parentProcessIdentity.Timestamp, container.Spec.MonitorTimestamp);
 
@@ -3564,7 +3410,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(2, executables.Length);
         Assert.All(executables, exe =>
         {
-            AssertPersistentMode(exe.Spec);
+            Assert.True(exe.Spec.Persistent.GetValueOrDefault());
             Assert.Equal(parentProcessIdentity.ProcessId, exe.Spec.MonitorPid);
             Assert.Equal(parentProcessIdentity.Timestamp, exe.Spec.MonitorTimestamp);
             Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
@@ -4972,7 +4818,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var exe = GetCreatedExecutableForResource(kubernetesService, "ServiceA");
 
-        Assert.Equal(ResourceLifecycleMode.Persistent, exe.Spec.Mode);
+        Assert.True(exe.Spec.Persistent);
         Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
 
         Assert.True(exe.TryGetAnnotationAsObjectList<string>(CustomResource.ResourceProjectArgsAnnotation, out var projectArgs));
@@ -5522,7 +5368,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var executable = Assert.Single(GetCreatedExecutablesForResource(kubernetesService, "anExecutable"));
         Assert.False(executable.Spec.Start);
-        AssertPersistentMode(executable.Spec);
+        Assert.True(executable.Spec.Persistent);
         Assert.Contains("--persistent", executable.Spec.Args!);
         Assert.Contains(executable.Spec.Env!, e => e is { Name: "PERSISTENT_ENV", Value: "true" });
 
@@ -5575,7 +5421,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>(), c => c.AppModelResourceName == "aContainer");
         Assert.False(container.Spec.Start);
-        AssertPersistentMode(container.Spec);
+        Assert.True(container.Spec.Persistent);
         Assert.Contains("--persistent", container.Spec.Args!);
         Assert.Contains(container.Spec.Env!, e => e is { Name: "PERSISTENT_ENV", Value: "true" });
 
@@ -6339,7 +6185,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
             executionContext,
             locations,
             aspireStore,
-            Options.Create(dcpOptions),
             NullLogger<ExecutableCreator>.Instance,
             appResources);
 
@@ -6443,42 +6288,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     private static Aspire.Hosting.Dcp.ResourceSnapshotBuilder CreateSnapshotBuilder(DistributedApplicationModel model)
     {
         return new(new DcpResourceState(model.Resources.ToDictionary(r => r.Name), []));
-    }
-
-    private static void AssertPersistentMode(ContainerSpec spec)
-    {
-        Assert.Equal(ResourceLifecycleMode.Persistent, spec.Mode);
-        Assert.Null(spec.Persistent);
-    }
-
-    private static void AssertPersistentMode(ExecutableSpec spec)
-    {
-        Assert.Equal(ResourceLifecycleMode.Persistent, spec.Mode);
-        Assert.Null(spec.Persistent);
-    }
-
-    private static void AssertPersistentMode(ContainerNetworkSpec spec)
-    {
-        Assert.Equal(ResourceLifecycleMode.Persistent, spec.Mode);
-        Assert.Null(spec.Persistent);
-    }
-
-    private static void AssertCleanupMode(ContainerSpec spec)
-    {
-        Assert.Equal(ResourceLifecycleMode.Cleanup, spec.Mode);
-        Assert.Null(spec.Persistent);
-    }
-
-    private static void AssertCleanupMode(ExecutableSpec spec)
-    {
-        Assert.Equal(ResourceLifecycleMode.Cleanup, spec.Mode);
-        Assert.Null(spec.Persistent);
-    }
-
-    private static void AssertCleanupMode(ContainerNetworkSpec spec)
-    {
-        Assert.Equal(ResourceLifecycleMode.Cleanup, spec.Mode);
-        Assert.Null(spec.Persistent);
     }
 
     private static CustomResourceSnapshot CreatePreviousSnapshot()

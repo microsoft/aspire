@@ -302,27 +302,22 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             {
                 await _kubernetesService.CleanupResourcesAsync(cancellationToken).ConfigureAwait(false);
             }
+
+            // The app orchestrator (represented by kubernetesService here) will perform a resource cleanup
+            // (if not done already) when the app host process exits.
+            // This is just a perf optimization, so we do not care that much if this call fails.
+            // There is not much difference for single app run, but for tests that tend to launch multiple instances
+            // of app host from the same process, the gain from programmatic orchestrator shutdown is significant
+            // See https://github.com/microsoft/aspire/issues/6561 for more info.
+            await _kubernetesService.StopServerAsync(Model.ResourceCleanup.Full, cancellationToken).ConfigureAwait(false);
         }
-        finally
+        catch (OperationCanceledException)
         {
-            try
-            {
-                // The app orchestrator (represented by kubernetesService here) will perform a resource cleanup
-                // (if not done already) when the app host process exits.
-                // This is just a perf optimization, so we do not care that much if this call fails.
-                // There is not much difference for single app run, but for tests that tend to launch multiple instances
-                // of app host from the same process, the gain from programmatic orchestrator shutdown is significant
-                // See https://github.com/microsoft/aspire/issues/6561 for more info.
-                await _kubernetesService.StopServerAsync(Model.ResourceCleanup.Full, cancellationToken).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                // Ignore.
-            }
-            catch (Exception ex)
-            {
-                _logger.LogDebug(ex, "Application orchestrator could not be stopped programmatically.");
-            }
+            // Ignore.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Application orchestrator could not be stopped programmatically.");
         }
     }
 

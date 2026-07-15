@@ -181,20 +181,6 @@ internal static class Conventions
     public const int UnknownExitCode = -1;
 }
 
-internal static class ResourceLifecycleMode
-{
-    public const string Session = "session";
-    public const string Persistent = "persistent";
-    public const string Existing = "existing";
-    public const string Cleanup = "cleanup";
-
-    public static bool IsSupportedPersistentResourceOverride(string mode)
-    {
-        return string.Equals(mode, Persistent, StringComparison.OrdinalIgnoreCase) ||
-            string.Equals(mode, Cleanup, StringComparison.OrdinalIgnoreCase);
-    }
-}
-
 internal sealed class ServiceProducerAnnotation
 {
     // Name of the service produced
