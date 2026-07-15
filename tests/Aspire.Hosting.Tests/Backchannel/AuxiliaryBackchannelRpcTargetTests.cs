@@ -2151,6 +2151,42 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExecuteResourceCommandAsync_StartDashboardCommand_TransitionsWaitingToStarting_WhenDashboardIsExplicitStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true,
+            outputHelper);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources, r => r.Name == KnownResourceNames.AspireDashboard);
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(dashboard, snapshot => snapshot with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.Waiting, null)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = KnownResourceNames.AspireDashboard,
+            CommandName = KnownResourceCommands.StartCommand,
+            ValidateOnly = false
+        }).DefaultTimeout();
+
+        Assert.True(response.Success, response.Message);
+        Assert.True(notificationService.TryGetCurrentState(KnownResourceNames.AspireDashboard, out var resourceEvent));
+        Assert.Equal(KnownResourceStates.Starting, resourceEvent.Snapshot.State?.Text);
+    }
+
+    [Fact]
     public async Task WaitForResourceAsync_ReturnsNotFound_WhenResourceDoesNotExist()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);

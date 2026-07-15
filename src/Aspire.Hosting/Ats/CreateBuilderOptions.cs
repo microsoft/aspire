@@ -31,7 +31,8 @@ internal sealed class CreateBuilderOptions
     public string? ContainerRegistryOverride { get; set; }
 
     /// <summary>
-    /// Determines whether the dashboard should be disabled at app host startup.
+    /// Determines whether dashboard auto-start should be disabled at app host startup.
+    /// The dashboard resource is still added and can be started explicitly later.
     /// </summary>
     public bool DisableDashboard { get; set; }
 
