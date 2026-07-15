@@ -897,10 +897,16 @@ test(`${features("HTTP-FAILURE-001")} reports an unavailable HTTP backend`, asyn
   await expect(page.getByTitle("Resources: Error")).toBeVisible();
   await expect(page.getByRole("table")).toHaveCount(0);
   await expect(page.getByText("frontend", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".splash__sweep")).toHaveCSS("animation-name", "none");
 
   await page.getByRole("main").getByRole("button", { name: "Retry" }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Can't reach the AppHost" })).toBeVisible();
   await expect(page.getByRole("table")).toHaveCount(0);
+
+  allowNavigationAbort.add(page);
+  await page.goto("/traces?backend=http");
+  await expect(page.getByRole("heading", { level: 1, name: "Can't reach the AppHost" })).toHaveCount(0);
+  await expect(page.getByText("No traces match your filter.")).toBeVisible();
 
   const body = await page.screenshot({ animations: "disabled", fullPage: true });
   await testInfo.attach("http-backend-unavailable.png", { body, contentType: "image/png" });

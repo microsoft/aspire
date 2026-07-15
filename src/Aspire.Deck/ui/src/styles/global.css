@@ -2857,15 +2857,8 @@ table.data tbody tr.selected {
   margin-bottom: 14px;
 }
 
-/* Rotating radar sweep to signal that Deck is actively listening. */
 .splash__sweep {
   transform-origin: 28px 28px;
-  animation: splash-sweep 3.2s linear infinite;
-}
-
-@keyframes splash-sweep {
-  from { transform: rotate(0deg); }
-  to { transform: rotate(360deg); }
 }
 
 .splash__title {
