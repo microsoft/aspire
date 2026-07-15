@@ -136,6 +136,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IM
     public List<string> GetLogPropertyKeys(ResourceKey? resourceKey) => GetLogPropertyKeysFromDatabase(resourceKey);
     public List<string> GetTracePropertyKeys(ResourceKey? resourceKey) => GetTracePropertyKeysFromDatabase(resourceKey);
     public GetTracesResponse GetTraces(GetTracesRequest context) => GetTracesFromDatabase(context);
+    public GetTraceSummariesResponse GetTraceSummaries(GetTracesRequest context) => GetTraceSummariesFromDatabase(context);
     public GetSpansResponse GetSpans(GetSpansRequest context) => GetSpansFromDatabase(context);
     public Dictionary<string, int> GetTraceFieldValues(string attributeName) => GetTraceFieldValuesFromDatabase(attributeName);
     public Dictionary<string, int> GetLogsFieldValues(string attributeName) => GetLogsFieldValuesFromDatabase(attributeName);

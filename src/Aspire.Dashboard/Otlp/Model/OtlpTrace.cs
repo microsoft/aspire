@@ -65,6 +65,8 @@ public class OtlpTrace
             throw new InvalidOperationException($"Circular loop detected for span '{span.SpanId}' with parent '{span.ParentSpanId}'.");
         }
 
+        _duration = null;
+
         if (string.IsNullOrEmpty(span.ParentSpanId))
         {
             // There should only be one span with no parent span ID.

@@ -727,6 +727,36 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
     }
 
+    public GetTraceSummariesResponse GetTraceSummaries(GetTracesRequest context)
+    {
+        var result = GetTraces(context);
+        return new GetTraceSummariesResponse
+        {
+            PagedResult = new PagedResult<TraceSummary>
+            {
+                Items = result.PagedResult.Items.Select(trace => new TraceSummary
+                {
+                    TraceId = trace.TraceId,
+                    FullName = trace.FullName,
+                    StartTime = trace.FirstSpan.StartTime,
+                    Duration = trace.Duration,
+                    RootResource = trace.RootOrFirstSpan.Source.Resource,
+                    Resources = TraceHelpers.GetOrderedResources(trace).Select(resource => new TraceResourceSummary
+                    {
+                        Resource = resource.Resource,
+                        TotalSpans = resource.TotalSpans,
+                        ErroredSpans = resource.ErroredSpans
+                    }).ToList(),
+                    HasError = trace.Spans.Any(span => span.Status == OtlpSpanStatusCode.Error),
+                    HasGenAI = trace.Spans.Any(span => global::Aspire.Dashboard.Model.GenAI.GenAIHelpers.HasGenAIAttribute(span.Attributes))
+                }).ToList(),
+                TotalItemCount = result.PagedResult.TotalItemCount,
+                IsFull = result.PagedResult.IsFull
+            },
+            MaxDuration = result.MaxDuration
+        };
+    }
+
     public GetSpansResponse GetSpans(GetSpansRequest context)
     {
         List<OtlpResource>? resources = null;

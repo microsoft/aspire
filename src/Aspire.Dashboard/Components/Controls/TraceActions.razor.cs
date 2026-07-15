@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -20,7 +20,7 @@ public partial class TraceActions : ComponentBase
     public required IStringLocalizer<ControlsStrings> ControlsLoc { get; init; }
 
     [Parameter]
-    public required OtlpTrace Trace { get; set; }
+    public required TraceSummary Summary { get; set; }
 
     private readonly List<MenuButtonItem> _menuItems = new();
 
@@ -28,6 +28,6 @@ public partial class TraceActions : ComponentBase
     {
         _menuItems.Clear();
 
-        TraceMenuBuilder.AddMenuItems(_menuItems, Trace);
+        TraceMenuBuilder.AddMenuItems(_menuItems, Summary);
     }
 }

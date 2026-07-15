@@ -382,6 +382,191 @@ public sealed partial class SqliteTelemetryRepository
         };
     }
 
+    private GetTraceSummariesResponse GetTraceSummariesFromDatabase(GetTracesRequest context)
+    {
+        using var connection = _database.OpenConnection();
+        var query = BuildTraceQuery(context);
+        query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
+        query.Parameters.Add("Count", Math.Max(context.Count, 0));
+        query.Parameters.Add("MaxTraceCount", _otlpContext.Options.MaxTraceCount);
+
+        // Build the page and its resource groups in one query. The recursive span tree preserves
+        // the resource ordering used by TraceHelpers when a child span starts before its parent.
+        var records = connection.Query<TracePageSummaryRecord>($"""
+            WITH RECURSIVE
+            filtered_traces AS (
+                SELECT t.*
+                {query.FromAndWhere}
+            ),
+            trace_aggregate AS (
+                SELECT COUNT(*) AS TotalItemCount, COALESCE(MAX(duration_ticks), 0) AS MaxDurationTicks
+                FROM filtered_traces
+            ),
+            paged_traces AS (
+                SELECT *
+                FROM filtered_traces
+                ORDER BY first_span_timestamp_ticks, insertion_sequence DESC
+                LIMIT @Count OFFSET @StartIndex
+            ),
+            span_tree AS (
+                SELECT
+                    s.trace_id,
+                    s.span_id,
+                    s.resource_id,
+                    s.uninstrumented_peer_resource_id,
+                    s.status,
+                    s.start_time_ticks AS resource_order_ticks
+                FROM telemetry_spans s
+                JOIN paged_traces pt ON pt.trace_id = s.trace_id
+                WHERE NOT EXISTS (
+                    SELECT 1
+                    FROM telemetry_spans parent
+                    WHERE parent.trace_id = s.trace_id AND parent.span_id = s.parent_span_id
+                )
+
+                UNION ALL
+
+                SELECT
+                    child.trace_id,
+                    child.span_id,
+                    child.resource_id,
+                    child.uninstrumented_peer_resource_id,
+                    child.status,
+                    MAX(child.start_time_ticks, parent.resource_order_ticks)
+                FROM telemetry_spans child
+                JOIN span_tree parent ON parent.trace_id = child.trace_id AND parent.span_id = child.parent_span_id
+            ),
+            span_resources AS (
+                SELECT
+                    st.trace_id,
+                    st.resource_id,
+                    st.status,
+                    st.resource_order_ticks
+                FROM span_tree st
+
+                UNION ALL
+
+                SELECT
+                    st.trace_id,
+                    st.uninstrumented_peer_resource_id,
+                    st.status,
+                    st.resource_order_ticks
+                FROM span_tree st
+                WHERE st.uninstrumented_peer_resource_id IS NOT NULL
+            ),
+            resource_summaries AS (
+                SELECT
+                    sr.trace_id,
+                    r.resource_name,
+                    r.instance_id,
+                    r.uninstrumented_peer,
+                    MIN(sr.resource_order_ticks) AS resource_order_ticks,
+                    COUNT(*) AS total_spans,
+                    SUM(CASE WHEN sr.status = 2 THEN 1 ELSE 0 END) AS errored_spans
+                FROM span_resources sr
+                JOIN telemetry_resources r ON r.resource_id = sr.resource_id
+                GROUP BY sr.trace_id, sr.resource_id
+            ),
+            primary_spans AS (
+                SELECT
+                    s.trace_id,
+                    r.resource_name,
+                    r.instance_id,
+                    r.uninstrumented_peer,
+                    ROW_NUMBER() OVER (
+                        PARTITION BY s.trace_id
+                        ORDER BY CASE WHEN s.parent_span_id IS NULL OR s.parent_span_id = '' THEN 0 ELSE 1 END, s.start_time_ticks, s.span_id
+                    ) AS row_number
+                FROM telemetry_spans s
+                JOIN paged_traces pt ON pt.trace_id = s.trace_id
+                JOIN telemetry_resources r ON r.resource_id = s.resource_id
+            ),
+            trace_summaries AS (
+                SELECT
+                    pt.trace_id,
+                    pt.full_name,
+                    pt.first_span_timestamp_ticks,
+                    pt.duration_ticks,
+                    ps.resource_name AS root_resource_name,
+                    ps.instance_id AS root_instance_id,
+                    ps.uninstrumented_peer AS root_uninstrumented_peer,
+                    EXISTS (SELECT 1 FROM telemetry_spans s WHERE s.trace_id = pt.trace_id AND s.status = 2) AS has_error,
+                    EXISTS (
+                        SELECT 1
+                        FROM telemetry_span_attributes a
+                        WHERE a.trace_id = pt.trace_id
+                          AND a.attribute_key IN ('gen_ai.system', 'gen_ai.provider.name')
+                          AND LENGTH(a.attribute_value) > 0
+                    ) AS has_gen_ai,
+                    pt.first_span_timestamp_ticks AS trace_order_ticks,
+                    pt.insertion_sequence
+                FROM paged_traces pt
+                JOIN primary_spans ps ON ps.trace_id = pt.trace_id AND ps.row_number = 1
+            )
+            SELECT
+                a.TotalItemCount,
+                a.MaxDurationTicks,
+                (SELECT COUNT(*) FROM telemetry_traces) >= @MaxTraceCount AS IsFull,
+                ts.trace_id AS TraceId,
+                ts.full_name AS FullName,
+                ts.first_span_timestamp_ticks AS StartTimeTicks,
+                ts.duration_ticks AS DurationTicks,
+                ts.root_resource_name AS RootResourceName,
+                ts.root_instance_id AS RootInstanceId,
+                ts.root_uninstrumented_peer AS RootUninstrumentedPeer,
+                ts.has_error AS HasError,
+                ts.has_gen_ai AS HasGenAI,
+                rs.resource_name AS ResourceName,
+                rs.instance_id AS InstanceId,
+                rs.uninstrumented_peer AS UninstrumentedPeer,
+                rs.total_spans AS TotalSpans,
+                rs.errored_spans AS ErroredSpans
+            FROM trace_aggregate a
+            LEFT JOIN trace_summaries ts ON 1 = 1
+            LEFT JOIN resource_summaries rs ON rs.trace_id = ts.trace_id
+            ORDER BY ts.trace_order_ticks, ts.insertion_sequence DESC, rs.resource_order_ticks, rs.resource_name, rs.instance_id;
+            """, query.Parameters).AsList();
+
+        var firstRecord = records[0];
+        var summaries = records
+            .Where(record => record.TraceId is not null)
+            .GroupBy(record => record.TraceId!, StringComparer.Ordinal)
+            .Select(group =>
+            {
+                var trace = group.First();
+                return new TraceSummary
+                {
+                    TraceId = trace.TraceId!,
+                    FullName = trace.FullName!,
+                    StartTime = new DateTime(trace.StartTimeTicks!.Value, DateTimeKind.Utc),
+                    Duration = TimeSpan.FromTicks(trace.DurationTicks!.Value),
+                    RootResource = CreateSummaryResource(trace.RootResourceName!, trace.RootInstanceId, trace.RootUninstrumentedPeer!.Value),
+                    Resources = group.Select(resource => new TraceResourceSummary
+                    {
+                        Resource = CreateSummaryResource(resource.ResourceName!, resource.InstanceId, resource.UninstrumentedPeer!.Value),
+                        TotalSpans = resource.TotalSpans!.Value,
+                        ErroredSpans = resource.ErroredSpans!.Value
+                    }).ToList(),
+                    HasError = trace.HasError!.Value,
+                    HasGenAI = trace.HasGenAI!.Value
+                };
+            }).ToList();
+
+        return new GetTraceSummariesResponse
+        {
+            PagedResult = new PagedResult<TraceSummary>
+            {
+                Items = summaries,
+                TotalItemCount = firstRecord.TotalItemCount,
+                IsFull = firstRecord.IsFull
+            },
+            MaxDuration = TimeSpan.FromTicks(firstRecord.MaxDurationTicks)
+        };
+
+        OtlpResource CreateSummaryResource(string resourceName, string? instanceId, bool uninstrumentedPeer) =>
+            new(resourceName, instanceId, uninstrumentedPeer, _otlpContext);
+    }
+
     private static TraceQuery BuildTraceQuery(GetTracesRequest context)
     {
         var sql = new StringBuilder("FROM telemetry_traces t WHERE 1 = 1");
@@ -1162,6 +1347,27 @@ public sealed partial class SqliteTelemetryRepository
     {
         public required string TraceId { get; init; }
         public required long LastUpdatedTimestampTicks { get; init; }
+    }
+
+    private sealed class TracePageSummaryRecord
+    {
+        public required int TotalItemCount { get; init; }
+        public required long MaxDurationTicks { get; init; }
+        public required bool IsFull { get; init; }
+        public string? TraceId { get; init; }
+        public string? FullName { get; init; }
+        public long? StartTimeTicks { get; init; }
+        public long? DurationTicks { get; init; }
+        public string? RootResourceName { get; init; }
+        public string? RootInstanceId { get; init; }
+        public bool? RootUninstrumentedPeer { get; init; }
+        public bool? HasError { get; init; }
+        public bool? HasGenAI { get; init; }
+        public string? ResourceName { get; init; }
+        public string? InstanceId { get; init; }
+        public bool? UninstrumentedPeer { get; init; }
+        public int? TotalSpans { get; init; }
+        public int? ErroredSpans { get; init; }
     }
 
     private sealed class SpanIdentityRecord

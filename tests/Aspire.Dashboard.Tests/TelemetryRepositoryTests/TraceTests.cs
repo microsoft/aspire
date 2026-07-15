@@ -94,6 +94,125 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public void GetTraceSummaries_ReturnsPageData()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "frontend", instanceId: "frontend-1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(3),
+                                attributes:
+                                [
+                                    KeyValuePair.Create("custom", "match"),
+                                    KeyValuePair.Create("gen_ai.system", "test")
+                                ],
+                                status: new Status { Code = Status.Types.StatusCode.Error }),
+                            CreateSpan(
+                                traceId: "2",
+                                spanId: "2-1",
+                                startTime: s_testTime.AddMinutes(2),
+                                endTime: s_testTime.AddMinutes(4),
+                                attributes: [KeyValuePair.Create("custom", "other")])
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "backend", instanceId: "backend-1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                parentSpanId: "1-1",
+                                startTime: s_testTime.AddMinutes(2),
+                                endTime: s_testTime.AddMinutes(6),
+                                status: new Status { Code = Status.Types.StatusCode.Ok })
+                        }
+                    }
+                }
+            }
+        });
+
+        var request = new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            TraceNameFilterText = "frontend",
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = "custom",
+                    Condition = FilterCondition.Equals,
+                    Value = "match"
+                }
+            ]
+        };
+
+        var summaries = repository.GetTraceSummaries(request);
+        var traces = repository.GetTraces(request);
+
+        Assert.Equal(traces.PagedResult.TotalItemCount, summaries.PagedResult.TotalItemCount);
+        Assert.Equal(traces.MaxDuration, summaries.MaxDuration);
+        var summary = Assert.Single(summaries.PagedResult.Items);
+        AssertId("1", summary.TraceId);
+        Assert.Equal("frontend: Test span. Id: 1-1", summary.FullName);
+        Assert.Equal(s_testTime.AddMinutes(1), summary.StartTime);
+        Assert.Equal(TimeSpan.FromMinutes(5), summary.Duration);
+        Assert.Equal(new ResourceKey("frontend", "frontend-1"), summary.RootResource.ResourceKey);
+        Assert.True(summary.HasError);
+        Assert.True(summary.HasGenAI);
+        Assert.Collection(summary.Resources,
+            resource =>
+            {
+                Assert.Equal(new ResourceKey("frontend", "frontend-1"), resource.Resource.ResourceKey);
+                Assert.Equal(1, resource.TotalSpans);
+                Assert.Equal(1, resource.ErroredSpans);
+            },
+            resource =>
+            {
+                Assert.Equal(new ResourceKey("backend", "backend-1"), resource.Resource.ResourceKey);
+                Assert.Equal(1, resource.TotalSpans);
+                Assert.Equal(0, resource.ErroredSpans);
+            });
+
+        var emptyPage = repository.GetTraceSummaries(new GetTracesRequest
+        {
+            ResourceKeys = request.ResourceKeys,
+            StartIndex = 10,
+            Count = request.Count,
+            TraceNameFilterText = request.TraceNameFilterText,
+            Filters = request.Filters
+        });
+
+        Assert.Empty(emptyPage.PagedResult.Items);
+        Assert.Equal(1, emptyPage.PagedResult.TotalItemCount);
+        Assert.Equal(TimeSpan.FromMinutes(5), emptyPage.MaxDuration);
+    }
+
+    [Fact]
     public void AddTraces_SelfParent_Reject()
     {
         // Arrange
