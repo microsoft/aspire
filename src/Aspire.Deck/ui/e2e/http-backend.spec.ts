@@ -885,6 +885,9 @@ test(`${features("HTTP-RESOURCES-001")} distinguishes the complete resource life
 test(`${features("HTTP-FAILURE-001")} reports an unavailable HTTP backend`, async ({ page }, testInfo: TestInfo) => {
   allowUnavailableResponses.add(page);
   await page.route("**/api/deck/**", async (route) => {
+    // Keep the retry request in flight long enough to verify that the disconnected
+    // surface remains mounted while the connection state changes to "connecting".
+    await new Promise((resolve) => setTimeout(resolve, 250));
     await route.fulfill({ status: 503, body: "Dashboard backend unavailable" });
   });
 
@@ -894,6 +897,10 @@ test(`${features("HTTP-FAILURE-001")} reports an unavailable HTTP backend`, asyn
   await expect(page.getByTitle("Resources: Error")).toBeVisible();
   await expect(page.getByRole("table")).toHaveCount(0);
   await expect(page.getByText("frontend", { exact: true })).toHaveCount(0);
+
+  await page.getByRole("main").getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Can't reach the AppHost" })).toBeVisible();
+  await expect(page.getByRole("table")).toHaveCount(0);
 
   const body = await page.screenshot({ animations: "disabled", fullPage: true });
   await testInfo.attach("http-backend-unavailable.png", { body, contentType: "image/png" });
