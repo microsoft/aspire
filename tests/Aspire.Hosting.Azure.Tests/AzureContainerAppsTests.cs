@@ -2016,6 +2016,28 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ExcludedAzureContainerAppEnvironmentDoesNotParticipateInCollisionValidation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var includedEnvironment = builder.AddAzureContainerAppEnvironment("cae1");
+        builder.AddAzureContainerAppEnvironment("cae2")
+            .ExcludeFromManifest();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(includedEnvironment);
+
+        using var app = builder.Build();
+
+        await app.RunAsync();
+    }
+
+    [Fact]
     public async Task DirectlyAddedAzureContainerAppEnvironmentDoesNotRequireContainerAppsValidationStep()
     {
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

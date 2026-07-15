@@ -73,7 +73,10 @@ public static class AzureContainerAppExtensions
                         return Task.CompletedTask;
                     }
 
-                    var environments = ctx.Model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
+                    var environments = ctx.Model.Resources
+                        .OfType<AzureContainerAppEnvironmentResource>()
+                        .Where(environment => !environment.IsExcludedFromPublish())
+                        .ToList();
                     if (environments.Count == 0)
                     {
                         foreach (var r in ctx.Model.GetComputeResources())
@@ -94,7 +97,8 @@ public static class AzureContainerAppExtensions
                             _ = environment.GetBicepTemplateString();
                         }
 
-                        marker.ValidateManagedEnvironmentNames();
+                        marker.ValidateManagedEnvironmentNames(
+                            environments.Select(environment => environment.Name).ToHashSet(StringComparer.Ordinal));
                     }
 
                     return Task.CompletedTask;
@@ -154,15 +158,17 @@ public static class AzureContainerAppExtensions
             }
         }
 
-        public void ValidateManagedEnvironmentNames()
+        public void ValidateManagedEnvironmentNames(IReadOnlySet<string> includedEnvironmentNames)
         {
             (string Expression, KeyValuePair<string, ManagedEnvironmentNamingMode>[] Environments)[] collisions;
 
             lock (_lock)
             {
                 collisions = _environmentsByManagedEnvironmentName
-                    .Where(pair => pair.Value.Count > 1)
-                    .Select(pair => (pair.Key, pair.Value.ToArray()))
+                    .Select(pair => (
+                        Expression: pair.Key,
+                        Environments: pair.Value.Where(environment => includedEnvironmentNames.Contains(environment.Key)).ToArray()))
+                    .Where(pair => pair.Environments.Length > 1)
                     .ToArray();
             }
 
@@ -507,10 +513,13 @@ public static class AzureContainerAppExtensions
                 laWorkspace.Name = BicepFunction.Interpolate($"law-{resourceToken}");
                 var managedEnvironmentName = BicepFunction.Interpolate($"cae-{resourceToken}");
                 containerAppEnvironment.Name = managedEnvironmentName;
-                marker.RecordManagedEnvironmentName(
-                    appEnvResource.Name,
-                    managedEnvironmentName,
-                    ManagedEnvironmentNamingMode.Azd);
+                if (!appEnvResource.IsExcludedFromPublish())
+                {
+                    marker.RecordManagedEnvironmentName(
+                        appEnvResource.Name,
+                        managedEnvironmentName,
+                        ManagedEnvironmentNamingMode.Azd);
+                }
 
 #pragma warning disable IDE0031 // Use null propagation (IDE0031)
                 if (storageVolume is not null)
@@ -552,7 +561,7 @@ public static class AzureContainerAppExtensions
             // them, so the digit-preserving name is opt-in via WithUniqueResourceNaming(). The fallback resolver
             // also records the actual generated expression so publish can reject colliding legacy names with
             // actionable guidance instead of allowing a broken deployment.
-            if (!appEnvResource.UseAzdNamingConvention)
+            if (!appEnvResource.UseAzdNamingConvention && !appEnvResource.IsExcludedFromPublish())
             {
                 AddManagedEnvironmentNameResolver(appEnvResource, containerAppEnvironment, marker);
             }
