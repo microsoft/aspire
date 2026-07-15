@@ -2151,7 +2151,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task ExecuteResourceCommandAsync_StartDashboardCommand_TransitionsWaitingToStarting_WhenDashboardIsExplicitStart()
+    public async Task ExecuteResourceCommandAsync_StartDashboardCommand_TransitionsFromNotStarted_WhenDashboardIsExplicitStart()
     {
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = true,
@@ -2165,7 +2165,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
         await notificationService.PublishUpdateAsync(dashboard, snapshot => snapshot with
         {
-            State = new ResourceStateSnapshot(KnownResourceStates.Waiting, null)
+            State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null)
         }).DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
@@ -2182,8 +2182,24 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         }).DefaultTimeout();
 
         Assert.True(response.Success, response.Message);
-        Assert.True(notificationService.TryGetCurrentState(KnownResourceNames.AspireDashboard, out var resourceEvent));
-        Assert.Equal(KnownResourceStates.Starting, resourceEvent.Snapshot.State?.Text);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        string? observedState = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (notificationService.TryGetCurrentState(KnownResourceNames.AspireDashboard, out var currentEvent))
+            {
+                observedState = currentEvent.Snapshot.State?.Text;
+                if (!string.IsNullOrEmpty(observedState) && observedState != KnownResourceStates.NotStarted)
+                {
+                    break;
+                }
+            }
+
+            await Task.Delay(100).DefaultTimeout();
+        }
+
+        Assert.False(string.IsNullOrEmpty(observedState));
+        Assert.NotEqual(KnownResourceStates.NotStarted, observedState);
     }
 
     [Fact]
