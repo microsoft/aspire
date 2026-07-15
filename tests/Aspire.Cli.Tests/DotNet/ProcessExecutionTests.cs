@@ -18,6 +18,21 @@ namespace Aspire.Cli.Tests.DotNet;
 public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
 {
     [Fact]
+    public async Task StartAsync_AfterDispose_ThrowsObjectDisposedException()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
+
+        var execution = CreateExecution(
+            scriptFile,
+            new ProcessInvocationOptions());
+
+        await execution.DisposeAsync();
+
+        await Assert.ThrowsAsync<ObjectDisposedException>(() => execution.StartAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task WaitForExitAsync_AllowsForwardersToDrainBeforeClosingStreams()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

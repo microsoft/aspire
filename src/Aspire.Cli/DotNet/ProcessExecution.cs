@@ -37,7 +37,8 @@ internal sealed class ProcessExecution : IProcessExecution
     // reaches Program.Main and acquires its own lease from the handoff environment.
     private IDisposable? _detachedUnixLauncherLease;
     private long _lastActivityTimestamp = Stopwatch.GetTimestamp();
-    private int _disposed;
+    private readonly TaskCompletionSource _startCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
+    private int _lifecycleState = (int)LifecycleState.NotStarted;
 
     internal ProcessExecution(
         IsolatedProcessStartInfo startInfo,
@@ -92,34 +93,49 @@ internal sealed class ProcessExecution : IProcessExecution
     {
         cancellationToken.ThrowIfCancellationRequested();
 
-        var detachedUnixLauncherLease = await ResolveDetachedUnixLauncherAsync(cancellationToken).ConfigureAwait(false);
+        var previousState = (LifecycleState)Interlocked.CompareExchange(ref _lifecycleState, (int)LifecycleState.Starting, (int)LifecycleState.NotStarted);
+        if (previousState != LifecycleState.NotStarted)
+        {
+            throw previousState == LifecycleState.Disposed
+                ? new ObjectDisposedException(nameof(ProcessExecution))
+                : new InvalidOperationException($"{nameof(ProcessExecution)} has already been started.");
+        }
 
-        // IsolatedProcess.StartAsync spawns the child and starts the stdout/stderr pumps. It throws on
-        // spawn failure, so a successful return always means the child is running — there is no
-        // false-on-failure case to model. Process.Start() returning false is not applicable when
-        // UseShellExecute=false.
-        var process = new IsolatedProcess(_startInfo);
-        process.OutputDataReceived += OnOutputLine;
-        process.ErrorDataReceived += OnErrorLine;
-        _process = process;
+        IsolatedProcess? process = null;
+        IDisposable? detachedUnixLauncherLease = null;
         try
         {
+            detachedUnixLauncherLease = await ResolveDetachedUnixLauncherAsync(cancellationToken).ConfigureAwait(false);
+
+            // IsolatedProcess.StartAsync spawns the child and starts the stdout/stderr pumps. It throws on
+            // spawn failure, so a successful return always means the child is running — there is no
+            // false-on-failure case to model. Process.Start() returning false is not applicable when
+            // UseShellExecute=false.
+            process = new IsolatedProcess(_startInfo);
+            process.OutputDataReceived += OnOutputLine;
+            process.ErrorDataReceived += OnErrorLine;
             await process.StartAsync(cancellationToken).ConfigureAwait(false);
+            _process = process;
             _detachedUnixLauncherLease = detachedUnixLauncherLease;
             detachedUnixLauncherLease = null;
+            Volatile.Write(ref _lifecycleState, (int)LifecycleState.Started);
         }
         catch
         {
-            _process = null;
-            await process.DisposeAsync().ConfigureAwait(false);
+            Volatile.Write(ref _lifecycleState, (int)LifecycleState.Disposed);
+            if (process is not null)
+            {
+                await process.DisposeAsync().ConfigureAwait(false);
+            }
             throw;
         }
         finally
         {
             detachedUnixLauncherLease?.Dispose();
+            _startCompletion.TrySetResult();
         }
 
-        _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, _process.Id, _startInfo.WorkingDirectory);
+        _logger.LogDebug("{FileName}({ProcessId}) started in {WorkingDirectory}", _fileName, process.Id, _startInfo.WorkingDirectory);
         return true;
     }
 
@@ -452,11 +468,39 @@ internal sealed class ProcessExecution : IProcessExecution
     /// <inheritdoc />
     public async ValueTask DisposeAsync()
     {
-        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        while (true)
         {
-            return;
-        }
+            switch ((LifecycleState)Volatile.Read(ref _lifecycleState))
+            {
+                case LifecycleState.NotStarted:
+                    if (Interlocked.CompareExchange(ref _lifecycleState, (int)LifecycleState.Disposed, (int)LifecycleState.NotStarted) == (int)LifecycleState.NotStarted)
+                    {
+                        return;
+                    }
+                    break;
 
+                case LifecycleState.Starting:
+                    // StartAsync owns the DCP resolution and process publication handoff. Wait until
+                    // it either publishes the process/lease or cleans up so disposal cannot miss them.
+                    await _startCompletion.Task.ConfigureAwait(false);
+                    break;
+
+                case LifecycleState.Started:
+                    if (Interlocked.CompareExchange(ref _lifecycleState, (int)LifecycleState.Disposed, (int)LifecycleState.Started) == (int)LifecycleState.Started)
+                    {
+                        await DisposeStartedProcessAsync().ConfigureAwait(false);
+                        return;
+                    }
+                    break;
+
+                case LifecycleState.Disposed:
+                    return;
+            }
+        }
+    }
+
+    private async Task DisposeStartedProcessAsync()
+    {
         // DotNetCliRunner does not dispose the execution (StartBackchannelAsync runs fire-and-forget
         // and reads HasExited/ExitCode after the await — see DotNetCliRunner.cs), so this path is
         // reached only by explicit `await using` consumers (the session, guest launcher) and tests.
@@ -505,6 +549,14 @@ internal sealed class ProcessExecution : IProcessExecution
     private void DisposeDetachedUnixLauncherLease()
     {
         Interlocked.Exchange(ref _detachedUnixLauncherLease, null)?.Dispose();
+    }
+
+    private enum LifecycleState
+    {
+        NotStarted,
+        Starting,
+        Started,
+        Disposed
     }
 
     private void OnOutputLine(IsolatedProcess sender, string line)

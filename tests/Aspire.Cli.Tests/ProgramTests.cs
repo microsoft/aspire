@@ -71,15 +71,17 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var versionDirectory = workspace.CreateDirectory("version");
 
-        using var result = RemoteExecutor.Invoke(static versionDirectory =>
         {
-            Environment.SetEnvironmentVariable(BundleDiscovery.BundleVersionDirectoryEnvVar, versionDirectory);
+            using var result = RemoteExecutor.Invoke(static versionDirectory =>
+            {
+                Environment.SetEnvironmentVariable(BundleDiscovery.BundleVersionDirectoryEnvVar, versionDirectory);
 
-            using var lease = Program.AcquireBundleLeaseFromEnvironment(["run"]);
+                using var lease = Program.AcquireBundleLeaseFromEnvironment(["run"]);
 
-            Assert.NotNull(lease);
-            Assert.True(BundleVersionLease.HasActiveLease(versionDirectory));
-        }, versionDirectory.FullName);
+                Assert.NotNull(lease);
+                Assert.True(BundleVersionLease.HasActiveLease(versionDirectory));
+            }, versionDirectory.FullName);
+        }
 
         Assert.False(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
     }

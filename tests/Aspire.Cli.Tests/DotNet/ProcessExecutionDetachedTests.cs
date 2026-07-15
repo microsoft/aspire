@@ -402,6 +402,73 @@ wait "$child_pid"
         Assert.False(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
     }
 
+    [Fact]
+    [SupportedOSPlatform("linux")]
+    [SupportedOSPlatform("macos")]
+    public async Task DisposeAsync_OnUnix_WaitsForStartResolutionBeforeDisposing()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only test.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var versionDirectory = workspace.CreateDirectory("version");
+        var dcpDirectory = versionDirectory.CreateSubdirectory(BundleDiscovery.DcpDirectoryName);
+        var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName);
+        await File.WriteAllTextAsync(dcpPath, """
+#!/bin/sh
+if [ "$1" != "fork-process" ]; then
+  exit 42
+fi
+if [ "$2" != "--monitor" ]; then
+  exit 43
+fi
+if [ "$6" != "--" ]; then
+  exit 44
+fi
+sleep 5 >/dev/null 2>&1 </dev/null &
+child_pid=$!
+printf '%s\n' "$child_pid"
+wait "$child_pid"
+""");
+        File.SetUnixFileMode(dcpPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+
+        var layout = new LayoutConfiguration
+        {
+            LayoutPath = versionDirectory.FullName
+        };
+        var bundleService = new BlockingBundleService(layout);
+
+        var detachedProcess = CreateDetachedExecution(
+            "/bin/sh",
+            ["-c", "exit 0"],
+            workspace.WorkspaceRoot.FullName,
+            layout: layout,
+            bundleService: bundleService,
+            executionContext: workspace.CreateExecutionContext());
+
+        var startTask = detachedProcess.StartAsync(CancellationToken.None);
+
+        try
+        {
+            await bundleService.AcquisitionStarted.WaitAsync(TimeSpan.FromSeconds(5));
+
+            var disposeTask = detachedProcess.DisposeAsync().AsTask();
+            await Task.Delay(TimeSpan.FromMilliseconds(200));
+            Assert.False(disposeTask.IsCompleted);
+
+            bundleService.AllowAcquire();
+
+            Assert.True(await startTask.WaitAsync(TimeSpan.FromSeconds(5)));
+            await disposeTask.WaitAsync(TimeSpan.FromSeconds(5));
+
+            Assert.False(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
+        }
+        finally
+        {
+            bundleService.AllowAcquire();
+            await detachedProcess.DisposeAsync();
+        }
+    }
+
     private static async Task WaitForFileAsync(string path)
     {
         while (!File.Exists(path))
@@ -521,6 +588,46 @@ wait "$child_pid"
             cancellationToken.ThrowIfCancellationRequested();
             var versionLease = BundleVersionLease.Acquire(layout.LayoutPath!, holderKind, commandName);
             return Task.FromResult<BundleLayoutLease?>(new BundleLayoutLease(layout, versionLease));
+        }
+
+        public string? GetDefaultExtractDir(string processPath)
+        {
+            _ = processPath;
+            return null;
+        }
+    }
+
+    private sealed class BlockingBundleService(LayoutConfiguration layout) : IBundleService
+    {
+        private readonly TaskCompletionSource _acquisitionStarted = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly TaskCompletionSource _allowAcquire = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool IsBundle => true;
+
+        public Task AcquisitionStarted => _acquisitionStarted.Task;
+
+        public void AllowAcquire() => _allowAcquire.TrySetResult();
+
+        public Task EnsureExtractedAsync(CancellationToken cancellationToken = default)
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.CompletedTask;
+        }
+
+        public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
+        {
+            _ = destinationPath;
+            _ = force;
+            cancellationToken.ThrowIfCancellationRequested();
+            return Task.FromResult(BundleExtractResult.AlreadyUpToDate);
+        }
+
+        public async Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
+        {
+            _acquisitionStarted.TrySetResult();
+            await _allowAcquire.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            var versionLease = BundleVersionLease.Acquire(layout.LayoutPath!, holderKind, commandName);
+            return new BundleLayoutLease(layout, versionLease);
         }
 
         public string? GetDefaultExtractDir(string processPath)
