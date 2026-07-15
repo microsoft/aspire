@@ -709,41 +709,81 @@ public sealed partial class SqliteTelemetryRepository
 
     private Dictionary<string, int> GetTraceFieldValuesFromDatabase(string attributeName)
     {
-        using var connection = _database.OpenConnection();
-        IEnumerable<string> values = attributeName switch
+        if (attributeName is KnownTraceFields.DurationField or KnownTraceFields.TimestampField)
         {
-            KnownResourceFields.ServiceNameField => connection.Query<string>("""
-                SELECT r.resource_name
-                FROM telemetry_spans s
-                JOIN telemetry_resources r ON r.resource_id = s.resource_id
-                UNION ALL
-                SELECT r.resource_name
-                FROM telemetry_spans s
-                JOIN telemetry_resources r ON r.resource_id = s.uninstrumented_peer_resource_id;
+            return new Dictionary<string, int>(StringComparers.OtlpAttribute);
+        }
+
+        using var connection = _database.OpenConnection();
+        IEnumerable<FieldValueRecord> values = attributeName switch
+        {
+            KnownResourceFields.ServiceNameField => connection.Query<FieldValueRecord>("""
+                SELECT resource_name AS FieldValue, COUNT(*) AS ValueCount
+                FROM (
+                    SELECT r.resource_name
+                    FROM telemetry_spans s
+                    JOIN telemetry_resources r ON r.resource_id = s.resource_id
+                    UNION ALL
+                    SELECT r.resource_name
+                    FROM telemetry_spans s
+                    JOIN telemetry_resources r ON r.resource_id = s.uninstrumented_peer_resource_id
+                )
+                GROUP BY resource_name;
                 """),
-            KnownTraceFields.TraceIdField => connection.Query<string>("SELECT trace_id FROM telemetry_spans;"),
-            KnownTraceFields.SpanIdField => connection.Query<string>("SELECT span_id FROM telemetry_spans;"),
-            KnownTraceFields.KindField => connection.Query<int>("SELECT kind FROM telemetry_spans;").Select(kind => ((OtlpSpanKind)kind).ToString()),
-            KnownTraceFields.StatusField => connection.Query<int>("SELECT status FROM telemetry_spans;").Select(status => ((OtlpSpanStatusCode)status).ToString()),
-            KnownSourceFields.NameField => connection.Query<string>("""
-                SELECT sc.scope_name
-                FROM telemetry_spans s
-                JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id;
+            KnownTraceFields.TraceIdField => QueryFieldValues("trace_id", "telemetry_spans"),
+            KnownTraceFields.SpanIdField => QueryFieldValues("span_id", "telemetry_spans"),
+            KnownTraceFields.KindField => connection.Query<FieldValueRecord>("""
+                SELECT
+                    CASE kind
+                        WHEN 0 THEN 'Unspecified'
+                        WHEN 1 THEN 'Internal'
+                        WHEN 2 THEN 'Server'
+                        WHEN 3 THEN 'Client'
+                        WHEN 4 THEN 'Producer'
+                        WHEN 5 THEN 'Consumer'
+                        ELSE CAST(kind AS TEXT)
+                    END AS FieldValue,
+                    COUNT(*) AS ValueCount
+                FROM telemetry_spans
+                GROUP BY kind;
                 """),
-            KnownTraceFields.NameField => connection.Query<string>("SELECT name FROM telemetry_spans;"),
-            KnownTraceFields.DurationField => connection.Query<long>("SELECT end_time_ticks - start_time_ticks FROM telemetry_spans;")
-                .Select(ticks => TimeSpan.FromTicks(ticks).TotalMilliseconds.ToString("R", CultureInfo.InvariantCulture)),
-            KnownTraceFields.TimestampField => connection.Query<long>("SELECT start_time_ticks FROM telemetry_spans;")
-                .Select(ticks => (ticks / TimeSpan.TicksPerMillisecond).ToString(CultureInfo.InvariantCulture)),
-            _ => connection.Query<string>("""
-                SELECT attribute_value
+            KnownTraceFields.StatusField => connection.Query<FieldValueRecord>("""
+                SELECT
+                    CASE status
+                        WHEN 0 THEN 'Unset'
+                        WHEN 1 THEN 'Ok'
+                        WHEN 2 THEN 'Error'
+                        ELSE CAST(status AS TEXT)
+                    END AS FieldValue,
+                    COUNT(*) AS ValueCount
+                FROM telemetry_spans
+                GROUP BY status;
+                """),
+            KnownSourceFields.NameField => connection.Query<FieldValueRecord>("""
+                SELECT sc.scope_name AS FieldValue, COUNT(*) AS ValueCount
+                FROM telemetry_spans s
+                JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id
+                GROUP BY sc.scope_name;
+                """),
+            KnownTraceFields.NameField => QueryFieldValues("name", "telemetry_spans"),
+            _ => connection.Query<FieldValueRecord>("""
+                SELECT attribute_value AS FieldValue, COUNT(*) AS ValueCount
                 FROM telemetry_span_attributes
-                WHERE attribute_key = @AttributeName COLLATE ORDINAL_IGNORE_CASE;
+                WHERE attribute_key = @AttributeName COLLATE ORDINAL_IGNORE_CASE
+                GROUP BY attribute_value;
                 """, new { AttributeName = attributeName })
         };
 
-        return values.GroupBy(value => value, StringComparers.OtlpAttribute)
-            .ToDictionary(group => group.Key, group => group.Count(), StringComparers.OtlpAttribute);
+        return values.ToDictionary(record => record.FieldValue!, record => record.ValueCount, StringComparers.OtlpAttribute);
+
+        IEnumerable<FieldValueRecord> QueryFieldValues(string expression, string table)
+        {
+            return connection.Query<FieldValueRecord>($"""
+                SELECT {expression} AS FieldValue, COUNT(*) AS ValueCount
+                FROM {table}
+                GROUP BY {expression};
+                """);
+        }
     }
 
     private bool HasUpdatedTraceInDatabase(OtlpTrace trace)

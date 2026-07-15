@@ -409,17 +409,26 @@ public sealed partial class SqliteTelemetryRepository
 
     private Dictionary<string, int> GetLogsFieldValuesFromDatabase(string attributeName)
     {
+        if (attributeName == KnownStructuredLogFields.TimestampField)
+        {
+            return new Dictionary<string, int>(StringComparers.OtlpAttribute);
+        }
+
         using var connection = _database.OpenConnection();
         var parameters = new DynamicParameters();
-        var expression = GetLogFieldExpression(attributeName, parameters, "FieldValue");
+        var expression = GetLogFieldExpression(attributeName, parameters, "FieldValue", coalesceMissing: false);
         return connection.Query<FieldValueRecord>($"""
-            SELECT {expression} AS FieldValue, COUNT(*) AS ValueCount
-            FROM telemetry_logs l
-            JOIN telemetry_resources r ON r.resource_id = l.resource_id
-            JOIN telemetry_scopes s ON s.scope_id = l.scope_id
-            GROUP BY {expression};
+            WITH field_values AS (
+                SELECT {expression} AS FieldValue
+                FROM telemetry_logs l
+                JOIN telemetry_resources r ON r.resource_id = l.resource_id
+                JOIN telemetry_scopes s ON s.scope_id = l.scope_id
+            )
+            SELECT FieldValue, COUNT(*) AS ValueCount
+            FROM field_values
+            WHERE FieldValue IS NOT NULL
+            GROUP BY FieldValue;
             """, parameters)
-            .Where(record => record.FieldValue is not null)
             .ToDictionary(record => record.FieldValue!, record => record.ValueCount, StringComparers.OtlpAttribute);
     }
 
@@ -528,34 +537,35 @@ public sealed partial class SqliteTelemetryRepository
         return BuildStringPredicate(expression, filter.Condition, parameterName);
     }
 
-    private static string GetLogFieldExpression(string field, DynamicParameters parameters, string attributeParameterName)
+    private static string GetLogFieldExpression(string field, DynamicParameters parameters, string attributeParameterName, bool coalesceMissing = true)
     {
         return field switch
         {
             nameof(OtlpLogEntry.Message) or KnownStructuredLogFields.MessageField => "l.message",
             KnownStructuredLogFields.TraceIdField => "l.trace_id",
             KnownStructuredLogFields.SpanIdField => "l.span_id",
-            KnownStructuredLogFields.OriginalFormatField => "COALESCE(l.original_format, '')",
+            KnownStructuredLogFields.OriginalFormatField => coalesceMissing ? "COALESCE(l.original_format, '')" : "l.original_format",
             KnownStructuredLogFields.CategoryField => "s.scope_name",
-            KnownStructuredLogFields.EventNameField => "COALESCE(l.event_name, '')",
+            KnownStructuredLogFields.EventNameField => coalesceMissing ? "COALESCE(l.event_name, '')" : "l.event_name",
             KnownStructuredLogFields.LevelField => "l.severity_name",
             KnownStructuredLogFields.TimestampField => $"CAST(l.timestamp_ticks / {TimeSpan.TicksPerMillisecond} AS TEXT)",
             KnownResourceFields.ServiceNameField => "r.resource_name",
-            _ => GetAttributeExpression(field, parameters, attributeParameterName)
+            _ => GetAttributeExpression(field, parameters, attributeParameterName, coalesceMissing)
         };
 
-        static string GetAttributeExpression(string field, DynamicParameters parameters, string parameterName)
+        static string GetAttributeExpression(string field, DynamicParameters parameters, string parameterName, bool coalesceMissing)
         {
             parameters.Add(parameterName, field);
-            return $"""
-                COALESCE((
+            var expression = $"""
+                (
                     SELECT attribute.attribute_value
                     FROM telemetry_log_attributes attribute
                     WHERE attribute.log_id = l.log_id
                       AND attribute.attribute_key = @{parameterName}
                     LIMIT 1
-                ), '')
+                )
                 """;
+            return coalesceMissing ? $"COALESCE({expression}, '')" : expression;
         }
     }
 
