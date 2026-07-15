@@ -84,6 +84,6 @@ CREATE INDEX IF NOT EXISTS ix_telemetry_spans_trace_order
 CREATE INDEX IF NOT EXISTS ix_telemetry_span_attributes_owner_key
     ON telemetry_span_attributes(trace_id, span_id, attribute_key);
 CREATE INDEX IF NOT EXISTS ix_telemetry_span_attributes_key_value_owner
-    ON telemetry_span_attributes(attribute_key COLLATE ORDINAL_IGNORE_CASE, attribute_value COLLATE ORDINAL_IGNORE_CASE, trace_id, span_id);
+    ON telemetry_span_attributes(attribute_key COLLATE NOCASE, attribute_value COLLATE NOCASE, trace_id, span_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_span_links_target
     ON telemetry_span_links(target_trace_id, target_span_id);

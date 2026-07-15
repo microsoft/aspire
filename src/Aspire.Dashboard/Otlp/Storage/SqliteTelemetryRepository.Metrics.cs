@@ -500,8 +500,8 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_metric_instruments i ON i.instrument_id = d.instrument_id
             JOIN telemetry_resources r ON r.resource_id = i.resource_id
             JOIN telemetry_scopes s ON s.scope_id = i.scope_id
-            WHERE r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE
-                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE)
+            WHERE r.resource_name = @ResourceName COLLATE NOCASE
+                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE NOCASE)
               AND s.scope_name = @MeterName
               AND i.instrument_name = @InstrumentName;
             """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId, MeterName = meterName, InstrumentName = instrumentName });
@@ -564,8 +564,8 @@ public sealed partial class SqliteTelemetryRepository
             FROM telemetry_metric_instruments i
             JOIN telemetry_resources r ON r.resource_id = i.resource_id
             JOIN telemetry_scopes s ON s.scope_id = i.scope_id
-            WHERE r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE
-                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE)
+            WHERE r.resource_name = @ResourceName COLLATE NOCASE
+                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE NOCASE)
               AND (@MeterName IS NULL OR s.scope_name = @MeterName)
               AND (@InstrumentName IS NULL OR i.instrument_name = @InstrumentName)
             ORDER BY i.instrument_id;
@@ -731,11 +731,11 @@ public sealed partial class SqliteTelemetryRepository
             var where = string.Empty;
             if (resourceKey is not null)
             {
-                where = " WHERE resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE";
+                where = " WHERE resource_name = @ResourceName COLLATE NOCASE";
                 parameters.Add("ResourceName", resourceKey.Value.Name);
                 if (resourceKey.Value.InstanceId is not null)
                 {
-                    where += " AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                    where += " AND instance_id = @InstanceId COLLATE NOCASE";
                     parameters.Add("InstanceId", resourceKey.Value.InstanceId);
                 }
             }

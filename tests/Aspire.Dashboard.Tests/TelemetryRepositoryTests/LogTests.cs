@@ -874,8 +874,48 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 1,
-            Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = "message" }]
+            Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = "MESSAGE" }]
         }).Items);
+    }
+
+    [Theory]
+    [InlineData("%")]
+    [InlineData("_")]
+    [InlineData("!")]
+    public void FilterLogs_WithLikeMetacharacter_TreatsValueAsLiteral(string fragment)
+    {
+        var repository = CreateRepository();
+        var expectedMessage = $"matches-{fragment}-literal";
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(instanceId: "1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime.AddMinutes(1), message: expectedMessage),
+                            CreateLogRecord(time: s_testTime.AddMinutes(2), message: "matches-x-literal")
+                        }
+                    }
+                }
+            }
+        });
+
+        var result = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKeys = [repository.GetResources().Single().ResourceKey],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = fragment }]
+        });
+
+        var log = Assert.Single(result.Items);
+        Assert.Equal(expectedMessage, log.Message);
     }
 
     [Fact]

@@ -437,11 +437,11 @@ public sealed partial class SqliteTelemetryRepository
         var parameters = new DynamicParameters();
         if (resourceKey is not null)
         {
-            sql.Append(" WHERE r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE");
+            sql.Append(" WHERE r.resource_name = @ResourceName COLLATE NOCASE");
             parameters.Add("ResourceName", resourceKey.Value.Name);
             if (resourceKey.Value.InstanceId is not null)
             {
-                sql.Append(" AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE");
+                sql.Append(" AND r.instance_id = @InstanceId COLLATE NOCASE");
                 parameters.Add("InstanceId", resourceKey.Value.InstanceId);
             }
         }
@@ -484,11 +484,11 @@ public sealed partial class SqliteTelemetryRepository
             for (var i = 0; i < context.ResourceKeys.Count; i++)
             {
                 var key = context.ResourceKeys[i];
-                var predicate = $"r.resource_name = @ResourceName{i} COLLATE ORDINAL_IGNORE_CASE";
+                var predicate = $"r.resource_name = @ResourceName{i} COLLATE NOCASE";
                 parameters.Add($"ResourceName{i}", key.Name);
                 if (key.InstanceId is not null)
                 {
-                    predicate += $" AND r.instance_id = @InstanceId{i} COLLATE ORDINAL_IGNORE_CASE";
+                    predicate += $" AND r.instance_id = @InstanceId{i} COLLATE NOCASE";
                     parameters.Add($"InstanceId{i}", key.InstanceId);
                 }
                 resourcePredicates.Add($"({predicate})");
@@ -511,23 +511,23 @@ public sealed partial class SqliteTelemetryRepository
             for (var i = 0; i < context.TextFragments.Length; i++)
             {
                 var parameterName = $"TextFragment{i}";
-                parameters.Add(parameterName, context.TextFragments[i]);
+                parameters.Add(parameterName, CreateContainsLikePattern(context.TextFragments[i]));
                 predicates.Add($$"""
                     (
-                        ordinal_contains(l.message, @{{parameterName}})
-                        OR ordinal_contains(s.scope_name, @{{parameterName}})
-                        OR ordinal_contains(l.trace_id, @{{parameterName}})
-                        OR ordinal_contains(l.span_id, @{{parameterName}})
-                        OR ordinal_contains(l.severity_name, @{{parameterName}})
-                        OR ordinal_contains(r.resource_name, @{{parameterName}})
-                        OR ordinal_contains(COALESCE(l.event_name, ''), @{{parameterName}})
+                        l.message LIKE @{{parameterName}} ESCAPE '!'
+                        OR s.scope_name LIKE @{{parameterName}} ESCAPE '!'
+                        OR l.trace_id LIKE @{{parameterName}} ESCAPE '!'
+                        OR l.span_id LIKE @{{parameterName}} ESCAPE '!'
+                        OR l.severity_name LIKE @{{parameterName}} ESCAPE '!'
+                        OR r.resource_name LIKE @{{parameterName}} ESCAPE '!'
+                        OR COALESCE(l.event_name, '') LIKE @{{parameterName}} ESCAPE '!'
                         OR EXISTS (
                             SELECT 1
                             FROM telemetry_log_attributes text_attribute
                             WHERE text_attribute.log_id = l.log_id
                               AND (
-                                  ordinal_contains(text_attribute.attribute_key, @{{parameterName}})
-                                  OR ordinal_contains(text_attribute.attribute_value, @{{parameterName}})
+                                  text_attribute.attribute_key LIKE @{{parameterName}} ESCAPE '!'
+                                  OR text_attribute.attribute_value LIKE @{{parameterName}} ESCAPE '!'
                               )
                         )
                     )
@@ -575,7 +575,11 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         var expression = GetLogFieldExpression(filter.Field, parameters, $"AttributeName{index}");
-        parameters.Add(parameterName, filter.Value);
+        parameters.Add(
+            parameterName,
+            filter.Condition is FilterCondition.Contains or FilterCondition.NotContains
+                ? CreateContainsLikePattern(filter.Value)
+                : filter.Value);
         return BuildStringPredicate(expression, filter.Condition, parameterName);
     }
 
@@ -615,11 +619,11 @@ public sealed partial class SqliteTelemetryRepository
     {
         return condition switch
         {
-            FilterCondition.Equals => $"{expression} = @{parameterName} COLLATE ORDINAL_IGNORE_CASE",
-            FilterCondition.Contains => $"ordinal_contains({expression}, @{parameterName})",
+            FilterCondition.Equals => $"{expression} = @{parameterName} COLLATE NOCASE",
+            FilterCondition.Contains => $"{expression} LIKE @{parameterName} ESCAPE '!'",
             FilterCondition.GreaterThan or FilterCondition.LessThan or FilterCondition.GreaterThanOrEqual or FilterCondition.LessThanOrEqual => "0 = 1",
-            FilterCondition.NotEqual => $"{expression} <> @{parameterName} COLLATE ORDINAL_IGNORE_CASE",
-            FilterCondition.NotContains => $"NOT ordinal_contains({expression}, @{parameterName})",
+            FilterCondition.NotEqual => $"{expression} <> @{parameterName} COLLATE NOCASE",
+            FilterCondition.NotContains => $"{expression} NOT LIKE @{parameterName} ESCAPE '!'",
             _ => throw new ArgumentOutOfRangeException(nameof(condition), condition, null)
         };
     }
@@ -763,13 +767,13 @@ public sealed partial class SqliteTelemetryRepository
             using var transaction = connection.BeginTransaction();
             var sql = new StringBuilder("""
                 DELETE FROM telemetry_resources
-                WHERE resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE
+                WHERE resource_name = @ResourceName COLLATE NOCASE
                 """);
             var parameters = new DynamicParameters();
             parameters.Add("ResourceName", resourceKey.Name);
             if (resourceKey.InstanceId is not null)
             {
-                sql.Append(" AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE");
+                sql.Append(" AND instance_id = @InstanceId COLLATE NOCASE");
                 parameters.Add("InstanceId", resourceKey.InstanceId);
             }
             sql.Append(';');
@@ -795,11 +799,11 @@ public sealed partial class SqliteTelemetryRepository
             var where = string.Empty;
             if (resourceKey is not null)
             {
-                where = " WHERE resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE";
+                where = " WHERE resource_name = @ResourceName COLLATE NOCASE";
                 parameters.Add("ResourceName", resourceKey.Value.Name);
                 if (resourceKey.Value.InstanceId is not null)
                 {
-                    where += " AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                    where += " AND instance_id = @InstanceId COLLATE NOCASE";
                     parameters.Add("InstanceId", resourceKey.Value.InstanceId);
                 }
             }
@@ -880,8 +884,8 @@ public sealed partial class SqliteTelemetryRepository
             SELECT v.resource_view_id
             FROM telemetry_resource_views v
             JOIN telemetry_resources r ON r.resource_id = v.resource_id
-            WHERE r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE
-                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE)
+            WHERE r.resource_name = @ResourceName COLLATE NOCASE
+                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE NOCASE)
             ORDER BY v.resource_view_id;
             """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }).AsList();
         var attributes = connection.Query<OwnedAttributeRecord>("""

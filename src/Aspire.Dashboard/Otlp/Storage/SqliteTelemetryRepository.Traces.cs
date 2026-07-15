@@ -393,13 +393,13 @@ public sealed partial class SqliteTelemetryRepository
             {
                 var key = context.ResourceKeys[index];
                 parameters.Add($"ResourceName{index}", key.Name);
-                var sourcePredicate = $"r.resource_name = @ResourceName{index} COLLATE ORDINAL_IGNORE_CASE";
-                var peerPredicate = $"pr.resource_name = @ResourceName{index} COLLATE ORDINAL_IGNORE_CASE";
+                var sourcePredicate = $"r.resource_name = @ResourceName{index} COLLATE NOCASE";
+                var peerPredicate = $"pr.resource_name = @ResourceName{index} COLLATE NOCASE";
                 if (key.InstanceId is not null)
                 {
                     parameters.Add($"InstanceId{index}", key.InstanceId);
-                    sourcePredicate += $" AND r.instance_id = @InstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
-                    peerPredicate += $" AND pr.instance_id = @InstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                    sourcePredicate += $" AND r.instance_id = @InstanceId{index} COLLATE NOCASE";
+                    peerPredicate += $" AND pr.instance_id = @InstanceId{index} COLLATE NOCASE";
                 }
                 resourcePredicates.Add($"(({sourcePredicate}) OR ({peerPredicate}))");
             }
@@ -409,8 +409,8 @@ public sealed partial class SqliteTelemetryRepository
         }
         if (!string.IsNullOrWhiteSpace(context.TraceNameFilterText))
         {
-            sql.Append(" AND ordinal_contains(t.full_name, @TraceNameFilterText)");
-            parameters.Add("TraceNameFilterText", context.TraceNameFilterText);
+            sql.Append(" AND t.full_name LIKE @TraceNameFilterText ESCAPE '!'");
+            parameters.Add("TraceNameFilterText", CreateContainsLikePattern(context.TraceNameFilterText));
         }
 
         var positivePredicates = new List<string>();
@@ -454,20 +454,20 @@ public sealed partial class SqliteTelemetryRepository
             for (var index = 0; index < context.TextFragments.Length; index++)
             {
                 var parameterName = $"TextFragment{index}";
-                parameters.Add(parameterName, context.TextFragments[index]);
-                fullNamePredicates.Add($"ordinal_contains(t.full_name, @{parameterName})");
+                parameters.Add(parameterName, CreateContainsLikePattern(context.TextFragments[index]));
+                fullNamePredicates.Add($"t.full_name LIKE @{parameterName} ESCAPE '!'");
                 spanPredicates.Add($"""
                     (
-                        ordinal_contains(s.name, @{parameterName}) OR
-                        ordinal_contains(s.span_id, @{parameterName}) OR
-                        ordinal_contains(s.trace_id, @{parameterName}) OR
-                        ordinal_contains(sc.scope_name, @{parameterName}) OR
-                        ordinal_contains(r.resource_name, @{parameterName}) OR
-                        ordinal_contains(CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END, @{parameterName}) OR
-                        ordinal_contains(CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END, @{parameterName}) OR
-                        ordinal_contains(COALESCE(s.status_message, ''), @{parameterName}) OR
-                        EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND (ordinal_contains(a.attribute_key, @{parameterName}) OR ordinal_contains(a.attribute_value, @{parameterName}))) OR
-                        EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND ordinal_contains(e.event_name, @{parameterName}))
+                        s.name LIKE @{parameterName} ESCAPE '!' OR
+                        s.span_id LIKE @{parameterName} ESCAPE '!' OR
+                        s.trace_id LIKE @{parameterName} ESCAPE '!' OR
+                        sc.scope_name LIKE @{parameterName} ESCAPE '!' OR
+                        r.resource_name LIKE @{parameterName} ESCAPE '!' OR
+                        CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END LIKE @{parameterName} ESCAPE '!' OR
+                        CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END LIKE @{parameterName} ESCAPE '!' OR
+                        COALESCE(s.status_message, '') LIKE @{parameterName} ESCAPE '!' OR
+                        EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND (a.attribute_key LIKE @{parameterName} ESCAPE '!' OR a.attribute_value LIKE @{parameterName} ESCAPE '!')) OR
+                        EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND e.event_name LIKE @{parameterName} ESCAPE '!')
                     )
                     """);
             }
@@ -507,7 +507,11 @@ public sealed partial class SqliteTelemetryRepository
                 _ => filter.Condition
             }
             : filter.Condition;
-        parameters.Add(parameterName, filter.Value);
+        parameters.Add(
+            parameterName,
+            condition is FilterCondition.Contains or FilterCondition.NotContains
+                ? CreateContainsLikePattern(filter.Value)
+                : filter.Value);
 
         var expression = filter.Field switch
         {
@@ -543,7 +547,7 @@ public sealed partial class SqliteTelemetryRepository
 
         var attributePredicate = BuildStringPredicate("a.attribute_value", condition, parameterName);
         parameters.Add($"TraceField{filterIndex}", filter.Field);
-        return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND a.attribute_key = @TraceField{filterIndex} COLLATE ORDINAL_IGNORE_CASE AND {attributePredicate})";
+        return $"EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND a.attribute_key = @TraceField{filterIndex} COLLATE NOCASE AND {attributePredicate})";
     }
 
     private GetSpansResponse GetSpansFromDatabase(GetSpansRequest context)
@@ -590,13 +594,13 @@ public sealed partial class SqliteTelemetryRepository
             {
                 var key = context.ResourceKeys[index];
                 parameters.Add($"SpanResourceName{index}", key.Name);
-                var source = $"r.resource_name = @SpanResourceName{index} COLLATE ORDINAL_IGNORE_CASE";
-                var peer = $"pr.resource_name = @SpanResourceName{index} COLLATE ORDINAL_IGNORE_CASE";
+                var source = $"r.resource_name = @SpanResourceName{index} COLLATE NOCASE";
+                var peer = $"pr.resource_name = @SpanResourceName{index} COLLATE NOCASE";
                 if (key.InstanceId is not null)
                 {
                     parameters.Add($"SpanInstanceId{index}", key.InstanceId);
-                    source += $" AND r.instance_id = @SpanInstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
-                    peer += $" AND pr.instance_id = @SpanInstanceId{index} COLLATE ORDINAL_IGNORE_CASE";
+                    source += $" AND r.instance_id = @SpanInstanceId{index} COLLATE NOCASE";
+                    peer += $" AND pr.instance_id = @SpanInstanceId{index} COLLATE NOCASE";
                 }
                 predicates.Add($"(({source}) OR ({peer}))");
             }
@@ -606,10 +610,14 @@ public sealed partial class SqliteTelemetryRepository
         }
         if (!string.IsNullOrEmpty(context.TraceId))
         {
-            parameters.Add("SpanTraceId", context.TraceId);
+            parameters.Add(
+                "SpanTraceId",
+                context.TraceId.Length >= OtlpHelpers.ShortenedIdLength
+                    ? CreateStartsWithLikePattern(context.TraceId)
+                    : context.TraceId);
             sql.Append(context.TraceId.Length >= OtlpHelpers.ShortenedIdLength
-                ? " AND ordinal_starts_with(s.trace_id, @SpanTraceId)"
-                : " AND s.trace_id = @SpanTraceId COLLATE ORDINAL_IGNORE_CASE");
+                ? " AND s.trace_id LIKE @SpanTraceId ESCAPE '!'"
+                : " AND s.trace_id = @SpanTraceId COLLATE NOCASE");
         }
         if (context.HasError is not null)
         {
@@ -662,19 +670,19 @@ public sealed partial class SqliteTelemetryRepository
             for (var index = 0; index < context.TextFragments.Length; index++)
             {
                 var parameterName = $"SpanTextFragment{index}";
-                parameters.Add(parameterName, context.TextFragments[index]);
+                parameters.Add(parameterName, CreateContainsLikePattern(context.TextFragments[index]));
                  sql.Append(CultureInfo.InvariantCulture, $"""
                      AND (
-                        ordinal_contains(s.name, @{parameterName}) OR
-                        ordinal_contains(s.span_id, @{parameterName}) OR
-                        ordinal_contains(s.trace_id, @{parameterName}) OR
-                        ordinal_contains(sc.scope_name, @{parameterName}) OR
-                        ordinal_contains(r.resource_name, @{parameterName}) OR
-                        ordinal_contains(CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END, @{parameterName}) OR
-                        ordinal_contains(CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END, @{parameterName}) OR
-                        ordinal_contains(COALESCE(s.status_message, ''), @{parameterName}) OR
-                        EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND (ordinal_contains(a.attribute_key, @{parameterName}) OR ordinal_contains(a.attribute_value, @{parameterName}))) OR
-                        EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND ordinal_contains(e.event_name, @{parameterName}))
+                        s.name LIKE @{parameterName} ESCAPE '!' OR
+                        s.span_id LIKE @{parameterName} ESCAPE '!' OR
+                        s.trace_id LIKE @{parameterName} ESCAPE '!' OR
+                        sc.scope_name LIKE @{parameterName} ESCAPE '!' OR
+                        r.resource_name LIKE @{parameterName} ESCAPE '!' OR
+                        CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END LIKE @{parameterName} ESCAPE '!' OR
+                        CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END LIKE @{parameterName} ESCAPE '!' OR
+                        COALESCE(s.status_message, '') LIKE @{parameterName} ESCAPE '!' OR
+                        EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND (a.attribute_key LIKE @{parameterName} ESCAPE '!' OR a.attribute_value LIKE @{parameterName} ESCAPE '!')) OR
+                        EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND e.event_name LIKE @{parameterName} ESCAPE '!')
                     )
                     """);
             }
@@ -689,11 +697,11 @@ public sealed partial class SqliteTelemetryRepository
         var resourceWhere = string.Empty;
         if (resourceKey is not null)
         {
-            resourceWhere = " AND r.resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE";
+            resourceWhere = " AND r.resource_name = @ResourceName COLLATE NOCASE";
             parameters.Add("ResourceName", resourceKey.Value.Name);
             if (resourceKey.Value.InstanceId is not null)
             {
-                resourceWhere += " AND r.instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                resourceWhere += " AND r.instance_id = @InstanceId COLLATE NOCASE";
                 parameters.Add("InstanceId", resourceKey.Value.InstanceId);
             }
         }
@@ -769,7 +777,7 @@ public sealed partial class SqliteTelemetryRepository
             _ => connection.Query<FieldValueRecord>("""
                 SELECT attribute_value AS FieldValue, COUNT(*) AS ValueCount
                 FROM telemetry_span_attributes
-                WHERE attribute_key = @AttributeName COLLATE ORDINAL_IGNORE_CASE
+                WHERE attribute_key = @AttributeName COLLATE NOCASE
                 GROUP BY attribute_value;
                 """, new { AttributeName = attributeName })
         };
@@ -800,9 +808,10 @@ public sealed partial class SqliteTelemetryRepository
     private OtlpTrace? GetTraceFromDatabase(string traceId)
     {
         using var connection = _database.OpenConnection();
-        var storedTraceId = connection.QueryFirstOrDefault<string>(traceId.Length >= OtlpHelpers.ShortenedIdLength
-            ? "SELECT trace_id FROM telemetry_traces WHERE ordinal_starts_with(trace_id, @TraceId) ORDER BY first_span_timestamp_ticks, insertion_sequence DESC LIMIT 1;"
-            : "SELECT trace_id FROM telemetry_traces WHERE trace_id = @TraceId COLLATE ORDINAL_IGNORE_CASE ORDER BY first_span_timestamp_ticks, insertion_sequence DESC LIMIT 1;", new { TraceId = traceId });
+        var usePrefix = traceId.Length >= OtlpHelpers.ShortenedIdLength;
+        var storedTraceId = connection.QueryFirstOrDefault<string>(usePrefix
+            ? "SELECT trace_id FROM telemetry_traces WHERE trace_id LIKE @TraceId ESCAPE '!' ORDER BY first_span_timestamp_ticks, insertion_sequence DESC LIMIT 1;"
+            : "SELECT trace_id FROM telemetry_traces WHERE trace_id = @TraceId COLLATE NOCASE ORDER BY first_span_timestamp_ticks, insertion_sequence DESC LIMIT 1;", new { TraceId = usePrefix ? CreateStartsWithLikePattern(traceId) : traceId });
         return storedTraceId is null ? null : MaterializeTrace(connection, storedTraceId);
     }
 
@@ -1111,11 +1120,11 @@ public sealed partial class SqliteTelemetryRepository
             var where = string.Empty;
             if (resourceKey is not null)
             {
-                where = " WHERE resource_name = @ResourceName COLLATE ORDINAL_IGNORE_CASE";
+                where = " WHERE resource_name = @ResourceName COLLATE NOCASE";
                 parameters.Add("ResourceName", resourceKey.Value.Name);
                 if (resourceKey.Value.InstanceId is not null)
                 {
-                    where += " AND instance_id = @InstanceId COLLATE ORDINAL_IGNORE_CASE";
+                    where += " AND instance_id = @InstanceId COLLATE NOCASE";
                     parameters.Add("InstanceId", resourceKey.Value.InstanceId);
                 }
             }
