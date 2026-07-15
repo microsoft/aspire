@@ -163,6 +163,49 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         });
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task TextVisualizer_ActionsStayWithinDialogAtNarrowViewport()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1280, 900);
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var row = page.GetByText("LongSourceResource", new PageGetByTextOptions { Exact = true })
+                .Locator("xpath=ancestor::*[@role='row']")
+                .First;
+            await Assertions.Expect(row).ToBeVisibleAsync();
+
+            var sourceCell = row.Locator("td[col-index='4']");
+            await sourceCell.HoverAsync();
+
+            var openTextVisualizerButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = Dashboard.Resources.Dialogs.OpenInTextVisualizer,
+                Exact = true
+            });
+            await Assertions.Expect(openTextVisualizerButton).ToBeVisibleAsync();
+            await openTextVisualizerButton.ClickAsync();
+
+            await page.SetViewportSizeAsync(360, 900);
+
+            var wrapCheckbox = page.GetByRole(AriaRole.Checkbox, new PageGetByRoleOptions
+            {
+                Name = ControlsStrings.GridValueWrapLines,
+                Exact = true
+            });
+            var copyButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = ControlsStrings.GridValueCopyToClipboard,
+                Exact = true
+            });
+
+            await AssertElementWithinViewportAsync(wrapCheckbox, 360);
+            await AssertElementWithinViewportAsync(copyButton, 360);
+        });
+    }
+
     public sealed class ResourcesDashboardServerFixture : DashboardServerFixture
     {
         protected override IReadOnlyList<ResourceViewModel> Resources =>
@@ -211,5 +254,16 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         Assert.NotNull(tabBounds);
         Assert.True(tabBounds.X >= 0, $"Tab should be within the viewport, but its X position was {tabBounds.X}.");
         Assert.True(tabBounds.X + tabBounds.Width <= viewportWidth, $"Tab should fit inside the {viewportWidth}px viewport, but its right edge was {tabBounds.X + tabBounds.Width}.");
+    }
+
+    private static async Task AssertElementWithinViewportAsync(ILocator element, int viewportWidth)
+    {
+        await Assertions.Expect(element).ToBeVisibleAsync();
+
+        var elementBounds = await element.BoundingBoxAsync();
+
+        Assert.NotNull(elementBounds);
+        Assert.True(elementBounds.X >= 0, $"Element should not overflow the viewport on the left. Element X: {elementBounds.X}.");
+        Assert.True(elementBounds.X + elementBounds.Width <= viewportWidth, $"Element should fit inside the {viewportWidth}px viewport. Element right edge: {elementBounds.X + elementBounds.Width}.");
     }
 }

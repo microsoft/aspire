@@ -246,10 +246,14 @@
 ::deep .message-actions {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 8px;
     margin-left: auto;
     margin-top: 4px;
     margin-right: 4px;
+    max-width: 100%;
+    min-width: 0;
 }
 
 ::deep .message-copy-button {

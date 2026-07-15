@@ -9,7 +9,9 @@
 
 .text-visualizer-container ::deep.button-container {
     display: flex;
+    flex-wrap: wrap;
     width: 100%;
+    gap: 8px;
     margin-top: auto;
 }
 
@@ -20,8 +22,12 @@
 .text-visualizer-container ::deep.button-container-right {
     display: flex;
     align-items: center;
+    flex-wrap: wrap;
+    justify-content: flex-end;
     gap: 8px;
     margin-left: auto;
+    max-width: 100%;
+    min-width: 0;
 }
 
 .text-visualizer-container ::deep.word-wrap-checkbox::part(label) {
