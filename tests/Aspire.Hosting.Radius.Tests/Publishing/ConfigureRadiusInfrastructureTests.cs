@@ -325,4 +325,110 @@ public class ConfigureRadiusInfrastructureTests
         Assert.Contains("api", ex.Message);
         Assert.Contains("renamed", ex.Message);
     }
+
+    [Fact]
+    public void ConfigureCallback_SettingNonLiteralContainerName_Throws()
+    {
+        // A callback that replaces the resource-name literal with a computed Bicep expression can't
+        // be verified against the `properties.containers` map key, and service discovery still
+        // targets the literal name, so the publisher must reject it rather than emit a Service under
+        // a name consumers never address.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Containers[0].ContainerName = new IdentifierExpression("computedName");
+            });
+        builder.AddContainer("api", "myapp/api", "latest");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains("api", ex.Message);
+        Assert.Contains("non-literal", ex.Message);
+    }
+
+    [Fact]
+    public void ConfigureCallback_ChangingContainerPort_Throws()
+    {
+        // Service discovery URLs (`services__*`) are emitted from the pre-callback ports, so a
+        // callback that changes a container port would leave consumers pointing at a stale port.
+        // The publisher must fail fast instead of emitting an inconsistent manifest.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Containers[0].Ports["http"] = new ContainerPortConstruct
+                {
+                    ContainerPort = 9999,
+                    Protocol = "TCP",
+                };
+            });
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithHttpEndpoint(targetPort: 5000, name: "http");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains("http", ex.Message);
+        Assert.Contains("5000", ex.Message);
+        Assert.Contains("9999", ex.Message);
+    }
+
+    [Fact]
+    public void ConfigureCallback_RemovingContainerPort_Throws()
+    {
+        // Removing a port that service discovery already emitted breaks cross-container calls just
+        // like changing it, so the publisher must reject that too.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Containers[0].Ports.Clear();
+            });
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithHttpEndpoint(targetPort: 5000, name: "http");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains("http", ex.Message);
+        Assert.Contains("removed", ex.Message);
+    }
+
+    [Fact]
+    public void PublishingContainer_WithNameTooLongForKubernetesService_Throws()
+    {
+        // The Radius recipe names the ClusterIP Service `{name}-{name}`, and a Kubernetes Service
+        // name is an RFC 1123 DNS label limited to 63 characters. Aspire allows resource names up to
+        // 64 characters, so a container that declares ports but has a >31-character name would emit a
+        // Service the control plane rejects. Fail fast at publish time with an actionable message.
+        var longName = new string('a', 40);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv");
+        builder.AddContainer(longName, "myapp/api", "latest")
+            .WithHttpEndpoint(targetPort: 5000, name: "http");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains($"{longName}-{longName}", ex.Message);
+        Assert.Contains("63", ex.Message);
+    }
 }

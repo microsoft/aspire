@@ -514,10 +514,10 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Port-forward directly to the Deployment. Radius does not synthesize a Kubernetes
-            // Service for Radius.Compute/containers workloads (only recipe-backed resources such as
-            // the Redis cache get one), so there is no Service to target. kubectl port-forward
-            // resolves a ready pod in the Deployment; 8080 is the container port Aspire assigns to
+            // Port-forward directly to the Deployment. Even though the Radius container recipe
+            // creates a ClusterIP Service for each container that declares ports (asserted in
+            // Step 29), port-forwarding to the Deployment reaches a ready pod directly without
+            // depending on Service endpoint readiness. 8080 is the container port Aspire assigns to
             // published containers (ASPNETCORE_HTTP_PORTS=8080).
             output.WriteLine("Step 26: Verifying apiservice endpoint via port-forward...");
             await auto.TypeAsync($"kubectl port-forward -n {appNamespace} deployment/apiservice 18080:8080 &");
@@ -559,9 +559,11 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             // Assert the recipe-created Service explicitly before asserting the app path, so a
-            // service-discovery/DNS regression is distinguishable from an application failure.
-            output.WriteLine("Step 29: Verifying the recipe created Service apiservice-apiservice on the container port (8080)...");
-            await auto.TypeAsync($"kubectl get svc -n {appNamespace} apiservice-apiservice -o jsonpath='{{.spec.ports[0].port}}' | grep -qx 8080");
+            // service-discovery/DNS regression is distinguishable from an application failure. Verify
+            // the full recipe contract (type == ClusterIP, port == targetPort == containerPort == 8080)
+            // so a change to any of those — not just the Service port — is caught here.
+            output.WriteLine("Step 29: Verifying the recipe created a ClusterIP Service apiservice-apiservice with port==targetPort==8080...");
+            await auto.TypeAsync($"test \"$(kubectl get svc -n {appNamespace} apiservice-apiservice -o jsonpath='{{.spec.type}}/{{.spec.ports[0].port}}/{{.spec.ports[0].targetPort}}')\" = 'ClusterIP/8080/8080'");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
