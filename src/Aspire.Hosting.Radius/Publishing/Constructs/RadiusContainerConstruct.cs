@@ -37,6 +37,15 @@ public sealed class RadiusContainerConstruct : ProvisionableResource
         set { Initialize(); _name!.Assign(value); }
     }
 
+    /// <summary>
+    /// The immutable <c>properties.containers</c> map key captured at construction (the Aspire
+    /// resource name). The container v2 schema and the Radius recipe require this to equal the
+    /// top-level <c>name:</c> (<see cref="ContainerName"/>); the publisher validates that invariant
+    /// after running <c>ConfigureRadiusInfrastructure</c> callbacks so service discovery (which is
+    /// derived from the resource name) cannot silently disagree with the generated Service name.
+    /// </summary>
+    internal string ContainerMapKey => _containerName;
+
     /// <summary>Container image (e.g., "nginx:latest").</summary>
     public BicepValue<string> Image
     {

@@ -189,17 +189,16 @@ Radius-specific notes:
   containers. Each container is then probed on its own HTTP endpoint via `kubectl port-forward`:
   `apiservice`'s `/weatherforecast`, `webfrontend`'s home page (`/`), and a Redis output-cache
   diagnostic endpoint on `webfrontend` (which verifies recipe-backed cache connection injection).
-- **Cross-container connectivity is instrumented but still gated.** The `webfrontend` `/weather`
-  page fans out to `apiservice` through the Redis output cache. The current Radius
-  `Radius.Compute/containers` Kubernetes recipe does create a ClusterIP `Service` for a container
-  that declares ports, named `${normalizedName}-${containerName}` with `port`/`targetPort` set to
-  the container port — so the merged claim that Radius creates *no* Service for container workloads
-  appears inaccurate. For Aspire's single-container emission this suggests the service-discovery
-  hostname `apiservice-apiservice.<namespace>.svc.cluster.local:8080`, but the exact Service name
-  must be confirmed by a live `deploy-test/*` run against the pinned rad 0.59 control plane before
-  asserting the direct `webfrontend` → `apiservice` diagnostic endpoint and `/weather`. The test
-  therefore adds both diagnostic endpoints, asserts the Redis one, and leaves the apiservice one
-  and `/weather` skipped pending that confirmation.
+- **Cross-container connectivity is asserted end-to-end.** The `webfrontend` `/weather` page fans
+  out to `apiservice` through the Redis output cache. The Radius `Radius.Compute/containers`
+  Kubernetes recipe creates a ClusterIP `Service` for each container that declares ports, named
+  `${normalizedName}-${containerName}` with `port`/`targetPort` set to the container port. Aspire
+  emits a single container entry keyed by the resource name, so `apiservice`'s Service is
+  `apiservice-apiservice` on port `8080`, and Aspire's Radius service discovery emits the matching
+  address `http://apiservice-apiservice.<namespace>.svc.cluster.local:8080` (see
+  `RadiusEnvironmentResource.GetHostAddressExpression` / `RadiusServiceDiscovery`). The test asserts
+  the recipe-created Service exists on the container port, then asserts the direct
+  `webfrontend` → `apiservice` diagnostic endpoint and the `/weather` page.
 
 ## Radius Azure resource injection (gap)
 

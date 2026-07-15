@@ -273,6 +273,13 @@ internal sealed class RadiusInfrastructureBuilder
 
         RunConfigureCallbacks(options);
 
+        // A ConfigureRadiusInfrastructure callback can rewrite a container's top-level `name:`
+        // (ContainerName) but never its `properties.containers` map key (fixed at construction to
+        // the resource name). The container v2 schema and the recipe require the two to match, and
+        // service discovery addresses the Service by the resource name, so a divergence would both
+        // produce an invalid manifest and silently break cross-container calls. Fail fast instead.
+        ValidateContainerNamesMatchMapKeys(options);
+
         // 7. Rewire `.id` cross-references for targets whose BicepIdentifier
         // was changed by a callback; leave everything else (including callback
         // edits to references) alone.
@@ -883,12 +890,27 @@ internal sealed class RadiusInfrastructureBuilder
             return ports;
         }
 
+        var seenPorts = new HashSet<(int ContainerPort, string Protocol)>();
         foreach (var endpoint in endpoints)
         {
-            // Prefer the target (in-container) port; fall back to the declared host port. In
-            // publish mode neither may be allocated yet, in which case there is nothing to emit.
-            var portValue = endpoint.TargetPort ?? endpoint.Port;
-            if (portValue is not int containerPort)
+            // Use the shared service-port resolver so the container port emitted here matches the
+            // Service port the recipe exposes and the port the environment puts in service-discovery
+            // URLs (RadiusServiceDiscovery). A null result means this endpoint contributes no port
+            // (e.g. the synthetic default HTTPS endpoint), so the recipe creates no Service for it.
+            if (RadiusServiceDiscovery.ResolveServicePort(resource, endpoint.Name) is not int containerPort)
+            {
+                continue;
+            }
+
+            var protocol = endpoint.Protocol == ProtocolType.Udp ? "UDP" : "TCP";
+
+            // Deduplicate by (container port, protocol), matching the Kubernetes publisher's ToService
+            // dedup. Multiple endpoints can resolve to the same container port (e.g. an explicit
+            // portless HTTP and HTTPS endpoint on a project both default to 8080), and the recipe would
+            // otherwise emit two Kubernetes Service ports with the same (port, protocol), which the
+            // provider rejects. The first endpoint wins; the others still resolve to the same port in
+            // their service-discovery URLs, so nothing is lost. See: https://github.com/microsoft/aspire/issues/14029
+            if (!seenPorts.Add((containerPort, protocol)))
             {
                 continue;
             }
@@ -896,7 +918,7 @@ internal sealed class RadiusInfrastructureBuilder
             var port = new ContainerPortConstruct
             {
                 ContainerPort = containerPort,
-                Protocol = endpoint.Protocol == ProtocolType.Udp ? "UDP" : "TCP",
+                Protocol = protocol,
             };
             ports[endpoint.Name] = port;
         }
@@ -1218,6 +1240,27 @@ internal sealed class RadiusInfrastructureBuilder
         foreach (var callback in callbacks)
         {
             callback.Configure(options);
+        }
+    }
+
+    // Ensures each container's top-level `name:` still equals its `properties.containers` map key
+    // after ConfigureRadiusInfrastructure callbacks. Only literal renames are checked (an
+    // expression-valued name is left to the control plane); a mismatch throws so the invalid,
+    // service-discovery-breaking manifest is never emitted.
+    private static void ValidateContainerNamesMatchMapKeys(RadiusInfrastructureOptions options)
+    {
+        foreach (var container in options.Containers)
+        {
+            var name = (IBicepValue)container.ContainerName;
+            if (name.LiteralValue is string literalName &&
+                !string.Equals(literalName, container.ContainerMapKey, StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"A ConfigureRadiusInfrastructure callback renamed container '{container.ContainerMapKey}' to " +
+                    $"'{literalName}'. The Radius container schema requires the top-level 'name' to match the " +
+                    $"'properties.containers' map key, and Aspire service discovery targets the original name, so " +
+                    $"renaming a container's name is not supported. Remove the rename to keep the manifest valid.");
+            }
         }
     }
 

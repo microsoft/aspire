@@ -299,4 +299,30 @@ public class ConfigureRadiusInfrastructureTests
         Assert.Contains("environment: renamedEnv.id", bicep);
         Assert.DoesNotContain("environment: myenv.id", bicep);
     }
+
+    [Fact]
+    public void ConfigureCallback_RenamingContainerName_Throws()
+    {
+        // The container v2 schema requires the top-level `name:` to equal the
+        // `properties.containers` map key, and Aspire service discovery targets the original
+        // resource name, so renaming a container's name would produce an invalid, unreachable
+        // manifest. The publisher must fail fast instead of emitting it.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Containers[0].ContainerName = "renamed";
+            });
+        builder.AddContainer("api", "myapp/api", "latest");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains("api", ex.Message);
+        Assert.Contains("renamed", ex.Message);
+    }
 }
