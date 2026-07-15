@@ -19,7 +19,6 @@ public sealed class DashboardOptions
     public TelemetryLimitOptions TelemetryLimits { get; set; } = new();
     public DebugSessionOptions DebugSession { get; set; } = new();
     public UIOptions UI { get; set; } = new();
-    public AIOptions AI { get; set; } = new();
 }
 
 // Don't set values after validating/parsing options.
@@ -390,11 +389,6 @@ public sealed class ClaimAction
     public string? SubKey { get; set; }
     public bool? IsUnique { get; set; }
     public string? ValueType { get; set; }
-}
-
-public sealed class AIOptions
-{
-    public bool? Disabled { get; set; }
 }
 
 public sealed class DebugSessionOptions
