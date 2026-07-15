@@ -27,14 +27,26 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private readonly string? _metadataPath;
     private readonly string? _temporaryDirectory;
     private readonly DashboardRunMetadata _metadata;
+    private readonly ILogger<DashboardRunStore> _logger;
 
-    public DashboardRunStore(IOptions<DashboardOptions> options)
+    public DashboardRunStore(IOptions<DashboardOptions> options, ILogger<DashboardRunStore> logger)
+        : this(options, logger, static directory => Directory.Delete(directory, recursive: true))
     {
+    }
+
+    internal DashboardRunStore(
+        IOptions<DashboardOptions> options,
+        ILogger<DashboardRunStore> logger,
+        Action<string> deleteRunDirectory)
+    {
+        _logger = logger;
         var applicationName = string.IsNullOrWhiteSpace(options.Value.ApplicationName) ? "Aspire" : options.Value.ApplicationName;
         var startedAt = DateTimeOffset.UtcNow;
         var runId = $"{startedAt:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}";
         PersistenceMode = options.Value.Data.PersistenceMode;
 
+        // Persistent run directories should be located under a directory scoped to the current user. Rely on that
+        // directory's inherited permissions instead of modifying the SQLite database, WAL, and shared-memory files individually.
         switch (PersistenceMode)
         {
             case DashboardPersistenceMode.None:
@@ -74,7 +86,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         if (_metadataPath is not null)
         {
             WriteMetadata(_metadata);
-            PruneRuns();
+            PruneRuns(deleteRunDirectory);
         }
     }
 
@@ -142,7 +154,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         File.WriteAllText(_metadataPath!, JsonSerializer.Serialize(metadata, s_jsonOptions));
     }
 
-    private void PruneRuns()
+    private void PruneRuns(Action<string> deleteRunDirectory)
     {
         // Run directory names start with a fixed-width UTC timestamp, so ordinal ordering matches creation order.
         var expiredRunDirectories = Directory.EnumerateDirectories(_runsDirectory!)
@@ -152,7 +164,17 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
         foreach (var directory in expiredRunDirectories)
         {
-            Directory.Delete(directory, recursive: true);
+            try
+            {
+                deleteRunDirectory(directory);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Failed to delete expired dashboard run directory '{RunDirectory}'. The directory may still be in use by another dashboard process.",
+                    directory);
+            }
         }
     }
 
