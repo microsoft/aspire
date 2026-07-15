@@ -85,4 +85,4 @@ CREATE INDEX IF NOT EXISTS ix_telemetry_logs_trace_order
 CREATE INDEX IF NOT EXISTS ix_telemetry_log_attributes_owner_key
     ON telemetry_log_attributes(log_id, attribute_key);
 CREATE INDEX IF NOT EXISTS ix_telemetry_log_attributes_key_value_owner
-    ON telemetry_log_attributes(attribute_key COLLATE ORDINAL_IGNORE_CASE, attribute_value COLLATE ORDINAL_IGNORE_CASE, log_id);
+    ON telemetry_log_attributes(attribute_key COLLATE NOCASE, attribute_value COLLATE NOCASE, log_id);

@@ -250,16 +250,16 @@ public sealed class DashboardDataSourceTests : IDisposable
     }
 
     [Fact]
-    public void SqliteDatabase_ConfiguresExactStringFunctionsAndForeignKeys()
+    public void SqliteDatabase_ConfiguresLikeAndForeignKeys()
     {
         var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "connection.db"));
         using var connection = database.OpenConnection();
         using var command = connection.CreateCommand();
         command.CommandText = """
             SELECT
-                'Ångström' = 'ångström' COLLATE ORDINAL_IGNORE_CASE,
-                ordinal_contains('CAFÉ au lait', 'fé AU'),
-                ordinal_starts_with('Δelta', 'δE'),
+                'Dashboard' = 'dashboard' COLLATE NOCASE,
+                'CAFE au lait' LIKE '%fe AU%',
+                'Delta' LIKE 'dE%',
                 (SELECT foreign_keys FROM pragma_foreign_keys());
             """;
         using var reader = command.ExecuteReader();

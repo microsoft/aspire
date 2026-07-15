@@ -14,9 +14,6 @@ internal sealed class DashboardSqliteDatabase
     private const string SchemaResourcePrefix = "Aspire.Dashboard.ServiceClient.DatabaseSchema.";
 
     internal const int SchemaVersion = 7;
-    internal const string OrdinalIgnoreCaseCollation = "ORDINAL_IGNORE_CASE";
-    internal const string OrdinalContainsFunction = "ordinal_contains";
-    internal const string OrdinalStartsWithFunction = "ordinal_starts_with";
 
     private static readonly Lazy<IReadOnlyList<string>> s_schemaScripts = new(LoadSchemaScripts);
 
@@ -78,17 +75,6 @@ internal sealed class DashboardSqliteDatabase
     public SqliteConnection OpenConnection()
     {
         var connection = new SqliteConnection(_connectionString);
-        connection.CreateCollation(
-            OrdinalIgnoreCaseCollation,
-            (left, right) => string.Compare(left, right, StringComparison.OrdinalIgnoreCase));
-        connection.CreateFunction<string?, string?, bool>(
-            OrdinalContainsFunction,
-            (value, fragment) => value?.Contains(fragment ?? string.Empty, StringComparison.OrdinalIgnoreCase) ?? false,
-            isDeterministic: true);
-        connection.CreateFunction<string?, string?, bool>(
-            OrdinalStartsWithFunction,
-            (value, prefix) => value?.StartsWith(prefix ?? string.Empty, StringComparison.OrdinalIgnoreCase) ?? false,
-            isDeterministic: true);
         connection.Open();
         connection.Execute("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
 

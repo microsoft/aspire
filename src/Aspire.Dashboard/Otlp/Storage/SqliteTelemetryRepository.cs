@@ -24,6 +24,18 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IM
     private readonly List<IDisposable> _outgoingPeerSubscriptions = [];
     private readonly object _writeLock = new();
 
+    private static string CreateContainsLikePattern(string value) => $"%{EscapeLikePattern(value)}%";
+
+    private static string CreateStartsWithLikePattern(string value) => $"{EscapeLikePattern(value)}%";
+
+    private static string EscapeLikePattern(string value)
+    {
+        return value
+            .Replace("!", "!!", StringComparison.Ordinal)
+            .Replace("%", "!%", StringComparison.Ordinal)
+            .Replace("_", "!_", StringComparison.Ordinal);
+    }
+
     public SqliteTelemetryRepository(
         string databasePath,
         ILoggerFactory loggerFactory,
