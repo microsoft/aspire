@@ -6,8 +6,10 @@ using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
 using Aspire.Dashboard.Resources;
 using Aspire.TestUtilities;
 using Aspire.Tests.Shared.DashboardModel;
+using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Playwright;
+using System.Text.Json;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Integration.Playwright;
@@ -103,6 +105,64 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
         });
     }
 
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task TextVisualizer_NoWrap_KeepsDialogWidthAndShowsHorizontalOverflow()
+    {
+        await RunTestAsync(async page =>
+        {
+            await page.SetViewportSizeAsync(1280, 900);
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var row = page.GetByText("LongSourceResource", new PageGetByTextOptions { Exact = true })
+                .Locator("xpath=ancestor::*[@role='row']")
+                .First;
+            await Assertions.Expect(row).ToBeVisibleAsync();
+
+            var sourceCell = row.Locator("td[col-index='4']");
+            await sourceCell.HoverAsync();
+
+            var openTextVisualizerButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
+            {
+                Name = Dashboard.Resources.Dialogs.OpenInTextVisualizer,
+                Exact = true
+            });
+            await Assertions.Expect(openTextVisualizerButton).ToBeVisibleAsync();
+            await openTextVisualizerButton.ClickAsync();
+
+            var wrapCheckbox = page.Locator("fluent-checkbox.word-wrap-checkbox");
+            await Assertions.Expect(wrapCheckbox).ToHaveAttributeAsync("current-checked", "true");
+            await wrapCheckbox.ClickAsync();
+            await Assertions.Expect(page.Locator(".text-visualizer-container .wrap-log-container")).ToHaveCountAsync(1);
+
+            var metricsJson = await page.EvaluateAsync<string>(@"() => {
+                const overflow = document.querySelector('.text-visualizer-container .log-overflow');
+                const dialog = document.querySelector('.text-visualizer-dialog');
+                if (overflow) {
+                    overflow.scrollLeft = 50;
+                }
+
+                return JSON.stringify({
+                    overflowScrollLeft: overflow ? overflow.scrollLeft : 0,
+                    dialogRight: dialog ? dialog.getBoundingClientRect().right : 0,
+                    viewportWidth: window.innerWidth,
+                    documentScrollWidth: document.documentElement.scrollWidth
+                });
+            }");
+
+            using var metricsDocument = JsonDocument.Parse(metricsJson);
+            var metrics = metricsDocument.RootElement;
+            var overflowScrollLeft = metrics.GetProperty("overflowScrollLeft").GetDouble();
+            var dialogRight = metrics.GetProperty("dialogRight").GetDouble();
+            var viewportWidth = metrics.GetProperty("viewportWidth").GetDouble();
+            var documentScrollWidth = metrics.GetProperty("documentScrollWidth").GetDouble();
+
+            Assert.True(overflowScrollLeft > 0, "No-wrap should allow horizontal scrolling inside the viewer.");
+            Assert.True(dialogRight <= viewportWidth, "Dialog should remain within viewport width when no-wrap is enabled.");
+            Assert.True(documentScrollWidth <= viewportWidth, "No-wrap should not cause page-level horizontal overflow.");
+        });
+    }
+
     public sealed class ResourcesDashboardServerFixture : DashboardServerFixture
     {
         protected override IReadOnlyList<ResourceViewModel> Resources =>
@@ -119,6 +179,27 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
                 resourceName: "HiddenResource",
                 resourceType: KnownResourceTypes.Container,
                 hidden: true)
+            ,
+            ModelTestHelpers.CreateResource(
+                resourceName: "LongSourceResource",
+                resourceType: KnownResourceTypes.Project,
+                state: KnownResourceState.Running,
+                properties: new[]
+                {
+                    new KeyValuePair<string, ResourcePropertyViewModel>(
+                        KnownProperties.Project.Path,
+                        new ResourcePropertyViewModel(
+                            KnownProperties.Project.Path,
+                            new Value
+                            {
+                                StringValue = new string('a', 12000)
+                            },
+                            isValueSensitive: false,
+                            knownProperty: new(KnownProperties.Project.Path, _ => "Path"),
+                            sortOrder: 0,
+                            displayName: null,
+                            isHighlighted: false))
+                }.ToDictionary())
         ];
     }
 

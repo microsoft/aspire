@@ -277,6 +277,9 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
 
         await wrapCheckbox.InvokeAsync(() => wrapCheckbox.Instance.ValueChanged.InvokeAsync(false));
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".wrap-log-container")));
+
+        cut.Find("fluent-button.back-button").Click();
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".wrap-log-container")));
     }
 
     [Fact]
