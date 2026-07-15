@@ -159,6 +159,7 @@ Aspire.Deployment.EndToEnd.Tests/
 ├── AzureStorageDeploymentTests.cs         # Azure Storage resource
 ├── PythonFastApiDeploymentTests.cs        # Python FastAPI to Azure Container Apps
 ├── RadiusStarterDeploymentTests.cs        # Starter template to Radius on AKS (rad deploy)
+├── RadiusAzureResourcesDeploymentTests.cs # Gap: cloud-managed Azure resource refs on Radius
 ├── TypeScriptAzureContainerAppJobDeploymentTests.cs # TypeScript AppHost ACA jobs
 ├── xunit.runner.json                  # Test runner config
 └── README.md                          # This file
@@ -186,14 +187,34 @@ Radius-specific notes:
   `rad app graph -a app --preview` (the legacy `rad app graph` routes to Applications.Core, which
   the Redis-only legacy `app` satisfies on its own) and asserts the graph names both project
   containers. Each container is then probed on its own HTTP endpoint via `kubectl port-forward`:
-  `apiservice`'s `/weatherforecast` and `webfrontend`'s home page (`/`).
-- **Cross-container connectivity is not asserted (current Radius limitation).** The `webfrontend`
-  `/weather` page fans out to `apiservice` through the Redis output cache, but Radius 0.59 does not
-  synthesize a Kubernetes `Service` for a `Radius.Compute/containers` workload, so the
-  service-discovery hostname Aspire emits for `apiservice`
-  (`apiservice.<namespace>.svc.cluster.local`) does not resolve in-cluster (`rad app graph` shows
-  `webfrontend` wired only to the cache). The test therefore validates each container in isolation
-  rather than the `/weather` end-to-end path until that connectivity is supported.
+  `apiservice`'s `/weatherforecast`, `webfrontend`'s home page (`/`), and a Redis output-cache
+  diagnostic endpoint on `webfrontend` (which verifies recipe-backed cache connection injection).
+- **Cross-container connectivity is instrumented but still gated.** The `webfrontend` `/weather`
+  page fans out to `apiservice` through the Redis output cache. The current Radius
+  `Radius.Compute/containers` Kubernetes recipe does create a ClusterIP `Service` for a container
+  that declares ports, named `${normalizedName}-${containerName}` with `port`/`targetPort` set to
+  the container port — so the merged claim that Radius creates *no* Service for container workloads
+  appears inaccurate. For Aspire's single-container emission this suggests the service-discovery
+  hostname `apiservice-apiservice.<namespace>.svc.cluster.local:8080`, but the exact Service name
+  must be confirmed by a live `deploy-test/*` run against the pinned rad 0.59 control plane before
+  asserting the direct `webfrontend` → `apiservice` diagnostic endpoint and `/weather`. The test
+  therefore adds both diagnostic endpoints, asserts the Redis one, and leaves the apiservice one
+  and `/weather` skipped pending that confirmation.
+
+## Radius Azure resource injection (gap)
+
+`RadiusAzureResourcesDeploymentTests.PublishWithAzureKeyVaultReferenceDocumentsCurrentRadiusGap`
+documents a **current gap**, not working coverage. The Aspire Radius publisher does not translate
+cloud-managed Azure resources (Key Vault, Storage, Service Bus, Azure Managed Redis) into Radius
+resources — only portable recipe-backed resources such as `AddRedis` are mapped. When a Radius
+container `WithReference`s an Azure resource, `aspire publish` does not fail fast; it **hangs**
+resolving `Azure.BicepOutputReference.GetValueAsync` inside
+`RadiusInfrastructureBuilder.ResolveEnvironmentAsync` and produces no `app.bicep`. The test asserts
+this timeout/no-output behavior so the gap is visible and regressions are caught; it needs only the
+current-build Aspire CLI (no AKS/Azure deployment). When Azure resource injection is implemented (or
+publish is made to fail fast), this test will start failing and should be converted into a real
+injection assertion. Product follow-up: add Azure resource mappings, or a deploy-time bridge from
+Azure Bicep outputs to Radius container env/connections, and fail fast instead of hanging.
 
 ## TypeScript deployment coverage
 
