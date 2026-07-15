@@ -323,7 +323,14 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
             if (!File.Exists(dashboardDll))
             {
-                distributedApplicationLogger.LogError("Dashboard DLL not found: {Path}", dashboardDll);
+                if (distributedApplicationOptions.DisableDashboard)
+                {
+                    distributedApplicationLogger.LogDebug("Dashboard DLL not found while dashboard auto-start is disabled: {Path}", dashboardDll);
+                }
+                else
+                {
+                    distributedApplicationLogger.LogError("Dashboard DLL not found: {Path}", dashboardDll);
+                }
             }
 
             dashboardResource = new ExecutableResource(KnownResourceNames.AspireDashboard, "dotnet", dashboardWorkingDirectory ?? "");
