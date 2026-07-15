@@ -130,6 +130,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IM
     }
 
     public PagedResult<OtlpLogEntry> GetLogs(GetLogsContext context) => GetLogsFromDatabase(context);
+    public PagedResult<LogSummary> GetLogSummaries(GetLogsContext context) => GetLogSummariesFromDatabase(context);
     public OtlpLogEntry? GetLog(long logId) => GetLogFromDatabase(logId);
     public List<OtlpLogEntry> GetLogsForSpan(string traceId, string spanId) => GetLogsForSpanFromDatabase(traceId, spanId);
     public List<OtlpLogEntry> GetLogsForTrace(string traceId) => GetLogsForTraceFromDatabase(traceId);

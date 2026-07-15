@@ -11,6 +11,7 @@ using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
@@ -88,6 +89,157 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         var propertyKeys = repository.GetLogPropertyKeys(resources[0].ResourceKey)!;
         Assert.Collection(propertyKeys,
             s => Assert.Equal("Log", s));
+    }
+
+    [Fact]
+    public void GetLogSummaries_ReturnsPageData()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "frontend", instanceId: "frontend-1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "trace",
+                                spanId: "span",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1),
+                                attributes: [KeyValuePair.Create("gen_ai.provider.name", "test")])
+                        }
+                    }
+                }
+            }
+        });
+        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "frontend", instanceId: "frontend-1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(
+                                time: s_testTime.AddMinutes(1),
+                                message: "direct",
+                                severity: SeverityNumber.Warn,
+                                traceId: "direct-trace",
+                                spanId: "direct-span",
+                                attributes:
+                                [
+                                    KeyValuePair.Create("custom", "match"),
+                                    KeyValuePair.Create("exception.stacktrace", "stack trace"),
+                                    KeyValuePair.Create("exception.message", "ignored message"),
+                                    KeyValuePair.Create("gen_ai.system", "test")
+                                ]),
+                            CreateLogRecord(
+                                time: s_testTime.AddMinutes(2),
+                                message: "linked",
+                                severity: SeverityNumber.Error,
+                                traceId: "trace",
+                                spanId: "span",
+                                attributes:
+                                [
+                                    KeyValuePair.Create("custom", "other"),
+                                    KeyValuePair.Create("exception.type", "TestException"),
+                                    KeyValuePair.Create("exception.message", "test message")
+                                ]),
+                            CreateLogRecord(
+                                time: s_testTime.AddMinutes(3),
+                                message: "ordinary",
+                                traceId: "ordinary-trace",
+                                spanId: "ordinary-span",
+                                attributes:
+                                [
+                                    KeyValuePair.Create("custom", "other"),
+                                    KeyValuePair.Create("gen_ai.system", string.Empty),
+                                    KeyValuePair.Create("gen_ai.provider.name", "ignored fallback")
+                                ])
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var context = new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        };
+        var summaries = repository.GetLogSummaries(context);
+        var logs = repository.GetLogs(context);
+
+        Assert.Equal(logs.TotalItemCount, summaries.TotalItemCount);
+        Assert.Equal(logs.IsFull, summaries.IsFull);
+        Assert.Collection(summaries.Items,
+            summary =>
+            {
+                var log = logs.Items[0];
+                Assert.Equal(log.InternalId, summary.InternalId);
+                Assert.Equal(log.TimeStamp, summary.TimeStamp);
+                Assert.Equal(log.Severity, summary.Severity);
+                Assert.Equal(log.Message, summary.Message);
+                Assert.Equal(log.TraceId, summary.TraceId);
+                Assert.Equal(log.SpanId, summary.SpanId);
+                Assert.Equal(new ResourceKey("frontend", "frontend-1"), summary.Resource.ResourceKey);
+                Assert.Equal("stack trace", summary.ExceptionText);
+                Assert.True(summary.HasGenAI);
+            },
+            summary =>
+            {
+                Assert.Equal("linked", summary.Message);
+                Assert.Equal("TestException: test message", summary.ExceptionText);
+                Assert.True(summary.HasGenAI);
+            },
+            summary =>
+            {
+                Assert.Equal("ordinary", summary.Message);
+                Assert.Null(summary.ExceptionText);
+                Assert.False(summary.HasGenAI);
+            });
+
+        var filtered = repository.GetLogSummaries(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = "custom",
+                    Condition = FilterCondition.Equals,
+                    Value = "match"
+                }
+            ]
+        });
+        Assert.Equal("direct", Assert.Single(filtered.Items).Message);
+        Assert.Equal(1, filtered.TotalItemCount);
+
+        var emptyPage = repository.GetLogSummaries(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 10,
+            Count = 10,
+            Filters = []
+        });
+        Assert.Empty(emptyPage.Items);
+        Assert.Equal(3, emptyPage.TotalItemCount);
     }
 
     [Fact]

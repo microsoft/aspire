@@ -841,8 +841,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
 
         // Assert - should return traces from both resource1 and resource2, but not resource3
         Assert.Collection(traces.PagedResult.Items,
-            t => AssertId("resource2-inst2", t.TraceId),
-            t => AssertId("resource1-inst1", t.TraceId));
+            t => AssertId("resource1-inst1", t.TraceId),
+            t => AssertId("resource2-inst2", t.TraceId));
     }
 
     [Fact]
@@ -865,8 +865,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
 
         // Assert - should return spans from service1 and service2, not service3
         Assert.Collection(result.PagedResult.Items,
-            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name),
-            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name));
+            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name),
+            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name));
     }
 
     [Fact]
@@ -896,8 +896,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
 
         // Assert - should receive spans from service1 and service2, not service3
         Assert.Collection(receivedSpans,
-            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name),
-            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name));
+            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name),
+            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name));
     }
 
     [Fact]
