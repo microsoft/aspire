@@ -1,0 +1,38 @@
+{
+  "run_id": 29441229739,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29441229739",
+  "analyzed_at": "2026-07-15T19:05:36Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18792,
+    "title": "Skip repo pulse and burndown workflows on forks",
+    "author": "afscrome",
+    "state": "closed",
+    "head_branch": "afscrome-fix-fork-workflow-gating",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18792"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting-1 / Hosting-1 (8-core-ubuntu-latest)",
+      "id": 87440983613,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29441229739/job/87440983613",
+      "classification": "flaky-test",
+      "reason": "ParentProcessLifetimeReusesResourcesAcrossAppRestartsAndStopsWhenParentExits failed because DCP rejected a container/executable creation with BadRequest due to timestamp parsing error ('parsing time \"0001-01-01T00:06:30Z\" as \"2006-01-02T15:04:05.000000Z07:00\": cannot parse \"Z\" as \".000000\"'). This is a known intermittent DCP issue unrelated to the PR, which only changed GitHub Actions workflow YAML files.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.Tests.DistributedApplicationTests.ParentProcessLifetimeReusesResourcesAcrossAppRestartsAndStopsWhenParentExits",
+      "job": "Tests / Hosting-1 / Hosting-1 (8-core-ubuntu-latest)",
+      "error": "System.OperationCanceledException : Resource 'parent-process-lifetime-reuse-redis' failed to meet the predicate condition before the operation was cancelled.\n- Current State: FailedToStart\n- Creation Time: (null)\n- Current Health: (null)\n---- System.OperationCanceledException : The operation was canceled.",
+      "stack_trace": "at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceCoreAsync(String resourceName, Func`2 predicate, String cancellationMessage, CancellationToken cancellationToken, String waitCondition) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 671\n   at Aspire.Hosting.ApplicationModel.ResourceNotificationService.WaitForResourceAsync(String resourceName, Func`2 predicate, CancellationToken cancellationToken) in /_/src/Aspire.Hosting/ApplicationModel/ResourceNotificationService.cs:line 629\n   at Aspire.Hosting.Tests.DistributedApplicationTests.ParentProcessLifetimeReusesResourcesAcrossAppRestartsAndStopsWhenParentExits() in /home/runner/work/aspire/aspire/tests/Aspire.Hosting.Tests/DistributedApplicationTests.cs:line 2096",
+      "classification": "flaky",
+      "reason": "DCP rejected resource creation with BadRequest due to timestamp parsing ('parsing time \"0001-01-01T00:06:30Z\" as \"2006-01-02T15:04:05.000000Z07:00\": cannot parse \"Z\" as \".000000\"'). This is the same intermittent DCP timestamp issue as prior cause hosting-parentprocess-dcp-timestamp-badrequest, but affecting a different test. The PR only modifies GitHub workflow YAML files, completely unrelated to this test."
+    }
+  ],
+  "causes": ["hosting-parentprocess-reuse-dcp-timestamp-badrequest"]
+}
