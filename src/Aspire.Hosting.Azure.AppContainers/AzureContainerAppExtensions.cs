@@ -133,9 +133,12 @@ public static class AzureContainerAppExtensions
     private sealed class ContainerAppsPipelineStepMarker
     {
         private readonly object _lock = new();
-        private readonly Dictionary<string, HashSet<string>> _environmentsByManagedEnvironmentName = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, Dictionary<string, ManagedEnvironmentNamingMode>> _environmentsByManagedEnvironmentName = new(StringComparer.Ordinal);
 
-        public void RecordManagedEnvironmentName(string environmentName, BicepValue<string> managedEnvironmentName)
+        public void RecordManagedEnvironmentName(
+            string environmentName,
+            BicepValue<string> managedEnvironmentName,
+            ManagedEnvironmentNamingMode namingMode)
         {
             var expression = managedEnvironmentName.ToString();
 
@@ -143,22 +146,23 @@ public static class AzureContainerAppExtensions
             {
                 if (!_environmentsByManagedEnvironmentName.TryGetValue(expression, out var environmentNames))
                 {
-                    environmentNames = new HashSet<string>(StringComparer.Ordinal);
+                    environmentNames = new Dictionary<string, ManagedEnvironmentNamingMode>(StringComparer.Ordinal);
                     _environmentsByManagedEnvironmentName.Add(expression, environmentNames);
                 }
 
-                environmentNames.Add(environmentName);
+                environmentNames[environmentName] = namingMode;
             }
         }
 
         public void ValidateManagedEnvironmentNames()
         {
-            KeyValuePair<string, HashSet<string>>[] collisions;
+            (string Expression, KeyValuePair<string, ManagedEnvironmentNamingMode>[] Environments)[] collisions;
 
             lock (_lock)
             {
                 collisions = _environmentsByManagedEnvironmentName
                     .Where(pair => pair.Value.Count > 1)
+                    .Select(pair => (pair.Key, pair.Value.ToArray()))
                     .ToArray();
             }
 
@@ -170,12 +174,40 @@ public static class AzureContainerAppExtensions
             var collisionDetails = string.Join(
                 "; ",
                 collisions.Select(pair =>
-                    $"'{string.Join("', '", pair.Value.Order(StringComparer.Ordinal))}' resolve to {pair.Key}"));
+                    $"'{string.Join("', '", pair.Environments.Select(environment => environment.Key).Order(StringComparer.Ordinal))}' resolve to {pair.Expression}"));
+
+            var namingModes = collisions
+                .SelectMany(collision => collision.Environments)
+                .Select(environment => environment.Value)
+                .ToHashSet();
+            var guidance = new List<string>();
+
+            if (namingModes.Contains(ManagedEnvironmentNamingMode.Legacy))
+            {
+                guidance.Add($"For environments using the default naming convention, call '{nameof(WithUniqueResourceNaming)}()'.");
+            }
+
+            if (namingModes.Contains(ManagedEnvironmentNamingMode.Unique))
+            {
+                guidance.Add($"For environments already using '{nameof(WithUniqueResourceNaming)}()', rename one or more resources or configure an explicit name resolver.");
+            }
+
+            if (namingModes.Contains(ManagedEnvironmentNamingMode.Azd))
+            {
+                guidance.Add($"For environments using '{nameof(WithAzdResourceNaming)}()', remove it or configure distinct managed environment names explicitly.");
+            }
 
             throw new DistributedApplicationException(
                 $"Azure Container App environments {collisionDetails}. Multiple environments with the same managed environment name cannot be deployed to one resource group. " +
-                $"Call '{nameof(WithUniqueResourceNaming)}()' on one or more of the colliding environment resources.");
+                string.Join(" ", guidance));
         }
+    }
+
+    private enum ManagedEnvironmentNamingMode
+    {
+        Legacy,
+        Unique,
+        Azd
     }
 
     /// <summary>
@@ -473,7 +505,12 @@ public static class AzureContainerAppExtensions
                     new StringLiteralExpression("-"),
                     new StringLiteralExpression(""));
                 laWorkspace.Name = BicepFunction.Interpolate($"law-{resourceToken}");
-                containerAppEnvironment.Name = BicepFunction.Interpolate($"cae-{resourceToken}");
+                var managedEnvironmentName = BicepFunction.Interpolate($"cae-{resourceToken}");
+                containerAppEnvironment.Name = managedEnvironmentName;
+                marker.RecordManagedEnvironmentName(
+                    appEnvResource.Name,
+                    managedEnvironmentName,
+                    ManagedEnvironmentNamingMode.Azd);
 
 #pragma warning disable IDE0031 // Use null propagation (IDE0031)
                 if (storageVolume is not null)
@@ -550,8 +587,8 @@ public static class AzureContainerAppExtensions
     }
 
     /// <summary>
-    /// Adds the fallback resolver used for the managed environment's <c>name</c> when
-    /// <see cref="WithUniqueResourceNaming"/> is applied (and azd naming is not in effect).
+    /// Adds the fallback resolver used to track generated managed environment names when azd naming is not in
+    /// effect, substituting the corrected name requirements when <see cref="WithUniqueResourceNaming"/> is applied.
     /// </summary>
     /// <remarks>
     /// Azure.Provisioning's default name resolver only assigns names while the <c>Name</c> property is unset.
@@ -1046,7 +1083,10 @@ public static class AzureContainerAppExtensions
 
             if (resolvedName is not null)
             {
-                marker.RecordManagedEnvironmentName(environmentName, resolvedName);
+                marker.RecordManagedEnvironmentName(
+                    environmentName,
+                    resolvedName,
+                    useUniqueResourceNaming ? ManagedEnvironmentNamingMode.Unique : ManagedEnvironmentNamingMode.Legacy);
             }
 
             return resolvedName;

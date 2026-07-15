@@ -2011,7 +2011,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             "Azure Container App environments 'cae1', 'cae2' resolve to take('cae${uniqueString(resourceGroup().id)}', 24). " +
             "Multiple environments with the same managed environment name cannot be deployed to one resource group. " +
-            "Call 'WithUniqueResourceNaming()' on one or more of the colliding environment resources.",
+            "For environments using the default naming convention, call 'WithUniqueResourceNaming()'.",
             exception.Message);
     }
 
@@ -2106,7 +2106,7 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
         var envResource = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
 
-        var (_, bicep) = await GetManifestWithBicep(envResource);
+        var bicep = envResource.GetBicepTemplateString();
 
         var name = GetManagedEnvironmentNameExpression(bicep);
 
@@ -2137,6 +2137,64 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         using var app = builder.Build();
 
         await app.RunAsync();
+    }
+
+    [Fact]
+    public async Task UniqueNamingCollisionSuggestsRenamingOrExplicitResolver()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var env1 = builder.AddAzureContainerAppEnvironment("cae-1")
+            .WithUniqueResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "For environments already using 'WithUniqueResourceNaming()', rename one or more resources or configure an explicit name resolver.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task AzdNamingCollisionSuggestsRemovingAzdNamingOrExplicitNames()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithAzdResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2")
+            .WithAzdResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "For environments using 'WithAzdResourceNaming()', remove it or configure distinct managed environment names explicitly.",
+            exception.Message);
     }
 
     [Fact]
