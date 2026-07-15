@@ -743,6 +743,9 @@ a:focus-visible {
 .structured-logs__toolbar {
   flex-wrap: nowrap;
 }
+.structured-logs {
+  container-type: inline-size;
+}
 .structured-logs__toolbar .searchbox {
   flex: 1 1 220px;
   min-width: 180px;
@@ -782,6 +785,46 @@ a:focus-visible {
 .structured-logs table.data td:last-child {
   padding-inline: 6px;
   text-align: center;
+}
+.structured-logs table.data {
+  min-width: 820px;
+}
+
+/* The sidebar makes the page narrower well before the viewport reaches the global
+   mobile breakpoint. Respond to the actual page width so the toolbar wraps instead
+   of clipping its pause and clear controls at intermediate window sizes. */
+@container (max-width: 980px) {
+  .structured-logs__toolbar {
+    flex-wrap: wrap;
+  }
+
+  .structured-logs__toolbar .searchbox {
+    flex: 1 1 100%;
+    width: 100%;
+    max-width: none;
+  }
+
+  .structured-logs__toolbar .deck-select-field {
+    flex: 1 1 180px;
+  }
+
+  .structured-logs__toolbar .page__header-spacer {
+    display: none;
+  }
+
+  .structured-logs__pause {
+    margin-inline-start: auto;
+  }
+}
+
+@container (max-width: 560px) {
+  .structured-logs__toolbar .deck-select-field {
+    flex-basis: 100%;
+  }
+
+  .structured-logs__pause {
+    margin-inline-start: 0;
+  }
 }
 .cell-trace {
   white-space: nowrap;

@@ -1381,6 +1381,13 @@ test(`${features("HTTP-STRUCTURED-LOGS-001", "HTTP-STRUCTURED-LOG-DETAILS-001")}
   await expect(logs.locator(".page__subtitle")).toHaveText("2 total · showing 2");
   expect(structuredLogRequests).toBe(1);
 
+  await page.setViewportSize({ width: 1_000, height: 700 });
+  const toolbar = logs.getByRole("toolbar", { name: "Structured log tools" });
+  await expect.poll(() => toolbar.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect(toolbar.getByRole("textbox", { name: "Filter messages…" })).toBeVisible();
+  await expect(toolbar.getByRole("switch", { name: "Pause incoming data" })).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: "Clear structured logs" })).toBeVisible();
+
   await table.locator("tbody tr", { hasText: "Queue processing failed" }).click();
   const details = page.getByRole("dialog", { name: "Structured log entry details" });
   await expect(details).toContainText("Worker.QueueFailed");
