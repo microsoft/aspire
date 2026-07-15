@@ -3,7 +3,6 @@
 
 CREATE TABLE IF NOT EXISTS telemetry_traces (
     trace_id TEXT PRIMARY KEY,
-    insertion_sequence INTEGER NOT NULL UNIQUE,
     first_span_timestamp_ticks INTEGER NOT NULL,
     duration_ticks INTEGER NOT NULL,
     last_updated_timestamp_ticks INTEGER NOT NULL,
@@ -76,7 +75,7 @@ CREATE TABLE IF NOT EXISTS telemetry_span_link_attributes (
 ) STRICT;
 
 CREATE INDEX IF NOT EXISTS ix_telemetry_traces_order
-    ON telemetry_traces(first_span_timestamp_ticks, insertion_sequence DESC);
+    ON telemetry_traces(first_span_timestamp_ticks, trace_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_spans_resource_order
     ON telemetry_spans(resource_id, start_time_ticks, trace_id, span_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_spans_trace_order

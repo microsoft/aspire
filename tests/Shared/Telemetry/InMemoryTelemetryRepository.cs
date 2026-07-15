@@ -1825,7 +1825,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                             linkedSpan?.BackLinks.Add(link);
                         }
 
-                        // Traces are sorted by the start time of the first span.
+                        // Traces are sorted by the start time of the first span, then by trace ID.
                         // We need to ensure traces are in the correct order if we're:
                         // 1. Adding a new trace.
                         // 2. The first span of the trace has changed.
@@ -1835,7 +1835,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                             for (var i = _traces.Count - 1; i >= 0; i--)
                             {
                                 var currentTrace = _traces[i];
-                                if (trace.FirstSpan.StartTime > currentTrace.FirstSpan.StartTime)
+                                if (CompareTraceOrder(trace, currentTrace) > 0)
                                 {
                                     _traces.Insert(i + 1, trace);
                                     added = true;
@@ -1857,7 +1857,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                                 for (var i = index - 1; i >= 0; i--)
                                 {
                                     var currentTrace = _traces[i];
-                                    if (trace.FirstSpan.StartTime > currentTrace.FirstSpan.StartTime)
+                                    if (CompareTraceOrder(trace, currentTrace) > 0)
                                     {
                                         var insertPosition = i + 1;
                                         if (index != insertPosition)
@@ -1940,6 +1940,12 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
             trace = null;
             return false;
         }
+    }
+
+    private static int CompareTraceOrder(OtlpTrace left, OtlpTrace right)
+    {
+        var timestampComparison = left.FirstSpan.StartTime.CompareTo(right.FirstSpan.StartTime);
+        return timestampComparison != 0 ? timestampComparison : string.CompareOrdinal(left.TraceId, right.TraceId);
     }
 
     public OtlpResource? GetPeerResource(OtlpSpan span)
