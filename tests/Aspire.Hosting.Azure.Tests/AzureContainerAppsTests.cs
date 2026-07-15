@@ -2220,6 +2220,34 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task MixedAzdAndUniqueNamingDetectsEquivalentPhysicalNames()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var azdEnvironment = builder.AddAzureContainerAppEnvironment("azd")
+            .WithAzdResourceNaming();
+        var uniqueEnvironment = builder.AddAzureContainerAppEnvironment("cae")
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(azdEnvironment);
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(uniqueEnvironment);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
+
+        Assert.Contains("'azd' resolve to 'cae-${resourceToken}'", exception.Message);
+        Assert.Contains("'cae' resolve to take('cae-${uniqueString(resourceGroup().id)}', 60)", exception.Message);
+    }
+
+    [Fact]
     public void WithUniqueResourceNamingThrowsWhenBuilderIsNull()
     {
         Assert.Throws<ArgumentNullException>(() => AzureContainerAppExtensions.WithUniqueResourceNaming(null!));

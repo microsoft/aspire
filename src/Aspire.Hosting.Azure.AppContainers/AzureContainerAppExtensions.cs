@@ -136,8 +136,9 @@ public static class AzureContainerAppExtensions
 
     private sealed class ContainerAppsPipelineStepMarker
     {
+        private const string ResourceGroupTokenPlaceholder = "\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f\u001f";
         private readonly object _lock = new();
-        private readonly Dictionary<string, Dictionary<string, ManagedEnvironmentNamingMode>> _environmentsByManagedEnvironmentName = new(StringComparer.Ordinal);
+        private readonly Dictionary<string, Dictionary<string, ManagedEnvironmentName>> _environmentsByManagedEnvironmentName = new(StringComparer.Ordinal);
 
         public void RecordManagedEnvironmentName(
             string environmentName,
@@ -145,30 +146,29 @@ public static class AzureContainerAppExtensions
             ManagedEnvironmentNamingMode namingMode)
         {
             var expression = managedEnvironmentName.ToString();
+            var effectiveNameKey = GetEffectiveNameKey(expression);
 
             lock (_lock)
             {
-                if (!_environmentsByManagedEnvironmentName.TryGetValue(expression, out var environmentNames))
+                if (!_environmentsByManagedEnvironmentName.TryGetValue(effectiveNameKey, out var environmentNames))
                 {
-                    environmentNames = new Dictionary<string, ManagedEnvironmentNamingMode>(StringComparer.Ordinal);
-                    _environmentsByManagedEnvironmentName.Add(expression, environmentNames);
+                    environmentNames = new Dictionary<string, ManagedEnvironmentName>(StringComparer.Ordinal);
+                    _environmentsByManagedEnvironmentName.Add(effectiveNameKey, environmentNames);
                 }
 
-                environmentNames[environmentName] = namingMode;
+                environmentNames[environmentName] = new ManagedEnvironmentName(expression, namingMode);
             }
         }
 
         public void ValidateManagedEnvironmentNames(IReadOnlySet<string> includedEnvironmentNames)
         {
-            (string Expression, KeyValuePair<string, ManagedEnvironmentNamingMode>[] Environments)[] collisions;
+            KeyValuePair<string, ManagedEnvironmentName>[][] collisions;
 
             lock (_lock)
             {
                 collisions = _environmentsByManagedEnvironmentName
-                    .Select(pair => (
-                        Expression: pair.Key,
-                        Environments: pair.Value.Where(environment => includedEnvironmentNames.Contains(environment.Key)).ToArray()))
-                    .Where(pair => pair.Environments.Length > 1)
+                    .Select(pair => pair.Value.Where(environment => includedEnvironmentNames.Contains(environment.Key)).ToArray())
+                    .Where(environments => environments.Length > 1)
                     .ToArray();
             }
 
@@ -179,12 +179,15 @@ public static class AzureContainerAppExtensions
 
             var collisionDetails = string.Join(
                 "; ",
-                collisions.Select(pair =>
-                    $"'{string.Join("', '", pair.Environments.Select(environment => environment.Key).Order(StringComparer.Ordinal))}' resolve to {pair.Expression}"));
+                collisions.SelectMany(environments =>
+                    environments
+                        .GroupBy(environment => environment.Value.Expression, StringComparer.Ordinal)
+                        .Select(group =>
+                            $"'{string.Join("', '", group.Select(environment => environment.Key).Order(StringComparer.Ordinal))}' resolve to {group.Key}")));
 
             var namingModes = collisions
-                .SelectMany(collision => collision.Environments)
-                .Select(environment => environment.Value)
+                .SelectMany(environments => environments)
+                .Select(environment => environment.Value.NamingMode)
                 .ToHashSet();
             var guidance = new List<string>();
 
@@ -207,6 +210,42 @@ public static class AzureContainerAppExtensions
                 $"Azure Container App environments {collisionDetails}. Multiple environments with the same managed environment name cannot be deployed to one resource group. " +
                 string.Join(" ", guidance));
         }
+
+        private static string GetEffectiveNameKey(string expression)
+        {
+            // Normalize the two generated Bicep shapes that use the same 13-character resource-group token:
+            //   take('cae-${uniqueString(resourceGroup().id)}', 60)
+            //   'cae-${resourceToken}'
+            // Evaluating take after substitution catches syntactically different expressions that deploy the
+            // same physical name. Unknown shapes retain their expression as the key.
+            var normalizedExpression = expression
+                .Replace("${uniqueString(resourceGroup().id)}", ResourceGroupTokenPlaceholder, StringComparison.Ordinal)
+                .Replace("${resourceToken}", ResourceGroupTokenPlaceholder, StringComparison.Ordinal);
+
+            const string TakePrefix = "take('";
+            const string TakeSeparator = "', ";
+            if (normalizedExpression.StartsWith(TakePrefix, StringComparison.Ordinal) &&
+                normalizedExpression.EndsWith(')'))
+            {
+                var separatorIndex = normalizedExpression.LastIndexOf(TakeSeparator, StringComparison.Ordinal);
+                var lengthStart = separatorIndex + TakeSeparator.Length;
+                if (separatorIndex >= TakePrefix.Length &&
+                    int.TryParse(
+                        normalizedExpression.AsSpan(lengthStart, normalizedExpression.Length - lengthStart - 1),
+                        out var maxLength))
+                {
+                    var value = normalizedExpression[TakePrefix.Length..separatorIndex];
+                    return value[..Math.Min(value.Length, maxLength)];
+                }
+            }
+
+            if (normalizedExpression is ['\'', .., '\''])
+            {
+                return normalizedExpression[1..^1];
+            }
+
+            return normalizedExpression;
+        }
     }
 
     private enum ManagedEnvironmentNamingMode
@@ -215,6 +254,8 @@ public static class AzureContainerAppExtensions
         Unique,
         Azd
     }
+
+    private readonly record struct ManagedEnvironmentName(string Expression, ManagedEnvironmentNamingMode NamingMode);
 
     /// <summary>
     /// Adds a container app environment resource to the distributed application builder.
