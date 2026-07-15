@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Documents the Go polyglot options flattening breaking change from PR #18698.",
+  "mergedAt": "2026-07-14T17:07:41Z",
+  "number": 1360,
+  "runDate": "2026-07-15T00:18:32Z",
+  "status": "included",
+  "title": "Document Go polyglot options flattening breaking change"
+}

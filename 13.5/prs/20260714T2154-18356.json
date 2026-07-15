@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Bot-authored release merge PR: merges release/13.4 back to main. Not a backport and not user-facing.",
+  "mergedAt": "2026-07-14T21:54:15Z",
+  "number": 18356,
+  "runDate": "2026-07-15T00:18:32Z",
+  "status": "excluded",
+  "title": "Merge release/13.4 to main after v13.4.6 release"
+}

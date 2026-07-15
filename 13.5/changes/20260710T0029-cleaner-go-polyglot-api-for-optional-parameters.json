@@ -1,14 +1,16 @@
 {
   "area": "Integrations",
-  "areaEmoji": "🔌",
+  "areaEmoji": "\ud83d\udd0c",
   "backport": false,
-  "breaking": false,
+  "breaking": true,
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The Go polyglot code generator now emits a cleaner API when a method has a single optional DTO named `options`: the DTO type is threaded directly as a variadic parameter instead of being wrapped in a generated method-options struct, matching the TypeScript generator behavior.",
-  "docsPrs": [],
-  "docsRequired": false,
-  "emoji": "🔧",
+  "docsPrs": [
+    1360
+  ],
+  "docsRequired": true,
+  "emoji": "\ud83d\udd27",
   "firstMergedAt": "2026-07-10T00:29:24Z",
   "lastMergedAt": "2026-07-10T00:29:24Z",
   "name": "Cleaner Go polyglot API for optional parameters",
