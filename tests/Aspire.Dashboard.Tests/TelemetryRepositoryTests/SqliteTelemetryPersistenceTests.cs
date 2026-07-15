@@ -278,6 +278,114 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     }
 
     [Fact]
+    public void ResourceViews_EquivalentAttributesShareNormalizedRows()
+    {
+        var databasePath = Path.Combine(_temporaryDirectory, "resource-views.db");
+        using (var repository = CreateRepository(databasePath))
+        {
+            var addContext = new AddContext();
+            repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+            {
+                new ResourceLogs
+                {
+                    Resource = CreateResource(attributes: [KeyValuePair.Create("second", "2"), KeyValuePair.Create("first", "1")]),
+                    ScopeLogs =
+                    {
+                        new ScopeLogs
+                        {
+                            Scope = CreateScope(),
+                            LogRecords = { CreateLogRecord() }
+                        }
+                    }
+                },
+                new ResourceLogs
+                {
+                    Resource = CreateResource(attributes: [KeyValuePair.Create("first", "1"), KeyValuePair.Create("second", "2")]),
+                    ScopeLogs =
+                    {
+                        new ScopeLogs
+                        {
+                            Scope = CreateScope(),
+                            LogRecords = { CreateLogRecord() }
+                        }
+                    }
+                }
+            });
+            Assert.Equal(0, addContext.FailureCount);
+        }
+
+        using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_resource_views;";
+        Assert.Equal(1L, command.ExecuteScalar());
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_resource_view_attributes;";
+        Assert.Equal(2L, command.ExecuteScalar());
+    }
+
+    [Fact]
+    public void ResourceViews_LimitRejectsNewNormalizedRow()
+    {
+        var databasePath = Path.Combine(_temporaryDirectory, "resource-view-limit.db");
+        using var repository = CreateRepository(databasePath);
+        var addContext = new AddContext();
+        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords = { CreateLogRecord() }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = $"""
+                WITH RECURSIVE numbers(value) AS (
+                    SELECT 1
+                    UNION ALL
+                    SELECT value + 1 FROM numbers WHERE value < {TelemetryRepositoryLimits.MaxResourceViewCount - 1}
+                )
+                INSERT INTO telemetry_resource_views (resource_id)
+                SELECT resource_id
+                FROM telemetry_resources
+                CROSS JOIN numbers;
+                """;
+            command.ExecuteNonQuery();
+            command.CommandText = "SELECT COUNT(*) FROM telemetry_resource_views;";
+            Assert.Equal((long)TelemetryRepositoryLimits.MaxResourceViewCount, command.ExecuteScalar());
+        }
+
+        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(attributes: [KeyValuePair.Create("new", "value")]),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords = { CreateLogRecord() }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(1, addContext.FailureCount);
+    }
+
+    [Fact]
     public void Scopes_AreDeletedAfterTheirFinalOwnerIsCleared()
     {
         var databasePath = Path.Combine(_temporaryDirectory, "scope-cleanup.db");

@@ -39,7 +39,7 @@ public sealed partial class SqliteTelemetryRepository
                         HasTraces = true
                     };
                     resourceView = new OtlpResourceView(resource, resourceSpansItem.Resource.Attributes);
-                    resourceViewId = InsertResourceView(connection, transaction, resourceId, resourceView.Properties);
+                    resourceViewId = GetOrAddResourceView(connection, transaction, resourceId, resourceView.Properties);
                 }
                 catch (Exception exception)
                 {

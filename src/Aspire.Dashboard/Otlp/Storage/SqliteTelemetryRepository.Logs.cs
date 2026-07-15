@@ -39,7 +39,7 @@ public sealed partial class SqliteTelemetryRepository
                         HasLogs = true
                     };
                     resourceView = new OtlpResourceView(resource, resourceLogsItem.Resource.Attributes);
-                    resourceViewId = InsertResourceView(connection, transaction, resourceId, resourceView.Properties);
+                    resourceViewId = GetOrAddResourceView(connection, transaction, resourceId, resourceView.Properties);
                 }
                 catch (Exception exception)
                 {
@@ -170,12 +170,54 @@ public sealed partial class SqliteTelemetryRepository
             """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
     }
 
-    private static long InsertResourceView(
+    private static long GetOrAddResourceView(
         SqliteConnection connection,
         IDbTransaction transaction,
         long resourceId,
         KeyValuePair<string, string>[] properties)
     {
+        var parameters = new DynamicParameters();
+        parameters.Add("ResourceId", resourceId);
+        parameters.Add("PropertyCount", properties.Length);
+        var sql = new StringBuilder("""
+            SELECT v.resource_view_id
+            FROM telemetry_resource_views v
+            WHERE v.resource_id = @ResourceId
+              AND (SELECT COUNT(*) FROM telemetry_resource_view_attributes a WHERE a.resource_view_id = v.resource_view_id) = @PropertyCount
+            """);
+        for (var index = 0; index < properties.Length; index++)
+        {
+            parameters.Add($"PropertyKey{index}", properties[index].Key);
+            parameters.Add($"PropertyValue{index}", properties[index].Value);
+            sql.Append(CultureInfo.InvariantCulture, $"""
+
+                  AND EXISTS (
+                      SELECT 1
+                      FROM telemetry_resource_view_attributes a
+                      WHERE a.resource_view_id = v.resource_view_id
+                        AND a.ordinal = {index}
+                        AND a.attribute_key = @PropertyKey{index}
+                        AND a.attribute_value = @PropertyValue{index}
+                  )
+                """);
+        }
+        sql.Append(" LIMIT 1;");
+
+        var existingResourceViewId = connection.QuerySingleOrDefault<long?>(sql.ToString(), parameters, transaction);
+        if (existingResourceViewId is not null)
+        {
+            return existingResourceViewId.Value;
+        }
+
+        var resourceViewCount = connection.QuerySingle<int>(
+            "SELECT COUNT(*) FROM telemetry_resource_views WHERE resource_id = @ResourceId;",
+            new { ResourceId = resourceId },
+            transaction);
+        if (resourceViewCount >= TelemetryRepositoryLimits.MaxResourceViewCount)
+        {
+            throw new InvalidOperationException($"Resource view limit of {TelemetryRepositoryLimits.MaxResourceViewCount} reached.");
+        }
+
         var resourceViewId = connection.QuerySingle<long>("""
             INSERT INTO telemetry_resource_views (resource_id)
             VALUES (@ResourceId)
