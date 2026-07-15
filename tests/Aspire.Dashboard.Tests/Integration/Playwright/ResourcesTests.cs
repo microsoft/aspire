@@ -137,14 +137,19 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
             var metricsJson = await page.EvaluateAsync<string>(@"() => {
                 const overflow = document.querySelector('.text-visualizer-container .log-overflow');
-                const dialog = document.querySelector('.text-visualizer-dialog');
+                const dialogHost = document.querySelector('fluent-dialog.fluent-dialog-main');
+                const dialog = dialogHost?.shadowRoot?.querySelector('[part=""control""]');
                 if (overflow) {
                     overflow.scrollLeft = 50;
                 }
 
+                if (!dialog) {
+                    throw new Error('Could not find the fluent-dialog control part for the text visualizer dialog.');
+                }
+
                 return JSON.stringify({
                     overflowScrollLeft: overflow ? overflow.scrollLeft : 0,
-                    dialogRight: dialog ? dialog.getBoundingClientRect().right : 0,
+                    dialogRight: dialog.getBoundingClientRect().right,
                     viewportWidth: window.innerWidth,
                     documentScrollWidth: document.documentElement.scrollWidth
                 });
