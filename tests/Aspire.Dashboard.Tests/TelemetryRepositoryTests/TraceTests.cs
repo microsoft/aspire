@@ -980,13 +980,14 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddTraces_ExceedLimit_FirstInFirstOut()
+    public void AddTraces_ExceedLimit_OrderedByTimestampAndTraceId()
     {
         // Arrange
         const int MaxTraceCount = 10;
         var repository = CreateRepository(maxTraceCount: MaxTraceCount);
 
         var testTime = s_testTime.AddDays(1);
+        var expectedTraces = new List<(string TraceId, DateTime StartTime)>();
 
         // Act
         for (var i = 0; i < 2000; i++)
@@ -996,6 +997,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
             // Insert traces out of order to stress the circular buffer type.
             var startTime = testTime.AddMinutes(i + (i % 2 == 0 ? -5 : 0));
+            expectedTraces.Add((GetHexId(traceId), startTime));
 
             try
             {
@@ -1024,15 +1026,13 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             Filters = []
         });
 
-        // Most recent traces are returned.
-        var first = GetStringId(traces.PagedResult.Items.First().TraceId);
-        var last = GetStringId(traces.PagedResult.Items.Last().TraceId);
-        Assert.Equal("1988", first);
-        Assert.Equal("2000", last);
-
-        // Traces returned are ordered by start time.
         var actualOrder = traces.PagedResult.Items.Select(t => t.TraceId).ToList();
-        var expectedOrder = traces.PagedResult.Items.OrderBy(t => t.FirstSpan.StartTime).Select(t => t.TraceId).ToList();
+        var expectedOrder = expectedTraces
+            .OrderBy(trace => trace.StartTime)
+            .ThenBy(trace => trace.TraceId, StringComparer.Ordinal)
+            .TakeLast(MaxTraceCount)
+            .Select(trace => trace.TraceId)
+            .ToList();
         Assert.Equal(expectedOrder, actualOrder);
 
         Assert.Equal(MaxTraceCount * 2, traces.PagedResult.Items.SelectMany(t => t.Spans).SelectMany(s => s.Links).Count());

@@ -116,10 +116,9 @@ public sealed partial class SqliteTelemetryRepository
         {
             connection.Execute("""
                 INSERT INTO telemetry_traces (
-                    trace_id, insertion_sequence, first_span_timestamp_ticks, duration_ticks, last_updated_timestamp_ticks, full_name)
+                    trace_id, first_span_timestamp_ticks, duration_ticks, last_updated_timestamp_ticks, full_name)
                 VALUES (
                     @TraceId,
-                    COALESCE((SELECT MAX(insertion_sequence) + 1 FROM telemetry_traces), 1),
                     @FirstSpanTimestampTicks,
                     @DurationTicks,
                     @LastUpdatedTimestampTicks,
@@ -338,7 +337,7 @@ public sealed partial class SqliteTelemetryRepository
             WHERE trace_id IN (
                 SELECT trace_id
                 FROM telemetry_traces
-                ORDER BY first_span_timestamp_ticks, insertion_sequence DESC
+                ORDER BY first_span_timestamp_ticks, trace_id
                 LIMIT MAX((SELECT COUNT(*) FROM telemetry_traces) - @MaxTraceCount, 0)
             );
 
@@ -366,7 +365,7 @@ public sealed partial class SqliteTelemetryRepository
                 t.trace_id AS TraceId,
                 t.last_updated_timestamp_ticks AS LastUpdatedTimestampTicks
             {query.FromAndWhere}
-            ORDER BY t.first_span_timestamp_ticks, t.insertion_sequence DESC
+            ORDER BY t.first_span_timestamp_ticks, t.trace_id
             LIMIT @Count OFFSET @StartIndex;
             """, query.Parameters).AsList();
         var traces = records.Select(record => MaterializeTrace(connection, record.TraceId)!).ToList();
@@ -405,7 +404,7 @@ public sealed partial class SqliteTelemetryRepository
             paged_traces AS (
                 SELECT *
                 FROM filtered_traces
-                ORDER BY first_span_timestamp_ticks, insertion_sequence DESC
+                ORDER BY first_span_timestamp_ticks, trace_id
                 LIMIT @Count OFFSET @StartIndex
             ),
             span_tree AS (
@@ -498,8 +497,7 @@ public sealed partial class SqliteTelemetryRepository
                           AND a.attribute_key IN ('gen_ai.system', 'gen_ai.provider.name')
                           AND LENGTH(a.attribute_value) > 0
                     ) AS has_gen_ai,
-                    pt.first_span_timestamp_ticks AS trace_order_ticks,
-                    pt.insertion_sequence
+                    pt.first_span_timestamp_ticks AS trace_order_ticks
                 FROM paged_traces pt
                 JOIN primary_spans ps ON ps.trace_id = pt.trace_id AND ps.row_number = 1
             )
@@ -524,7 +522,7 @@ public sealed partial class SqliteTelemetryRepository
             FROM trace_aggregate a
             LEFT JOIN trace_summaries ts ON 1 = 1
             LEFT JOIN resource_summaries rs ON rs.trace_id = ts.trace_id
-            ORDER BY ts.trace_order_ticks, ts.insertion_sequence DESC, rs.resource_order_ticks, rs.resource_name, rs.instance_id;
+            ORDER BY ts.trace_order_ticks, ts.trace_id, rs.resource_order_ticks, rs.resource_name, rs.instance_id;
             """, query.Parameters).AsList();
 
         var firstRecord = records[0];
@@ -745,7 +743,7 @@ public sealed partial class SqliteTelemetryRepository
         var identities = connection.Query<SpanIdentityRecord>($"""
             SELECT s.trace_id AS TraceId, s.span_id AS SpanId
             {query.FromAndWhere}
-            ORDER BY t.first_span_timestamp_ticks, t.insertion_sequence DESC, s.start_time_ticks, s.span_id
+            ORDER BY t.first_span_timestamp_ticks, t.trace_id, s.start_time_ticks, s.span_id
             LIMIT @Count OFFSET @StartIndex;
             """, query.Parameters).AsList();
         var traces = identities.Select(identity => identity.TraceId).Distinct(StringComparer.Ordinal)
@@ -995,8 +993,8 @@ public sealed partial class SqliteTelemetryRepository
         using var connection = _database.OpenConnection();
         var usePrefix = traceId.Length >= OtlpHelpers.ShortenedIdLength;
         var storedTraceId = connection.QueryFirstOrDefault<string>(usePrefix
-            ? "SELECT trace_id FROM telemetry_traces WHERE trace_id LIKE @TraceId ESCAPE '!' ORDER BY first_span_timestamp_ticks, insertion_sequence DESC LIMIT 1;"
-            : "SELECT trace_id FROM telemetry_traces WHERE trace_id = @TraceId COLLATE NOCASE ORDER BY first_span_timestamp_ticks, insertion_sequence DESC LIMIT 1;", new { TraceId = usePrefix ? CreateStartsWithLikePattern(traceId) : traceId });
+            ? "SELECT trace_id FROM telemetry_traces WHERE trace_id LIKE @TraceId ESCAPE '!' ORDER BY first_span_timestamp_ticks, trace_id LIMIT 1;"
+            : "SELECT trace_id FROM telemetry_traces WHERE trace_id = @TraceId COLLATE NOCASE ORDER BY first_span_timestamp_ticks, trace_id LIMIT 1;", new { TraceId = usePrefix ? CreateStartsWithLikePattern(traceId) : traceId });
         return storedTraceId is null ? null : MaterializeTrace(connection, storedTraceId);
     }
 
