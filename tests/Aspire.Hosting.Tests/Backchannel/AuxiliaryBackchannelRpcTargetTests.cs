@@ -2082,6 +2082,38 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         Assert.Null(result.BaseUrlWithLoginToken);
     }
 
+    [Theory]
+    [InlineData("Waiting")]
+    [InlineData("Unknown")]
+    public async Task GetDashboardUrlsAsync_ReturnsUnhealthy_WhenDashboardIsExplicitStartAndNotRunnable(string state)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true,
+            outputHelper);
+
+        using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources, r => r.Name == KnownResourceNames.AspireDashboard);
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(dashboard, snapshot => snapshot with
+        {
+            State = new ResourceStateSnapshot(state, null)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetDashboardUrlsAsync().DefaultTimeout();
+
+        Assert.False(result.DashboardHealthy);
+        Assert.Null(result.BaseUrlWithLoginToken);
+    }
+
     [Fact]
     public async Task ExecuteResourceCommandAsync_ValidateOnly_AllowsDashboardStart_WhenDashboardIsExplicitStart()
     {
