@@ -266,8 +266,10 @@ function subscribeResources(
   let retryTimer: number | undefined;
   let connection: HubConnection | null = null;
   let streamSubscription: ISubscription<ResourcesEvent> | null = null;
+  let connectionFailed = false;
 
   const reportError = (error: unknown): void => {
+    connectionFailed = true;
     reportConnection({
       target: "resourceService",
       state: "error",
@@ -306,6 +308,7 @@ function subscribeResources(
 
         receivedSnapshot = true;
         callback(event);
+        connectionFailed = false;
         reportConnection({ target: "resourceService", state: "connected" });
       },
       error: (error) => {
@@ -340,7 +343,12 @@ function subscribeResources(
     }
 
     starting = true;
-    reportConnection({ target: "resourceService", state: "connecting" });
+    // Once an attempt has failed, keep the stable error status visible while automatic
+    // retries run in the background. Alternating error/connecting every second makes the
+    // status pill pulse and looks like the disconnected dashboard is being remounted.
+    if (!connectionFailed) {
+      reportConnection({ target: "resourceService", state: "connecting" });
+    }
     try {
       if (connection === null) {
         const version = await getNegotiatedVersion();
