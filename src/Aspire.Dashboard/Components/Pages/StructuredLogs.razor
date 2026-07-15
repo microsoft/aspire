@@ -3,6 +3,7 @@
 
 @using Aspire.Dashboard.Resources
 @using Aspire.Dashboard.Components.Controls.Grid
+@using Aspire.Dashboard.Otlp.Storage
 @inject IJSRuntime JS
 @implements IDisposable
 
@@ -123,16 +124,16 @@
                                                 ResizableColumns="true"
                                                 ResizeColumnOnAllRows="false"
                                                 ItemsProvider="@GetData"
-                                                TGridItem="OtlpLogEntry"
+                                                TGridItem="LogSummary"
                                                 GridTemplateColumns="@_manager.GetGridTemplateColumns()"
                                                 ShowHover="true"
                                                 ItemKey="@(r => r.InternalId)"
                                                 OnRowClick="@(r => r.ExecuteOnDefault(d => OnShowPropertiesAsync(d, focusElementId: ScrollContainerId)))"
                                                 Class="main-grid enable-row-click">
                                     <ChildContent>
-                                        <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsResourceColumnHeader)]" Tooltip="true" TooltipText="@(e => GetResourceName(e.ResourceView))">
-                                            <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.ResourceView)));">
-                                                @GetResourceName(context.ResourceView)
+                                        <AspireTemplateColumn ColumnId="@ResourceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsResourceColumnHeader)]" Tooltip="true" TooltipText="@(e => GetResourceName(e.Resource))">
+                                            <span style="padding-left:5px; border-left-width: 5px; border-left-style: solid; border-left-color: @(ColorGenerator.Instance.GetColorVariableByKey(GetResourceName(context.Resource)));">
+                                                @GetResourceName(context.Resource)
                                             </span>
                                         </AspireTemplateColumn>
                                         <AspireTemplateColumn ColumnId="@LogLevelColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsLevelColumnHeader)]">
@@ -143,7 +144,7 @@
                                         </AspireTemplateColumn>
                                         <AspireTemplateColumn ColumnId="@MessageColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsMessageColumnHeader)]">
                                             @* Tooltip is displayed by the message GridValue instance *@
-                                            <LogMessageColumnDisplay FilterText="@(ViewModel.FilterText)" LogEntry="@context" IsGenAILogCallback="@IsGenAILogEntry" LaunchGenAIVisualizerCallback="@LaunchGenAIVisualizerAsync" />
+                                            <LogMessageColumnDisplay FilterText="@(ViewModel.FilterText)" LogEntry="@context" IsGenAILogCallback="@(log => log.HasGenAI)" LaunchGenAIVisualizerCallback="@LaunchGenAIVisualizerAsync" />
                                         </AspireTemplateColumn>
                                         <AspireTemplateColumn ColumnId="@TraceColumn" ColumnManager="@_manager" Title="@Loc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsTraceColumnHeader)]">
                                             @if (!string.IsNullOrEmpty(context.TraceId))

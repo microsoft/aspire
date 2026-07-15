@@ -39,6 +39,7 @@ public interface ITelemetryRepository : IDisposable
     void AddTraces(AddContext context, RepeatedField<ResourceSpans> resourceSpans);
 
     PagedResult<OtlpLogEntry> GetLogs(GetLogsContext context);
+    PagedResult<LogSummary> GetLogSummaries(GetLogsContext context);
     OtlpLogEntry? GetLog(long logId);
     List<OtlpLogEntry> GetLogsForSpan(string traceId, string spanId);
     List<OtlpLogEntry> GetLogsForTrace(string traceId);

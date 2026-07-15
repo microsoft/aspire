@@ -498,6 +498,29 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
     }
 
+    public PagedResult<LogSummary> GetLogSummaries(GetLogsContext context)
+    {
+        var result = GetLogs(context);
+        return new PagedResult<LogSummary>
+        {
+            Items = result.Items.Select(log => new LogSummary
+            {
+                InternalId = log.InternalId,
+                TimeStamp = log.TimeStamp,
+                Severity = log.Severity,
+                Message = log.Message,
+                SpanId = log.SpanId,
+                TraceId = log.TraceId,
+                Resource = log.ResourceView.Resource,
+                ExceptionText = OtlpLogEntry.GetExceptionText(log),
+                HasGenAI = global::Aspire.Dashboard.Model.GenAI.GenAIHelpers.HasGenAIAttribute(log.Attributes) ||
+                    GetSpan(log.TraceId, log.SpanId) is { } span && global::Aspire.Dashboard.Model.GenAI.GenAIHelpers.HasGenAIAttribute(span.Attributes)
+            }).ToList(),
+            TotalItemCount = result.TotalItemCount,
+            IsFull = result.IsFull
+        };
+    }
+
     public OtlpLogEntry? GetLog(long logId)
     {
         _logsLock.EnterReadLock();

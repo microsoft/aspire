@@ -361,6 +361,127 @@ public sealed partial class SqliteTelemetryRepository
         };
     }
 
+    private PagedResult<LogSummary> GetLogSummariesFromDatabase(GetLogsContext context)
+    {
+        using var connection = _database.OpenConnection();
+        var query = BuildLogQuery(context);
+        query.Parameters.Add("StartIndex", Math.Max(context.StartIndex, 0));
+        query.Parameters.Add("Count", Math.Max(context.Count, 0));
+        query.Parameters.Add("MaxLogCount", _otlpContext.Options.MaxLogCount);
+
+        // Return the aggregate and page display data together. Only attributes that affect the
+        // message column are aggregated, avoiding the extra materialization queries for every page.
+        var records = connection.Query<LogSummaryRecord>($"""
+            WITH
+            filtered_logs AS (
+                SELECT
+                    l.*,
+                    r.resource_name,
+                    r.instance_id,
+                    r.uninstrumented_peer
+                {query.FromAndWhere}
+            ),
+            log_aggregate AS (
+                SELECT COUNT(*) AS TotalItemCount
+                FROM filtered_logs
+            ),
+            paged_logs AS (
+                SELECT *
+                FROM filtered_logs
+                ORDER BY timestamp_ticks, log_id DESC
+                LIMIT @Count OFFSET @StartIndex
+            ),
+            log_attribute_summaries AS (
+                SELECT
+                    a.log_id,
+                    MAX(CASE WHEN a.attribute_key = 'exception.stacktrace' THEN a.attribute_value END) AS exception_stacktrace,
+                    MAX(CASE WHEN a.attribute_key = 'exception.message' THEN a.attribute_value END) AS exception_message,
+                    MAX(CASE WHEN a.attribute_key = 'exception.type' THEN a.attribute_value END) AS exception_type,
+                    MAX(CASE WHEN a.attribute_key = 'gen_ai.system' THEN 1 ELSE 0 END) AS has_gen_ai_system,
+                    MAX(CASE WHEN a.attribute_key = 'gen_ai.system' AND LENGTH(a.attribute_value) > 0 THEN 1 ELSE 0 END) AS has_non_empty_gen_ai_system,
+                    MAX(CASE WHEN a.attribute_key = 'gen_ai.provider.name' AND LENGTH(a.attribute_value) > 0 THEN 1 ELSE 0 END) AS has_non_empty_gen_ai_provider
+                FROM telemetry_log_attributes a
+                JOIN paged_logs pl ON pl.log_id = a.log_id
+                WHERE a.attribute_key IN (
+                    'exception.stacktrace',
+                    'exception.message',
+                    'exception.type',
+                    'gen_ai.system',
+                    'gen_ai.provider.name')
+                GROUP BY a.log_id
+            )
+            SELECT
+                a.TotalItemCount,
+                (SELECT COUNT(*) FROM telemetry_logs) >= @MaxLogCount AS IsFull,
+                pl.log_id AS InternalId,
+                pl.timestamp_ticks AS TimestampTicks,
+                pl.severity AS Severity,
+                pl.message AS Message,
+                pl.span_id AS SpanId,
+                pl.trace_id AS TraceId,
+                pl.resource_name AS ResourceName,
+                pl.instance_id AS InstanceId,
+                pl.uninstrumented_peer AS UninstrumentedPeer,
+                CASE
+                    WHEN LENGTH(las.exception_stacktrace) > 0 THEN las.exception_stacktrace
+                    WHEN LENGTH(las.exception_message) > 0 AND LENGTH(las.exception_type) > 0 THEN las.exception_type || ': ' || las.exception_message
+                    WHEN LENGTH(las.exception_message) > 0 THEN las.exception_message
+                END AS ExceptionText,
+                                COALESCE(
+                                        CASE WHEN las.has_gen_ai_system = 1
+                                                THEN las.has_non_empty_gen_ai_system
+                                                ELSE las.has_non_empty_gen_ai_provider
+                                        END,
+                                        0) = 1 OR
+                                CASE WHEN EXISTS (
+                                        SELECT 1
+                                        FROM telemetry_span_attributes sa
+                                        WHERE sa.trace_id = pl.trace_id
+                                            AND sa.span_id = pl.span_id
+                                            AND sa.attribute_key = 'gen_ai.system'
+                                ) THEN EXISTS (
+                                        SELECT 1
+                                        FROM telemetry_span_attributes sa
+                                        WHERE sa.trace_id = pl.trace_id
+                                            AND sa.span_id = pl.span_id
+                                            AND sa.attribute_key = 'gen_ai.system'
+                                            AND LENGTH(sa.attribute_value) > 0
+                                ) ELSE EXISTS (
+                                        SELECT 1
+                                        FROM telemetry_span_attributes sa
+                                        WHERE sa.trace_id = pl.trace_id
+                                            AND sa.span_id = pl.span_id
+                                            AND sa.attribute_key = 'gen_ai.provider.name'
+                                            AND LENGTH(sa.attribute_value) > 0
+                                ) END AS HasGenAI
+            FROM log_aggregate a
+            LEFT JOIN paged_logs pl ON 1 = 1
+            LEFT JOIN log_attribute_summaries las ON las.log_id = pl.log_id
+            ORDER BY pl.timestamp_ticks, pl.log_id DESC;
+            """, query.Parameters).AsList();
+
+        var firstRecord = records[0];
+        return new PagedResult<LogSummary>
+        {
+            Items = records
+                .Where(record => record.InternalId is not null)
+                .Select(record => new LogSummary
+                {
+                    InternalId = record.InternalId!.Value,
+                    TimeStamp = new DateTime(record.TimestampTicks!.Value, DateTimeKind.Utc),
+                    Severity = (LogLevel)record.Severity!.Value,
+                    Message = record.Message!,
+                    SpanId = record.SpanId!,
+                    TraceId = record.TraceId!,
+                    Resource = new OtlpResource(record.ResourceName!, record.InstanceId, record.UninstrumentedPeer!.Value, _otlpContext),
+                    ExceptionText = record.ExceptionText,
+                    HasGenAI = record.HasGenAI!.Value
+                }).ToList(),
+            TotalItemCount = firstRecord.TotalItemCount,
+            IsFull = firstRecord.IsFull
+        };
+    }
+
     private OtlpLogEntry? GetLogFromDatabase(long logId)
     {
         using var connection = _database.OpenConnection();
@@ -964,6 +1085,23 @@ public sealed partial class SqliteTelemetryRepository
         public required bool HasMetrics { get; init; }
         public required string ScopeName { get; init; }
         public required string ScopeVersion { get; init; }
+    }
+
+    private sealed class LogSummaryRecord
+    {
+        public required int TotalItemCount { get; init; }
+        public required bool IsFull { get; init; }
+        public long? InternalId { get; init; }
+        public long? TimestampTicks { get; init; }
+        public int? Severity { get; init; }
+        public string? Message { get; init; }
+        public string? SpanId { get; init; }
+        public string? TraceId { get; init; }
+        public string? ResourceName { get; init; }
+        public string? InstanceId { get; init; }
+        public bool? UninstrumentedPeer { get; init; }
+        public string? ExceptionText { get; init; }
+        public bool? HasGenAI { get; init; }
     }
 
     private sealed class FieldValueRecord
