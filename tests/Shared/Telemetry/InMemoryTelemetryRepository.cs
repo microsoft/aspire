@@ -1538,9 +1538,13 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
 
     public Dictionary<string, int> GetLogsFieldValues(string attributeName)
     {
-        _logsLock.EnterReadLock();
-
         var attributesValues = new Dictionary<string, int>(StringComparers.OtlpAttribute);
+        if (attributeName == KnownStructuredLogFields.TimestampField)
+        {
+            return attributesValues;
+        }
+
+        _logsLock.EnterReadLock();
 
         try
         {

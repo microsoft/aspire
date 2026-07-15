@@ -91,6 +91,62 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public void GetLogsFieldValues_AllFieldsMatchMaterializedLogs()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime, message: "Message", attributes: [KeyValuePair.Create("custom", "Value")], severity: SeverityNumber.Info, eventName: "Event"),
+                            CreateLogRecord(time: s_testTime, message: "message", attributes: [KeyValuePair.Create("custom", "value")], severity: SeverityNumber.Info2)
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var logs = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).Items;
+
+        foreach (var field in KnownStructuredLogFields.AllFields
+            .Except([KnownStructuredLogFields.TimestampField])
+            .Append(KnownStructuredLogFields.LevelField)
+            .Append("custom"))
+        {
+            var expected = logs
+                .Select(log => OtlpLogEntry.GetFieldValue(log, field))
+                .Where(value => value is not null)
+                .GroupBy(value => value!, StringComparers.OtlpAttribute)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparers.OtlpAttribute);
+            var actual = repository.GetLogsFieldValues(field);
+            Assert.True(expected.Count == actual.Count, $"Field '{field}' expected {expected.Count} values but found {actual.Count}.");
+            foreach (var (value, count) in expected)
+            {
+                Assert.True(actual.TryGetValue(value, out var actualCount), $"Field '{field}' is missing value '{value}'.");
+                Assert.True(count == actualCount, $"Field '{field}' value '{value}' expected count {count} but found {actualCount}.");
+            }
+        }
+
+        Assert.Empty(repository.GetLogsFieldValues(KnownStructuredLogFields.TimestampField));
+    }
+
+    [Fact]
     public void AddLogs_NoBody_EmptyMessage()
     {
         // Arrange

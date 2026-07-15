@@ -1183,6 +1183,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal(count, actual[value]);
             }
         }
+
+        Assert.Empty(repository.GetTraceFieldValues(KnownTraceFields.DurationField));
+        Assert.Empty(repository.GetTraceFieldValues(KnownTraceFields.TimestampField));
     }
 
     [Fact]
