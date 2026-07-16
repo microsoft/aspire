@@ -19,6 +19,7 @@ using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
 using Microsoft.JSInterop;
 using Xunit;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
 
@@ -325,6 +326,7 @@ public partial class MainLayoutTests : DashboardTestContext
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        JSInterop.SetupVoid("focusElement", _ => true);
         var initializedCount = 0;
         var disposedCount = 0;
         var cut = RenderComponent<MainLayout>(builder =>
@@ -339,20 +341,35 @@ public partial class MainLayoutTests : DashboardTestContext
             });
         });
 
-        var select = Assert.Single(cut.FindComponents<FluentSelect<string>>());
-        var statusIcon = Assert.Single(select.FindAll(".application-run-status"));
+        var runSelect = cut.FindComponent<DashboardRunSelect>();
+        var menuButton = runSelect.FindComponent<AspireMenuButton>();
+        var statusIcon = runSelect.Find(".application-run-status");
         Assert.Equal("start", statusIcon.GetAttribute("slot"));
         Assert.Contains("fill: var(--success)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
-        Assert.Empty(select.FindAll("fluent-option .application-run-status"));
-        Assert.True(select.Find("[slot='indicator']").HasAttribute("hidden"));
+        Assert.Equal("Live run", menuButton.Instance.Text);
+        Assert.True(menuButton.Instance.HideIcon);
         Assert.Collection(
-            select.FindAll("fluent-option"),
-            option => Assert.Equal("Current", option.TextContent),
-            option => Assert.Equal("1/2/2025 1:30 PM", option.TextContent));
+            menuButton.Instance.Items,
+            item =>
+            {
+                Assert.Equal("Live run", item.Text);
+                Assert.IsType<Icons.Regular.Size16.Checkmark>(item.Icon);
+            },
+            item => Assert.True(item.IsDivider),
+            item =>
+            {
+                Assert.Equal("1/2/2025 1:30:00 PM", item.Text);
+                Assert.Null(item.Icon);
+            });
 
         var navigationOccurred = false;
         Services.GetRequiredService<NavigationManager>().LocationChanged += (_, _) => navigationOccurred = true;
-        select.Find("fluent-select").Change(historicalRun.RunId);
+        runSelect.Find("fluent-button").Click();
+        var menuItems = runSelect.WaitForElements("fluent-menu-item");
+        Assert.Single(runSelect.FindAll("fluent-divider"));
+        Assert.Single(menuItems[0].QuerySelectorAll("span[slot='start']"));
+        Assert.Empty(menuItems[1].QuerySelectorAll("span[slot='start']"));
+        menuItems[1].Click();
 
         Assert.Equal("historical", storedRunId);
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
@@ -360,18 +377,39 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.False(navigationOccurred);
         Assert.Equal(2, initializedCount);
         Assert.Equal(1, disposedCount);
-        statusIcon = cut.Find(".application-run-status");
+        runSelect = cut.FindComponent<DashboardRunSelect>();
+        menuButton = runSelect.FindComponent<AspireMenuButton>();
+        statusIcon = runSelect.Find(".application-run-status");
         Assert.Contains("fill: var(--warning)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
+        Assert.Equal("1/2/2025 1:30:00 PM", menuButton.Instance.Text);
+        Assert.Collection(
+            menuButton.Instance.Items,
+            item => Assert.Null(item.Icon),
+            item => Assert.True(item.IsDivider),
+            item => Assert.IsType<Icons.Regular.Size16.Checkmark>(item.Icon));
 
-        cut.Find("fluent-select").Change("current");
+        runSelect.Find("fluent-button").Click();
+    menuItems = runSelect.WaitForElements("fluent-menu-item");
+    Assert.Single(runSelect.FindAll("fluent-divider"));
+    Assert.Empty(menuItems[0].QuerySelectorAll("span[slot='start']"));
+    Assert.Single(menuItems[1].QuerySelectorAll("span[slot='start']"));
+    menuItems[0].Click();
 
         Assert.Equal(string.Empty, storedRunId);
         Assert.Null(runSelection.SelectedRunId);
         Assert.False(navigationOccurred);
         Assert.Equal(3, initializedCount);
         Assert.Equal(2, disposedCount);
-        statusIcon = cut.Find(".application-run-status");
+        runSelect = cut.FindComponent<DashboardRunSelect>();
+        menuButton = runSelect.FindComponent<AspireMenuButton>();
+        statusIcon = runSelect.Find(".application-run-status");
         Assert.Contains("fill: var(--success)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
+        Assert.Equal("Live run", menuButton.Instance.Text);
+        Assert.Collection(
+            menuButton.Instance.Items,
+            item => Assert.IsType<Icons.Regular.Size16.Checkmark>(item.Icon),
+            item => Assert.True(item.IsDivider),
+            item => Assert.Null(item.Icon));
     }
 
     [Fact]

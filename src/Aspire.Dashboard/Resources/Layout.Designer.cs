@@ -70,7 +70,7 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Current.
+        ///   Looks up a localized string similar to Live run.
         /// </summary>
         public static string DashboardRunSelectCurrent {
             get {

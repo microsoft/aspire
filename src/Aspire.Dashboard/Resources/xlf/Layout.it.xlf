@@ -8,8 +8,8 @@
         <note />
       </trans-unit>
       <trans-unit id="DashboardRunSelectCurrent">
-        <source>Current</source>
-        <target state="new">Current</target>
+        <source>Live run</source>
+        <target state="new">Live run</target>
         <note />
       </trans-unit>
       <trans-unit id="MainLayoutAspire">
