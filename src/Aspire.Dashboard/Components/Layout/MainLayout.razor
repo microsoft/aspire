@@ -22,7 +22,8 @@
             <div class="flex-filler"></div>
             @if (RunStore.SupportsRunSelection && _selectedRun is { } selectedRun)
             {
-                <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
+                <DashboardRunSelect @key="selectedRun.RunId"
+                                    SelectedRunId="@selectedRun.RunId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
                                     SelectedRunIdChanged="@SwitchDashboardRunAsync" />
             }
@@ -67,7 +68,8 @@
             <div class="flex-filler"></div>
             @if (RunStore.SupportsRunSelection && _selectedRun is { } selectedRun)
             {
-                <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
+                <DashboardRunSelect @key="selectedRun.RunId"
+                                    SelectedRunId="@selectedRun.RunId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
                                     SelectedRunIdChanged="@SwitchDashboardRunAsync" />
             }
@@ -98,9 +100,11 @@
     <div class="layout-body-container">
         <FluentBodyContent Class="custom-body-content body-content">
             <FluentToastProvider MaxToastCount="3" Timeout="5000" />
-            @if (_selectedRun is not null)
+            @if (!_isSwitchingRuns && _selectedRun is { } selectedRun)
             {
-                @Body
+                <CascadingValue @key="selectedRun.RunId" Name="DashboardRunId" Value="selectedRun.RunId" IsFixed="true">
+                    @Body
+                </CascadingValue>
             }
         </FluentBodyContent>
     </div>
@@ -108,10 +112,12 @@
     <FluentDialogProvider/>
     <FluentTooltipProvider />
     <FluentMenuProvider />
-    @if (_selectedRun is not null)
+    @if (!_isSwitchingRuns && _selectedRun is not null)
     {
-        <InteractionsProvider />
-        <ResourceServiceConnectionProvider />
+        <CascadingValue @key="_selectedRun.RunId" Name="DashboardRunProviders" Value="_selectedRun.RunId" IsFixed="true">
+            <InteractionsProvider />
+            <ResourceServiceConnectionProvider />
+        </CascadingValue>
     }
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]

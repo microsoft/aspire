@@ -314,13 +314,16 @@ public sealed class DashboardDataSourceTests : IDisposable
             currentTelemetryRepository,
             currentResourceRepository,
             options);
+        using ITelemetryRepository selectedTelemetryRepository = new SelectedTelemetryRepository(dataSource);
+        Assert.Empty(selectedTelemetryRepository.GetResources());
+
         dataSource.SelectRun(historicalRunId);
 
         Assert.True(dataSource.IsReadOnly);
         Assert.Equal(historicalRunId, dataSource.SelectedRun.RunId);
         Assert.Equal("api", Assert.Single(dataSource.ResourceRepository.GetResources()).Name);
-        Assert.Equal("TestService", Assert.Single(dataSource.TelemetryRepository.GetResources()).ResourceName);
-        Assert.Equal("Test Value!", Assert.Single(dataSource.TelemetryRepository.GetLogs(new GetLogsContext
+        Assert.Equal("TestService", Assert.Single(selectedTelemetryRepository.GetResources()).ResourceName);
+        Assert.Equal("Test Value!", Assert.Single(selectedTelemetryRepository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -347,6 +350,11 @@ public sealed class DashboardDataSourceTests : IDisposable
         Assert.Equal(DashboardConnectionState.Connected, selectedClient.ConnectionState);
         Assert.Equal(0, connectionStateChangedCount);
         await selectedClient.ReconnectAsync();
+
+        dataSource.SelectRun(runId: null);
+
+        Assert.Empty(selectedTelemetryRepository.GetResources());
+        Assert.False(dataSource.IsReadOnly);
     }
 
     [Fact]

@@ -89,21 +89,6 @@ For more information about using AI agents with the dashboard, including setting
         <target state="new">AI agents</target>
         <note />
       </trans-unit>
-      <trans-unit id="DashboardRunsDialogLaunchButton">
-        <source>Select dashboard run</source>
-        <target state="new">Select dashboard run</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="DashboardRunsDialogStartedAt">
-        <source>Started {0}</source>
-        <target state="new">Started {0}</target>
-        <note>{0} is the run start time.</note>
-      </trans-unit>
-      <trans-unit id="DashboardRunsDialogTitle">
-        <source>Dashboard runs</source>
-        <target state="new">Dashboard runs</target>
-        <note />
-      </trans-unit>
       <trans-unit id="DialogCloseButtonText">
         <source>Close</source>
         <target state="translated">关闭</target>
@@ -647,26 +632,6 @@ For more information about using AI agents with the dashboard, including setting
       <trans-unit id="SettingsDialogDashboardLogsAndTelemetry">
         <source>Resource logs and telemetry</source>
         <target state="translated">资源日志和遥测</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogDashboardRun">
-        <source>{0} runs:</source>
-        <target state="new">{0} runs:</target>
-        <note>{0} is the application name.</note>
-      </trans-unit>
-      <trans-unit id="SettingsDialogDashboardRunCurrent">
-        <source>Current</source>
-        <target state="new">Current</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogDashboardRunPageReloads">
-        <source>Historical runs are read-only. The page will reload when the selected run changes.</source>
-        <target state="new">Historical runs are read-only. The page will reload when the selected run changes.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="SettingsDialogDashboardRunUnknownApplication">
-        <source>Aspire</source>
-        <target state="new">Aspire</target>
         <note />
       </trans-unit>
       <trans-unit id="SettingsDialogDotNetRuntimeVersion">

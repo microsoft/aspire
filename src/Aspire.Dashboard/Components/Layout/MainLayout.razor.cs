@@ -18,6 +18,7 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    private bool _isSwitchingRuns;
 
     private IDisposable? _themeChangedSubscription;
     private IDisposable? _locationChangingRegistration;
@@ -243,9 +244,21 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             return;
         }
 
-        _selectedRun = selectedRun;
+        _isSwitchingRuns = true;
+        await InvokeAsync(StateHasChanged);
+
+        try
+        {
+            RunSelection.SelectRun(selectedRun.IsCurrent ? null : selectedRun.RunId);
+            _selectedRun = selectedRun;
+        }
+        finally
+        {
+            _isSwitchingRuns = false;
+            await InvokeAsync(StateHasChanged);
+        }
+
         await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, selectedRun.IsCurrent ? string.Empty : selectedRun.RunId);
-        NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
     }
 
     private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)

@@ -5,13 +5,14 @@ using System.Globalization;
 using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using DialogsResources = Aspire.Dashboard.Resources.Dialogs;
+using LayoutResources = Aspire.Dashboard.Resources.Layout;
 
 namespace Aspire.Dashboard.Components.Controls;
 
 public partial class DashboardRunSelect : ComponentBase
 {
     private IReadOnlyList<DashboardRunDescriptor> _runs = [];
+    private string RunSelectAriaLabel => Loc[nameof(LayoutResources.DashboardRunSelectAriaLabel)];
 
     [Parameter, EditorRequired]
     public required string SelectedRunId { get; set; }
@@ -23,7 +24,7 @@ public partial class DashboardRunSelect : ComponentBase
     public EventCallback<string?> SelectedRunIdChanged { get; set; }
 
     [Inject]
-    public required IStringLocalizer<DialogsResources> Loc { get; init; }
+    public required IStringLocalizer<LayoutResources> Loc { get; init; }
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -40,13 +41,10 @@ public partial class DashboardRunSelect : ComponentBase
     {
         if (run.IsCurrent)
         {
-            return Loc[nameof(DialogsResources.SettingsDialogDashboardRunCurrent)];
+            return Loc[nameof(LayoutResources.DashboardRunSelectCurrent)];
         }
 
         var localStartedAt = TimeZoneInfo.ConvertTime(run.StartedAtUtc, TimeProvider.LocalTimeZone);
-        return string.Format(
-            CultureInfo.CurrentCulture,
-            Loc[nameof(DialogsResources.DashboardRunsDialogStartedAt)],
-            localStartedAt.ToString("g", CultureInfo.CurrentCulture));
+        return localStartedAt.ToString("g", CultureInfo.CurrentCulture);
     }
 }

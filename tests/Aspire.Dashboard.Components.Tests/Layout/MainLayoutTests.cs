@@ -297,7 +297,7 @@ public partial class MainLayoutTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task DashboardRunSelect_ChangeStoresSelectionAndReloadsWithoutQueryString()
+    public async Task DashboardRunSelect_ChangeStoresAndAppliesSelectionWithoutNavigation()
     {
         var historicalRun = new DashboardRunDescriptor(
             RunId: "historical",
@@ -325,9 +325,18 @@ public partial class MainLayoutTests : DashboardTestContext
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        var initializedCount = 0;
+        var disposedCount = 0;
         var cut = RenderComponent<MainLayout>(builder =>
         {
             builder.Add(component => component.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+            builder.Add(component => component.Body, bodyBuilder =>
+            {
+                bodyBuilder.OpenComponent<LifecycleTestComponent>(0);
+                bodyBuilder.AddComponentParameter(1, nameof(LifecycleTestComponent.Initialized), (Action)(() => initializedCount++));
+                bodyBuilder.AddComponentParameter(2, nameof(LifecycleTestComponent.Disposed), (Action)(() => disposedCount++));
+                bodyBuilder.CloseComponent();
+            });
         });
 
         var select = Assert.Single(cut.FindComponents<FluentSelect<string>>());
@@ -336,13 +345,33 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Contains("fill: var(--success)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
         Assert.Empty(select.FindAll("fluent-option .application-run-status"));
         Assert.True(select.Find("[slot='indicator']").HasAttribute("hidden"));
+        Assert.Collection(
+            select.FindAll("fluent-option"),
+            option => Assert.Equal("Current", option.TextContent),
+            option => Assert.Equal("1/2/2025 1:30 PM", option.TextContent));
 
-        await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(historicalRun.RunId));
+        var navigationOccurred = false;
+        Services.GetRequiredService<NavigationManager>().LocationChanged += (_, _) => navigationOccurred = true;
+        select.Find("fluent-select").Change(historicalRun.RunId);
 
-        statusIcon = Assert.Single(select.FindAll(".application-run-status"));
-        Assert.Contains("fill: var(--warning)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
         Assert.Equal("historical", storedRunId);
-        Assert.Empty(new Uri(Services.GetRequiredService<NavigationManager>().Uri).Query);
+        var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
+        Assert.Equal("historical", runSelection.SelectedRunId);
+        Assert.False(navigationOccurred);
+        Assert.Equal(2, initializedCount);
+        Assert.Equal(1, disposedCount);
+        statusIcon = cut.Find(".application-run-status");
+        Assert.Contains("fill: var(--warning)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
+
+        cut.Find("fluent-select").Change("current");
+
+        Assert.Equal(string.Empty, storedRunId);
+        Assert.Null(runSelection.SelectedRunId);
+        Assert.False(navigationOccurred);
+        Assert.Equal(3, initializedCount);
+        Assert.Equal(2, disposedCount);
+        statusIcon = cut.Find(".application-run-status");
+        Assert.Contains("fill: var(--success)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
     }
 
     [Fact]

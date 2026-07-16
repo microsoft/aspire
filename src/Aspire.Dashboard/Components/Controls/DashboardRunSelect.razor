@@ -1,11 +1,9 @@
-@using Aspire.Dashboard.Resources
-
 <div class="application-run-select">
     <FluentSelect TOption="string"
                 Value="@SelectedRunId"
-                ValueChanged="@SelectedRunIdChanged"
+                      ValueChanged="@SelectedRunIdChanged"
                 Position="SelectPosition.Below"
-                AriaLabel="@Loc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]"
+            AriaLabel="@RunSelectAriaLabel"
                 Appearance="Appearance.Stealth">
         <FluentIcon Class="application-run-status"
                     Value="@(new Icons.Filled.Size12.Circle())"
