@@ -1,6 +1,6 @@
 # Aspire.Mcp.Client library
 
-Registers an [McpClient](https://modelcontextprotocol.io/specification/2025-06-18/basic/architecture) in the DI container for connecting to a Model Context Protocol (MCP) server through Aspire service discovery. Enables a corresponding health check, logging, and telemetry.
+Registers an [McpClient](https://modelcontextprotocol.io/specification/2025-06-18/basic/architecture) in the DI container for connecting to a Model Context Protocol (MCP) server through Aspire service discovery. Enables a corresponding health check and logging.
 
 ## Getting started
 

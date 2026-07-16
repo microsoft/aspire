@@ -48,6 +48,7 @@ public class AspireMcpClientExtensionsTests
 
         builder.AddMcpClient(
             "mcp",
+            null,
             _ => clientOptionsConfigured = true,
             options =>
             {
@@ -74,6 +75,7 @@ public class AspireMcpClientExtensionsTests
 
         builder.AddKeyedMcpClient(
             "mcp",
+            null,
             _ => clientOptionsConfigured = true,
             options =>
             {
@@ -110,7 +112,7 @@ public class AspireMcpClientExtensionsTests
 
         var exception = Assert.Throws<FormatException>(() => builder.AddMcpClient("mcp"));
 
-        Assert.Equal("The MCP client connection string must be an absolute URI.", exception.Message);
+        Assert.Equal("The MCP client connection string must be an absolute HTTP or HTTPS URI.", exception.Message);
     }
 
     [Theory]
@@ -137,6 +139,21 @@ public class AspireMcpClientExtensionsTests
         _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
 
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://override/mcp");
+    }
+
+    [Fact]
+    public void MalformedConnectionStringDoesNotUseInheritedEndpoint()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Aspire:Mcp:Client:Endpoint"] = "https://inherited/mcp",
+            ["ConnectionStrings:mcp"] = "not-a-uri"
+        });
+
+        var exception = Assert.Throws<FormatException>(() => builder.AddMcpClient("mcp"));
+
+        Assert.Equal("The MCP client connection string must be an absolute HTTP or HTTPS URI.", exception.Message);
     }
 
     [Fact]
@@ -408,6 +425,21 @@ public class AspireMcpClientExtensionsTests
         Assert.Equal(2, handler.InitializeAttempts);
     }
 
+    [Fact]
+    public async Task AddMcpClientReconnectsAfterOperationFailure()
+    {
+        var handler = new FailPingOnceHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var result = await host.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync();
+
+        Assert.Equal(HealthStatus.Healthy, result.Status);
+        Assert.Equal(2, handler.InitializeAttempts);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
@@ -618,6 +650,35 @@ public class AspireMcpClientExtensionsTests
             }
 
             return new HttpResponseMessage(HttpStatusCode.NotFound);
+        }
+    }
+
+    private sealed class FailPingOnceHandler : SuccessfulInitializationHandler
+    {
+        private int _pingFailures;
+        public int InitializeAttempts { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                var body = request.Content is null ? string.Empty : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+                using var json = JsonDocument.Parse(body);
+                if (json.RootElement.TryGetProperty("method", out var method))
+                {
+                    if (string.Equals(method.GetString(), "initialize", StringComparison.Ordinal))
+                    {
+                        InitializeAttempts++;
+                    }
+                    else if (string.Equals(method.GetString(), "ping", StringComparison.Ordinal) &&
+                        Interlocked.Exchange(ref _pingFailures, 1) is 0)
+                    {
+                        return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                    }
+                }
+            }
+
+            return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
     }
 

@@ -34,6 +34,6 @@ public sealed class McpClientSettings
             return;
         }
 
-        throw new FormatException("The MCP client connection string must be an absolute URI.");
+        throw new FormatException("The MCP client connection string must be an absolute HTTP or HTTPS URI.");
     }
 }

@@ -47,9 +47,9 @@ public static class AspireMcpClientExtensions
     /// </summary>
     /// <param name="builder">The application builder to add services to.</param>
     /// <param name="connectionName">The service-discovery name of the MCP server.</param>
+    /// <param name="configureSettings">An optional delegate to configure <see cref="McpClientSettings"/> after configuration binding.</param>
     /// <param name="configureClientOptions">An optional delegate to configure <see cref="McpClientOptions"/> before the client is created.</param>
     /// <param name="configureTransportOptions">An optional delegate to configure <see cref="HttpClientTransportOptions"/> before the transport is created.</param>
-    /// <param name="configureSettings">An optional delegate to configure <see cref="McpClientSettings"/> after configuration binding.</param>
     /// <remarks>
     /// The server is resolved at <c>https://{connectionName}/mcp</c> by default. When service discovery only provides
     /// HTTP endpoints, the client uses <c>http://{connectionName}/mcp</c> instead. Use <c>WithReference</c> in the
@@ -60,13 +60,17 @@ public static class AspireMcpClientExtensions
     /// <code>
     /// builder.AddMcpClient(
     ///     "mcp-server",
+    ///     settings =>
+    ///     {
+    ///         // Configure Aspire settings.
+    ///     },
     ///     clientOptions =>
     ///     {
     ///         // Configure client options.
     ///     },
     ///     transportOptions =>
     ///     {
-    ///         transportOptions.Endpoint = new Uri("https://mcp-server/mcp");
+    ///         // Configure transport options.
     ///     });
     /// </code>
     /// </example>
@@ -77,9 +81,9 @@ public static class AspireMcpClientExtensions
     public static IHostApplicationBuilder AddMcpClient(
         this IHostApplicationBuilder builder,
         string connectionName,
+        Action<McpClientSettings>? configureSettings = null,
         Action<McpClientOptions>? configureClientOptions = null,
-        Action<HttpClientTransportOptions>? configureTransportOptions = null,
-        Action<McpClientSettings>? configureSettings = null)
+        Action<HttpClientTransportOptions>? configureTransportOptions = null)
         => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions, configureTransportOptions, configureSettings);
 
     /// <summary>
@@ -115,9 +119,9 @@ public static class AspireMcpClientExtensions
     /// </summary>
     /// <param name="builder">The application builder to add services to.</param>
     /// <param name="name">The service-discovery name of the MCP server and the service key of the client.</param>
+    /// <param name="configureSettings">An optional delegate to configure <see cref="McpClientSettings"/> after configuration binding.</param>
     /// <param name="configureClientOptions">An optional delegate to configure <see cref="McpClientOptions"/> before the client is created.</param>
     /// <param name="configureTransportOptions">An optional delegate to configure <see cref="HttpClientTransportOptions"/> before the transport is created.</param>
-    /// <param name="configureSettings">An optional delegate to configure <see cref="McpClientSettings"/> after configuration binding.</param>
     /// <remarks>
     /// The server is resolved at <c>https://{name}/mcp</c> by default. When service discovery only provides HTTP
     /// endpoints, the client uses <c>http://{name}/mcp</c> instead. Use <c>WithReference</c> in the AppHost to provide
@@ -128,13 +132,17 @@ public static class AspireMcpClientExtensions
     /// <code>
     /// builder.AddKeyedMcpClient(
     ///     "mcp-server",
+    ///     settings =>
+    ///     {
+    ///         // Configure Aspire settings.
+    ///     },
     ///     clientOptions =>
     ///     {
     ///         // Configure client options.
     ///     },
     ///     transportOptions =>
     ///     {
-    ///         transportOptions.Endpoint = new Uri("https://mcp-server/mcp");
+    ///         // Configure transport options.
     ///     });
     /// </code>
     /// </example>
@@ -145,9 +153,9 @@ public static class AspireMcpClientExtensions
     public static IHostApplicationBuilder AddKeyedMcpClient(
         this IHostApplicationBuilder builder,
         string name,
+        Action<McpClientSettings>? configureSettings = null,
         Action<McpClientOptions>? configureClientOptions = null,
-        Action<HttpClientTransportOptions>? configureTransportOptions = null,
-        Action<McpClientSettings>? configureSettings = null)
+        Action<HttpClientTransportOptions>? configureTransportOptions = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
@@ -181,6 +189,8 @@ public static class AspireMcpClientExtensions
             }
             catch (FormatException ex)
             {
+                // A malformed connection string must not be masked by an endpoint inherited from configuration.
+                settings.Endpoint = null;
                 connectionStringException = ex;
             }
         }
@@ -242,12 +252,12 @@ public static class AspireMcpClientExtensions
         return new Uri($"{scheme}://{connectionName}/mcp", UriKind.Absolute);
     }
 
-    private sealed class McpClientRegistration : IDisposable
+    private sealed class McpClientRegistration : IDisposable, IAsyncDisposable
     {
-        private readonly object _clientLock = new();
         private readonly Func<Task<DisposableMcpClient>> _createClient;
         private readonly CancellationTokenSource _creationCancellation = new();
-        private Task<DisposableMcpClient>? _client;
+        private ReconnectableMcpClient? _client;
+        private readonly object _lock = new();
         private int _disposed;
 
         public McpClientRegistration(
@@ -257,57 +267,48 @@ public static class AspireMcpClientExtensions
             IHttpClientFactory httpClientFactory,
             ILoggerFactory loggerFactory)
         {
-            _createClient = () => CreateClientAsync(
-                endpoint,
-                configureClientOptions,
-                configureTransportOptions,
-                httpClientFactory,
-                loggerFactory);
+            _createClient = () => CreateClientAsync(endpoint, configureClientOptions, configureTransportOptions, httpClientFactory, loggerFactory);
         }
 
         public McpClient GetClient()
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) is not 0, this);
-
-            var clientTask = Volatile.Read(ref _client);
-            if (clientTask is null)
+            var client = Volatile.Read(ref _client);
+            if (client is null)
             {
-                lock (_clientLock)
+                lock (_lock)
                 {
-                    clientTask ??= _client ??= _createClient();
+                    client ??= _client ??= new ReconnectableMcpClient(_createClient);
                 }
             }
-
-            try
-            {
-                return clientTask.GetAwaiter().GetResult();
-            }
-            catch
-            {
-                if (clientTask.IsFaulted || clientTask.IsCanceled)
-                {
-                    lock (_clientLock)
-                    {
-                        if (ReferenceEquals(_client, clientTask))
-                        {
-                            _client = null;
-                        }
-                    }
-                }
-
-                throw;
-            }
+            client.Initialize();
+            return client;
         }
 
         public void Dispose()
         {
-            if (Interlocked.Exchange(ref _disposed, 1) is not 0)
+            if (Interlocked.Exchange(ref _disposed, 1) is 0)
             {
-                return;
+                _creationCancellation.Cancel();
+                Volatile.Read(ref _client)?.Dispose();
+                _creationCancellation.Dispose();
             }
-
-            _creationCancellation.Cancel();
         }
+
+        public async ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) is 0)
+                {
+                    _creationCancellation.Cancel();
+                    var client = Volatile.Read(ref _client);
+                    if (client is not null)
+                    {
+                        client.Dispose();
+                        await client.DisposeAsync().ConfigureAwait(false);
+                    }
+                    _creationCancellation.Dispose();
+                }
+            }
 
         private async Task<DisposableMcpClient> CreateClientAsync(
             Uri endpoint,
@@ -318,7 +319,6 @@ public static class AspireMcpClientExtensions
         {
             HttpClient? httpClient = null;
             HttpClientTransport? transport = null;
-
             try
             {
                 var transportOptions = new HttpClientTransportOptions { Endpoint = endpoint };
@@ -326,23 +326,13 @@ public static class AspireMcpClientExtensions
                 var clientOptions = new McpClientOptions();
                 configureClientOptions?.Invoke(clientOptions);
                 httpClient = httpClientFactory.CreateClient(string.Empty);
-                transport = new HttpClientTransport(
-                    transportOptions,
-                    httpClient,
-                    loggerFactory,
-                    ownsHttpClient: true);
-
-                var client = await McpClient.CreateAsync(
-                    transport,
-                    clientOptions,
-                    loggerFactory: loggerFactory,
-                    cancellationToken: _creationCancellation.Token).ConfigureAwait(false);
+                transport = new HttpClientTransport(transportOptions, httpClient, loggerFactory, ownsHttpClient: true);
+                var client = await McpClient.CreateAsync(transport, clientOptions, loggerFactory: loggerFactory, cancellationToken: _creationCancellation.Token).ConfigureAwait(false);
                 if (Volatile.Read(ref _disposed) is not 0)
                 {
                     await client.DisposeAsync().ConfigureAwait(false);
                     throw new ObjectDisposedException(nameof(McpClientRegistration));
                 }
-
                 return new DisposableMcpClient(client, transport);
             }
             catch
@@ -355,8 +345,176 @@ public static class AspireMcpClientExtensions
                 {
                     httpClient?.Dispose();
                 }
-
                 throw;
+            }
+        }
+    }
+
+    // Keep the injected McpClient stable while replacing its private session after completion or failure.
+#pragma warning disable MCPEXP002
+    private sealed class ReconnectableMcpClient(Func<Task<DisposableMcpClient>> createClient) : McpClient, IDisposable
+#pragma warning restore MCPEXP002
+    {
+        private readonly object _lock = new();
+        private readonly SemaphoreSlim _operationLock = new(1, 1);
+        private readonly List<Task> _retiredClients = [];
+        private Task<DisposableMcpClient>? _client;
+        private int _disposed;
+
+        public override ServerCapabilities ServerCapabilities => GetClient().ServerCapabilities;
+        public override Implementation ServerInfo => GetClient().ServerInfo;
+        public override string ServerInstructions => GetClient().ServerInstructions!;
+        public override Task<ClientCompletionDetails> Completion => GetClient().Completion;
+        public override string SessionId => GetClient().SessionId!;
+        public override string NegotiatedProtocolVersion => GetClient().NegotiatedProtocolVersion!;
+        public override Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken = default) => ExecuteAsync(client => client.SendRequestAsync(request, cancellationToken));
+        public override Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default) => ExecuteAsync(client => client.SendMessageAsync(message, cancellationToken));
+        public override IAsyncDisposable RegisterNotificationHandler(string method, Func<JsonRpcNotification, CancellationToken, ValueTask> handler) => GetClient().RegisterNotificationHandler(method, handler);
+
+        public void Initialize() => _ = GetClient();
+
+        public void Dispose()
+        {
+            if (Interlocked.Exchange(ref _disposed, 1) is 0)
+            {
+                var client = Interlocked.Exchange(ref _client, null);
+                if (client?.IsCompletedSuccessfully is true)
+                {
+                    DisposeClientAsync(client).GetAwaiter().GetResult();
+                }
+                DisposeRetiredClientsAsync().GetAwaiter().GetResult();
+                _operationLock.Dispose();
+            }
+        }
+
+        public override ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
+
+        private McpClient GetClient()
+        {
+            ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) is not 0, this);
+            var clientTask = Volatile.Read(ref _client);
+            if (clientTask is null)
+            {
+                lock (_lock)
+                {
+                    clientTask ??= _client ??= createClient();
+                    _ = ObserveCompletionAsync(clientTask);
+                }
+            }
+            try
+            {
+                return clientTask.GetAwaiter().GetResult();
+            }
+            catch
+            {
+                Invalidate(clientTask);
+                throw;
+            }
+        }
+
+        private async Task<T> ExecuteAsync<T>(Func<McpClient, Task<T>> operation)
+        {
+            await _operationLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                for (var attempt = 0; ; attempt++)
+                {
+                    var task = Volatile.Read(ref _client);
+                    try
+                    {
+                        return await operation(GetClient()).ConfigureAwait(false);
+                    }
+                    catch when (attempt is 0 && task is not null)
+                    {
+                        Invalidate(task);
+                    }
+                }
+            }
+            finally
+            {
+                _operationLock.Release();
+            }
+        }
+
+        private async Task ExecuteAsync(Func<McpClient, Task> operation)
+        {
+            await _operationLock.WaitAsync().ConfigureAwait(false);
+            try
+            {
+                for (var attempt = 0; ; attempt++)
+                {
+                    var task = Volatile.Read(ref _client);
+                    try
+                    {
+                        await operation(GetClient()).ConfigureAwait(false);
+                        return;
+                    }
+                    catch when (attempt is 0 && task is not null)
+                    {
+                        Invalidate(task);
+                    }
+                }
+            }
+            finally
+            {
+                _operationLock.Release();
+            }
+        }
+
+        private async Task ObserveCompletionAsync(Task<DisposableMcpClient> task)
+        {
+            try
+            {
+                await (await task.ConfigureAwait(false)).Completion.ConfigureAwait(false);
+            }
+            catch
+            {
+            }
+            Invalidate(task);
+        }
+
+        private void Invalidate(Task<DisposableMcpClient> task)
+        {
+            lock (_lock)
+            {
+                if (!ReferenceEquals(_client, task))
+                {
+                    return;
+                }
+                _client = null;
+            }
+            if (task.IsCompletedSuccessfully)
+            {
+                lock (_lock)
+                {
+                    _retiredClients.Add(DisposeClientAsync(task));
+                }
+            }
+        }
+
+        private async Task DisposeRetiredClientsAsync()
+        {
+            Task[] tasks;
+            lock (_lock)
+            {
+                tasks = [.. _retiredClients];
+                _retiredClients.Clear();
+            }
+            await Task.WhenAll(tasks).ConfigureAwait(false);
+        }
+
+        private static async Task DisposeClientAsync(Task<DisposableMcpClient> task)
+        {
+            try
+            {
+                await (await task.ConfigureAwait(false)).DisposeAsync().ConfigureAwait(false);
+            }
+            catch
+            {
             }
         }
     }
