@@ -1,0 +1,4 @@
+.application-run-select {
+    width: min(240px, 30vw);
+    margin-right: 8px;
+}
