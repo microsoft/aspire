@@ -309,12 +309,15 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData(null, "Runs")]
-    [InlineData("", "Runs")]
-    [InlineData("   ", "Runs")]
-    [InlineData("Runs", "Runs")]
+    [InlineData(null, null, "Runs")]
+    [InlineData("", null, "Runs")]
+    [InlineData("   ", null, "Runs")]
+    [InlineData(null, "   ", "Runs")]
+    [InlineData(null, "None", "None")]
+    [InlineData("Runs", "None", "Runs")]
     public async Task ConfigureEnvironmentVariables_ConfiguresDashboardRunStorageRootApplicationNameAndPersistenceMode(
         string? configuredPersistenceMode,
+        string? configuredPersistenceModeEnvironmentAlias,
         string expectedPersistenceMode)
     {
         var storeDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-store-tests-");
@@ -327,7 +330,8 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
                 {
                     ["Aspire:Store:Path"] = storeDirectory.FullName,
                     ["AppHost:DashboardApplicationName"] = "My App.AppHost",
-                    ["Aspire:Dashboard:PersistenceMode"] = configuredPersistenceMode
+                    ["Aspire:Dashboard:PersistenceMode"] = configuredPersistenceMode,
+                    [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = configuredPersistenceModeEnvironmentAlias
                 })
                 .Build();
             var dashboardOptions = Options.Create(new DashboardOptions
