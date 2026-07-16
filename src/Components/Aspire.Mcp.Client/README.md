@@ -1,6 +1,6 @@
 # Aspire.Mcp.Client library
 
-Registers an [McpClient](https://modelcontextprotocol.io/specification/2025-06-18/basic/architecture) in the DI container for connecting to a Model Context Protocol (MCP) server through Aspire service discovery. Enables a corresponding health check and logging.
+Registers an [McpClient](https://modelcontextprotocol.io/specification/2025-06-18/basic/architecture) in the DI container for connecting to a Model Context Protocol (MCP) server through Aspire service discovery. Enables a corresponding health check, logging, and telemetry.
 
 ## Getting started
 
@@ -58,6 +58,9 @@ And then configure the endpoint URI in the `ConnectionStrings` configuration sec
   }
 }
 ```
+
+The connection string must be an absolute HTTP or HTTPS URI; malformed values throw
+`FormatException` unless `configureSettings` supplies an endpoint.
 
 ### Use configuration providers
 
@@ -119,6 +122,14 @@ builder.AddMcpClient(
         };
         options.OAuth = oauthProvider;
     });
+```
+
+Use `configureSettings` to configure Aspire integration behavior, such as disabling health checks:
+
+```csharp
+builder.AddMcpClient(
+    "mcp",
+    configureSettings: settings => settings.DisableHealthChecks = true);
 ```
 
 ### Use keyed registrations

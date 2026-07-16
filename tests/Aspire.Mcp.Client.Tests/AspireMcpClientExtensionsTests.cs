@@ -10,6 +10,7 @@ using Microsoft.Extensions.Options;
 using System.Net;
 using System.Text;
 using System.Text.Json;
+using Json.Schema;
 using Xunit;
 
 namespace Aspire.Mcp.Client.Tests;
@@ -110,6 +111,78 @@ public class AspireMcpClientExtensionsTests
         var exception = Assert.Throws<FormatException>(() => builder.AddMcpClient("mcp"));
 
         Assert.Equal("The MCP client connection string must be an absolute URI.", exception.Message);
+    }
+
+    [Theory]
+    [InlineData("not-a-uri")]
+    [InlineData("ftp://mcp")]
+    public void AddMcpClientRejectsMalformedConnectionString(string connectionString)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration["ConnectionStrings:mcp"] = connectionString;
+
+        Assert.Throws<FormatException>(() => builder.AddMcpClient("mcp"));
+    }
+
+    [Fact]
+    public void ConfigureSettingsCanOverrideMalformedConnectionString()
+    {
+        var handler = new RequestRecordingHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration["ConnectionStrings:mcp"] = "not-a-uri";
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp", configureSettings: settings => settings.Endpoint = new Uri("https://override/mcp"));
+
+        using var host = builder.Build();
+        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://override/mcp");
+    }
+
+    [Fact]
+    public void ConfigurationUsesBaseThenNamedThenConnectionStringThenSettings()
+    {
+        var handler = new RequestRecordingHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["Aspire:Mcp:Client:Endpoint"] = "https://base/mcp",
+            ["Aspire:Mcp:Client:mcp:Endpoint"] = "https://named/mcp",
+            ["ConnectionStrings:mcp"] = "https://connection/mcp"
+        });
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp", configureSettings: settings => settings.Endpoint = new Uri("https://settings/mcp"));
+
+        using var host = builder.Build();
+        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://settings/mcp");
+    }
+
+    [Fact]
+    public void ConfigurationSchemaValidatesExpectedConfiguration()
+    {
+        var schema = JsonSchema.FromFile(Path.Combine(AppContext.BaseDirectory, "ConfigurationSchema.json"), new BuildOptions
+        {
+            Dialect = Dialect.Draft07,
+            SchemaRegistry = new SchemaRegistry()
+        });
+        using var config = JsonDocument.Parse("""{"Aspire":{"Mcp":{"Client":{"Endpoint":"https://mcp/mcp","DisableHealthChecks":false}}}}""");
+
+        Assert.True(schema.Evaluate(config.RootElement).IsValid);
+    }
+
+    [Fact]
+    public void ConfigurationSchemaRejectsInvalidConfiguration()
+    {
+        var schema = JsonSchema.FromFile(Path.Combine(AppContext.BaseDirectory, "ConfigurationSchema.json"), new BuildOptions
+        {
+            Dialect = Dialect.Draft07,
+            SchemaRegistry = new SchemaRegistry()
+        });
+        using var config = JsonDocument.Parse("""{"Aspire":{"Mcp":{"Client":{"DisableHealthChecks":"false"}}}}""");
+
+        Assert.False(schema.Evaluate(config.RootElement).IsValid);
     }
 
     [Fact]
@@ -267,7 +340,8 @@ public class AspireMcpClientExtensionsTests
         var handler = new SuccessfulInitializationHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.AddMcpClient("mcp");
-        builder.Services.AddSingleton<IHttpClientFactory>(new TrackingHttpClientFactory(handler));
+        var factory = new TrackingHttpClientFactory(handler);
+        builder.Services.AddSingleton<IHttpClientFactory>(factory);
 
         var host = builder.Build();
         var resolveException = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
@@ -275,6 +349,7 @@ public class AspireMcpClientExtensionsTests
         Assert.Null(resolveException);
         Assert.Null(Record.Exception(host.Dispose));
         Assert.True(handler.Disposed);
+        Assert.Equal(string.Empty, factory.Name);
     }
 
     [Fact]
@@ -608,6 +683,12 @@ public class AspireMcpClientExtensionsTests
 
     private sealed class TrackingHttpClientFactory(HttpMessageHandler handler) : IHttpClientFactory
     {
-        public HttpClient CreateClient(string name) => new(handler);
+        public string? Name { get; private set; }
+
+        public HttpClient CreateClient(string name)
+        {
+            Name = name;
+            return new(handler);
+        }
     }
 }

@@ -38,6 +38,7 @@ public static class AspireMcpClientExtensions
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="connectionName"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="connectionName"/> is empty.</exception>
+    /// <exception cref="FormatException">Thrown when the configured connection string is not an absolute HTTP or HTTPS URI.</exception>
     public static IHostApplicationBuilder AddMcpClient(this IHostApplicationBuilder builder, string connectionName)
         => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions: null, configureTransportOptions: null, configureSettings: null);
 
@@ -72,6 +73,7 @@ public static class AspireMcpClientExtensions
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="connectionName"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="connectionName"/> is empty.</exception>
+    /// <exception cref="FormatException">Thrown when the configured connection string is not an absolute HTTP or HTTPS URI and <paramref name="configureSettings"/> does not provide an endpoint.</exception>
     public static IHostApplicationBuilder AddMcpClient(
         this IHostApplicationBuilder builder,
         string connectionName,
@@ -99,6 +101,7 @@ public static class AspireMcpClientExtensions
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="name"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is empty.</exception>
+    /// <exception cref="FormatException">Thrown when the configured connection string is not an absolute HTTP or HTTPS URI.</exception>
     public static IHostApplicationBuilder AddKeyedMcpClient(this IHostApplicationBuilder builder, string name)
     {
         ArgumentNullException.ThrowIfNull(builder);
@@ -138,6 +141,7 @@ public static class AspireMcpClientExtensions
     /// <returns>The <paramref name="builder"/> for chaining.</returns>
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="name"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="name"/> is empty.</exception>
+    /// <exception cref="FormatException">Thrown when the configured connection string is not an absolute HTTP or HTTPS URI and <paramref name="configureSettings"/> does not provide an endpoint.</exception>
     public static IHostApplicationBuilder AddKeyedMcpClient(
         this IHostApplicationBuilder builder,
         string name,
@@ -168,12 +172,25 @@ public static class AspireMcpClientExtensions
         configSection.Bind(settings);
         namedConfigSection.Bind(settings);
 
+        FormatException? connectionStringException = null;
         if (builder.Configuration.GetConnectionString(connectionName) is string connectionString)
         {
-            settings.ParseConnectionString(connectionString);
+            try
+            {
+                settings.ParseConnectionString(connectionString);
+            }
+            catch (FormatException ex)
+            {
+                connectionStringException = ex;
+            }
         }
 
         configureSettings?.Invoke(settings);
+
+        if (connectionStringException is not null && settings.Endpoint is null)
+        {
+            throw connectionStringException;
+        }
 
         var endpoint = settings.Endpoint ?? CreateServiceDiscoveryEndpoint(builder.Configuration, connectionName);
         var registrationKey = new object();
@@ -290,7 +307,6 @@ public static class AspireMcpClientExtensions
             }
 
             _creationCancellation.Cancel();
-            _creationCancellation.Dispose();
         }
 
         private async Task<DisposableMcpClient> CreateClientAsync(
@@ -309,7 +325,7 @@ public static class AspireMcpClientExtensions
                 configureTransportOptions?.Invoke(transportOptions);
                 var clientOptions = new McpClientOptions();
                 configureClientOptions?.Invoke(clientOptions);
-                httpClient = httpClientFactory.CreateClient();
+                httpClient = httpClientFactory.CreateClient(string.Empty);
                 transport = new HttpClientTransport(
                     transportOptions,
                     httpClient,
