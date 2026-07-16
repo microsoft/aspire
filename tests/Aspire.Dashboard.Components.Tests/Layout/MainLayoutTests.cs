@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
@@ -18,8 +19,6 @@ using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
 using Microsoft.JSInterop;
 using Xunit;
-using DashboardRunsDialog = Aspire.Dashboard.Components.Dialogs.DashboardRunsDialog;
-using DashboardRunsDialogViewModel = Aspire.Dashboard.Components.Dialogs.DashboardRunsDialogViewModel;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
 
@@ -241,34 +240,31 @@ public partial class MainLayoutTests : DashboardTestContext
         });
     }
 
-    [Fact]
-    public void DashboardRunsButton_Click_OpensDashboardRunsDialog()
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void DashboardRunSelect_Supported_IsDisplayedBeforeHeaderButtons(bool isDesktop)
     {
-        DialogParameters? capturedParameters = null;
-        TestDialogService? dialogService = null;
-        dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
-        {
-            capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
-        });
-
-        SetupMainLayoutServices(dialogService: dialogService);
+        SetupMainLayoutServices();
 
         var cut = RenderComponent<MainLayout>(builder =>
         {
-            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        cut.Find("#dashboard-runs-button").Click();
+        var existingButtonId = isDesktop ? "dashboard-help-button" : "dashboard-navigation-button";
 
-        Assert.NotNull(capturedParameters);
-        Assert.Equal(nameof(DashboardRunsDialog), capturedParameters.Id);
+        Assert.Single(cut.FindComponents<DashboardRunSelect>());
+        Assert.Contains("id=\"dashboard-runs-select\"", cut.Markup, StringComparison.Ordinal);
+        Assert.True(
+            cut.Markup.IndexOf("id=\"dashboard-runs-select\"", StringComparison.Ordinal) <
+            cut.Markup.IndexOf($"id=\"{existingButtonId}\"", StringComparison.Ordinal));
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void DashboardRunsButton_Unsupported_IsHiddenAndStaleSelectionIsIgnored(bool isDesktop)
+    public void DashboardRunSelect_Unsupported_IsHiddenAndStaleSelectionIsIgnored(bool isDesktop)
     {
         var runStore = new FluentUISetupHelpers.TestDashboardRunStore(
         [
@@ -295,13 +291,13 @@ public partial class MainLayoutTests : DashboardTestContext
                 new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        Assert.Empty(cut.FindAll("#dashboard-runs-button"));
+        Assert.Empty(cut.FindAll("#dashboard-runs-select"));
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         Assert.Null(runSelection.SelectedRunId);
     }
 
     [Fact]
-    public async Task DashboardRunsDialog_OkStoresSelectionAndReloadsWithoutQueryString()
+    public async Task DashboardRunSelect_ChangeStoresSelectionAndReloadsWithoutQueryString()
     {
         var historicalRun = new DashboardRunDescriptor(
             RunId: "historical",
@@ -328,26 +324,22 @@ public partial class MainLayoutTests : DashboardTestContext
         {
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
-        DashboardRunsDialogViewModel? content = null;
-        DialogParameters? capturedParameters = null;
-        TestDialogService? dialogService = null;
-        dialogService = new TestDialogService(onShowDialog: (dialogContent, parameters) =>
-        {
-            content = Assert.IsType<DashboardRunsDialogViewModel>(dialogContent);
-            capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
-        });
-
-        SetupMainLayoutServices(dialogService: dialogService, dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
         var cut = RenderComponent<MainLayout>(builder =>
         {
             builder.Add(component => component.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        cut.Find("#dashboard-runs-button").Click();
-        content!.SelectedRun = historicalRun;
-        await cut.InvokeAsync(() => capturedParameters!.OnDialogResult.InvokeAsync(DialogResult.Ok(true)));
+        var select = Assert.Single(cut.FindComponents<FluentSelect<string>>());
+        var statusIcon = Assert.Single(select.FindAll(".application-run-status"));
+        Assert.Equal("start", statusIcon.GetAttribute("slot"));
+        Assert.Contains("fill: var(--success)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
+        Assert.Empty(select.FindAll("fluent-option .application-run-status"));
 
+        await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(historicalRun.RunId));
+
+        statusIcon = Assert.Single(select.FindAll(".application-run-status"));
+        Assert.Contains("fill: var(--warning)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
         Assert.Equal("historical", storedRunId);
         Assert.Empty(new Uri(Services.GetRequiredService<NavigationManager>().Uri).Query);
     }
@@ -570,6 +562,9 @@ public partial class MainLayoutTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentMenu(this);
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
+        FluentUISetupHelpers.SetupFluentInputLabel(this);
+        FluentUISetupHelpers.SetupFluentList(this);
+        FluentUISetupHelpers.SetupFluentCombobox(this);
 
         var themeModule = JSInterop.SetupModule("/js/app-theme.js");
 

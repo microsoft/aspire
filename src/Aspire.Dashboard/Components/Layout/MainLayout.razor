@@ -24,17 +24,14 @@
                         <span class="application-run-start">@startText</span>
                     }
                 </FluentAnchor>
-                @if (RunStore.SupportsRunSelection)
-                {
-                    <FluentButton Class="application-run-button"
-                                  Id="@DashboardRunsButtonId"
-                                  Appearance="Appearance.Stealth" OnClick="@LaunchDashboardRunsAsync"
-                                  Title="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]" aria-label="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.Settings())" Color="Color.Neutral"/>
-                    </FluentButton>
-                }
             </div>
             <div class="flex-filler"></div>
+            @if (RunStore.SupportsRunSelection && _selectedRun is { } selectedRun)
+            {
+                <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
+                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    SelectedRunIdChanged="@SwitchDashboardRunAsync" />
+            }
             <FluentAnchor Class="header-button"
                           Appearance="Appearance.Stealth"
                           Href="https://aka.ms/aspire/repo" Target="_blank" Rel="noreferrer noopener"
@@ -78,18 +75,14 @@
                         <span class="application-run-start">@startText</span>
                     }
                 </FluentAnchor>
-                @if (RunStore.SupportsRunSelection)
-                {
-                    <FluentButton Class="application-run-button"
-                                  Id="@DashboardRunsButtonId"
-                                  Appearance="Appearance.Stealth" OnClick="@LaunchDashboardRunsAsync"
-                                  Title="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]" aria-label="@DialogsLoc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]">
-                        <FluentIcon Value="@(new Icons.Regular.Size16.Settings())" Color="Color.Neutral"/>
-                    </FluentButton>
-                }
             </div>
             <div class="flex-filler"></div>
-
+            @if (RunStore.SupportsRunSelection && _selectedRun is { } selectedRun)
+            {
+                <DashboardRunSelect SelectedRunId="@selectedRun.RunId"
+                                    SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    SelectedRunIdChanged="@SwitchDashboardRunAsync" />
+            }
             <UserProfile/>
             <FluentButton
                 IconEnd="@(_isNavMenuOpen ? new Icons.Regular.Size24.Dismiss() : new Icons.Regular.Size24.Navigation())"

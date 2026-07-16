@@ -201,12 +201,6 @@
     white-space: nowrap;
 }
 
-::deep .header-gutters .application-run-button::part(control) {
-    width: 32px;
-    height: 32px;
-    padding: 0;
-}
-
 ::deep .header-gutters .header-button {
     height: 100%;
     display: block;

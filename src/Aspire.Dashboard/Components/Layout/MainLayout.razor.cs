@@ -33,11 +33,10 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private const string HelpDialogId = "HelpDialog";
     private const string NotificationsDialogId = "NotificationsDialog";
     private const string AIAgentsDialogId = "AIAgentsDialog";
-    private const string DashboardRunsDialogId = "DashboardRunsDialog";
     internal const string HelpButtonId = "dashboard-help-button";
     internal const string SettingsButtonId = "dashboard-settings-button";
-    internal const string DashboardRunsButtonId = "dashboard-runs-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
+    private IReadOnlyList<DashboardRunDescriptor> _runOptions = [];
     private DashboardRunDescriptor? _selectedRun;
 
     [Inject]
@@ -90,15 +89,15 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
-        var runs = RunStore.GetRuns();
+        _runOptions = RunStore.GetRuns();
         string? selectedRunId = null;
         if (RunStore.SupportsRunSelection)
         {
             var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
             selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
         }
-        _selectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, selectedRunId, StringComparison.Ordinal))
-            ?? runs.Single(run => run.IsCurrent);
+        _selectedRun = _runOptions.FirstOrDefault(run => string.Equals(run.RunId, selectedRunId, StringComparison.Ordinal))
+            ?? _runOptions.Single(run => run.IsCurrent);
         RunSelection.SelectRun(_selectedRun.IsCurrent ? null : _selectedRun.RunId);
 
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
@@ -251,6 +250,19 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             localStartedAt.ToString("g", CultureInfo.CurrentCulture));
     }
 
+    private async Task SwitchDashboardRunAsync(string? runId)
+    {
+        var selectedRun = _runOptions.FirstOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+        if (selectedRun is null || string.Equals(selectedRun.RunId, _selectedRun?.RunId, StringComparison.Ordinal))
+        {
+            return;
+        }
+
+        _selectedRun = selectedRun;
+        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, selectedRun.IsCurrent ? string.Empty : selectedRun.RunId);
+        NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
+    }
+
     private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)
     {
         // Dialog launchers move between the desktop header and the mobile navigation menu.
@@ -346,49 +358,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     public Task LaunchSettingsAsync() => LaunchSettingsAsync(GetDefaultReturnFocusElementId(SettingsButtonId));
-
-    private async Task LaunchDashboardRunsAsync()
-    {
-        if (!RunStore.SupportsRunSelection)
-        {
-            return;
-        }
-
-        var content = new DashboardRunsDialogViewModel
-        {
-            SelectedRun = _selectedRun ?? RunStore.GetRuns().Single(run => run.IsCurrent)
-        };
-        var parameters = new DialogParameters
-        {
-            Title = DialogsLoc[nameof(Resources.Dialogs.DashboardRunsDialogTitle)],
-            PrimaryAction = DialogsLoc[nameof(Resources.Dialogs.InteractionButtonOk)],
-            SecondaryAction = DialogsLoc[nameof(Resources.Dialogs.InteractionButtonCancel)],
-            TrapFocus = true,
-            Modal = true,
-            Alignment = HorizontalAlignment.Center,
-            Width = "500px",
-            Height = "auto",
-            Id = DashboardRunsDialogId,
-            OnDialogClosing = EventCallback.Factory.Create<DialogInstance>(this, _ => HandleDialogClose(DashboardRunsButtonId)),
-            OnDialogResult = EventCallback.Factory.Create<DialogResult>(this, async result =>
-            {
-                if (result.Cancelled || string.Equals(content.SelectedRun.RunId, _selectedRun?.RunId, StringComparison.Ordinal))
-                {
-                    return;
-                }
-
-                await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, content.SelectedRun.IsCurrent ? string.Empty : content.SelectedRun.RunId);
-                NavigationManager.NavigateTo(NavigationManager.Uri, forceLoad: true);
-            })
-        };
-
-        if (!await CloseOpenPageDialogForReplacementAsync(DashboardRunsDialogId).ConfigureAwait(true))
-        {
-            return;
-        }
-
-        _openPageDialog = await DialogService.ShowDialogAsync<DashboardRunsDialog>(content, parameters).ConfigureAwait(true);
-    }
 
     private async Task LaunchSettingsAsync(string? returnFocusElementId)
     {
