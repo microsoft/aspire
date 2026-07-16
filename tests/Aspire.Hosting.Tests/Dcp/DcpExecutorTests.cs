@@ -3399,11 +3399,11 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         await appExecutor.RunApplicationAsync();
 
-        var expectedMonitorTimestamp = ToMicroTimePrecision(parentProcessIdentity.Timestamp);
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         Assert.True(container.Spec.Persistent.GetValueOrDefault());
         Assert.Equal(parentProcessIdentity.ProcessId, container.Spec.MonitorPid);
-        Assert.Equal(expectedMonitorTimestamp, container.Spec.MonitorTimestamp);
+        Assert.NotNull(container.Spec.MonitorTimestamp);
+        Assert.Equal(parentProcessIdentity.Timestamp, container.Spec.MonitorTimestamp.Value, TimeSpan.FromMicroseconds(1));
 
         var executables = kubernetesService.CreatedResources.OfType<Executable>()
             .Where(e => e.AppModelResourceName is "worker" or "project")
@@ -3413,17 +3413,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             Assert.True(exe.Spec.Persistent.GetValueOrDefault());
             Assert.Equal(parentProcessIdentity.ProcessId, exe.Spec.MonitorPid);
-            Assert.Equal(expectedMonitorTimestamp, exe.Spec.MonitorTimestamp);
+            Assert.NotNull(exe.Spec.MonitorTimestamp);
+            Assert.Equal(parentProcessIdentity.Timestamp, exe.Spec.MonitorTimestamp.Value, TimeSpan.FromMicroseconds(1));
             Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
         });
-
-        static DateTime ToMicroTimePrecision(DateTime timestamp)
-        {
-            // TestKubernetesService clones resources through JSON to catch DCP wire-contract issues.
-            // Kubernetes MicroTime preserves microsecond precision, so sub-microsecond DateTime ticks
-            // are truncated during that round-trip.
-            return new DateTime(timestamp.Ticks - (timestamp.Ticks % 10), timestamp.Kind);
-        }
     }
 
     [Fact]
