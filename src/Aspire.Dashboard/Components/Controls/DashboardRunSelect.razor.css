@@ -1,4 +1,9 @@
-.application-run-select {
-    width: min(240px, 30vw);
+.application-run-select ::deep fluent-select {
+    min-width: 225px;
+    width: min(225px, 30vw);
     margin-right: 8px;
+}
+
+.application-run-select ::deep fluent-select::part(indicator) {
+    display: none;
 }

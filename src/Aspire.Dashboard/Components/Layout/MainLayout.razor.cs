@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Pages;
@@ -235,20 +234,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     }
 
     private string GetDefaultReturnFocusElementId(string desktopButtonId) => ViewportInformation.IsDesktop ? desktopButtonId : NavigationButtonId;
-
-    private string? GetHistoricalRunStartText()
-    {
-        if (_selectedRun is not { IsCurrent: false } selectedRun)
-        {
-            return null;
-        }
-
-        var localStartedAt = TimeZoneInfo.ConvertTime(selectedRun.StartedAtUtc, TimeProvider.LocalTimeZone);
-        return string.Format(
-            CultureInfo.CurrentCulture,
-            DialogsLoc[nameof(Resources.Dialogs.DashboardRunsDialogStartedAt)],
-            localStartedAt.ToString("g", CultureInfo.CurrentCulture));
-    }
 
     private async Task SwitchDashboardRunAsync(string? runId)
     {
