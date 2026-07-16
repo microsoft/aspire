@@ -326,6 +326,9 @@ public partial class MainLayoutTests : DashboardTestContext
             OnSetAsync = (_, value) => storedRunId = Assert.IsType<string>(value)
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        var expectedHistoricalRunText = FormatHelpers.FormatTimeWithOptionalDate(
+            Services.GetRequiredService<BrowserTimeProvider>(),
+            historicalRun.StartedAtUtc.UtcDateTime);
         JSInterop.SetupVoid("focusElement", _ => true);
         var initializedCount = 0;
         var disposedCount = 0;
@@ -358,7 +361,7 @@ public partial class MainLayoutTests : DashboardTestContext
             item => Assert.True(item.IsDivider),
             item =>
             {
-                Assert.Equal("1/2/2025 1:30:00 PM", item.Text);
+                Assert.Equal(expectedHistoricalRunText, item.Text);
                 Assert.Null(item.Icon);
             });
 
@@ -381,7 +384,7 @@ public partial class MainLayoutTests : DashboardTestContext
         menuButton = runSelect.FindComponent<AspireMenuButton>();
         statusIcon = runSelect.Find(".application-run-status");
         Assert.Contains("fill: var(--warning)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
-        Assert.Equal("1/2/2025 1:30:00 PM", menuButton.Instance.Text);
+        Assert.Equal(expectedHistoricalRunText, menuButton.Instance.Text);
         Assert.Collection(
             menuButton.Instance.Items,
             item => Assert.Null(item.Icon),
