@@ -28,7 +28,8 @@ public sealed class McpClientSettings
     internal void ParseConnectionString(string? connectionString)
     {
         if (Uri.TryCreate(connectionString, UriKind.Absolute, out var endpoint) &&
-            endpoint.Scheme is "http" or "https")
+            endpoint.Scheme is "http" or "https" &&
+            !string.IsNullOrEmpty(endpoint.Host))
         {
             Endpoint = endpoint;
             return;

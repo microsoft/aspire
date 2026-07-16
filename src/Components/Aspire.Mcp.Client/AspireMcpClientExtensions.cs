@@ -278,7 +278,7 @@ public static class AspireMcpClientExtensions
             {
                 lock (_lock)
                 {
-                    client ??= _client ??= new ReconnectableMcpClient(_createClient);
+                    client ??= _client ??= new ReconnectableMcpClient(_createClient, _creationCancellation.Cancel);
                 }
             }
             client.Initialize();
@@ -303,7 +303,6 @@ public static class AspireMcpClientExtensions
                     var client = Volatile.Read(ref _client);
                     if (client is not null)
                     {
-                        client.Dispose();
                         await client.DisposeAsync().ConfigureAwait(false);
                     }
                     _creationCancellation.Dispose();
@@ -352,7 +351,9 @@ public static class AspireMcpClientExtensions
 
     // Keep the injected McpClient stable while replacing its private session after a terminal failure.
 #pragma warning disable MCPEXP002
-    private sealed class ReconnectableMcpClient(Func<Task<DisposableMcpClient>> createClient) : McpClient, IDisposable
+    private sealed class ReconnectableMcpClient(
+        Func<Task<DisposableMcpClient>> createClient,
+        Action cancelClientCreation) : McpClient, IDisposable
 #pragma warning restore MCPEXP002
     {
         private readonly object _lock = new();
@@ -399,6 +400,8 @@ public static class AspireMcpClientExtensions
         {
             if (Interlocked.Exchange(ref _disposed, 1) is 0)
             {
+                cancelClientCreation();
+
                 Task<DisposableMcpClient>? client;
                 lock (_lock)
                 {
@@ -421,6 +424,8 @@ public static class AspireMcpClientExtensions
         {
             if (Interlocked.Exchange(ref _disposed, 1) is 0)
             {
+                cancelClientCreation();
+
                 Task<DisposableMcpClient>? client;
                 lock (_lock)
                 {

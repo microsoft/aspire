@@ -118,6 +118,8 @@ public class AspireMcpClientExtensionsTests
     [Theory]
     [InlineData("not-a-uri")]
     [InlineData("ftp://mcp")]
+    [InlineData("http:/mcp")]
+    [InlineData("https:///mcp")]
     public void AddMcpClientRejectsMalformedConnectionString(string connectionString)
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
