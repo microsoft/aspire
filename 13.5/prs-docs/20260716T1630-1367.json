@@ -1,0 +1,9 @@
+{
+  "author": "alistairmatthews",
+  "comment": "Follow-up fixes to aspire.dev#455; no matching changelog entry found - documents pre-existing Dashboard OTLP/browser telemetry functionality",
+  "mergedAt": "2026-07-16T16:30:52Z",
+  "number": 1367,
+  "runDate": "2026-07-16T18:25:20Z",
+  "status": "excluded",
+  "title": "Fixed issues raised by @mitchdenny"
+}

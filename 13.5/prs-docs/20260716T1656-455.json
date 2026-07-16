@@ -1,0 +1,9 @@
+{
+  "author": "app/copilot-swe-agent",
+  "comment": "No matching changelog entry found - documents pre-existing Dashboard OTLP/browser telemetry functionality, not a new 13.5 feature",
+  "mergedAt": "2026-07-16T16:56:18Z",
+  "number": 455,
+  "runDate": "2026-07-16T18:25:20Z",
+  "status": "excluded",
+  "title": "Add Blazor WASM telemetry docs and post-deployment observability guidance"
+}
