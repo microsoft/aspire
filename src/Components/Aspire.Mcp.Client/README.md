@@ -80,6 +80,7 @@ The Aspire MCP Client library supports [Microsoft.Extensions.Configuration](http
 ```
 
 You can also use named configuration (`Aspire:Mcp:Client:{connectionName}`) to override base settings for specific registrations.
+Configured endpoint values must be absolute HTTP or HTTPS URIs with a non-empty host.
 
 ### Use the connection name
 

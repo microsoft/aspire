@@ -7,7 +7,9 @@ using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using ModelContextProtocol.Client;
 using Microsoft.Extensions.Options;
+using System.Collections.Concurrent;
 using System.Net;
+using System.IO.Pipelines;
 using System.Text;
 using System.Text.Json;
 using Json.Schema;
@@ -124,6 +126,17 @@ public class AspireMcpClientExtensionsTests
     {
         var builder = Host.CreateEmptyApplicationBuilder(null);
         builder.Configuration["ConnectionStrings:mcp"] = connectionString;
+
+        Assert.Throws<FormatException>(() => builder.AddMcpClient("mcp"));
+    }
+
+    [Theory]
+    [InlineData("ftp://mcp/mcp")]
+    [InlineData("/mcp")]
+    public void AddMcpClientRejectsInvalidConfiguredEndpoint(string endpoint)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration["Aspire:Mcp:Client:Endpoint"] = endpoint;
 
         Assert.Throws<FormatException>(() => builder.AddMcpClient("mcp"));
     }
@@ -409,7 +422,7 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public void AddMcpClientRetriesInitializationAfterTransientFailure()
+    public async Task AddMcpClientRetriesInitializationAfterTransientFailure()
     {
         var handler = new FailThenSucceedInitializationHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -417,13 +430,12 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp");
 
         using var host = builder.Build();
-        var firstException = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
-        McpClient? client = null;
-        var secondException = Record.Exception(() => client = host.Services.GetRequiredService<McpClient>());
+        var healthChecks = host.Services.GetRequiredService<HealthCheckService>();
+        var firstResult = await healthChecks.CheckHealthAsync();
+        var secondResult = await healthChecks.CheckHealthAsync();
 
-        Assert.NotNull(firstException);
-        Assert.Null(secondException);
-        Assert.NotNull(client);
+        Assert.Equal(HealthStatus.Unhealthy, firstResult.Status);
+        Assert.Equal(HealthStatus.Healthy, secondResult.Status);
         Assert.Equal(2, handler.InitializeAttempts);
     }
 
@@ -443,6 +455,52 @@ public class AspireMcpClientExtensionsTests
         Assert.Equal(HealthStatus.Unhealthy, firstResult.Status);
         Assert.Equal(HealthStatus.Healthy, secondResult.Status);
         Assert.Equal(2, handler.InitializeAttempts);
+    }
+
+    [Fact]
+    public async Task AddMcpClientPreservesNotificationHandlersAcrossReconnect()
+    {
+        var handler = new NotificationRecoveryHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var client = host.Services.GetRequiredService<McpClient>();
+        var notificationReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var unexpectedNotification = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var notificationCount = 0;
+        await using var registration = client.RegisterNotificationHandler(
+            "test/notification",
+            (_, _) =>
+            {
+                if (Interlocked.Increment(ref notificationCount) > 1)
+                {
+                    unexpectedNotification.TrySetResult();
+                }
+
+                notificationReceived.TrySetResult();
+                return ValueTask.CompletedTask;
+            });
+
+        await handler.InitialStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var healthChecks = host.Services.GetRequiredService<HealthCheckService>();
+        var firstResult = await healthChecks.CheckHealthAsync();
+        var secondResult = await healthChecks.CheckHealthAsync();
+        var replacementStream = await handler.ReplacementStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(HealthStatus.Unhealthy, firstResult.Status);
+        Assert.Equal(HealthStatus.Healthy, secondResult.Status);
+
+        await NotificationRecoveryHandler.SendNotificationAsync(replacementStream);
+        await notificationReceived.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.Equal(1, Volatile.Read(ref notificationCount));
+
+        await registration.DisposeAsync();
+        await NotificationRecoveryHandler.SendNotificationAsync(replacementStream);
+        var unexpectedResult = await Task.WhenAny(unexpectedNotification.Task, Task.Delay(TimeSpan.FromSeconds(1)));
+        Assert.NotSame(unexpectedNotification.Task, unexpectedResult);
+        Assert.Equal(1, Volatile.Read(ref notificationCount));
     }
 
     [Theory]
@@ -497,26 +555,26 @@ public class AspireMcpClientExtensionsTests
 
     private sealed class RequestRecordingHandler : HttpMessageHandler
     {
-        public List<Uri> RequestUris { get; } = [];
+        public ConcurrentQueue<Uri> RequestUris { get; } = [];
 
         protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            RequestUris.Add(request.RequestUri!);
+            RequestUris.Enqueue(request.RequestUri!);
             return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
         }
     }
 
     private class SuccessfulInitializationHandler : HttpMessageHandler
     {
-        public List<Uri> RequestUris { get; } = [];
+        public ConcurrentQueue<Uri> RequestUris { get; } = [];
 
-        public List<string> RequestMethods { get; } = [];
+        public ConcurrentQueue<string> RequestMethods { get; } = [];
 
         public bool Disposed { get; private set; }
 
         protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
         {
-            RequestUris.Add(request.RequestUri!);
+            RequestUris.Enqueue(request.RequestUri!);
 
             if (request.Method == HttpMethod.Get)
             {
@@ -530,7 +588,7 @@ public class AspireMcpClientExtensionsTests
             using var requestJson = JsonDocument.Parse(requestBody);
             if (requestJson.RootElement.TryGetProperty("method", out var methodElement))
             {
-                RequestMethods.Add(methodElement.GetString()!);
+                RequestMethods.Enqueue(methodElement.GetString()!);
                 if (string.Equals(methodElement.GetString(), "initialize", StringComparison.Ordinal))
                 {
                     var id = requestJson.RootElement.GetProperty("id").GetInt32();
@@ -687,6 +745,63 @@ public class AspireMcpClientExtensionsTests
         }
     }
 
+    private sealed class NotificationRecoveryHandler : SuccessfulInitializationHandler
+    {
+        private int _pingFailures;
+        private int _streamCount;
+
+        public TaskCompletionSource<PipeWriter> InitialStream { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public TaskCompletionSource<PipeWriter> ReplacementStream { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Method == HttpMethod.Get)
+            {
+                var pipe = new Pipe();
+                var streamNumber = Interlocked.Increment(ref _streamCount);
+                if (streamNumber is 1)
+                {
+                    InitialStream.TrySetResult(pipe.Writer);
+                }
+                else
+                {
+                    ReplacementStream.TrySetResult(pipe.Writer);
+                }
+
+                var response = new HttpResponseMessage(HttpStatusCode.OK)
+                {
+                    Content = new StreamContent(pipe.Reader.AsStream()),
+                };
+                response.Content.Headers.ContentType = new("text/event-stream");
+                return response;
+            }
+
+            if (request.Method == HttpMethod.Post)
+            {
+                var requestBody = request.Content is null
+                    ? string.Empty
+                    : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                using var requestJson = JsonDocument.Parse(requestBody);
+                if (requestJson.RootElement.TryGetProperty("method", out var methodElement) &&
+                    string.Equals(methodElement.GetString(), "ping", StringComparison.Ordinal) &&
+                    Interlocked.Exchange(ref _pingFailures, 1) is 0)
+                {
+                    return new HttpResponseMessage(HttpStatusCode.InternalServerError);
+                }
+            }
+
+            return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        }
+
+        public static async Task SendNotificationAsync(PipeWriter writer)
+        {
+            const string message = "event: message\ndata: {\"jsonrpc\":\"2.0\",\"method\":\"test/notification\",\"params\":{}}\n\n";
+            await writer.WriteAsync(Encoding.UTF8.GetBytes(message));
+        }
+    }
+
     private sealed class FailThenSucceedInitializationHandler : HttpMessageHandler
     {
         private int _initializeAttempts;
@@ -711,6 +826,7 @@ public class AspireMcpClientExtensionsTests
                 {
                     if (Interlocked.Increment(ref _initializeAttempts) == 1)
                     {
+                        await Task.Yield();
                         return new HttpResponseMessage(HttpStatusCode.ServiceUnavailable);
                     }
 
@@ -740,6 +856,16 @@ public class AspireMcpClientExtensionsTests
                 if (string.Equals(methodElement.GetString(), "notifications/initialized", StringComparison.Ordinal))
                 {
                     return new HttpResponseMessage(HttpStatusCode.OK);
+                }
+
+                if (string.Equals(methodElement.GetString(), "ping", StringComparison.Ordinal))
+                {
+                    var id = requestJson.RootElement.GetProperty("id").GetInt32();
+                    var pingResponse = JsonSerializer.Serialize(new { jsonrpc = "2.0", id, result = new { } });
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(pingResponse, Encoding.UTF8, "application/json"),
+                    };
                 }
             }
 

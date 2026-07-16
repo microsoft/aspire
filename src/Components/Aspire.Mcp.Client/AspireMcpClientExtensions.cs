@@ -203,6 +203,7 @@ public static class AspireMcpClientExtensions
         }
 
         var endpoint = settings.Endpoint ?? CreateServiceDiscoveryEndpoint(builder.Configuration, connectionName);
+        McpClientSettings.ValidateEndpoint(endpoint);
         var registrationKey = new object();
         builder.Services.AddHttpClient();
         builder.Services.AddKeyedSingleton<McpClientRegistration>(registrationKey, (serviceProvider, _) => new McpClientRegistration(
@@ -278,6 +279,7 @@ public static class AspireMcpClientExtensions
             {
                 lock (_lock)
                 {
+                    ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) is not 0, this);
                     client ??= _client ??= new ReconnectableMcpClient(_createClient, _creationCancellation.Cancel);
                 }
             }
@@ -290,7 +292,13 @@ public static class AspireMcpClientExtensions
             if (Interlocked.Exchange(ref _disposed, 1) is 0)
             {
                 _creationCancellation.Cancel();
-                Volatile.Read(ref _client)?.Dispose();
+                ReconnectableMcpClient? client;
+                lock (_lock)
+                {
+                    client = _client;
+                }
+
+                client?.Dispose();
                 _creationCancellation.Dispose();
             }
         }
@@ -300,7 +308,12 @@ public static class AspireMcpClientExtensions
                 if (Interlocked.Exchange(ref _disposed, 1) is 0)
                 {
                     _creationCancellation.Cancel();
-                    var client = Volatile.Read(ref _client);
+                    ReconnectableMcpClient? client;
+                    lock (_lock)
+                    {
+                        client = _client;
+                    }
+
                     if (client is not null)
                     {
                         await client.DisposeAsync().ConfigureAwait(false);
@@ -530,6 +543,11 @@ public static class AspireMcpClientExtensions
                 return false;
             }
 
+            if (task.IsFaulted)
+            {
+                return true;
+            }
+
             if (exception is HttpRequestException or IOException or System.Net.Sockets.SocketException)
             {
                 return true;
@@ -546,6 +564,7 @@ public static class AspireMcpClientExtensions
 
         private void Invalidate(Task<DisposableMcpClient> task)
         {
+            Task? cleanupTask = null;
             lock (_lock)
             {
                 if (!ReferenceEquals(_client, task))
@@ -553,27 +572,23 @@ public static class AspireMcpClientExtensions
                     return;
                 }
 
+                if (task.IsCompletedSuccessfully)
+                {
+                    cleanupTask = DisposeClientAsync(task);
+                    _cleanupTasks.Add(cleanupTask);
+                }
+
                 _client = null;
             }
 
-            if (task.IsCompletedSuccessfully)
+            if (cleanupTask is not null)
             {
-                TrackCleanup(DisposeClientAsync(task));
+                _ = cleanupTask.ContinueWith(
+                    _ => RemoveCleanup(cleanupTask),
+                    CancellationToken.None,
+                    TaskContinuationOptions.ExecuteSynchronously,
+                    TaskScheduler.Default);
             }
-        }
-
-        private void TrackCleanup(Task cleanupTask)
-        {
-            lock (_lock)
-            {
-                _cleanupTasks.Add(cleanupTask);
-            }
-
-            _ = cleanupTask.ContinueWith(
-                _ => RemoveCleanup(cleanupTask),
-                CancellationToken.None,
-                TaskContinuationOptions.ExecuteSynchronously,
-                TaskScheduler.Default);
         }
 
         private void RemoveCleanup(Task cleanupTask)

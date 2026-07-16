@@ -28,13 +28,25 @@ public sealed class McpClientSettings
     internal void ParseConnectionString(string? connectionString)
     {
         if (Uri.TryCreate(connectionString, UriKind.Absolute, out var endpoint) &&
-            endpoint.Scheme is "http" or "https" &&
-            !string.IsNullOrEmpty(endpoint.Host))
+            endpoint.IsAbsoluteUri)
         {
+            ValidateEndpoint(endpoint);
             Endpoint = endpoint;
             return;
         }
 
         throw new FormatException("The MCP client connection string must be an absolute HTTP or HTTPS URI.");
+    }
+
+    internal static void ValidateEndpoint(Uri endpoint)
+    {
+        if (endpoint.IsAbsoluteUri &&
+            endpoint.Scheme is "http" or "https" &&
+            !string.IsNullOrEmpty(endpoint.Host))
+        {
+            return;
+        }
+
+        throw new FormatException("The MCP client endpoint must be an absolute HTTP or HTTPS URI.");
     }
 }
