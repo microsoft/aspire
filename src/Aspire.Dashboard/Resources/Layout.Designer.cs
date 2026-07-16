@@ -59,7 +59,25 @@ namespace Aspire.Dashboard.Resources {
                 resourceCulture = value;
             }
         }
-        
+
+        /// <summary>
+        ///   Looks up a localized string similar to Select dashboard run.
+        /// </summary>
+        public static string DashboardRunSelectAriaLabel {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectAriaLabel", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Current.
+        /// </summary>
+        public static string DashboardRunSelectCurrent {
+            get {
+                return ResourceManager.GetString("DashboardRunSelectCurrent", resourceCulture);
+            }
+        }
+
         /// <summary>
         ///   Looks up a localized string similar to Aspire.
         /// </summary>

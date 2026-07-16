@@ -310,7 +310,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 services.GetRequiredService<PauseManager>(),
                 services.GetServices<IOutgoingPeerResolver>());
         });
-        builder.Services.AddScoped<ITelemetryRepository>(services => services.GetRequiredService<DashboardDataSource>().TelemetryRepository);
+        builder.Services.AddScoped<ITelemetryRepository, SelectedTelemetryRepository>();
         builder.Services.AddSingleton<SqliteResourceRepository>(services =>
         {
             return new SqliteResourceRepository(
@@ -319,7 +319,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
                 services.GetRequiredService<ILoggerFactory>());
         });
         builder.Services.AddSingleton<IResourceRepositoryWriter>(services => services.GetRequiredService<SqliteResourceRepository>());
-        builder.Services.AddScoped<IResourceRepository>(services => services.GetRequiredService<DashboardDataSource>().ResourceRepository);
+        builder.Services.AddScoped<IResourceRepository>(services => services.GetRequiredService<IDashboardClient>());
         builder.Services.AddTransient<StructuredLogsViewModel>();
 
         builder.Services.AddTransient(services => new OtlpLogsService(

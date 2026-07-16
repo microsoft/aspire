@@ -159,29 +159,6 @@
   <data name="SettingsDialogTheme" xml:space="preserve">
     <value>Theme</value>
   </data>
-  <data name="DashboardRunsDialogLaunchButton" xml:space="preserve">
-    <value>Select dashboard run</value>
-  </data>
-  <data name="DashboardRunsDialogStartedAt" xml:space="preserve">
-    <value>Started {0}</value>
-    <comment>{0} is the run start time.</comment>
-  </data>
-  <data name="DashboardRunsDialogTitle" xml:space="preserve">
-    <value>Dashboard runs</value>
-  </data>
-  <data name="SettingsDialogDashboardRun" xml:space="preserve">
-    <value>{0} runs:</value>
-    <comment>{0} is the application name.</comment>
-  </data>
-  <data name="SettingsDialogDashboardRunCurrent" xml:space="preserve">
-    <value>Current</value>
-  </data>
-  <data name="SettingsDialogDashboardRunPageReloads" xml:space="preserve">
-    <value>Historical runs are read-only. The page will reload when the selected run changes.</value>
-  </data>
-  <data name="SettingsDialogDashboardRunUnknownApplication" xml:space="preserve">
-    <value>Aspire</value>
-  </data>
   <data name="SettingsDialogVersion" xml:space="preserve">
     <value>Version: {0}</value>
     <comment>{0} is the dashboard version string</comment>
