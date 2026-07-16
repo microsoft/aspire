@@ -230,7 +230,7 @@ public static class AspireMcpClientExtensions
 
             builder.TryAddHealthCheck(new HealthCheckRegistration(
                 healthCheckName,
-                sp => new McpClientHealthCheck(sp, serviceKey),
+                sp => new McpClientHealthCheck(sp, registrationKey),
                 failureStatus: default,
                 tags: default,
                 timeout: default));
@@ -273,6 +273,20 @@ public static class AspireMcpClientExtensions
 
         public McpClient GetClient()
         {
+            var client = GetOrCreateClient();
+            client.Initialize();
+            return client;
+        }
+
+        public async Task<McpClient> GetClientAsync(CancellationToken cancellationToken)
+        {
+            var client = GetOrCreateClient();
+            await client.InitializeAsync(cancellationToken).ConfigureAwait(false);
+            return client;
+        }
+
+        private ReconnectableMcpClient GetOrCreateClient()
+        {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) is not 0, this);
             var client = Volatile.Read(ref _client);
             if (client is null)
@@ -283,7 +297,6 @@ public static class AspireMcpClientExtensions
                     client ??= _client ??= new ReconnectableMcpClient(_createClient, _creationCancellation.Cancel);
                 }
             }
-            client.Initialize();
             return client;
         }
 
@@ -409,6 +422,21 @@ public static class AspireMcpClientExtensions
 
         public void Initialize() => _ = GetClient();
 
+        public async Task InitializeAsync(CancellationToken cancellationToken)
+        {
+            var task = GetClientTask();
+            try
+            {
+                var client = await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                RegisterNotificationHandlers(task, client);
+            }
+            catch (Exception ex) when (IsTerminalFailure(task, ex))
+            {
+                Invalidate(task);
+                throw;
+            }
+        }
+
         public void Dispose()
         {
             if (Interlocked.Exchange(ref _disposed, 1) is 0)
@@ -455,7 +483,21 @@ public static class AspireMcpClientExtensions
             }
         }
 
-        private McpClient GetClient() => GetClientTask().GetAwaiter().GetResult();
+        private McpClient GetClient()
+        {
+            var task = GetClientTask();
+            try
+            {
+                var client = task.GetAwaiter().GetResult();
+                RegisterNotificationHandlers(task, client);
+                return client;
+            }
+            catch (Exception ex) when (IsTerminalFailure(task, ex))
+            {
+                Invalidate(task);
+                throw;
+            }
+        }
 
         private Task<DisposableMcpClient> GetClientTask()
         {
@@ -670,15 +712,14 @@ public static class AspireMcpClientExtensions
         }
     }
 
-    private sealed class McpClientHealthCheck(IServiceProvider serviceProvider, object? serviceKey) : IHealthCheck
+    private sealed class McpClientHealthCheck(IServiceProvider serviceProvider, object registrationKey) : IHealthCheck
     {
         public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
         {
             try
             {
-                var client = serviceKey is null
-                    ? serviceProvider.GetRequiredService<McpClient>()
-                    : serviceProvider.GetRequiredKeyedService<McpClient>(serviceKey);
+                var registration = serviceProvider.GetRequiredKeyedService<McpClientRegistration>(registrationKey);
+                var client = await registration.GetClientAsync(cancellationToken).ConfigureAwait(false);
 
                 await client.PingAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
                 return HealthCheckResult.Healthy();

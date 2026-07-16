@@ -367,6 +367,25 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
+    public async Task AddMcpClientHealthCheckPassesCancellationTokenToInitialization()
+    {
+        var handler = new BlockingInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var checkTask = host.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync(cancellationTokenSource.Token);
+        await handler.InitializeStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        cancellationTokenSource.Cancel();
+        var result = await checkTask.WaitAsync(TimeSpan.FromSeconds(10));
+
+        Assert.Equal(HealthStatus.Unhealthy, result.Status);
+    }
+
+    [Fact]
     public void AddMcpClientDisposesHttpClientTransportOnHostDisposal()
     {
         var handler = new SuccessfulInitializationHandler();
@@ -484,13 +503,13 @@ public class AspireMcpClientExtensionsTests
             });
 
         await handler.InitialStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
-        var healthChecks = host.Services.GetRequiredService<HealthCheckService>();
-        var firstResult = await healthChecks.CheckHealthAsync();
-        var secondResult = await healthChecks.CheckHealthAsync();
+        var failure = await Record.ExceptionAsync(async () => await client.PingAsync());
+        Assert.NotNull(failure);
+
+        var serverInfo = client.ServerInfo;
         var replacementStream = await handler.ReplacementStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
 
-        Assert.Equal(HealthStatus.Unhealthy, firstResult.Status);
-        Assert.Equal(HealthStatus.Healthy, secondResult.Status);
+        Assert.Equal("test", serverInfo.Name);
 
         await NotificationRecoveryHandler.SendNotificationAsync(replacementStream);
         await notificationReceived.Task.WaitAsync(TimeSpan.FromSeconds(10));
