@@ -12,7 +12,8 @@ public sealed class McpClientSettings
     /// Gets or sets the explicit MCP endpoint URI.
     /// </summary>
     /// <remarks>
-    /// When not configured, the endpoint defaults to <c>https+http://{connectionName}/mcp</c> and is resolved via service discovery.
+    /// When not configured, the endpoint defaults to <c>https://{connectionName}/mcp</c>, or
+    /// <c>http://{connectionName}/mcp</c> when service discovery only provides HTTP endpoints.
     /// </remarks>
     public Uri? Endpoint { get; set; }
 
@@ -29,6 +30,9 @@ public sealed class McpClientSettings
         if (Uri.TryCreate(connectionString, UriKind.Absolute, out var endpoint))
         {
             Endpoint = endpoint;
+            return;
         }
+
+        throw new FormatException("The MCP client connection string must be an absolute URI.");
     }
 }

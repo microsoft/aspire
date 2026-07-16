@@ -102,6 +102,17 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
+    public void AddMcpClientRejectsNonAbsoluteConnectionString()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration["ConnectionStrings:mcp"] = "not-a-uri";
+
+        var exception = Assert.Throws<FormatException>(() => builder.AddMcpClient("mcp"));
+
+        Assert.Equal("The MCP client connection string must be an absolute URI.", exception.Message);
+    }
+
+    [Fact]
     public void McpClientUsesServiceDiscoveryEndpoint()
     {
         var handler = new RequestRecordingHandler();
