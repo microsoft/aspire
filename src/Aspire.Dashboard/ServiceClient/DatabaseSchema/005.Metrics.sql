@@ -17,7 +17,8 @@ CREATE TABLE IF NOT EXISTS telemetry_metric_instruments (
 
 CREATE TABLE IF NOT EXISTS telemetry_metric_dimensions (
     dimension_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    instrument_id INTEGER NOT NULL REFERENCES telemetry_metric_instruments(instrument_id) ON DELETE CASCADE
+    instrument_id INTEGER NOT NULL REFERENCES telemetry_metric_instruments(instrument_id) ON DELETE CASCADE,
+    attribute_hash INTEGER NOT NULL
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS telemetry_metric_dimension_attributes (
@@ -77,6 +78,8 @@ CREATE INDEX IF NOT EXISTS ix_telemetry_metric_instruments_lookup
     ON telemetry_metric_instruments(resource_id, scope_id, instrument_name);
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_dimensions_instrument
     ON telemetry_metric_dimensions(instrument_id, dimension_id);
+CREATE INDEX IF NOT EXISTS ix_telemetry_metric_dimensions_hash
+    ON telemetry_metric_dimensions(instrument_id, attribute_hash);
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_dimension_order
     ON telemetry_metric_points(dimension_id, point_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_time

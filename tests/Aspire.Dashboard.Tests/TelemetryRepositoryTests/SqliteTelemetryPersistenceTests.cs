@@ -187,6 +187,49 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     }
 
     [Fact]
+    public void Metrics_EquivalentAttributesShareIndexedDimension()
+    {
+        var databasePath = Path.Combine(_temporaryDirectory, "metric-dimensions.db");
+        var startTime = new DateTime(2025, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        using (var repository = CreateRepository(databasePath))
+        {
+            var addContext = new AddContext();
+            foreach (var attributes in new[]
+            {
+                new[] { KeyValuePair.Create("second", "2"), KeyValuePair.Create("first", "1") },
+                new[] { KeyValuePair.Create("first", "1"), KeyValuePair.Create("second", "2") },
+                new[] { KeyValuePair.Create("first", "different") }
+            })
+            {
+                repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+                {
+                    new ResourceMetrics
+                    {
+                        Resource = CreateResource(),
+                        ScopeMetrics =
+                        {
+                            new ScopeMetrics
+                            {
+                                Scope = CreateScope("TestMeter"),
+                                Metrics = { CreateSumMetric("requests", startTime, attributes: attributes) }
+                            }
+                        }
+                    }
+                });
+            }
+            Assert.Equal(0, addContext.FailureCount);
+        }
+
+        using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_metric_dimensions;";
+        Assert.Equal(2L, command.ExecuteScalar());
+        command.CommandText = "SELECT COUNT(*) FROM sqlite_schema WHERE type = 'index' AND name = 'ix_telemetry_metric_dimensions_hash';";
+        Assert.Equal(1L, command.ExecuteScalar());
+    }
+
+    [Fact]
     public void Scopes_AreSharedAcrossLogsTracesAndMetrics()
     {
         var databasePath = Path.Combine(_temporaryDirectory, "shared-scopes.db");

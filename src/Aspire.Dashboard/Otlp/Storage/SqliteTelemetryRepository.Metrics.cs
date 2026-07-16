@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers.Binary;
 using System.Data;
 using System.Globalization;
+using System.IO.Hashing;
+using System.Text;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
@@ -323,33 +326,42 @@ public sealed partial class SqliteTelemetryRepository
         OtlpHelpers.CopyKeyValuePairs(pointAttributes, scope.Attributes, _otlpContext, out var copyCount, ref temporaryAttributes);
         Array.Sort(temporaryAttributes, 0, copyCount, MetricAttributeComparer.Instance);
         var attributes = temporaryAttributes.AsSpan(0, copyCount).ToArray();
-        var existingDimensionIds = connection.Query<long>("SELECT dimension_id FROM telemetry_metric_dimensions WHERE instrument_id = @InstrumentId ORDER BY dimension_id;", new { InstrumentId = instrumentId }, transaction).AsList();
-        var existingAttributesByDimension = connection.Query<OwnedAttributeRecord>("""
-            SELECT a.dimension_id AS OwnerId, a.attribute_key AS AttributeKey, a.attribute_value AS AttributeValue
-            FROM telemetry_metric_dimension_attributes a
-            JOIN telemetry_metric_dimensions d ON d.dimension_id = a.dimension_id
+        var attributeHash = GetMetricDimensionAttributeHash(attributes);
+        var candidates = connection.Query<MetricDimensionAttributeRecord>("""
+            SELECT
+                d.dimension_id AS DimensionId,
+                a.attribute_key AS AttributeKey,
+                a.attribute_value AS AttributeValue
+            FROM telemetry_metric_dimensions d
+            LEFT JOIN telemetry_metric_dimension_attributes a ON a.dimension_id = d.dimension_id
             WHERE d.instrument_id = @InstrumentId
-            ORDER BY a.dimension_id, a.ordinal;
-            """, new { InstrumentId = instrumentId }, transaction).ToLookup(attribute => attribute.OwnerId);
-        foreach (var existingDimensionId in existingDimensionIds)
+              AND d.attribute_hash = @AttributeHash
+            ORDER BY d.dimension_id, a.ordinal;
+            """, new { InstrumentId = instrumentId, AttributeHash = attributeHash }, transaction).ToLookup(attribute => attribute.DimensionId);
+        foreach (var candidate in candidates)
         {
-            var existingAttributes = existingAttributesByDimension[existingDimensionId]
-                .Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue));
+            var existingAttributes = candidate
+                .Where(attribute => attribute.AttributeKey is not null)
+                .Select(attribute => KeyValuePair.Create(attribute.AttributeKey!, attribute.AttributeValue!));
             if (existingAttributes.SequenceEqual(attributes))
             {
-                return existingDimensionId;
+                return candidate.Key;
             }
         }
 
-        if (existingDimensionIds.Count >= TelemetryRepositoryLimits.MaxDimensionCount)
+        var dimensionCount = connection.QuerySingle<int>(
+            "SELECT COUNT(*) FROM telemetry_metric_dimensions WHERE instrument_id = @InstrumentId;",
+            new { InstrumentId = instrumentId },
+            transaction);
+        if (dimensionCount >= TelemetryRepositoryLimits.MaxDimensionCount)
         {
             throw new InvalidOperationException($"Dimension limit of {TelemetryRepositoryLimits.MaxDimensionCount} reached.");
         }
         var dimensionId = connection.QuerySingle<long>("""
-            INSERT INTO telemetry_metric_dimensions (instrument_id)
-            VALUES (@InstrumentId)
+            INSERT INTO telemetry_metric_dimensions (instrument_id, attribute_hash)
+            VALUES (@InstrumentId, @AttributeHash)
             RETURNING dimension_id;
-            """, new { InstrumentId = instrumentId }, transaction);
+            """, new { InstrumentId = instrumentId, AttributeHash = attributeHash }, transaction);
         connection.Execute("""
             INSERT INTO telemetry_metric_dimension_attributes (dimension_id, ordinal, attribute_key, attribute_value)
             VALUES (@DimensionId, @Ordinal, @Key, @Value);
@@ -360,6 +372,27 @@ public sealed partial class SqliteTelemetryRepository
             connection.Execute("UPDATE telemetry_metric_instruments SET has_overflow = 1 WHERE instrument_id = @InstrumentId;", new { InstrumentId = instrumentId }, transaction);
         }
         return dimensionId;
+    }
+
+    private static long GetMetricDimensionAttributeHash(ReadOnlySpan<KeyValuePair<string, string>> attributes)
+    {
+        var hash = new XxHash3();
+        foreach (var attribute in attributes)
+        {
+            AppendHashValue(hash, attribute.Key);
+            AppendHashValue(hash, attribute.Value);
+        }
+
+        return BinaryPrimitives.ReadInt64LittleEndian(hash.GetCurrentHash());
+
+        static void AppendHashValue(XxHash3 hash, string value)
+        {
+            var valueBytes = Encoding.UTF8.GetBytes(value);
+            Span<byte> lengthBytes = stackalloc byte[sizeof(int)];
+            BinaryPrimitives.WriteInt32LittleEndian(lengthBytes, valueBytes.Length);
+            hash.Append(lengthBytes);
+            hash.Append(valueBytes);
+        }
     }
 
     private static MetricPointRecord? GetLatestMetricPoint(SqliteConnection connection, IDbTransaction transaction, long dimensionId)
@@ -798,6 +831,13 @@ public sealed partial class SqliteTelemetryRepository
         public static readonly MetricAttributeComparer Instance = new();
 
         public int Compare(KeyValuePair<string, string> x, KeyValuePair<string, string> y) => string.Compare(x.Key, y.Key, StringComparison.Ordinal);
+    }
+
+    private sealed class MetricDimensionAttributeRecord
+    {
+        public required long DimensionId { get; init; }
+        public string? AttributeKey { get; init; }
+        public string? AttributeValue { get; init; }
     }
 
     private class MetricPointRecord

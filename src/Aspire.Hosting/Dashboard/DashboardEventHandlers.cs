@@ -608,6 +608,10 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
             context.EnvironmentVariables[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] = Path.Combine(aspireStorePath, ".aspire", "dashboard");
         }
         var persistenceMode = configuration["Aspire:Dashboard:PersistenceMode"];
+        if (string.IsNullOrWhiteSpace(persistenceMode))
+        {
+            persistenceMode = configuration[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName];
+        }
         context.EnvironmentVariables[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] =
             string.IsNullOrWhiteSpace(persistenceMode) ? "Runs" : persistenceMode;
 

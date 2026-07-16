@@ -104,7 +104,7 @@ public sealed class DashboardDataSourceTests : IDisposable
     }
 
     [Theory]
-    [InlineData("CREATE TABLE dashboard_schema (version INTEGER NOT NULL); INSERT INTO dashboard_schema VALUES (7), (7);")]
+    [InlineData("CREATE TABLE dashboard_schema (version INTEGER NOT NULL); INSERT INTO dashboard_schema VALUES (8), (8);")]
     [InlineData("CREATE TABLE dashboard_schema (version); INSERT INTO dashboard_schema VALUES ('invalid');")]
     public void IsCompatible_ReturnsFalseForMalformedSchema(string schemaSql)
     {
