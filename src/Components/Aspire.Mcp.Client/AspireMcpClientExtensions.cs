@@ -39,7 +39,7 @@ public static class AspireMcpClientExtensions
     /// <exception cref="ArgumentNullException">Thrown when <paramref name="builder"/> or <paramref name="connectionName"/> is <see langword="null"/>.</exception>
     /// <exception cref="ArgumentException">Thrown when <paramref name="connectionName"/> is empty.</exception>
     public static IHostApplicationBuilder AddMcpClient(this IHostApplicationBuilder builder, string connectionName)
-        => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions: null, configureTransportOptions: null);
+        => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions: null, configureTransportOptions: null, configureSettings: null);
 
     /// <summary>
     /// Registers an <see cref="McpClient"/> that connects to the specified MCP server through service discovery.
@@ -48,6 +48,7 @@ public static class AspireMcpClientExtensions
     /// <param name="connectionName">The service-discovery name of the MCP server.</param>
     /// <param name="configureClientOptions">An optional delegate to configure <see cref="McpClientOptions"/> before the client is created.</param>
     /// <param name="configureTransportOptions">An optional delegate to configure <see cref="HttpClientTransportOptions"/> before the transport is created.</param>
+    /// <param name="configureSettings">An optional delegate to configure <see cref="McpClientSettings"/> after configuration binding.</param>
     /// <remarks>
     /// The server is resolved at <c>https://{connectionName}/mcp</c> by default. When service discovery only provides
     /// HTTP endpoints, the client uses <c>http://{connectionName}/mcp</c> instead. Use <c>WithReference</c> in the
@@ -75,8 +76,9 @@ public static class AspireMcpClientExtensions
         this IHostApplicationBuilder builder,
         string connectionName,
         Action<McpClientOptions>? configureClientOptions = null,
-        Action<HttpClientTransportOptions>? configureTransportOptions = null)
-        => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions, configureTransportOptions);
+        Action<HttpClientTransportOptions>? configureTransportOptions = null,
+        Action<McpClientSettings>? configureSettings = null)
+        => AddMcpClientCore(builder, connectionName, serviceKey: null, configureClientOptions, configureTransportOptions, configureSettings);
 
     /// <summary>
     /// Registers a keyed <see cref="McpClient"/> that connects to the specified MCP server through service discovery.
@@ -102,7 +104,7 @@ public static class AspireMcpClientExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        return AddMcpClientCore(builder, name, name, configureClientOptions: null, configureTransportOptions: null);
+        return AddMcpClientCore(builder, name, name, configureClientOptions: null, configureTransportOptions: null, configureSettings: null);
     }
 
     /// <summary>
@@ -112,6 +114,7 @@ public static class AspireMcpClientExtensions
     /// <param name="name">The service-discovery name of the MCP server and the service key of the client.</param>
     /// <param name="configureClientOptions">An optional delegate to configure <see cref="McpClientOptions"/> before the client is created.</param>
     /// <param name="configureTransportOptions">An optional delegate to configure <see cref="HttpClientTransportOptions"/> before the transport is created.</param>
+    /// <param name="configureSettings">An optional delegate to configure <see cref="McpClientSettings"/> after configuration binding.</param>
     /// <remarks>
     /// The server is resolved at <c>https://{name}/mcp</c> by default. When service discovery only provides HTTP
     /// endpoints, the client uses <c>http://{name}/mcp</c> instead. Use <c>WithReference</c> in the AppHost to provide
@@ -139,12 +142,13 @@ public static class AspireMcpClientExtensions
         this IHostApplicationBuilder builder,
         string name,
         Action<McpClientOptions>? configureClientOptions = null,
-        Action<HttpClientTransportOptions>? configureTransportOptions = null)
+        Action<HttpClientTransportOptions>? configureTransportOptions = null,
+        Action<McpClientSettings>? configureSettings = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(name);
 
-        return AddMcpClientCore(builder, name, name, configureClientOptions, configureTransportOptions);
+        return AddMcpClientCore(builder, name, name, configureClientOptions, configureTransportOptions, configureSettings);
     }
 
     private static IHostApplicationBuilder AddMcpClientCore(
@@ -152,7 +156,8 @@ public static class AspireMcpClientExtensions
         string connectionName,
         object? serviceKey,
         Action<McpClientOptions>? configureClientOptions,
-        Action<HttpClientTransportOptions>? configureTransportOptions)
+        Action<HttpClientTransportOptions>? configureTransportOptions,
+        Action<McpClientSettings>? configureSettings)
     {
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentException.ThrowIfNullOrEmpty(connectionName);
@@ -167,6 +172,8 @@ public static class AspireMcpClientExtensions
         {
             settings.ParseConnectionString(connectionString);
         }
+
+        configureSettings?.Invoke(settings);
 
         var endpoint = settings.Endpoint ?? CreateServiceDiscoveryEndpoint(builder.Configuration, connectionName);
         var registrationKey = new object();
@@ -340,19 +347,20 @@ public static class AspireMcpClientExtensions
 
     private sealed class McpClientHealthCheck(IServiceProvider serviceProvider, object? serviceKey) : IHealthCheck
     {
-        public Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
+        public async Task<HealthCheckResult> CheckHealthAsync(HealthCheckContext context, CancellationToken cancellationToken = default)
         {
             try
             {
-                _ = serviceKey is null
+                var client = serviceKey is null
                     ? serviceProvider.GetRequiredService<McpClient>()
                     : serviceProvider.GetRequiredKeyedService<McpClient>(serviceKey);
 
-                return Task.FromResult(HealthCheckResult.Healthy());
+                await client.PingAsync(cancellationToken: cancellationToken).ConfigureAwait(false);
+                return HealthCheckResult.Healthy();
             }
             catch (Exception ex)
             {
-                return Task.FromResult(HealthCheckResult.Unhealthy("MCP client initialization failed.", ex));
+                return HealthCheckResult.Unhealthy("MCP client health check failed.", ex);
             }
         }
     }

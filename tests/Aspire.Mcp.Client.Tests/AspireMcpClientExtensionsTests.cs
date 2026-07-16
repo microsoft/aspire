@@ -4,7 +4,9 @@
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using ModelContextProtocol.Client;
+using Microsoft.Extensions.Options;
 using System.Net;
 using System.Text;
 using System.Text.Json;
@@ -84,6 +86,19 @@ public class AspireMcpClientExtensionsTests
         Assert.True(clientOptionsConfigured);
         Assert.True(transportOptionsConfigured);
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://keyed/mcp");
+    }
+
+    [Fact]
+    public void AddMcpClientInvokesSettingsDelegate()
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+
+        builder.AddMcpClient("mcp", configureSettings: settings => settings.DisableHealthChecks = true);
+
+        using var host = builder.Build();
+        var options = host.Services.GetRequiredService<IOptions<HealthCheckServiceOptions>>().Value;
+
+        Assert.Empty(options.Registrations);
     }
 
     [Fact]
@@ -198,6 +213,41 @@ public class AspireMcpClientExtensionsTests
 
         Assert.Null(resolveException);
         Assert.Null(Record.Exception(host.Dispose));
+    }
+
+    [Fact]
+    public async Task AddMcpClientHealthCheckPingsServer()
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var result = await host.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync();
+
+        Assert.Equal(HealthStatus.Healthy, result.Status);
+        Assert.Contains(handler.RequestMethods, method => method == "ping");
+    }
+
+    [Fact]
+    public async Task AddMcpClientHealthCheckPassesCancellationTokenToPing()
+    {
+        var handler = new BlockingPingHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        using var cancellationTokenSource = new CancellationTokenSource();
+        var checkTask = host.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync(cancellationTokenSource.Token);
+        await handler.PingStarted.Task.WaitAsync(TimeSpan.FromSeconds(10));
+
+        cancellationTokenSource.Cancel();
+        var result = await checkTask;
+
+        Assert.Equal(HealthStatus.Unhealthy, result.Status);
+        Assert.True(handler.PingCanceled);
     }
 
     [Fact]
@@ -333,9 +383,11 @@ public class AspireMcpClientExtensionsTests
         }
     }
 
-    private sealed class SuccessfulInitializationHandler : HttpMessageHandler
+    private class SuccessfulInitializationHandler : HttpMessageHandler
     {
         public List<Uri> RequestUris { get; } = [];
+
+        public List<string> RequestMethods { get; } = [];
 
         public bool Disposed { get; private set; }
 
@@ -355,6 +407,7 @@ public class AspireMcpClientExtensionsTests
             using var requestJson = JsonDocument.Parse(requestBody);
             if (requestJson.RootElement.TryGetProperty("method", out var methodElement))
             {
+                RequestMethods.Add(methodElement.GetString()!);
                 if (string.Equals(methodElement.GetString(), "initialize", StringComparison.Ordinal))
                 {
                     var id = requestJson.RootElement.GetProperty("id").GetInt32();
@@ -384,6 +437,16 @@ public class AspireMcpClientExtensionsTests
                 {
                     return new HttpResponseMessage(HttpStatusCode.OK);
                 }
+
+                if (string.Equals(methodElement.GetString(), "ping", StringComparison.Ordinal))
+                {
+                    var id = requestJson.RootElement.GetProperty("id").GetInt32();
+                    var pingResponse = JsonSerializer.Serialize(new { jsonrpc = "2.0", id, result = new { } });
+                    return new HttpResponseMessage(HttpStatusCode.OK)
+                    {
+                        Content = new StringContent(pingResponse, Encoding.UTF8, "application/json"),
+                    };
+                }
             }
 
             return new HttpResponseMessage(HttpStatusCode.NotFound);
@@ -397,6 +460,41 @@ public class AspireMcpClientExtensionsTests
             }
 
             base.Dispose(disposing);
+        }
+    }
+
+    private sealed class BlockingPingHandler : SuccessfulInitializationHandler
+    {
+        public TaskCompletionSource PingStarted { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
+
+        public bool PingCanceled { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.Method == HttpMethod.Post)
+            {
+                var requestBody = request.Content is null
+                    ? string.Empty
+                    : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+                using var requestJson = JsonDocument.Parse(requestBody);
+                if (requestJson.RootElement.TryGetProperty("method", out var methodElement) &&
+                    string.Equals(methodElement.GetString(), "ping", StringComparison.Ordinal))
+                {
+                    PingStarted.TrySetResult();
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        PingCanceled = true;
+                        throw;
+                    }
+                }
+            }
+
+            return await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
         }
     }
 
