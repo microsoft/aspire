@@ -255,9 +255,9 @@ public partial class MainLayoutTests : DashboardTestContext
         var existingButtonId = isDesktop ? "dashboard-help-button" : "dashboard-navigation-button";
 
         Assert.Single(cut.FindComponents<DashboardRunSelect>());
-        Assert.Contains("id=\"dashboard-runs-select\"", cut.Markup, StringComparison.Ordinal);
+        Assert.Contains("class=\"application-run-select\"", cut.Markup, StringComparison.Ordinal);
         Assert.True(
-            cut.Markup.IndexOf("id=\"dashboard-runs-select\"", StringComparison.Ordinal) <
+            cut.Markup.IndexOf("class=\"application-run-select\"", StringComparison.Ordinal) <
             cut.Markup.IndexOf($"id=\"{existingButtonId}\"", StringComparison.Ordinal));
     }
 
@@ -291,7 +291,7 @@ public partial class MainLayoutTests : DashboardTestContext
                 new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        Assert.Empty(cut.FindAll("#dashboard-runs-select"));
+        Assert.Empty(cut.FindComponents<DashboardRunSelect>());
         var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
         Assert.Null(runSelection.SelectedRunId);
     }
@@ -335,6 +335,7 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Equal("start", statusIcon.GetAttribute("slot"));
         Assert.Contains("fill: var(--success)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
         Assert.Empty(select.FindAll("fluent-option .application-run-status"));
+        Assert.True(select.Find("[slot='indicator']").HasAttribute("hidden"));
 
         await cut.InvokeAsync(() => select.Instance.ValueChanged.InvokeAsync(historicalRun.RunId));
 
@@ -342,46 +343,6 @@ public partial class MainLayoutTests : DashboardTestContext
         Assert.Contains("fill: var(--warning)", statusIcon.GetAttribute("style"), StringComparison.Ordinal);
         Assert.Equal("historical", storedRunId);
         Assert.Empty(new Uri(Services.GetRequiredService<NavigationManager>().Uri).Query);
-    }
-
-    [Fact]
-    public void HistoricalRun_DisplaysLocalStartTimeAfterApplicationName()
-    {
-        var timeProvider = new TestTimeProvider();
-        var runStore = new FluentUISetupHelpers.TestDashboardRunStore(
-        [
-            new(
-                RunId: "current",
-                StartedAtUtc: DateTimeOffset.UnixEpoch,
-                EndedAtUtc: null,
-                CleanShutdown: false,
-                ApplicationName: "TestApp",
-                DatabasePath: string.Empty,
-                IsCurrent: true),
-            new(
-                RunId: "historical",
-                StartedAtUtc: new DateTimeOffset(2025, 1, 2, 12, 30, 0, TimeSpan.Zero),
-                EndedAtUtc: new DateTimeOffset(2025, 1, 2, 13, 30, 0, TimeSpan.Zero),
-                CleanShutdown: true,
-                ApplicationName: "TestApp",
-                DatabasePath: string.Empty,
-                IsCurrent: false)
-        ]);
-
-        var sessionStorage = new TestSessionStorage
-        {
-            OnGetAsync = key => key == BrowserStorageKeys.SelectedDashboardRunId
-                ? (true, "historical")
-                : (false, null)
-        };
-        SetupMainLayoutServices(browserTimeProvider: timeProvider, dashboardRunStore: runStore, sessionStorage: sessionStorage);
-
-        var cut = RenderComponent<MainLayout>(builder =>
-        {
-            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
-        });
-
-        Assert.Equal("Started 1/2/2025 1:30 PM", cut.Find(".application-run-start").TextContent, ignoreWhiteSpaceDifferences: true);
     }
 
     [Fact]

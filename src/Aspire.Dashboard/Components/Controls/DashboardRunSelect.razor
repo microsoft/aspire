@@ -1,56 +1,20 @@
 @using Aspire.Dashboard.Resources
-@inject IStringLocalizer<Dialogs> Loc
-@inject BrowserTimeProvider TimeProvider
 
-<FluentSelect TOption="string"
-              Class="application-run-select"
-              Id="dashboard-runs-select"
-              Value="@SelectedRunId"
-              ValueChanged="@SelectedRunIdChanged"
-              Position="SelectPosition.Below"
-              AriaLabel="@Loc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]"
-              Appearance="Appearance.Stealth">
-    <FluentIcon Class="application-run-status"
-                Value="@(new Icons.Filled.Size12.Circle())"
-                Color="@(SelectedRunIsCurrent ? Color.Success : Color.Warning)"
-                Slot="start" />
-    @foreach (var run in _runs)
-    {
-        <FluentOption Value="@run.RunId">@FormatRunOption(run)</FluentOption>
-    }
-</FluentSelect>
-
-@code {
-    private IReadOnlyList<DashboardRunDescriptor> _runs = [];
-
-    [Parameter, EditorRequired]
-    public required string SelectedRunId { get; set; }
-
-    [Parameter]
-    public bool SelectedRunIsCurrent { get; set; }
-
-    [Parameter]
-    public EventCallback<string?> SelectedRunIdChanged { get; set; }
-
-    [Inject]
-    internal IDashboardRunStore RunStore { get; init; } = null!;
-
-    protected override void OnInitialized()
-    {
-        _runs = RunStore.GetRuns();
-    }
-
-    private string FormatRunOption(DashboardRunDescriptor run)
-    {
-        if (run.IsCurrent)
+<div class="application-run-select">
+    <FluentSelect TOption="string"
+                Value="@SelectedRunId"
+                ValueChanged="@SelectedRunIdChanged"
+                Position="SelectPosition.Below"
+                AriaLabel="@Loc[nameof(Dialogs.DashboardRunsDialogLaunchButton)]"
+                Appearance="Appearance.Stealth">
+        <FluentIcon Class="application-run-status"
+                    Value="@(new Icons.Filled.Size12.Circle())"
+                    Color="@(SelectedRunIsCurrent ? Color.Success : Color.Warning)"
+                    Slot="start" />
+        <span slot="indicator" hidden></span>
+        @foreach (var run in _runs)
         {
-            return Loc[nameof(Dialogs.SettingsDialogDashboardRunCurrent)];
+            <FluentOption Value="@run.RunId">@FormatRunOption(run)</FluentOption>
         }
-
-        var localStartedAt = TimeZoneInfo.ConvertTime(run.StartedAtUtc, TimeProvider.LocalTimeZone);
-        return string.Format(
-            CultureInfo.CurrentCulture,
-            Loc[nameof(Dialogs.DashboardRunsDialogStartedAt)],
-            localStartedAt.ToString("g", CultureInfo.CurrentCulture));
-    }
-}
+    </FluentSelect>
+</div>

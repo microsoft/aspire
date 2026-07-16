@@ -16,15 +16,9 @@
     @if (ViewportInformation.IsDesktop)
     {
         <FluentHeader>
-            <div class="application-header">
-                <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
-                    <ApplicationName/>
-                    @if (GetHistoricalRunStartText() is { } startText)
-                    {
-                        <span class="application-run-start">@startText</span>
-                    }
-                </FluentAnchor>
-            </div>
+            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
+                <ApplicationName/>
+            </FluentAnchor>
             <div class="flex-filler"></div>
             @if (RunStore.SupportsRunSelection && _selectedRun is { } selectedRun)
             {
@@ -67,15 +61,9 @@
     else
     {
         <FluentHeader>
-            <div class="application-header">
-                <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
-                    <ApplicationName/>
-                    @if (GetHistoricalRunStartText() is { } startText)
-                    {
-                        <span class="application-run-start">@startText</span>
-                    }
-                </FluentAnchor>
-            </div>
+            <FluentAnchor Appearance="Appearance.Stealth" Href="/" Class="logo">
+                <ApplicationName/>
+            </FluentAnchor>
             <div class="flex-filler"></div>
             @if (RunStore.SupportsRunSelection && _selectedRun is { } selectedRun)
             {
