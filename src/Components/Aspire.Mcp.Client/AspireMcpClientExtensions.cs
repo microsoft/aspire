@@ -7,6 +7,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.ServiceDiscovery;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
 
@@ -202,8 +203,15 @@ public static class AspireMcpClientExtensions
             throw connectionStringException;
         }
 
-        var endpoint = settings.Endpoint ?? CreateServiceDiscoveryEndpoint(builder.Configuration, connectionName);
-        McpClientSettings.ValidateEndpoint(endpoint);
+        var endpoint = settings.Endpoint;
+        if (endpoint is null)
+        {
+            endpoint = CreateServiceDiscoveryEndpoint(connectionName);
+        }
+        else
+        {
+            McpClientSettings.ValidateEndpoint(endpoint);
+        }
         var registrationKey = new object();
         builder.Services.AddHttpClient();
         builder.Services.AddKeyedSingleton<McpClientRegistration>(registrationKey, (serviceProvider, _) => new McpClientRegistration(
@@ -211,7 +219,8 @@ public static class AspireMcpClientExtensions
             configureClientOptions,
             configureTransportOptions,
             serviceProvider.GetRequiredService<IHttpClientFactory>(),
-            serviceProvider.GetRequiredService<ILoggerFactory>()));
+            serviceProvider.GetRequiredService<ILoggerFactory>(),
+            serviceProvider.GetService<ServiceEndpointResolver>()));
 
         if (serviceKey is null)
         {
@@ -239,18 +248,14 @@ public static class AspireMcpClientExtensions
         return builder;
     }
 
-    private static Uri CreateServiceDiscoveryEndpoint(IConfiguration configuration, string connectionName)
+    private static Uri CreateServiceDiscoveryEndpoint(string connectionName)
     {
         if (connectionName.IndexOfAny(['/', '\\', '?', '#', '@', ':']) >= 0)
         {
             throw new ArgumentException($"'{connectionName}' is not a valid MCP service-discovery connection name.", nameof(connectionName));
         }
 
-        var servicesSection = configuration.GetSection("services").GetSection(connectionName);
-        var hasHttpsEndpoint = servicesSection.GetSection("https").GetChildren().Any();
-        var hasHttpEndpoint = servicesSection.GetSection("http").GetChildren().Any();
-        var scheme = !hasHttpsEndpoint && hasHttpEndpoint ? "http" : "https";
-        return new Uri($"{scheme}://{connectionName}/mcp", UriKind.Absolute);
+        return new Uri($"https+http://{connectionName}/mcp", UriKind.Absolute);
     }
 
     private sealed class McpClientRegistration : IDisposable, IAsyncDisposable
@@ -266,9 +271,10 @@ public static class AspireMcpClientExtensions
             Action<McpClientOptions>? configureClientOptions,
             Action<HttpClientTransportOptions>? configureTransportOptions,
             IHttpClientFactory httpClientFactory,
-            ILoggerFactory loggerFactory)
+            ILoggerFactory loggerFactory,
+            ServiceEndpointResolver? serviceEndpointResolver)
         {
-            _createClient = () => CreateClientAsync(endpoint, configureClientOptions, configureTransportOptions, httpClientFactory, loggerFactory);
+            _createClient = () => CreateClientAsync(endpoint, configureClientOptions, configureTransportOptions, httpClientFactory, loggerFactory, serviceEndpointResolver);
         }
 
         public McpClient GetClient()
@@ -340,13 +346,15 @@ public static class AspireMcpClientExtensions
             Action<McpClientOptions>? configureClientOptions,
             Action<HttpClientTransportOptions>? configureTransportOptions,
             IHttpClientFactory httpClientFactory,
-            ILoggerFactory loggerFactory)
+            ILoggerFactory loggerFactory,
+            ServiceEndpointResolver? serviceEndpointResolver)
         {
             HttpClient? httpClient = null;
             HttpClientTransport? transport = null;
             try
             {
-                var transportOptions = new HttpClientTransportOptions { Endpoint = endpoint };
+                var resolvedEndpoint = await ResolveEndpointAsync(endpoint, serviceEndpointResolver, _creationCancellation.Token).ConfigureAwait(false);
+                var transportOptions = new HttpClientTransportOptions { Endpoint = resolvedEndpoint };
                 configureTransportOptions?.Invoke(transportOptions);
                 var clientOptions = new McpClientOptions();
                 configureClientOptions?.Invoke(clientOptions);
@@ -372,6 +380,38 @@ public static class AspireMcpClientExtensions
                 }
                 throw;
             }
+        }
+
+        private static async Task<Uri> ResolveEndpointAsync(Uri endpoint, ServiceEndpointResolver? serviceEndpointResolver, CancellationToken cancellationToken)
+        {
+            if (endpoint.Scheme is not "https+http")
+            {
+                return endpoint;
+            }
+
+            if (serviceEndpointResolver is null)
+            {
+                return new UriBuilder(Uri.UriSchemeHttps, endpoint.Host, endpoint.Port, endpoint.AbsolutePath).Uri;
+            }
+
+            var endpointSource = await serviceEndpointResolver.GetEndpointsAsync(endpoint.GetLeftPart(UriPartial.Authority), cancellationToken).ConfigureAwait(false);
+            var resolvedUri = endpointSource.Endpoints
+                .Select(static serviceEndpoint => serviceEndpoint.EndPoint)
+                .OfType<UriEndPoint>()
+                .Select(static uriEndpoint => uriEndpoint.Uri)
+                .Where(static uri => uri.Scheme is "http" or "https")
+                .OrderByDescending(static uri => uri.Scheme is "https")
+                .FirstOrDefault();
+
+            if (resolvedUri is null)
+            {
+                throw new InvalidOperationException($"No HTTP or HTTPS endpoint was found for MCP service '{endpoint.Host}'.");
+            }
+
+            return new UriBuilder(resolvedUri)
+            {
+                Path = endpoint.AbsolutePath,
+            }.Uri;
         }
     }
 

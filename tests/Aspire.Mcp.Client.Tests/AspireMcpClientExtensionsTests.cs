@@ -44,6 +44,9 @@ public class AspireMcpClientExtensionsTests
     {
         var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration["services:mcp:https:0"] = "https://mcp";
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http => http.AddServiceDiscovery());
         builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
         var clientOptionsConfigured = false;
         var transportOptionsConfigured = false;
@@ -367,7 +370,7 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public async Task AddMcpClientHealthCheckPassesCancellationTokenToInitialization()
+    public async Task AddMcpClientHealthCheckCancelsInitializationWait()
     {
         var handler = new BlockingInitializationHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -383,6 +386,7 @@ public class AspireMcpClientExtensionsTests
         var result = await checkTask.WaitAsync(TimeSpan.FromSeconds(10));
 
         Assert.Equal(HealthStatus.Unhealthy, result.Status);
+        Assert.False(handler.InitializeCanceled);
     }
 
     [Fact]
