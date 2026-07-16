@@ -426,7 +426,7 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
-    public async Task AddMcpClientReconnectsAfterOperationFailure()
+    public async Task AddMcpClientReconnectsAfterOperationFailureWithoutReplaying()
     {
         var handler = new FailPingOnceHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
@@ -434,9 +434,12 @@ public class AspireMcpClientExtensionsTests
         builder.AddMcpClient("mcp");
 
         using var host = builder.Build();
-        var result = await host.Services.GetRequiredService<HealthCheckService>().CheckHealthAsync();
+        var healthChecks = host.Services.GetRequiredService<HealthCheckService>();
+        var firstResult = await healthChecks.CheckHealthAsync();
+        var secondResult = await healthChecks.CheckHealthAsync();
 
-        Assert.Equal(HealthStatus.Healthy, result.Status);
+        Assert.Equal(HealthStatus.Unhealthy, firstResult.Status);
+        Assert.Equal(HealthStatus.Healthy, secondResult.Status);
         Assert.Equal(2, handler.InitializeAttempts);
     }
 

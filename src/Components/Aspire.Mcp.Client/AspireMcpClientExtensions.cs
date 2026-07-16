@@ -350,14 +350,14 @@ public static class AspireMcpClientExtensions
         }
     }
 
-    // Keep the injected McpClient stable while replacing its private session after completion or failure.
+    // Keep the injected McpClient stable while replacing its private session after a terminal failure.
 #pragma warning disable MCPEXP002
     private sealed class ReconnectableMcpClient(Func<Task<DisposableMcpClient>> createClient) : McpClient, IDisposable
 #pragma warning restore MCPEXP002
     {
         private readonly object _lock = new();
-        private readonly SemaphoreSlim _operationLock = new(1, 1);
-        private readonly List<Task> _retiredClients = [];
+        private readonly HashSet<NotificationRegistration> _notificationRegistrations = [];
+        private readonly HashSet<Task> _cleanupTasks = [];
         private Task<DisposableMcpClient>? _client;
         private int _disposed;
 
@@ -367,9 +367,31 @@ public static class AspireMcpClientExtensions
         public override Task<ClientCompletionDetails> Completion => GetClient().Completion;
         public override string SessionId => GetClient().SessionId!;
         public override string NegotiatedProtocolVersion => GetClient().NegotiatedProtocolVersion!;
-        public override Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken = default) => ExecuteAsync(client => client.SendRequestAsync(request, cancellationToken));
-        public override Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default) => ExecuteAsync(client => client.SendMessageAsync(message, cancellationToken));
-        public override IAsyncDisposable RegisterNotificationHandler(string method, Func<JsonRpcNotification, CancellationToken, ValueTask> handler) => GetClient().RegisterNotificationHandler(method, handler);
+
+        public override Task<JsonRpcResponse> SendRequestAsync(JsonRpcRequest request, CancellationToken cancellationToken = default)
+            => ExecuteAsync((client, token) => client.SendRequestAsync(request, token), cancellationToken);
+
+        public override Task SendMessageAsync(JsonRpcMessage message, CancellationToken cancellationToken = default)
+            => ExecuteAsync((client, token) => client.SendMessageAsync(message, token), cancellationToken);
+
+        public override IAsyncDisposable RegisterNotificationHandler(string method, Func<JsonRpcNotification, CancellationToken, ValueTask> handler)
+        {
+            var registration = new NotificationRegistration(this, method, handler);
+            while (true)
+            {
+                var task = GetClientTask();
+                var client = task.GetAwaiter().GetResult();
+                lock (_lock)
+                {
+                    if (ReferenceEquals(_client, task))
+                    {
+                        _notificationRegistrations.Add(registration);
+                        registration.Register(task, client);
+                        return registration;
+                    }
+                }
+            }
+        }
 
         public void Initialize() => _ = GetClient();
 
@@ -377,23 +399,47 @@ public static class AspireMcpClientExtensions
         {
             if (Interlocked.Exchange(ref _disposed, 1) is 0)
             {
-                var client = Interlocked.Exchange(ref _client, null);
-                if (client?.IsCompletedSuccessfully is true)
+                Task<DisposableMcpClient>? client;
+                lock (_lock)
+                {
+                    client = _client;
+                    _client = null;
+                }
+
+                if (client is not null)
                 {
                     DisposeClientAsync(client).GetAwaiter().GetResult();
                 }
-                DisposeRetiredClientsAsync().GetAwaiter().GetResult();
-                _operationLock.Dispose();
+
+                WaitForCleanupAsync().GetAwaiter().GetResult();
             }
         }
 
-        public override ValueTask DisposeAsync()
+        public override ValueTask DisposeAsync() => new(DisposeAsyncCore());
+
+        private async Task DisposeAsyncCore()
         {
-            Dispose();
-            return ValueTask.CompletedTask;
+            if (Interlocked.Exchange(ref _disposed, 1) is 0)
+            {
+                Task<DisposableMcpClient>? client;
+                lock (_lock)
+                {
+                    client = _client;
+                    _client = null;
+                }
+
+                if (client is not null)
+                {
+                    await DisposeClientAsync(client).ConfigureAwait(false);
+                }
+
+                await WaitForCleanupAsync().ConfigureAwait(false);
+            }
         }
 
-        private McpClient GetClient()
+        private McpClient GetClient() => GetClientTask().GetAwaiter().GetResult();
+
+        private Task<DisposableMcpClient> GetClientTask()
         {
             ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) is not 0, this);
             var clientTask = Volatile.Read(ref _client);
@@ -401,67 +447,47 @@ public static class AspireMcpClientExtensions
             {
                 lock (_lock)
                 {
+                    ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) is not 0, this);
                     clientTask ??= _client ??= createClient();
-                    _ = ObserveCompletionAsync(clientTask);
+                    if (ReferenceEquals(_client, clientTask))
+                    {
+                        _ = ObserveCompletionAsync(clientTask);
+                    }
                 }
             }
+
+            return clientTask;
+        }
+
+        private async Task<T> ExecuteAsync<T>(Func<McpClient, CancellationToken, Task<T>> operation, CancellationToken cancellationToken)
+        {
+            var task = GetClientTask();
             try
             {
-                return clientTask.GetAwaiter().GetResult();
+                var client = await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                RegisterNotificationHandlers(task, client);
+                return await operation(client, cancellationToken).ConfigureAwait(false);
             }
-            catch
+            catch (Exception ex) when (IsTerminalFailure(task, ex))
             {
-                Invalidate(clientTask);
+                Invalidate(task);
                 throw;
             }
         }
 
-        private async Task<T> ExecuteAsync<T>(Func<McpClient, Task<T>> operation)
+        private async Task ExecuteAsync(Func<McpClient, CancellationToken, Task> operation, CancellationToken cancellationToken)
         {
-            await _operationLock.WaitAsync().ConfigureAwait(false);
+            var task = GetClientTask();
             try
             {
-                for (var attempt = 0; ; attempt++)
-                {
-                    var task = Volatile.Read(ref _client);
-                    try
-                    {
-                        return await operation(GetClient()).ConfigureAwait(false);
-                    }
-                    catch when (attempt is 0 && task is not null)
-                    {
-                        Invalidate(task);
-                    }
-                }
+                var client = await task.WaitAsync(cancellationToken).ConfigureAwait(false);
+                RegisterNotificationHandlers(task, client);
+                await operation(client, cancellationToken).ConfigureAwait(false);
             }
-            finally
+            catch (Exception ex) when (IsTerminalFailure(task, ex))
             {
-                _operationLock.Release();
-            }
-        }
-
-        private async Task ExecuteAsync(Func<McpClient, Task> operation)
-        {
-            await _operationLock.WaitAsync().ConfigureAwait(false);
-            try
-            {
-                for (var attempt = 0; ; attempt++)
-                {
-                    var task = Volatile.Read(ref _client);
-                    try
-                    {
-                        await operation(GetClient()).ConfigureAwait(false);
-                        return;
-                    }
-                    catch when (attempt is 0 && task is not null)
-                    {
-                        Invalidate(task);
-                    }
-                }
-            }
-            finally
-            {
-                _operationLock.Release();
+                Invalidate(task);
+                throw;
             }
         }
 
@@ -474,7 +500,43 @@ public static class AspireMcpClientExtensions
             catch
             {
             }
+
             Invalidate(task);
+        }
+
+        private void RegisterNotificationHandlers(Task<DisposableMcpClient> task, DisposableMcpClient client)
+        {
+            lock (_lock)
+            {
+                if (ReferenceEquals(_client, task))
+                {
+                    foreach (var registration in _notificationRegistrations)
+                    {
+                        registration.Register(task, client);
+                    }
+                }
+            }
+        }
+
+        private static bool IsTerminalFailure(Task<DisposableMcpClient> task, Exception exception)
+        {
+            if (exception is OperationCanceledException)
+            {
+                return false;
+            }
+
+            if (exception is HttpRequestException or IOException or System.Net.Sockets.SocketException)
+            {
+                return true;
+            }
+
+            if (!task.IsCompletedSuccessfully)
+            {
+                return false;
+            }
+
+            var completion = task.Result.Completion;
+            return completion.IsCompletedSuccessfully && completion.Result.Exception is not null;
         }
 
         private void Invalidate(Task<DisposableMcpClient> task)
@@ -485,26 +547,55 @@ public static class AspireMcpClientExtensions
                 {
                     return;
                 }
+
                 _client = null;
             }
+
             if (task.IsCompletedSuccessfully)
             {
-                lock (_lock)
-                {
-                    _retiredClients.Add(DisposeClientAsync(task));
-                }
+                TrackCleanup(DisposeClientAsync(task));
             }
         }
 
-        private async Task DisposeRetiredClientsAsync()
+        private void TrackCleanup(Task cleanupTask)
         {
-            Task[] tasks;
             lock (_lock)
             {
-                tasks = [.. _retiredClients];
-                _retiredClients.Clear();
+                _cleanupTasks.Add(cleanupTask);
             }
-            await Task.WhenAll(tasks).ConfigureAwait(false);
+
+            _ = cleanupTask.ContinueWith(
+                _ => RemoveCleanup(cleanupTask),
+                CancellationToken.None,
+                TaskContinuationOptions.ExecuteSynchronously,
+                TaskScheduler.Default);
+        }
+
+        private void RemoveCleanup(Task cleanupTask)
+        {
+            lock (_lock)
+            {
+                _cleanupTasks.Remove(cleanupTask);
+            }
+        }
+
+        private async Task WaitForCleanupAsync()
+        {
+            while (true)
+            {
+                Task[] tasks;
+                lock (_lock)
+                {
+                    tasks = [.. _cleanupTasks];
+                }
+
+                if (tasks.Length is 0)
+                {
+                    return;
+                }
+
+                await Task.WhenAll(tasks).ConfigureAwait(false);
+            }
         }
 
         private static async Task DisposeClientAsync(Task<DisposableMcpClient> task)
@@ -515,6 +606,46 @@ public static class AspireMcpClientExtensions
             }
             catch
             {
+            }
+        }
+
+        private sealed class NotificationRegistration(
+            ReconnectableMcpClient owner,
+            string method,
+            Func<JsonRpcNotification, CancellationToken, ValueTask> handler) : IAsyncDisposable
+        {
+            private Task<DisposableMcpClient>? _client;
+            private IAsyncDisposable? _innerRegistration;
+            private int _disposed;
+
+            public void Register(Task<DisposableMcpClient> clientTask, DisposableMcpClient client)
+            {
+                if (Volatile.Read(ref _disposed) is not 0 || ReferenceEquals(_client, clientTask))
+                {
+                    return;
+                }
+
+                _client = clientTask;
+                _innerRegistration = client.RegisterNotificationHandler(method, handler);
+            }
+
+            public async ValueTask DisposeAsync()
+            {
+                if (Interlocked.Exchange(ref _disposed, 1) is 0)
+                {
+                    IAsyncDisposable? registration;
+                    lock (owner._lock)
+                    {
+                        owner._notificationRegistrations.Remove(this);
+                        registration = _innerRegistration;
+                        _innerRegistration = null;
+                    }
+
+                    if (registration is not null)
+                    {
+                        await registration.DisposeAsync().ConfigureAwait(false);
+                    }
+                }
             }
         }
     }
