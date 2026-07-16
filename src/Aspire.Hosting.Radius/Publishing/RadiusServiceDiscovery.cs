@@ -22,10 +22,12 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// <para>
 /// For a Radius container emitted by Aspire, both <c>normalizedName</c> (the top-level <c>name:</c>)
 /// and <c>containerName</c> (the <c>properties.containers</c> map key) equal the Aspire resource
-/// name, so the Service name is <c>{resource.Name}-{resource.Name}</c>. Both the recipe and the
-/// container v2 schema require the map key to equal <c>name:</c>, so a callback that renames only
-/// one of them produces an invalid manifest; the publisher guards against that so this doubling
-/// holds for every valid manifest.
+/// name, so the Service name is <c>{resource.Name}-{resource.Name}</c>. The Radius recipe and the
+/// container v2 schema do <em>not</em> require the map key to equal <c>name:</c> — Radius permits
+/// distinct top-level and container-map names. Aspire requires them to match because it derives
+/// service discovery from the original resource name, so a callback that renames only one of them
+/// would make the emitted <c>services__*</c> values address a Service that is never produced; the
+/// publisher guards against that so this doubling holds for every manifest Aspire emits.
 /// </para>
 /// </remarks>
 internal static class RadiusServiceDiscovery

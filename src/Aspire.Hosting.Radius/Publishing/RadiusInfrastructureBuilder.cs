@@ -1288,6 +1288,14 @@ internal sealed class RadiusInfrastructureBuilder
 
         foreach (var (mapKey, snapshot) in portSnapshots)
         {
+            // A portless container has no Service and no `services__*` value can address it, so
+            // removing it in a callback is harmless — skip the preservation check for empty
+            // snapshots so the invariant does not needlessly reject valid customization callbacks.
+            if (snapshot.Count == 0)
+            {
+                continue;
+            }
+
             // The workload service discovery was emitted for must still be present under the same
             // map key. A callback that removed it — or replaced it with a differently keyed
             // container — leaves consumers pointing at a Service that is no longer produced.

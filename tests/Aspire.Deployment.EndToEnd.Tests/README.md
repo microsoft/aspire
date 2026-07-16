@@ -206,14 +206,20 @@ Radius-specific notes:
 documents a **current gap**, not working coverage. The Aspire Radius publisher does not translate
 cloud-managed Azure resources (Key Vault, Storage, Service Bus, Azure Managed Redis) into Radius
 resources — only portable recipe-backed resources such as `AddRedis` are mapped. When a Radius
-container `WithReference`s an Azure resource, `aspire publish` does not fail fast; it **hangs**
-resolving `Azure.BicepOutputReference.GetValueAsync` inside
-`RadiusInfrastructureBuilder.ResolveEnvironmentAsync` and produces no `app.bicep`. The test asserts
-this timeout/no-output behavior so the gap is visible and regressions are caught; it needs only the
-current-build Aspire CLI (no AKS/Azure deployment). When Azure resource injection is implemented (or
-publish is made to fail fast), this test will start failing and should be converted into a real
-injection assertion. Product follow-up: add Azure resource mappings, or a deploy-time bridge from
-Azure Bicep outputs to Radius container env/connections, and fail fast instead of hanging.
+container `WithReference`s an Azure resource, `aspire publish` currently **hangs** resolving
+`Azure.BicepOutputReference.GetValueAsync` inside `RadiusInfrastructureBuilder.ResolveEnvironmentAsync`
+and produces no `app.bicep`. The tracking issue is
+[#18802](https://github.com/microsoft/aspire/issues/18802).
+
+Because that hang is the bug being tracked, the test is marked `[ActiveIssue("…/18802")]` and is
+**skipped** in CI. Its body asserts the **intended fail-fast behavior** — `aspire publish` should
+exit non-zero within a bounded timeout and emit no `app.bicep` — rather than the current hang, so it
+starts passing only once the gap is closed. It needs only the current-build Aspire CLI (no
+AKS/Azure deployment). When Azure resource injection is implemented (or publish is made to fail
+fast), **remove the `[ActiveIssue]` attribute** so the test runs and guards the behavior; do not
+expect it to fail automatically while skipped. Product follow-up: add Azure resource mappings, or a
+deploy-time bridge from Azure Bicep outputs to Radius container env/connections, and fail fast
+instead of hanging.
 
 ## TypeScript deployment coverage
 

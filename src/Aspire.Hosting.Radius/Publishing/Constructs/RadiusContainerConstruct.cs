@@ -39,10 +39,11 @@ public sealed class RadiusContainerConstruct : ProvisionableResource
 
     /// <summary>
     /// The immutable <c>properties.containers</c> map key captured at construction (the Aspire
-    /// resource name). The container v2 schema and the Radius recipe require this to equal the
-    /// top-level <c>name:</c> (<see cref="ContainerName"/>); the publisher validates that invariant
-    /// after running <c>ConfigureRadiusInfrastructure</c> callbacks so service discovery (which is
-    /// derived from the resource name) cannot silently disagree with the generated Service name.
+    /// resource name). The Radius v2 schema and recipe do <em>not</em> require this to equal the
+    /// top-level <c>name:</c> (<see cref="ContainerName"/>) — Radius permits distinct names. Aspire
+    /// requires them to match because it derives service discovery from the resource name, and the
+    /// publisher validates that invariant after running <c>ConfigureRadiusInfrastructure</c>
+    /// callbacks so service discovery cannot silently disagree with the generated Service name.
     /// </summary>
     internal string ContainerMapKey => _containerName;
 

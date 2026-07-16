@@ -303,10 +303,10 @@ public class ConfigureRadiusInfrastructureTests
     [Fact]
     public void ConfigureCallback_RenamingContainerName_Throws()
     {
-        // The container v2 schema requires the top-level `name:` to equal the
-        // `properties.containers` map key, and Aspire service discovery targets the original
-        // resource name, so renaming a container's name would produce an invalid, unreachable
-        // manifest. The publisher must fail fast instead of emitting it.
+        // Radius permits a top-level `name:` and `properties.containers` map key to differ, but
+        // Aspire service discovery targets the original resource name, so renaming a container's
+        // name would make the emitted `services__*` values point at a Service that is never
+        // produced. The publisher must fail fast instead of emitting an unreachable manifest.
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddRadiusEnvironment("myenv")
             .ConfigureRadiusInfrastructure(opts =>
@@ -467,6 +467,30 @@ public class ConfigureRadiusInfrastructureTests
         var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
         Assert.Contains("http", ex.Message);
         Assert.Contains("non-literal", ex.Message);
+    }
+
+    [Fact]
+    public void ConfigureCallback_RemovingPortlessContainer_DoesNotThrow()
+    {
+        // A portless container has no Service and no `services__*` value can address it, so removing
+        // it in a callback is harmless. The service-discovery invariant must not reject this valid
+        // customization — only removal of a container that had ports (and thus a Service) is rejected.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Containers.Clear();
+            });
+        builder.AddContainer("api", "myapp/api", "latest");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var bicep = context.GenerateBicep(model);
+        Assert.DoesNotContain("myapp/api", bicep);
     }
 
     [Fact]
