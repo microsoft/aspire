@@ -1,0 +1,9 @@
+{
+  "author": "afscrome",
+  "comment": "CI-only workflow change to prevent fork workflows from running; no user-facing impact",
+  "mergedAt": "2026-07-15T18:36:23Z",
+  "number": 18792,
+  "runDate": "2026-07-16T00:20:20Z",
+  "status": "excluded",
+  "title": "Skip repo pulse and burndown workflows on forks"
+}
