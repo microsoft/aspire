@@ -15,8 +15,10 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// The Radius Kubernetes container recipe (radius-project/resource-types-contrib) creates one
 /// ClusterIP <c>Service</c> per container that declares ports. The Service name is
 /// <c>${normalizedName}-${containerName}</c> and it is exposed on the container port
-/// (<c>port == targetPort == containerPort</c>):
-/// <see href="https://github.com/radius-project/resource-types-contrib/blob/main/Compute/containers/recipes/kubernetes/bicep/kubernetes-containers.bicep"/>.
+/// (<c>port == targetPort == containerPort</c>). Pinned to an immutable commit so the documented
+/// contract can be verified even if <c>main</c> moves (Service name at line 338, port/targetPort at
+/// lines 329-330):
+/// <see href="https://github.com/radius-project/resource-types-contrib/blob/ab9722ac7027060693ef6d731f770436b03abbaf/Compute/containers/recipes/kubernetes/bicep/kubernetes-containers.bicep"/>.
 /// <para>
 /// For a Radius container emitted by Aspire, both <c>normalizedName</c> (the top-level <c>name:</c>)
 /// and <c>containerName</c> (the <c>properties.containers</c> map key) equal the Aspire resource
@@ -37,7 +39,13 @@ internal static class RadiusServiceDiscovery
     /// <summary>
     /// Gets the Kubernetes <c>Service</c> name the Radius recipe creates for <paramref name="resource"/>.
     /// </summary>
-    public static string GetServiceName(IResource resource) => $"{resource.Name}-{resource.Name}";
+    public static string GetServiceName(IResource resource) => GetServiceName(resource.Name);
+
+    /// <summary>
+    /// Gets the Kubernetes <c>Service</c> name the Radius recipe creates for a container whose
+    /// Aspire resource name is <paramref name="resourceName"/>.
+    /// </summary>
+    public static string GetServiceName(string resourceName) => $"{resourceName}-{resourceName}";
 
     /// <summary>
     /// Resolves the port the Radius recipe's <c>Service</c> exposes for the endpoint named
@@ -52,10 +60,13 @@ internal static class RadiusServiceDiscovery
     /// <list type="bullet">
     /// <item>an explicit target port is used as-is;</item>
     /// <item>a <see cref="ContainerResource"/> with only a host port listens on that port;</item>
-    /// <item>a <see cref="ProjectResource"/>'s default HTTP endpoint has no resolved port (the
-    /// deployment tool would assign one), so it is defaulted to <see cref="DefaultProjectContainerPort"/>;</item>
-    /// <item>any other endpoint without an explicit port is given a distinct allocated port, so
-    /// multiple portless endpoints never collapse onto the same Service port.</item>
+    /// <item>an endpoint without an explicit port that <see cref="ResourceExtensions.ResolveEndpoints"/>
+    /// assigns a distinct allocated port to uses that allocated port, so multiple portless endpoints
+    /// never collapse onto the same Service port;</item>
+    /// <item>a <see cref="ProjectResource"/> endpoint that resolves to no port — the first portless
+    /// HTTP or HTTPS endpoint for its scheme (the deployment tool would normally assign one) — is
+    /// defaulted to <see cref="DefaultProjectContainerPort"/>, <em>except</em> the synthetic default
+    /// HTTPS endpoint, which returns <see langword="null"/> (see the port-resolution code below).</item>
     /// </list>
     /// A resolution is stateless and deterministic (the allocator always starts from the same port
     /// and endpoints are enumerated in a stable order), so the two independent callers — the Bicep

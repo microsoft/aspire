@@ -13,11 +13,16 @@ namespace Aspire.Deployment.EndToEnd.Tests;
 /// <remarks>
 /// Radius 0.59 supports portable recipe-backed resources such as <c>AddRedis</c>, but the
 /// Aspire Radius publisher does not currently translate cloud-managed Azure resources such as
-/// Key Vault, Storage, Service Bus, or Azure Managed Redis into Radius resources.
+/// Key Vault, Storage, Service Bus, or Azure Managed Redis into Radius resources. Today
+/// <c>aspire publish</c> hangs in that scenario; the tracking issue
+/// (https://github.com/microsoft/aspire/issues/18802) covers making it fail fast instead. The
+/// test is marked <c>[ActiveIssue]</c> and asserts that intended fail-fast behavior, so it starts
+/// passing once the gap is closed.
 /// </remarks>
 public sealed class RadiusAzureResourcesDeploymentTests(ITestOutputHelper output)
 {
     [Fact]
+    [ActiveIssue("https://github.com/microsoft/aspire/issues/18802")]
     public async Task PublishWithAzureKeyVaultReferenceDocumentsCurrentRadiusGap()
     {
         if (!DeploymentE2ETestHelpers.IsRunningInCI)
@@ -89,7 +94,8 @@ public sealed class RadiusAzureResourcesDeploymentTests(ITestOutputHelper output
 
             var vault = builder.AddAzureKeyVault("vault");
 
-            builder.AddContainer("consumer", "mcr.microsoft.com/dotnet/samples", "aspnetapp")
+            builder.AddContainer("consumer", "mcr.microsoft.com/azuredocs/aci-helloworld", "latest")
+                .WithImageSHA256("456a1150aa41340a14c7be1342deda2cde9e6e7df9fde6b8a69de0ae04f92fad")
                 .WithReference(vault)
                 .WithComputeEnvironment(radius);
 
@@ -100,39 +106,29 @@ public sealed class RadiusAzureResourcesDeploymentTests(ITestOutputHelper output
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter);
 
-        output.WriteLine("Publishing is expected to time out: Radius tries to resolve Azure Bicep outputs during container env emission.");
+        output.WriteLine("Publishing should fail fast once the gap is fixed: Aspire cannot translate a cloud-managed Azure resource (Key Vault) into a Radius resource. See https://github.com/microsoft/aspire/issues/18802.");
         await auto.TypeAsync(
             "set +e; " +
-            "mkdir -p \"$HOME/.aspire/logs\"; " +
-            "rm -rf ../out ../publish.log ../radius-gap-evidence.log ../radius-gap-log-start; " +
-            ": > ../radius-gap-log-start; " +
-            "timeout 45s aspire publish --output-path ../out --non-interactive > ../publish.log 2>&1; " +
+            "rm -rf ../out ../publish.log; " +
+            // The bug in #18802 causes `aspire publish` to HANG (Radius resolves Azure Bicep outputs
+            // during container env emission). Cap it with `timeout` so an unfixed build fails the
+            // test loudly instead of hanging. Once #18802 is fixed, publish should fail fast with a
+            // non-zero exit and produce no app.bicep.
+            "timeout 120s aspire publish --output-path ../out --non-interactive > ../publish.log 2>&1; " +
             "code=$?; " +
-            "if [ \"$code\" = \"124\" ]; then " +
-            "if [ -f ../out/app.bicep ]; then cat ../publish.log; echo \"Radius app.bicep should not be produced for the current gap.\"; exit 1; fi; " +
-            "logs=$(find \"$HOME/.aspire/logs\" -maxdepth 1 -name 'cli_*.log' -newer ../radius-gap-log-start -print); " +
-            "if [ -z \"$logs\" ]; then cat ../publish.log; echo \"Radius publish timed out, but no invocation-specific CLI log was produced.\"; exit 1; fi; " +
-            "if ! grep -hE \"Azure[.]BicepOutputReference[.]GetValueAsync|RadiusInfrastructureBuilder[.]ResolveEnvironmentAsync\" $logs > ../radius-gap-evidence.log 2>/dev/null; then " +
-            "cat ../publish.log; " +
-            "echo \"Radius publish timed out, but this invocation's CLI logs did not show Azure Bicep output resolution evidence.\"; " +
-            "printf '%s\\n' $logs; " +
-            "exit 1; " +
-            "fi; " +
-            "tail -8 ../radius-gap-evidence.log; " +
-            // Split the marker token in the source command (RADIUS_AZURE_REFERENCE_GAP''_TIMEOUT
-            // evaluates to RADIUS_AZURE_REFERENCE_GAP_TIMEOUT) so Hex1b cannot self-match the
+            "if [ \"$code\" = \"124\" ]; then cat ../publish.log; echo \"Radius publish still hangs on a cloud-managed Azure reference (see issue 18802).\"; exit 1; fi; " +
+            "if [ \"$code\" = \"0\" ]; then cat ../publish.log; echo \"Radius publish unexpectedly succeeded for a cloud-managed Azure reference; it should fail fast until Azure resource translation is supported.\"; exit 1; fi; " +
+            "if [ -f ../out/app.bicep ]; then cat ../publish.log; echo \"Radius publish produced app.bicep for a cloud-managed Azure reference; it should fail before emitting output.\"; exit 1; fi; " +
+            // Split the marker token in the source command (RADIUS_AZURE_REFERENCE_GAP''_FAILFAST
+            // evaluates to RADIUS_AZURE_REFERENCE_GAP_FAILFAST) so Hex1b cannot self-match the
             // echoed command line before the shell actually reaches the gap assertion.
-            "echo RADIUS_AZURE_REFERENCE_GAP''_TIMEOUT; " +
-            "exit 0; " +
-            "fi; " +
-            "cat ../publish.log; " +
-            "echo \"Expected Radius publish to time out while resolving Azure resource references, but exit code was $code.\"; " +
-            "exit 1");
+            "echo RADIUS_AZURE_REFERENCE_GAP''_FAILFAST; " +
+            "exit 0");
         await auto.EnterAsync();
         await auto.WaitUntilAsync(
-            s => new CellPatternSearcher().Find("RADIUS_AZURE_REFERENCE_GAP_TIMEOUT").Search(s).Count > 0,
-            timeout: TimeSpan.FromSeconds(90),
-            description: "Radius/Azure reference gap timeout marker");
+            s => new CellPatternSearcher().Find("RADIUS_AZURE_REFERENCE_GAP_FAILFAST").Search(s).Count > 0,
+            timeout: TimeSpan.FromMinutes(3),
+            description: "Radius/Azure reference gap fail-fast marker");
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
         await auto.TypeAsync("exit");

@@ -409,6 +409,124 @@ public class ConfigureRadiusInfrastructureTests
     }
 
     [Fact]
+    public void ConfigureCallback_ChangingContainerPortProtocol_Throws()
+    {
+        // Service discovery emits the pre-callback protocol as well as the port, so a callback that
+        // changes only the protocol (leaving the port intact) still diverges from what consumers
+        // were told and must be rejected.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Containers[0].Ports["http"] = new ContainerPortConstruct
+                {
+                    ContainerPort = 5000,
+                    Protocol = "UDP",
+                };
+            });
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithHttpEndpoint(targetPort: 5000, name: "http");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains("http", ex.Message);
+        Assert.Contains("TCP", ex.Message);
+        Assert.Contains("UDP", ex.Message);
+    }
+
+    [Fact]
+    public void ConfigureCallback_SettingNonLiteralContainerPort_Throws()
+    {
+        // Service discovery emits a fixed literal port. A callback that swaps in a computed Bicep
+        // expression could evaluate to a different value at deploy time, so it cannot be reconciled
+        // with the already-emitted `services__*` port and must be rejected.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Containers[0].Ports["http"] = new ContainerPortConstruct
+                {
+                    ContainerPort = new IdentifierExpression("computedPort"),
+                    Protocol = "TCP",
+                };
+            });
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithHttpEndpoint(targetPort: 5000, name: "http");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains("http", ex.Message);
+        Assert.Contains("non-literal", ex.Message);
+    }
+
+    [Fact]
+    public void ConfigureCallback_RemovingContainer_Throws()
+    {
+        // Service discovery already emitted `services__*` variables addressing the container, so a
+        // callback that drops the workload entirely would leave consumers pointing at a Service that
+        // is never produced. The publisher must fail fast.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Containers.Clear();
+            });
+        builder.AddContainer("api", "myapp/api", "latest")
+            .WithHttpEndpoint(targetPort: 5000, name: "http");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains("api", ex.Message);
+        Assert.Contains("removed or replaced", ex.Message);
+    }
+
+    [Fact]
+    public void ConfigureCallback_AddingPortToPortlessContainerWithLongName_Throws()
+    {
+        // A portless container has no Service, so its long name is harmless until a callback adds the
+        // first port. The Service-name length check therefore has to run on the FINAL container set:
+        // here the callback introduces a port, and the resulting `{name}-{name}` Service name
+        // overflows the 63-character Kubernetes limit.
+        var longName = new string('a', 40);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .ConfigureRadiusInfrastructure(opts =>
+            {
+                opts.Containers[0].Ports["http"] = new ContainerPortConstruct
+                {
+                    ContainerPort = 8080,
+                    Protocol = "TCP",
+                };
+            });
+        builder.AddContainer(longName, "myapp/api", "latest");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => context.GenerateBicep(model));
+        Assert.Contains($"{longName}-{longName}", ex.Message);
+        Assert.Contains("63", ex.Message);
+    }
+
+    [Fact]
     public void PublishingContainer_WithNameTooLongForKubernetesService_Throws()
     {
         // The Radius recipe names the ClusterIP Service `{name}-{name}`, and a Kubernetes Service
