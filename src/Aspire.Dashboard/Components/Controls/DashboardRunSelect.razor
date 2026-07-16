@@ -1,18 +1,12 @@
 <div class="application-run-select">
-    <FluentSelect TOption="string"
-                Value="@SelectedRunId"
-                      ValueChanged="@SelectedRunIdChanged"
-                Position="SelectPosition.Below"
-            AriaLabel="@RunSelectAriaLabel"
-                Appearance="Appearance.Stealth">
-        <FluentIcon Class="application-run-status"
-                    Value="@(new Icons.Filled.Size12.Circle())"
-                    Color="@(SelectedRunIsCurrent ? Color.Success : Color.Warning)"
-                    Slot="start" />
-        <span slot="indicator" hidden></span>
-        @foreach (var run in _runs)
-        {
-            <FluentOption Value="@run.RunId">@FormatRunOption(run)</FluentOption>
-        }
-    </FluentSelect>
+    <AspireMenuButton Text="@SelectedRunText"
+                      Title="@RunSelectAriaLabel"
+                      IconStart="@(new Icons.Filled.Size12.Circle())"
+                      IconStartClass="application-run-status"
+                      IconStartColor="@(SelectedRunIsCurrent ? Color.Success : Color.Warning)"
+                      Items="@_menuItems"
+                      ButtonAppearance="Appearance.Stealth"
+                      ButtonClass="application-run-select-button"
+                      HideIcon="true"
+                      RestoreFocusOnItemClick="true" />
 </div>

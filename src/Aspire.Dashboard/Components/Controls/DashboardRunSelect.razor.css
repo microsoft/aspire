@@ -1,9 +1,3 @@
-.application-run-select ::deep fluent-select {
-    min-width: 200px;
-    width: min(200px, 30vw);
+.application-run-select ::deep .application-run-select-button {
     margin-right: 8px;
-}
-
-.application-run-select ::deep fluent-select::part(indicator) {
-    display: none;
 }

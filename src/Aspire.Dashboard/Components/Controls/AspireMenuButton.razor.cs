@@ -25,6 +25,15 @@ public partial class AspireMenuButton : FluentComponentBase
     public Icon? IconStart { get; set; }
 
     [Parameter]
+    public string? IconStartClass { get; set; }
+
+    [Parameter]
+    public Color? IconStartColor { get; set; }
+
+    [Parameter]
+    public string? IconStartCustomColor { get; set; }
+
+    [Parameter]
     public Icon? Icon { get; set; }
 
     [Parameter]

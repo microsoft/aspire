@@ -184,6 +184,6 @@
     <value>Select dashboard run</value>
   </data>
   <data name="DashboardRunSelectCurrent" xml:space="preserve">
-    <value>Current</value>
+    <value>Live run</value>
   </data>
 </root>

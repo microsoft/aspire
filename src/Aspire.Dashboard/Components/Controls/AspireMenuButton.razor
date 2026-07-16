@@ -11,7 +11,12 @@
     };
 }
 
-<FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" IconStart="@IconStart" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+<FluentButton Id="@MenuButtonId" Title="@Title" Appearance="@ButtonAppearance" @onclick="ToggleMenu" Disabled="@_disabled" AdditionalAttributes="@additionalButtonAttributes" Class="@ButtonClass">
+    @if (IconStart is not null)
+    {
+        <FluentIcon Class="@IconStartClass" Value="@IconStart" Color="@IconStartColor" CustomColor="@IconStartCustomColor" Slot="start" />
+    }
+
     @if (string.IsNullOrWhiteSpace(Text))
     {
         <FluentIcon Value="@_icon" Color="@IconColor" CustomColor="@IconCustomColor" />
