@@ -1,33 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <Dependencies>
   <ProductDependencies>
-    <Dependency Name="Microsoft.DeveloperControlPlane.darwin-amd64" Version="0.25.6">
+    <Dependency Name="Microsoft.DeveloperControlPlane.darwin-amd64" Version="0.25.7">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>3ff074999f489b17cbf43747ebf407ca4a732667</Sha>
+      <Sha>08cab63a9a1a2a480f052fffac6edf876e0e8944</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.darwin-arm64" Version="0.25.6">
+    <Dependency Name="Microsoft.DeveloperControlPlane.darwin-arm64" Version="0.25.7">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>3ff074999f489b17cbf43747ebf407ca4a732667</Sha>
+      <Sha>08cab63a9a1a2a480f052fffac6edf876e0e8944</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.linux-amd64" Version="0.25.6">
+    <Dependency Name="Microsoft.DeveloperControlPlane.linux-amd64" Version="0.25.7">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>3ff074999f489b17cbf43747ebf407ca4a732667</Sha>
+      <Sha>08cab63a9a1a2a480f052fffac6edf876e0e8944</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.linux-arm64" Version="0.25.6">
+    <Dependency Name="Microsoft.DeveloperControlPlane.linux-arm64" Version="0.25.7">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>3ff074999f489b17cbf43747ebf407ca4a732667</Sha>
+      <Sha>08cab63a9a1a2a480f052fffac6edf876e0e8944</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.linux-musl-amd64" Version="0.25.6">
+    <Dependency Name="Microsoft.DeveloperControlPlane.linux-musl-amd64" Version="0.25.7">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>3ff074999f489b17cbf43747ebf407ca4a732667</Sha>
+      <Sha>08cab63a9a1a2a480f052fffac6edf876e0e8944</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.windows-amd64" Version="0.25.6">
+    <Dependency Name="Microsoft.DeveloperControlPlane.windows-amd64" Version="0.25.7">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>3ff074999f489b17cbf43747ebf407ca4a732667</Sha>
+      <Sha>08cab63a9a1a2a480f052fffac6edf876e0e8944</Sha>
     </Dependency>
-    <Dependency Name="Microsoft.DeveloperControlPlane.windows-arm64" Version="0.25.6">
+    <Dependency Name="Microsoft.DeveloperControlPlane.windows-arm64" Version="0.25.7">
       <Uri>https://github.com/microsoft/dcp</Uri>
-      <Sha>3ff074999f489b17cbf43747ebf407ca4a732667</Sha>
+      <Sha>08cab63a9a1a2a480f052fffac6edf876e0e8944</Sha>
     </Dependency>
     <Dependency Name="Microsoft.Extensions.DependencyInjection.AutoActivation" Version="10.5.0">
       <Uri>https://dev.azure.com/dnceng/internal/_git/dotnet-extensions</Uri>
