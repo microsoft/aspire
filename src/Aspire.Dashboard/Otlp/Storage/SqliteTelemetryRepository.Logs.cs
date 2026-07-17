@@ -17,6 +17,9 @@ namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed partial class SqliteTelemetryRepository
 {
+    private readonly Dictionary<ResourceKey, long> _resourceIdsByKey = [];
+    private readonly Dictionary<string, ScopeCacheEntry> _scopesByName = new(StringComparer.Ordinal);
+
     private List<OtlpLogEntry> AddLogsToDatabase(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
     {
         var addedLogs = new List<OtlpLogEntry>();
@@ -146,6 +149,11 @@ public sealed partial class SqliteTelemetryRepository
 
     private long GetOrAddTelemetryResource(SqliteConnection connection, IDbTransaction transaction, ResourceKey resourceKey)
     {
+        if (_resourceIdsByKey.TryGetValue(resourceKey, out var cachedResourceId))
+        {
+            return cachedResourceId;
+        }
+
         var resourceId = connection.QuerySingleOrDefault<long?>("""
             SELECT resource_id
             FROM telemetry_resources
@@ -154,6 +162,7 @@ public sealed partial class SqliteTelemetryRepository
             """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
         if (resourceId is not null)
         {
+            _resourceIdsByKey.Add(resourceKey, resourceId.Value);
             return resourceId.Value;
         }
 
@@ -163,11 +172,20 @@ public sealed partial class SqliteTelemetryRepository
             throw new InvalidOperationException($"Resource limit of {_otlpContext.Options.MaxResourceCount} reached. Resource '{resourceKey}' will not be added.");
         }
 
-        return connection.QuerySingle<long>("""
+        resourceId = connection.QuerySingle<long>("""
             INSERT INTO telemetry_resources (resource_name, instance_id)
             VALUES (@ResourceName, @InstanceId)
             RETURNING resource_id;
             """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
+        _resourceIdsByKey.Add(resourceKey, resourceId.Value);
+        return resourceId.Value;
+    }
+
+    private void ClearIngestionCaches()
+    {
+        _resourceIdsByKey.Clear();
+        _scopesByName.Clear();
+        _metricIngestionState.Clear();
     }
 
     private static long GetOrAddResourceView(
@@ -241,6 +259,12 @@ public sealed partial class SqliteTelemetryRepository
         IDbTransaction transaction,
         InstrumentationScope? instrumentationScope)
     {
+        var scopeName = instrumentationScope?.Name ?? OtlpScope.Empty.Name;
+        if (_scopesByName.TryGetValue(scopeName, out var cachedScope))
+        {
+            return (cachedScope.ScopeId, cachedScope.Scope);
+        }
+
         var incomingScope = instrumentationScope is null
             ? OtlpScope.Empty
             : new OtlpScope(
@@ -262,7 +286,9 @@ public sealed partial class SqliteTelemetryRepository
                 """, new { existing.ScopeId }, transaction)
                 .Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue))
                 .ToArray();
-            return (existing.ScopeId, new OtlpScope(existing.ScopeName, existing.ScopeVersion, attributes));
+            var scope = new OtlpScope(existing.ScopeName, existing.ScopeVersion, attributes);
+            _scopesByName.Add(scopeName, new ScopeCacheEntry(existing.ScopeId, scope));
+            return (existing.ScopeId, scope);
         }
 
         var scopeCount = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_scopes;", transaction: transaction);
@@ -286,6 +312,7 @@ public sealed partial class SqliteTelemetryRepository
             attribute.Key,
             attribute.Value
         }), transaction);
+        _scopesByName.Add(scopeName, new ScopeCacheEntry(scopeId, incomingScope));
         return (scopeId, incomingScope);
     }
 
@@ -905,6 +932,7 @@ public sealed partial class SqliteTelemetryRepository
                 """, transaction: transaction);
             DeleteOrphanedScopes(connection, transaction);
             transaction.Commit();
+            ClearIngestionCaches();
         }
 
         _resourceCache.TryRemove(resourceKey, out _);
@@ -949,7 +977,7 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private static void DeleteOrphanedScopes(SqliteConnection connection, IDbTransaction transaction)
+    private void DeleteOrphanedScopes(SqliteConnection connection, IDbTransaction transaction)
     {
         connection.Execute("""
             DELETE FROM telemetry_scopes
@@ -957,6 +985,7 @@ public sealed partial class SqliteTelemetryRepository
               AND NOT EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.scope_id = telemetry_scopes.scope_id)
               AND NOT EXISTS (SELECT 1 FROM telemetry_metric_instruments WHERE telemetry_metric_instruments.scope_id = telemetry_scopes.scope_id);
             """, transaction: transaction);
+        _scopesByName.Clear();
     }
 
     private List<OtlpResource> GetTelemetryResources(bool includeUninstrumentedPeers, string? name)
@@ -1042,6 +1071,8 @@ public sealed partial class SqliteTelemetryRepository
     }
 
     private sealed record LogQuery(string FromAndWhere, DynamicParameters Parameters);
+
+    private sealed record ScopeCacheEntry(long ScopeId, OtlpScope Scope);
 
     private sealed class ScopeRecord
     {

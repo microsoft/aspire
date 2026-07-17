@@ -18,6 +18,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     private readonly DashboardSqliteDatabase _database;
     private readonly IKnownPropertyLookup _knownPropertyLookup;
     private readonly ILogger _logger;
+    private readonly bool _ownsDatabase;
     private readonly object _lock = new();
     private readonly Dictionary<string, ResourceViewModel> _resources = new(StringComparers.ResourceName);
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _resourceChannels = [];
@@ -32,6 +33,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         bool readOnly = false)
         : this(new DashboardSqliteDatabase(databasePath, readOnly), knownPropertyLookup, loggerFactory)
     {
+        _ownsDatabase = true;
     }
 
     internal SqliteResourceRepository(
@@ -422,6 +424,10 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             }
 
             _database.ClearPool();
+            if (_ownsDatabase)
+            {
+                _database.Dispose();
+            }
         }
     }
 

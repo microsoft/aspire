@@ -22,6 +22,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
     private ITelemetryRepository? _historicalTelemetryRepository;
     private IResourceRepository? _historicalResourceRepository;
+    private DashboardSqliteDatabase? _historicalDatabase;
 
     internal DashboardDataSource(
         IDashboardRunStore runStore,
@@ -69,9 +70,9 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
         if (!selectedRun.IsCurrent)
         {
-            var historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
-            _historicalTelemetryRepository = _repositoryFactory.CreateTelemetryRepository(historicalDatabase);
-            _historicalResourceRepository = _repositoryFactory.CreateResourceRepository(historicalDatabase);
+            _historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
+            _historicalTelemetryRepository = _repositoryFactory.CreateTelemetryRepository(_historicalDatabase);
+            _historicalResourceRepository = _repositoryFactory.CreateResourceRepository(_historicalDatabase);
             TelemetryRepository = _historicalTelemetryRepository;
             ResourceRepository = _historicalResourceRepository;
             IsReadOnly = true;
@@ -95,5 +96,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
     {
         _historicalTelemetryRepository?.Dispose();
         (_historicalResourceRepository as IDisposable)?.Dispose();
+        _historicalDatabase?.Dispose();
+        _historicalDatabase = null;
     }
 }

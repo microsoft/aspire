@@ -40,6 +40,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using OpenTelemetry.Trace;
 using OpenIdConnectOptions = Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions;
 
 namespace Aspire.Dashboard;
@@ -64,6 +65,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
     private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
+    private const string OtlpExporterEndpointConfigurationKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
     private readonly IOptionsMonitor<DashboardOptions> _dashboardOptionsMonitor;
@@ -298,6 +300,13 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.TryAddSingleton<IDashboardTelemetrySender, DashboardTelemetrySender>();
         builder.Services.AddSingleton<ILoggerProvider, TelemetryLoggerProvider>();
         builder.Services.AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>();
+        if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpExporterEndpointConfigurationKey]))
+        {
+            builder.Services.AddOpenTelemetry()
+                .WithTracing(tracing => tracing
+                    .AddSource(TracingSqliteConnection.ActivitySourceName)
+                    .AddOtlpExporter());
+        }
 
         // OTLP services.
         builder.Services.AddGrpc();
