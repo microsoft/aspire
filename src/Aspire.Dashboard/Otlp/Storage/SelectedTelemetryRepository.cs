@@ -14,7 +14,7 @@ namespace Aspire.Dashboard.Otlp.Storage;
 /// <summary>
 /// Forwards telemetry operations to the repository for the selected dashboard run.
 /// </summary>
-internal sealed class SelectedTelemetryRepository(DashboardDataSource dataSource) : ITelemetryRepository, IMetricTelemetryRepository
+internal sealed class SelectedTelemetryRepository(DashboardDataSource dataSource) : ITelemetryRepository
 {
     private ITelemetryRepository Repository => dataSource.TelemetryRepository;
 
@@ -74,15 +74,13 @@ internal sealed class SelectedTelemetryRepository(DashboardDataSource dataSource
     public OtlpResource? GetPeerResource(OtlpSpan span) => Repository.GetPeerResource(span);
     public List<OtlpInstrumentSummary> GetInstrumentsSummaries(ResourceKey key) => Repository.GetInstrumentsSummaries(key);
     public OtlpInstrumentData? GetInstrument(GetInstrumentRequest request) => Repository.GetInstrument(request);
+    public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName) => Repository.GetInstrumentLatestEndTime(resourceKey, meterName, instrumentName);
     public IAsyncEnumerable<OtlpSpan> WatchSpansAsync(WatchSpansRequest request, CancellationToken cancellationToken) => Repository.WatchSpansAsync(request, cancellationToken);
     public IAsyncEnumerable<OtlpLogEntry> WatchLogsAsync(WatchLogsRequest request, CancellationToken cancellationToken) => Repository.WatchLogsAsync(request, cancellationToken);
     public void ClearSelectedSignals(Dictionary<string, HashSet<AspireDataType>> selectedResources) => Repository.ClearSelectedSignals(selectedResources);
     public void ClearTraces(ResourceKey? resourceKey = null) => Repository.ClearTraces(resourceKey);
     public void ClearStructuredLogs(ResourceKey? resourceKey = null) => Repository.ClearStructuredLogs(resourceKey);
     public void ClearMetrics(ResourceKey? resourceKey = null) => Repository.ClearMetrics(resourceKey);
-
-    DateTime? IMetricTelemetryRepository.GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName) =>
-        Repository.GetInstrumentLatestEndTime(resourceKey, meterName, instrumentName);
 
     public void Dispose()
     {

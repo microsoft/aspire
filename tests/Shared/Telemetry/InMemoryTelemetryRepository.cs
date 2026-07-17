@@ -25,7 +25,7 @@ using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
-public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, IMetricTelemetryRepository
+public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository
 {
     internal const int MaxResourceViewCount = TelemetryRepositoryLimits.MaxResourceViewCount;
     internal const int MaxInstrumentCount = TelemetryRepositoryLimits.MaxInstrumentCount;
@@ -2235,7 +2235,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
     }
 
-    DateTime? IMetricTelemetryRepository.GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName)
+    public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName)
     {
         return GetResources(resourceKey)
             .Select(resource => resource.GetInstrument(meterName, instrumentName, DateTime.MinValue, DateTime.MaxValue))
