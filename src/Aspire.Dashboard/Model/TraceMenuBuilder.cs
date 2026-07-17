@@ -25,8 +25,7 @@ public sealed class TraceMenuBuilder
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
     private readonly NavigationManager _navigationManager;
     private readonly DashboardDialogService _dialogService;
-    private readonly ITelemetryRepository _telemetryRepository;
-    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
+    private readonly DashboardDataSource _dataSource;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="TraceMenuBuilder"/> class.
@@ -35,14 +34,12 @@ public sealed class TraceMenuBuilder
         IStringLocalizer<ControlsStrings> controlsLoc,
         NavigationManager navigationManager,
         DashboardDialogService dialogService,
-        ITelemetryRepository telemetryRepository,
-        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+        DashboardDataSource dataSource)
     {
         _controlsLoc = controlsLoc;
         _navigationManager = navigationManager;
         _dialogService = dialogService;
-        _telemetryRepository = telemetryRepository;
-        _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
+        _dataSource = dataSource;
     }
 
     /// <summary>
@@ -70,7 +67,7 @@ public sealed class TraceMenuBuilder
         TraceSummary summary,
         bool showViewDetails = true)
     {
-        AddMenuItems(menuItems, summary.TraceId, () => _telemetryRepository.GetTrace(summary.TraceId), showViewDetails);
+        AddMenuItems(menuItems, summary.TraceId, () => _dataSource.TelemetryRepository.GetTrace(summary.TraceId), showViewDetails);
     }
 
     private void AddMenuItems(
@@ -116,7 +113,7 @@ public sealed class TraceMenuBuilder
                     return;
                 }
 
-                var result = ExportHelpers.GetTraceAsJson(trace, _telemetryRepository, _outgoingPeerResolvers);
+                var result = ExportHelpers.GetTraceAsJson(trace, _dataSource.TelemetryRepository);
                 await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                 {
                     DialogService = _dialogService,

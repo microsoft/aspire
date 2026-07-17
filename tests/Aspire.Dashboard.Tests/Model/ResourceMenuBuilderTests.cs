@@ -40,14 +40,15 @@ public sealed class ResourceMenuBuilderTests
         InMemoryTelemetryRepository repository,
         IDashboardClient? dashboardClient = null)
     {
+        dashboardClient ??= new TestDashboardClient();
         return new ResourceMenuBuilder(
             new TestNavigationManager(),
-            repository,
+            TestDashboardDataSource.Create(repository, dashboardClient),
             new TestStringLocalizer<ControlsStrings>(),
             new TestStringLocalizer<Resources.Resources>(),
             _iconResolver,
             _dialogService,
-            dashboardClient ?? new TestDashboardClient());
+            dashboardClient);
     }
 
     [Fact]

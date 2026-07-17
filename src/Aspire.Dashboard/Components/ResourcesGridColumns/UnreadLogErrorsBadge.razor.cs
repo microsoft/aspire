@@ -20,7 +20,9 @@ public partial class UnreadLogErrorsBadge
     public required Dictionary<ResourceKey, int>? UnviewedErrorCounts { get; set; }
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     protected override void OnParametersSet()
     {

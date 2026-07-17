@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -29,7 +28,7 @@ public sealed class ResourceMenuBuilder
     private static readonly Icon s_exportEnvIcon = new Icons.Regular.Size16.DocumentText();
 
     private readonly NavigationManager _navigationManager;
-    private readonly ITelemetryRepository _telemetryRepository;
+    private readonly DashboardDataSource _dataSource;
     private readonly IStringLocalizer<ControlsStrings> _controlLoc;
     private readonly IStringLocalizer<Resources.Resources> _loc;
     private readonly IconResolver _iconResolver;
@@ -41,7 +40,7 @@ public sealed class ResourceMenuBuilder
     /// </summary>
     public ResourceMenuBuilder(
         NavigationManager navigationManager,
-        ITelemetryRepository telemetryRepository,
+        DashboardDataSource dataSource,
         IStringLocalizer<ControlsStrings> controlLoc,
         IStringLocalizer<Resources.Resources> loc,
         IconResolver iconResolver,
@@ -49,7 +48,7 @@ public sealed class ResourceMenuBuilder
         IDashboardClient dashboardClient)
     {
         _navigationManager = navigationManager;
-        _telemetryRepository = telemetryRepository;
+        _dataSource = dataSource;
         _controlLoc = controlLoc;
         _loc = loc;
         _iconResolver = iconResolver;
@@ -206,7 +205,7 @@ public sealed class ResourceMenuBuilder
     private void AddTelemetryMenuItems(List<MenuButtonItem> menuItems, ResourceViewModel resource, IDictionary<string, ResourceViewModel> resourceByName)
     {
         // Show telemetry menu items if there is telemetry for the resource.
-        var telemetryResource = _telemetryRepository.GetResourceByCompositeName(resource.Name);
+        var telemetryResource = _dataSource.TelemetryRepository.GetResourceByCompositeName(resource.Name);
         if (telemetryResource != null)
         {
             menuItems.Add(new MenuButtonItem { IsDivider = true });

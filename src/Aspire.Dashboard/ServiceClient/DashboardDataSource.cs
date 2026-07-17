@@ -1,10 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Storage;
-using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.ServiceClient;
 
@@ -13,48 +10,50 @@ internal interface IDashboardRunSelection
     void SelectRun(string? runId);
 }
 
-internal sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
+/// <summary>
+/// Provides repositories for the dashboard run selected in the current scope.
+/// </summary>
+public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 {
-    private readonly DashboardRunStore _runStore;
-    private readonly SqliteTelemetryRepository _currentTelemetryRepository;
-    private readonly SqliteResourceRepository _currentResourceRepository;
-    private readonly ILoggerFactory _loggerFactory;
-    private readonly IOptions<DashboardOptions> _dashboardOptions;
-    private readonly PauseManager _pauseManager;
-    private readonly IEnumerable<IOutgoingPeerResolver> _outgoingPeerResolvers;
-    private readonly IKnownPropertyLookup _knownPropertyLookup;
+    private readonly IDashboardRunStore _runStore;
+    private readonly ITelemetryRepository _currentTelemetryRepository;
+    private readonly IResourceRepository _currentResourceRepository;
+    private readonly IRepositoryFactory _repositoryFactory;
 
-    private SqliteTelemetryRepository? _historicalTelemetryRepository;
-    private SqliteResourceRepository? _historicalResourceRepository;
+    private ITelemetryRepository? _historicalTelemetryRepository;
+    private IResourceRepository? _historicalResourceRepository;
 
-    public DashboardDataSource(
-        DashboardRunStore runStore,
-        SqliteTelemetryRepository currentTelemetryRepository,
-        SqliteResourceRepository currentResourceRepository,
-        ILoggerFactory loggerFactory,
-        IOptions<DashboardOptions> dashboardOptions,
-        PauseManager pauseManager,
-        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers,
-        IKnownPropertyLookup knownPropertyLookup)
+    internal DashboardDataSource(
+        IDashboardRunStore runStore,
+        ITelemetryRepository currentTelemetryRepository,
+        IResourceRepository currentResourceRepository,
+        IRepositoryFactory repositoryFactory)
     {
         _runStore = runStore;
         _currentTelemetryRepository = currentTelemetryRepository;
         _currentResourceRepository = currentResourceRepository;
-        _loggerFactory = loggerFactory;
-        _dashboardOptions = dashboardOptions;
-        _pauseManager = pauseManager;
-        _outgoingPeerResolvers = outgoingPeerResolvers;
-        _knownPropertyLookup = knownPropertyLookup;
+        _repositoryFactory = repositoryFactory;
 
         SelectRun(runId: null);
     }
 
-    public DashboardRunDescriptor SelectedRun { get; private set; } = null!;
-    public ITelemetryRepository TelemetryRepository { get; private set; } = null!;
-    public IResourceRepository ResourceRepository { get; private set; } = null!;
-    public bool IsReadOnly { get; private set; }
+    internal DashboardRunDescriptor SelectedRun { get; private set; } = null!;
 
-    public void SelectRun(string? runId)
+    /// <summary>
+    /// Gets the telemetry repository for the selected dashboard run.
+    /// </summary>
+    public ITelemetryRepository TelemetryRepository { get; private set; } = null!;
+
+    /// <summary>
+    /// Gets the resource repository for the selected dashboard run.
+    /// </summary>
+    public IResourceRepository ResourceRepository { get; private set; } = null!;
+
+    internal bool IsReadOnly { get; private set; }
+
+    void IDashboardRunSelection.SelectRun(string? runId) => SelectRun(runId);
+
+    internal void SelectRun(string? runId)
     {
         var runs = _runStore.GetRuns();
         var selectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal))
@@ -64,24 +63,15 @@ internal sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
             return;
         }
 
-        _historicalTelemetryRepository?.Dispose();
-        _historicalResourceRepository?.Dispose();
+        DisposeHistoricalRepositories();
         _historicalTelemetryRepository = null;
         _historicalResourceRepository = null;
 
         if (!selectedRun.IsCurrent)
         {
             var historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
-            _historicalTelemetryRepository = new SqliteTelemetryRepository(
-                historicalDatabase,
-                _loggerFactory,
-                _dashboardOptions,
-                _pauseManager,
-                _outgoingPeerResolvers);
-            _historicalResourceRepository = new SqliteResourceRepository(
-                historicalDatabase,
-                _knownPropertyLookup,
-                _loggerFactory);
+            _historicalTelemetryRepository = _repositoryFactory.CreateTelemetryRepository(historicalDatabase);
+            _historicalResourceRepository = _repositoryFactory.CreateResourceRepository(historicalDatabase);
             TelemetryRepository = _historicalTelemetryRepository;
             ResourceRepository = _historicalResourceRepository;
             IsReadOnly = true;
@@ -98,7 +88,12 @@ internal sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
     public void Dispose()
     {
+        DisposeHistoricalRepositories();
+    }
+
+    private void DisposeHistoricalRepositories()
+    {
         _historicalTelemetryRepository?.Dispose();
-        _historicalResourceRepository?.Dispose();
+        (_historicalResourceRepository as IDisposable)?.Dispose();
     }
 }

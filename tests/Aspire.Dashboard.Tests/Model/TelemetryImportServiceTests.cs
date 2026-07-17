@@ -401,7 +401,7 @@ public sealed class TelemetryImportServiceTests
         var traces = sourceRepository.GetTraces(GetTracesRequest.ForResourceKey(resources[0].ResourceKey));
 
         // Export
-        var exportedJson = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items, []);
+        var exportedJson = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items);
         var jsonString = JsonSerializer.Serialize(exportedJson, OtlpJsonSerializerContext.DefaultOptions);
 
         // Import

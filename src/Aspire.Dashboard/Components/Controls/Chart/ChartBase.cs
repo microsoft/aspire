@@ -41,7 +41,9 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
     public required BrowserTimeProvider TimeProvider { get; init; }
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required PauseManager PauseManager { get; init; }

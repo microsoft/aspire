@@ -86,3 +86,8 @@ public abstract class TelemetryRepositoryTestBase : IDisposable
         }
     }
 }
+
+internal static class TelemetryRepositoryTestExtensions
+{
+    public static ITelemetryRepositoryWriter AsWriter(this ITelemetryRepository repository) => (ITelemetryRepositoryWriter)repository;
+}

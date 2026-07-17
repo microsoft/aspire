@@ -49,7 +49,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     public required string? PauseText { get; set; }
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required ILogger<ChartContainer> Logger { get; init; }

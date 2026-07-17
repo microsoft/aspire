@@ -32,7 +32,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private const int RootSpanDepth = 1;
 
     private readonly CancellationTokenSource _cts = new();
-    private readonly List<IDisposable> _peerChangesSubscriptions = new();
     private OtlpTrace? _trace;
     private Subscription? _tracesSubscription;
     private int _maxDepth;
@@ -64,10 +63,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
 
-    [Inject]
-    public required IEnumerable<IOutgoingPeerResolver> OutgoingPeerResolvers { get; init; }
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -109,16 +107,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             new GridColumn(Name: TicksColumn, DesktopWidth: "12fr", MobileWidth: "12fr"),
             new GridColumn(Name: ActionsColumn, DesktopWidth: "100px", MobileWidth: null)
         ];
-
-        foreach (var resolver in OutgoingPeerResolvers)
-        {
-            _peerChangesSubscriptions.Add(resolver.OnPeerChanges(async () =>
-            {
-                UpdateDetailViewData();
-                await InvokeAsync(StateHasChanged);
-                await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
-            }));
-        }
 
         UpdateTraceActionsMenu();
 
@@ -278,7 +266,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         var result = TelemetryRepository.GetLogsForTrace(_trace.TraceId);
 
         Logger.LogInformation("Trace '{TraceId}' has {SpanCount} spans.", _trace.TraceId, _trace.Spans.Count);
-        PageViewModel.SpanWaterfallViewModels = SpanWaterfallViewModel.Create(_trace, result, new SpanWaterfallViewModel.TraceDetailState(OutgoingPeerResolvers.ToArray(), _collapsedSpanIds, _resources));
+        PageViewModel.SpanWaterfallViewModels = SpanWaterfallViewModel.Create(_trace, result, new SpanWaterfallViewModel.TraceDetailState(_collapsedSpanIds, _resources));
         _maxDepth = PageViewModel.SpanWaterfallViewModels.Max(s => s.Depth);
 
         var apps = new HashSet<OtlpResource>();
@@ -647,10 +635,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public void Dispose()
     {
         _cts.Cancel();
-        foreach (var subscription in _peerChangesSubscriptions)
-        {
-            subscription.Dispose();
-        }
         _tracesSubscription?.Dispose();
         TelemetryContext.Dispose();
     }

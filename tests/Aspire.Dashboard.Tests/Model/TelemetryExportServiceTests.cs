@@ -11,11 +11,11 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Otlp.Serialization;
-using Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -293,7 +293,7 @@ public sealed class TelemetryExportServiceTests
         });
 
         // Act
-        var result = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items, []);
+        var result = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items);
 
         // Assert
         Assert.NotNull(result.ResourceSpans);
@@ -359,7 +359,7 @@ public sealed class TelemetryExportServiceTests
         var traces = repository.GetTraces(GetTracesRequest.ForResourceKey(resource.ResourceKey));
 
         // Act
-        var result = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items, []);
+        var result = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items);
 
         // Assert
         var spans = result.ResourceSpans![0].ScopeSpans![0].Spans!;
@@ -372,7 +372,7 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertTracesToOtlpJson_WithPeerResolvers_AddsDestinationNameAttribute()
+    public void ConvertTracesToOtlpJson_WithPersistedPeer_AddsDestinationNameAttribute()
     {
         // Arrange
         var repository = CreateRepository();
@@ -405,14 +405,14 @@ public sealed class TelemetryExportServiceTests
         var resource = resources[0];
         var traces = repository.GetTraces(GetTracesRequest.ForResourceKey(resource.ResourceKey));
 
-        var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: attributes =>
-        {
-            var peerService = attributes.FirstOrDefault(a => a.Key == "peer.service");
-            return (peerService.Value, null);
-        });
+        traces.PagedResult.Items[0].Spans[0].SetUninstrumentedPeer(new OtlpResource(
+            "target-service",
+            instanceId: null,
+            uninstrumentedPeer: true,
+            new OtlpContext { Logger = NullLogger.Instance, Options = new() }));
 
         // Act
-        var result = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items, [outgoingPeerResolver]);
+        var result = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items);
 
         // Assert
         var span = result.ResourceSpans![0].ScopeSpans![0].Spans![0];
@@ -421,7 +421,7 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertTracesToOtlpJson_WithoutPeerResolvers_DoesNotAddDestinationNameAttribute()
+    public void ConvertTracesToOtlpJson_WithoutPersistedPeer_AddsPeerAddressAttribute()
     {
         // Arrange
         var repository = CreateRepository();
@@ -455,12 +455,51 @@ public sealed class TelemetryExportServiceTests
         var traces = repository.GetTraces(GetTracesRequest.ForResourceKey(resource.ResourceKey));
 
         // Act
-        var result = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items, []);
+        var result = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items);
 
         // Assert
         var span = result.ResourceSpans![0].ScopeSpans![0].Spans![0];
         Assert.NotNull(span.Attributes);
-        Assert.DoesNotContain(span.Attributes, a => a.Key == OtlpHelpers.AspireDestinationNameAttribute);
+        Assert.Contains(span.Attributes, a => a.Key == OtlpHelpers.AspireDestinationNameAttribute && a.Value?.StringValue == "target-service");
+    }
+
+    [Fact]
+    public void ConvertTracesToOtlpJson_WithInstrumentedChild_AddsDestinationResourceAttribute()
+    {
+        var context = CreateContext();
+        var source = new OtlpResource("source", instanceId: null, uninstrumentedPeer: false, context);
+        var destination = new OtlpResource("destination", instanceId: "replica-1", uninstrumentedPeer: false, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, s_testTime);
+        var scope = CreateOtlpScope(context);
+        var parentSpan = CreateOtlpSpan(
+            source,
+            trace,
+            scope,
+            spanId: "parent",
+            parentSpanId: null,
+            startDate: s_testTime,
+            attributes: [KeyValuePair.Create(OtlpSpan.PeerServiceAttributeKey, "raw-address")],
+            kind: OtlpSpanKind.Client);
+        var childSpan = CreateOtlpSpan(
+            destination,
+            trace,
+            scope,
+            spanId: "child",
+            parentSpanId: "parent",
+            startDate: s_testTime.AddSeconds(1),
+            kind: OtlpSpanKind.Server);
+        trace.AddSpan(parentSpan);
+        trace.AddSpan(childSpan);
+
+        var result = TelemetryExportService.ConvertTracesToOtlpJson([trace]);
+
+        var exportedParent = result.ResourceSpans!
+            .SelectMany(resourceSpans => resourceSpans.ScopeSpans!)
+            .SelectMany(scopeSpans => scopeSpans.Spans!)
+            .Single(span => span.SpanId == "parent");
+        Assert.Contains(
+            exportedParent.Attributes!,
+            attribute => attribute.Key == OtlpHelpers.AspireDestinationNameAttribute && attribute.Value?.StringValue == "destination-replica-1");
     }
 
     [Fact]
@@ -891,7 +930,7 @@ public sealed class TelemetryExportServiceTests
         var span = repository.GetTraces(GetTracesRequest.ForResourceKey(repository.GetResources()[0].ResourceKey)).PagedResult.Items[0].Spans[0];
 
         // Act
-        var json = TelemetryExportService.ConvertSpanToJson(span, []);
+        var json = TelemetryExportService.ConvertSpanToJson(span);
 
         // Assert - deserialize back to verify OtlpTelemetryDataJson structure
         var data = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
@@ -944,7 +983,7 @@ public sealed class TelemetryExportServiceTests
         var logs = repository.GetLogs(GetLogsContext.ForResourceKey(repository.GetResources()[0].ResourceKey)).Items;
 
         // Act
-        var json = TelemetryExportService.ConvertSpanToJson(span, [], logs);
+        var json = TelemetryExportService.ConvertSpanToJson(span, logs);
 
         // Assert - verify both spans and logs are in the output
         var data = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
@@ -1004,7 +1043,7 @@ public sealed class TelemetryExportServiceTests
         var logs = repository.GetLogs(GetLogsContext.ForResourceKey(repository.GetResources()[0].ResourceKey)).Items;
 
         // Act
-        var json = TelemetryExportService.ConvertTraceToJson(trace, [], logs);
+        var json = TelemetryExportService.ConvertTraceToJson(trace, logs);
 
         // Assert - verify both spans and logs are in the output
         var data = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
@@ -1044,7 +1083,7 @@ public sealed class TelemetryExportServiceTests
         var trace = repository.GetTraces(GetTracesRequest.ForResourceKey(repository.GetResources()[0].ResourceKey)).PagedResult.Items[0];
 
         // Act
-        var json = TelemetryExportService.ConvertTraceToJson(trace, []);
+        var json = TelemetryExportService.ConvertTraceToJson(trace);
 
         // Assert - deserialize back to verify OtlpTelemetryDataJson structure
         var data = JsonSerializer.Deserialize(json, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
@@ -1097,8 +1136,9 @@ public sealed class TelemetryExportServiceTests
         var sessionStorage = new TestSessionStorage();
         var consoleLogsManager = new ConsoleLogsManager(sessionStorage);
         await consoleLogsManager.EnsureInitializedAsync();
-        var consoleLogsFetcher = new ConsoleLogsFetcher(dashboardClient, consoleLogsManager);
-        return new TelemetryExportService(repository, consoleLogsFetcher, dashboardClient, Array.Empty<IOutgoingPeerResolver>());
+        var dataSource = TestDashboardDataSource.Create(repository, dashboardClient);
+        var consoleLogsFetcher = new ConsoleLogsFetcher(dataSource, dashboardClient, consoleLogsManager);
+        return new TelemetryExportService(dataSource, consoleLogsFetcher, dashboardClient);
     }
 
     private static Dictionary<string, HashSet<AspireDataType>> BuildAllResourcesSelection(InMemoryTelemetryRepository repository)

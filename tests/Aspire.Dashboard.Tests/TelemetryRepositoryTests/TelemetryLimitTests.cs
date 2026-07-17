@@ -24,7 +24,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         for (var i = 0; i < 3; i++)
         {
             var addContext = new AddContext();
-            repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+            repository.AsWriter().AddTraces(addContext, new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
                 {
@@ -46,7 +46,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
 
         // Adding a 4th resource should fail.
         var failContext = new AddContext();
-        repository.AddTraces(failContext, new RepeatedField<ResourceSpans>
+        repository.AsWriter().AddTraces(failContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -76,7 +76,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         for (var i = 0; i < 2; i++)
         {
             var addContext = new AddContext();
-            repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+            repository.AsWriter().AddTraces(addContext, new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
                 {
@@ -96,7 +96,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
 
         // Adding data for an existing resource should still succeed.
         var successContext = new AddContext();
-        repository.AddTraces(successContext, new RepeatedField<ResourceSpans>
+        repository.AsWriter().AddTraces(successContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -129,7 +129,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         }
 
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -153,7 +153,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
 
         // Adding one more instrument should fail.
         var failContext = new AddContext();
-        repository.AddMetrics(failContext, new RepeatedField<ResourceMetrics>
+        repository.AsWriter().AddMetrics(failContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -183,7 +183,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
 
         // Fill the single resource slot.
         var setupContext = new AddContext();
-        repository.AddLogs(setupContext, new RepeatedField<ResourceLogs>
+        repository.AsWriter().AddLogs(setupContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -203,7 +203,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         // Attempt to add logs for a new resource with multiple scopes and records.
         // FailureCount must equal total log records, not number of scopes.
         var failContext = new AddContext();
-        repository.AddLogs(failContext, new RepeatedField<ResourceLogs>
+        repository.AsWriter().AddLogs(failContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -244,7 +244,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
 
         // Fill the single resource slot.
         var setupContext = new AddContext();
-        repository.AddMetrics(setupContext, new RepeatedField<ResourceMetrics>
+        repository.AsWriter().AddMetrics(setupContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -264,7 +264,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         // Attempt to add metrics for a new resource with multiple scopes and metrics.
         // FailureCount must equal total data points, not number of metrics.
         var failContext = new AddContext();
-        repository.AddMetrics(failContext, new RepeatedField<ResourceMetrics>
+        repository.AsWriter().AddMetrics(failContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -306,7 +306,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
 
         // Fill the single resource slot.
         var setupContext = new AddContext();
-        repository.AddTraces(setupContext, new RepeatedField<ResourceSpans>
+        repository.AsWriter().AddTraces(setupContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -326,7 +326,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         // Attempt to add traces for a new resource with multiple scopes and spans.
         // FailureCount must equal total spans, not number of scopes.
         var failContext = new AddContext();
-        repository.AddTraces(failContext, new RepeatedField<ResourceSpans>
+        repository.AsWriter().AddTraces(failContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -377,12 +377,12 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         scopeLogs.Add(rl);
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, scopeLogs);
+        repository.AsWriter().AddLogs(addContext, scopeLogs);
         Assert.Equal(0, addContext.FailureCount);
 
         // Adding one more scope should fail.
         var failContext = new AddContext();
-        repository.AddLogs(failContext, new RepeatedField<ResourceLogs>
+        repository.AsWriter().AddLogs(failContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -424,12 +424,12 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         }
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans> { rs });
+        repository.AsWriter().AddTraces(addContext, new RepeatedField<ResourceSpans> { rs });
         Assert.Equal(0, addContext.FailureCount);
 
         // Adding one more scope should fail.
         var failContext = new AddContext();
-        repository.AddTraces(failContext, new RepeatedField<ResourceSpans>
+        repository.AsWriter().AddTraces(failContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -470,12 +470,12 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         }
 
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics> { rm });
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics> { rm });
         Assert.Equal(0, addContext.FailureCount);
 
         // Adding one more scope should fail. Each metric has 1 data point.
         var failContext = new AddContext();
-        repository.AddMetrics(failContext, new RepeatedField<ResourceMetrics>
+        repository.AsWriter().AddMetrics(failContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {

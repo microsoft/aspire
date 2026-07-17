@@ -27,7 +27,9 @@ public partial class ExemplarsDialog : IDisposable
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     public IQueryable<ChartExemplar> MetricView => Content.Exemplars.AsQueryable();
 

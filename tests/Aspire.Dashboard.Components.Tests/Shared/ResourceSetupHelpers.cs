@@ -59,7 +59,7 @@ internal static class ResourceSetupHelpers
         context.JSInterop.SetupVoid("focusElement", _ => true);
         context.Services.AddSingleton<IconResolver>();
         context.Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
-        context.Services.AddSingleton<StructuredLogsViewModel>();
+        context.Services.AddTransient<StructuredLogsViewModel>();
         context.Services.AddScoped<DashboardCommandExecutor, DashboardCommandExecutor>();
         context.Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient(isEnabled: true, initialResources: [], resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>));
 

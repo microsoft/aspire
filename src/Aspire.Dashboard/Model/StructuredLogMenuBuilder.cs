@@ -25,7 +25,7 @@ public sealed class StructuredLogMenuBuilder
     private readonly IStringLocalizer<StructuredLogs> _loc;
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
     private readonly DashboardDialogService _dialogService;
-    private readonly ITelemetryRepository _telemetryRepository;
+    private readonly DashboardDataSource _dataSource;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StructuredLogMenuBuilder"/> class.
@@ -34,12 +34,12 @@ public sealed class StructuredLogMenuBuilder
         IStringLocalizer<StructuredLogs> loc,
         IStringLocalizer<ControlsStrings> controlsLoc,
         DashboardDialogService dialogService,
-        ITelemetryRepository telemetryRepository)
+        DashboardDataSource dataSource)
     {
         _loc = loc;
         _controlsLoc = controlsLoc;
         _dialogService = dialogService;
-        _telemetryRepository = telemetryRepository;
+        _dataSource = dataSource;
     }
 
     /// <summary>
@@ -71,7 +71,7 @@ public sealed class StructuredLogMenuBuilder
         EventCallback onViewDetails,
         bool showViewDetails = true)
     {
-        AddMenuItems(menuItems, summary.Message, () => _telemetryRepository.GetLog(summary.InternalId), onViewDetails, showViewDetails);
+        AddMenuItems(menuItems, summary.Message, () => _dataSource.TelemetryRepository.GetLog(summary.InternalId), onViewDetails, showViewDetails);
     }
 
     private void AddMenuItems(

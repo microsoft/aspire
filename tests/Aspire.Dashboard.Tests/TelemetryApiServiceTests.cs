@@ -3,7 +3,6 @@
 
 using System.Text;
 using Aspire.Dashboard.Api;
-using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Otlp.Serialization;
@@ -781,13 +780,9 @@ public class TelemetryApiServiceTests
         });
     }
 
-    private static TelemetryApiService CreateService(
-        InMemoryTelemetryRepository? repository = null,
-        IOutgoingPeerResolver[]? peerResolvers = null)
+    private static TelemetryApiService CreateService(InMemoryTelemetryRepository? repository = null)
     {
-        return new TelemetryApiService(
-            repository ?? CreateRepository(),
-            peerResolvers ?? []);
+        return new TelemetryApiService(repository ?? CreateRepository());
     }
 
     private static List<OtlpSpanJson> GetAllSpans(TelemetryApiResponse result)

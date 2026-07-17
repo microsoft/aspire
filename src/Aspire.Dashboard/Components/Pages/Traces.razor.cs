@@ -56,7 +56,12 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     public string? ResourceName { get; set; }
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required TracesViewModel TracesViewModel { get; init; }
@@ -387,7 +392,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private Task ClearTraces(ResourceKey? key)
     {
-        TelemetryRepository.ClearTraces(key);
+        TelemetryRepositoryWriter.ClearTraces(key);
         return Task.CompletedTask;
     }
 
