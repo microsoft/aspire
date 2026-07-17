@@ -37,6 +37,7 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken) => dataSource.ResourceRepository.SubscribeResourcesAsync(cancellationToken);
     public ResourceViewModel? GetResource(string resourceName) => dataSource.ResourceRepository.GetResource(resourceName);
     public IReadOnlyList<ResourceViewModel> GetResources() => dataSource.ResourceRepository.GetResources();
+    public bool HaveConsoleLogsBeenLoaded(string resourceName) => dataSource.ResourceRepository.HaveConsoleLogsBeenLoaded(resourceName);
     public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) =>
         IsReadOnly
             ? dataSource.ResourceRepository.SubscribeConsoleLogs(resourceName, cancellationToken)

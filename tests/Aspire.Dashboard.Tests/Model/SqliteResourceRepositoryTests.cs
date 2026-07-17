@@ -94,6 +94,33 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     }
 
     [Fact]
+    public void ConsoleLogsLoaded_PersistsWithoutLogLines()
+    {
+        var databasePath = Path.Combine(_temporaryDirectory, "console-loaded.db");
+        using (var repository = CreateRepository(databasePath))
+        {
+            var writer = (IResourceRepositoryWriter)repository;
+            writer.ReplaceResources([CreateResource("api", "api"), CreateResource("worker", "worker")]);
+            Assert.False(repository.HaveConsoleLogsBeenLoaded("api"));
+
+            writer.MarkConsoleLogsLoaded("api");
+
+            Assert.True(repository.HaveConsoleLogsBeenLoaded("api"));
+            Assert.False(repository.HaveConsoleLogsBeenLoaded("worker"));
+
+            writer.ApplyChanges([new WatchResourcesChange { Upsert = CreateResource("api", "api") }]);
+            Assert.True(repository.HaveConsoleLogsBeenLoaded("api"));
+
+            writer.ReplaceResources([CreateResource("api", "api"), CreateResource("worker", "worker")]);
+            Assert.True(repository.HaveConsoleLogsBeenLoaded("api"));
+        }
+
+        using var historicalRepository = CreateRepository(databasePath, readOnly: true);
+        Assert.True(historicalRepository.HaveConsoleLogsBeenLoaded("api"));
+        Assert.False(historicalRepository.HaveConsoleLogsBeenLoaded("worker"));
+    }
+
+    [Fact]
     public void Resources_AllFieldsAndRecursiveValuesRoundTrip()
     {
         var databasePath = Path.Combine(_temporaryDirectory, "all-fields.db");

@@ -31,6 +31,11 @@ public interface IResourceRepository
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken);
 
     /// <summary>
+    /// Gets whether console logs have been loaded for a resource.
+    /// </summary>
+    bool HaveConsoleLogsBeenLoaded(string resourceName) => false;
+
+    /// <summary>
     /// Gets existing console log messages for a resource.
     /// </summary>
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken);

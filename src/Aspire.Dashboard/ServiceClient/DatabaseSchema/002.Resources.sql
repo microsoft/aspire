@@ -18,7 +18,8 @@ CREATE TABLE IF NOT EXISTS dashboard_resources (
     is_hidden INTEGER NOT NULL,
     supports_detailed_telemetry INTEGER NOT NULL,
     icon_name TEXT NULL,
-    icon_variant INTEGER NULL
+    icon_variant INTEGER NULL,
+    console_logs_loaded INTEGER NOT NULL
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS dashboard_resource_environment (

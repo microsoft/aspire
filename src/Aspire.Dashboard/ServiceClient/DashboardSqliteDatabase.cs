@@ -13,7 +13,7 @@ internal sealed class DashboardSqliteDatabase
 {
     private const string SchemaResourcePrefix = "Aspire.Dashboard.ServiceClient.DatabaseSchema.";
 
-    internal const int SchemaVersion = 8;
+    internal const int SchemaVersion = 9;
 
     private static readonly Lazy<IReadOnlyList<string>> s_schemaScripts = new(LoadSchemaScripts);
 

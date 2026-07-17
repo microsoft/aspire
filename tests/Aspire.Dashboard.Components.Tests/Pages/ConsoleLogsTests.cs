@@ -409,6 +409,27 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Theory]
+    [InlineData(false, "Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.")]
+    [InlineData(true, "No logs found")]
+    public void HistoricalRun_NoLogs_DisplaysCaptureStatus(bool consoleLogsWereLoaded, string expectedMessage)
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>(),
+            resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
+            initialResources: [testResource],
+            isReadOnly: true,
+            loadedConsoleLogResourceNames: consoleLogsWereLoaded ? new HashSet<string>(StringComparers.ResourceName) { testResource.Name } : null);
+        SetupConsoleLogsServices(dashboardClient);
+
+        var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), testResource.Name);
+
+        var emptyMessage = cut.WaitForElement(".console-empty-message", TimeSpan.FromSeconds(3));
+        Assert.Equal(expectedMessage, emptyMessage.TextContent.Trim());
+    }
+
+    [Theory]
     [InlineData(true)]
     [InlineData(false)]
     public async Task SearchFilter_UpdatesLogViewerFilterAndVisibleLogs(bool isDesktop)

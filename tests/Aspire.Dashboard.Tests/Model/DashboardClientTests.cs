@@ -183,6 +183,7 @@ public sealed class DashboardClientTests
         var persistedLogs = Assert.Single(repositoryWriter.ConsoleLogs);
         Assert.Equal("api", persistedLogs.ResourceName);
         Assert.Equal("Hello", Assert.Single(persistedLogs.LogLines).Text);
+        Assert.Equal("api", Assert.Single(repositoryWriter.LoadedConsoleLogs));
     }
 
     [Fact]
@@ -699,6 +700,7 @@ public sealed class DashboardClientTests
     private sealed class RecordingResourceRepositoryWriter : IResourceRepositoryWriter
     {
         public List<(string ResourceName, IReadOnlyList<ConsoleLogLine> LogLines)> ConsoleLogs { get; } = [];
+        public List<string> LoadedConsoleLogs { get; } = [];
 
         public void ReplaceResources(IReadOnlyList<Resource> resources)
         {
@@ -706,6 +708,11 @@ public sealed class DashboardClientTests
 
         public void ApplyChanges(IReadOnlyList<WatchResourcesChange> changes)
         {
+        }
+
+        public void MarkConsoleLogsLoaded(string resourceName)
+        {
+            LoadedConsoleLogs.Add(resourceName);
         }
 
         public void AddConsoleLogs(string resourceName, IReadOnlyList<ConsoleLogLine> logLines)

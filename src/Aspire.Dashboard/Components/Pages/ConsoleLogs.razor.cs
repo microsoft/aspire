@@ -189,6 +189,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _isTimestampUtc;
     private bool _noWrapLogs;
     private bool _showNoLogsMessage;
+    private bool _consoleLogsWereLoaded = true;
     private string _logFilter = string.Empty;
     public ConsoleLogsViewModel PageViewModel { get; set; } = null!;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
@@ -526,6 +527,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
         ResetNoLogsMessage();
 
+        _consoleLogsWereLoaded = !DashboardClient.IsReadOnly || WereConsoleLogsLoaded(isAllSelected, selectedResourceName);
+
         await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
 
         if (isAllSelected)
@@ -558,6 +561,22 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // that has no WithTerminal(), and be missing on the reverse switch.
         UpdateMenuButtons();
     }
+
+    private bool WereConsoleLogsLoaded(bool isAllSelected, string? selectedResourceName)
+    {
+        if (isAllSelected)
+        {
+            return _resourceByName.Values
+                .Where(resource => !resource.IsResourceHidden(_showHiddenResources))
+                .Any(resource => DashboardClient.HaveConsoleLogsBeenLoaded(resource.Name));
+        }
+
+        return selectedResourceName is not null && DashboardClient.HaveConsoleLogsBeenLoaded(selectedResourceName);
+    }
+
+    private string GetNoLogsMessage() => _consoleLogsWereLoaded
+        ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoLogsFound)]
+        : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNotCapturedForRun)];
 
     private bool IsAllSelected()
     {
