@@ -60,6 +60,61 @@ public sealed class DashboardDataSourceTests : IDisposable
     }
 
     [Fact]
+    public void NoneMode_DeletesAbandonedTemporaryDirectories()
+    {
+        var abandonedDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-").FullName;
+        File.WriteAllText(Path.Combine(abandonedDirectory, "dashboard.db"), string.Empty);
+
+        try
+        {
+            using var runStore = CreateRunStore(CreateOptions(persistenceMode: DashboardPersistenceMode.None));
+
+            Assert.False(Directory.Exists(abandonedDirectory));
+        }
+        finally
+        {
+            if (Directory.Exists(abandonedDirectory))
+            {
+                Directory.Delete(abandonedDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
+    public void NoneMode_DoesNotDeleteActiveTemporaryDirectories()
+    {
+        var options = CreateOptions(persistenceMode: DashboardPersistenceMode.None);
+        using var activeRunStore = CreateRunStore(options);
+        new DashboardSqliteDatabase(activeRunStore.DatabasePath).InitializeSchema();
+
+        using var secondRunStore = CreateRunStore(options);
+
+        Assert.True(Directory.Exists(activeRunStore.RunDirectory));
+        Assert.True(Directory.Exists(secondRunStore.RunDirectory));
+    }
+
+    [Fact]
+    public void NoneMode_DoesNotDeleteOtherDashboardTemporaryDirectories()
+    {
+        var otherDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-telemetry-tests-").FullName;
+        File.WriteAllText(Path.Combine(otherDirectory, "dashboard.db"), string.Empty);
+
+        try
+        {
+            using var runStore = CreateRunStore(CreateOptions(persistenceMode: DashboardPersistenceMode.None));
+
+            Assert.True(Directory.Exists(otherDirectory));
+        }
+        finally
+        {
+            if (Directory.Exists(otherDirectory))
+            {
+                Directory.Delete(otherDirectory, recursive: true);
+            }
+        }
+    }
+
+    [Fact]
     public void AppendMode_ReusesApplicationDatabaseWithoutRunSelection()
     {
         var options = CreateOptions("My Dashboard", DashboardPersistenceMode.Append);
@@ -190,6 +245,35 @@ public sealed class DashboardDataSourceTests : IDisposable
         Assert.False(Directory.Exists(historicalRunDirectories[^1]));
         Assert.All(historicalRunDirectories[..^1], directory => Assert.True(Directory.Exists(directory)));
         Assert.True(Directory.Exists(currentRunStore.RunDirectory));
+    }
+
+    [Fact]
+    public void RunsMode_DoesNotDeleteActiveExpiredRun()
+    {
+        var applicationDirectory = Path.Combine(_temporaryDirectory, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
+        var runsDirectory = Path.Combine(applicationDirectory, "runs");
+        var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
+            .Select(index => Path.Combine(
+                runsDirectory,
+                $"{DateTimeOffset.UtcNow.AddDays(-index):yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}"))
+            .ToList();
+
+        foreach (var directory in historicalRunDirectories)
+        {
+            Directory.CreateDirectory(directory);
+        }
+
+        var activeExpiredRun = historicalRunDirectories[^1];
+        using var activeRunLock = new FileStream(
+            DashboardRunStore.GetRunLockPath(activeExpiredRun),
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.None);
+
+        using var currentRunStore = CreateRunStore(CreateOptions());
+
+        Assert.True(Directory.Exists(activeExpiredRun));
+        Assert.Equal(DashboardRunStore.MaxRuns + 1, Directory.GetDirectories(runsDirectory).Length);
     }
 
     [Fact]
@@ -358,6 +442,14 @@ public sealed class DashboardDataSourceTests : IDisposable
 
         Assert.Empty(dataSource.TelemetryRepository.GetResources());
         Assert.False(dataSource.IsReadOnly);
+
+        Action<DashboardConnectionState> handler = _ => connectionStateChangedCount++;
+        selectedClient.ConnectionStateChanged += handler;
+        dataSource.SelectRun(historicalRunId);
+        selectedClient.ConnectionStateChanged -= handler;
+
+        currentClient.SetConnectionStateForTesting(DashboardConnectionState.Connected);
+        Assert.Equal(0, connectionStateChangedCount);
     }
 
     [Fact]
