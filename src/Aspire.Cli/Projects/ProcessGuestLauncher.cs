@@ -76,8 +76,8 @@ internal sealed class ProcessGuestLauncher : IGuestProcessLauncher
 
         // The execution local is forward-referenced by the per-line callbacks so they can read the
         // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
-        // (line only), but the guest wants the pid in each trace line. The callbacks only fire after
-        // StartAsync(), by which point `execution` is assigned and ProcessId is valid.
+        // (line only), but the guest wants the pid in each trace line. ProcessExecution publishes the
+        // child pid before it starts stdout/stderr pumps so immediate output can read ProcessId.
         IProcessExecution execution = null!;
 
         void HandleStdoutLine(string line)

@@ -554,8 +554,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         // The execution local is forward-referenced by the log callbacks so they can read the
         // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
-        // (line only), but the AppHost wants the pid in each trace line (#16729). The callbacks
-        // only fire after StartAsync(), by which point `execution` is assigned and ProcessId is valid.
+        // (line only), but the AppHost wants the pid in each trace line (#16729). ProcessExecution
+        // publishes the child pid before it starts stdout/stderr pumps so immediate output can read
+        // ProcessId.
         IProcessExecution execution = null!;
 
         void OnStdout(string line)

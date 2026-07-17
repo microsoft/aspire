@@ -113,8 +113,11 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
     private Process? _process;
     private int? _id;
     private DateTimeOffset? _startTime;
+    private StartedProcess? _startedProcess;
     private readonly TaskCompletionSource _startCompletion = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private int _lifecycleState = (int)LifecycleState.NotStarted;
+    private int _outputReadState;
+    private int _errorReadState;
 
     public IsolatedProcess(IsolatedProcessStartInfo startInfo)
     {
@@ -181,6 +184,55 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
 
     /// <summary>Stderr counterpart of <see cref="StandardOutputClosed"/>.</summary>
     public Task StandardErrorClosed { get; private set; }
+
+    /// <summary>
+    /// Starts asynchronous stdout line reads, matching <see cref="Process.BeginOutputReadLine"/>.
+    /// </summary>
+    public void BeginOutputReadLine()
+    {
+        var startedProcess = GetStartedProcessForAsyncRead();
+
+        if (Interlocked.CompareExchange(ref _outputReadState, 1, 0) != 0)
+        {
+            throw new InvalidOperationException($"{nameof(BeginOutputReadLine)} has already been called.");
+        }
+
+        var outputTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        StandardOutputClosed = outputTcs.Task;
+
+        var outputPump = ProcessPump.Start(startedProcess.StandardOutput, line => OutputDataReceived?.Invoke(this, line));
+        _ = ForwardPumpAsync(outputPump.Completion, outputTcs);
+    }
+
+    /// <summary>
+    /// Starts asynchronous stderr line reads, matching <see cref="Process.BeginErrorReadLine"/>.
+    /// </summary>
+    public void BeginErrorReadLine()
+    {
+        var startedProcess = GetStartedProcessForAsyncRead();
+
+        if (Interlocked.CompareExchange(ref _errorReadState, 1, 0) != 0)
+        {
+            throw new InvalidOperationException($"{nameof(BeginErrorReadLine)} has already been called.");
+        }
+
+        var errorTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        StandardErrorClosed = errorTcs.Task;
+
+        var errorPump = ProcessPump.Start(startedProcess.StandardError, line => ErrorDataReceived?.Invoke(this, line));
+        _ = ForwardPumpAsync(errorPump.Completion, errorTcs);
+    }
+
+    private StartedProcess GetStartedProcessForAsyncRead()
+    {
+        return (LifecycleState)Volatile.Read(ref _lifecycleState) switch
+        {
+            LifecycleState.Started => _startedProcess
+                ?? throw new InvalidOperationException($"{nameof(IsolatedProcess)} has not been started."),
+            LifecycleState.Disposed => throw new ObjectDisposedException(nameof(IsolatedProcess)),
+            _ => throw new InvalidOperationException($"{nameof(IsolatedProcess)} has not been started.")
+        };
+    }
 
     /// <summary>Mirrors <see cref="Process.WaitForExitAsync(CancellationToken)"/>.</summary>
     /// <remarks>
@@ -366,32 +418,18 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         _hasExitedProvider = startedProcess.HasExitedProvider;
         _waitForExitProvider = startedProcess.WaitForExitProvider;
         _startTime = startedProcess.UseProvidedStartTime ? startedProcess.StartTime : GetStartTime(startedProcess.Process);
-
-        WireOutputPumps(startedProcess);
-    }
-
-    private void WireOutputPumps(StartedProcess startedProcess)
-    {
-        var process = startedProcess.Process;
-        var standardOutput = startedProcess.StandardOutput;
-        var standardError = startedProcess.StandardError;
-        var extraDispose = startedProcess.ExtraDispose;
-
-        var outputTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var errorTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        StandardOutputClosed = outputTcs.Task;
-        StandardErrorClosed = errorTcs.Task;
+        _startedProcess = startedProcess;
 
         async ValueTask DisposeAsync()
         {
-            if (extraDispose is not null)
+            if (startedProcess.ExtraDispose is not null)
             {
-                try { await extraDispose().ConfigureAwait(false); } catch { }
+                try { await startedProcess.ExtraDispose().ConfigureAwait(false); } catch { }
             }
 
             try
             {
-                process.Dispose();
+                startedProcess.Process.Dispose();
             }
             catch
             {
@@ -400,13 +438,6 @@ internal sealed partial class IsolatedProcess : IAsyncDisposable
         }
 
         _disposeAsync = DisposeAsync;
-
-        // The pumps capture this wrapper as the handler's "sender", matching Process output event shape.
-        var outputPump = ProcessPump.Start(standardOutput, line => OutputDataReceived?.Invoke(this, line));
-        var errorPump = ProcessPump.Start(standardError, line => ErrorDataReceived?.Invoke(this, line));
-
-        _ = ForwardPumpAsync(outputPump.Completion, outputTcs);
-        _ = ForwardPumpAsync(errorPump.Completion, errorTcs);
     }
 
     private sealed record StartedProcess(

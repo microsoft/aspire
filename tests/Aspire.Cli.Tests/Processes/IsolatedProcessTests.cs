@@ -30,6 +30,8 @@ public class IsolatedProcessTests
         child.OutputDataReceived += (_, line) => stdout.Enqueue(line);
         child.ErrorDataReceived += (_, line) => stderr.Enqueue(line);
         await child.StartAsync(CancellationToken.None);
+        child.BeginOutputReadLine();
+        child.BeginErrorReadLine();
 
         // Both pumps complete on pipe EOF — child exits within tens of milliseconds, but
         // the OS pipe close + StreamReader drain can take a bit longer under load.
@@ -57,6 +59,8 @@ public class IsolatedProcessTests
 
         await using var child = new IsolatedProcess(startInfo);
         await child.StartAsync(CancellationToken.None);
+        child.BeginOutputReadLine();
+        child.BeginErrorReadLine();
 
         // Carried explicitly because Process.GetProcessById returns a Process whose
         // StartInfo is empty — telemetry callers depend on these fields.
@@ -95,6 +99,8 @@ public class IsolatedProcessTests
             }
         };
         await child.StartAsync(CancellationToken.None);
+        child.BeginOutputReadLine();
+        child.BeginErrorReadLine();
 
         // StandardOutputClosed should fault with the recorded exception, but only AFTER
         // draining every line. The first OperationCanceledException-style early-exit was the bug.
@@ -136,6 +142,8 @@ public class IsolatedProcessTests
         try
         {
             await child.StartAsync(CancellationToken.None);
+            child.BeginOutputReadLine();
+            child.BeginErrorReadLine();
             await callbackEntered.Task.WaitAsync(TimeSpan.FromSeconds(10));
             await child.WaitForExitAsync().WaitAsync(TimeSpan.FromSeconds(10));
 

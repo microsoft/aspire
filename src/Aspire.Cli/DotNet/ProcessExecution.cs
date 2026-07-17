@@ -86,7 +86,8 @@ internal sealed class ProcessExecution : IProcessExecution
     public DateTimeOffset? StartTime => Process.StartTime;
 
     private IsolatedProcess Process =>
-        _process ?? throw new InvalidOperationException($"{nameof(ProcessExecution)} has not been started. Call {nameof(StartAsync)} first.");
+        Volatile.Read(ref _process)
+        ?? throw new InvalidOperationException($"{nameof(ProcessExecution)} has not been started. Call {nameof(StartAsync)} first.");
 
     /// <inheritdoc />
     public async Task<bool> StartAsync(CancellationToken cancellationToken)
@@ -107,15 +108,18 @@ internal sealed class ProcessExecution : IProcessExecution
         {
             detachedUnixLauncherLease = await ResolveDetachedUnixLauncherAsync(cancellationToken).ConfigureAwait(false);
 
-            // IsolatedProcess.StartAsync spawns the child and starts the stdout/stderr pumps. It throws on
-            // spawn failure, so a successful return always means the child is running — there is no
-            // false-on-failure case to model. Process.Start() returning false is not applicable when
-            // UseShellExecute=false.
+            // Match the real Process API ordering: start the child, publish the process object so
+            // ProcessId is valid for callbacks, then begin asynchronous stdout/stderr reads.
+            // IsolatedProcess.StartAsync throws on spawn failure, so a successful return always
+            // means the child is running — there is no false-on-failure case to model.
+            // Process.Start() returning false is not applicable when UseShellExecute=false.
             process = new IsolatedProcess(_startInfo);
             process.OutputDataReceived += OnOutputLine;
             process.ErrorDataReceived += OnErrorLine;
             await process.StartAsync(cancellationToken).ConfigureAwait(false);
-            _process = process;
+            Volatile.Write(ref _process, process);
+            process.BeginOutputReadLine();
+            process.BeginErrorReadLine();
             _detachedUnixLauncherLease = detachedUnixLauncherLease;
             detachedUnixLauncherLease = null;
             Volatile.Write(ref _lifecycleState, (int)LifecycleState.Started);
@@ -123,6 +127,11 @@ internal sealed class ProcessExecution : IProcessExecution
         catch
         {
             Volatile.Write(ref _lifecycleState, (int)LifecycleState.Disposed);
+            if (ReferenceEquals(Volatile.Read(ref _process), process))
+            {
+                Volatile.Write(ref _process, null);
+            }
+
             if (process is not null)
             {
                 await process.DisposeAsync().ConfigureAwait(false);
