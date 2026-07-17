@@ -368,6 +368,46 @@ public partial class ConsoleLogsTests : DashboardTestContext
         cut.WaitForState(() => instance._logEntries.EntriesCount > 0);
     }
 
+    [Fact]
+    public async Task CurrentRun_SubscribesToLiveConsoleLogs()
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var liveSubscriptionTcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var liveConsoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var repositoryConsoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var repositorySubscriptionCount = 0;
+        var liveClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: resourceName =>
+            {
+                liveSubscriptionTcs.TrySetResult(resourceName);
+                return liveConsoleLogsChannel;
+            });
+        var currentResourceRepository = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ =>
+            {
+                Interlocked.Increment(ref repositorySubscriptionCount);
+                return repositoryConsoleLogsChannel;
+            },
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+
+        SetupConsoleLogsServices(liveClient);
+        Services.AddSingleton<IResourceRepository>(currentResourceRepository);
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var cut = RenderConsoleLogsPage(viewport, testResource.Name);
+
+        Assert.Equal(testResource.Name, await liveSubscriptionTcs.Task.DefaultTimeout());
+        Assert.Equal(0, Volatile.Read(ref repositorySubscriptionCount));
+
+        liveConsoleLogsChannel.Writer.TryWrite([new ResourceLogLine(1, "Live log", IsErrorMessage: false)]);
+        cut.WaitForState(() => cut.Instance._logEntries.EntriesCount == 1);
+        Assert.Equal("Live log", Assert.Single(cut.Instance._logEntries.GetEntries()).RawContent);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]

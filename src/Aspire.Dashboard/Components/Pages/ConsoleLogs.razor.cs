@@ -1005,7 +1005,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
             Logger.LogDebug("Subscribing to console logs with subscription {SubscriptionId} to resource {ResourceName}.", subscription.SubscriptionId, subscription.Resource.Name);
 
-            var logSubscription = DataSource.ResourceRepository.SubscribeConsoleLogs(subscription.Resource.Name, subscription.CancellationToken);
+            var logSubscription = DashboardClient.SubscribeConsoleLogs(subscription.Resource.Name, subscription.CancellationToken);
 
             // For "All" subscriptions, only update status once when starting
             if (_isSubscribedToAll && _consoleLogsSubscriptions.Count == 1)
