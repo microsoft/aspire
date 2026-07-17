@@ -83,6 +83,8 @@ function makeDocument(filePath: string, content: string): vscode.TextDocument {
 const appHostCsContent = 'var builder = DistributedApplication.CreateBuilder(args);\nbuilder.AddRedis("cache");\nbuilder.Build().Run();';
 const appHostTsContent = 'import { createBuilder } from "@aspire/sdk";\nconst builder = await createBuilder();\nawait builder.addRedis("cache");';
 const nonAppHostCsContent = 'using System;\nclass Program { static void Main() { } }';
+const appHostProjectContent = '<Project Sdk="Aspire.AppHost.Sdk/13.5.0" />';
+const nonAppHostProjectContent = '<Project Sdk="Microsoft.NET.Sdk" />';
 
 function fsPath(path: string): string {
     return vscode.Uri.file(path).fsPath;
@@ -199,6 +201,27 @@ suite('AppHostFilePresenceWatcher', () => {
         watcher.dispose();
     });
 
+    test('reports a backgrounded open AppHost project tab', async () => {
+        setOpenDocuments([makeDocument('/test/AppHost.csproj', appHostProjectContent)], []);
+
+        const watcher = new AppHostFilePresenceWatcher(repository);
+        await waitForUpdate(watcher);
+
+        assert.strictEqual(setOpenSpy.calledOnce, true);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.csproj')]);
+        watcher.dispose();
+    });
+
+    test('does not report a regular project tab', async () => {
+        setOpenDocuments([makeDocument('/test/Library.csproj', nonAppHostProjectContent)]);
+
+        const watcher = new AppHostFilePresenceWatcher(repository);
+        await waitForUpdate(watcher);
+
+        assert.strictEqual(setOpenSpy.called, false);
+        watcher.dispose();
+    });
+
     test('reports every open AppHost tab as a single set', async () => {
         setOpenDocuments([
             makeDocument('/test/AppHost.cs', appHostCsContent),
@@ -292,6 +315,32 @@ suite('AppHostFilePresenceWatcher', () => {
 
         assert.strictEqual(setOpenSpy.calledOnce, true);
         assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/Program.cs')]);
+        watcher.dispose();
+    });
+
+    test('editing an open project tab updates its AppHost status after debounce', async () => {
+        setOpenDocuments([makeDocument('/test/AppHost.csproj', nonAppHostProjectContent)], []);
+        const watcher = new AppHostFilePresenceWatcher(repository);
+        await waitForUpdate(watcher);
+        assert.strictEqual(setOpenSpy.called, false);
+
+        const upgraded = makeDocument('/test/AppHost.csproj', appHostProjectContent);
+        textDocuments = [upgraded];
+        captured.documentListeners.forEach(l => l({ document: upgraded, contentChanges: [], reason: undefined } as any));
+        await clock.tickAsync(AppHostFilePresenceWatcher['_changeDebounceMs']);
+        await waitForUpdate(watcher);
+
+        assert.strictEqual(setOpenSpy.calledOnce, true);
+        assert.deepStrictEqual(reportedPaths(setOpenSpy.firstCall), [fsPath('/test/AppHost.csproj')]);
+
+        const downgraded = makeDocument('/test/AppHost.csproj', nonAppHostProjectContent);
+        textDocuments = [downgraded];
+        captured.documentListeners.forEach(l => l({ document: downgraded, contentChanges: [], reason: undefined } as any));
+        await clock.tickAsync(AppHostFilePresenceWatcher['_changeDebounceMs']);
+        await waitForUpdate(watcher);
+
+        assert.strictEqual(setOpenSpy.callCount, 2);
+        assert.deepStrictEqual(setOpenSpy.secondCall.args[0], []);
         watcher.dispose();
     });
 

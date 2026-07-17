@@ -261,6 +261,7 @@ export class AppHostDataRepository {
     private _describeErrorMessage: string | undefined;
     private _describeErrorIsCompatibility = false;
     private _describeErrorIsCliWide = false;
+    private _describeErrorAppHostPath: string | undefined;
     private _psErrorMessage: string | undefined;
     private _errorMessage: string | undefined;
     private _errorIsCompatibility = false;
@@ -992,7 +993,11 @@ export class AppHostDataRepository {
                         if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath) || isDescribeUnsupportedOutput(stream.nonJsonLines, stream.stderr)) {
                             const noDataError = this._getDescribeNoDataError(code, stream.nonJsonLines, stream.stderr);
                             if (noDataError.message) {
-                                this._setDescribeError(noDataError.message, { compatibility: noDataError.isCompatibilityError, cliWide: noDataError.isCliWideError });
+                                this._setDescribeError(noDataError.message, {
+                                    compatibility: noDataError.isCompatibilityError,
+                                    cliWide: noDataError.isCliWideError,
+                                    appHostPath: noDataError.isCliWideError ? undefined : appHostPath,
+                                });
                             }
                         }
                     }
@@ -1019,7 +1024,7 @@ export class AppHostDataRepository {
                     stream.process = undefined;
                     stream.resources.clear();
                     if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath)) {
-                        this._setDescribeError(errorFetchingAppHosts(error.message));
+                        this._setDescribeError(errorFetchingAppHosts(error.message), { appHostPath });
                     }
 
                     // Host no longer running: drop the stream silently
@@ -1047,7 +1052,7 @@ export class AppHostDataRepository {
             extensionLogOutputChannel.warn(`Failed to start describe watch (--apphost ${appHostPath}): ${error}`);
             this._describeStreams.delete(appHostPath);
             if (isMatchingAppHostPath(appHostPath, this._workspaceAppHostPath)) {
-                this._setDescribeError(errorFetchingAppHosts(String(error)));
+                this._setDescribeError(errorFetchingAppHosts(String(error)), { appHostPath });
             }
         });
     }
@@ -1084,9 +1089,14 @@ export class AppHostDataRepository {
 stream.receivedData = true;
                 stream.restartDelay = 5000;
                 // A working stream proves the CLI supports `describe`, so any peer clears a CLI-wide
-                // banner. A host-scoped banner belongs to the selected workspace AppHost, so only its own
-                // data clears that — a non-selected peer must not erase an error the selected host raised.
-                if (this._describeErrorIsCliWide || isMatchingAppHostPath(stream.appHostPath, this._workspaceAppHostPath)) {
+                // banner. Once a host raises a scoped error, only that host's recovery clears it, even if
+                // workspace selection changes while the stream is restarting. Ownerless errors retain the
+                // selected-workspace-host behavior used for discovery failures.
+                const recoveredOwnedError = this._describeErrorAppHostPath !== undefined
+                    && isMatchingAppHostPath(stream.appHostPath, this._describeErrorAppHostPath);
+                const recoveredOwnerlessError = this._describeErrorAppHostPath === undefined
+                    && isMatchingAppHostPath(stream.appHostPath, this._workspaceAppHostPath);
+                if (this._describeErrorIsCliWide || recoveredOwnedError || recoveredOwnerlessError) {
                     this._setDescribeError(undefined);
                 }
                 this._attachResourcesToAppHosts();
@@ -1167,7 +1177,10 @@ stream.receivedData = true;
             }
         }
 
-        if (desired.size === 0 && this._describeErrorIsCompatibility) {
+        const errorOwnerIsDesired = this._describeErrorAppHostPath !== undefined
+            && Array.from(desired).some(path => isMatchingAppHostPath(path, this._describeErrorAppHostPath));
+        if ((this._describeErrorAppHostPath !== undefined && !errorOwnerIsDesired)
+            || (desired.size === 0 && this._describeErrorIsCompatibility)) {
             this._setDescribeError(undefined);
         }
 
@@ -1632,17 +1645,23 @@ stream.receivedData = true;
         this._describeErrorMessage = undefined;
         this._describeErrorIsCompatibility = false;
         this._describeErrorIsCliWide = false;
+        this._describeErrorAppHostPath = undefined;
         this._psErrorMessage = undefined;
         this._updateErrorMessage();
     }
 
-    private _setDescribeError(message: string | undefined, options?: { compatibility?: boolean; cliWide?: boolean }): void {
+    private _setDescribeError(message: string | undefined, options?: { compatibility?: boolean; cliWide?: boolean; appHostPath?: string }): void {
         const compatibility = message !== undefined && (options?.compatibility ?? false);
         const cliWide = message !== undefined && (options?.cliWide ?? false);
-        if (this._describeErrorMessage !== message || this._describeErrorIsCompatibility !== compatibility || this._describeErrorIsCliWide !== cliWide) {
+        const appHostPath = message !== undefined && !cliWide ? options?.appHostPath : undefined;
+        if (this._describeErrorMessage !== message
+            || this._describeErrorIsCompatibility !== compatibility
+            || this._describeErrorIsCliWide !== cliWide
+            || !isMatchingAppHostPath(this._describeErrorAppHostPath, appHostPath)) {
             this._describeErrorMessage = message;
             this._describeErrorIsCompatibility = compatibility;
             this._describeErrorIsCliWide = cliWide;
+            this._describeErrorAppHostPath = appHostPath;
             this._updateErrorMessage();
         }
     }

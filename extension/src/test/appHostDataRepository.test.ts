@@ -1437,6 +1437,102 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('host-scoped describe error follows its owner across selection changes and clears when it stops', async () => {
+        let getAppHostsLineCallback: ((line: string) => void) | undefined;
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            if (args[0] === 'ls') {
+                getAppHostsLineCallback = createLsLineCallback(options);
+            }
+            return new TestChildProcess();
+        });
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForAppHostDiscovery();
+            assert.ok(getAppHostsLineCallback);
+
+            getAppHostsLineCallback(JSON.stringify({
+                selected_project_file: '/workspace/selected/AppHost.csproj',
+                all_project_file_candidates: [
+                    '/workspace/selected/AppHost.csproj',
+                    '/workspace/peer-one/AppHost.csproj',
+                    '/workspace/peer-two/AppHost.csproj',
+                ],
+            }));
+            await waitForAppHostDiscovery();
+
+            repository.setAppHostFilesOpen([
+                '/workspace/selected/AppHost.csproj',
+                '/workspace/peer-one/AppHost.csproj',
+                '/workspace/peer-two/AppHost.csproj',
+            ]);
+            await waitForMicrotasks();
+
+            const psCall = spawnStub.getCalls().find(call => {
+                const spawnArgs = call.args[2] as string[];
+                return spawnArgs[0] === 'ps' && spawnArgs.includes('--follow');
+            });
+            assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
+            psCall.args[3].lineCallback(JSON.stringify([{
+                appHostPath: '/workspace/selected/AppHost.csproj',
+                appHostPid: 1,
+                dashboardUrl: 'https://localhost:17193/login?t=selected',
+            }, {
+                appHostPath: '/workspace/peer-one/AppHost.csproj',
+                appHostPid: 2,
+                dashboardUrl: 'https://localhost:17194/login?t=peer-one',
+            }, {
+                appHostPath: '/workspace/peer-two/AppHost.csproj',
+                appHostPid: 3,
+                dashboardUrl: 'https://localhost:17195/login?t=peer-two',
+            }]));
+
+            await waitForCondition(() => spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'describe').length >= 3,
+                'expected a describe stream for each running AppHost');
+            const selectedDescribe = spawnStub.getCalls().find(call => {
+                const spawnArgs = call.args[2] as string[];
+                return spawnArgs[0] === 'describe' && spawnArgs.at(-1) === '/workspace/selected/AppHost.csproj';
+            });
+            assert.ok(selectedDescribe);
+            selectedDescribe.args[3].errorCallback(new Error('selected describe failed'));
+            assert.ok(repository.errorMessage?.includes('selected describe failed'), repository.errorMessage);
+
+            (repository as unknown as { _setWorkspaceAppHostPathFromCurrentCandidates(appHostPath: string): void })
+                ._setWorkspaceAppHostPathFromCurrentCandidates('/workspace/peer-one/AppHost.csproj');
+            const peerDescribe = spawnStub.getCalls().find(call => {
+                const spawnArgs = call.args[2] as string[];
+                return spawnArgs[0] === 'describe' && spawnArgs.at(-1) === '/workspace/peer-one/AppHost.csproj';
+            });
+            assert.ok(peerDescribe);
+            peerDescribe.args[3].lineCallback(JSON.stringify({ name: 'peer-resource' }));
+            await waitForMicrotasks();
+            assert.ok(repository.errorMessage?.includes('selected describe failed'), repository.errorMessage);
+
+            psCall.args[3].lineCallback(JSON.stringify([{
+                appHostPath: '/workspace/peer-one/AppHost.csproj',
+                appHostPid: 2,
+                dashboardUrl: 'https://localhost:17194/login?t=peer-one',
+            }, {
+                appHostPath: '/workspace/peer-two/AppHost.csproj',
+                appHostPid: 3,
+                dashboardUrl: 'https://localhost:17195/login?t=peer-two',
+            }]));
+            await waitForMicrotasks();
+
+            assert.strictEqual(repository.errorMessage, undefined);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
     test('ps cli-path failures surface a single fetch prefix in error message', async () => {
         const spawned: { args: string[]; options: any }[] = [];
         spawnStub.callsFake((_terminalProvider, _cliPath, args, options) => {
@@ -4761,6 +4857,116 @@ suite('AppHostDataRepository global polling', () => {
             assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ps', '--format', 'json', '--nologo']);
         } finally {
             repository.dispose();
+            clock.restore();
+        }
+    });
+
+    test('new polling interval setting takes precedence and changing it restarts interval polling', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const configChange = new vscode.EventEmitter<vscode.ConfigurationChangeEvent>();
+        const onDidChangeConfigurationStub = sinon.stub(vscode.workspace, 'onDidChangeConfiguration')
+            .callsFake(listener => configChange.event(listener));
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 2000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ globalValue: 9000 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        getConfigInfoStub.resolves({ capabilities: [] } as any);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            const process = new TestChildProcess();
+            if (args[0] === 'ps' && !args.includes('--follow')) {
+                options.stdoutCallback('[]');
+                options.exitCallback(0);
+                process.markExited();
+            }
+            return process;
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const psFollowCall = spawnStub.getCalls().find(call => {
+                const spawnArgs = call.args[2] as string[];
+                return spawnArgs[0] === 'ps' && spawnArgs.includes('--follow');
+            });
+            assert.ok(psFollowCall);
+            psFollowCall.args[3].exitCallback(1);
+            await waitForMicrotasks();
+
+            const initialSpawnCount = spawnStub.callCount;
+            await clock.tickAsync(1999);
+            assert.strictEqual(spawnStub.callCount, initialSpawnCount);
+            await clock.tickAsync(1);
+            assert.strictEqual(spawnStub.callCount, initialSpawnCount + 1);
+
+            inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 4000 });
+            configChange.fire({ affectsConfiguration: section => section === 'aspire.appHostsPollingInterval' });
+            await waitForMicrotasks();
+            const restartedSpawnCount = spawnStub.callCount;
+            await clock.tickAsync(3999);
+            assert.strictEqual(spawnStub.callCount, restartedSpawnCount);
+            await clock.tickAsync(1);
+            assert.strictEqual(spawnStub.callCount, restartedSpawnCount + 1);
+        } finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            onDidChangeConfigurationStub.restore();
+            configChange.dispose();
+            clock.restore();
+        }
+    });
+
+    test('deprecated polling interval setting remains the fallback when the new setting is unset', async () => {
+        const clock = sinon.useFakeTimers({ shouldClearNativeTimers: true });
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({});
+        inspect.withArgs('globalAppHostsPollingInterval').returns({ workspaceValue: 2500 });
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        getConfigInfoStub.resolves({ capabilities: [] } as any);
+        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
+            const process = new TestChildProcess();
+            if (args[0] === 'ps' && !args.includes('--follow')) {
+                options.stdoutCallback('[]');
+                options.exitCallback(0);
+                process.markExited();
+            }
+            return process;
+        });
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setViewMode('global');
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const psFollowCall = spawnStub.getCalls().find(call => {
+                const spawnArgs = call.args[2] as string[];
+                return spawnArgs[0] === 'ps' && spawnArgs.includes('--follow');
+            });
+            assert.ok(psFollowCall);
+            psFollowCall.args[3].exitCallback(1);
+            await waitForMicrotasks();
+
+            const initialSpawnCount = spawnStub.callCount;
+            await clock.tickAsync(2499);
+            assert.strictEqual(spawnStub.callCount, initialSpawnCount);
+            await clock.tickAsync(1);
+            assert.strictEqual(spawnStub.callCount, initialSpawnCount + 1);
+        } finally {
+            repository.dispose();
+            getConfigurationStub.restore();
             clock.restore();
         }
     });
