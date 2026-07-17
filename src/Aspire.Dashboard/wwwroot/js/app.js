@@ -393,7 +393,15 @@ window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, do
     };
 
     const anchorKeydownListener = function (ev) {
-        if (ev.key !== "Tab") {
+        const isEscape = ev.key === "Escape" || ev.keyCode === 27;
+        if (ev.key !== "Tab" && !isEscape) {
+            return;
+        }
+
+        if (isEscape) {
+            stopPopupKeyboardEvent(ev);
+            anchorElement.focus();
+            dotNetHelper.invokeMethodAsync("CloseAsync");
             return;
         }
 

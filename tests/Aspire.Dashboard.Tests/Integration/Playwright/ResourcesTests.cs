@@ -152,6 +152,15 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
             await OpenUrlOverflowPopoverAsync(moreButton, popover);
 
+            // AutoFocus is disabled, so Escape must close the popup while focus is still
+            // on the trigger after opening it with a mouse or keyboard activation.
+            await Assertions.Expect(moreButton).ToBeFocusedAsync();
+            await page.Keyboard.PressAsync("Escape");
+            await Assertions.Expect(popover).ToBeHiddenAsync();
+            await Assertions.Expect(moreButton).ToBeFocusedAsync();
+
+            await OpenUrlOverflowPopoverAsync(moreButton, popover);
+
             // Tab from the trigger should land inside the popup (anchor keydown listener path).
             await moreButton.FocusAsync();
             await page.Keyboard.PressAsync("Tab");
