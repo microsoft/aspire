@@ -29,9 +29,14 @@ builder.AddMcpClient("mcp");
 You can then retrieve the `McpClient` instance using dependency injection. For example, to retrieve the client from a Web API controller:
 
 ```csharp
-public sealed class ToolsController(McpClient mcpClient)
+public sealed class ProductsController
 {
-    private readonly McpClient _mcpClient = mcpClient;
+    private readonly McpClient _mcpClient;
+
+    public ProductsController(McpClient mcpClient)
+    {
+        _mcpClient = mcpClient;
+    }
 }
 ```
 

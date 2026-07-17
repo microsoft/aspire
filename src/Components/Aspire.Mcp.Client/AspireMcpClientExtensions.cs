@@ -356,6 +356,7 @@ public static class AspireMcpClientExtensions
                 var resolvedEndpoint = await ResolveEndpointAsync(endpoint, serviceEndpointResolver, _creationCancellation.Token).ConfigureAwait(false);
                 var transportOptions = new HttpClientTransportOptions { Endpoint = resolvedEndpoint };
                 configureTransportOptions?.Invoke(transportOptions);
+                McpClientSettings.ValidateEndpoint(transportOptions.Endpoint);
                 var clientOptions = new McpClientOptions();
                 configureClientOptions?.Invoke(clientOptions);
                 httpClient = httpClientFactory.CreateClient(string.Empty);

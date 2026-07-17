@@ -276,6 +276,22 @@ public class AspireMcpClientExtensionsTests
         Assert.True(transportOptionsConfigured);
     }
 
+    [Theory]
+    [InlineData("ftp://mcp/mcp")]
+    public void AddMcpClientRejectsInvalidTransportEndpoint(string endpoint)
+    {
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.AddMcpClient(
+            "mcp",
+            configureTransportOptions: options => options.Endpoint = new Uri(endpoint, UriKind.RelativeOrAbsolute));
+
+        using var host = builder.Build();
+
+        void ResolveClient() => _ = host.Services.GetRequiredService<McpClient>();
+
+        Assert.Throws<ArgumentException>(ResolveClient);
+    }
+
     [Fact]
     public void AddKeyedMcpClientSupportsConfiguringOnlyClientOptions()
     {
