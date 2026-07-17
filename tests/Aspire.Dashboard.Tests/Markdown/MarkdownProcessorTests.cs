@@ -151,6 +151,24 @@ public class MarkdownProcessorTests
     }
 
     [Fact]
+    public void ToHtml_FencedCodeBlock_CopyButtonHasLocalizedAccessibleName()
+    {
+        var processor = CreateMarkdownProcessor();
+
+        var markdown =
+            """
+            ```csharp
+            Console.WriteLine("Hello");
+            ```
+            """;
+
+        var html = processor.ToHtml(markdown, inCompleteDocument: true);
+
+        var copyButton = Regex.Match(html, """<button[^>]* (?<accessibleName>aria-label="[^"]+")[^>]*>""");
+        Assert.Equal("aria-label=\"Localized:GridValueCopyToClipboard\"", copyButton.Groups["accessibleName"].Value);
+    }
+
+    [Fact]
     public void ToHtml_ContainsHtml_HtmlIgnored()
     {
         // Arrange
