@@ -64,4 +64,21 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
             }
         });
     }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task AIAgentsDialog_MarkdownCodeCopyButton_HasAccessibleName()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var aiAgentsButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions { Name = Layout.MainLayoutLaunchAIAgents, Exact = true });
+            await aiAgentsButton.ClickAsync();
+
+            await Assertions
+                .Expect(page.Locator("button.code-copy-button"))
+                .ToHaveAccessibleNameAsync(ControlsStrings.GridValueCopyToClipboard);
+        });
+    }
 }
