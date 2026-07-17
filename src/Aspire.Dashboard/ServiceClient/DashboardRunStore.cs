@@ -68,6 +68,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 DatabasePath = Path.Combine(RunDirectory, "dashboard.db");
                 if (File.Exists(DatabasePath) && !DashboardSqliteDatabase.IsCompatible(DatabasePath))
                 {
+                    DashboardSqliteDatabase.ClearPools();
                     DeleteDatabaseFiles(DatabasePath);
                 }
                 break;
@@ -139,6 +140,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public void Dispose()
     {
+        DashboardSqliteDatabase.ClearPools();
+
         if (_metadataPath is not null)
         {
             WriteMetadata(_metadata with { EndedAtUtc = DateTimeOffset.UtcNow, CleanShutdown = true });

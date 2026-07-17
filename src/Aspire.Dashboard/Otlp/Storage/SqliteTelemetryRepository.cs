@@ -206,6 +206,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
             subscription.Dispose();
         }
         DisposeWatchers();
+        _database.ClearPool();
     }
 
 }

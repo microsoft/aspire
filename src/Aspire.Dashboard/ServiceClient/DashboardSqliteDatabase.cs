@@ -21,7 +21,7 @@ internal sealed class DashboardSqliteDatabase
     private readonly object _schemaLock = new();
     private bool _schemaInitialized;
 
-    public DashboardSqliteDatabase(string databasePath, bool readOnly = false)
+    public DashboardSqliteDatabase(string databasePath, bool readOnly = false, bool pooling = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
 
@@ -37,7 +37,7 @@ internal sealed class DashboardSqliteDatabase
         {
             DataSource = DatabasePath,
             Mode = readOnly ? SqliteOpenMode.ReadOnly : SqliteOpenMode.ReadWriteCreate,
-            Pooling = false,
+            Pooling = pooling,
             DefaultTimeout = 5
         }.ToString();
     }
@@ -53,9 +53,9 @@ internal sealed class DashboardSqliteDatabase
             return false;
         }
 
+        var database = new DashboardSqliteDatabase(databasePath, readOnly: true, pooling: false);
         try
         {
-            var database = new DashboardSqliteDatabase(databasePath, readOnly: true);
             using var connection = database.OpenConnection();
             var version = connection.QuerySingleOrDefault<int?>("""
                 SELECT CASE
@@ -79,6 +79,14 @@ internal sealed class DashboardSqliteDatabase
         connection.Execute("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
 
         return connection;
+    }
+
+    public static void ClearPools() => SqliteConnection.ClearAllPools();
+
+    public void ClearPool()
+    {
+        using var connection = new SqliteConnection(_connectionString);
+        SqliteConnection.ClearPool(connection);
     }
 
     public void InitializeSchema()
