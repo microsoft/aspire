@@ -253,22 +253,28 @@ public sealed class DashboardDataSourceTests : IDisposable
     public void SqliteDatabase_ConfiguresLikeAndForeignKeys()
     {
         var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "connection.db"));
-        using var connection = database.OpenConnection();
-        using var command = connection.CreateCommand();
-        command.CommandText = """
-            SELECT
-                'Dashboard' = 'dashboard' COLLATE NOCASE,
-                'CAFE au lait' LIKE '%fe AU%',
-                'Delta' LIKE 'dE%',
-                (SELECT foreign_keys FROM pragma_foreign_keys());
-            """;
-        using var reader = command.ExecuteReader();
+        using (var connection = database.OpenConnection())
+        using (var command = connection.CreateCommand())
+        {
+            Assert.True(new SqliteConnectionStringBuilder(connection.ConnectionString).Pooling);
 
-        Assert.True(reader.Read());
-        Assert.Equal(1, reader.GetInt64(0));
-        Assert.Equal(1, reader.GetInt64(1));
-        Assert.Equal(1, reader.GetInt64(2));
-        Assert.Equal(1, reader.GetInt64(3));
+            command.CommandText = """
+                SELECT
+                    'Dashboard' = 'dashboard' COLLATE NOCASE,
+                    'CAFE au lait' LIKE '%fe AU%',
+                    'Delta' LIKE 'dE%',
+                    (SELECT foreign_keys FROM pragma_foreign_keys());
+                """;
+            using var reader = command.ExecuteReader();
+
+            Assert.True(reader.Read());
+            Assert.Equal(1, reader.GetInt64(0));
+            Assert.Equal(1, reader.GetInt64(1));
+            Assert.Equal(1, reader.GetInt64(2));
+            Assert.Equal(1, reader.GetInt64(3));
+        }
+
+        database.ClearPool();
     }
 
     [Fact]

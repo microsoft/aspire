@@ -420,6 +420,8 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                     channel.Writer.TryComplete();
                 }
             }
+
+            _database.ClearPool();
         }
     }
 
