@@ -1,0 +1,16 @@
+{
+  "id": "dotnet-install-ssl-auth-failure",
+  "type": "infra-failure",
+  "title": ".NET install script download fails with SSL/TLS authentication error from builds.dotnet.microsoft.com on Windows runner",
+  "error_pattern": "D:\\a\\aspire\\aspire\\tests\\Shared\\InstallSdk.targets(37,5): error MSB3923: Failed to download file \"https://builds.dotnet.microsoft.com/dotnet/scripts/v1/dotnet-install.ps1\". The SSL connection could not be established, see inner exception. ---> Authentication failed, see inner exception. ---> The Local Security Authority cannot be contacted",
+  "occurrences": [
+    {
+      "run_id": 29612218857,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29612218857",
+      "job": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "pr_number": 18678,
+      "observed_at": "2026-07-17T21:13:46Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18821"
+}

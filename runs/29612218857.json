@@ -1,0 +1,38 @@
+{
+  "run_id": 29612218857,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29612218857",
+  "analyzed_at": "2026-07-17T21:13:46Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 18678,
+    "title": "Use DCP fork-process for Unix detached start",
+    "author": "danegsta",
+    "state": "closed",
+    "head_branch": "danegsta-dcp-detached-launch",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18678"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Prepare Homebrew installer artifacts / Prepare Homebrew cask",
+      "id": 87991223801,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29612218857/job/87991223801",
+      "classification": "code-issue",
+      "reason": "brew style local/aspire failed with exit code 1 during 'brew audit'. This is a deterministic style/lint check on the generated Homebrew cask file. The PR significantly modified CLI process launching code (IsolatedProcess, DetachedProcessLauncher, etc.) which affects the CLI build output and consequently the generated cask. Not a transient failure.",
+      "failed_steps": ["Prepare Homebrew cask artifact"]
+    },
+    {
+      "name": "Tests / Templates-XUnit_V2_NewUpAndBuildSupportProjectTemplatesTests / Templates-XUnit_V2_NewUpAndBuildSupportProjectTemplatesTests (windows-latest)",
+      "id": 87991226587,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29612218857/job/87991226587",
+      "classification": "transient-infra",
+      "reason": "Failed to download dotnet-install.ps1 from builds.dotnet.microsoft.com due to SSL/TLS authentication failure: 'The SSL connection could not be established ... Authentication failed ... The Local Security Authority cannot be contacted'. This is a transient Windows runner SSL infrastructure issue unrelated to PR changes.",
+      "failed_steps": ["Install sdk for nuget based testing"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["dotnet-install-ssl-auth-failure"]
+}
