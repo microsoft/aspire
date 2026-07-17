@@ -7,7 +7,7 @@ namespace Aspire.Cli.Processes;
 
 internal interface IDetachedProcessLauncher
 {
-    Process Start(
+    IDetachedProcess Start(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
@@ -15,9 +15,24 @@ internal interface IDetachedProcessLauncher
         IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null);
 }
 
+internal interface IDetachedProcess : IDisposable
+{
+    int Id { get; }
+
+    bool HasExited { get; }
+
+    int ExitCode { get; }
+
+    DateTime StartTime { get; }
+
+    Task WaitForExitAsync(CancellationToken cancellationToken = default);
+
+    void Kill(bool entireProcessTree);
+}
+
 internal sealed class DefaultDetachedProcessLauncher : IDetachedProcessLauncher
 {
-    public Process Start(
+    public IDetachedProcess Start(
         string fileName,
         IReadOnlyList<string> arguments,
         string workingDirectory,
@@ -26,6 +41,23 @@ internal sealed class DefaultDetachedProcessLauncher : IDetachedProcessLauncher
     {
         return DetachedProcessLauncher.Start(fileName, arguments, workingDirectory, shouldRemoveEnvironmentVariable, additionalEnvironmentVariables);
     }
+}
+
+internal sealed class ProcessBackedDetachedProcess(Process process) : IDetachedProcess
+{
+    public int Id => process.Id;
+
+    public bool HasExited => process.HasExited;
+
+    public int ExitCode => process.ExitCode;
+
+    public DateTime StartTime => process.StartTime;
+
+    public Task WaitForExitAsync(CancellationToken cancellationToken = default) => process.WaitForExitAsync(cancellationToken);
+
+    public void Kill(bool entireProcessTree) => process.Kill(entireProcessTree);
+
+    public void Dispose() => process.Dispose();
 }
 
 // ============================================================================
@@ -68,13 +100,12 @@ internal sealed class DefaultDetachedProcessLauncher : IDetachedProcessLauncher
 // │         │ grandchild inherits nothing useful. Child stdout/stderr go to │
 // │         │ the NUL device.                                               │
 // │         │                                                               │
-// │ Linux / │ Process.Start with RedirectStandard{Output,Error} = true,     │
-// │ macOS   │ then immediately close the parent's read-end pipe streams.    │
-// │         │ The original pipe fds have O_CLOEXEC, but dup2 onto fd 0/1/2 │
-// │         │ clears it — so grandchildren inherit the pipe as their stdio. │
-// │         │ With no reader, writes produce harmless EPIPE. The critical   │
-// │         │ difference from Windows is that no caller gets stuck waiting  │
-// │         │ on a pipe handle — closing the read-end is sufficient.        │
+// │ Linux / │ posix_spawn /bin/sh with POSIX_SPAWN_SETPGROUP, stdio bound  │
+// │ macOS   │ to /dev/null, and a small exec handoff. The new process group │
+// │         │ keeps the child CLI and AppHost out of launcher process-group │
+// │         │ cleanup after `aspire start` returns, while /dev/null stdio   │
+// │         │ prevents the detached child from corrupting parent output or  │
+// │         │ keeping caller-observed pipes alive.                          │
 // └─────────┴────────────────────────────────────────────────────────────────┘
 //
 
@@ -93,8 +124,8 @@ internal static partial class DetachedProcessLauncher
     /// <param name="workingDirectory">The working directory for the child process.</param>
     /// <param name="shouldRemoveEnvironmentVariable">Optional predicate that returns <see langword="true" /> for environment variable names that should be removed from the child process.</param>
     /// <param name="additionalEnvironmentVariables">Optional dictionary of environment variables to add to the child process without mutating the parent.</param>
-    /// <returns>A <see cref="Process"/> object representing the launched child.</returns>
-    public static Process Start(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable = null, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
+    /// <returns>An <see cref="IDetachedProcess"/> object representing the launched child.</returns>
+    public static IDetachedProcess Start(string fileName, IReadOnlyList<string> arguments, string workingDirectory, Func<string, bool>? shouldRemoveEnvironmentVariable = null, IReadOnlyDictionary<string, string>? additionalEnvironmentVariables = null)
     {
         if (OperatingSystem.IsWindows())
         {

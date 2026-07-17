@@ -872,7 +872,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             }
         }
 
-        public Process Start(
+        public IDetachedProcess Start(
             string fileName,
             IReadOnlyList<string> arguments,
             string workingDirectory,
@@ -891,7 +891,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
             StartedProcess = Process.Start(CreateProcessStartInfo(workingDirectory)) ?? throw new InvalidOperationException("Failed to start test child process.");
             Started.SetResult();
-            return StartedProcess;
+            return new ProcessBackedDetachedProcess(StartedProcess);
         }
 
         public void Dispose()

@@ -366,7 +366,7 @@ internal sealed class AppHostLauncher(
         return environment;
     }
 
-    private record LaunchResult(Process? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int ChildExitCode, DateTimeOffset? ChildStartedAt = null);
+    private record LaunchResult(IDetachedProcess? ChildProcess, IAppHostAuxiliaryBackchannel? Backchannel, DashboardUrlsState? DashboardUrls, bool ChildExitedEarly, int ChildExitCode, DateTimeOffset? ChildStartedAt = null);
 
     private async Task<LaunchResult> LaunchAndWaitForBackchannelAsync(
         string executablePath,
@@ -377,7 +377,7 @@ internal sealed class AppHostLauncher(
         Action<string> updateStatus,
         CancellationToken cancellationToken)
     {
-        Process childProcess;
+        IDetachedProcess childProcess;
 
         using (var spawnActivity = profilingTelemetry.StartDetachedSpawnChild(executablePath, childArgs, "run"))
         {
@@ -538,7 +538,7 @@ internal sealed class AppHostLauncher(
         return new LaunchResult(childProcess, null, dashboardUrls, false, 0, childStartedAt);
     }
 
-    private Task RequestGracefulShutdownThenForceKillAsync(Process childProcess, DateTimeOffset childStartedAt)
+    private Task RequestGracefulShutdownThenForceKillAsync(IDetachedProcess childProcess, DateTimeOffset childStartedAt)
     {
         return processShutdownService.StopProcessTreeAsync(
             childProcess.Id,
@@ -547,7 +547,7 @@ internal sealed class AppHostLauncher(
             CancellationToken.None);
     }
 
-    private LaunchResult CreateChildExitedLaunchResult(Process childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset childStartedAt)
+    private LaunchResult CreateChildExitedLaunchResult(IDetachedProcess childProcess, ProfilingTelemetry.ActivityScope waitForBackchannelActivity, DateTimeOffset childStartedAt)
     {
         var exitCode = childProcess.ExitCode;
         waitForBackchannelActivity.SetProcessExitCode(exitCode);
