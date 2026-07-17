@@ -355,6 +355,24 @@ window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, do
         }
 
         if (isEscape) {
+            const popupElement = resolvePopupElement();
+            const expandedSubmenuItem = ev.target instanceof Element
+                ? ev.target.closest("fluent-menu-item[aria-expanded='true']")
+                : null;
+            if (popupElement?.contains(expandedSubmenuItem)) {
+                // Fluent's Escape handler closes the entire menu tree. Convert it to the
+                // native submenu-collapse key so Fluent retains ownership of submenu state.
+                stopPopupKeyboardEvent(ev);
+                expandedSubmenuItem.dispatchEvent(new KeyboardEvent("keydown", {
+                    key: "ArrowLeft",
+                    code: "ArrowLeft",
+                    keyCode: 37,
+                    bubbles: true,
+                    composed: true
+                }));
+                return;
+            }
+
             stopPopupKeyboardEvent(ev);
             anchorElement.focus();
             dotNetHelper.invokeMethodAsync("CloseAsync");

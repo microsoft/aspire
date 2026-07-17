@@ -45,8 +45,39 @@ public class ConsoleLogsTests : PlaywrightTestsBase<ConsoleLogsTests.ConsoleLogs
 
             var resourceActionsButton = page.Locator($"fluent-button[title='{ControlsStrings.ResourceActions}']");
             await resourceActionsButton.ClickAsync();
+            var commandsItem = page.GetByRole(AriaRole.Menuitem, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourceActionCommandsText, Exact = true });
+            await commandsItem.FocusAsync();
+            await page.Keyboard.PressAsync("ArrowRight");
             await page.GetByRole(AriaRole.Menuitem, new PageGetByRoleOptions { Name = "Test command", Exact = true }).ClickAsync();
 
+            await Assertions.Expect(resourceActionsButton).ToBeFocusedAsync();
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourceActionsMenu_EscapeInsideOpenSubmenu_ClosesOneLevelAtATime()
+    {
+        await RunTestAsync(async page =>
+        {
+            await GoToConsoleLogsAsync(page);
+
+            var resourceActionsButton = page.Locator($"fluent-button[title='{ControlsStrings.ResourceActions}']");
+            await resourceActionsButton.ClickAsync();
+            var commandsItem = page.GetByRole(AriaRole.Menuitem, new PageGetByRoleOptions { Name = Dashboard.Resources.Resources.ResourceActionCommandsText, Exact = true });
+            await commandsItem.FocusAsync();
+            await page.Keyboard.PressAsync("ArrowRight");
+            await Assertions.Expect(commandsItem).ToHaveAttributeAsync("aria-expanded", "true");
+
+            await page.Keyboard.PressAsync("Escape");
+
+            await Assertions.Expect(page.GetByRole(AriaRole.Menu).First).ToBeVisibleAsync();
+            await Assertions.Expect(commandsItem).ToHaveAttributeAsync("aria-expanded", "false");
+            await Assertions.Expect(commandsItem).ToBeFocusedAsync();
+
+            await page.Keyboard.PressAsync("Escape");
+
+            await Assertions.Expect(page.GetByRole(AriaRole.Menu).First).ToBeHiddenAsync();
             await Assertions.Expect(resourceActionsButton).ToBeFocusedAsync();
         });
     }
@@ -99,21 +130,31 @@ public class ConsoleLogsTests : PlaywrightTestsBase<ConsoleLogsTests.ConsoleLogs
                 state: KnownResourceState.Running,
                 commands:
                 [
-                    new CommandViewModel(
-                        name: "test-command",
-                        state: CommandViewModelState.Enabled,
-                        displayName: "Test command",
-                        displayDescription: "Test command",
-                        confirmationMessage: string.Empty,
-                        argumentInputs: [],
-                        isHighlighted: false,
-                        iconName: string.Empty,
-                        iconVariant: Microsoft.FluentUI.AspNetCore.Components.IconVariant.Regular)
+                    CreateCommand("test-command", "Test command"),
+                    CreateCommand("test-command-2", "Test command 2"),
+                    CreateCommand("test-command-3", "Test command 3"),
+                    CreateCommand("test-command-4", "Test command 4"),
+                    CreateCommand("test-command-5", "Test command 5"),
+                    CreateCommand("test-command-6", "Test command 6")
                 ]),
             ModelTestHelpers.CreateResource(
                 resourceName: "OtherResource",
                 resourceType: KnownResourceTypes.Project,
                 state: KnownResourceState.Running)
         ];
+    }
+
+    private static CommandViewModel CreateCommand(string name, string displayName)
+    {
+        return new CommandViewModel(
+            name: name,
+            state: CommandViewModelState.Enabled,
+            displayName: displayName,
+            displayDescription: displayName,
+            confirmationMessage: string.Empty,
+            argumentInputs: [],
+            isHighlighted: false,
+            iconName: string.Empty,
+            iconVariant: Microsoft.FluentUI.AspNetCore.Components.IconVariant.Regular);
     }
 }
