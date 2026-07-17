@@ -41,7 +41,7 @@ public class KestrelConfigTests
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
         // When using Kestrel, we should not be setting ASPNETCORE_URLS at all
-        Assert.False(config.ContainsKey("ASPNETCORE_URLS"));
+        Assert.False(config.ContainsKey(KnownAspNetCoreConfigNames.Urls));
 
         // Instead, we should be setting the Kestrel override
         Assert.Equal("http://*:port_http", config["Kestrel__Endpoints__http__Url"]);
@@ -79,7 +79,7 @@ public class KestrelConfigTests
         var config = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance).DefaultTimeout();
 
         // We're ignoring Kestrel, so we should be setting ASPNETCORE_URLS
-        Assert.Equal("http://localhost:port_http;http://localhost:port_ExplicitHttp", config["ASPNETCORE_URLS"]);
+        Assert.Equal("http://localhost:port_http;http://localhost:port_ExplicitHttp", config[KnownAspNetCoreConfigNames.Urls]);
 
         // And we should not be setting the Kestrel override
         Assert.False(config.ContainsKey("Kestrel__Endpoints__http__Url"));

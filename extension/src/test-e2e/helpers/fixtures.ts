@@ -63,11 +63,16 @@ export async function setShowStatusDelayForE2E(delayMs: number | undefined): Pro
     await applyE2eControl({ showStatusDelayMs: delayMs ?? null });
 }
 
+export async function resetDashboardDefaultChangedNotificationForE2E(): Promise<void> {
+    await applyE2eControl({ resetDashboardDefaultChangedNotification: true });
+}
+
 export async function executeE2eControlCommand(
     command: AspireExtensionE2EControlCommand,
     options?: { waitFor?: 'started' | 'applied'; timeoutMs?: number }
 ): Promise<AspireExtensionE2EControlStatus> {
-    return await applyE2eControl({ command }, options?.waitFor ?? 'applied', options?.timeoutMs);
+    const timeoutMs = options?.timeoutMs ?? (command.name === 'stopDebugging' ? 180000 : undefined);
+    return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
 export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Promise<unknown>>, failureMessage: string): Promise<void> {
@@ -371,7 +376,7 @@ interface PsAppHost {
 }
 
 async function getRunningAppHostAccordingToCli(appHostPath: string): Promise<PsAppHost | undefined> {
-    const result = await runProcess(getCliPath(), ['ps', '--format', 'json'], {
+    const result = await runProcess(getCliPath(), ['ps', '--format', 'json', '--nologo'], {
         cwd: getWorkspaceRoot(),
         timeoutMs: 30000,
     });
@@ -619,7 +624,7 @@ if (args.includes('--include-disabled-commands')) {
   process.exit(123);
 }
 
-if (args.length === 3 && args[0] === 'config' && args[1] === 'info' && args[2] === '--json') {
+if (args[0] === 'config' && args[1] === 'info' && args.includes('--json')) {
 ${options.configInfoJson === undefined
         ? `  console.error(${JSON.stringify(options.configInfoStderr ?? 'config info is not available')});
   process.exit(${options.configInfoExitCode ?? 1});`

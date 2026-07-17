@@ -269,6 +269,48 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                     dialogComponentId = TelemetryComponentIds.InteractionInputsDialog;
                     openDialog = dialogService => dialogService.ShowDialogAsync<InteractionsInputDialog>(vm, dialogParameters);
                 }
+                else if (item.PromptProgress is { } promptProgress)
+                {
+                    var dialogParameters = CreateDialogParameters(item, intent: null);
+                    dialogParameters.ShowDismiss = false;
+                    dialogParameters.SecondaryAction = null;
+
+                    // If a primary button text is provided, show it as a cancel button.
+                    // Otherwise, hide the primary action (the dialog can only be closed from the server side).
+                    if (string.IsNullOrEmpty(item.PrimaryButtonText))
+                    {
+                        dialogParameters.PrimaryAction = null;
+                    }
+
+                    dialogParameters.OnDialogResult = EventCallback.Factory.Create<DialogResult>(this, async dialogResult =>
+                    {
+                        // When the user clicks the cancel button, notify the server.
+                        var request = new WatchInteractionsRequestUpdate
+                        {
+                            InteractionId = item.InteractionId
+                        };
+
+                        if (dialogResult.Cancelled)
+                        {
+                            request.Complete = new InteractionComplete();
+                        }
+                        else
+                        {
+                            promptProgress.Result = false;
+                            request.PromptProgress = promptProgress;
+                        }
+
+                        await DashboardClient.SendInteractionRequestAsync(request, _cts.Token).ConfigureAwait(false);
+                    });
+
+                    var vm = new InteractionsProgressDialogViewModel
+                    {
+                        Message = GetMessageHtml(item)
+                    };
+
+                    dialogComponentId = TelemetryComponentIds.InteractionProgressDialog;
+                    openDialog = dialogService => dialogService.ShowDialogAsync<InteractionsProgressDialog>(vm, dialogParameters);
+                }
                 else
                 {
                     Logger.LogWarning("Unexpected interaction kind: {Kind}", item.KindCase);
@@ -335,6 +377,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
     private async Task WatchInteractionsAsync()
     {
+        await DashboardClient.WhenConnected.WaitAsync(_cts.Token).ConfigureAwait(false);
+
         var interactions = DashboardClient.SubscribeInteractionsAsync(_cts.Token);
         await foreach (var item in interactions)
         {
@@ -345,6 +389,7 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
                 {
                     case WatchInteractionsResponseUpdate.KindOneofCase.MessageBox:
                     case WatchInteractionsResponseUpdate.KindOneofCase.InputsDialog:
+                    case WatchInteractionsResponseUpdate.KindOneofCase.PromptProgress:
                         if (_interactionDialogReference != null &&
                             _interactionDialogReference.InteractionId == item.InteractionId &&
                             _interactionDialogReference.Dialog.Instance.Content is InteractionsInputsDialogViewModel inputsVM)

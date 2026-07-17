@@ -7,6 +7,7 @@ using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.AspireSkills;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Git;
 using Aspire.Cli.Interaction;
@@ -28,6 +29,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
     private readonly PlaywrightCliInstaller _playwrightCliInstaller;
     private readonly IGitRepository _gitRepository;
     private readonly ILanguageDiscovery _languageDiscovery;
+    private readonly ITelemetryHookConfigurator _telemetryHookConfigurator;
 
     /// <summary>
     /// AgentInitCommand does not need template package metadata prefetching.
@@ -45,6 +47,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
+        ITelemetryHookConfigurator telemetryHookConfigurator,
         CommonCommandServices services)
         : base("init", AgentCommandStrings.InitCommand_Description, services)
     {
@@ -53,6 +56,7 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
         _playwrightCliInstaller = playwrightCliInstaller;
         _gitRepository = gitRepository;
         _languageDiscovery = languageDiscovery;
+        _telemetryHookConfigurator = telemetryHookConfigurator;
 
         Options.Add(s_workspaceRootOption);
         Options.Add(s_skillLocationsOption);
@@ -465,6 +469,12 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             }
         }
 
+        // --- Phase 6: Install agent telemetry hooks (default-on, parity with azure-skills) ---
+        // Hooks are installed for every detected, supported client. Whether telemetry is actually
+        // transmitted stays gated by the single ASPIRE_CLI_TELEMETRY_OPTOUT opt-out, which both the
+        // hook scripts and the `aspire agent telemetry` command path re-check at runtime.
+        await ConfigureTelemetryHooksAsync(context, cancellationToken);
+
         if (hasErrors)
         {
             InteractionService.DisplayMessage(KnownEmojis.Warning, AgentCommandStrings.ConfigurationCompletedWithErrors);
@@ -479,6 +489,57 @@ internal sealed class AgentInitCommand : BaseCommand, IPackageMetaPrefetchingCom
             selectedLocations,
             selectedSkills);
     }
+
+    private async Task ConfigureTelemetryHooksAsync(AgentEnvironmentScanContext context, CancellationToken cancellationToken)
+    {
+        TelemetryHookConfigurationResult result;
+        try
+        {
+            result = await _telemetryHookConfigurator.ConfigureAsync(context.DetectedClients, cancellationToken);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            // Hook installation is best-effort transparency tooling; never fail `agent init` over it.
+            // This deliberately catches everything except cancellation: besides file IO failures, a
+            // corrupted CLI build could surface a missing embedded hook script as an
+            // InvalidOperationException, and that must not abort the whole command either.
+            InteractionService.DisplaySubtleMessage(ex.Message);
+            return;
+        }
+
+        if (result.ConfiguredClients.Count > 0)
+        {
+            var clientNames = string.Join(", ", result.ConfiguredClients.Select(GetClientDisplayName));
+            InteractionService.DisplayMessage(
+                KnownEmojis.BarChart,
+                string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHooksInstalled, clientNames));
+        }
+
+        foreach (var skip in result.Skipped)
+        {
+            var clientName = GetClientDisplayName(skip.Client);
+            var message = skip.Reason switch
+            {
+                TelemetryHookSkipReason.MalformedConfig => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedMalformedConfig, clientName),
+                TelemetryHookSkipReason.UnexpectedConfigShape => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookSkippedUnexpectedShape, clientName),
+                _ => string.Format(CultureInfo.CurrentCulture, AgentCommandStrings.InitCommand_TelemetryHookWriteFailed, clientName),
+            };
+
+            // Skips are surfaced to the user but never treated as command failures: a user-owned
+            // config we can't safely modify must not break `agent init`.
+            InteractionService.DisplaySubtleMessage(message);
+        }
+    }
+
+    private static string GetClientDisplayName(AgentClientKind client)
+        => client switch
+        {
+            AgentClientKind.CopilotCli => "GitHub Copilot CLI",
+            AgentClientKind.ClaudeCode => "Claude Code",
+            AgentClientKind.VsCode => "VS Code",
+            AgentClientKind.OpenCode => "OpenCode",
+            _ => client.ToString(),
+        };
 
     private async Task<(IReadOnlyList<SkillDefinition> Skills, AspireSkillsBundle? Bundle, string? FailureMessage)> ResolveAvailableSkillsAsync(LanguageId? detectedLanguage, CancellationToken cancellationToken)
     {

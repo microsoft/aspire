@@ -42,5 +42,10 @@ export function removeFilteredEnvironmentKeys(keys: string[]): void {
 export const enum EnvironmentVariables {
     ASPIRE_CLI_STOP_ON_ENTRY = "ASPIRE_CLI_STOP_ON_ENTRY",
     ASPIRE_APPHOST_STOP_ON_ENTRY = "ASPIRE_APPHOST_STOP_ON_ENTRY",
-    ASPIRE_CLI_START_TIMEOUT = "ASPIRE_CLI_START_TIMEOUT"
+    ASPIRE_CLI_START_TIMEOUT = "ASPIRE_CLI_START_TIMEOUT",
+    ASPIRE_NON_INTERACTIVE = "ASPIRE_NON_INTERACTIVE"
 }
+
+export const nonInteractiveCliEnvironment: EnvVar[] = [
+    { name: EnvironmentVariables.ASPIRE_NON_INTERACTIVE, value: 'true' },
+];

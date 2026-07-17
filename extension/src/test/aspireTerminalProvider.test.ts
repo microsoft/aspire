@@ -147,6 +147,38 @@ suite('AspireTerminalProvider tests', () => {
                 platformStub.restore();
             }
         });
+
+        test('recreates terminal after all Aspire terminals are closed for an environment change', () => {
+            const createEnvironmentStub = sinon.stub(terminalProvider, 'createEnvironment').returns({});
+            const firstTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const secondTerminal = {
+                name: 'Aspire terminal',
+                dispose: sinon.stub(),
+            } as unknown as vscode.Terminal;
+            const createTerminalStub = sinon.stub(vscode.window, 'createTerminal');
+            createTerminalStub.onFirstCall().returns(firstTerminal);
+            createTerminalStub.onSecondCall().returns(secondTerminal);
+            const terminalsStub = sinon.stub(vscode.window, 'terminals').value([firstTerminal]);
+
+            try {
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, firstTerminal);
+
+                terminalProvider.closeAllOpenAspireTerminals();
+
+                assert.strictEqual((firstTerminal.dispose as sinon.SinonStub).called, true);
+                assert.strictEqual(terminalProvider.getAspireTerminal().terminal, secondTerminal);
+                assert.strictEqual(createTerminalStub.callCount, 2);
+            }
+            finally {
+                terminalProvider.dispose();
+                createTerminalStub.restore();
+                createEnvironmentStub.restore();
+                terminalsStub.restore();
+            }
+        });
     });
 
     suite('sendAspireCommandToAspireTerminal', () => {
@@ -685,6 +717,138 @@ suite('AspireTerminalProvider tests', () => {
             assert.strictEqual(env.ASPIRE_EXTENSION_DEBUG_SESSION_ID, undefined);
             assert.strictEqual(env.ASPIRE_EXTENSION_PROMPT_ENABLED, 'true');
             assert.strictEqual(env.ASPIRE_NON_INTERACTIVE, undefined);
+        });
+
+        test('forwards an existing absolute aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution can pick it up', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns(__filename);
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, __filename);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('forwards AspireCliPath even when extension backchannel variables are suppressed', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns(__filename);
+            try {
+                const env = terminalProvider.createEnvironment(undefined, undefined, true);
+                assert.strictEqual(env.AspireCliPath, __filename);
+                assert.strictEqual(env.ASPIRE_EXTENSION_ENDPOINT, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured path is empty', () => {
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured path is a bare command name', () => {
+            // A relative or bare-name value would fail ResolveAspireCliBundle's
+            // File.Exists guard, so leaving the env var unset is the correct
+            // behavior. The task then falls back to its PATH/ASPIRE_HOME logic.
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('aspire');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('omits AspireCliPath when the configured absolute path does not exist', () => {
+            // A stale absolute value would fail ResolveAspireCliBundle's
+            // File.Exists guard and suppress PATH/ASPIRE_HOME fallback.
+            const getConfiguredCliPathStub = sinon.stub(cliPathModule, 'getConfiguredCliPath').returns('/work/aspire/missing/aspire');
+            try {
+                const env = terminalProvider.createEnvironment();
+                assert.strictEqual(env.AspireCliPath, undefined);
+            } finally {
+                getConfiguredCliPathStub.restore();
+            }
+        });
+
+        test('preserves locale override for hidden CLI commands without extension backchannel variables', () => {
+            const inheritedVariables: Record<string, string> = {
+                ASPIRE_BACKCHANNEL_PATH: 'inherited-backchannel-path',
+                ASPIRE_CLI_LOG_FILE: 'inherited-cli-log-file',
+                ASPIRE_CLI_PID: 'inherited-cli-pid',
+                ASPIRE_CLI_STARTED: 'inherited-cli-started',
+                ASPIRE_EXTENSION_CAPABILITIES: 'inherited-capabilities',
+                ASPIRE_EXTENSION_CERT: 'inherited-cert',
+                ASPIRE_EXTENSION_DEBUG_RUN_MODE: 'inherited-debug-run-mode',
+                ASPIRE_EXTENSION_DEBUG_SESSION_ID: 'inherited-debug-session-id',
+                ASPIRE_EXTENSION_ENDPOINT: 'inherited-endpoint',
+                ASPIRE_EXTENSION_PROMPT_ENABLED: 'inherited-prompt-enabled',
+                ASPIRE_EXTENSION_TOKEN: 'inherited-token',
+                ASPIRE_LOCALE_OVERRIDE: 'process-locale',
+                ASPIRE_NON_INTERACTIVE: 'inherited-non-interactive',
+                ASPIRE_SUPPRESS_CLI_RUN_HOOK: 'inherited-suppress-run-hook',
+                ASPIRE_TERMINAL_HOST_CUSTOM_TEST: 'inherited-terminal-host-custom',
+                ASPIRE_TERMINAL_HOST_INVOCATION_ARGS: 'inherited-terminal-host-invocation-args',
+                ASPIRE_TERMINAL_HOST_PATH: 'inherited-terminal-host-path',
+                DCP_INSTANCE_ID_PREFIX: 'inherited-dcp-instance-prefix',
+                DEBUG_SESSION_INFO: 'inherited-debug-session-info',
+                DEBUG_SESSION_PORT: 'inherited-debug-session-port',
+                DEBUG_SESSION_RUN_MODE: 'inherited-debug-session-run-mode',
+                DEBUG_SESSION_SERVER_CERTIFICATE: 'inherited-debug-session-certificate',
+                DEBUG_SESSION_TOKEN: 'inherited-debug-session-token',
+            };
+            const previousVariables = new Map<string, string | undefined>();
+
+            for (const [key, value] of Object.entries(inheritedVariables)) {
+                previousVariables.set(key, process.env[key]);
+                process.env[key] = value;
+            }
+
+            let env: any;
+            try {
+                env = terminalProvider.createEnvironment(undefined, undefined, true);
+            } finally {
+                for (const [key, value] of previousVariables) {
+                    restoreEnvironmentVariable(key, value);
+                }
+            }
+
+            assert.strictEqual(env.ASPIRE_LOCALE_OVERRIDE, vscode.env.language);
+            for (const key of Object.keys(inheritedVariables).filter(key => key !== 'ASPIRE_LOCALE_OVERRIDE')) {
+                assert.strictEqual(env[key], undefined, key);
+            }
+        });
+
+        test('scrubs hidden CLI extension variables case-insensitively on Windows', () => {
+            const platformStub = sinon.stub(process, 'platform').value('win32');
+            const inheritedVariables: Record<string, string> = {
+                Aspire_Extension_Token: 'mixed-case-token',
+                debug_session_token: 'lowercase-debug-session-token',
+                aspire_terminal_host_path: 'lowercase-terminal-host-path',
+            };
+            const previousVariables = new Map<string, string | undefined>();
+
+            for (const [key, value] of Object.entries(inheritedVariables)) {
+                previousVariables.set(key, process.env[key]);
+                process.env[key] = value;
+            }
+
+            let env: any;
+            try {
+                env = terminalProvider.createEnvironment(undefined, undefined, true);
+            } finally {
+                platformStub.restore();
+                for (const [key, value] of previousVariables) {
+                    restoreEnvironmentVariable(key, value);
+                }
+            }
+            for (const key of Object.keys(inheritedVariables)) {
+                assert.strictEqual(env[key], undefined, key);
+            }
         });
     });
 

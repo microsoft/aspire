@@ -46,7 +46,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
     [InlineData("explicit-staging", "explicit-staging")] // user-supplied --channel → pin written
     public async Task ScaffoldAsync_PersistsContextChannelVerbatim(string? contextChannel, string? expectedPersistedChannel)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var scaffoldingService = CreateScaffoldingService(workspace);
 
@@ -75,7 +75,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ScaffoldAsync_PassesPackageSourceOverrideToPrepareAsync()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         const string packageSourceOverride = "/tmp/aspire-pr-hive/packages";
         var language = s_testLanguage with { PackageName = "Aspire.Hosting.CodeGeneration.TypeScript" };
         var appHostServerProject = new CapturingAppHostServerProject(workspace.WorkspaceRoot.FullName);
@@ -88,6 +88,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             serverSessionFactory: new FakeAppHostServerSessionFactory(),
             languageDiscovery: new TestLanguageDiscovery(language),
             interactionService: new TestInteractionService(),
+            environment: new TestEnvironment(),
             logger: NullLogger<ScaffoldingService>.Instance,
             executionContext: workspace.CreateExecutionContext(),
             profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));
@@ -120,6 +121,7 @@ public class ChannelReseedTests(ITestOutputHelper outputHelper)
             serverSessionFactory: new FakeAppHostServerSessionFactory(),
             languageDiscovery: new TestLanguageDiscovery(s_testLanguage),
             interactionService: new TestInteractionService(),
+            environment: new TestEnvironment(),
             logger: NullLogger<ScaffoldingService>.Instance,
             executionContext: workspace.CreateExecutionContext(),
             profilingTelemetry: new ProfilingTelemetry(new ConfigurationBuilder().Build()));

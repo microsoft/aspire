@@ -3,13 +3,14 @@
 
 using Azure.Identity;
 using Azure.Messaging.EventHubs;
+using Aspire.Components.ConformanceTests;
 using Microsoft.Extensions.Hosting;
 
 namespace Aspire.Azure.Messaging.EventHubs.Tests;
 
 public class ConformanceTests_EventProcessorClient : ConformanceTestsBase<EventProcessorClient, AzureMessagingEventHubsProcessorSettings>
 {
-    protected override string[] RequiredLogCategories => ["Azure.Core", "Azure.Messaging.EventHubs.Processor.BlobEventStore"];
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Azure.Core"), new("Azure.Messaging.EventHubs.Processor.BlobEventStore")];
 
     protected override void SetHealthCheck(AzureMessagingEventHubsProcessorSettings options, bool enabled)
         => options.DisableHealthChecks = !enabled;

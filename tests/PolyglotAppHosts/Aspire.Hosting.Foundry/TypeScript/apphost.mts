@@ -1,4 +1,4 @@
-import { AzureContainerRegistryRole, FoundryModels, FoundryRole, type FoundryModel, createBuilder } from './.aspire/modules/aspire.mjs';
+import { AzureContainerRegistryRole, FoundryModels, FoundryRole, HostedAgentProtocol, type FoundryModel, createBuilder } from './.aspire/modules/aspire.mjs';
 
 const builder = await createBuilder();
 
@@ -115,13 +115,12 @@ server.listen(port, '127.0.0.1');
 `
     ]);
 
-await hostedAgent.asHostedAgent(project, {
+await hostedAgent.asHostedAgent(project, HostedAgentProtocol.Invocations, '1.0.0', {
     description: 'Validation hosted agent',
     cpu: 1,
     memory: 2,
     metadata: { scenario: 'validation' },
-    environmentVariables: { VALIDATION_MODE: 'true' },
-    protocols: [{ protocol: 'invocations', version: '1.0.0' }]
+    environmentVariables: { VALIDATION_MODE: 'true' }
 });
 
 const api = await builder.addContainer('api', 'nginx');

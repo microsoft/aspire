@@ -9,11 +9,9 @@ namespace Aspire.Cli.DotNet;
 
 /// <summary>
 /// The single <see cref="IProcessExecution"/> implementation. Wraps an <see cref="IsolatedProcess"/>
-/// for both the isolated-console run path (Windows AppHost graceful shutdown) and ordinary
-/// non-isolated subprocesses — the only difference is the
-/// <see cref="IsolatedProcessStartInfo.IsolateConsole"/> flag the factory sets. The child is
-/// spawned lazily on <see cref="Start"/> so callers that build an execution but never start it
-/// (e.g. the extension-host launch path, which reads <see cref="Arguments"/> /
+/// for isolated-console, kill-on-parent-exit, and ordinary redirected subprocesses. The child is
+/// spawned lazily on <see cref="Start"/> so callers that build an execution but never start it (e.g.
+/// the extension-host launch path, which reads <see cref="Arguments"/> /
 /// <see cref="EnvironmentVariables"/> and returns before starting) don't orphan a process.
 /// </summary>
 internal sealed class ProcessExecution : IProcessExecution
@@ -27,6 +25,7 @@ internal sealed class ProcessExecution : IProcessExecution
     private readonly IReadOnlyDictionary<string, string?> _environment;
     private readonly ILogger _logger;
     private readonly ProcessInvocationOptions _options;
+    private readonly IEnvironment _hostEnvironment;
     private IsolatedProcess? _process;
     private long _lastActivityTimestamp = Stopwatch.GetTimestamp();
     private int _disposed;
@@ -37,7 +36,8 @@ internal sealed class ProcessExecution : IProcessExecution
         IReadOnlyList<string> arguments,
         IReadOnlyDictionary<string, string?> environment,
         ILogger logger,
-        ProcessInvocationOptions options)
+        ProcessInvocationOptions options,
+        IEnvironment hostEnvironment)
     {
         _startInfo = startInfo;
         _fileName = fileName;
@@ -45,6 +45,7 @@ internal sealed class ProcessExecution : IProcessExecution
         _environment = environment;
         _logger = logger;
         _options = options;
+        _hostEnvironment = hostEnvironment;
     }
 
     /// <inheritdoc />
@@ -275,7 +276,7 @@ internal sealed class ProcessExecution : IProcessExecution
                 return;
             }
 
-            if (!OperatingSystem.IsWindows())
+            if (!_hostEnvironment.IsWindows())
             {
                 ProcessSignaler.RequestGracefulShutdown(process.Id, expectedStartTime: null, _logger);
 

@@ -135,6 +135,8 @@
     <Compile Include="$(SharedDir)ChannelExtensions.cs" Link="Utils\ChannelExtensions.cs" />
     <Compile Include="$(SharedDir)CommandLineArgsParser.cs" Link="Utils\CommandLineArgsParser.cs" />
     <Compile Include="$(SharedDir)EnumerableExtensions.cs" Link="Utils\EnumerableExtensions.cs" />
+    <Compile Include="$(SharedDir)FileUploadHelpers.cs" Link="Utils\FileUploadHelpers.cs" />
+    <Compile Include="$(SharedDir)KnownAspNetCoreConfigNames.cs" Link="Utils\KnownAspNetCoreConfigNames.cs" />
     <Compile Include="$(SharedDir)KnownConfigNames.cs" Link="Utils\KnownConfigNames.cs" />
     <Compile Include="$(SharedDir)LaunchProfiles\LaunchSettingsReader.cs" Link="LaunchProfiles\LaunchSettingsReader.cs" />
     <Compile Include="$(SharedDir)IntegrationPackageProbeManifest.cs" Link="Utils\IntegrationPackageProbeManifest.cs" />
@@ -197,6 +199,8 @@
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="ConsoleLogs\TimestampParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="ConsoleLogs\UrlParser.cs" />
     <Compile Include="$(SharedDir)ProcessSignaler.cs" Link="Utils\ProcessSignaler.cs" />
+    <Compile Include="$(SharedDir)ProcessStartTimeHelper.cs" Link="Utils\ProcessStartTimeHelper.cs" />
+    <Compile Include="$(SharedDir)ParentProcessLivenessMonitor.cs" Link="Utils\ParentProcessLivenessMonitor.cs" />
     <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="Utils\NpmVersionHelper.cs" />
   </ItemGroup>
 
@@ -225,6 +229,11 @@
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
       <DependentUpon>ErrorStrings.resx</DependentUpon>
+    </Compile>
+    <Compile Update="Resources\MigrationStrings.Designer.cs">
+      <DesignTime>True</DesignTime>
+      <AutoGen>True</AutoGen>
+      <DependentUpon>MigrationStrings.resx</DependentUpon>
     </Compile>
     <Compile Update="Resources\AddCommandStrings.Designer.cs">
       <DesignTime>True</DesignTime>
@@ -307,6 +316,15 @@
     <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills.metadata.json" LogicalName="aspire-skills.metadata.json">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+    <!-- Agent PostToolUse telemetry hook scripts. Materialized to ~/.aspire/hooks/ by
+         TelemetryHookInstaller and registered into each detected agent client's user-level
+         config during `aspire agent init`. -->
+    <EmbeddedResource Include="Agents\Hooks\track-telemetry.sh" LogicalName="track-telemetry.sh">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Agents\Hooks\track-telemetry.ps1" LogicalName="track-telemetry.ps1">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
   </ItemGroup>
 
 
@@ -331,6 +349,13 @@
       <SubType>Designer</SubType>
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>ErrorStrings.Designer.cs</LastGenOutput>
+    </EmbeddedResource>
+    <EmbeddedResource Update="Resources\MigrationStrings.resx">
+      <XlfSourceFormat>Resx</XlfSourceFormat>
+      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
+      <SubType>Designer</SubType>
+      <Generator>ResXFileCodeGenerator</Generator>
+      <LastGenOutput>MigrationStrings.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Update="Resources\AddCommandStrings.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>

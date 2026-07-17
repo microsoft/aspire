@@ -9,6 +9,7 @@ using System.Xml.Linq;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -38,6 +39,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
     private readonly IDotNetCliRunner _dotNetCliRunner;
     private readonly IPackagingService _packagingService;
     private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly string? _logFilePath;
 
@@ -48,6 +50,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         IDotNetCliRunner dotNetCliRunner,
         IPackagingService packagingService,
         IProcessExecutionFactory processExecutionFactory,
+        IEnvironment environment,
         ILogger<DotNetBasedAppHostServerProject> logger,
         string? projectModelPath = null,
         string? logFilePath = null)
@@ -60,6 +63,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         _dotNetCliRunner = dotNetCliRunner;
         _packagingService = packagingService;
         _processExecutionFactory = processExecutionFactory;
+        _environment = environment;
         _logger = logger;
         _logFilePath = logFilePath;
 
@@ -474,7 +478,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         AppHostServerRunControl? runControl)
     {
         var assemblyPath = Path.Combine(BuildPath, ProjectDllName);
-        var dotnetExe = OperatingSystem.IsWindows() ? "dotnet.exe" : "dotnet";
+        var dotnetExe = _environment.IsWindows() ? "dotnet.exe" : "dotnet";
 
         // Build the canonical ProcessStartInfo first, then translate to IsolatedProcessStartInfo
         // only if the isolated path is requested. Sharing the env/arg construction avoids drift
@@ -499,13 +503,18 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
 
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliLogFilePath] = _logFilePath;
+
+        // Stamp the launching CLI (hostPid) as the parent under both the RemoteHost and generic CLI
+        // key pairs. Resolve the start time once and pair it with the PID so the RemoteHost orphan
+        // detector verifies both and does not keep the server alive against a recycled PID.
+        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(hostPid);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 
         // Dev mode uses debug builds which require Development environment
         // for the dashboard to resolve static web assets correctly
-        startInfo.Environment["ASPNETCORE_ENVIRONMENT"] = "Development";
+        startInfo.Environment[KnownAspNetCoreConfigNames.Environment] = "Development";
 
         // Wire WithTerminal() for guest/polyglot AppHosts running from the repo. The
         // generated AppHostServer references Aspire.Hosting from the repo and DCP resolves
@@ -571,7 +580,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             // The graceful ladder always tree-kills on escalation; this fallback only matters when
             // graceful services were not wired (non-Run callers), where it preserves the old session
             // behavior of force-killing the tree on Unix but only the root on Windows.
-            KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
+            KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
         };
 
         execution = _processExecutionFactory.CreateExecution(startInfo, options);
@@ -647,10 +656,10 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
         }
     }
 
-    private static (string Os, string Arch) GetBuildPlatform()
+    private (string Os, string Arch) GetBuildPlatform()
     {
-        var os = OperatingSystem.IsLinux() ? "linux"
-            : OperatingSystem.IsMacOS() ? "darwin"
+        var os = _environment.IsLinux() ? "linux"
+            : _environment.IsMacOS() ? "darwin"
             : "windows";
 
         var arch = RuntimeInformation.OSArchitecture switch

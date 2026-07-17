@@ -13,6 +13,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -45,6 +46,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     private readonly IPackagingService _packagingService;
     private readonly CliExecutionContext _executionContext;
     private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly BundleLayoutLease? _layoutLease;
     private readonly string _workingDirectory;
@@ -68,6 +70,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// <param name="packagingService">The packaging service for channel resolution.</param>
     /// <param name="executionContext">The CLI execution context providing identity channel information.</param>
     /// <param name="processExecutionFactory">The factory used to spawn and manage the AppHost server child process.</param>
+    /// <param name="environment">The environment abstraction for OS detection.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     /// <param name="layoutLease">The active bundle layout lease, if this server is running from a versioned bundle.</param>
     public PrebuiltAppHostServer(
@@ -80,6 +83,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         IPackagingService packagingService,
         CliExecutionContext executionContext,
         IProcessExecutionFactory processExecutionFactory,
+        IEnvironment environment,
         ILogger logger,
         BundleLayoutLease? layoutLease = null)
     {
@@ -92,6 +96,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         _packagingService = packagingService;
         _executionContext = executionContext;
         _processExecutionFactory = processExecutionFactory;
+        _environment = environment;
         _logger = logger;
         _layoutLease = layoutLease;
 
@@ -961,7 +966,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             IsolateConsole = runControl?.IsolateConsole ?? false,
             GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
             ShutdownService = runControl?.ShutdownService,
-            KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
+            KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
         };
 
         execution = _processExecutionFactory.CreateExecution(startInfo, options);
@@ -1012,9 +1017,14 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
         // Configure environment
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliLogFilePath] = _executionContext.LogFilePath;
+
+        // Stamp the launching CLI (hostPid) as the parent under both the RemoteHost and generic CLI
+        // key pairs. Resolve the start time once and pair it with the PID so the RemoteHost orphan
+        // detector verifies both and does not keep the server alive against a recycled PID.
+        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(hostPid);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 
         if (_integrationLibsPath is not null)
         {

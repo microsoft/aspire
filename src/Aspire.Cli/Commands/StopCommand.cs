@@ -22,7 +22,9 @@ internal sealed class StopCommand : BaseCommand
     private readonly AppHostConnectionResolver _connectionResolver;
     private readonly ILogger<StopCommand> _logger;
     private readonly ICliHostEnvironment _hostEnvironment;
+    private readonly IEnvironment _environment;
     private readonly ProcessTreeGracefulShutdownService _processShutdownService;
+    private readonly OrphanedAppHostCollector _collector;
     private readonly ProfilingTelemetry _profilingTelemetry;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
@@ -35,7 +37,9 @@ internal sealed class StopCommand : BaseCommand
     public StopCommand(
         AppHostConnectionResolver connectionResolver,
         ICliHostEnvironment hostEnvironment,
+        IEnvironment environment,
         ProcessTreeGracefulShutdownService processShutdownService,
+        OrphanedAppHostCollector collector,
         ILogger<StopCommand> logger,
         ProfilingTelemetry profilingTelemetry,
         CommonCommandServices services)
@@ -43,7 +47,9 @@ internal sealed class StopCommand : BaseCommand
     {
         _connectionResolver = connectionResolver;
         _hostEnvironment = hostEnvironment;
+        _environment = environment;
         _processShutdownService = processShutdownService;
+        _collector = collector;
         _logger = logger;
         _profilingTelemetry = profilingTelemetry;
 
@@ -144,6 +150,16 @@ internal sealed class StopCommand : BaseCommand
     /// </summary>
     private async Task<int> StopAllAppHostsAsync(CancellationToken cancellationToken)
     {
+        // First collect AppHosts whose launching CLI has died.
+        // Collecting first guarantees orphaned trees and their stale sockets are cleaned up
+        // even if the normal stop path can't connect to one of them. CollectAsync is best effort and
+        // never throws for scan/stop failures (only cancellation propagates), so no guard is needed here.
+        var collected = await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
+        if (collected > 0)
+        {
+            _logger.LogDebug("Collected {Count} orphaned AppHost(s) before stopping the rest.", collected);
+        }
+
         var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
             SharedCommandStrings.ScanningForRunningAppHosts,
             cancellationToken);
@@ -160,7 +176,7 @@ internal sealed class StopCommand : BaseCommand
         var connections = allConnections.Select(connectionResult => connectionResult.Connection!).ToArray();
         var appHostPaths = connections.Select(GetAppHostPath).ToArray();
         var appHostPathComparer = GetAppHostPathComparer();
-        var displayPaths = FileSystemHelper.ShortenPaths(appHostPaths);
+        var displayPaths = FileSystemHelper.ShortenPaths(appHostPaths, _environment);
         var appHostPathCounts = appHostPaths
             .GroupBy(path => path, appHostPathComparer)
             .ToDictionary(group => group.Key, group => group.Count(), appHostPathComparer);
@@ -253,9 +269,9 @@ internal sealed class StopCommand : BaseCommand
             : connection.AppHostInfo.AppHostPath;
     }
 
-    private static StringComparer GetAppHostPathComparer()
+    private StringComparer GetAppHostPathComparer()
     {
-        return OperatingSystem.IsWindows()
+        return _environment.IsWindows()
             ? StringComparer.OrdinalIgnoreCase
             : StringComparer.Ordinal;
     }

@@ -235,8 +235,8 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Wait for UI to update
         cut.WaitForAssertion(() =>
         {
-            selectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
-            var updatedOptions = selectElement.QuerySelectorAll("fluent-option");
+            var updatedSelectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
+            var updatedOptions = updatedSelectElement.QuerySelectorAll("fluent-option");
             // Should now have "All" + all three resources
             Assert.Equal(4, updatedOptions.Length);
             var updatedOptionValues = updatedOptions.Select(opt => opt.GetAttribute("value")).ToList();
@@ -256,8 +256,8 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // Wait for UI to update - hidden resource should be filtered out
         cut.WaitForAssertion(() =>
         {
-            selectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
-            var finalOptions = selectElement.QuerySelectorAll("fluent-option");
+            var finalSelectElement = cut.FindComponent<ResourceSelect>().Find("fluent-select");
+            var finalOptions = finalSelectElement.QuerySelectorAll("fluent-option");
             // Should be back to "All" + 2 regular resources only
             Assert.Equal(3, finalOptions.Length);
             var finalOptionValues = finalOptions.Select(opt => opt.GetAttribute("value")).ToList();
@@ -366,6 +366,73 @@ public partial class ConsoleLogsTests : DashboardTestContext
         logger.LogInformation("Log results are added to log viewer.");
         consoleLogsChannel.Writer.TryWrite([new ResourceLogLine(1, "Hello world", IsErrorMessage: false)]);
         cut.WaitForState(() => instance._logEntries.EntriesCount > 0);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public async Task SearchFilter_UpdatesLogViewerFilterAndVisibleLogs(bool isDesktop)
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        var viewport = CreateViewport(isDesktop);
+        SetupConsoleLogsServices(dashboardClient);
+        var dialogProvider = isDesktop ? null : RenderDialogProvider(viewport);
+
+        var cut = RenderConsoleLogsPage(viewport, resourceName: "test-resource");
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        consoleLogsChannel.Writer.TryWrite([
+            new ResourceLogLine(1, "apple log", IsErrorMessage: false),
+            new ResourceLogLine(2, "banana log", IsErrorMessage: false)
+        ]);
+
+        cut.WaitForAssertion(() => Assert.Equal(2, cut.FindAll(".log-content").Count));
+
+        var search = isDesktop
+            ? Assert.Single(cut.FindComponents<FluentSearch>())
+            : OpenMobileToolbarAndFindSearch(cut, dialogProvider!);
+        await cut.InvokeAsync(() => search.Instance.ValueChanged.InvokeAsync("banana"));
+
+        cut.WaitForAssertion(() =>
+        {
+            var logViewer = Assert.Single(cut.FindComponents<LogViewer>());
+            Assert.Equal("banana", logViewer.Instance.FilterText);
+
+            var content = Assert.Single(cut.FindAll(".log-content"));
+            Assert.Contains("banana log", content.TextContent);
+        });
+    }
+
+    [Fact]
+    public void SearchFilter_MobileHasVisibleLabel()
+    {
+        var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
+        var viewport = CreateViewport(isDesktop: false);
+        SetupConsoleLogsServices(dashboardClient);
+        var dialogProvider = RenderDialogProvider(viewport);
+
+        var cut = RenderConsoleLogsPage(viewport, resourceName: "test-resource");
+        cut.WaitForState(() => cut.Instance.PageViewModel.SelectedResource.Id?.InstanceId == testResource.Name);
+
+        var loc = Services.GetRequiredService<IStringLocalizer<Resources.ControlsStrings>>();
+        var search = OpenMobileToolbarAndFindSearch(cut, dialogProvider);
+
+        Assert.Equal(loc[nameof(Resources.ControlsStrings.FilterPlaceholder)].Value, search.Instance.Label);
     }
 
     [Fact]
@@ -834,6 +901,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
 
     private void SetupConsoleLogsServices(TestDashboardClient? dashboardClient = null, TestTimeProvider? timeProvider = null)
     {
+        FluentUISetupHelpers.SetupFluentDialogProvider(this);
         FluentUISetupHelpers.SetupFluentDivider(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentList(this);
@@ -858,5 +926,46 @@ public partial class ConsoleLogsTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
         Services.AddScoped<DashboardCommandExecutor>();
         Services.AddSingleton<ConsoleLogsManager>();
+    }
+
+    private IRenderedComponent<Components.Pages.ConsoleLogs> RenderConsoleLogsPage(ViewportInformation viewport, string resourceName)
+    {
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        return RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, resourceName);
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+    }
+
+    private static ViewportInformation CreateViewport(bool isDesktop)
+    {
+        return new ViewportInformation(IsDesktop: isDesktop, IsUltraLowHeight: false, IsUltraLowWidth: false);
+    }
+
+    private static IRenderedComponent<FluentSearch> OpenMobileToolbarAndFindSearch(IRenderedComponent<Components.Pages.ConsoleLogs> cut, IRenderedFragment dialogProvider)
+    {
+        cut.Find(".mobile-toolbar").Click();
+
+        dialogProvider.WaitForAssertion(() => Assert.Single(dialogProvider.FindComponents<FluentSearch>()));
+
+        return Assert.Single(dialogProvider.FindComponents<FluentSearch>());
+    }
+
+    private IRenderedFragment RenderDialogProvider(ViewportInformation viewport)
+    {
+        return Render(builder =>
+        {
+            builder.OpenComponent<CascadingValue<ViewportInformation>>(0);
+            builder.AddAttribute(1, nameof(CascadingValue<ViewportInformation>.Value), viewport);
+            builder.AddAttribute(2, nameof(CascadingValue<ViewportInformation>.ChildContent), (RenderFragment)(childBuilder =>
+            {
+                childBuilder.OpenComponent<FluentDialogProvider>(0);
+                childBuilder.CloseComponent();
+            }));
+            builder.CloseComponent();
+        });
     }
 }

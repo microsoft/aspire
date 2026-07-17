@@ -132,6 +132,42 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Development Tools.
+        /// </summary>
+        public static string DevelopmentToolsCategoryHeader {
+            get {
+                return ResourceManager.GetString("DevelopmentToolsCategoryHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire extension for VS Code is installed.
+        /// </summary>
+        public static string VsCodeExtensionInstalledMessage {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionInstalledMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to VS Code is installed, but the Aspire extension is not installed.
+        /// </summary>
+        public static string VsCodeExtensionMissingMessage {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionMissingMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience..
+        /// </summary>
+        public static string VsCodeExtensionMissingFix {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionMissingFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Summary: {0} passed, {1} warnings, {2} failed.
         /// </summary>
         public static string SummaryFormat {
@@ -389,6 +425,33 @@ namespace Aspire.Cli.Resources {
         public static string DevCertsOldVersionDetailsFormat {
             get {
                 return ResourceManager.GetString("DevCertsOldVersionDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to certutil is not available; browser certificate trust may be incomplete.
+        /// </summary>
+        public static string DevCertsMissingCertUtilMessage {
+            get {
+                return ResourceManager.GetString("DevCertsMissingCertUtilMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux..
+        /// </summary>
+        public static string DevCertsMissingCertUtilDetails {
+            get {
+                return ResourceManager.GetString("DevCertsMissingCertUtilDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install certutil from your distribution's NSS tools package (for example, libnss3-tools)..
+        /// </summary>
+        public static string DevCertsMissingCertUtilFix {
+            get {
+                return ResourceManager.GetString("DevCertsMissingCertUtilFix", resourceCulture);
             }
         }
 
@@ -767,6 +830,24 @@ namespace Aspire.Cli.Resources {
         public static string LegacySettingsDetectedFix {
             get {
                 return ResourceManager.GetString("LegacySettingsDetectedFix", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Legacy 'apphost.ts' layout detected at {0}.
+        /// </summary>
+        public static string LegacyTypeScriptAppHostMessageFormat {
+            get {
+                return ResourceManager.GetString("LegacyTypeScriptAppHostMessageFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run 'aspire update --migrate' to apply the recommended migration....
+        /// </summary>
+        public static string PendingMigrationFix {
+            get {
+                return ResourceManager.GetString("PendingMigrationFix", resourceCulture);
             }
         }
     }

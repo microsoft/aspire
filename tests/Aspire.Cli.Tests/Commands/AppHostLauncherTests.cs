@@ -16,6 +16,7 @@ using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Telemetry;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -65,6 +66,57 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
         Assert.StartsWith("cli_20260212T180000000_detach-child_", fileName, StringComparison.Ordinal);
         Assert.EndsWith(".log", fileName, StringComparison.Ordinal);
         Assert.DoesNotContain($"_{Environment.ProcessId}", fileName, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void ComputeDetachedMatchHashes_ResolvesSymlinkForPrimaryHash_AndKeepsRawHashInFallback()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
+            "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var homeDirectory = workspace.WorkspaceRoot.FullName;
+
+        // Reference the same AppHost through a directory symlink ("link" -> "real"). This mirrors the
+        // macOS temp-path shape (/var/folders/... is a symlink to /private/var/folders/...) that made
+        // detached `aspire start` wait on a hash the AppHost never used.
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
+        var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
+
+        var realProjectPath = Path.Combine(realDirectory.FullName, "AppHost.csproj");
+        File.WriteAllText(realProjectPath, "<Project />");
+        var appHostPathViaSymlink = Path.Combine(symlinkDirectory, "AppHost.csproj");
+
+        var resolvedPath = PathNormalizer.ResolveSymlinks(appHostPathViaSymlink);
+        // The test is only meaningful when resolution actually rewrites the path.
+        Assert.NotEqual(appHostPathViaSymlink, resolvedPath);
+
+        var resolvedPathHash = AppHostHelper.ExtractHashFromSocketPath(
+            AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedPath, homeDirectory))!;
+        var rawPathHash = AppHostHelper.ExtractHashFromSocketPath(
+            AppHostHelper.ComputeAuxiliarySocketPrefix(appHostPathViaSymlink, homeDirectory))!;
+        var rawFallbackHashes = AppHostHelper.ComputeLegacyHashes(appHostPathViaSymlink);
+        var resolvedFallbackHashes = AppHostHelper.ComputeLegacyHashes(resolvedPath);
+
+        var (expectedHash, fallbackHashes) = AppHostLauncher.ComputeDetachedMatchHashes(appHostPathViaSymlink, homeDirectory);
+
+        // The primary hash is computed from the resolved path — the value the AppHost actually keys
+        // its socket on — and therefore differs from the raw-path hash the buggy code waited on.
+        Assert.Equal(resolvedPathHash, expectedHash);
+        Assert.NotEqual(rawPathHash, expectedHash);
+
+        // The fallback set keeps the raw path's compact hash so an AppHost still keyed on the
+        // unresolved path continues to match, plus the legacy hex hashes of both paths.
+        Assert.Contains(rawPathHash, fallbackHashes);
+        Assert.Contains(rawFallbackHashes[0], fallbackHashes);
+        Assert.Contains(resolvedFallbackHashes[0], fallbackHashes);
+
+        // Cross-side agreement: the AppHost builds its socket file name with the same shared code,
+        // keyed on the resolved path (AuxiliaryBackchannelService resolves symlinks before naming the
+        // socket via ComputeSocketPath, which embeds ComputeAppHostId(resolvedPath)). The CLI's
+        // primary hash must equal that embedded id so it waits on exactly the AppHost's socket.
+        Assert.Equal(BackchannelConstants.ComputeAppHostId(resolvedPath), expectedHash);
     }
 
     [Fact]
@@ -448,6 +500,21 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void DetachedChildEnvironment_StampsLauncherIdentityForLivenessMonitor()
+    {
+        // The detached child's LauncherLivenessMonitor watches this launcher identity (PID + start time)
+        // to tear the AppHost down if the foreground launcher dies before readiness. Without it the child
+        // cannot detect a dead launcher and the AppHost + dashboard leak as orphaned processes.
+        var environment = AppHostLauncher.CreateDetachedChildEnvironment(null);
+
+        Assert.Equal("true", environment[KnownConfigNames.CliRunDetached]);
+        Assert.Equal(
+            Environment.ProcessId.ToString(CultureInfo.InvariantCulture),
+            environment[KnownConfigNames.CliLauncherProcessId]);
+        Assert.NotNull(ProcessStartTimeHelper.TryParseStartTimeUnixSeconds(environment[KnownConfigNames.CliLauncherProcessStarted]));
+    }
+
+    [Fact]
     public void DetachedChildEnvironment_IncludesProfilingTelemetryContextFromActiveProfilingSpan()
     {
         using var profilingTelemetry = new ProfilingTelemetry(CreateConfiguration(
@@ -499,7 +566,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ReadChildLogTail_ReturnsBoundedRelevantNonEmptyTail()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var childLogFile = Path.Combine(workspace.WorkspaceRoot.FullName, "child.log");
         await File.WriteAllLinesAsync(childLogFile, [
             "[2026-05-15 17:07:24.674] [DBUG] [Features] Feature updateNotificationsEnabled = True (default: True)",
@@ -527,7 +594,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ReadChildLogTail_IncludesBuildOutput()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var childLogFile = Path.Combine(workspace.WorkspaceRoot.FullName, "child.log");
         await File.WriteAllLinesAsync(childLogFile, [
             "[2026-05-16 19:07:51.709] [INFO] [Build]   Determining projects to restore...",
@@ -550,7 +617,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ReadChildLogReplayTail_ReturnsRicherBoundedRelevantTail()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var childLogFile = Path.Combine(workspace.WorkspaceRoot.FullName, "child.log");
         await File.WriteAllLinesAsync(childLogFile, [
             "[2026-05-15 17:07:24.674] [DBUG] [Features] Feature updateNotificationsEnabled = True (default: True)",
@@ -612,7 +679,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ReadChildLogReplayTail_IncludesBuildOutput()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var childLogFile = Path.Combine(workspace.WorkspaceRoot.FullName, "child.log");
         await File.WriteAllLinesAsync(childLogFile, [
             "[2026-05-16 19:07:51.709] [INFO] [Build]   Determining projects to restore...",
@@ -688,7 +755,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
 
         public static AppHostLauncherHarness Create(ITestOutputHelper outputHelper)
         {
-            var workspace = TemporaryWorkspace.Create(outputHelper);
+            var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var homeDirectory = workspace.WorkspaceRoot.CreateSubdirectory("home");
             var hivesDirectory = workspace.WorkspaceRoot.CreateSubdirectory("hives");
             var cacheDirectory = workspace.WorkspaceRoot.CreateSubdirectory("cache");
@@ -714,7 +781,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
                 new FixedLayoutDiscovery(),
                 new NullBundleService(),
                 new LayoutProcessRunner(new TestProcessExecutionFactory()),
-                executionContext,
+                executionContext, new TestEnvironment(),
                 NullLogger<ProcessTreeGracefulShutdownService>.Instance,
                 TimeProvider.System);
             var launcher = new AppHostLauncher(

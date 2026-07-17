@@ -19,18 +19,23 @@ internal sealed class DashboardServiceData : IDisposable
     private readonly ResourceCommandService _resourceCommandService;
     private readonly InteractionService _interactionService;
     private readonly ResourceLoggerService _resourceLoggerService;
+    private readonly IFileUploadStore _fileUploadStore;
+    private readonly ILogger<DashboardServiceData> _logger;
 
     public DashboardServiceData(
         ResourceNotificationService resourceNotificationService,
         ResourceLoggerService resourceLoggerService,
         ILogger<DashboardServiceData> logger,
         ResourceCommandService resourceCommandService,
-        InteractionService interactionService)
+        InteractionService interactionService,
+        IFileUploadStore fileUploadStore)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourcePublisher = new ResourcePublisher(_cts.Token);
         _resourceCommandService = resourceCommandService;
         _interactionService = interactionService;
+        _fileUploadStore = fileUploadStore;
+        _logger = logger;
         var cancellationToken = _cts.Token;
 
         Task.Run(async () =>
@@ -202,6 +207,8 @@ internal sealed class DashboardServiceData : IDisposable
                         return new InteractionCompletionState { Complete = true, State = request.MessageBox.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.Notification:
                         return new InteractionCompletionState { Complete = true, State = request.Notification.Result };
+                    case WatchInteractionsRequestUpdate.KindOneofCase.PromptProgress:
+                        return new InteractionCompletionState { Complete = true, State = request.PromptProgress.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog:
                         var inputsInfo = (Interaction.InputsInteractionInfo)interaction.InteractionInfo;
                         var options = (InputsDialogInteractionOptions)interaction.Options;
@@ -210,7 +217,7 @@ internal sealed class DashboardServiceData : IDisposable
                             serviceProvider,
                             logger,
                             inputsInfo,
-                            request.InputsDialog.InputItems.Select(i => new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType))).ToList(),
+                            request.InputsDialog.InputItems.Select(i => MapInputDto(i)).ToList(),
                             request.ResponseUpdate,
                             interaction.CancellationToken);
 
@@ -223,7 +230,27 @@ internal sealed class DashboardServiceData : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
-    public record InputDto(string Name, string Value, InputType InputType);
+    private InputDto MapInputDto(Aspire.DashboardService.Proto.V1.InteractionInput i)
+    {
+        var inputType = DashboardService.MapInputType(i.InputType);
+
+        // For file inputs, Value contains a JSON array of objects with file IDs and names.
+        // Resolve each ID to the temp file path and build InputFileDto entries.
+        if (inputType == InputType.File)
+        {
+            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, i.Name, _logger);
+            if (files is not null)
+            {
+                return new InputDto(i.Name, i.Value, inputType, files);
+            }
+        }
+
+        return new InputDto(i.Name, i.Value, inputType);
+    }
+
+    public record InputFileDto(string Id, string Name, string FilePath);
+
+    public record InputDto(string Name, string Value, InputType InputType, IReadOnlyList<InputFileDto>? Files = null);
 
     public static void ProcessInputs(IServiceProvider serviceProvider, ILogger logger, Interaction.InputsInteractionInfo inputsInfo, List<InputDto> inputDtos, bool dependencyChange, CancellationToken cancellationToken)
     {
@@ -248,6 +275,23 @@ internal sealed class DashboardServiceData : IDisposable
             if (!string.Equals(modelInput.Value ?? string.Empty, incomingValue ?? string.Empty))
             {
                 modelInput.Value = incomingValue;
+
+                // For File inputs, build InteractionFile instances from the resolved file info.
+                if (requestInput.InputType == InputType.File)
+                {
+                    if (requestInput.Files is { Count: > 0 })
+                    {
+                        var interactionFiles = requestInput.Files
+                            .Select(f => new InteractionFile(f.Id, f.Name, f.FilePath))
+                            .ToArray();
+                        modelInput.SetFiles(interactionFiles);
+                    }
+                    else
+                    {
+                        // Clear stale file references when the selection is empty.
+                        modelInput.SetFiles([]);
+                    }
+                }
 
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.
                 if (dependencyChange)

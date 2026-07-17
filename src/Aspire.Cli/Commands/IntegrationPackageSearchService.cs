@@ -23,6 +23,63 @@ internal sealed class IntegrationPackageSearchService(
 
     public async Task<IEnumerable<(NuGetPackage Package, PackageChannel Channel)>> GetIntegrationPackagesWithChannelsAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
     {
+        var channels = await GetSearchChannelsAsync(configuredChannel, cancellationToken);
+
+        var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
+        var packagesLock = new object();
+
+        await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
+        {
+            var integrationPackages = await channel.GetIntegrationPackagesAsync(
+                workingDirectory: workingDirectory,
+                cancellationToken: ct);
+            lock (packagesLock)
+            {
+                packages.AddRange(integrationPackages.Select(p => (p, channel)));
+            }
+        });
+
+        return packages;
+    }
+
+    /// <summary>
+    /// Searches the same channels as <see cref="GetIntegrationPackagesWithChannelsAsync"/> and, in the same
+    /// pass, resolves the union of integration package IDs that are marked polyglot-compatible (carry the
+    /// <c>polyglot</c> NuGet tag). Used by <c>aspire add</c> and integration discovery to hide integrations a
+    /// non-C# AppHost cannot consume unless <c>--all</c> is passed.
+    /// </summary>
+    /// <remarks>
+    /// Resolving both lists together avoids re-resolving the channel set and lets each channel's integration
+    /// search and its <c>tags:polyglot</c> lookup run concurrently, rather than as two serial discovery passes.
+    /// </remarks>
+    public async Task<(IReadOnlyList<(NuGetPackage Package, PackageChannel Channel)> Packages, IReadOnlySet<string> PolyglotCompatibleIds)> GetIntegrationPackagesWithPolyglotCompatibilityAsync(DirectoryInfo workingDirectory, string? configuredChannel, CancellationToken cancellationToken)
+    {
+        var channels = await GetSearchChannelsAsync(configuredChannel, cancellationToken);
+
+        var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
+        var polyglotIds = new HashSet<string>(StringComparers.NuGetPackageId);
+        var gate = new object();
+
+        await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
+        {
+            // Resolve the integration list and the polyglot allow-list for this channel concurrently so the
+            // compatibility lookup runs alongside the integration search instead of as a second serial pass.
+            var integrationPackagesTask = channel.GetIntegrationPackagesAsync(workingDirectory: workingDirectory, cancellationToken: ct);
+            var polyglotIdsTask = channel.GetPolyglotCompatiblePackageIdsAsync(workingDirectory: workingDirectory, cancellationToken: ct);
+            await Task.WhenAll(integrationPackagesTask, polyglotIdsTask);
+
+            lock (gate)
+            {
+                packages.AddRange(integrationPackagesTask.Result.Select(p => (p, channel)));
+                polyglotIds.UnionWith(polyglotIdsTask.Result);
+            }
+        });
+
+        return (packages, polyglotIds);
+    }
+
+    private async Task<IEnumerable<PackageChannel>> GetSearchChannelsAsync(string? configuredChannel, CancellationToken cancellationToken)
+    {
         // `configuredChannel` (from a polyglot apphost's aspire.config.json) is forwarded
         // as `requestedChannelName` so PackagingService can synthesize the staging channel
         // for out-of-tree apphosts whose directory wasn't picked up by
@@ -47,28 +104,12 @@ internal sealed class IntegrationPackageSearchService(
         // emulated identity (stable/daily/staging), not a local-build name — participates in the
         // search instead of being filtered out, which would silently fall back to nuget.org.
         var hasHives = executionContext.GetHiveCount() > 0 || executionContext.IdentityPackagesDirectory is not null;
-        var channels = hasHives || !string.IsNullOrEmpty(configuredChannel)
+        return hasHives || !string.IsNullOrEmpty(configuredChannel)
             ? allChannels
             : allChannels.Where(c => c.Type is PackageChannelType.Implicit);
-
-        var packages = new List<(NuGetPackage Package, PackageChannel Channel)>();
-        var packagesLock = new object();
-
-        await Parallel.ForEachAsync(channels, cancellationToken, async (channel, ct) =>
-        {
-            var integrationPackages = await channel.GetIntegrationPackagesAsync(
-                workingDirectory: workingDirectory,
-                cancellationToken: ct);
-            lock (packagesLock)
-            {
-                packages.AddRange(integrationPackages.Select(p => (p, channel)));
-            }
-        });
-
-        return packages;
     }
 
-    public async Task<(DirectoryInfo WorkingDirectory, string? ConfiguredChannel, int? ExitCode)> GetPackageSearchContextAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
+    public async Task<(DirectoryInfo WorkingDirectory, string? ConfiguredChannel, string? LanguageId, int? ExitCode)> GetPackageSearchContextAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
     {
         FileInfo? appHostProjectFile;
         if (passedAppHostProjectFile is not null)
@@ -88,12 +129,12 @@ internal sealed class IntegrationPackageSearchService(
 
         if (appHostProjectFile is null)
         {
-            return (executionContext.WorkingDirectory, ConfiguredChannel: null, ExitCode: null);
+            return (executionContext.WorkingDirectory, ConfiguredChannel: null, LanguageId: null, ExitCode: null);
         }
 
         var project = projectFactory.GetProject(appHostProjectFile);
         var (configuredChannel, exitCode) = GetConfiguredChannel(appHostProjectFile, project);
-        return (appHostProjectFile.Directory!, configuredChannel, exitCode);
+        return (appHostProjectFile.Directory!, configuredChannel, project.LanguageId, exitCode);
     }
 
     public (string? ConfiguredChannel, int? ExitCode) GetConfiguredChannel(FileInfo appHostProjectFile, IAppHostProject project)

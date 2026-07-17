@@ -7,7 +7,10 @@ using Aspire.Hosting.Maui;
 using Aspire.Hosting.Maui.Annotations;
 using Aspire.Hosting.Maui.Utilities;
 using Aspire.Hosting.Tests.Utils;
+using Aspire.Hosting.Utils;
+using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using System.Net.Sockets;
 using System.Reflection;
 using System.Text.Json;
 using System.Text.Json.Serialization;
@@ -18,7 +21,7 @@ namespace Aspire.Hosting.Tests;
 /// Consolidated tests for all MAUI platform extensions (Windows, macOS Catalyst, Android Device, Android Emulator).
 /// This reduces test duplication by using theory-based tests with platform-specific data.
 /// </summary>
-public class MauiPlatformExtensionsTests
+public class MauiPlatformExtensionsTests(ITestOutputHelper outputHelper)
 {
     // Test data provider for platform configurations
     public static TheoryData<PlatformTestConfig> AllPlatforms => new()
@@ -85,28 +88,22 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_CreatesResourceWithCorrectName(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var platform = config.AddPlatformWithDefaultName(maui);
+        // Act
+        var platform = config.AddPlatformWithDefaultName(maui);
 
-            // Assert
-            Assert.NotNull(platform);
-            Assert.Equal(config.ExpectedDefaultName, platform.Resource.Name);
-            var resourceWithParent = Assert.IsAssignableFrom<IResourceWithParent<MauiProjectResource>>(platform.Resource);
-            Assert.Same(maui.Resource, resourceWithParent.Parent);
-            Assert.IsType(config.ExpectedResourceType, platform.Resource);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert
+        Assert.NotNull(platform);
+        Assert.Equal(config.ExpectedDefaultName, platform.Resource.Name);
+        var resourceWithParent = Assert.IsAssignableFrom<IResourceWithParent<MauiProjectResource>>(platform.Resource);
+        Assert.Same(maui.Resource, resourceWithParent.Parent);
+        Assert.IsType(config.ExpectedResourceType, platform.Resource);
     }
 
     [Theory]
@@ -114,25 +111,19 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_WithCustomName_UsesProvidedName(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var customName = $"custom-{config.PlatformName}";
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var customName = $"custom-{config.PlatformName}";
 
-            // Act
-            var platform = config.AddPlatformWithCustomName(maui, customName);
+        // Act
+        var platform = config.AddPlatformWithCustomName(maui, customName);
 
-            // Assert
-            Assert.Equal(customName, platform.Resource.Name);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert
+        Assert.Equal(customName, platform.Resource.Name);
     }
 
     [Theory]
@@ -140,65 +131,53 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_DuplicateName_ThrowsException(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var name = "duplicate-name";
-            config.AddPlatformWithCustomName(maui, name);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var name = "duplicate-name";
+        config.AddPlatformWithCustomName(maui, name);
 
-            // Act & Assert
-            var exception = Assert.Throws<DistributedApplicationException>(() =>
-                config.AddPlatformWithCustomName(maui, name));
-            Assert.Contains("already exists", exception.Message);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Act & Assert
+        var exception = Assert.Throws<DistributedApplicationException>(() =>
+            config.AddPlatformWithCustomName(maui, name));
+        Assert.Contains("already exists", exception.Message);
     }
 
     [Theory]
     [MemberData(nameof(MauiPlatformsWithIdeLaunchConfiguration))]
     public void AddMauiPlatform_EmitsMauiIdeLaunchConfiguration(PlatformTestConfig config)
     {
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            var platform = config.AddPlatformWithDefaultName(maui);
+        var platform = config.AddPlatformWithDefaultName(maui);
 
-            var debugSupport = Assert.Single(platform.Resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
-            Assert.Equal("maui", GetPropertyValue(debugSupport, "LaunchConfigurationType"));
+        var debugSupport = Assert.Single(platform.Resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
+        Assert.Equal("maui", GetPropertyValue(debugSupport, "LaunchConfigurationType"));
 
-            var exe = CreateExecutableForDebugTest();
-            var annotator = Assert.IsAssignableFrom<Delegate>(GetPropertyValue(debugSupport, "LaunchConfigurationAnnotator"));
-            annotator.DynamicInvoke(exe, "Debug");
+        var exe = CreateExecutableForDebugTest();
+        var annotator = Assert.IsAssignableFrom<Delegate>(GetPropertyValue(debugSupport, "LaunchConfigurationAnnotator"));
+        annotator.DynamicInvoke(exe, "Debug");
 
-            var launchConfigurations = GetLaunchConfigurations<SerializedMauiLaunchConfiguration>(exe);
+        var launchConfigurations = GetLaunchConfigurations<SerializedMauiLaunchConfiguration>(exe);
 
-            var launchConfiguration = Assert.Single(launchConfigurations);
-            Assert.Equal("maui", launchConfiguration.Type);
-            Assert.Equal("Debug", launchConfiguration.Mode);
-            Assert.Equal(tempFile, launchConfiguration.ProjectPath);
-            Assert.Equal(config.RequiredTfm, launchConfiguration.TargetFramework);
-            Assert.Equal(config.PlatformIdentifier, launchConfiguration.Platform);
-            Assert.Equal(config.ExpectedTargetKind, launchConfiguration.TargetKind);
-            Assert.Equal(config.ExpectedDevice, launchConfiguration.Device);
-            Assert.Equal(config.ExpectedRuntimeIdentifier, launchConfiguration.RuntimeIdentifier);
-            Assert.Equal(config.ExpectedMsBuildProperties, launchConfiguration.MsBuildProperties);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        var launchConfiguration = Assert.Single(launchConfigurations);
+        Assert.Equal("maui", launchConfiguration.Type);
+        Assert.Equal("Debug", launchConfiguration.Mode);
+        Assert.Equal(tempFile, launchConfiguration.ProjectPath);
+        Assert.Equal(config.RequiredTfm, launchConfiguration.TargetFramework);
+        Assert.Equal(config.PlatformIdentifier, launchConfiguration.Platform);
+        Assert.Equal(config.ExpectedTargetKind, launchConfiguration.TargetKind);
+        Assert.Equal(config.ExpectedDevice, launchConfiguration.Device);
+        Assert.Equal(config.ExpectedRuntimeIdentifier, launchConfiguration.RuntimeIdentifier);
+        Assert.Equal(config.ExpectedMsBuildProperties, launchConfiguration.MsBuildProperties);
     }
 
     [Theory]
@@ -206,35 +185,47 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_HasCorrectAnnotations(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var platform = config.AddPlatformWithDefaultName(maui);
+        // Act
+        var platform = config.AddPlatformWithDefaultName(maui);
 
-            // Assert
-            var resource = platform.Resource;
+        // Assert
+        var resource = platform.Resource;
 
-            // Check ExecutableAnnotation
-            var execAnnotation = resource.Annotations.OfType<ExecutableAnnotation>().FirstOrDefault();
-            Assert.NotNull(execAnnotation);
-            Assert.Equal("dotnet", execAnnotation.Command);
-            Assert.NotNull(execAnnotation.WorkingDirectory);
+        // Check ExecutableAnnotation
+        var execAnnotation = resource.Annotations.OfType<ExecutableAnnotation>().FirstOrDefault();
+        Assert.NotNull(execAnnotation);
+        Assert.Equal("dotnet", execAnnotation.Command);
+        Assert.NotNull(execAnnotation.WorkingDirectory);
 
-            // Check MauiProjectMetadata
-            var metadata = resource.Annotations.OfType<MauiProjectMetadata>().FirstOrDefault();
-            Assert.NotNull(metadata);
-            Assert.Equal(tempFile, metadata.ProjectPath);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Check MauiProjectMetadata
+        var metadata = resource.Annotations.OfType<MauiProjectMetadata>().FirstOrDefault();
+        Assert.NotNull(metadata);
+        Assert.Equal(tempFile, metadata.ProjectPath);
+
+        var buildInfo = resource.Annotations.OfType<MauiBuildInfoAnnotation>().FirstOrDefault();
+        Assert.NotNull(buildInfo);
+        Assert.Equal(config.RequiredTfm, buildInfo.TargetFramework);
+        Assert.Equal(GetTestAssemblyConfiguration(), buildInfo.Configuration);
+        Assert.Equal(
+            config.ExpectedMsBuildProperties?.Select(property => $"-p:{property.Key}={property.Value}").ToArray() ?? [],
+            buildInfo.AdditionalBuildArguments);
+
+        var launchOverride = resource.Annotations.OfType<ProjectLaunchArgsOverrideAnnotation>().FirstOrDefault();
+        Assert.NotNull(launchOverride);
+        Assert.Collection(
+            launchOverride.Arguments,
+            arg => Assert.Equal("build", arg),
+            arg => Assert.Equal("--no-restore", arg),
+            arg => Assert.Equal("/t:Run", arg),
+            arg => Assert.Equal("-p:NoBuild=true", arg));
+        Assert.Equal("run", launchOverride.LeadingResourceArgumentToRemove);
     }
 
     [Theory]
@@ -242,24 +233,18 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_ImplementsIMauiPlatformResource(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var platform = config.AddPlatformWithDefaultName(maui);
+        // Act
+        var platform = config.AddPlatformWithDefaultName(maui);
 
-            // Assert
-            Assert.IsAssignableFrom<IMauiPlatformResource>(platform.Resource);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert
+        Assert.IsAssignableFrom<IMauiPlatformResource>(platform.Resource);
     }
 
     [Theory]
@@ -267,29 +252,23 @@ public class MauiPlatformExtensionsTests
     public void AddPlatform_MultiplePlatforms_AllCreated(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var platform1 = config.AddPlatformWithCustomName(maui, $"{config.PlatformName}-1");
-            var platform2 = config.AddPlatformWithCustomName(maui, $"{config.PlatformName}-2");
+        // Act
+        var platform1 = config.AddPlatformWithCustomName(maui, $"{config.PlatformName}-1");
+        var platform2 = config.AddPlatformWithCustomName(maui, $"{config.PlatformName}-2");
 
-            // Assert
-            Assert.NotEqual(platform1.Resource.Name, platform2.Resource.Name);
-            var parent1 = Assert.IsAssignableFrom<IResourceWithParent<MauiProjectResource>>(platform1.Resource);
-            var parent2 = Assert.IsAssignableFrom<IResourceWithParent<MauiProjectResource>>(platform2.Resource);
-            Assert.Same(parent1.Parent, parent2.Parent);
-            Assert.Same(maui.Resource, parent1.Parent);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert
+        Assert.NotEqual(platform1.Resource.Name, platform2.Resource.Name);
+        var parent1 = Assert.IsAssignableFrom<IResourceWithParent<MauiProjectResource>>(platform1.Resource);
+        var parent2 = Assert.IsAssignableFrom<IResourceWithParent<MauiProjectResource>>(platform2.Resource);
+        Assert.Same(parent1.Parent, parent2.Parent);
+        Assert.Same(maui.Resource, parent1.Parent);
     }
 
     [Theory]
@@ -297,282 +276,228 @@ public class MauiPlatformExtensionsTests
     public async Task AddPlatform_WithoutRequiredTfm_ThrowsOnBeforeStartEvent(PlatformTestConfig config)
     {
         // Arrange - Create project without the required TFM
-        var projectContent = CreateProjectContentWithout(config.PlatformIdentifier);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, CreateProjectContentWithout(config.PlatformIdentifier));
 
-        try
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+
+        // Act - Adding the platform should succeed (validation deferred to start)
+        var platform = config.AddPlatformWithDefaultName(maui);
+        Assert.NotNull(platform);
+
+        // Build the app to get access to eventing
+        await using var app = appBuilder.Build();
+
+        // Trigger the BeforeResourceStartedEvent which should throw
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+            await app.Services.GetRequiredService<IDistributedApplicationEventing>()
+                .PublishAsync(new BeforeResourceStartedEvent(platform.Resource, app.Services), CancellationToken.None);
+        });
 
-            // Act - Adding the platform should succeed (validation deferred to start)
-            var platform = config.AddPlatformWithDefaultName(maui);
-            Assert.NotNull(platform);
-
-            // Build the app to get access to eventing
-            await using var app = appBuilder.Build();
-
-            // Trigger the BeforeResourceStartedEvent which should throw
-            var exception = await Assert.ThrowsAsync<DistributedApplicationException>(async () =>
-            {
-                await app.Services.GetRequiredService<IDistributedApplicationEventing>()
-                    .PublishAsync(new BeforeResourceStartedEvent(platform.Resource, app.Services), CancellationToken.None);
-            });
-
-            Assert.Contains($"Unable to detect {config.DisplayName}", exception.Message, StringComparison.OrdinalIgnoreCase);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        Assert.Contains($"Unable to detect {config.DisplayName}", exception.Message, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
     public async Task AddAndroidEmulator_WithEnvironment_EnvironmentVariablesAreSet()
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var androidEmulator = maui.AddAndroidEmulator()
-                .WithEnvironment("DEBUG_MODE", "true")
-                .WithEnvironment("API_TIMEOUT", "30");
+        // Act
+        var androidEmulator = maui.AddAndroidEmulator()
+            .WithEnvironment("DEBUG_MODE", "true")
+            .WithEnvironment("API_TIMEOUT", "30");
 
-            // Assert
-            var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                androidEmulator.Resource,
-                DistributedApplicationOperation.Run,
-                TestServiceProvider.Instance);
+        // Assert
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            androidEmulator.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance);
 
-            Assert.Contains(envVars, kvp => kvp.Key == "DEBUG_MODE" && kvp.Value == "true");
-            Assert.Contains(envVars, kvp => kvp.Key == "API_TIMEOUT" && kvp.Value == "30");
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        Assert.Contains(envVars, kvp => kvp.Key == "DEBUG_MODE" && kvp.Value == "true");
+        Assert.Contains(envVars, kvp => kvp.Key == "API_TIMEOUT" && kvp.Value == "30");
     }
 
     [Fact]
     public void AddAndroidDeviceAndEmulator_CanCoexist()
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var androidDevice = maui.AddAndroidDevice();
-            var androidEmulator = maui.AddAndroidEmulator();
+        // Act
+        var androidDevice = maui.AddAndroidDevice();
+        var androidEmulator = maui.AddAndroidEmulator();
 
-            // Assert
-            Assert.NotNull(androidDevice);
-            Assert.NotNull(androidEmulator);
-            Assert.NotEqual(androidDevice.Resource.Name, androidEmulator.Resource.Name);
-            Assert.IsType<MauiAndroidDeviceResource>(androidDevice.Resource);
-            Assert.IsType<MauiAndroidEmulatorResource>(androidEmulator.Resource);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert
+        Assert.NotNull(androidDevice);
+        Assert.NotNull(androidEmulator);
+        Assert.NotEqual(androidDevice.Resource.Name, androidEmulator.Resource.Name);
+        Assert.IsType<MauiAndroidDeviceResource>(androidDevice.Resource);
+        Assert.IsType<MauiAndroidEmulatorResource>(androidEmulator.Resource);
     }
 
     [Fact]
     public void AddAndroidDevice_WithDeviceId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var device = maui.AddAndroidDevice("my-device", "abc12345");
+        // Act
+        var device = maui.AddAndroidDevice("my-device", "abc12345");
 
-            // Assert
-            Assert.NotNull(device);
-            Assert.Equal("my-device", device.Resource.Name);
-            Assert.IsType<MauiAndroidDeviceResource>(device.Resource);
-            var launchConfiguration = GetSingleMauiLaunchConfiguration(device.Resource);
-            Assert.Equal("abc12345", launchConfiguration.Device);
-            Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s abc12345" }, launchConfiguration.MsBuildProperties);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert
+        Assert.NotNull(device);
+        Assert.Equal("my-device", device.Resource.Name);
+        Assert.IsType<MauiAndroidDeviceResource>(device.Resource);
+        var launchConfiguration = GetSingleMauiLaunchConfiguration(device.Resource);
+        Assert.Equal("abc12345", launchConfiguration.Device);
+        Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s abc12345" }, launchConfiguration.MsBuildProperties);
     }
 
     [Fact]
     public void AddAndroidEmulator_WithEmulatorId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var emulator = maui.AddAndroidEmulator("my-emulator", "Pixel_5_API_33");
+        // Act
+        var emulator = maui.AddAndroidEmulator("my-emulator", "Pixel_5_API_33");
 
-            // Assert
-            Assert.NotNull(emulator);
-            Assert.Equal("my-emulator", emulator.Resource.Name);
-            Assert.IsType<MauiAndroidEmulatorResource>(emulator.Resource);
-            var launchConfiguration = GetSingleMauiLaunchConfiguration(emulator.Resource);
-            Assert.Equal("Pixel_5_API_33", launchConfiguration.Device);
-            Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s Pixel_5_API_33" }, launchConfiguration.MsBuildProperties);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert
+        Assert.NotNull(emulator);
+        Assert.Equal("my-emulator", emulator.Resource.Name);
+        Assert.IsType<MauiAndroidEmulatorResource>(emulator.Resource);
+        var launchConfiguration = GetSingleMauiLaunchConfiguration(emulator.Resource);
+        Assert.Equal("Pixel_5_API_33", launchConfiguration.Device);
+        Assert.Equal(new Dictionary<string, string> { ["AdbTarget"] = "-s Pixel_5_API_33" }, launchConfiguration.MsBuildProperties);
     }
 
     [Fact]
     public void AddiOSDevice_WithDeviceId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
-        try
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+
+        // Act
+        var device = maui.AddiOSDevice("my-device", "00008030-001234567890123A");
+
+        // Assert
+        Assert.NotNull(device);
+        Assert.Equal("my-device", device.Resource.Name);
+        Assert.IsType<MauiiOSDeviceResource>(device.Resource);
+        var launchConfiguration = GetSingleMauiLaunchConfiguration(device.Resource);
+        Assert.Equal("00008030-001234567890123A", launchConfiguration.Device);
+        Assert.Equal("ios-arm64", launchConfiguration.RuntimeIdentifier);
+        Assert.Equal(new Dictionary<string, string>
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-
-            // Act
-            var device = maui.AddiOSDevice("my-device", "00008030-001234567890123A");
-
-            // Assert
-            Assert.NotNull(device);
-            Assert.Equal("my-device", device.Resource.Name);
-            Assert.IsType<MauiiOSDeviceResource>(device.Resource);
-            var launchConfiguration = GetSingleMauiLaunchConfiguration(device.Resource);
-            Assert.Equal("00008030-001234567890123A", launchConfiguration.Device);
-            Assert.Equal("ios-arm64", launchConfiguration.RuntimeIdentifier);
-            Assert.Equal(new Dictionary<string, string>
-            {
-                ["RuntimeIdentifier"] = "ios-arm64",
-                ["_DeviceName"] = "00008030-001234567890123A"
-            }, launchConfiguration.MsBuildProperties);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+            ["RuntimeIdentifier"] = "ios-arm64",
+            ["_DeviceName"] = "00008030-001234567890123A"
+        }, launchConfiguration.MsBuildProperties);
     }
 
     [Fact]
     public void AddiOSSimulator_WithSimulatorId_CreatesResourceWithCorrectName()
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
-        try
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+
+        // Act
+        var simulator = maui.AddiOSSimulator("my-simulator", "E25BBE37-69BA-4720-B6FD-D54C97791E79");
+
+        // Assert
+        Assert.NotNull(simulator);
+        Assert.Equal("my-simulator", simulator.Resource.Name);
+        Assert.IsType<MauiiOSSimulatorResource>(simulator.Resource);
+        var launchConfiguration = GetSingleMauiLaunchConfiguration(simulator.Resource);
+        Assert.Equal("E25BBE37-69BA-4720-B6FD-D54C97791E79", launchConfiguration.Device);
+        Assert.Equal(new Dictionary<string, string>
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-
-            // Act
-            var simulator = maui.AddiOSSimulator("my-simulator", "E25BBE37-69BA-4720-B6FD-D54C97791E79");
-
-            // Assert
-            Assert.NotNull(simulator);
-            Assert.Equal("my-simulator", simulator.Resource.Name);
-            Assert.IsType<MauiiOSSimulatorResource>(simulator.Resource);
-            var launchConfiguration = GetSingleMauiLaunchConfiguration(simulator.Resource);
-            Assert.Equal("E25BBE37-69BA-4720-B6FD-D54C97791E79", launchConfiguration.Device);
-            Assert.Equal(new Dictionary<string, string>
-            {
-                ["_DeviceName"] = ":v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79"
-            }, launchConfiguration.MsBuildProperties);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+            ["_DeviceName"] = ":v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79"
+        }, launchConfiguration.MsBuildProperties);
     }
 
     [Fact]
     public async Task AddiOSSimulator_OptsOutOfProjectIdeLaunchAndKeepsSdkRunArgs()
     {
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
-        try
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var simulator = maui.AddiOSSimulator("my-simulator", "E25BBE37-69BA-4720-B6FD-D54C97791E79");
+
+        var debugSupport = Assert.Single(simulator.Resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
+        Assert.Equal("maui", GetPropertyValue(debugSupport, "LaunchConfigurationType"));
+
+        var args = new List<object>();
+        var argsContext = new CommandLineArgsCallbackContext(args, simulator.Resource);
+        foreach (var argsAnnotation in simulator.Resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>())
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var simulator = maui.AddiOSSimulator("my-simulator", "E25BBE37-69BA-4720-B6FD-D54C97791E79");
-
-            var debugSupport = Assert.Single(simulator.Resource.Annotations, annotation => annotation.GetType().FullName == "Aspire.Hosting.ApplicationModel.SupportsDebuggingAnnotation");
-            Assert.Equal("maui", GetPropertyValue(debugSupport, "LaunchConfigurationType"));
-
-            var args = new List<object>();
-            var argsContext = new CommandLineArgsCallbackContext(args, simulator.Resource);
-            foreach (var argsAnnotation in simulator.Resource.Annotations.OfType<CommandLineArgsCallbackAnnotation>())
-            {
-                await argsAnnotation.Callback(argsContext);
-            }
-
-            Assert.Collection(args,
-                arg => Assert.Equal("run", Assert.IsType<string>(arg)),
-                arg => Assert.Equal("-f", Assert.IsType<string>(arg)),
-                arg => Assert.Equal("net10.0-ios", Assert.IsType<string>(arg)),
-                arg => Assert.Equal("-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79", Assert.IsType<string>(arg)));
+            await argsAnnotation.Callback(argsContext);
         }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+
+        Assert.Collection(args,
+            arg => Assert.Equal("run", Assert.IsType<string>(arg)),
+            arg => Assert.Equal("-f", Assert.IsType<string>(arg)),
+            arg => Assert.Equal("net10.0-ios", Assert.IsType<string>(arg)),
+            arg => Assert.Equal("-p:_DeviceName=:v2:udid=E25BBE37-69BA-4720-B6FD-D54C97791E79", Assert.IsType<string>(arg)));
     }
 
     [Fact]
     public void AddiOSDeviceAndSimulator_CanCoexist()
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var device = maui.AddiOSDevice();
-            var simulator = maui.AddiOSSimulator();
+        // Act
+        var device = maui.AddiOSDevice();
+        var simulator = maui.AddiOSSimulator();
 
-            // Assert
-            Assert.NotNull(device);
-            Assert.NotNull(simulator);
-            Assert.NotEqual(device.Resource.Name, simulator.Resource.Name);
-            Assert.IsType<MauiiOSDeviceResource>(device.Resource);
-            Assert.IsType<MauiiOSSimulatorResource>(simulator.Resource);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert
+        Assert.NotNull(device);
+        Assert.NotNull(simulator);
+        Assert.NotEqual(device.Resource.Name, simulator.Resource.Name);
+        Assert.IsType<MauiiOSDeviceResource>(device.Resource);
+        Assert.IsType<MauiiOSSimulatorResource>(simulator.Resource);
     }
 
     [Theory]
@@ -581,65 +506,53 @@ public class MauiPlatformExtensionsTests
     public void AddiOS_HasEnvironmentAnnotation(bool isDevice)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
-        try
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+
+        // Act
+        IResource resource;
+        if (isDevice)
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-
-            // Act
-            IResource resource;
-            if (isDevice)
-            {
-                resource = maui.AddiOSDevice().Resource;
-            }
-            else
-            {
-                resource = maui.AddiOSSimulator().Resource;
-            }
-
-            // Assert
-            var annotation = resource.Annotations.OfType<MauiiOSEnvironmentAnnotation>().FirstOrDefault();
-            Assert.NotNull(annotation);
+            resource = maui.AddiOSDevice().Resource;
         }
-        finally
+        else
         {
-            MauiTestHelper.CleanupTempFile(tempFile);
+            resource = maui.AddiOSSimulator().Resource;
         }
+
+        // Assert
+        var annotation = resource.Annotations.OfType<MauiiOSEnvironmentAnnotation>().FirstOrDefault();
+        Assert.NotNull(annotation);
     }
 
     [Fact]
     public async Task AddiOSSimulator_WithEnvironment_EnvironmentVariablesAreSet()
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-ios");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
 
-            // Act
-            var iosSimulator = maui.AddiOSSimulator()
-                .WithEnvironment("DEBUG_MODE", "true")
-                .WithEnvironment("API_TIMEOUT", "30");
+        // Act
+        var iosSimulator = maui.AddiOSSimulator()
+            .WithEnvironment("DEBUG_MODE", "true")
+            .WithEnvironment("API_TIMEOUT", "30");
 
-            // Assert
-            var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                iosSimulator.Resource,
-                DistributedApplicationOperation.Run,
-                TestServiceProvider.Instance);
+        // Assert
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            iosSimulator.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance);
 
-            Assert.Contains(envVars, kvp => kvp.Key == "DEBUG_MODE" && kvp.Value == "true");
-            Assert.Contains(envVars, kvp => kvp.Key == "API_TIMEOUT" && kvp.Value == "30");
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        Assert.Contains(envVars, kvp => kvp.Key == "DEBUG_MODE" && kvp.Value == "true");
+        Assert.Contains(envVars, kvp => kvp.Key == "API_TIMEOUT" && kvp.Value == "30");
     }
 
     [Theory]
@@ -648,33 +561,27 @@ public class MauiPlatformExtensionsTests
     public void AddAndroid_HasEnvironmentAnnotation(bool isDevice)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+
+        // Act
+        IResource resource;
+        if (isDevice)
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-
-            // Act
-            IResource resource;
-            if (isDevice)
-            {
-                resource = maui.AddAndroidDevice().Resource;
-            }
-            else
-            {
-                resource = maui.AddAndroidEmulator().Resource;
-            }
-
-            // Assert
-            var annotation = resource.Annotations.OfType<MauiAndroidEnvironmentAnnotation>().FirstOrDefault();
-            Assert.NotNull(annotation);
+            resource = maui.AddAndroidDevice().Resource;
         }
-        finally
+        else
         {
-            MauiTestHelper.CleanupTempFile(tempFile);
+            resource = maui.AddAndroidEmulator().Resource;
         }
+
+        // Assert
+        var annotation = resource.Annotations.OfType<MauiAndroidEnvironmentAnnotation>().FirstOrDefault();
+        Assert.NotNull(annotation);
     }
 
     // OTLP Dev Tunnel Configuration Tests
@@ -684,29 +591,23 @@ public class MauiPlatformExtensionsTests
     public void WithOtlpDevTunnel_AddsOtlpDevTunnelAnnotation(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var platform = config.AddPlatformWithDefaultName(maui);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var platform = config.AddPlatformWithDefaultName(maui);
 
-            // Act - WithOtlpDevTunnel works on the concrete platform resource builder
-            config.ApplyWithOtlpDevTunnel(platform);
+        // Act - WithOtlpDevTunnel works on the concrete platform resource builder
+        config.ApplyWithOtlpDevTunnel(platform);
 
-            // Assert
-            // Verify that the tunnel infrastructure was created on the parent
-            var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().FirstOrDefault();
-            Assert.NotNull(tunnelConfig);
-            Assert.NotNull(tunnelConfig.OtlpStub);
-            Assert.NotNull(tunnelConfig.DevTunnel);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert
+        // Verify that the tunnel infrastructure was created on the parent
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().FirstOrDefault();
+        Assert.NotNull(tunnelConfig);
+        Assert.NotNull(tunnelConfig.OtlpStub);
+        Assert.NotNull(tunnelConfig.DevTunnel);
     }
 
     [Theory]
@@ -714,28 +615,22 @@ public class MauiPlatformExtensionsTests
     public void WithOtlpDevTunnel_MultiplePlatforms_SharesSameInfrastructure(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var platform1 = config.AddPlatformWithCustomName(maui, $"{config.PlatformName}-1");
-            var platform2 = config.AddPlatformWithCustomName(maui, $"{config.PlatformName}-2");
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var platform1 = config.AddPlatformWithCustomName(maui, $"{config.PlatformName}-1");
+        var platform2 = config.AddPlatformWithCustomName(maui, $"{config.PlatformName}-2");
 
-            // Act - Apply dev tunnel to both platforms
-            config.ApplyWithOtlpDevTunnel(platform1);
-            config.ApplyWithOtlpDevTunnel(platform2);
+        // Act - Apply dev tunnel to both platforms
+        config.ApplyWithOtlpDevTunnel(platform1);
+        config.ApplyWithOtlpDevTunnel(platform2);
 
-            // Assert - Both platforms should share the same tunnel infrastructure
-            var annotations = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().ToList();
-            Assert.Single(annotations); // Only one tunnel infrastructure created
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // Assert - Both platforms should share the same tunnel infrastructure
+        var annotations = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().ToList();
+        Assert.Single(annotations); // Only one tunnel infrastructure created
     }
 
     [Theory]
@@ -743,45 +638,225 @@ public class MauiPlatformExtensionsTests
     public async Task WithOtlpDevTunnel_SetsEndpointWithoutIntermediateEnvironmentVariables(PlatformTestConfig config)
     {
         // Arrange
-        var projectContent = MauiTestHelper.CreateProjectContent(config.RequiredTfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(config.RequiredTfm));
 
-        try
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var platform = config.AddPlatformWithDefaultName(maui);
+
+        // Act
+        config.ApplyWithOtlpDevTunnel(platform);
+
+        var endpointAnnotations = appBuilder.Resources.SelectMany(x => x.Annotations.OfType<EndpointAnnotation>());
+
+        foreach (var endpointAnnotation in endpointAnnotations)
         {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var platform = config.AddPlatformWithDefaultName(maui);
+            endpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(endpointAnnotation, "localhost", 1234);
+        }
 
-            // Act
-            config.ApplyWithOtlpDevTunnel(platform);
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            platform.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance);
 
-            var endpointAnnotations = appBuilder.Resources.SelectMany(x => x.Annotations.OfType<EndpointAnnotation>());
+        // Assert - OTEL_EXPORTER_OTLP_ENDPOINT should be set directly from the tunnel endpoint
+        Assert.True(envVars.TryGetValue("OTEL_EXPORTER_OTLP_ENDPOINT", out var endpointValue));
+        Assert.False(string.IsNullOrWhiteSpace(endpointValue));
+        Assert.True(Uri.TryCreate(endpointValue, UriKind.Absolute, out _));
 
-            foreach (var endpointAnnotation in endpointAnnotations)
+        // No intermediate service discovery or endpoint env vars should be present
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        var stubName = tunnelConfig.OtlpStub.Name;
+        Assert.DoesNotContain(envVars.Keys, k => k.StartsWith($"services__{stubName}__"));
+        Assert.DoesNotContain(envVars.Keys, k => k.StartsWith($"{EnvironmentVariableNameEncoder.Encode(stubName).ToUpperInvariant()}_"));
+    }
+
+    [Fact]
+    public async Task WithOtlpDevTunnel_AllocatesStubFromDynamicDashboardOtlpEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-ios"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+
+        var dashboard = appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
+        dashboard.Resource.Annotations.Add(new EndpointAnnotation(
+            ProtocolType.Tcp,
+            name: KnownEndpointNames.OtlpGrpcEndpointName,
+            uriScheme: "http",
+            isProxied: true,
+            transport: "http2"));
+
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var iosSimulator = maui.AddiOSSimulator()
+            .WithOtlpDevTunnel();
+
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
+
+        Assert.Null(stubEndpoint.Port);
+        Assert.Null(stubEndpoint.TargetPort);
+        Assert.Null(stubEndpoint.AllocatedEndpoint);
+
+        await using var app = appBuilder.Build();
+
+        var dashboardEndpoint = dashboard.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == KnownEndpointNames.OtlpGrpcEndpointName);
+        dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55075);
+        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
+
+        Assert.Equal("http", stubEndpoint.UriScheme);
+        Assert.Equal(55075, stubEndpoint.Port);
+        Assert.Equal(55075, stubEndpoint.TargetPort);
+        Assert.Equal("http://localhost:55075", stubEndpoint.AllocatedEndpoint?.UriString);
+
+        var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
+        tunnelEndpoint.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(tunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
+
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            iosSimulator.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services);
+
+        Assert.Equal("https://mobile-otlp.devtunnels.ms:443", envVars[KnownOtelConfigNames.ExporterOtlpEndpoint]);
+        Assert.Equal("grpc", envVars[KnownOtelConfigNames.ExporterOtlpProtocol]);
+    }
+
+    [Fact]
+    public async Task WithOtlpDevTunnel_AllocatesStubFromConfiguredOtlpEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
+
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+        appBuilder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost:18889";
+
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var androidEmulator = maui.AddAndroidEmulator()
+            .WithOtlpDevTunnel();
+        var dashboard = appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
+        var dashboardEndpoint = new EndpointAnnotation(
+            ProtocolType.Tcp,
+            name: KnownEndpointNames.OtlpGrpcEndpointName,
+            uriScheme: "https",
+            isProxied: true,
+            transport: "http2");
+        dashboard.Resource.Annotations.Add(dashboardEndpoint);
+
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+        var stubEndpoint = tunnelConfig.OtlpStub.OtlpEndpoint;
+        var stubEndpointEventPublished = false;
+        appBuilder.Eventing.Subscribe<ResourceEndpointsAllocatedEvent>((evt, _) =>
+        {
+            if (ReferenceEquals(evt.Resource, tunnelConfig.OtlpStub))
             {
-                endpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(endpointAnnotation, "localhost", 1234);
+                stubEndpointEventPublished = true;
             }
 
-            var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                platform.Resource,
-                DistributedApplicationOperation.Run,
-                TestServiceProvider.Instance);
+            return Task.CompletedTask;
+        });
 
-            // Assert - OTEL_EXPORTER_OTLP_ENDPOINT should be set directly from the tunnel endpoint
-            Assert.True(envVars.TryGetValue("OTEL_EXPORTER_OTLP_ENDPOINT", out var endpointValue));
-            Assert.False(string.IsNullOrWhiteSpace(endpointValue));
-            Assert.True(Uri.TryCreate(endpointValue, UriKind.Absolute, out _));
+        Assert.Equal("http", stubEndpoint.UriScheme);
+        Assert.Equal(18889, stubEndpoint.Port);
+        Assert.Equal(18889, stubEndpoint.TargetPort);
+        Assert.Equal("http://localhost:18889", stubEndpoint.AllocatedEndpoint?.UriString);
 
-            // No intermediate service discovery or endpoint env vars should be present
-            var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
-            var stubName = tunnelConfig.OtlpStub.Name;
-            Assert.DoesNotContain(envVars.Keys, k => k.StartsWith($"services__{stubName}__"));
-            Assert.DoesNotContain(envVars.Keys, k => k.StartsWith($"{EnvironmentVariableNameEncoder.Encode(stubName).ToUpperInvariant()}_"));
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        await using var app = appBuilder.Build();
+
+        await appBuilder.Eventing.PublishAsync(new BeforeStartEvent(app.Services, app.Services.GetRequiredService<DistributedApplicationModel>()), CancellationToken.None);
+        Assert.True(stubEndpointEventPublished);
+
+        dashboardEndpoint.AllocatedEndpoint = new AllocatedEndpoint(dashboardEndpoint, "localhost", 55075);
+        await appBuilder.Eventing.PublishAsync(new ResourceEndpointsAllocatedEvent(dashboard.Resource, app.Services), CancellationToken.None);
+
+        Assert.Equal("http", stubEndpoint.UriScheme);
+        Assert.Equal(18889, stubEndpoint.Port);
+        Assert.Equal(18889, stubEndpoint.TargetPort);
+        Assert.Equal("http://localhost:18889", stubEndpoint.AllocatedEndpoint?.UriString);
+
+        var tunnelEndpoint = tunnelConfig.DevTunnel.GetEndpoint(tunnelConfig.OtlpStub, "otlp");
+        tunnelEndpoint.EndpointAnnotation.AllocatedEndpoint = new AllocatedEndpoint(tunnelEndpoint.EndpointAnnotation, "mobile-otlp.devtunnels.ms", 443);
+
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            androidEmulator.Resource,
+            DistributedApplicationOperation.Run,
+            app.Services);
+
+        Assert.Equal("https://mobile-otlp.devtunnels.ms:443", envVars[KnownOtelConfigNames.ExporterOtlpEndpoint]);
+    }
+
+    [Fact]
+    public async Task WithOtlpDevTunnel_ThrowsWhenDashboardDisabledAndNoConfiguredOtlpEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
+
+        var appBuilder = DistributedApplication.CreateBuilder(new DistributedApplicationOptions { DisableDashboard = true });
+        ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        maui.AddAndroidEmulator()
+            .WithOtlpDevTunnel();
+
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+
+        await using var app = appBuilder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None));
+
+        Assert.Contains("requires the Aspire dashboard", exception.Message);
+    }
+
+    [Fact]
+    public async Task WithOtlpDevTunnel_ThrowsWhenDashboardHasNoAllocatedOtlpEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        ClearDashboardOtlpEndpointConfiguration(appBuilder.Configuration);
+        appBuilder.AddResource(new ContainerResource(KnownResourceNames.AspireDashboard));
+
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        maui.AddAndroidEmulator()
+            .WithOtlpDevTunnel();
+
+        var tunnelConfig = maui.Resource.Annotations.OfType<OtlpDevTunnelConfigurationAnnotation>().Single();
+
+        await using var app = appBuilder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() =>
+            appBuilder.Eventing.PublishAsync(new BeforeResourceStartedEvent(tunnelConfig.DevTunnel.Resource, app.Services), CancellationToken.None));
+
+        Assert.Contains("does not have an allocated OTLP endpoint", exception.Message);
+        Assert.Contains(KnownEndpointNames.OtlpGrpcEndpointName, exception.Message);
+        Assert.Contains(KnownEndpointNames.OtlpHttpEndpointName, exception.Message);
+    }
+
+    [Fact]
+    public void WithOtlpDevTunnel_ThrowsForInvalidConfiguredOtlpEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
+
+        var appBuilder = DistributedApplication.CreateBuilder();
+        appBuilder.Configuration[KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "not a url";
+
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var androidEmulator = maui.AddAndroidEmulator();
+
+        var exception = Assert.Throws<DistributedApplicationException>(() => androidEmulator.WithOtlpDevTunnel());
+
+        Assert.Contains(KnownConfigNames.DashboardOtlpGrpcEndpointUrl, exception.Message);
+        Assert.Contains("not a url", exception.Message);
     }
 
     // Helper methods
@@ -824,6 +899,9 @@ public class MauiPlatformExtensionsTests
         return createMethod.Invoke(null, ["test", "dotnet"])!;
     }
 
+    private static string? GetTestAssemblyConfiguration() =>
+        typeof(MauiPlatformExtensionsTests).Assembly.GetCustomAttribute<AssemblyConfigurationAttribute>()?.Configuration;
+
     private static List<T> GetLaunchConfigurations<T>(object executable)
     {
         var metadata = GetPropertyValue(executable, "Metadata");
@@ -849,6 +927,17 @@ public class MauiPlatformExtensionsTests
         annotator.DynamicInvoke(executable, "Debug");
 
         return Assert.Single(GetLaunchConfigurations<SerializedMauiLaunchConfiguration>(executable));
+    }
+
+    private static void ClearDashboardOtlpEndpointConfiguration(ConfigurationManager configuration)
+    {
+        configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "",
+            [KnownConfigNames.Legacy.DashboardOtlpGrpcEndpointUrl] = "",
+            [KnownConfigNames.DashboardOtlpHttpEndpointUrl] = "",
+            [KnownConfigNames.Legacy.DashboardOtlpHttpEndpointUrl] = ""
+        });
     }
 
     // Configuration class for platform-specific test data

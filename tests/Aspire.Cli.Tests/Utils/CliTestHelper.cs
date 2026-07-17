@@ -4,6 +4,7 @@
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Cli.Agents;
+using Aspire.Cli.Agents.Hooks;
 using Aspire.Cli.Agents.AspireSkills;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Backchannel;
@@ -36,6 +37,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Spectre.Console;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Migrations;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Aspire.Cli.Packaging;
@@ -157,6 +159,8 @@ internal static class CliTestHelper
         services.AddSingleton(options.AspireSkillsInstallerFactory);
         services.AddSingleton(options.PlaywrightCliRunnerFactory);
         services.AddSingleton<PlaywrightCliInstaller>();
+        services.AddSingleton<ITelemetryHookInstaller, TelemetryHookInstaller>();
+        services.AddSingleton(options.TelemetryHookConfiguratorFactory);
         services.AddSingleton(options.ScaffoldingServiceFactory);
         services.AddSingleton<IAppHostServerProjectFactory, AppHostServerProjectFactory>();
         services.AddSingleton<IAppHostServerSessionFactory, AppHostServerSessionFactory>();
@@ -175,6 +179,8 @@ internal static class CliTestHelper
         // wraps. Without this, DI returns null and Run-path tests construct the project with
         // a missing dependency, masking wiring regressions.
         services.AddTransient<IProcessTreeGracefulShutdownSignaler>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
+        services.AddTransient<IAppHostStopper>(sp => sp.GetRequiredService<ProcessTreeGracefulShutdownService>());
+        services.AddTransient<OrphanedAppHostCollector>();
         // Match Program.Main's ConsoleCancellationManager (5s finalDrainBudget) so tests exercise the
         // same shutdown ladder budget as production. RunCommand and GuestAppHostProject require these
         // services in production wiring. IGracefulShutdownWindow resolves to the same CCM instance,
@@ -277,6 +283,7 @@ internal static class CliTestHelper
         services.AddTransient<AgentCommand>();
         services.AddTransient<AgentMcpCommand>();
         services.AddTransient<AgentInitCommand>();
+        services.AddTransient<AgentTelemetryCommand>();
         services.AddSingleton<ResourceColorMap>();
         services.AddTransient<TelemetryCommand>();
         services.AddTransient<TelemetryLogsCommand>();
@@ -286,6 +293,7 @@ internal static class CliTestHelper
         services.AddTransient<ExtensionInternalCommand>();
         services.AddTransient<WaitCommand>();
         services.AddTransient<RestoreCommand>();
+        services.AddSingleton<IMigration, TypeScriptAppHostMigration>();
         services.AddTransient<SdkCommand>();
         services.AddTransient<SdkGenerateCommand>();
         services.AddTransient<SdkDumpCommand>();
@@ -441,10 +449,10 @@ internal sealed class CliServiceCollectionTestOptions
         var sdkInstaller = serviceProvider.GetRequiredService<IDotNetSdkInstaller>();
         var gitRepository = serviceProvider.GetRequiredService<IGitRepository>();
         var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
-        var appHostCandidateFinder = serviceProvider.GetService<IAppHostCandidateFinder>()
-            ?? new AppHostCandidateFinder(gitRepository, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
-        var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var environment = serviceProvider.GetRequiredService<IEnvironment>();
+        var appHostCandidateFinder = serviceProvider.GetService<IAppHostCandidateFinder>()
+            ?? new AppHostCandidateFinder(gitRepository, environment, profilingTelemetry, NullLogger<AppHostCandidateFinder>.Instance);
+        var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         return new ProjectLocator(logger, executionContext, environment, interactionService, configurationService, projectFactory, languageDiscovery, sdkInstaller, appHostCandidateFinder, telemetry);
     }
 
@@ -512,7 +520,7 @@ internal sealed class CliServiceCollectionTestOptions
         var interactionService = serviceProvider.GetRequiredService<IInteractionService>();
         var logger = serviceProvider.GetRequiredService<ILogger<ScaffoldingService>>();
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
-        return new ScaffoldingService(appHostServerProjectFactory, serverSessionFactory, languageDiscovery, interactionService, logger, executionContext, serviceProvider.GetRequiredService<ProfilingTelemetry>());
+        return new ScaffoldingService(appHostServerProjectFactory, serverSessionFactory, languageDiscovery, interactionService, serviceProvider.GetRequiredService<IEnvironment>(), logger, executionContext, serviceProvider.GetRequiredService<ProfilingTelemetry>());
     };
 
     public Func<IServiceProvider, IProcessExecutionFactory> DotNetCliExecutionFactoryFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -552,9 +560,10 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IAppHostCliBackchannel> AppHostBackchannelFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {
         var logger = serviceProvider.GetRequiredService<ILogger<AppHostCliBackchannel>>();
+        var environment = serviceProvider.GetRequiredService<IEnvironment>();
         var telemetry = serviceProvider.GetRequiredService<AspireCliTelemetry>();
         var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
-        return new AppHostCliBackchannel(logger, telemetry, profilingTelemetry);
+        return new AppHostCliBackchannel(logger, environment, telemetry, profilingTelemetry);
     };
 
     public Func<IServiceProvider, IExtensionRpcTarget> ExtensionRpcTargetFactory { get; set; } = (IServiceProvider serviceProvider) =>
@@ -599,7 +608,7 @@ internal sealed class CliServiceCollectionTestOptions
         var templateNuGetConfigService = serviceProvider.GetRequiredService<TemplateNuGetConfigService>();
         var dotNetFactory = new DotNetTemplateFactory(interactionService, runner, certificateService, prompter, executionContext, sdkInstaller, features, telemetry, hostEnvironment, templateNuGetConfigService, new HostEnvironment());
         var projectFactory = serviceProvider.GetRequiredService<IAppHostProjectFactory>();
-        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, templateNuGetConfigService, cliTemplateLogger);
+        var cliFactory = new CliTemplateFactory(languageDiscovery, projectFactory, scaffoldingService, prompter, executionContext, interactionService, hostEnvironment, serviceProvider.GetRequiredService<IEnvironment>(), templateNuGetConfigService, cliTemplateLogger);
         return new TemplateProvider([dotNetFactory, cliFactory]);
     };
 
@@ -645,7 +654,7 @@ internal sealed class CliServiceCollectionTestOptions
         var executionContext = serviceProvider.GetRequiredService<CliExecutionContext>();
         var logger = serviceProvider.GetRequiredService<ILogger<GitRepository>>();
         var profilingTelemetry = serviceProvider.GetRequiredService<ProfilingTelemetry>();
-        return new GitRepository(executionContext, logger, profilingTelemetry);
+        return new GitRepository(executionContext, serviceProvider.GetRequiredService<IEnvironment>(), logger, profilingTelemetry);
     };
 
     public Func<IServiceProvider, INpmRunner> NpmRunnerFactory { get; set; } = _ => new FakeNpmRunner();
@@ -655,6 +664,12 @@ internal sealed class CliServiceCollectionTestOptions
     public Func<IServiceProvider, IAspireSkillsInstaller> AspireSkillsInstallerFactory { get; set; } = serviceProvider => new FakeAspireSkillsInstaller(serviceProvider.GetRequiredService<CliExecutionContext>());
 
     public Func<IServiceProvider, IPlaywrightCliRunner> PlaywrightCliRunnerFactory { get; set; } = _ => new FakePlaywrightCliRunner();
+
+    // Defaults to the real configurator (resolving ITelemetryHookInstaller/CliExecutionContext/IEnvironment
+    // from DI) so agent-init tests exercise the shipped behavior; a test can override it to simulate a
+    // failure and assert hook installation never aborts `agent init`.
+    public Func<IServiceProvider, ITelemetryHookConfigurator> TelemetryHookConfiguratorFactory { get; set; }
+        = serviceProvider => ActivatorUtilities.CreateInstance<TelemetryHookConfigurator>(serviceProvider);
 
     public Func<IServiceProvider, ILanguageService> LanguageServiceFactory { get; set; } = (IServiceProvider serviceProvider) =>
     {

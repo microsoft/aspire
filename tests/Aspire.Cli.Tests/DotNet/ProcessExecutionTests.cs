@@ -20,7 +20,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitForExitAsync_AllowsForwardersToDrainBeforeClosingStreams()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var outputFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "output.json"));
         await File.WriteAllTextAsync(outputFile.FullName, CreateJsonPayload(lineCount: 400));
@@ -80,7 +80,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitForExitAsync_AllowsBufferedTailOutputAfterLongIdlePeriod()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var outputFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "output.json"));
         await File.WriteAllTextAsync(outputFile.FullName, CreateJsonPayload(lineCount: 400));
@@ -142,7 +142,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitForExitAsync_KillsProcessWhenCanceled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
 
@@ -165,7 +165,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [InlineData(true)]
     public async Task WaitForExitAsync_WithGracefulServices_InvokesSignalerAndThrowsOnCancellation(bool isolateConsole)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
         using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled (positive budget) so the coordinator runs
@@ -195,7 +195,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [InlineData(true)]
     public async Task WaitForExitAsync_WithGracefulServices_ProcessIgnoresSignal_ExpireEscalatesToKill(bool isolateConsole)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
         using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled so the coordinator runs the ladder.
@@ -230,7 +230,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
     [InlineData(true)]
     public async Task WaitForExitAsync_WithGracefulServices_SignalerThrows_StillEscalatesToKill(bool isolateConsole)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var scriptFile = await CreateLongRunningScriptAsync(workspace.WorkspaceRoot);
         using var shutdownService = new TestGracefulShutdownWindow();
         // Model the run path: graceful shutdown is enabled so the coordinator runs the ladder.
@@ -393,7 +393,7 @@ public sealed class ProcessExecutionTests(ITestOutputHelper outputHelper)
         FileInfo scriptFile,
         ProcessInvocationOptions options)
     {
-        var factory = new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance);
+        var factory = new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance);
         var startInfo = CreateStartInfo(scriptFile);
 
         return factory.CreateExecution(

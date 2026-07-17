@@ -37,6 +37,16 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
     [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether focus should return to <see cref="Anchor"/> after a menu item is clicked.
+    /// </summary>
+    /// <remarks>
+    /// Use this only for button-anchored menus where <see cref="Anchor"/> identifies the element that opened the menu.
+    /// Do not enable it for cursor-positioned or context menus where <see cref="Anchor"/> is only used for positioning.
+    /// </remarks>
+    [Parameter]
+    public bool RestoreFocusOnItemClick { get; set; }
+
     [Inject]
     public required IJSRuntime JS { get; init; }
 
@@ -126,8 +136,12 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
         {
             await onClick();
         }
-
         await SetOpenAsync(false);
+
+        if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
+        {
+            await JS.InvokeVoidAsync("focusElement", Anchor);
+        }
     }
 
     private async Task OnOpenChanged(bool open)

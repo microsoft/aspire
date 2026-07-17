@@ -222,6 +222,21 @@
         <target state="new">Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</target>
         <note>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilDetails">
+        <source>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</source>
+        <target state="new">Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilFix">
+        <source>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</source>
+        <target state="new">Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilMessage">
+        <source>certutil is not available; browser certificate trust may be incomplete</source>
+        <target state="new">certutil is not available; browser certificate trust may be incomplete</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion.</source>
         <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion.</target>
@@ -307,6 +322,11 @@
         <target state="new">HTTPS development certificate is trusted</target>
         <note />
       </trans-unit>
+      <trans-unit id="DevelopmentToolsCategoryHeader">
+        <source>Development Tools</source>
+        <target state="new">Development Tools</target>
+        <note />
+      </trans-unit>
       <trans-unit id="EnvironmentCategoryHeader">
         <source>Environment</source>
         <target state="translated">Ambiente</target>
@@ -344,10 +364,22 @@ The legacy file continues to work — this is a non-blocking warning.</target>
         <target state="new">Legacy .aspire/settings.json detected at {0}</target>
         <note>{0} is the full path to the legacy settings file.</note>
       </trans-unit>
+      <trans-unit id="LegacyTypeScriptAppHostMessageFormat">
+        <source>Legacy 'apphost.ts' layout detected at {0}</source>
+        <target state="new">Legacy 'apphost.ts' layout detected at {0}</target>
+        <note>{0} is the full path to the legacy apphost.ts file.</note>
+      </trans-unit>
       <trans-unit id="OperatingSystemMessageFormat">
         <source>Operating system: {0}</source>
         <target state="new">Operating system: {0}</target>
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
+      </trans-unit>
+      <trans-unit id="PendingMigrationFix">
+        <source>Run 'aspire update --migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</source>
+        <target state="new">Run 'aspire update --migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</target>
+        <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">
         <source>.NET SDK</source>
@@ -397,6 +429,21 @@ The legacy file continues to work — this is a non-blocking warning.</target>
       <trans-unit id="VersionUnknown">
         <source>unknown</source>
         <target state="new">unknown</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionInstalledMessage">
+        <source>Aspire extension for VS Code is installed</source>
+        <target state="new">Aspire extension for VS Code is installed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionMissingFix">
+        <source>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</source>
+        <target state="new">Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionMissingMessage">
+        <source>VS Code is installed, but the Aspire extension is not installed</source>
+        <target state="new">VS Code is installed, but the Aspire extension is not installed</target>
         <note />
       </trans-unit>
     </body>

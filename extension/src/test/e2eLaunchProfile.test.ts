@@ -73,9 +73,11 @@ suite('E2E launch profile', () => {
         const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
 
         assert.ok(runner.includes("'get-vscode'"));
-        assert.ok(runner.includes('attempts: 2'));
-        assert.ok(runner.includes('timeout: 240000'));
+        assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_ATTEMPTS', 5"));
+        assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_DELAY_MS', 15000"));
+        assert.ok(runner.includes("ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_TIMEOUT_MS', 240000"));
         assert.ok(runner.includes("'get-chromedriver'"));
+        assert.ok(runner.includes('const setupDownloadRetryOptions = getSetupDownloadRetryOptions();'));
         assert.ok(runner.includes('run(command, args, extraEnv, options);'));
     });
 
@@ -110,9 +112,9 @@ suite('E2E launch profile', () => {
         const internalFeed = 'https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/';
 
         assert.strictEqual(packageJson.devDependencies['vscode-extension-tester'], '8.23.0');
-        assert.strictEqual(packageJson.resolutions.undici, '7.27.0');
+        assert.strictEqual(packageJson.resolutions.undici, '7.28.0');
         assert.ok(lockfile.includes('vscode-extension-tester@8.23.0'));
-        assert.ok(lockfile.includes('undici@7.27.0'));
+        assert.ok(lockfile.includes('undici@7.28.0'));
         assert.ok(lockfile.split(/\r?\n/).filter(l => /^\s*resolved\s+"/.test(l)).every(l => l.includes(internalFeed)));
         assert.ok(workflow.includes('NPM_REGISTRY: https://pkgs.dev.azure.com/dnceng/public/_packaging/dotnet-public-npm/npm/registry/'));
         assert.ok(fs.existsSync(path.join(extensionRoot, 'scripts', 'validate-lockfile-registry.cjs')));
@@ -216,6 +218,31 @@ suite('E2E launch profile', () => {
 
         assert.strictEqual(settings['telemetry.telemetryLevel'], 'off');
         assert.ok(runner.includes("'--disable-telemetry'"));
+    });
+
+    test('does not seed dashboard launch preferences in the E2E harness', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const runner = fs.readFileSync(path.join(extensionRoot, 'scripts', 'run-e2e.js'), 'utf8');
+        const settings = JSON.parse(fs.readFileSync(path.join(extensionRoot, 'test-e2e', 'settings.json'), 'utf8'));
+
+        assert.strictEqual(settings['aspire.dashboardBrowser'], undefined);
+        assert.strictEqual(settings['aspire.enableAspireDashboardAutoLaunch'], undefined);
+        assert.ok(!runner.includes("'aspire.dashboardBrowser':"));
+        assert.ok(!runner.includes("'aspire.enableAspireDashboardAutoLaunch':"));
+    });
+
+    test('resets the dashboard default notification key for E2E dashboard launch coverage', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const debugDashboard = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'debugDashboard.e2e.test.ts'), 'utf8');
+
+        assert.ok(apiTypes.includes('resetDashboardDefaultChangedNotification?: boolean;'));
+        assert.ok(e2eStateFileBridge.includes("import { dashboardDefaultChangedNotificationKey } from '../utils/dashboardNotificationState';"));
+        assert.ok(e2eStateFileBridge.includes("context.globalState.update(dashboardDefaultChangedNotificationKey, undefined)"));
+        assert.ok(fixtures.includes('resetDashboardDefaultChangedNotificationForE2E'));
+        assert.ok(debugDashboard.includes('await resetDashboardDefaultChangedNotificationForE2E();'));
     });
 
     test('uses known AppHost PID when E2E teardown CLI status probes time out', () => {
@@ -434,7 +461,7 @@ suite('E2E launch profile', () => {
         assert.ok(discoveryConfiguration.includes('runE2eTeardown'));
         assert.ok(!commandPalette.includes('throw new AggregateError'));
         assert.ok(!discoveryConfiguration.includes('throw new AggregateError'));
-        assert.ok(fixtures.includes("['ps', '--format', 'json']"));
+        assert.ok(fixtures.includes("['ps', '--format', 'json', '--nologo']"));
         assert.ok(fixtures.includes('Number.isInteger(candidate.appHostPid)'));
         assert.ok(fixtures.includes('let lastKnownAppHostPid = knownAppHostPid;'));
         assert.ok(fixtures.includes('lastKnownAppHostPid = runningAppHost.appHostPid;'));

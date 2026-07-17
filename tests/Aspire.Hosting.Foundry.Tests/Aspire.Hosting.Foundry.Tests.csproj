@@ -3,7 +3,6 @@
   <PropertyGroup>
     <TargetFramework>$(DefaultTargetFramework)</TargetFramework>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.Foundry\Aspire.Hosting.Foundry.csproj" />
     <ProjectReference Include="..\..\src\Aspire.Hosting.AppHost\Aspire.Hosting.AppHost.csproj" />
@@ -19,6 +18,7 @@
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)AsyncTestHelpers.cs" LinkBase="shared" />
     <Compile Include="$(TestsSharedDir)TestModuleInitializer.cs" LinkBase="shared" />
+    <Compile Include="$(TestsSharedDir)TestPipelineActivityReporter.cs" LinkBase="shared" />
   </ItemGroup>
 
 </Project>

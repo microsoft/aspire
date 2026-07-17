@@ -8,6 +8,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Tests;
 using Aspire.TypeSystem;
@@ -29,7 +30,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
             fileLoggerProvider: fileLoggerProvider,
             commandResolver: commandResolver ?? PathLookupHelper.FindFullPathFromPath,
-            processExecutionFactory: new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance));
+            processExecutionFactory: new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
 
     private GuestRuntime CreateRuntime(
         RuntimeSpec? spec = null,
@@ -40,6 +41,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             spec ?? CreateTestSpec(),
             _loggerFactory.CreateLogger<GuestRuntime>(),
             commandResolver ?? PathLookupHelper.FindFullPathFromPath,
+            new TestEnvironment(),
             profilingTelemetry ?? new ProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 
@@ -261,7 +263,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var spec = CreateTestSpec(
             execute: new CommandSpec
@@ -279,7 +281,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             ]);
         var runtime = CreateRuntime(spec, profilingTelemetry: profilingTelemetry);
         var launcher = new RecordingLauncher();
-        var directory = new DirectoryInfo(tempDirectory.Path);
+        var directory = new DirectoryInfo(workspace.Path);
         var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
 
         await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
@@ -775,7 +777,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var launcher = CreateLauncher(
             commandResolver: cmd => cmd == "dotnet" ? "dotnet" : null);
@@ -785,13 +787,13 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             "Test Runtime",
             "dotnet",
             ["--version"],
-            new DirectoryInfo(tempDirectory.Path),
+            new DirectoryInfo(workspace.Path),
             ProfilingTelemetry.Values.GuestCommandPhaseExecute))
         {
             var (exitCode, output) = await launcher.LaunchAsync(
                 "dotnet",
                 ["--version"],
-                new DirectoryInfo(tempDirectory.Path),
+                new DirectoryInfo(workspace.Path),
                 new Dictionary<string, string>(),
                 afterLaunchAsync: null,
                 options: null,
@@ -885,8 +887,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsync_CreatesMissingMigrationFiles()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var tempDir = tempDirectory.Path;
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var tempDir = workspace.Path;
 
         var migrationFileName = "tsconfig.apphost.json";
         var migrationContent = """{ "compilerOptions": { "target": "ES2022" } }""";
@@ -928,8 +930,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsync_DoesNotOverwriteExistingMigrationFiles()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var tempDir = tempDirectory.Path;
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var tempDir = workspace.Path;
 
         var migrationFileName = "tsconfig.apphost.json";
         var migrationContent = """{ "compilerOptions": { "target": "ES2022" } }""";

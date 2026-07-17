@@ -28,9 +28,12 @@
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.4.24",
     "typescript": "~5.9.3",
-    "vite": "^8.0.0"
+    "vite": "^8.0.16"
   },
   "overrides": {
-    "postcss": "8.5.10"
+    "postcss": "8.5.10",
+    "esbuild": "0.28.1",
+    "@babel/core": "7.29.6",
+    "js-yaml": "4.2.0"
   }
 }

@@ -24,7 +24,7 @@ public sealed class NpmCliPackageTests : IDisposable
         new("osx-arm64", "aspire", ["darwin"], ["arm64"], null)
     ];
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly ITestOutputHelper _output;
     private readonly string _repoRoot = RepoRoot.Path;
     private readonly string _packScriptPath;
@@ -32,10 +32,11 @@ public sealed class NpmCliPackageTests : IDisposable
     public NpmCliPackageTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _packScriptPath = Path.Combine(_repoRoot, "eng", "scripts", "pack-cli-npm-package.ps1");
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     public async Task LauncherDetectsMuslArm64AndThrowsUnsupported()
@@ -156,6 +157,90 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     [Fact]
+    [RequiresTools(["node"])]
+    public async Task LauncherPostinstallCheckSucceedsWhenNativePackageIsInstalled()
+    {
+        var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: true);
+
+        using var cmd = new NodeCommand(_output)
+            .WithTimeout(TimeSpan.FromSeconds(30));
+
+        var result = await cmd.ExecuteScriptAsync(
+            Path.Combine(pointerPackageRoot, "bin", "aspire.js"),
+            "--npm-postinstall-check");
+
+        result.EnsureSuccessful();
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task LauncherPostinstallCheckExplainsDisabledOptionalDependenciesOnSupportedPlatform()
+    {
+        var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: false);
+        var testScriptPath = Path.Combine(_workspace.Path, $"{Path.GetRandomFileName()}.js");
+        await File.WriteAllTextAsync(
+            testScriptPath,
+            """
+            const launcher = require(process.argv[2]);
+
+            try {
+              launcher.__testing.runNpmPostinstallCheck(
+                { name: process.argv[3], version: process.argv[4] },
+                () => process.argv[5]);
+              console.error('Expected postinstall check to fail.');
+              process.exit(1);
+            } catch (error) {
+              console.log(error.message);
+            }
+            """);
+
+        using var cmd = new NodeCommand(_output)
+            .WithTimeout(TimeSpan.FromSeconds(30));
+
+        var result = await cmd.ExecuteScriptAsync(
+            testScriptPath,
+            Path.Combine(pointerPackageRoot, "bin", "aspire.js"),
+            PackageName,
+            PackageVersion,
+            "linux-x64");
+
+        result.EnsureSuccessful();
+
+        Assert.Contains("without disabling npm optional dependencies", result.Output);
+        Assert.Contains("--omit=optional", result.Output);
+        Assert.Contains("--no-optional", result.Output);
+        Assert.Contains("npm_config_optional=false", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task LauncherPostinstallCheckSkipsUnsupportedPlatform()
+    {
+        var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: false);
+        var testScriptPath = Path.Combine(_workspace.Path, $"{Path.GetRandomFileName()}.js");
+        await File.WriteAllTextAsync(
+            testScriptPath,
+            """
+            const launcher = require(process.argv[2]);
+
+            launcher.__testing.runNpmPostinstallCheck(
+              { name: process.argv[3], version: process.argv[4] },
+              () => launcher.__testing.detectRid('linux', 'arm64', true));
+            """);
+
+        using var cmd = new NodeCommand(_output)
+            .WithTimeout(TimeSpan.FromSeconds(30));
+
+        var result = await cmd.ExecuteScriptAsync(
+            testScriptPath,
+            Path.Combine(pointerPackageRoot, "bin", "aspire.js"),
+            PackageName,
+            PackageVersion);
+
+        result.EnsureSuccessful();
+    }
+
+    [Fact]
     [RequiresTools(["pwsh", "npm"])]
     public async Task PackScriptGeneratesPointerPackageMetadataMapAndReadme()
     {
@@ -171,6 +256,7 @@ public sealed class NpmCliPackageTests : IDisposable
             ["aspire", "typescript", "dotnet", "apphost", "polyglot", "distributed-applications", "code-first", "orchestration", "observability", "opentelemetry", "local-development"],
             GetStringArray(packageJson["keywords"]));
         Assert.Equal(">=20", GetString(GetObject(packageJson, "engines"), "node"));
+        Assert.Equal("node bin/aspire.js --npm-postinstall-check", GetString(GetObject(packageJson, "scripts"), "postinstall"));
         Assert.Equal(
             s_supportedRids.ToDictionary(rid => $"{PackageName}-{rid.Rid}", _ => PackageVersion, StringComparer.Ordinal),
             GetStringMap(GetObject(packageJson, "optionalDependencies")));
@@ -182,19 +268,47 @@ public sealed class NpmCliPackageTests : IDisposable
 
         var readme = await File.ReadAllTextAsync(Path.Combine(package.PointerPackageRoot, "README.md"));
         Assert.Equal(await RenderTemplateAsync("eng/scripts/pack-cli-npm-package.pointer.README.md", ("PACKAGE_NAME", PackageName)), readme);
+        Assert.Contains("Use it to create, run, publish, and deploy Aspire AppHosts from a terminal.", readme);
         Assert.Contains("This package requires Node.js 20 or later.", readme);
+        Assert.Contains("Supported platforms:", readme);
         Assert.Contains($"npm install -g {PackageName}", readme);
+        Assert.Contains($"npm install -g {PackageName}@latest", readme);
         Assert.Contains("The native platform packages are installed through npm optional dependencies.", readme);
+        Assert.Contains("installation fails because the launcher cannot find the native CLI binary", readme);
         Assert.Contains("If you run `aspire update --self` from an npm install, the CLI points you back to this npm update command.", readme);
+        Assert.Contains($"npm uninstall -g {PackageName}", readme);
+        Assert.Contains("## Troubleshooting", readme);
+        Assert.Contains("Optional dependencies disabled", readme);
+        Assert.Contains("If installation fails or the launcher says the native package was not installed", readme);
+        Assert.Contains("the `npm_config_optional=false` environment variable", readme);
+        Assert.Contains("New app:", readme);
+        Assert.Contains("Existing repo:", readme);
+        Assert.Contains("Dashboard only:", readme);
+        Assert.Contains("PATH cannot find `aspire`", readme);
+        Assert.Contains("Supported platforms and architectures", readme);
+        Assert.Contains("## Useful commands", readme);
+        Assert.Contains("`aspire deploy` deploys an AppHost to its supported deployment targets.", readme);
+        Assert.Contains("Aspire CLI command reference", readme);
         Assert.Contains("TypeScript AppHost (`apphost.mts`)", readme);
         Assert.Contains("import { createBuilder } from './.aspire/modules/aspire.mjs';", readme);
         Assert.Contains("aspire dashboard run", readme);
+        Assert.Contains("Browse Aspire samples", readme);
         Assert.DoesNotContain("apphost.ts", readme);
         Assert.DoesNotContain("./.aspire/modules/aspire.js", readme);
         Assert.DoesNotContain("__PACKAGE_NAME__", readme);
         // The C# AppHost example was intentionally removed; the npm README is TypeScript-only.
         Assert.DoesNotContain("apphost.cs", readme);
         Assert.DoesNotContain("```csharp", readme);
+    }
+
+    [Fact]
+    public async Task PointerPackageReadmeSupportedPlatformTextMatchesSupportedRidMatrix()
+    {
+        var readme = await RenderTemplateAsync("eng/scripts/pack-cli-npm-package.pointer.README.md", ("PACKAGE_NAME", PackageName));
+        var supportedPlatformText = GetExpectedSupportedPlatformText();
+
+        Assert.Contains($"Supported platforms: {supportedPlatformText}.", readme);
+        Assert.Contains($"The npm package currently ships native binaries for {supportedPlatformText}. Other platforms are not supported by this package.", readme);
     }
 
     [Theory]
@@ -349,6 +463,60 @@ public sealed class NpmCliPackageTests : IDisposable
     private Task<string> ReadRepoFileAsync(string relativePath)
         => File.ReadAllTextAsync(Path.Combine(_repoRoot, relativePath.Replace('/', Path.DirectorySeparatorChar)));
 
+    private async Task<string> CreateFakeNpmInstallAsync(bool includeRidPackages)
+    {
+        var testRoot = Path.Combine(_workspace.Path, Path.GetRandomFileName());
+        var nodeModulesRoot = Path.Combine(testRoot, "node_modules");
+        var pointerPackageRoot = Path.Combine(nodeModulesRoot, "@microsoft", "aspire-cli");
+        var pointerBinRoot = Path.Combine(pointerPackageRoot, "bin");
+        Directory.CreateDirectory(pointerBinRoot);
+
+        File.Copy(
+            Path.Combine(_repoRoot, "eng", "clipack", "npm", "aspire.js"),
+            Path.Combine(pointerBinRoot, "aspire.js"));
+
+        await File.WriteAllTextAsync(
+            Path.Combine(pointerPackageRoot, "package.json"),
+            $$"""
+            {
+              "name": "{{PackageName}}",
+              "version": "{{PackageVersion}}"
+            }
+            """);
+
+        var packageMap = new JsonObject();
+        foreach (var rid in s_supportedRids)
+        {
+            packageMap[rid.Rid] = $"{PackageName}-{rid.Rid}";
+        }
+
+        await File.WriteAllTextAsync(Path.Combine(pointerBinRoot, "aspire-package-map.json"), packageMap.ToJsonString());
+
+        if (includeRidPackages)
+        {
+            foreach (var rid in s_supportedRids)
+            {
+                var ridPackageRoot = Path.Combine(nodeModulesRoot, "@microsoft", $"aspire-cli-{rid.Rid}");
+                var ridBinRoot = Path.Combine(ridPackageRoot, "bin");
+                Directory.CreateDirectory(ridBinRoot);
+
+                await File.WriteAllTextAsync(
+                    Path.Combine(ridPackageRoot, "package.json"),
+                    $$"""
+                    {
+                      "name": "{{PackageName}}-{{rid.Rid}}",
+                      "version": "{{PackageVersion}}"
+                    }
+                    """);
+
+                await File.WriteAllTextAsync(Path.Combine(ridBinRoot, "aspire"), "native binary stub");
+                await File.WriteAllTextAsync(Path.Combine(ridBinRoot, "aspire.exe"), "native binary stub");
+            }
+        }
+
+        return pointerPackageRoot;
+    }
+
     public static TheoryData<RidPackageExpectation> GetSupportedRidData()
     {
         var data = new TheoryData<RidPackageExpectation>();
@@ -362,7 +530,7 @@ public sealed class NpmCliPackageTests : IDisposable
 
     private async Task<PackedNpmPackage> PackCliNpmPackageAsync(string rid)
     {
-        var testRoot = Path.Combine(_tempDirectory.Path, Path.GetRandomFileName());
+        var testRoot = Path.Combine(_workspace.Path, Path.GetRandomFileName());
         var stagingRoot = Path.Combine(testRoot, "staging");
         var outputPath = Path.Combine(testRoot, "output");
         var nativeBinaryPath = Path.Combine(testRoot, "native-aspire-stub");
@@ -400,6 +568,89 @@ public sealed class NpmCliPackageTests : IDisposable
         }
 
         return template;
+    }
+
+    private static string GetExpectedSupportedPlatformText()
+    {
+        var platformGroups = new[]
+        {
+            new PlatformDescription("win32", null, "Windows", null),
+            new PlatformDescription("darwin", null, "macOS", null),
+            new PlatformDescription("linux", "glibc", "Linux", "with glibc"),
+            new PlatformDescription("linux", "musl", "Linux", "with musl/Alpine")
+        };
+
+        var describedRids = new HashSet<string>(StringComparer.Ordinal);
+        var descriptions = new List<string>();
+
+        foreach (var group in platformGroups)
+        {
+            var matchingRids = s_supportedRids
+                .Where(rid => rid.Os.Contains(group.Os, StringComparer.Ordinal) && HasLibc(rid, group.Libc))
+                .ToArray();
+
+            if (matchingRids.Length == 0)
+            {
+                continue;
+            }
+
+            foreach (var rid in matchingRids)
+            {
+                describedRids.Add(rid.Rid);
+            }
+
+            var cpuText = string.Join(
+                '/',
+                matchingRids
+                    .SelectMany(rid => rid.Cpu)
+                    .Distinct(StringComparer.Ordinal)
+                    .OrderBy(GetCpuDisplayOrder)
+                    .Select(FormatCpuName));
+            descriptions.Add(group.LibcDescription is null ? $"{group.Name} {cpuText}" : $"{group.Name} {cpuText} {group.LibcDescription}");
+        }
+
+        Assert.Equal(
+            s_supportedRids.Select(rid => rid.Rid).Order(StringComparer.Ordinal),
+            describedRids.Order(StringComparer.Ordinal));
+
+        return JoinDescriptions(descriptions);
+    }
+
+    private static bool HasLibc(RidPackageExpectation rid, string? libc)
+    {
+        return libc is null
+            ? rid.Libc is null
+            : rid.Libc?.Contains(libc, StringComparer.Ordinal) == true;
+    }
+
+    private static string FormatCpuName(string cpu)
+    {
+        return cpu switch
+        {
+            "arm64" => "Arm64",
+            _ => cpu
+        };
+    }
+
+    private static int GetCpuDisplayOrder(string cpu)
+    {
+        return cpu switch
+        {
+            "x64" => 0,
+            "arm64" => 1,
+            _ => 2
+        };
+    }
+
+    private static string JoinDescriptions(IReadOnlyList<string> descriptions)
+    {
+        return descriptions.Count switch
+        {
+            0 => throw new InvalidOperationException("Expected at least one supported npm CLI platform."),
+            1 => descriptions[0],
+            2 => $"{descriptions[0]} and {descriptions[1]}",
+            _ => $"{string.Join(", ", descriptions.Take(descriptions.Count - 1))}, and {descriptions[^1]}"
+        };
     }
 
     private static JsonObject ReadJsonObject(string path)
@@ -465,6 +716,8 @@ public sealed class NpmCliPackageTests : IDisposable
     }
 
     public sealed record RidPackageExpectation(string Rid, string BinaryName, string[] Os, string[] Cpu, string[]? Libc);
+
+    private sealed record PlatformDescription(string Os, string? Libc, string Name, string? LibcDescription);
 
     private sealed record PackedNpmPackage(string RidPackageRoot, string PointerPackageRoot);
 }

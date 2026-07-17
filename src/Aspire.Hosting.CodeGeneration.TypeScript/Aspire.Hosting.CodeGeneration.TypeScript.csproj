@@ -7,6 +7,9 @@
     <RootNamespace>Aspire.Hosting.CodeGeneration.TypeScript</RootNamespace>
     <!-- Required for TypeScript AppHost support -->
     <IsPackable>true</IsPackable>
+    <!-- Code-generation infrastructure, not a discoverable polyglot integration, so opt out of the
+         default 'polyglot' NuGet tag that `aspire add` uses to surface integrations to non-C# AppHosts. -->
+    <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
     <!-- No baseline exists since this package was previously not published -->
     <DisablePackageBaselineValidation>true</DisablePackageBaselineValidation>
     <IsAotCompatible>true</IsAotCompatible>
@@ -33,6 +36,7 @@
 
   <ItemGroup>
     <Compile Include="$(SharedDir)AppHostProfilePortGenerator.cs" Link="AppHostProfilePortGenerator.cs" />
+    <Compile Include="$(SharedDir)CodeGeneration\AtsOptionsFlattening.cs" Link="AtsOptionsFlattening.cs" />
     <Compile Include="$(SharedDir)Json\AtsJsonCodeWriter.cs" Link="AtsJsonCodeWriter.cs" />
     <Compile Include="$(SharedDir)NpmVersionHelper.cs" Link="NpmVersionHelper.cs" />
   </ItemGroup>

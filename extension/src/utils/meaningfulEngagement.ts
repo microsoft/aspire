@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { AppHostDiscoveryService } from './appHostDiscovery';
 import { summarizeAppHostLanguages } from './appHostLanguage';
+import { type AppHostTargetVersionSummary, summarizeAppHostTargetVersions } from './appHostTargetVersion';
 import { sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties } from './telemetry';
 
 /**
@@ -115,31 +116,39 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
         // Collect a coarse snapshot of the workspace state at fire time. We
         // intentionally only fetch from already-running discovery — never
         // forcing a new discovery — to keep the event side-effect-free.
-        const languageSummary = await this._safeLanguageSummary();
+        const appHostSummary = await this._safeAppHostSummary();
         const workspaceFolderCount = vscode.workspace.workspaceFolders?.length ?? 0;
         const hasCSharpDevKit = vscode.extensions.getExtension('ms-dotnettools.csdevkit') !== undefined;
 
         // Publish a small set of properties to be merged into every
         // subsequent event in this session.
         setCommonTelemetryProperties({
-            apphost_languages: languageSummary,
-            apphost_present: languageSummary === 'none' ? 'false' : 'true',
+            apphost_languages: appHostSummary.languages,
+            apphost_target_versions: appHostSummary.targetVersions,
+            apphost_present: appHostSummary.languages === 'none' ? 'false' : 'true',
         });
 
         sendTelemetryEvent('engagement/active', {
             trigger,
-            apphost_present: languageSummary === 'none' ? 'false' : 'true',
-            apphost_languages: languageSummary,
+            apphost_present: appHostSummary.languages === 'none' ? 'false' : 'true',
+            apphost_languages: appHostSummary.languages,
+            apphost_target_versions: appHostSummary.targetVersions,
             has_csharp_devkit: hasCSharpDevKit ? 'true' : 'false',
         }, {
             workspace_folders: workspaceFolderCount,
         });
     }
 
-    private async _safeLanguageSummary(): Promise<ReturnType<typeof summarizeAppHostLanguages>> {
+    private async _safeAppHostSummary(): Promise<{
+        languages: ReturnType<typeof summarizeAppHostLanguages>;
+        targetVersions: AppHostTargetVersionSummary;
+    }> {
         const folders = vscode.workspace.workspaceFolders;
         if (!folders || folders.length === 0) {
-            return 'none';
+            return {
+                languages: 'none',
+                targetVersions: 'none',
+            };
         }
         const all: import('./appHostDiscovery').CandidateAppHostDisplayInfo[] = [];
         for (const folder of folders) {
@@ -151,6 +160,9 @@ export class MeaningfulEngagementReporter implements vscode.Disposable {
                 // ignored; see _checkAppHostsForFolder
             }
         }
-        return summarizeAppHostLanguages(all);
+        return {
+            languages: summarizeAppHostLanguages(all),
+            targetVersions: await summarizeAppHostTargetVersions(all),
+        };
     }
 }

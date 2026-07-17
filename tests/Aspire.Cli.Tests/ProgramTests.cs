@@ -5,7 +5,6 @@ using System.Reflection;
 using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -67,7 +66,7 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WarnIfGlobalSettingsContainAppHostPath_WritesWarning_WhenGlobalConfigHasAppHostPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(settingsPath, """{ "appHost": { "path": "AppHost.csproj" } }""");
         var errorWriter = new TestStartupErrorWriter();
@@ -84,7 +83,7 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     [Fact]
     public void WarnIfGlobalSettingsContainAppHostPath_DoesNotWarn_WhenGlobalConfigHasNoAppHostPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(settingsPath, """{ "channel": "daily" }""");
         var errorWriter = new TestStartupErrorWriter();
@@ -101,7 +100,7 @@ public class ProgramTests(ITestOutputHelper outputHelper)
     [InlineData("""{ "appHost": { "path": "AppHost.csproj" }""")]
     public void WarnIfGlobalSettingsContainAppHostPath_DoesNotWarn_WhenGlobalConfigCannotBeLoaded(string content)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var settingsPath = Path.Combine(workspace.WorkspaceRoot.FullName, AspireConfigFile.FileName);
         File.WriteAllText(settingsPath, content);
         var errorWriter = new TestStartupErrorWriter();

@@ -11,6 +11,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Aspire.Hosting;
 using Aspire.Shared;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -24,7 +25,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_BundleNotAvailable_DisplaysError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -47,7 +48,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_Help_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -67,7 +68,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--config-file-path /path/to/config.json")]
     public void DashboardRunCommand_ParsesOptionsWithoutErrors(string args)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -80,7 +81,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void DashboardRunCommand_ForwardsUnmatchedTokens()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -112,7 +113,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var unmatchedTokens = new[] { "--ASPNETCORE_URLS=http://localhost:9999" };
 
-        Assert.True(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, "ASPNETCORE_URLS"));
+        Assert.True(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, KnownAspNetCoreConfigNames.Urls));
         Assert.False(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, "ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"));
     }
 
@@ -123,13 +124,13 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var unmatchedTokens = new[] { "--ASPNETCORE_URLS", "http://localhost:9999" };
 
-        Assert.True(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, "ASPNETCORE_URLS"));
+        Assert.True(DashboardRunCommand.ConfigSettingHasValue(unmatchedTokens, environment, KnownAspNetCoreConfigNames.Urls));
     }
 
     [Fact]
     public async Task DashboardRunCommand_DefaultOptions_DoesNotEmitAllowAnonymous()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -149,7 +150,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_DefaultOptions_PassesDefaultArgsToProcess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -179,7 +180,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--config-file-path /path/to/config.json", "--ASPIRE_DASHBOARD_CONFIG_FILE_PATH=/path/to/config.json")]
     public async Task DashboardRunCommand_IndividualOption_PassesCorrectArgToProcess(string cliArgs, string expectedArg)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -199,7 +200,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_WithoutAllowAnonymous_SetsBrowserTokenEnvVar()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         IDictionary<string, string>? capturedEnv = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -223,7 +224,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_UnmatchedTokens_ForwardedToProcess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -249,7 +250,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_CombinedOptions_PassesAllArgsToProcess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         string[]? capturedArgs = null;
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
@@ -276,7 +277,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_ProcessExitsWithError_ReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
@@ -294,7 +295,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_ProcessFailsToStart_DisplaysErrorAndReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
         var (services, managedPath, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
@@ -328,7 +329,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DashboardRunCommand_WhenCancelled_DisplaysCancellationMessageAndReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
         var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -384,7 +385,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     {
         var environment = CreateEnvironment(new Dictionary<string, string?>
         {
-            ["ASPNETCORE_URLS"] = "http://envhost:9999"
+            [KnownAspNetCoreConfigNames.Urls] = "http://envhost:9999"
         });
 
         // No arg in the list — should fall back to the environment variable.
@@ -433,7 +434,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     {
         var environment = CreateEnvironment(new Dictionary<string, string?>
         {
-            ["ASPNETCORE_URLS"] = "http://envhost:9999"
+            [KnownAspNetCoreConfigNames.Urls] = "http://envhost:9999"
         });
 
         var args = new List<string> { "dashboard", "--ASPNETCORE_URLS=http://arghost:5555" };
@@ -470,7 +471,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         });
         console.Profile.Width = int.MaxValue;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [dashboard].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
 

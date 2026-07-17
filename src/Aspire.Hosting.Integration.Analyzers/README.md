@@ -24,6 +24,16 @@ If you edit the project file directly, keep the analyzer private and use the sam
 
 The package is applied automatically when it is referenced. No additional MSBuild property is required.
 
+Integrations that run these analyzers are treated as polyglot-compatible by default and automatically get the `polyglot` NuGet tag so `aspire add` can surface the integration to non-C# (TypeScript, Python, Go, Java, Rust) AppHosts. A project that is not a polyglot integration (for example, infrastructure that has no `[AspireExport]` surface) must acknowledge that by setting the following property:
+
+```xml
+<PropertyGroup>
+  <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible>
+</PropertyGroup>
+```
+
+Setting the property to `false` omits the `polyglot` NuGet tag. If a project has no `[AspireExport]` coverage and does not opt out, the build fails with `ASPIREEXPORT017`, prompting you to either add export coverage or opt out.
+
 The analyzers validate common ATS export patterns used by polyglot integrations, such as:
 
 - exported builder methods that directly invoke synchronous callbacks

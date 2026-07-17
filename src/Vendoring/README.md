@@ -23,7 +23,7 @@ git checkout tags/Instrumentation.ConfluentKafka-0.1.0-alpha.2
 ```console
 git clone https://github.com/open-telemetry/opentelemetry-dotnet-contrib.git
 git fetch --tags
-git checkout tags/Instrumentation.StackExchangeRedis-1.15.1-beta.2
+git checkout tags/Instrumentation.StackExchangeRedis-1.16.0-beta.1
 ```
 
 ### Instructions

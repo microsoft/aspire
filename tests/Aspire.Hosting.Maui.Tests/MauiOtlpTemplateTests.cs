@@ -12,7 +12,7 @@ namespace Aspire.Hosting.Tests;
 /// after evaluation. MAUI resources resolve these templates eagerly because Android/iOS 
 /// environment files are generated before DCP's template replacement happens.
 /// </summary>
-public class MauiOtlpTemplateTests
+public class MauiOtlpTemplateTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData("Windows", "net10.0-windows10.0.19041.0")]
@@ -21,30 +21,24 @@ public class MauiOtlpTemplateTests
     [InlineData("MacCatalyst", "net10.0-maccatalyst")]
     public async Task PlatformResource_OtelServiceName_DoesNotContainDcpPlaceholders(string platform, string tfm)
     {
-        var projectContent = MauiTestHelper.CreateProjectContent(tfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(tfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var platformResource = AddPlatformByName(maui, platform);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var platformResource = AddPlatformByName(maui, platform);
 
-            var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                platformResource.Resource,
-                DistributedApplicationOperation.Run,
-                TestServiceProvider.Instance);
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            platformResource.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance);
 
-            Assert.True(envVars.ContainsKey("OTEL_SERVICE_NAME"),
-                "Expected OTEL_SERVICE_NAME to be set on MAUI platform resource");
-            var serviceName = envVars["OTEL_SERVICE_NAME"];
-            Assert.DoesNotContain("{{", serviceName);
-            Assert.DoesNotContain("}}", serviceName);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        Assert.True(envVars.ContainsKey("OTEL_SERVICE_NAME"),
+            "Expected OTEL_SERVICE_NAME to be set on MAUI platform resource");
+        var serviceName = envVars["OTEL_SERVICE_NAME"];
+        Assert.DoesNotContain("{{", serviceName);
+        Assert.DoesNotContain("}}", serviceName);
     }
 
     [Theory]
@@ -54,57 +48,45 @@ public class MauiOtlpTemplateTests
     [InlineData("MacCatalyst", "net10.0-maccatalyst")]
     public async Task PlatformResource_OtelResourceAttributes_DoesNotContainDcpPlaceholders(string platform, string tfm)
     {
-        var projectContent = MauiTestHelper.CreateProjectContent(tfm);
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent(tfm));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var platformResource = AddPlatformByName(maui, platform);
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var platformResource = AddPlatformByName(maui, platform);
 
-            var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                platformResource.Resource,
-                DistributedApplicationOperation.Run,
-                TestServiceProvider.Instance);
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            platformResource.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance);
 
-            Assert.True(envVars.ContainsKey("OTEL_RESOURCE_ATTRIBUTES"),
-                "Expected OTEL_RESOURCE_ATTRIBUTES to be set on MAUI platform resource");
-            var resourceAttrs = envVars["OTEL_RESOURCE_ATTRIBUTES"];
-            Assert.DoesNotContain("{{", resourceAttrs);
-            Assert.DoesNotContain("}}", resourceAttrs);
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        Assert.True(envVars.ContainsKey("OTEL_RESOURCE_ATTRIBUTES"),
+            "Expected OTEL_RESOURCE_ATTRIBUTES to be set on MAUI platform resource");
+        var resourceAttrs = envVars["OTEL_RESOURCE_ATTRIBUTES"];
+        Assert.DoesNotContain("{{", resourceAttrs);
+        Assert.DoesNotContain("}}", resourceAttrs);
     }
 
     [Fact]
     public async Task PlatformResource_HasOtelExporterEndpoint()
     {
-        var projectContent = MauiTestHelper.CreateProjectContent("net10.0-android");
-        var tempFile = MauiTestHelper.CreateTempProjectFile(projectContent);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var tempFile = Path.Combine(workspace.Path, "TempMauiProject.csproj");
+        File.WriteAllText(tempFile, MauiTestHelper.CreateProjectContent("net10.0-android"));
 
-        try
-        {
-            var appBuilder = DistributedApplication.CreateBuilder();
-            var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
-            var androidDevice = maui.AddAndroidDevice();
+        var appBuilder = DistributedApplication.CreateBuilder();
+        var maui = appBuilder.AddMauiProject("mauiapp", tempFile);
+        var androidDevice = maui.AddAndroidDevice();
 
-            var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
-                androidDevice.Resource,
-                DistributedApplicationOperation.Run,
-                TestServiceProvider.Instance);
+        var envVars = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(
+            androidDevice.Resource,
+            DistributedApplicationOperation.Run,
+            TestServiceProvider.Instance);
 
-            // OTEL_EXPORTER_OTLP_ENDPOINT should be present (set by WithOtlpExporter)
-            Assert.True(envVars.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"),
-                "Expected OTEL_EXPORTER_OTLP_ENDPOINT to be set on MAUI platform resource");
-        }
-        finally
-        {
-            MauiTestHelper.CleanupTempFile(tempFile);
-        }
+        // OTEL_EXPORTER_OTLP_ENDPOINT should be present (set by WithOtlpExporter)
+        Assert.True(envVars.ContainsKey("OTEL_EXPORTER_OTLP_ENDPOINT"),
+            "Expected OTEL_EXPORTER_OTLP_ENDPOINT to be set on MAUI platform resource");
     }
 
     private static IResourceBuilder<IResource> AddPlatformByName(

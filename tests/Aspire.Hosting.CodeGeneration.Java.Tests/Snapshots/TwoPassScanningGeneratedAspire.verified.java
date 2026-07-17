@@ -1344,6 +1344,7 @@ public class AspireRegistrations {
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceLoggerService", (h, c) -> new ResourceLoggerService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ResourceCommandService", (h, c) -> new ResourceCommandService(h, c));
         AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.IInteractionService", (h, c) -> new IInteractionService(h, c));
+        AspireClient.registerHandleWrapper("Aspire.Hosting/Aspire.Hosting.ProgressContext", (h, c) -> new ProgressContext(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfiguration", (h, c) -> new IConfiguration(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Configuration.Abstractions/Microsoft.Extensions.Configuration.IConfigurationSection", (h, c) -> new IConfigurationSection(h, c));
         AspireClient.registerHandleWrapper("Microsoft.Extensions.Hosting.Abstractions/Microsoft.Extensions.Hosting.IHostEnvironment", (h, c) -> new IHostEnvironment(h, c));
@@ -3675,6 +3676,7 @@ public class CommandOptions implements JsonSerializable {
     private IconVariant iconVariant;
     private boolean isHighlighted;
     private AspireFunc1<UpdateCommandStateContext, ResourceCommandState> updateState;
+    private CommandProgressOptions progress;
 
     public String getDescription() { return description; }
     public void setDescription(String value) { this.description = value; }
@@ -3696,6 +3698,8 @@ public class CommandOptions implements JsonSerializable {
     public void setIsHighlighted(boolean value) { this.isHighlighted = value; }
     public AspireFunc1<UpdateCommandStateContext, ResourceCommandState> getUpdateState() { return updateState; }
     public void setUpdateState(AspireFunc1<UpdateCommandStateContext, ResourceCommandState> value) { this.updateState = value; }
+    public CommandProgressOptions getProgress() { return progress; }
+    public void setProgress(CommandProgressOptions value) { this.progress = value; }
 
     @SuppressWarnings("unchecked")
     public static CommandOptions fromMap(Map<String, Object> map) {
@@ -3716,6 +3720,8 @@ public class CommandOptions implements JsonSerializable {
         value.setIconVariant(iconVariantValue == null ? null : IconVariant.fromValue((String) iconVariantValue));
         var isHighlightedValue = map.get("IsHighlighted");
         value.setIsHighlighted((Boolean) isHighlightedValue);
+        var progressValue = map.get("Progress");
+        value.setProgress(progressValue == null ? null : CommandProgressOptions.fromMap((Map<String, Object>) progressValue));
         return value;
     }
 
@@ -3738,6 +3744,49 @@ public class CommandOptions implements JsonSerializable {
             var arg = (UpdateCommandStateContext) transportArg;
             return AspireClient.awaitValue(updateState.invoke(arg));
         }));
+        map.put("Progress", AspireClient.serializeValue(progress));
+        return map;
+    }
+}
+
+// ===== CommandProgressOptions.java =====
+// CommandProgressOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** CommandProgressOptions DTO. */
+public class CommandProgressOptions implements JsonSerializable {
+    private String message;
+    private String title;
+    private boolean hideCancelButton;
+
+    public String getMessage() { return message; }
+    public void setMessage(String value) { this.message = value; }
+    public String getTitle() { return title; }
+    public void setTitle(String value) { this.title = value; }
+    public boolean getHideCancelButton() { return hideCancelButton; }
+    public void setHideCancelButton(boolean value) { this.hideCancelButton = value; }
+
+    @SuppressWarnings("unchecked")
+    public static CommandProgressOptions fromMap(Map<String, Object> map) {
+        var value = new CommandProgressOptions();
+        var messageValue = map.get("Message");
+        value.setMessage(messageValue == null ? null : (String) messageValue);
+        var titleValue = map.get("Title");
+        value.setTitle(titleValue == null ? null : (String) titleValue);
+        var hideCancelButtonValue = map.get("HideCancelButton");
+        value.setHideCancelButton((Boolean) hideCancelButtonValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("Message", AspireClient.serializeValue(message));
+        map.put("Title", AspireClient.serializeValue(title));
+        map.put("HideCancelButton", AspireClient.serializeValue(hideCancelButton));
         return map;
     }
 }
@@ -7717,6 +7766,9 @@ public class CreateInteractionInputOptions implements JsonSerializable {
     private Boolean allowCustomChoice;
     private Boolean disabled;
     private Double maxLength;
+    private Double maxFileSize;
+    private Boolean allowMultipleFiles;
+    private String fileFilter;
 
     public String getLabel() { return label; }
     public void setLabel(String value) { this.label = value; }
@@ -7736,6 +7788,12 @@ public class CreateInteractionInputOptions implements JsonSerializable {
     public void setDisabled(Boolean value) { this.disabled = value; }
     public Double getMaxLength() { return maxLength; }
     public void setMaxLength(Double value) { this.maxLength = value; }
+    public Double getMaxFileSize() { return maxFileSize; }
+    public void setMaxFileSize(Double value) { this.maxFileSize = value; }
+    public Boolean getAllowMultipleFiles() { return allowMultipleFiles; }
+    public void setAllowMultipleFiles(Boolean value) { this.allowMultipleFiles = value; }
+    public String getFileFilter() { return fileFilter; }
+    public void setFileFilter(String value) { this.fileFilter = value; }
 
     @SuppressWarnings("unchecked")
     public static CreateInteractionInputOptions fromMap(Map<String, Object> map) {
@@ -7758,6 +7816,12 @@ public class CreateInteractionInputOptions implements JsonSerializable {
         value.setDisabled(disabledValue == null ? null : (Boolean) disabledValue);
         var maxLengthValue = map.get("MaxLength");
         value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
+        var maxFileSizeValue = map.get("MaxFileSize");
+        value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
+        var allowMultipleFilesValue = map.get("AllowMultipleFiles");
+        value.setAllowMultipleFiles(allowMultipleFilesValue == null ? null : (Boolean) allowMultipleFilesValue);
+        var fileFilterValue = map.get("FileFilter");
+        value.setFileFilter(fileFilterValue == null ? null : (String) fileFilterValue);
         return value;
     }
 
@@ -7772,6 +7836,9 @@ public class CreateInteractionInputOptions implements JsonSerializable {
         map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
         map.put("Disabled", AspireClient.serializeValue(disabled));
         map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
+        map.put("AllowMultipleFiles", AspireClient.serializeValue(allowMultipleFiles));
+        map.put("FileFilter", AspireClient.serializeValue(fileFilter));
         return map;
     }
 }
@@ -15278,6 +15345,36 @@ public class IInteractionService extends HandleWrapperBase {
         return BoolInteractionResult.fromMap((Map<String, Object>) result);
     }
 
+    /** Displays a progress dialog with an indeterminate progress indicator. */
+    public BoolInteractionResult promptProgress(String message, PromptProgressOptions optionsBag) {
+        var title = optionsBag == null ? null : optionsBag.getTitle();
+        var options = optionsBag == null ? null : optionsBag.getOptions();
+        var cancellationToken = optionsBag == null ? null : optionsBag.getCancellationToken();
+        return promptProgressImpl(message, title, options, cancellationToken);
+    }
+
+    public BoolInteractionResult promptProgress(String message) {
+        return promptProgress(message, null);
+    }
+
+    /** Displays a progress dialog with an indeterminate progress indicator. */
+    private BoolInteractionResult promptProgressImpl(String message, String title, InteractionProgressOptions options, CancellationToken cancellationToken) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("message", AspireClient.serializeValue(message));
+        if (title != null) {
+            reqArgs.put("title", AspireClient.serializeValue(title));
+        }
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        if (cancellationToken != null) {
+            reqArgs.put("cancellationToken", getClient().registerCancellation(cancellationToken));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/promptProgress", reqArgs);
+        return BoolInteractionResult.fromMap((Map<String, Object>) result);
+    }
+
     /** Prompts the user for a single input. */
     public InputInteractionResult promptInput(String title, String message, InteractionInputBuilder input, PromptInputOptions optionsBag) {
         var options = optionsBag == null ? null : optionsBag.getOptions();
@@ -15403,6 +15500,22 @@ public class IInteractionService extends HandleWrapperBase {
             reqArgs.put("options", AspireClient.serializeValue(options));
         }
         var result = getClient().invokeCapability("Aspire.Hosting/createNumberInput", reqArgs);
+        return (InteractionInputBuilder) result;
+    }
+
+    public InteractionInputBuilder createFileInput(String name) {
+        return createFileInput(name, null);
+    }
+
+    /** Creates a file input. */
+    public InteractionInputBuilder createFileInput(String name, CreateInteractionInputOptions options) {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("interactionService", AspireClient.serializeValue(getHandle()));
+        reqArgs.put("name", AspireClient.serializeValue(name));
+        if (options != null) {
+            reqArgs.put("options", AspireClient.serializeValue(options));
+        }
+        var result = getClient().invokeCapability("Aspire.Hosting/createFileInput", reqArgs);
         return (InteractionInputBuilder) result;
     }
 
@@ -16226,7 +16339,8 @@ public enum InputType implements WireValueEnum {
     SECRET_TEXT("SecretText"),
     CHOICE("Choice"),
     BOOLEAN("Boolean"),
-    NUMBER("Number");
+    NUMBER("Number"),
+    FILE("File");
 
     private final String value;
 
@@ -16383,6 +16497,9 @@ public class InteractionInput implements JsonSerializable {
     private Boolean allowCustomChoice;
     private boolean disabled;
     private Double maxLength;
+    private Boolean allowMultipleFiles;
+    private String fileFilter;
+    private Double maxFileSize;
 
     public String getName() { return name; }
     public void setName(String value) { this.name = value; }
@@ -16408,6 +16525,12 @@ public class InteractionInput implements JsonSerializable {
     public void setDisabled(boolean value) { this.disabled = value; }
     public Double getMaxLength() { return maxLength; }
     public void setMaxLength(Double value) { this.maxLength = value; }
+    public Boolean getAllowMultipleFiles() { return allowMultipleFiles; }
+    public void setAllowMultipleFiles(Boolean value) { this.allowMultipleFiles = value; }
+    public String getFileFilter() { return fileFilter; }
+    public void setFileFilter(String value) { this.fileFilter = value; }
+    public Double getMaxFileSize() { return maxFileSize; }
+    public void setMaxFileSize(Double value) { this.maxFileSize = value; }
 
     @SuppressWarnings("unchecked")
     public static InteractionInput fromMap(Map<String, Object> map) {
@@ -16436,6 +16559,12 @@ public class InteractionInput implements JsonSerializable {
         value.setDisabled((Boolean) disabledValue);
         var maxLengthValue = map.get("MaxLength");
         value.setMaxLength(maxLengthValue == null ? null : ((Number) maxLengthValue).doubleValue());
+        var allowMultipleFilesValue = map.get("AllowMultipleFiles");
+        value.setAllowMultipleFiles(allowMultipleFilesValue == null ? null : (Boolean) allowMultipleFilesValue);
+        var fileFilterValue = map.get("FileFilter");
+        value.setFileFilter(fileFilterValue == null ? null : (String) fileFilterValue);
+        var maxFileSizeValue = map.get("MaxFileSize");
+        value.setMaxFileSize(maxFileSizeValue == null ? null : ((Number) maxFileSizeValue).doubleValue());
         return value;
     }
 
@@ -16453,6 +16582,9 @@ public class InteractionInput implements JsonSerializable {
         map.put("AllowCustomChoice", AspireClient.serializeValue(allowCustomChoice));
         map.put("Disabled", AspireClient.serializeValue(disabled));
         map.put("MaxLength", AspireClient.serializeValue(maxLength));
+        map.put("AllowMultipleFiles", AspireClient.serializeValue(allowMultipleFiles));
+        map.put("FileFilter", AspireClient.serializeValue(fileFilter));
+        map.put("MaxFileSize", AspireClient.serializeValue(maxFileSize));
         return map;
     }
 }
@@ -16830,6 +16962,50 @@ public class InteractionNotificationOptions implements JsonSerializable {
         map.put("Intent", AspireClient.serializeValue(intent));
         map.put("LinkText", AspireClient.serializeValue(linkText));
         map.put("LinkUrl", AspireClient.serializeValue(linkUrl));
+        return map;
+    }
+}
+
+// ===== InteractionProgressOptions.java =====
+// InteractionProgressOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** InteractionProgressOptions DTO. */
+public class InteractionProgressOptions implements JsonSerializable {
+    private String primaryButtonText;
+    private Boolean enableMessageMarkdown;
+    private AspireAction1<ProgressContext> work;
+
+    public String getPrimaryButtonText() { return primaryButtonText; }
+    public void setPrimaryButtonText(String value) { this.primaryButtonText = value; }
+    public Boolean getEnableMessageMarkdown() { return enableMessageMarkdown; }
+    public void setEnableMessageMarkdown(Boolean value) { this.enableMessageMarkdown = value; }
+    public AspireAction1<ProgressContext> getWork() { return work; }
+    public void setWork(AspireAction1<ProgressContext> value) { this.work = value; }
+
+    @SuppressWarnings("unchecked")
+    public static InteractionProgressOptions fromMap(Map<String, Object> map) {
+        var value = new InteractionProgressOptions();
+        var primaryButtonTextValue = map.get("PrimaryButtonText");
+        value.setPrimaryButtonText(primaryButtonTextValue == null ? null : (String) primaryButtonTextValue);
+        var enableMessageMarkdownValue = map.get("EnableMessageMarkdown");
+        value.setEnableMessageMarkdown(enableMessageMarkdownValue == null ? null : (Boolean) enableMessageMarkdownValue);
+        return value;
+    }
+
+    public Map<String, Object> toMap() {
+        Map<String, Object> map = new HashMap<>();
+        map.put("PrimaryButtonText", AspireClient.serializeValue(primaryButtonText));
+        map.put("EnableMessageMarkdown", AspireClient.serializeValue(enableMessageMarkdown));
+        map.put("Work", work == null ? null : (java.util.function.Function<Object, Object>) (transportArg -> {
+            var arg = (ProgressContext) transportArg;
+            work.invoke(arg);
+            return null;
+        }));
         return map;
     }
 }
@@ -18539,6 +18715,30 @@ public class ProcessCommandSpecExportData implements JsonSerializable {
         map.put("KillEntireProcessTree", AspireClient.serializeValue(killEntireProcessTree));
         return map;
     }
+}
+
+// ===== ProgressContext.java =====
+// ProgressContext.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Wrapper for Aspire.Hosting/Aspire.Hosting.ProgressContext. */
+public class ProgressContext extends HandleWrapperBase {
+    ProgressContext(Handle handle, AspireClient client) {
+        super(handle, client);
+    }
+
+    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    public CancellationToken cancellationToken() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/ProgressContext.cancellationToken", reqArgs);
+        return (CancellationToken) result;
+    }
+
 }
 
 // ===== ProjectResource.java =====
@@ -20398,6 +20598,40 @@ public final class PromptNotificationOptions {
 
     public CancellationToken getCancellationToken() { return cancellationToken; }
     public PromptNotificationOptions cancellationToken(CancellationToken value) {
+        this.cancellationToken = value;
+        return this;
+    }
+
+}
+
+// ===== PromptProgressOptions.java =====
+// PromptProgressOptions.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** Options for PromptProgress. */
+public final class PromptProgressOptions {
+    private String title;
+    private InteractionProgressOptions options;
+    private CancellationToken cancellationToken;
+
+    public String getTitle() { return title; }
+    public PromptProgressOptions title(String value) {
+        this.title = value;
+        return this;
+    }
+
+    public InteractionProgressOptions getOptions() { return options; }
+    public PromptProgressOptions options(InteractionProgressOptions value) {
+        this.options = value;
+        return this;
+    }
+
+    public CancellationToken getCancellationToken() { return cancellationToken; }
+    public PromptProgressOptions cancellationToken(CancellationToken value) {
         this.cancellationToken = value;
         return this;
     }
@@ -28884,6 +29118,7 @@ public final class WithVolumeOptions {
 .aspire/modules/CommandLineArgsCallbackContext.java
 .aspire/modules/CommandLineArgsEditor.java
 .aspire/modules/CommandOptions.java
+.aspire/modules/CommandProgressOptions.java
 .aspire/modules/CommandResultData.java
 .aspire/modules/CommandResultFormat.java
 .aspire/modules/CompleteStepMarkdownOptions.java
@@ -28999,6 +29234,7 @@ public final class WithVolumeOptions {
 .aspire/modules/InteractionLoadingInput.java
 .aspire/modules/InteractionMessageBoxOptions.java
 .aspire/modules/InteractionNotificationOptions.java
+.aspire/modules/InteractionProgressOptions.java
 .aspire/modules/JsonSerializable.java
 .aspire/modules/LogFacade.java
 .aspire/modules/MessageIntent.java
@@ -29016,6 +29252,7 @@ public final class WithVolumeOptions {
 .aspire/modules/ProcessCommandExportOptions.java
 .aspire/modules/ProcessCommandResultExportOptions.java
 .aspire/modules/ProcessCommandSpecExportData.java
+.aspire/modules/ProgressContext.java
 .aspire/modules/ProjectResource.java
 .aspire/modules/ProjectResourceOptions.java
 .aspire/modules/PromptConfirmationOptions.java
@@ -29023,6 +29260,7 @@ public final class WithVolumeOptions {
 .aspire/modules/PromptInputsOptions.java
 .aspire/modules/PromptMessageBoxOptions.java
 .aspire/modules/PromptNotificationOptions.java
+.aspire/modules/PromptProgressOptions.java
 .aspire/modules/ProtocolType.java
 .aspire/modules/PublishResourceUpdateOptions.java
 .aspire/modules/ReferenceEnvironmentInjectionOptions.java

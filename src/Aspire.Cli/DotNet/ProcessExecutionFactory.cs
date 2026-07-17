@@ -11,6 +11,7 @@ namespace Aspire.Cli.DotNet;
 /// Creates process executions backed by real OS processes.
 /// </summary>
 internal sealed class ProcessExecutionFactory(
+    IEnvironment environment,
     ILogger<ProcessExecutionFactory> logger) : IProcessExecutionFactory
 {
     public IProcessExecution CreateExecution(string fileName, string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
@@ -32,10 +33,7 @@ internal sealed class ProcessExecutionFactory(
             FileName = fileName,
             WorkingDirectory = workingDirectory.FullName,
             IsolateConsole = options.IsolateConsole,
-            // Only the isolated path on Windows uses the kill-on-close job; the non-isolated path
-            // and every Unix path leave it null. The job is the process-wide singleton, created on
-            // demand the first time an isolated child needs it.
-            JobHandle = options.IsolateConsole && OperatingSystem.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
+            KillOnParentExit = options.KillOnParentExit,
         };
 
         foreach (var a in args)
@@ -55,7 +53,7 @@ internal sealed class ProcessExecutionFactory(
             }
         }
 
-        return Build(startInfo, fileName, effectiveLogger, options);
+        return Build(startInfo, fileName, effectiveLogger, options, environment);
     }
 
     public IProcessExecution CreateExecution(System.Diagnostics.ProcessStartInfo startInfo, ProcessInvocationOptions options)
@@ -69,7 +67,7 @@ internal sealed class ProcessExecutionFactory(
             FileName = startInfo.FileName,
             WorkingDirectory = startInfo.WorkingDirectory,
             IsolateConsole = options.IsolateConsole,
-            JobHandle = options.IsolateConsole && OperatingSystem.IsWindows() ? WindowsConsoleProcessJob.Shared.Handle : null,
+            KillOnParentExit = options.KillOnParentExit,
         };
 
         foreach (var arg in startInfo.ArgumentList)
@@ -102,7 +100,7 @@ internal sealed class ProcessExecutionFactory(
         // other overload — see StripIdentityEnvVars.
         StripIdentityEnvVars(isolatedStartInfo);
 
-        return Build(isolatedStartInfo, startInfo.FileName, effectiveLogger, options);
+        return Build(isolatedStartInfo, startInfo.FileName, effectiveLogger, options, environment);
     }
 
     // Strip ASPIRE_CLI_* identity overrides from every spawned process — both the isolated AppHost
@@ -122,7 +120,7 @@ internal sealed class ProcessExecutionFactory(
         }
     }
 
-    private static ProcessExecution Build(IsolatedProcessStartInfo startInfo, string fileName, ILogger logger, ProcessInvocationOptions options)
+    private static ProcessExecution Build(IsolatedProcessStartInfo startInfo, string fileName, ILogger logger, ProcessInvocationOptions options, IEnvironment environment)
     {
         // Snapshot args + env now so the IProcessExecution surfaces them before Start() spawns the
         // child. The extension-host launch path reads Arguments / EnvironmentVariables and returns
@@ -130,6 +128,6 @@ internal sealed class ProcessExecutionFactory(
         var argsSnapshot = startInfo.ArgumentList.ToArray();
         var envSnapshot = new Dictionary<string, string?>(startInfo.Environment, StringComparer.OrdinalIgnoreCase);
 
-        return new ProcessExecution(startInfo, fileName, argsSnapshot, envSnapshot, logger, options);
+        return new ProcessExecution(startInfo, fileName, argsSnapshot, envSnapshot, logger, options, environment);
     }
 }

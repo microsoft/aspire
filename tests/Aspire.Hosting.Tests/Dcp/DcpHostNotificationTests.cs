@@ -577,8 +577,8 @@ public sealed class DcpHostNotificationTests
         {
             ["aspnetcore_urls"] = "http://localhost:5000",
             ["DOTNET_LAUNCH_PROFILE"] = "MyProfile",
-            ["ASPNETCORE_ENVIRONMENT"] = "Development",
-            ["DOTNET_ENVIRONMENT"] = "Development",
+            [KnownAspNetCoreConfigNames.Environment] = "Development",
+            [KnownAspNetCoreConfigNames.DotNetEnvironment] = "Development",
             ["aspire_loglevel"] = "Debug",
         };
 
@@ -607,8 +607,8 @@ public sealed class DcpHostNotificationTests
             [
                 "aspnetcore_urls",
                 "DOTNET_LAUNCH_PROFILE",
-                "ASPNETCORE_ENVIRONMENT",
-                "DOTNET_ENVIRONMENT",
+                KnownAspNetCoreConfigNames.Environment,
+                KnownAspNetCoreConfigNames.DotNetEnvironment,
                 "aspire_loglevel",
             ];
 

@@ -420,6 +420,8 @@ pub enum InputType {
     Boolean,
     #[serde(rename = "Number")]
     Number,
+    #[serde(rename = "File")]
+    File,
 }
 
 impl std::fmt::Display for InputType {
@@ -430,6 +432,7 @@ impl std::fmt::Display for InputType {
             Self::Choice => write!(f, "Choice"),
             Self::Boolean => write!(f, "Boolean"),
             Self::Number => write!(f, "Number"),
+            Self::File => write!(f, "File"),
         }
     }
 }
@@ -675,6 +678,12 @@ pub struct InteractionInput {
     pub disabled: bool,
     #[serde(rename = "MaxLength", skip_serializing_if = "Option::is_none")]
     pub max_length: Option<f64>,
+    #[serde(rename = "AllowMultipleFiles", skip_serializing_if = "Option::is_none")]
+    pub allow_multiple_files: Option<bool>,
+    #[serde(rename = "FileFilter", skip_serializing_if = "Option::is_none")]
+    pub file_filter: Option<String>,
+    #[serde(rename = "MaxFileSize", skip_serializing_if = "Option::is_none")]
+    pub max_file_size: Option<f64>,
 }
 
 impl InteractionInput {
@@ -705,6 +714,15 @@ impl InteractionInput {
         map.insert("Disabled".to_string(), serde_json::to_value(&self.disabled).unwrap_or(Value::Null));
         if let Some(ref v) = self.max_length {
             map.insert("MaxLength".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.allow_multiple_files {
+            map.insert("AllowMultipleFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.file_filter {
+            map.insert("FileFilter".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.max_file_size {
+            map.insert("MaxFileSize".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map
     }
@@ -941,6 +959,12 @@ pub struct CreateInteractionInputOptions {
     pub disabled: Option<bool>,
     #[serde(rename = "MaxLength", skip_serializing_if = "Option::is_none")]
     pub max_length: Option<f64>,
+    #[serde(rename = "MaxFileSize", skip_serializing_if = "Option::is_none")]
+    pub max_file_size: Option<f64>,
+    #[serde(rename = "AllowMultipleFiles", skip_serializing_if = "Option::is_none")]
+    pub allow_multiple_files: Option<bool>,
+    #[serde(rename = "FileFilter", skip_serializing_if = "Option::is_none")]
+    pub file_filter: Option<String>,
 }
 
 impl CreateInteractionInputOptions {
@@ -972,6 +996,15 @@ impl CreateInteractionInputOptions {
         }
         if let Some(ref v) = self.max_length {
             map.insert("MaxLength".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.max_file_size {
+            map.insert("MaxFileSize".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.allow_multiple_files {
+            map.insert("AllowMultipleFiles".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.file_filter {
+            map.insert("FileFilter".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map
     }
@@ -1130,6 +1163,33 @@ impl InteractionInputsDialogOptions {
         }
         if let Some(ref v) = self.validation_callback {
             map.insert("ValidationCallback".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        map
+    }
+}
+
+/// InteractionProgressOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct InteractionProgressOptions {
+    #[serde(rename = "PrimaryButtonText", skip_serializing_if = "Option::is_none")]
+    pub primary_button_text: Option<String>,
+    #[serde(rename = "EnableMessageMarkdown", skip_serializing_if = "Option::is_none")]
+    pub enable_message_markdown: Option<bool>,
+    #[serde(rename = "Work", skip_serializing_if = "Option::is_none")]
+    pub work: Option<Value>,
+}
+
+impl InteractionProgressOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        if let Some(ref v) = self.primary_button_text {
+            map.insert("PrimaryButtonText".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.enable_message_markdown {
+            map.insert("EnableMessageMarkdown".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = self.work {
+            map.insert("Work".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         map
     }
@@ -1338,6 +1398,8 @@ pub struct CommandOptions {
     pub is_highlighted: bool,
     #[serde(rename = "UpdateState")]
     pub update_state: Value,
+    #[serde(rename = "Progress")]
+    pub progress: CommandProgressOptions,
 }
 
 impl CommandOptions {
@@ -1355,6 +1417,28 @@ impl CommandOptions {
         }
         map.insert("IsHighlighted".to_string(), serde_json::to_value(&self.is_highlighted).unwrap_or(Value::Null));
         map.insert("UpdateState".to_string(), serde_json::to_value(&self.update_state).unwrap_or(Value::Null));
+        map.insert("Progress".to_string(), serde_json::to_value(&self.progress).unwrap_or(Value::Null));
+        map
+    }
+}
+
+/// CommandProgressOptions
+#[derive(Debug, Clone, Default, Serialize, Deserialize)]
+pub struct CommandProgressOptions {
+    #[serde(rename = "Message")]
+    pub message: String,
+    #[serde(rename = "Title")]
+    pub title: String,
+    #[serde(rename = "HideCancelButton")]
+    pub hide_cancel_button: bool,
+}
+
+impl CommandProgressOptions {
+    pub fn to_map(&self) -> HashMap<String, Value> {
+        let mut map = HashMap::new();
+        map.insert("Message".to_string(), serde_json::to_value(&self.message).unwrap_or(Value::Null));
+        map.insert("Title".to_string(), serde_json::to_value(&self.title).unwrap_or(Value::Null));
+        map.insert("HideCancelButton".to_string(), serde_json::to_value(&self.hide_cancel_button).unwrap_or(Value::Null));
         map
     }
 }
@@ -12071,6 +12155,25 @@ impl IInteractionService {
         Ok(serde_json::from_value(result)?)
     }
 
+    /// Displays a progress dialog with an indeterminate progress indicator.
+    pub fn prompt_progress(&self, message: &str, title: Option<&str>, options: Option<InteractionProgressOptions>, cancellation_token: Option<&CancellationToken>) -> Result<BoolInteractionResult, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("message".to_string(), serde_json::to_value(&message).unwrap_or(Value::Null));
+        if let Some(ref v) = title {
+            args.insert("title".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        if let Some(token) = cancellation_token {
+            let token_id = register_cancellation(token, self.client.clone());
+            args.insert("cancellationToken".to_string(), Value::String(token_id));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/promptProgress", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
     /// Prompts the user for a single input.
     pub fn prompt_input(&self, title: &str, message: &str, input: &InteractionInputBuilder, options: Option<InteractionInputsDialogOptions>, cancellation_token: Option<&CancellationToken>) -> Result<InputInteractionResult, Box<dyn std::error::Error>> {
         let mut args: HashMap<String, Value> = HashMap::new();
@@ -12157,6 +12260,19 @@ impl IInteractionService {
             args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
         }
         let result = self.client.invoke_capability("Aspire.Hosting/createNumberInput", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(InteractionInputBuilder::new(handle, self.client.clone()))
+    }
+
+    /// Creates a file input.
+    pub fn create_file_input(&self, name: &str, options: Option<CreateInteractionInputOptions>) -> Result<InteractionInputBuilder, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("interactionService".to_string(), self.handle.to_json());
+        args.insert("name".to_string(), serde_json::to_value(&name).unwrap_or(Value::Null));
+        if let Some(ref v) = options {
+            args.insert("options".to_string(), serde_json::to_value(v).unwrap_or(Value::Null));
+        }
+        let result = self.client.invoke_capability("Aspire.Hosting/createFileInput", args)?;
         let handle: Handle = serde_json::from_value(result)?;
         Ok(InteractionInputBuilder::new(handle, self.client.clone()))
     }
@@ -14517,6 +14633,41 @@ impl PipelineSummary {
         args.insert("markdownString".to_string(), serde_json::to_value(&markdown_string).unwrap_or(Value::Null));
         let result = self.client.invoke_capability("Aspire.Hosting/addMarkdown", args)?;
         Ok(())
+    }
+}
+
+/// Wrapper for Aspire.Hosting/Aspire.Hosting.ProgressContext
+pub struct ProgressContext {
+    handle: Handle,
+    client: Arc<AspireClient>,
+}
+
+impl HasHandle for ProgressContext {
+    fn handle(&self) -> &Handle {
+        &self.handle
+    }
+}
+
+impl ProgressContext {
+    pub fn new(handle: Handle, client: Arc<AspireClient>) -> Self {
+        Self { handle, client }
+    }
+
+    pub fn handle(&self) -> &Handle {
+        &self.handle
+    }
+
+    pub fn client(&self) -> &Arc<AspireClient> {
+        &self.client
+    }
+
+    /// Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled.
+    pub fn cancellation_token(&self) -> Result<CancellationToken, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/ProgressContext.cancellationToken", args)?;
+        let handle: Handle = serde_json::from_value(result)?;
+        Ok(CancellationToken::new(handle, self.client.clone()))
     }
 }
 

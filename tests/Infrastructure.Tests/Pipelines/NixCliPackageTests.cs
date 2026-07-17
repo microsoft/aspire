@@ -7,7 +7,7 @@ using Xunit;
 
 namespace Infrastructure.Tests;
 
-public sealed class NixCliPackageTests : IDisposable
+public sealed class NixCliPackageTests(ITestOutputHelper outputHelper) : IDisposable
 {
     private static readonly Dictionary<string, string> s_expectedSystems = new(StringComparer.Ordinal)
     {
@@ -17,9 +17,9 @@ public sealed class NixCliPackageTests : IDisposable
         ["x86_64-linux"] = "linux-x64",
     };
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     public async Task ManifestDescribesExpectedStableReleaseAssets()
@@ -70,8 +70,8 @@ public sealed class NixCliPackageTests : IDisposable
     [RequiresTools(["bash", "base64", "xxd"])]
     public async Task UpdateVersionsParsesFirstHashTokenFromSha512CompanionFile()
     {
-        var outputPath = Path.Combine(_tempDirectory.Path, "versions.json");
-        var fakeBinPath = Path.Combine(_tempDirectory.Path, "bin");
+        var outputPath = Path.Combine(_workspace.Path, "versions.json");
+        var fakeBinPath = Path.Combine(_workspace.Path, "bin");
         Directory.CreateDirectory(fakeBinPath);
 
         var curlPath = Path.Combine(fakeBinPath, "curl");

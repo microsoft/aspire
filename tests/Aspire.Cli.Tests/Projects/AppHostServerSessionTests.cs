@@ -444,7 +444,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CreatePrebuiltAppHostServer_DisposesLayoutLeaseWhenConstructorFails()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appPath = workspace.CreateDirectory("apphost").FullName;
         var integrationCachePathBlockedByFile = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "integrations");
         File.WriteAllText(integrationCachePathBlockedByFile, string.Empty);
@@ -488,7 +488,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             KillEntireProcessTreeOnCancel = !OperatingSystem.IsWindows(),
         };
 
-        return new ProcessExecutionFactory(NullLogger<ProcessExecutionFactory>.Instance)
+        return new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance)
             .CreateExecution(startInfo, options);
     }
 
@@ -551,6 +551,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             project,
             environmentVariables,
             debug,
+            new TestEnvironment(),
             NullLogger<AppHostServerSession>.Instance,
             profilingTelemetry,
             gracefulShutdownSignaler,
@@ -575,6 +576,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             nugetService,
             new TestDotNetSdkInstaller(),
             executionContext,
+            new TestEnvironment(),
             new TestProcessExecutionFactory(),
             NullLoggerFactory.Instance);
     }

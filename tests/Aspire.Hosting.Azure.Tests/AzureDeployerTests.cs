@@ -14,6 +14,7 @@ using Azure.Core;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure.Provisioning;
 using Aspire.Hosting.Azure.Provisioning.Internal;
+using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Testing;
@@ -1282,7 +1283,7 @@ public class AzureDeployerTests(ITestOutputHelper testOutputHelper)
         var acaEnv = builder.AddAzureContainerAppEnvironment("aca-env");
 
         builder.AddProject<Project>("agent", launchProfileName: null)
-            .AsHostedAgent(foundryProject);
+            .AsHostedAgent(foundryProject, HostedAgentProtocol.Responses, "2.0.0");
 
         builder.AddProject<Project>("api", launchProfileName: null)
             .WithExternalHttpEndpoints()

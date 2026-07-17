@@ -9,7 +9,7 @@ using Xunit;
 
 namespace Aspire.Hosting.Sdk.Tests;
 
-public class AppHostSdkTargetsTests
+public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 {
     private const string SuppressCliRunHookEnvironmentVariable = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
 
@@ -27,7 +27,8 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task AddReferenceToDashboardAndDcpIsSkippedWhenCliBundleIsDefaulted()
     {
-        var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(extraProjectXml: null);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(workspace, extraProjectXml: null);
 
         Assert.DoesNotContain(packageReferences, static packageReference => packageReference.StartsWith("Aspire.Dashboard.Sdk.", StringComparison.Ordinal));
         Assert.DoesNotContain(packageReferences, static packageReference => packageReference.StartsWith("Aspire.Hosting.Orchestration.", StringComparison.Ordinal));
@@ -37,7 +38,8 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task AddReferenceToDashboardAndDcpUsesSdkRidSelectionTask()
     {
-        var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(workspace,
             """
               <PropertyGroup>
                 <AspireUseCliBundle>false</AspireUseCliBundle>
@@ -52,6 +54,8 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task AddReferenceToDashboardAndDcpFallsBackToRuntimeIdentifierToolForOlderSdks()
     {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
         // Force the pre-.NET 10 code path by disabling the in-proc PickBestRid task and pointing the
         // Exec call at the locally-built Aspire.RuntimeIdentifier.Tool assembly (which is normally
         // resolved out of the packed SDK's tools folder).
@@ -65,7 +69,7 @@ public class AppHostSdkTargetsTests
               </PropertyGroup>
             """;
 
-        var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(extraProjectXml);
+        var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(workspace, extraProjectXml);
 
         Assert.Contains("UseSdkPickBestRid=false", packageReferences);
         Assert.Contains("RunRidToolFallback=true", packageReferences);
@@ -75,9 +79,9 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsUsesAspireCliWhenCliBundleIsEnabled()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
@@ -93,9 +97,9 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsUsesConfiguredAspireCliPathWhenCliBundleIsEnabled()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project, [$"-p:AspireCliPath={aspireCliPath}"]);
@@ -107,8 +111,8 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsUsesFileBasedAppHostPathWhenCliBundleIsEnabled()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var appHostDirectory = Path.Combine(tempDirectory.Path, "FileApp");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var appHostDirectory = Path.Combine(workspace.Path, "FileApp");
         Directory.CreateDirectory(appHostDirectory);
         var appHostFile = Path.Combine(appHostDirectory, "apphost.cs");
         await File.WriteAllTextAsync(appHostFile, """
@@ -130,8 +134,8 @@ public class AppHostSdkTargetsTests
                 </RuntimeHostConfigurationOption>
               </ItemGroup>
             """;
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true, extraProjectXml: extraProjectXml);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, extraProjectXml: extraProjectXml);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
@@ -147,8 +151,8 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliBundleIsDisabled()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: false);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: false);
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project);
 
@@ -162,8 +166,8 @@ public class AppHostSdkTargetsTests
     [InlineData("_AspireSuppressCliRunHook", "1")]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenHookIsSuppressed(string suppressionPropertyName, string suppressionValue)
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
 
         Dictionary<string, string>? environment = suppressionPropertyName == SuppressCliRunHookEnvironmentVariable
             ? new Dictionary<string, string> { [SuppressCliRunHookEnvironmentVariable] = suppressionValue }
@@ -180,10 +184,10 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task DotNetRunUsesAspireCliWhenCliBundleIsEnabled()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
-        var captureFile = Path.Combine(tempDirectory.Path, "aspire-args.txt");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var captureFile = Path.Combine(workspace.Path, "aspire-args.txt");
         await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
 
         var pathEnvironmentVariable = GetPathEnvironmentVariableName();
@@ -218,9 +222,9 @@ public class AppHostSdkTargetsTests
     [InlineData("13.4.5")]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionIsBelowMinimum(string cliVersion)
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
         await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, cliVersion);
 
@@ -234,9 +238,9 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsDoesNotUsePathAspireCliWhenCliVersionIsBelowMinimum()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, "13.4.5");
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
@@ -255,9 +259,9 @@ public class AppHostSdkTargetsTests
     [InlineData("14.0.0")]
     public async Task ComputeRunArgumentsUsesAspireCliWhenCliVersionIsAtOrAboveMinimum(string cliVersion)
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
         await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, cliVersion);
 
@@ -272,9 +276,9 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsUsesAspireCliWhenCliVersionWritesLargeStdErr()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
         await CreateFakeAspireCliWithVersionAndLargeStdErrAsync(fakeCliDirectory.FullName, "13.5.0");
 
@@ -289,9 +293,9 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionCommandTimesOut()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
         await CreateFakeAspireCliThatHangsOnVersionAsync(fakeCliDirectory.FullName);
 
@@ -305,9 +309,9 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionOutputIsUnparseable()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
         await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, "aspire version 13.5.0");
 
@@ -321,9 +325,9 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliVersionCannotBeDetermined()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "fake-cli"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         var cliPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "aspire.cmd" : "aspire");
         await CreateFakeAspireCliThatFailsVersionAsync(fakeCliDirectory.FullName);
 
@@ -337,9 +341,9 @@ public class AppHostSdkTargetsTests
     [Fact]
     public async Task ComputeRunArgumentsDoesNotUseAspireCliWhenCliIsUnavailable()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var project = await CreateRunHookProjectAsync(tempDirectory.Path, aspireUseCliBundle: true);
-        var emptyPathDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.Path, "empty-path"));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var emptyPathDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "empty-path"));
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
@@ -349,12 +353,11 @@ public class AppHostSdkTargetsTests
         AssertUsesDotNetRun(properties, project, "--custom foo");
     }
 
-    private static async Task<string[]> RunAddReferenceToDashboardAndDcpAsync(string? extraProjectXml)
+    private static async Task<string[]> RunAddReferenceToDashboardAndDcpAsync(TemporaryWorkspace workspace, string? extraProjectXml)
     {
         var repoRoot = GetRepoRoot();
-        using var tempDirectory = new TestTempDirectory();
 
-        var projectDirectory = Path.Combine(tempDirectory.Path, "AppHost");
+        var projectDirectory = Path.Combine(workspace.Path, "AppHost");
         Directory.CreateDirectory(projectDirectory);
 
         var sdkTargetsPath = SecurityElement.Escape(Path.Combine(repoRoot, "src", "Aspire.AppHost.Sdk", "SDK", "Sdk.in.targets"));
@@ -393,10 +396,10 @@ public class AppHostSdkTargetsTests
         return await File.ReadAllLinesAsync(packageReferencesPath);
     }
 
-    private static async Task<RunHookProject> CreateRunHookProjectAsync(string tempDirectory, bool aspireUseCliBundle, string? extraProjectXml = null)
+    private static async Task<RunHookProject> CreateRunHookProjectAsync(string workspace, bool aspireUseCliBundle, string? extraProjectXml = null)
     {
         var repoRoot = GetRepoRoot();
-        var projectDirectory = Path.Combine(tempDirectory, "AppHost");
+        var projectDirectory = Path.Combine(workspace, "AppHost");
         Directory.CreateDirectory(projectDirectory);
 
         var appHostTargetsPath = SecurityElement.Escape(Path.Combine(repoRoot, "src", "Aspire.Hosting.AppHost", "build", "Aspire.Hosting.AppHost.in.targets"));
