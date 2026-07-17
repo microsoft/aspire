@@ -31,6 +31,8 @@ public sealed partial class SqliteTelemetryRepository
         lock (_writeLock)
         {
             _metricIngestionState.DimensionsToTrim.Clear();
+            _metricIngestionState.PendingDimensions.Clear();
+            _metricIngestionState.PendingDimensionAttributes.Clear();
             try
             {
                 using var connection = _database.OpenConnection();
@@ -38,10 +40,10 @@ public sealed partial class SqliteTelemetryRepository
                 var pointBatch = new MetricPointBatch();
                 foreach (var resourceMetricsItem in resourceMetrics)
                 {
-                    long resourceId;
+                    CachedResource cachedResource;
                     try
                     {
-                        resourceId = GetOrAddTelemetryResource(connection, transaction, resourceMetricsItem.Resource.GetResourceKey());
+                        cachedResource = GetOrAddCachedResource(connection, transaction, resourceMetricsItem.Resource.GetResourceKey());
                     }
                     catch (Exception exception)
                     {
@@ -52,11 +54,10 @@ public sealed partial class SqliteTelemetryRepository
 
                     foreach (var scopeMetrics in resourceMetricsItem.ScopeMetrics)
                     {
-                        OtlpScope scope;
-                        long scopeId;
+                        CachedResourceScope cachedScope;
                         try
                         {
-                            (scopeId, scope) = GetOrAddScope(connection, transaction, scopeMetrics.Scope);
+                            cachedScope = GetOrAddCachedScope(connection, transaction, cachedResource, scopeMetrics.Scope, CachedTelemetryType.Metrics);
                         }
                         catch (Exception exception)
                         {
@@ -67,22 +68,30 @@ public sealed partial class SqliteTelemetryRepository
 
                         foreach (var metric in scopeMetrics.Metrics)
                         {
-                            AddMetricToDatabase(connection, transaction, context, resourceId, scopeId, scope, metric, _metricIngestionState, pointBatch);
+                            AddMetricToDatabase(connection, transaction, context, cachedResource, cachedScope, metric, _metricIngestionState, pointBatch);
                         }
                     }
 
-                    connection.Execute(
-                        "UPDATE telemetry_resources SET has_metrics = 1 WHERE resource_id = @ResourceId;",
-                        new { ResourceId = resourceId },
-                        transaction);
+                    if (!cachedResource.Resource.HasMetrics)
+                    {
+                        connection.Execute(
+                            "UPDATE telemetry_resources SET has_metrics = 1 WHERE resource_id = @ResourceId;",
+                            new { cachedResource.ResourceId },
+                            transaction);
+                        cachedResource.Resource.HasMetrics = true;
+                    }
                 }
 
+                InsertMetricDimensions(connection, transaction, _metricIngestionState.PendingDimensions);
+                InsertMetricDimensionAttributes(connection, transaction, _metricIngestionState.PendingDimensionAttributes);
                 ExecuteMetricPointBatch(connection, transaction, pointBatch);
 
                 TrimMetricDimensions(connection, transaction, _metricIngestionState.DimensionsToTrim);
 
                 transaction.Commit();
                 _metricIngestionState.DimensionsToTrim.Clear();
+                _metricIngestionState.PendingDimensions.Clear();
+                _metricIngestionState.PendingDimensionAttributes.Clear();
             }
             catch
             {
@@ -97,9 +106,8 @@ public sealed partial class SqliteTelemetryRepository
         SqliteConnection connection,
         IDbTransaction transaction,
         AddContext context,
-        long resourceId,
-        long scopeId,
-        OtlpScope scope,
+        CachedResource cachedResource,
+        CachedResourceScope cachedScope,
         Metric metric,
         MetricIngestionState ingestionState,
         MetricPointBatch pointBatch)
@@ -116,10 +124,10 @@ public sealed partial class SqliteTelemetryRepository
             return;
         }
 
-        long instrumentId;
+        CachedInstrument cachedInstrument;
         try
         {
-            instrumentId = GetOrAddMetricInstrument(connection, transaction, resourceId, scopeId, metric, ingestionState);
+            cachedInstrument = GetOrAddCachedInstrument(connection, transaction, cachedResource, cachedScope, metric);
         }
         catch (Exception exception)
         {
@@ -133,81 +141,22 @@ public sealed partial class SqliteTelemetryRepository
             case Metric.DataOneofCase.Gauge:
                 foreach (var point in metric.Gauge.DataPoints)
                 {
-                    AddNumberMetricPoint(connection, transaction, context, instrumentId, scope, point, ingestionState, pointBatch);
+                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, cachedScope.Scope.Scope, point, ingestionState, pointBatch);
                 }
                 break;
             case Metric.DataOneofCase.Sum:
                 foreach (var point in metric.Sum.DataPoints)
                 {
-                    AddNumberMetricPoint(connection, transaction, context, instrumentId, scope, point, ingestionState, pointBatch);
+                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, cachedScope.Scope.Scope, point, ingestionState, pointBatch);
                 }
                 break;
             case Metric.DataOneofCase.Histogram:
                 foreach (var point in metric.Histogram.DataPoints)
                 {
-                    AddHistogramMetricPoint(connection, transaction, context, instrumentId, scope, point, ingestionState, pointBatch);
+                    AddHistogramMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, cachedScope.Scope.Scope, point, ingestionState, pointBatch);
                 }
                 break;
         }
-    }
-
-    private static long GetOrAddMetricInstrument(
-        SqliteConnection connection,
-        IDbTransaction transaction,
-        long resourceId,
-        long scopeId,
-        Metric metric,
-        MetricIngestionState ingestionState)
-    {
-        if (string.IsNullOrEmpty(metric.Name))
-        {
-            throw new InvalidOperationException("Instrument name is required.");
-        }
-
-        var instrumentKey = (resourceId, scopeId, metric.Name);
-        if (ingestionState.InstrumentIds.TryGetValue(instrumentKey, out var instrumentId))
-        {
-            return instrumentId;
-        }
-
-        var existingId = connection.QuerySingleOrDefault<long?>("""
-            SELECT instrument_id
-            FROM telemetry_metric_instruments
-            WHERE resource_id = @ResourceId AND scope_id = @ScopeId AND instrument_name = @InstrumentName;
-            """, new { ResourceId = resourceId, ScopeId = scopeId, InstrumentName = metric.Name }, transaction);
-        if (existingId is not null)
-        {
-            ingestionState.InstrumentIds.Add(instrumentKey, existingId.Value);
-            return existingId.Value;
-        }
-
-        var instrumentCount = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_metric_instruments WHERE resource_id = @ResourceId;", new { ResourceId = resourceId }, transaction);
-        if (instrumentCount >= TelemetryRepositoryLimits.MaxInstrumentCount)
-        {
-            throw new InvalidOperationException($"Instrument limit of {TelemetryRepositoryLimits.MaxInstrumentCount} reached. Instrument '{metric.Name}' will not be added.");
-        }
-
-        instrumentId = connection.QuerySingle<long>("""
-            INSERT INTO telemetry_metric_instruments (
-                resource_id, scope_id, instrument_name, description, unit, instrument_type,
-                aggregation_temporality, is_monotonic)
-            VALUES (
-                @ResourceId, @ScopeId, @InstrumentName, @Description, @Unit, @InstrumentType,
-                @AggregationTemporality, @IsMonotonic)
-            RETURNING instrument_id;
-            """, new
-        {
-            ResourceId = resourceId,
-            ScopeId = scopeId,
-            InstrumentName = metric.Name,
-            metric.Description,
-            metric.Unit,
-            InstrumentType = (int)MapMetricType(metric.DataCase),
-            AggregationTemporality = (int)MapAggregationTemporality(metric),
-            IsMonotonic = metric.DataCase == Metric.DataOneofCase.Sum && metric.Sum.IsMonotonic
-        }, transaction);
-        ingestionState.InstrumentIds.Add(instrumentKey, instrumentId);
-        return instrumentId;
     }
 
     private void AddNumberMetricPoint(
@@ -250,7 +199,7 @@ public sealed partial class SqliteTelemetryRepository
                 {
                     pointBatch.AddUpdate(latest!.PointId, endTimeTicks, incrementRepeatCount: true);
                     latest.EndTimeTicks = endTimeTicks;
-                    AddMetricExemplars(connection, transaction, latest.PointId, point.Exemplars);
+                    QueueMetricExemplars(pointBatch, latest.PointId, point.Exemplars);
                     context.SuccessCount++;
                 }
             }
@@ -276,7 +225,7 @@ public sealed partial class SqliteTelemetryRepository
                 pendingPoint.Exemplars.AddRange(point.Exemplars);
                 pointBatch.Inserts.Add(pendingPoint);
                 dimension.PendingPoint = pendingPoint;
-                ingestionState.DimensionsToTrim.Add(dimension.DimensionId);
+                ingestionState.DimensionsToTrim.Add(dimension);
             }
         }
         catch (Exception exception)
@@ -323,7 +272,7 @@ public sealed partial class SqliteTelemetryRepository
                 {
                     pointBatch.AddUpdate(latest!.PointId, endTimeTicks, incrementRepeatCount: false);
                     latest.EndTimeTicks = endTimeTicks;
-                    AddMetricExemplars(connection, transaction, latest.PointId, point.Exemplars);
+                    QueueMetricExemplars(pointBatch, latest.PointId, point.Exemplars);
                     context.SuccessCount++;
                 }
             }
@@ -351,7 +300,7 @@ public sealed partial class SqliteTelemetryRepository
                 pendingPoint.Exemplars.AddRange(point.Exemplars);
                 pointBatch.Inserts.Add(pendingPoint);
                 dimension.PendingPoint = pendingPoint;
-                ingestionState.DimensionsToTrim.Add(dimension.DimensionId);
+                ingestionState.DimensionsToTrim.Add(dimension);
             }
         }
         catch (Exception exception)
@@ -386,10 +335,11 @@ public sealed partial class SqliteTelemetryRepository
             sql.AppendLine();
             sql.Append("""
                 )
-                UPDATE telemetry_metric_points
-                SET end_time_ticks = (SELECT end_time_ticks FROM updates WHERE updates.point_id = telemetry_metric_points.point_id),
-                    repeat_count = repeat_count + (SELECT repeat_delta FROM updates WHERE updates.point_id = telemetry_metric_points.point_id)
-                WHERE point_id IN (SELECT point_id FROM updates);
+                UPDATE telemetry_metric_points AS points
+                SET end_time_ticks = updates.end_time_ticks,
+                    repeat_count = points.repeat_count + updates.repeat_delta
+                FROM updates
+                WHERE points.point_id = updates.point_id;
                 """);
             connection.Execute(sql.ToString(), parameters, transaction);
         }
@@ -431,20 +381,17 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
 
+        InsertHistogramBucketCounts(connection, transaction, pointBatch.Inserts);
+        InsertHistogramExplicitBounds(connection, transaction, pointBatch.Inserts);
         foreach (var point in pointBatch.Inserts)
         {
-            try
-            {
-                InsertHistogramBucketCounts(connection, transaction, point);
-                InsertHistogramExplicitBounds(connection, transaction, point);
-                AddMetricExemplars(connection, transaction, point.PointId, point.Exemplars);
-                point.Context.SuccessCount += point.SourcePointCount;
-            }
-            catch (Exception exception)
-            {
-                point.Context.FailureCount += point.SourcePointCount;
-                _otlpContext.Logger.LogInformation(exception, "Error adding metric.");
-            }
+            QueueMetricExemplars(pointBatch, point.PointId, point.Exemplars);
+        }
+        InsertMetricExemplars(connection, transaction, pointBatch.Exemplars);
+
+        foreach (var point in pointBatch.Inserts)
+        {
+            point.Context.SuccessCount += point.SourcePointCount;
 
             if (ReferenceEquals(point.Dimension.PendingPoint, point))
             {
@@ -462,62 +409,64 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private static void InsertHistogramBucketCounts(SqliteConnection connection, IDbTransaction transaction, PendingMetricPoint point)
+    private static void InsertHistogramBucketCounts(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        List<PendingMetricPoint> points)
     {
-        if (point.HistogramBucketCounts is not { Length: > 0 } bucketCounts)
+        var bucketCounts = points
+            .Where(point => point.HistogramBucketCounts is { Length: > 0 })
+            .SelectMany(point => point.HistogramBucketCounts!.Select((bucketCount, ordinal) => new PendingHistogramBucketCount(point.PointId, ordinal, bucketCount)))
+            .ToArray();
+        foreach (var batch in bucketCounts.Chunk(MaxMetricPointBatchSize))
         {
-            return;
-        }
-
-        for (var offset = 0; offset < bucketCounts.Length; offset += MaxMetricPointBatchSize)
-        {
-            var count = Math.Min(MaxMetricPointBatchSize, bucketCounts.Length - offset);
             var sql = new StringBuilder("""
                 INSERT INTO telemetry_metric_histogram_bucket_counts (point_id, ordinal, bucket_count)
                 VALUES
                 """);
             var parameters = new DynamicParameters();
-            for (var index = 0; index < count; index++)
+            for (var index = 0; index < batch.Length; index++)
             {
                 if (index > 0)
                 {
                     sql.AppendLine(",");
                 }
                 sql.Append(CultureInfo.InvariantCulture, $"    (@PointId{index}, @Ordinal{index}, @BucketCount{index})");
-                parameters.Add($"PointId{index}", point.PointId);
-                parameters.Add($"Ordinal{index}", offset + index);
-                parameters.Add($"BucketCount{index}", bucketCounts[offset + index]);
+                parameters.Add($"PointId{index}", batch[index].PointId);
+                parameters.Add($"Ordinal{index}", batch[index].Ordinal);
+                parameters.Add($"BucketCount{index}", batch[index].BucketCount);
             }
             sql.Append(';');
             connection.Execute(sql.ToString(), parameters, transaction);
         }
     }
 
-    private static void InsertHistogramExplicitBounds(SqliteConnection connection, IDbTransaction transaction, PendingMetricPoint point)
+    private static void InsertHistogramExplicitBounds(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        List<PendingMetricPoint> points)
     {
-        if (point.HistogramExplicitBounds is not { Length: > 0 } explicitBounds)
+        var explicitBounds = points
+            .Where(point => point.HistogramExplicitBounds is { Length: > 0 })
+            .SelectMany(point => point.HistogramExplicitBounds!.Select((explicitBound, ordinal) => new PendingHistogramExplicitBound(point.PointId, ordinal, explicitBound)))
+            .ToArray();
+        foreach (var batch in explicitBounds.Chunk(MaxMetricPointBatchSize))
         {
-            return;
-        }
-
-        for (var offset = 0; offset < explicitBounds.Length; offset += MaxMetricPointBatchSize)
-        {
-            var count = Math.Min(MaxMetricPointBatchSize, explicitBounds.Length - offset);
             var sql = new StringBuilder("""
                 INSERT INTO telemetry_metric_histogram_explicit_bounds (point_id, ordinal, explicit_bound)
                 VALUES
                 """);
             var parameters = new DynamicParameters();
-            for (var index = 0; index < count; index++)
+            for (var index = 0; index < batch.Length; index++)
             {
                 if (index > 0)
                 {
                     sql.AppendLine(",");
                 }
                 sql.Append(CultureInfo.InvariantCulture, $"    (@PointId{index}, @Ordinal{index}, @ExplicitBound{index})");
-                parameters.Add($"PointId{index}", point.PointId);
-                parameters.Add($"Ordinal{index}", offset + index);
-                parameters.Add($"ExplicitBound{index}", explicitBounds[offset + index]);
+                parameters.Add($"PointId{index}", batch[index].PointId);
+                parameters.Add($"Ordinal{index}", batch[index].Ordinal);
+                parameters.Add($"ExplicitBound{index}", batch[index].ExplicitBound);
             }
             sql.Append(';');
             connection.Execute(sql.ToString(), parameters, transaction);
@@ -538,9 +487,9 @@ public sealed partial class SqliteTelemetryRepository
         var attributes = temporaryAttributes.AsSpan(0, copyCount).ToArray();
         var attributeHash = GetMetricDimensionAttributeHash(attributes);
         var cacheKey = (instrumentId, attributeHash);
-        if (!ingestionState.Dimensions.TryGetValue(cacheKey, out var candidates))
+        if (ingestionState.LoadedDimensionInstruments.Add(instrumentId))
         {
-            candidates = connection.Query<MetricDimensionStateRecord>("""
+            var dimensions = connection.Query<MetricDimensionStateRecord>("""
                 SELECT
                     d.dimension_id AS DimensionId,
                     a.attribute_key AS AttributeKey,
@@ -561,9 +510,8 @@ public sealed partial class SqliteTelemetryRepository
                     LIMIT 1
                 )
                 WHERE d.instrument_id = @InstrumentId
-                  AND d.attribute_hash = @AttributeHash
                 ORDER BY d.dimension_id, a.ordinal;
-                """, new { InstrumentId = instrumentId, AttributeHash = attributeHash }, transaction)
+                """, new { InstrumentId = instrumentId }, transaction)
                 .GroupBy(record => record.DimensionId)
                 .Select(group =>
                 {
@@ -589,6 +537,22 @@ public sealed partial class SqliteTelemetryRepository
                     };
                 })
                 .ToList();
+            foreach (var loadedDimension in dimensions)
+            {
+                var dimensionCacheKey = (instrumentId, GetMetricDimensionAttributeHash(loadedDimension.Attributes));
+                if (!ingestionState.Dimensions.TryGetValue(dimensionCacheKey, out var dimensionCandidates))
+                {
+                    dimensionCandidates = [];
+                    ingestionState.Dimensions.Add(dimensionCacheKey, dimensionCandidates);
+                }
+                dimensionCandidates.Add(loadedDimension);
+            }
+            ingestionState.DimensionCounts[instrumentId] = dimensions.Count;
+        }
+
+        if (!ingestionState.Dimensions.TryGetValue(cacheKey, out var candidates))
+        {
+            candidates = [];
             ingestionState.Dimensions.Add(cacheKey, candidates);
         }
 
@@ -600,35 +564,84 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
 
-        if (!ingestionState.DimensionCounts.TryGetValue(instrumentId, out var dimensionCount))
-        {
-            dimensionCount = connection.QuerySingle<int>(
-                "SELECT COUNT(*) FROM telemetry_metric_dimensions WHERE instrument_id = @InstrumentId;",
-                new { InstrumentId = instrumentId },
-                transaction);
-        }
+        var dimensionCount = ingestionState.DimensionCounts[instrumentId];
         if (dimensionCount >= TelemetryRepositoryLimits.MaxDimensionCount)
         {
             throw new InvalidOperationException($"Dimension limit of {TelemetryRepositoryLimits.MaxDimensionCount} reached.");
         }
-        var dimensionId = connection.QuerySingle<long>("""
-            INSERT INTO telemetry_metric_dimensions (instrument_id, attribute_hash)
-            VALUES (@InstrumentId, @AttributeHash)
-            RETURNING dimension_id;
-            """, new { InstrumentId = instrumentId, AttributeHash = attributeHash }, transaction);
-        connection.Execute("""
-            INSERT INTO telemetry_metric_dimension_attributes (dimension_id, ordinal, attribute_key, attribute_value)
-            VALUES (@DimensionId, @Ordinal, @Key, @Value);
-            """, attributes.Select((attribute, ordinal) => new { DimensionId = dimensionId, Ordinal = ordinal, attribute.Key, attribute.Value }), transaction);
+        var dimension = new MetricDimensionState { Attributes = attributes };
+        ingestionState.PendingDimensions.Add(new PendingMetricDimension(instrumentId, attributeHash, dimension));
+        ingestionState.PendingDimensionAttributes.AddRange(attributes.Select((attribute, ordinal) => new PendingMetricDimensionAttribute(
+            dimension,
+            ordinal,
+            attribute.Key,
+            attribute.Value)));
 
         if (pointAttributes.Count == 1 && pointAttributes[0].Key == "otel.metric.overflow" && pointAttributes[0].Value.GetString() == "true")
         {
             connection.Execute("UPDATE telemetry_metric_instruments SET has_overflow = 1 WHERE instrument_id = @InstrumentId;", new { InstrumentId = instrumentId }, transaction);
+            MarkCachedInstrumentHasOverflow(instrumentId);
         }
-        var dimension = new MetricDimensionState { DimensionId = dimensionId, Attributes = attributes };
         candidates.Add(dimension);
         ingestionState.DimensionCounts[instrumentId] = dimensionCount + 1;
         return dimension;
+    }
+
+    private static void InsertMetricDimensions(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        List<PendingMetricDimension> dimensions)
+    {
+        foreach (var batch in dimensions.Chunk(MaxMetricPointBatchSize))
+        {
+            var sql = new StringBuilder();
+            var parameters = new DynamicParameters();
+            for (var index = 0; index < batch.Length; index++)
+            {
+                sql.Append(CultureInfo.InvariantCulture, $$"""
+                    INSERT INTO telemetry_metric_dimensions (instrument_id, attribute_hash)
+                    VALUES (@InstrumentId{{index}}, @AttributeHash{{index}})
+                    RETURNING dimension_id;
+                    """);
+                parameters.Add($"InstrumentId{index}", batch[index].InstrumentId);
+                parameters.Add($"AttributeHash{index}", batch[index].AttributeHash);
+            }
+
+            using var reader = connection.QueryMultiple(sql.ToString(), parameters, transaction);
+            for (var index = 0; index < batch.Length; index++)
+            {
+                batch[index].Dimension.DimensionId = reader.ReadSingle<long>();
+            }
+        }
+    }
+
+    private static void InsertMetricDimensionAttributes(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        List<PendingMetricDimensionAttribute> attributes)
+    {
+        foreach (var batch in attributes.Chunk(MaxMetricPointBatchSize))
+        {
+            var sql = new StringBuilder("""
+                INSERT INTO telemetry_metric_dimension_attributes (dimension_id, ordinal, attribute_key, attribute_value)
+                VALUES
+                """);
+            var parameters = new DynamicParameters();
+            for (var index = 0; index < batch.Length; index++)
+            {
+                if (index > 0)
+                {
+                    sql.AppendLine(",");
+                }
+                sql.Append(CultureInfo.InvariantCulture, $"    (@DimensionId{index}, @Ordinal{index}, @Key{index}, @Value{index})");
+                parameters.Add($"DimensionId{index}", batch[index].Dimension.DimensionId);
+                parameters.Add($"Ordinal{index}", batch[index].Ordinal);
+                parameters.Add($"Key{index}", batch[index].Key);
+                parameters.Add($"Value{index}", batch[index].Value);
+            }
+            sql.Append(';');
+            connection.Execute(sql.ToString(), parameters, transaction);
+        }
     }
 
     private static long GetMetricDimensionAttributeHash(ReadOnlySpan<KeyValuePair<string, string>> attributes)
@@ -652,7 +665,7 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private void AddMetricExemplars(SqliteConnection connection, IDbTransaction transaction, long pointId, IEnumerable<Exemplar> exemplars)
+    private void QueueMetricExemplars(MetricPointBatch pointBatch, long pointId, IEnumerable<Exemplar> exemplars)
     {
         foreach (var exemplar in exemplars)
         {
@@ -662,40 +675,94 @@ public sealed partial class SqliteTelemetryRepository
             }
             var startTicks = OtlpHelpers.UnixNanoSecondsToDateTime(exemplar.TimeUnixNano).Ticks;
             var value = exemplar.HasAsDouble ? exemplar.AsDouble : exemplar.AsInt;
-            var exists = connection.QuerySingle<bool>("""
-                SELECT EXISTS (
-                    SELECT 1 FROM telemetry_metric_exemplars
-                    WHERE point_id = @PointId AND start_time_ticks = @StartTimeTicks AND exemplar_value = @Value
-                );
-                """, new { PointId = pointId, StartTimeTicks = startTicks, Value = value }, transaction);
-            if (exists)
-            {
-                continue;
-            }
-            var exemplarId = connection.QuerySingle<long>("""
-                INSERT INTO telemetry_metric_exemplars (
-                    point_id, start_time_ticks, exemplar_value, span_id, trace_id)
-                VALUES (@PointId, @StartTimeTicks, @Value, @SpanId, @TraceId)
-                RETURNING exemplar_id;
-                """, new
-            {
-                PointId = pointId,
-                StartTimeTicks = startTicks,
-                Value = value,
-                SpanId = exemplar.SpanId.ToHexString(),
-                TraceId = exemplar.TraceId.ToHexString()
-            }, transaction);
-            var attributes = exemplar.FilteredAttributes.ToKeyValuePairs(_otlpContext);
-            connection.Execute("""
-                INSERT INTO telemetry_metric_exemplar_attributes (exemplar_id, ordinal, attribute_key, attribute_value)
-                VALUES (@ExemplarId, @Ordinal, @Key, @Value);
-                """, attributes.Select((attribute, ordinal) => new { ExemplarId = exemplarId, Ordinal = ordinal, attribute.Key, attribute.Value }), transaction);
+            pointBatch.Exemplars.TryAdd(
+                new MetricExemplarKey(pointId, startTicks, value),
+                new PendingMetricExemplar
+                {
+                    PointId = pointId,
+                    StartTimeTicks = startTicks,
+                    Value = value,
+                    SpanId = exemplar.SpanId.ToHexString(),
+                    TraceId = exemplar.TraceId.ToHexString(),
+                    Attributes = exemplar.FilteredAttributes.ToKeyValuePairs(_otlpContext)
+                });
         }
     }
 
-    private void TrimMetricDimensions(SqliteConnection connection, IDbTransaction transaction, IEnumerable<long> dimensionIds)
+    private static void InsertMetricExemplars(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        Dictionary<MetricExemplarKey, PendingMetricExemplar> exemplars)
     {
-        foreach (var ids in dimensionIds.Chunk(MaxMetricPointBatchSize))
+        foreach (var batch in exemplars.Values.Chunk(MaxMetricPointBatchSize))
+        {
+            var sql = new StringBuilder("""
+                INSERT OR IGNORE INTO telemetry_metric_exemplars (
+                    point_id, start_time_ticks, exemplar_value, span_id, trace_id)
+                VALUES
+                """);
+            var parameters = new DynamicParameters();
+            for (var index = 0; index < batch.Length; index++)
+            {
+                if (index > 0)
+                {
+                    sql.AppendLine(",");
+                }
+                sql.Append(CultureInfo.InvariantCulture, $"    (@PointId{index}, @StartTimeTicks{index}, @Value{index}, @SpanId{index}, @TraceId{index})");
+                parameters.Add($"PointId{index}", batch[index].PointId);
+                parameters.Add($"StartTimeTicks{index}", batch[index].StartTimeTicks);
+                parameters.Add($"Value{index}", batch[index].Value);
+                parameters.Add($"SpanId{index}", batch[index].SpanId);
+                parameters.Add($"TraceId{index}", batch[index].TraceId);
+            }
+            sql.Append("""
+                RETURNING
+                    exemplar_id AS ExemplarId,
+                    point_id AS PointId,
+                    start_time_ticks AS StartTimeTicks,
+                    exemplar_value AS ExemplarValue;
+                """);
+            foreach (var inserted in connection.Query<InsertedMetricExemplarRecord>(sql.ToString(), parameters, transaction))
+            {
+                exemplars[new MetricExemplarKey(inserted.PointId, inserted.StartTimeTicks, inserted.ExemplarValue)].ExemplarId = inserted.ExemplarId;
+            }
+        }
+
+        var attributes = exemplars.Values
+            .Where(exemplar => exemplar.ExemplarId is not null)
+            .SelectMany(exemplar => exemplar.Attributes.Select((attribute, ordinal) => new PendingMetricExemplarAttribute(
+                exemplar.ExemplarId!.Value,
+                ordinal,
+                attribute.Key,
+                attribute.Value)))
+            .ToArray();
+        foreach (var batch in attributes.Chunk(MaxMetricPointBatchSize))
+        {
+            var sql = new StringBuilder("""
+                INSERT INTO telemetry_metric_exemplar_attributes (exemplar_id, ordinal, attribute_key, attribute_value)
+                VALUES
+                """);
+            var parameters = new DynamicParameters();
+            for (var index = 0; index < batch.Length; index++)
+            {
+                if (index > 0)
+                {
+                    sql.AppendLine(",");
+                }
+                sql.Append(CultureInfo.InvariantCulture, $"    (@ExemplarId{index}, @Ordinal{index}, @Key{index}, @Value{index})");
+                parameters.Add($"ExemplarId{index}", batch[index].ExemplarId);
+                parameters.Add($"Ordinal{index}", batch[index].Ordinal);
+                parameters.Add($"Key{index}", batch[index].Key);
+                parameters.Add($"Value{index}", batch[index].Value);
+            }
+            sql.Append(';');
+            connection.Execute(sql.ToString(), parameters, transaction);
+        }
+    }
+
+    private void TrimMetricDimensions(SqliteConnection connection, IDbTransaction transaction, IEnumerable<MetricDimensionState> dimensions)
+    {
+        foreach (var batch in dimensions.Chunk(MaxMetricPointBatchSize))
         {
             connection.Execute("""
                 DELETE FROM telemetry_metric_points
@@ -710,35 +777,24 @@ public sealed partial class SqliteTelemetryRepository
                     )
                     WHERE point_rank > @MaxMetricsCount
                 );
-                """, new { DimensionIds = ids, _otlpContext.Options.MaxMetricsCount }, transaction);
+                """, new { DimensionIds = batch.Select(dimension => dimension.DimensionId).ToArray(), _otlpContext.Options.MaxMetricsCount }, transaction);
         }
-    }
-
-    private List<OtlpInstrumentSummary> GetInstrumentsSummariesFromDatabase(ResourceKey key)
-    {
-        using var connection = _database.OpenConnection();
-        var records = QueryMetricInstruments(connection, key, meterName: null, instrumentName: null);
-        var scopes = MaterializeMetricScopes(connection, records);
-        return records
-            .Select(record => CreateMetricSummary(record, scopes[record.ScopeId]))
-            .DistinctBy(summary => summary.GetKey())
-            .ToList();
     }
 
     private OtlpInstrumentData? GetInstrumentFromDatabase(GetInstrumentRequest request)
     {
-        using var connection = _database.OpenConnection();
-        var records = QueryMetricInstruments(connection, request.ResourceKey, request.MeterName, request.InstrumentName);
-        if (records.Count == 0)
+        var instruments = GetCachedInstruments(request.ResourceKey, request.MeterName, request.InstrumentName);
+        if (instruments.Count == 0)
         {
             return null;
         }
-        var scopes = MaterializeMetricScopes(connection, records);
+
+        using var connection = _database.OpenConnection();
         var dimensions = new List<DimensionScope>();
         var knownAttributeValues = new Dictionary<string, List<string?>>();
-        foreach (var record in records)
+        foreach (var instrument in instruments)
         {
-            foreach (var dimension in MaterializeMetricDimensions(connection, record.InstrumentId, request.StartTime, request.EndTime))
+            foreach (var dimension in MaterializeMetricDimensions(connection, instrument.InstrumentId, request.StartTime, request.EndTime))
             {
                 var isFirst = dimensions.Count == 0;
                 foreach (var key in knownAttributeValues.Keys.Union(dimension.Attributes.Select(attribute => attribute.Key)).Distinct().ToList())
@@ -763,10 +819,10 @@ public sealed partial class SqliteTelemetryRepository
         }
         return new OtlpInstrumentData
         {
-            Summary = CreateMetricSummary(records[0], scopes[records[0].ScopeId]),
+            Summary = instruments[0].Summary,
             Dimensions = dimensions,
             KnownAttributeValues = knownAttributeValues,
-            HasOverflow = records.Any(record => record.HasOverflow)
+            HasOverflow = instruments.Any(instrument => instrument.HasOverflow)
         };
     }
 
@@ -823,52 +879,6 @@ public sealed partial class SqliteTelemetryRepository
             instrument.Dimensions.Add(dimension.Attributes, dimension);
         }
         return instrument;
-    }
-
-    private static List<MetricInstrumentRecord> QueryMetricInstruments(
-        SqliteConnection connection,
-        ResourceKey key,
-        string? meterName,
-        string? instrumentName)
-    {
-        return connection.Query<MetricInstrumentRecord>("""
-            SELECT
-                i.instrument_id AS InstrumentId,
-                i.scope_id AS ScopeId,
-                i.instrument_name AS InstrumentName,
-                i.description AS Description,
-                i.unit AS Unit,
-                i.instrument_type AS InstrumentType,
-                i.aggregation_temporality AS AggregationTemporality,
-                i.has_overflow AS HasOverflow
-            FROM telemetry_metric_instruments i
-            JOIN telemetry_resources r ON r.resource_id = i.resource_id
-            JOIN telemetry_scopes s ON s.scope_id = i.scope_id
-            WHERE r.resource_name = @ResourceName COLLATE NOCASE
-                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE NOCASE)
-              AND (@MeterName IS NULL OR s.scope_name = @MeterName)
-              AND (@InstrumentName IS NULL OR i.instrument_name = @InstrumentName)
-            ORDER BY i.instrument_id;
-            """, new { ResourceName = key.Name, key.InstanceId, MeterName = meterName, InstrumentName = instrumentName }).AsList();
-    }
-
-    private static Dictionary<long, OtlpScope> MaterializeMetricScopes(SqliteConnection connection, List<MetricInstrumentRecord> records)
-    {
-        var scopeIds = records.Select(record => record.ScopeId).Distinct().ToArray();
-        var scopeRecords = connection.Query<MetricScopeRecord>("""
-            SELECT scope_id AS ScopeId, scope_name AS ScopeName, scope_version AS ScopeVersion
-            FROM telemetry_scopes
-            WHERE scope_id IN @Ids;
-            """, new { Ids = scopeIds }).ToDictionary(record => record.ScopeId);
-        var attributes = connection.Query<OwnedAttributeRecord>("""
-            SELECT scope_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
-            FROM telemetry_scope_attributes
-            WHERE scope_id IN @Ids
-            ORDER BY scope_id, ordinal;
-            """, new { Ids = scopeIds }).ToLookup(record => record.OwnerId);
-        return scopeRecords.ToDictionary(
-            pair => pair.Key,
-            pair => CreateScope(pair.Value.ScopeName, pair.Value.ScopeVersion, attributes[pair.Key].Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray()));
     }
 
     private List<DimensionScope> MaterializeMetricDimensions(
@@ -1028,21 +1038,8 @@ public sealed partial class SqliteTelemetryRepository
                 """, parameters, transaction);
             DeleteOrphanedScopes(connection, transaction);
             transaction.Commit();
-            _metricIngestionState.Clear();
+            ClearIngestionCaches();
         }
-    }
-
-    private static OtlpInstrumentSummary CreateMetricSummary(MetricInstrumentRecord record, OtlpScope scope)
-    {
-        return new OtlpInstrumentSummary
-        {
-            Name = record.InstrumentName,
-            Description = record.Description,
-            Unit = record.Unit,
-            Type = (OtlpInstrumentType)record.InstrumentType,
-            AggregationTemporality = (OtlpAggregationTemporality)record.AggregationTemporality,
-            Parent = scope
-        };
     }
 
     private static OtlpScope CreateScope(string name, string version, KeyValuePair<string, string>[] attributes)
@@ -1083,23 +1080,31 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed class MetricIngestionState
     {
-        public Dictionary<(long ResourceId, long ScopeId, string InstrumentName), long> InstrumentIds { get; } = [];
         public Dictionary<(long InstrumentId, long AttributeHash), List<MetricDimensionState>> Dimensions { get; } = [];
         public Dictionary<long, int> DimensionCounts { get; } = [];
-        public HashSet<long> DimensionsToTrim { get; } = [];
+        public HashSet<long> LoadedDimensionInstruments { get; } = [];
+        public HashSet<MetricDimensionState> DimensionsToTrim { get; } = [];
+        public List<PendingMetricDimension> PendingDimensions { get; } = [];
+        public List<PendingMetricDimensionAttribute> PendingDimensionAttributes { get; } = [];
 
         public void Clear()
         {
-            InstrumentIds.Clear();
             Dimensions.Clear();
             DimensionCounts.Clear();
+            LoadedDimensionInstruments.Clear();
             DimensionsToTrim.Clear();
+            PendingDimensions.Clear();
+            PendingDimensionAttributes.Clear();
         }
     }
 
+    private sealed record PendingMetricDimension(long InstrumentId, long AttributeHash, MetricDimensionState Dimension);
+
+    private sealed record PendingMetricDimensionAttribute(MetricDimensionState Dimension, int Ordinal, string Key, string Value);
+
     private sealed class MetricDimensionState
     {
-        public required long DimensionId { get; init; }
+        public long DimensionId { get; set; }
         public required KeyValuePair<string, string>[] Attributes { get; init; }
         public MetricPointRecord? LatestPoint { get; set; }
         public PendingMetricPoint? PendingPoint { get; set; }
@@ -1109,6 +1114,7 @@ public sealed partial class SqliteTelemetryRepository
     {
         public Dictionary<long, MetricPointUpdate> Updates { get; } = [];
         public List<PendingMetricPoint> Inserts { get; } = [];
+        public Dictionary<MetricExemplarKey, PendingMetricExemplar> Exemplars { get; } = [];
 
         public void AddUpdate(long pointId, long endTimeTicks, bool incrementRepeatCount)
         {
@@ -1123,6 +1129,33 @@ public sealed partial class SqliteTelemetryRepository
                 update.RepeatDelta++;
             }
         }
+    }
+
+    private readonly record struct MetricExemplarKey(long PointId, long StartTimeTicks, double Value);
+
+    private sealed class PendingMetricExemplar
+    {
+        public required long PointId { get; init; }
+        public required long StartTimeTicks { get; init; }
+        public required double Value { get; init; }
+        public required string SpanId { get; init; }
+        public required string TraceId { get; init; }
+        public required KeyValuePair<string, string>[] Attributes { get; init; }
+        public long? ExemplarId { get; set; }
+    }
+
+    private sealed record PendingMetricExemplarAttribute(long ExemplarId, int Ordinal, string Key, string Value);
+
+    private sealed record PendingHistogramBucketCount(long PointId, int Ordinal, string BucketCount);
+
+    private sealed record PendingHistogramExplicitBound(long PointId, int Ordinal, double ExplicitBound);
+
+    private sealed class InsertedMetricExemplarRecord
+    {
+        public required long ExemplarId { get; init; }
+        public required long PointId { get; init; }
+        public required long StartTimeTicks { get; init; }
+        public required double ExemplarValue { get; init; }
     }
 
     private sealed class MetricPointUpdate
@@ -1173,25 +1206,6 @@ public sealed partial class SqliteTelemetryRepository
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
         public string? HistogramCount { get; init; }
-    }
-
-    private sealed class MetricInstrumentRecord
-    {
-        public required long InstrumentId { get; init; }
-        public required long ScopeId { get; init; }
-        public required string InstrumentName { get; init; }
-        public required string Description { get; init; }
-        public required string Unit { get; init; }
-        public required int InstrumentType { get; init; }
-        public required int AggregationTemporality { get; init; }
-        public required bool HasOverflow { get; init; }
-    }
-
-    private sealed class MetricScopeRecord
-    {
-        public required long ScopeId { get; init; }
-        public required string ScopeName { get; init; }
-        public required string ScopeVersion { get; init; }
     }
 
     private sealed class MetricPointDataRecord : MetricPointRecord

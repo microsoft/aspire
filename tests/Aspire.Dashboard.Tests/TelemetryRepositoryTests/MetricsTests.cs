@@ -2,9 +2,9 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using System.Text;
-using System.Diagnostics;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
@@ -438,7 +438,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.Null(repository.GetInstrumentLatestEndTime(resourceKey, "test-meter", "missing"));
     }
 
-    private static Exemplar CreateExemplar(DateTime startTime, double value, IEnumerable<KeyValuePair<string, string>>? attributes = null)
+    protected static Exemplar CreateExemplar(DateTime startTime, double value, IEnumerable<KeyValuePair<string, string>>? attributes = null)
     {
         var exemplar = new Exemplar
         {
@@ -1369,11 +1369,73 @@ public sealed class SqliteMetricsTests : MetricsTests
             .Where(activity => activity.ParentSpanId == parent.SpanId)
             .Select(activity => (string)activity.GetTagItem("db.query.text")!)
             .ToList();
+        Assert.Single(queries, query => query.Contains("SELECT instrument_id", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("SELECT COUNT(*) FROM telemetry_metric_instruments", StringComparison.Ordinal));
+        Assert.Equal(2, queries.Count(query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal)));
+        Assert.DoesNotContain(queries, query => query.StartsWith("SELECT COUNT(*) FROM telemetry_metric_dimensions", StringComparison.Ordinal));
+        var dimensionInsert = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_dimensions", StringComparison.Ordinal));
+        Assert.Equal(3, dimensionInsert.Split("INSERT INTO telemetry_metric_dimensions", StringSplitOptions.None).Length - 1);
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_dimension_attributes", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_histogram_bucket_counts", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_histogram_explicit_bounds", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
         Assert.Equal(3, context.SuccessCount);
         Assert.Equal(0, context.FailureCount);
+    }
+
+    [Fact]
+    public void AddMetrics_BatchesAndDeduplicatesExemplars()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateResourceMetrics(CreateSumMetric(
+                metricName: "test",
+                startTime: s_queryTestTime.AddMinutes(1),
+                value: 1,
+                exemplars: [CreateExemplar(s_queryTestTime.AddMinutes(1), 2, [KeyValuePair.Create("first", "value")])]))
+        });
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("metric exemplar test").Start();
+
+        var context = new AddContext();
+        repository.AsWriter().AddMetrics(context, new RepeatedField<ResourceMetrics>
+        {
+            CreateResourceMetrics(CreateSumMetric(
+                metricName: "test",
+                startTime: s_queryTestTime.AddMinutes(2),
+                value: 1,
+                exemplars:
+                [
+                    CreateExemplar(s_queryTestTime.AddMinutes(1), 2, [KeyValuePair.Create("first", "value")]),
+                    CreateExemplar(s_queryTestTime.AddMinutes(2), 3, [KeyValuePair.Create("second", "value")])
+                ]))
+        });
+
+        var queries = activities
+            .Where(activity => activity.ParentSpanId == parent.SpanId)
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
+            .ToList();
+        Assert.DoesNotContain(queries, query => query.Contains("SELECT EXISTS", StringComparison.Ordinal));
+        var exemplarInsert = Assert.Single(queries, query => query.StartsWith("INSERT OR IGNORE INTO telemetry_metric_exemplars", StringComparison.Ordinal));
+        Assert.Equal(2, exemplarInsert.Split("@PointId", StringSplitOptions.None).Length - 1);
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_exemplar_attributes", StringComparison.Ordinal));
+        Assert.Equal(1, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+
+        var instrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+        var value = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(instrument!.Dimensions).Values));
+        Assert.Collection(value.Exemplars,
+            exemplar => Assert.Equal("first", Assert.Single(exemplar.Attributes).Key),
+            exemplar => Assert.Equal("second", Assert.Single(exemplar.Attributes).Key));
     }
 
     [Fact]
@@ -1418,9 +1480,12 @@ public sealed class SqliteMetricsTests : MetricsTests
         Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_scope_attributes", StringComparison.Ordinal));
         Assert.DoesNotContain(queries, query => query.Contains("SELECT instrument_id", StringComparison.Ordinal));
         Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.StartsWith("UPDATE telemetry_resources SET has_metrics", StringComparison.Ordinal));
         Assert.DoesNotContain(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
         var updateQuery = Assert.Single(queries, query => query.Contains("UPDATE telemetry_metric_points", StringComparison.Ordinal));
         Assert.Contains("WITH updates", updateQuery, StringComparison.Ordinal);
+        Assert.Contains("FROM updates", updateQuery, StringComparison.Ordinal);
+        Assert.DoesNotContain("SELECT end_time_ticks FROM updates", updateQuery, StringComparison.Ordinal);
         var instrument = repository.GetInstrument(new GetInstrumentRequest
         {
             ResourceKey = CreateResource().GetResourceKey(),

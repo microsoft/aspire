@@ -1,12 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Integration;
+using Aspire.Tests;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
@@ -1784,4 +1786,104 @@ public sealed class InMemoryLogTests(ITestOutputHelper testOutputHelper) : LogTe
 public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
 {
     protected override bool UseSqlite => true;
+
+    [Fact]
+    public void AddLogs_BatchesRowsAndAttributesAcrossResourcesAndSkipsResourceUpdateWhenCached()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        repository.AsWriter().AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+            Resource = CreateResource(name: "app-one"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { CreateLogRecord() }
+                    }
+                }
+            },
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "app-two"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { CreateLogRecord() }
+                    }
+                }
+            }
+        });
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("log ingestion test").Start();
+
+        var context = new AddContext();
+        repository.AsWriter().AddLogs(context, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "app-one"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "one", attributes: [KeyValuePair.Create("key", "one")]),
+                            CreateLogRecord(message: "two", attributes: [KeyValuePair.Create("key", "two")])
+                        }
+                    }
+                }
+            },
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "app-two"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "three", attributes: [KeyValuePair.Create("key", "three")]),
+                            CreateLogRecord(message: "four", attributes: [KeyValuePair.Create("key", "four")])
+                        }
+                    }
+                }
+            }
+        });
+
+        var queries = activities
+            .Where(activity => activity.ParentSpanId == parent.SpanId)
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
+            .ToList();
+        var logInsert = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_logs", StringComparison.Ordinal));
+        Assert.Equal(4, logInsert.Split("INSERT INTO telemetry_logs", StringSplitOptions.None).Length - 1);
+        var attributeInsert = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_log_attributes", StringComparison.Ordinal));
+        Assert.Equal(4, attributeInsert.Split("@LogId", StringSplitOptions.None).Length - 1);
+        Assert.DoesNotContain(queries, query => query.StartsWith("UPDATE telemetry_resources SET has_logs", StringComparison.Ordinal));
+        Assert.Equal(4, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+
+        Assert.Equal(3, repository.GetLogs(new GetLogsContext
+        {
+            ResourceKeys = [new ResourceKey("app-one", null)],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).Items.Count);
+        Assert.Equal(3, repository.GetLogs(new GetLogsContext
+        {
+            ResourceKeys = [new ResourceKey("app-two", null)],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).Items.Count);
+    }
 }

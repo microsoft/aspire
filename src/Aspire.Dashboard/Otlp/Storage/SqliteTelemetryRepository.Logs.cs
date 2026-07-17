@@ -10,15 +10,14 @@ using Aspire.Dashboard.Otlp.Model;
 using Dapper;
 using Google.Protobuf.Collections;
 using Microsoft.Data.Sqlite;
-using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed partial class SqliteTelemetryRepository
 {
-    private readonly Dictionary<ResourceKey, long> _resourceIdsByKey = [];
-    private readonly Dictionary<string, ScopeCacheEntry> _scopesByName = new(StringComparer.Ordinal);
+    private const int MaxLogBatchSize = 50;
+    private const int MaxLogAttributeBatchSize = 200;
 
     private List<OtlpLogEntry> AddLogsToDatabase(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
     {
@@ -27,22 +26,21 @@ public sealed partial class SqliteTelemetryRepository
         {
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
+            var pendingLogs = new List<PendingLog>();
+            var resourcesWithLogs = new HashSet<CachedResource>();
 
             foreach (var resourceLogsItem in resourceLogs)
             {
+                CachedResource cachedResource;
                 OtlpResourceView resourceView;
-                long resourceId;
                 long resourceViewId;
                 try
                 {
                     var resourceKey = resourceLogsItem.Resource.GetResourceKey();
-                    resourceId = GetOrAddTelemetryResource(connection, transaction, resourceKey);
-                    var resource = new OtlpResource(resourceKey.Name, resourceKey.InstanceId, uninstrumentedPeer: false, _otlpContext)
-                    {
-                        HasLogs = true
-                    };
-                    resourceView = new OtlpResourceView(resource, resourceLogsItem.Resource.Attributes);
-                    resourceViewId = GetOrAddResourceView(connection, transaction, resourceId, resourceView.Properties);
+                    cachedResource = GetOrAddCachedResource(connection, transaction, resourceKey);
+                    var cachedView = GetOrAddCachedResourceView(connection, transaction, cachedResource, resourceLogsItem.Resource.Attributes);
+                    resourceView = cachedView.View;
+                    resourceViewId = cachedView.ResourceViewId;
                 }
                 catch (Exception exception)
                 {
@@ -50,6 +48,7 @@ public sealed partial class SqliteTelemetryRepository
                     _otlpContext.Logger.LogInformation(exception, "Error adding resource.");
                     continue;
                 }
+                resourcesWithLogs.Add(cachedResource);
 
                 foreach (var scopeLogs in resourceLogsItem.ScopeLogs)
                 {
@@ -57,7 +56,9 @@ public sealed partial class SqliteTelemetryRepository
                     long scopeId;
                     try
                     {
-                        (scopeId, scope) = GetOrAddScope(connection, transaction, scopeLogs.Scope);
+                        var cachedScope = GetOrAddCachedScope(connection, transaction, cachedResource, scopeLogs.Scope, CachedTelemetryType.Logs);
+                        scopeId = cachedScope.Scope.ScopeId;
+                        scope = cachedScope.Scope.Scope;
                     }
                     catch (Exception exception)
                     {
@@ -70,61 +71,11 @@ public sealed partial class SqliteTelemetryRepository
                     {
                         try
                         {
-                            var log = new OtlpLogEntry(record, resourceView, scope, _otlpContext);
-                            var logId = connection.QuerySingle<long>("""
-                                INSERT INTO telemetry_logs (
-                                    resource_id, resource_view_id, scope_id, timestamp_ticks, flags, severity,
-                                    severity_name, severity_number, message, span_id, trace_id, parent_id,
-                                    original_format, event_name)
-                                VALUES (
-                                    @ResourceId, @ResourceViewId, @ScopeId, @TimestampTicks, @Flags, @Severity,
-                                    @SeverityName, @SeverityNumber, @Message, @SpanId, @TraceId, @ParentId,
-                                    @OriginalFormat, @EventName)
-                                RETURNING log_id;
-                                """, new
-                            {
-                                ResourceId = resourceId,
-                                ResourceViewId = resourceViewId,
-                                ScopeId = scopeId,
-                                TimestampTicks = log.TimeStamp.Ticks,
-                                Flags = (long)log.Flags,
-                                Severity = (int)log.Severity,
-                                SeverityName = log.Severity.ToString(),
-                                log.SeverityNumber,
-                                log.Message,
-                                log.SpanId,
-                                log.TraceId,
-                                log.ParentId,
-                                log.OriginalFormat,
-                                log.EventName
-                            }, transaction);
-
-                            connection.Execute("""
-                                INSERT INTO telemetry_log_attributes (log_id, ordinal, attribute_key, attribute_value)
-                                VALUES (@LogId, @Ordinal, @Key, @Value);
-                                """, log.Attributes.Select((attribute, ordinal) => new
-                            {
-                                LogId = logId,
-                                Ordinal = ordinal,
-                                attribute.Key,
-                                attribute.Value
-                            }), transaction);
-                            addedLogs.Add(new OtlpLogEntry(
-                                logId,
-                                log.TimeStamp,
-                                log.Flags,
-                                log.Severity,
-                                log.SeverityNumber,
-                                log.Message,
-                                log.SpanId,
-                                log.TraceId,
-                                log.ParentId,
-                                log.OriginalFormat,
-                                resourceView,
-                                scope,
-                                log.Attributes,
-                                log.EventName));
-                            context.SuccessCount++;
+                            pendingLogs.Add(new PendingLog(
+                                cachedResource.ResourceId,
+                                resourceViewId,
+                                scopeId,
+                                new OtlpLogEntry(record, resourceView, scope, _otlpContext)));
                         }
                         catch (Exception exception)
                         {
@@ -133,13 +84,11 @@ public sealed partial class SqliteTelemetryRepository
                         }
                     }
                 }
-
-                connection.Execute(
-                    "UPDATE telemetry_resources SET has_logs = 1 WHERE resource_id = @ResourceId;",
-                    new { ResourceId = resourceId },
-                    transaction);
             }
 
+            InsertLogs(connection, transaction, pendingLogs, addedLogs);
+            context.SuccessCount += pendingLogs.Count;
+            MarkResourcesHaveLogs(connection, transaction, resourcesWithLogs);
             TrimLogsToCapacity(connection, transaction);
             transaction.Commit();
         }
@@ -147,173 +96,124 @@ public sealed partial class SqliteTelemetryRepository
         return addedLogs;
     }
 
-    private long GetOrAddTelemetryResource(SqliteConnection connection, IDbTransaction transaction, ResourceKey resourceKey)
-    {
-        if (_resourceIdsByKey.TryGetValue(resourceKey, out var cachedResourceId))
-        {
-            return cachedResourceId;
-        }
-
-        var resourceId = connection.QuerySingleOrDefault<long?>("""
-            SELECT resource_id
-            FROM telemetry_resources
-            WHERE resource_name = @ResourceName
-              AND instance_id IS @InstanceId;
-            """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
-        if (resourceId is not null)
-        {
-            _resourceIdsByKey.Add(resourceKey, resourceId.Value);
-            return resourceId.Value;
-        }
-
-        var resourceCount = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_resources;", transaction: transaction);
-        if (resourceCount >= _otlpContext.Options.MaxResourceCount)
-        {
-            throw new InvalidOperationException($"Resource limit of {_otlpContext.Options.MaxResourceCount} reached. Resource '{resourceKey}' will not be added.");
-        }
-
-        resourceId = connection.QuerySingle<long>("""
-            INSERT INTO telemetry_resources (resource_name, instance_id)
-            VALUES (@ResourceName, @InstanceId)
-            RETURNING resource_id;
-            """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
-        _resourceIdsByKey.Add(resourceKey, resourceId.Value);
-        return resourceId.Value;
-    }
-
-    private void ClearIngestionCaches()
-    {
-        _resourceIdsByKey.Clear();
-        _scopesByName.Clear();
-        _metricIngestionState.Clear();
-    }
-
-    private static long GetOrAddResourceView(
+    private static void InsertLogs(
         SqliteConnection connection,
         IDbTransaction transaction,
-        long resourceId,
-        KeyValuePair<string, string>[] properties)
+        List<PendingLog> logs,
+        List<OtlpLogEntry> addedLogs)
     {
-        var parameters = new DynamicParameters();
-        parameters.Add("ResourceId", resourceId);
-        parameters.Add("PropertyCount", properties.Length);
-        var sql = new StringBuilder("""
-            SELECT v.resource_view_id
-            FROM telemetry_resource_views v
-            WHERE v.resource_id = @ResourceId
-              AND (SELECT COUNT(*) FROM telemetry_resource_view_attributes a WHERE a.resource_view_id = v.resource_view_id) = @PropertyCount
-            """);
-        for (var index = 0; index < properties.Length; index++)
+        foreach (var logBatch in logs.Chunk(MaxLogBatchSize))
         {
-            parameters.Add($"PropertyKey{index}", properties[index].Key);
-            parameters.Add($"PropertyValue{index}", properties[index].Value);
-            sql.Append(CultureInfo.InvariantCulture, $"""
+            var sql = new StringBuilder();
+            var parameters = new DynamicParameters();
+            for (var index = 0; index < logBatch.Length; index++)
+            {
+                var pendingLog = logBatch[index];
+                var log = pendingLog.Log;
+                sql.Append(CultureInfo.InvariantCulture, $$"""
+                    INSERT INTO telemetry_logs (
+                        resource_id, resource_view_id, scope_id, timestamp_ticks, flags, severity,
+                        severity_name, severity_number, message, span_id, trace_id, parent_id,
+                        original_format, event_name)
+                    VALUES (
+                        @ResourceId{{index}}, @ResourceViewId{{index}}, @ScopeId{{index}}, @TimestampTicks{{index}}, @Flags{{index}}, @Severity{{index}},
+                        @SeverityName{{index}}, @SeverityNumber{{index}}, @Message{{index}}, @SpanId{{index}}, @TraceId{{index}}, @ParentId{{index}},
+                        @OriginalFormat{{index}}, @EventName{{index}})
+                    RETURNING log_id;
+                    """);
+                parameters.Add($"ResourceId{index}", pendingLog.ResourceId);
+                parameters.Add($"ResourceViewId{index}", pendingLog.ResourceViewId);
+                parameters.Add($"ScopeId{index}", pendingLog.ScopeId);
+                parameters.Add($"TimestampTicks{index}", log.TimeStamp.Ticks);
+                parameters.Add($"Flags{index}", (long)log.Flags);
+                parameters.Add($"Severity{index}", (int)log.Severity);
+                parameters.Add($"SeverityName{index}", log.Severity.ToString());
+                parameters.Add($"SeverityNumber{index}", log.SeverityNumber);
+                parameters.Add($"Message{index}", log.Message);
+                parameters.Add($"SpanId{index}", log.SpanId);
+                parameters.Add($"TraceId{index}", log.TraceId);
+                parameters.Add($"ParentId{index}", log.ParentId);
+                parameters.Add($"OriginalFormat{index}", log.OriginalFormat);
+                parameters.Add($"EventName{index}", log.EventName);
+            }
 
-                  AND EXISTS (
-                      SELECT 1
-                      FROM telemetry_resource_view_attributes a
-                      WHERE a.resource_view_id = v.resource_view_id
-                        AND a.ordinal = {index}
-                        AND a.attribute_key = @PropertyKey{index}
-                        AND a.attribute_value = @PropertyValue{index}
-                  )
+            var logIds = new long[logBatch.Length];
+            // Keep one RETURNING result set per log in a single command so each generated ID maps
+            // deterministically to its source log without relying on SQLite RETURNING row order.
+            using (var reader = connection.QueryMultiple(sql.ToString(), parameters, transaction))
+            {
+                for (var index = 0; index < logBatch.Length; index++)
+                {
+                    logIds[index] = reader.ReadSingle<long>();
+                }
+            }
+
+            InsertLogAttributes(connection, transaction, logBatch, logIds);
+            for (var index = 0; index < logBatch.Length; index++)
+            {
+                var log = logBatch[index].Log;
+                addedLogs.Add(new OtlpLogEntry(
+                    logIds[index],
+                    log.TimeStamp,
+                    log.Flags,
+                    log.Severity,
+                    log.SeverityNumber,
+                    log.Message,
+                    log.SpanId,
+                    log.TraceId,
+                    log.ParentId,
+                    log.OriginalFormat,
+                    log.ResourceView,
+                    log.Scope,
+                    log.Attributes,
+                    log.EventName));
+            }
+        }
+    }
+
+    private static void InsertLogAttributes(SqliteConnection connection, IDbTransaction transaction, PendingLog[] logs, long[] logIds)
+    {
+        var attributes = logs
+            .SelectMany((pendingLog, logIndex) => pendingLog.Log.Attributes.Select((attribute, ordinal) => (LogId: logIds[logIndex], Ordinal: ordinal, Attribute: attribute)))
+            .ToArray();
+        foreach (var attributeBatch in attributes.Chunk(MaxLogAttributeBatchSize))
+        {
+            var sql = new StringBuilder("""
+                INSERT INTO telemetry_log_attributes (log_id, ordinal, attribute_key, attribute_value)
+                VALUES
                 """);
+            var parameters = new DynamicParameters();
+            for (var index = 0; index < attributeBatch.Length; index++)
+            {
+                if (index > 0)
+                {
+                    sql.AppendLine(",");
+                }
+                sql.Append(CultureInfo.InvariantCulture, $"    (@LogId{index}, @Ordinal{index}, @Key{index}, @Value{index})");
+                parameters.Add($"LogId{index}", attributeBatch[index].LogId);
+                parameters.Add($"Ordinal{index}", attributeBatch[index].Ordinal);
+                parameters.Add($"Key{index}", attributeBatch[index].Attribute.Key);
+                parameters.Add($"Value{index}", attributeBatch[index].Attribute.Value);
+            }
+            sql.Append(';');
+            connection.Execute(sql.ToString(), parameters, transaction);
         }
-        sql.Append(" LIMIT 1;");
-
-        var existingResourceViewId = connection.QuerySingleOrDefault<long?>(sql.ToString(), parameters, transaction);
-        if (existingResourceViewId is not null)
-        {
-            return existingResourceViewId.Value;
-        }
-
-        var resourceViewCount = connection.QuerySingle<int>(
-            "SELECT COUNT(*) FROM telemetry_resource_views WHERE resource_id = @ResourceId;",
-            new { ResourceId = resourceId },
-            transaction);
-        if (resourceViewCount >= TelemetryRepositoryLimits.MaxResourceViewCount)
-        {
-            throw new InvalidOperationException($"Resource view limit of {TelemetryRepositoryLimits.MaxResourceViewCount} reached.");
-        }
-
-        var resourceViewId = connection.QuerySingle<long>("""
-            INSERT INTO telemetry_resource_views (resource_id)
-            VALUES (@ResourceId)
-            RETURNING resource_view_id;
-            """, new { ResourceId = resourceId }, transaction);
-        connection.Execute("""
-            INSERT INTO telemetry_resource_view_attributes (resource_view_id, ordinal, attribute_key, attribute_value)
-            VALUES (@ResourceViewId, @Ordinal, @Key, @Value);
-            """, properties.Select((property, ordinal) => new
-        {
-            ResourceViewId = resourceViewId,
-            Ordinal = ordinal,
-            property.Key,
-            property.Value
-        }), transaction);
-        return resourceViewId;
     }
 
-    private (long ScopeId, OtlpScope Scope) GetOrAddScope(
-        SqliteConnection connection,
-        IDbTransaction transaction,
-        InstrumentationScope? instrumentationScope)
+    private static void MarkResourcesHaveLogs(SqliteConnection connection, IDbTransaction transaction, HashSet<CachedResource> resources)
     {
-        var scopeName = instrumentationScope?.Name ?? OtlpScope.Empty.Name;
-        if (_scopesByName.TryGetValue(scopeName, out var cachedScope))
+        var resourcesToUpdate = resources.Where(resource => !resource.Resource.HasLogs).ToArray();
+        foreach (var batch in resourcesToUpdate.Chunk(MaxLogAttributeBatchSize))
         {
-            return (cachedScope.ScopeId, cachedScope.Scope);
+            connection.Execute(
+                "UPDATE telemetry_resources SET has_logs = 1 WHERE resource_id IN @ResourceIds;",
+                new { ResourceIds = batch.Select(resource => resource.ResourceId).ToArray() },
+                transaction);
         }
-
-        var incomingScope = instrumentationScope is null
-            ? OtlpScope.Empty
-            : new OtlpScope(
-                instrumentationScope.Name,
-                instrumentationScope.Version,
-                instrumentationScope.Attributes.ToKeyValuePairs(_otlpContext));
-        var existing = connection.QuerySingleOrDefault<ScopeRecord>("""
-            SELECT scope_id AS ScopeId, scope_name AS ScopeName, scope_version AS ScopeVersion
-            FROM telemetry_scopes
-            WHERE scope_name = @ScopeName;
-            """, new { ScopeName = incomingScope.Name }, transaction);
-        if (existing is not null)
+        foreach (var resource in resourcesToUpdate)
         {
-            var attributes = connection.Query<AttributeRecord>("""
-                SELECT attribute_key AS AttributeKey, attribute_value AS AttributeValue
-                FROM telemetry_scope_attributes
-                WHERE scope_id = @ScopeId
-                ORDER BY ordinal;
-                """, new { existing.ScopeId }, transaction)
-                .Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue))
-                .ToArray();
-            var scope = new OtlpScope(existing.ScopeName, existing.ScopeVersion, attributes);
-            _scopesByName.Add(scopeName, new ScopeCacheEntry(existing.ScopeId, scope));
-            return (existing.ScopeId, scope);
+            resource.Resource.HasLogs = true;
         }
-
-        var scopeCount = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_scopes;", transaction: transaction);
-        if (scopeCount >= TelemetryRepositoryLimits.MaxScopeCount)
-        {
-            throw new InvalidOperationException($"Scope limit of {TelemetryRepositoryLimits.MaxScopeCount} reached. Scope '{incomingScope.Name}' will not be added.");
-        }
-
-        var scopeId = connection.QuerySingle<long>("""
-            INSERT INTO telemetry_scopes (scope_name, scope_version)
-            VALUES (@ScopeName, @ScopeVersion)
-            RETURNING scope_id;
-            """, new { ScopeName = incomingScope.Name, ScopeVersion = incomingScope.Version }, transaction);
-        connection.Execute("""
-            INSERT INTO telemetry_scope_attributes (scope_id, ordinal, attribute_key, attribute_value)
-            VALUES (@ScopeId, @Ordinal, @Key, @Value);
-            """, incomingScope.Attributes.Select((attribute, ordinal) => new
-        {
-            ScopeId = scopeId,
-            Ordinal = ordinal,
-            attribute.Key,
-            attribute.Value
-        }), transaction);
-        _scopesByName.Add(scopeName, new ScopeCacheEntry(scopeId, incomingScope));
-        return (scopeId, incomingScope);
     }
 
     private void TrimLogsToCapacity(SqliteConnection connection, IDbTransaction transaction)
@@ -446,6 +346,7 @@ public sealed partial class SqliteTelemetryRepository
                 pl.message AS Message,
                 pl.span_id AS SpanId,
                 pl.trace_id AS TraceId,
+                pl.resource_id AS ResourceId,
                 pl.resource_name AS ResourceName,
                 pl.instance_id AS InstanceId,
                 pl.uninstrumented_peer AS UninstrumentedPeer,
@@ -500,7 +401,7 @@ public sealed partial class SqliteTelemetryRepository
                     Message = record.Message!,
                     SpanId = record.SpanId!,
                     TraceId = record.TraceId!,
-                    Resource = new OtlpResource(record.ResourceName!, record.InstanceId, record.UninstrumentedPeer!.Value, _otlpContext),
+                    Resource = GetCachedResource(record.ResourceId!.Value)!,
                     ExceptionText = record.ExceptionText,
                     HasGenAI = record.HasGenAI!.Value
                 }).ToList(),
@@ -800,60 +701,16 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         var logIds = records.Select(record => record.LogId).Distinct().ToArray();
-        var viewIds = records.Select(record => record.ResourceViewId).Distinct().ToArray();
-        var scopeIds = records.Select(record => record.ScopeId).Distinct().ToArray();
         var logAttributes = connection.Query<OwnedAttributeRecord>("""
             SELECT log_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
             FROM telemetry_log_attributes
             WHERE log_id IN @Ids
             ORDER BY log_id, ordinal;
             """, new { Ids = logIds }).ToLookup(record => record.OwnerId);
-        var viewAttributes = connection.Query<OwnedAttributeRecord>("""
-            SELECT resource_view_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
-            FROM telemetry_resource_view_attributes
-            WHERE resource_view_id IN @Ids
-            ORDER BY resource_view_id, ordinal;
-            """, new { Ids = viewIds }).ToLookup(record => record.OwnerId);
-        var scopeAttributes = connection.Query<OwnedAttributeRecord>("""
-            SELECT scope_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
-            FROM telemetry_scope_attributes
-            WHERE scope_id IN @Ids
-            ORDER BY scope_id, ordinal;
-            """, new { Ids = scopeIds }).ToLookup(record => record.OwnerId);
-
-        var resources = new Dictionary<long, OtlpResource>();
-        var views = new Dictionary<long, OtlpResourceView>();
-        var scopes = new Dictionary<long, OtlpScope>();
         var results = new List<OtlpLogEntry>(records.Count);
         foreach (var record in records)
         {
-            if (!resources.TryGetValue(record.ResourceId, out var resource))
-            {
-                resource = new OtlpResource(
-                    record.ResourceName,
-                    record.InstanceId,
-                    record.UninstrumentedPeer,
-                    _otlpContext)
-                {
-                    HasLogs = record.HasLogs,
-                    HasTraces = record.HasTraces,
-                    HasMetrics = record.HasMetrics
-                };
-                resources.Add(record.ResourceId, resource);
-            }
-            if (!views.TryGetValue(record.ResourceViewId, out var view))
-            {
-                view = new OtlpResourceView(resource, ToPairs(viewAttributes[record.ResourceViewId]));
-                views.Add(record.ResourceViewId, view);
-            }
-            if (!scopes.TryGetValue(record.ScopeId, out var scope))
-            {
-                var attributes = ToPairs(scopeAttributes[record.ScopeId]);
-                scope = record.ScopeName == OtlpScope.Empty.Name && record.ScopeVersion.Length == 0 && attributes.Length == 0
-                    ? OtlpScope.Empty
-                    : new OtlpScope(record.ScopeName, record.ScopeVersion, attributes);
-                scopes.Add(record.ScopeId, scope);
-            }
+            var (_, view, scope) = GetCachedTelemetryMetadata(record.ResourceId, record.ResourceViewId, record.ScopeId, CachedTelemetryType.Logs);
 
             results.Add(new OtlpLogEntry(
                 record.LogId,
@@ -934,8 +791,6 @@ public sealed partial class SqliteTelemetryRepository
             transaction.Commit();
             ClearIngestionCaches();
         }
-
-        _resourceCache.TryRemove(resourceKey, out _);
     }
 
     private void ClearStructuredLogsFromDatabase(ResourceKey? resourceKey)
@@ -974,10 +829,11 @@ public sealed partial class SqliteTelemetryRepository
                 """, parameters, transaction);
             DeleteOrphanedScopes(connection, transaction);
             transaction.Commit();
+            ClearMetadataCache();
         }
     }
 
-    private void DeleteOrphanedScopes(SqliteConnection connection, IDbTransaction transaction)
+    private static void DeleteOrphanedScopes(SqliteConnection connection, IDbTransaction transaction)
     {
         connection.Execute("""
             DELETE FROM telemetry_scopes
@@ -985,71 +841,20 @@ public sealed partial class SqliteTelemetryRepository
               AND NOT EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.scope_id = telemetry_scopes.scope_id)
               AND NOT EXISTS (SELECT 1 FROM telemetry_metric_instruments WHERE telemetry_metric_instruments.scope_id = telemetry_scopes.scope_id);
             """, transaction: transaction);
-        _scopesByName.Clear();
     }
 
     private List<OtlpResource> GetTelemetryResources(bool includeUninstrumentedPeers, string? name)
     {
-        var resources = new Dictionary<ResourceKey, OtlpResource>();
-        using var connection = _database.OpenConnection();
-        foreach (var record in connection.Query<TelemetryResourceStateRecord>("""
-            SELECT
-                resource_name AS ResourceName,
-                instance_id AS InstanceId,
-                uninstrumented_peer AS UninstrumentedPeer,
-                has_logs AS HasLogs,
-                has_traces AS HasTraces,
-                has_metrics AS HasMetrics
-            FROM telemetry_resources;
-            """))
+        EnsureCachePopulated();
+        lock (_cacheLock)
         {
-            var key = new ResourceKey(record.ResourceName, record.InstanceId);
-            var resource = _resourceCache.GetOrAdd(key, resourceKey =>
-            {
-                var newResource = new OtlpResource(resourceKey.Name, resourceKey.InstanceId, record.UninstrumentedPeer, _otlpContext);
-                newResource.ConfigureDataProviders(
-                    (meterName, instrumentName, startTime, endTime) => GetResourceInstrumentFromDatabase(resourceKey, meterName, instrumentName, startTime, endTime),
-                    () => GetInstrumentsSummariesFromDatabase(resourceKey),
-                    () => GetResourceViewsFromDatabase(resourceKey, newResource));
-                return newResource;
-            });
-            resource.SetUninstrumentedPeer(record.UninstrumentedPeer);
-            resource.HasLogs = record.HasLogs;
-            resource.HasTraces = record.HasTraces;
-            resource.HasMetrics = record.HasMetrics;
-            resources.Add(key, resource);
+            return _cachedResourcesByKey.Values
+                .Select(resource => resource.Resource)
+                .Where(resource => includeUninstrumentedPeers || !resource.UninstrumentedPeer)
+                .Where(resource => name is null || string.Equals(resource.ResourceName, name, StringComparisons.ResourceName))
+                .OrderBy(resource => resource.ResourceKey)
+                .ToList();
         }
-
-        return resources.Values
-            .Where(resource => includeUninstrumentedPeers || !resource.UninstrumentedPeer)
-            .Where(resource => name is null || string.Equals(resource.ResourceName, name, StringComparisons.ResourceName))
-            .OrderBy(resource => resource.ResourceKey)
-            .ToList();
-    }
-
-    private List<OtlpResourceView> GetResourceViewsFromDatabase(ResourceKey resourceKey, OtlpResource resource)
-    {
-        using var connection = _database.OpenConnection();
-        var viewIds = connection.Query<long>("""
-            SELECT v.resource_view_id
-            FROM telemetry_resource_views v
-            JOIN telemetry_resources r ON r.resource_id = v.resource_id
-            WHERE r.resource_name = @ResourceName COLLATE NOCASE
-                            AND (@InstanceId IS NULL OR r.instance_id = @InstanceId COLLATE NOCASE)
-            ORDER BY v.resource_view_id;
-            """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }).AsList();
-        var attributes = connection.Query<OwnedAttributeRecord>("""
-            SELECT resource_view_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
-            FROM telemetry_resource_view_attributes
-            WHERE resource_view_id IN @Ids
-            ORDER BY resource_view_id, ordinal;
-            """, new { Ids = viewIds }).ToLookup(attribute => attribute.OwnerId);
-        return viewIds
-            .Select(viewId => new OtlpResourceView(resource, attributes[viewId]
-                .Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue))
-                .ToArray()))
-            .DistinctBy(view => view.Properties, ResourceViewPropertiesComparer.Instance)
-            .ToList();
     }
 
     private sealed class ResourceViewPropertiesComparer : IEqualityComparer<KeyValuePair<string, string>[]>
@@ -1072,7 +877,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record LogQuery(string FromAndWhere, DynamicParameters Parameters);
 
-    private sealed record ScopeCacheEntry(long ScopeId, OtlpScope Scope);
+    private sealed record PendingLog(long ResourceId, long ResourceViewId, long ScopeId, OtlpLogEntry Log);
 
     private sealed class ScopeRecord
     {
@@ -1128,6 +933,7 @@ public sealed partial class SqliteTelemetryRepository
         public string? Message { get; init; }
         public string? SpanId { get; init; }
         public string? TraceId { get; init; }
+        public long? ResourceId { get; init; }
         public string? ResourceName { get; init; }
         public string? InstanceId { get; init; }
         public bool? UninstrumentedPeer { get; init; }
@@ -1147,11 +953,4 @@ public sealed partial class SqliteTelemetryRepository
         public string? InstanceId { get; init; }
     }
 
-    private sealed class TelemetryResourceStateRecord : TelemetryResourceRecord
-    {
-        public required bool UninstrumentedPeer { get; init; }
-        public required bool HasLogs { get; init; }
-        public required bool HasTraces { get; init; }
-        public required bool HasMetrics { get; init; }
-    }
 }

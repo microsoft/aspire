@@ -319,8 +319,17 @@ public class OtlpResource : IOtlpResource
 
     internal OtlpResourceView GetView(RepeatedField<KeyValue> attributes)
     {
+        return GetView(new OtlpResourceView(this, attributes));
+    }
+
+    internal OtlpResourceView GetViewFromProperties(KeyValuePair<string, string>[] properties)
+    {
+        return GetView(new OtlpResourceView(this, properties));
+    }
+
+    private OtlpResourceView GetView(OtlpResourceView view)
+    {
         // Inefficient to create this to possibly throw it away.
-        var view = new OtlpResourceView(this, attributes);
 
         if (_resourceViews.TryGetValue(view.Properties, out var resourceView))
         {

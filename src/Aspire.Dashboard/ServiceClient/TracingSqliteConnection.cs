@@ -5,6 +5,7 @@ using System.Data;
 using System.Data.Common;
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
+using Aspire.Dashboard.Otlp.Model;
 using Microsoft.Data.Sqlite;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -138,6 +139,7 @@ internal sealed class TracingSqliteConnection(string connectionString, string da
             if (activity is not null)
             {
                 activity.SetTag("db.system.name", "sqlite");
+                activity.SetTag(OtlpSpan.PeerServiceAttributeKey, databaseName);
                 activity.SetTag("db.namespace", databaseName);
                 activity.SetTag("db.query.text", CommandText);
                 activity.SetTag("db.operation.name", operationName);
