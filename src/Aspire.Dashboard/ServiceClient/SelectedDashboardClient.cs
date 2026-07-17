@@ -26,10 +26,7 @@ internal sealed class SelectedDashboardClient(DashboardClient currentClient, Das
         }
         remove
         {
-            if (!IsReadOnly)
-            {
-                currentClient.ConnectionStateChanged -= value;
-            }
+            currentClient.ConnectionStateChanged -= value;
         }
     }
 

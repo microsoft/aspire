@@ -17,6 +17,8 @@ internal interface IDashboardRunStore
 
 internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 {
+    private const string TemporaryDirectoryPrefix = "aspire-dashboard-";
+
     internal const int MaxApplicationDirectoryNameLength = 80;
     internal const int MaxRuns = 10;
     internal const int SchemaVersion = DashboardSqliteDatabase.SchemaVersion;
@@ -26,6 +28,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private readonly string? _runsDirectory;
     private readonly string? _metadataPath;
     private readonly string? _temporaryDirectory;
+    private readonly FileStream? _runLock;
     private readonly DashboardRunMetadata _metadata;
     private readonly ILogger<DashboardRunStore> _logger;
 
@@ -45,13 +48,15 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         var runId = $"{startedAt:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}";
         PersistenceMode = options.Value.Data.PersistenceMode;
 
-        // Persistent run directories should be located under a directory scoped to the current user. Rely on that
-        // directory's inherited permissions instead of modifying the SQLite database, WAL, and shared-memory files individually.
+        // Persistent run directories should be located under a directory scoped to the current user. Do not set Unix modes here;
+        // rely on the AppHost-managed data root's inherited permissions for the database, WAL, and shared-memory files.
         switch (PersistenceMode)
         {
             case DashboardPersistenceMode.None:
-                _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-").FullName;
+                _temporaryDirectory = Directory.CreateTempSubdirectory(TemporaryDirectoryPrefix).FullName;
                 RunDirectory = _temporaryDirectory;
+                _runLock = OpenRunLock(RunDirectory);
+                DeleteAbandonedTemporaryDirectories(deleteRunDirectory);
                 DatabasePath = Path.Combine(RunDirectory, "dashboard.db");
                 break;
             case DashboardPersistenceMode.Runs:
@@ -59,6 +64,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 _runsDirectory = Path.Combine(applicationDirectory, "runs");
                 RunDirectory = Path.Combine(_runsDirectory, runId);
                 Directory.CreateDirectory(RunDirectory);
+                _runLock = OpenRunLock(RunDirectory);
                 DatabasePath = Path.Combine(RunDirectory, "dashboard.db");
                 _metadataPath = Path.Combine(RunDirectory, "run.json");
                 break;
@@ -89,6 +95,47 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             WriteMetadata(_metadata);
             PruneRuns(deleteRunDirectory);
         }
+    }
+
+    private void DeleteAbandonedTemporaryDirectories(Action<string> deleteRunDirectory)
+    {
+        var temporaryRoot = Directory.GetParent(RunDirectory)!.FullName;
+        foreach (var directory in Directory.EnumerateDirectories(temporaryRoot, $"{TemporaryDirectoryPrefix}*"))
+        {
+            if (!IsTemporaryDatabaseDirectory(directory) ||
+                string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase) ||
+                !File.Exists(Path.Combine(directory, "dashboard.db")))
+            {
+                continue;
+            }
+
+            using var runLock = TryOpenRunLock(directory);
+            if (runLock is null)
+            {
+                continue;
+            }
+
+            try
+            {
+                deleteRunDirectory(directory);
+            }
+            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+            {
+                _logger.LogWarning(
+                    exception,
+                    "Failed to delete abandoned dashboard temporary directory '{RunDirectory}'. The directory may still be in use by another dashboard process.",
+                    directory);
+            }
+        }
+    }
+
+    private static bool IsTemporaryDatabaseDirectory(string directory)
+    {
+        // Directory.CreateTempSubdirectory appends a Path.GetRandomFileName value such as "a1b2c3d4.e5f".
+        // Checking that exact shape avoids matching other Aspire test and tool directories with longer prefixes.
+        var directoryName = Path.GetFileName(directory);
+        var randomName = directoryName.AsSpan(TemporaryDirectoryPrefix.Length);
+        return randomName is { Length: 12 } && randomName[8] == '.';
     }
 
     public string RunDirectory { get; }
@@ -140,15 +187,22 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public void Dispose()
     {
-        DashboardSqliteDatabase.ClearPools();
+        try
+        {
+            DashboardSqliteDatabase.ClearPools();
 
-        if (_metadataPath is not null)
-        {
-            WriteMetadata(_metadata with { EndedAtUtc = DateTimeOffset.UtcNow, CleanShutdown = true });
+            if (_metadataPath is not null)
+            {
+                WriteMetadata(_metadata with { EndedAtUtc = DateTimeOffset.UtcNow, CleanShutdown = true });
+            }
+            else if (_temporaryDirectory is not null && Directory.Exists(_temporaryDirectory))
+            {
+                Directory.Delete(_temporaryDirectory, recursive: true);
+            }
         }
-        else if (_temporaryDirectory is not null && Directory.Exists(_temporaryDirectory))
+        finally
         {
-            Directory.Delete(_temporaryDirectory, recursive: true);
+            _runLock?.Dispose();
         }
     }
 
@@ -167,6 +221,12 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
         foreach (var directory in expiredRunDirectories)
         {
+            using var runLock = TryOpenRunLock(directory);
+            if (runLock is null)
+            {
+                continue;
+            }
+
             try
             {
                 deleteRunDirectory(directory);
@@ -180,6 +240,34 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             }
         }
     }
+
+    private static FileStream OpenRunLock(string runDirectory)
+    {
+        // An exclusive FileStream is the best cross-platform option for locking across processes because .NET named
+        // semaphores are only supported on Windows. Keep the lock beside the run directory so pruning can hold it
+        // while recursively deleting the directory on Windows.
+        return new FileStream(
+            GetRunLockPath(runDirectory),
+            FileMode.OpenOrCreate,
+            FileAccess.ReadWrite,
+            FileShare.None,
+            bufferSize: 1,
+            FileOptions.DeleteOnClose);
+    }
+
+    private static FileStream? TryOpenRunLock(string runDirectory)
+    {
+        try
+        {
+            return OpenRunLock(runDirectory);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            return null;
+        }
+    }
+
+    internal static string GetRunLockPath(string runDirectory) => $"{runDirectory}.lock";
 
     private static DashboardRunDescriptor CreateDescriptor(DashboardRunMetadata metadata, string runDirectory, bool isCurrent)
     {
