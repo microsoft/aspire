@@ -9,7 +9,7 @@ namespace Aspire.Dashboard.Model;
 
 public class StructuredLogsViewModel
 {
-    private readonly ITelemetryRepository _telemetryRepository;
+    private readonly DashboardDataSource _dataSource;
     private readonly List<FieldTelemetryFilter> _filters = new();
 
     private PagedResult<LogSummary>? _logs;
@@ -20,9 +20,9 @@ public class StructuredLogsViewModel
     private LogLevel? _logLevel;
     private bool _currentDataHasErrors;
 
-    public StructuredLogsViewModel(ITelemetryRepository telemetryRepository)
+    public StructuredLogsViewModel(DashboardDataSource dataSource)
     {
-        _telemetryRepository = telemetryRepository;
+        _dataSource = dataSource;
     }
 
     public ResourceKey? ResourceKey { get => _resourceKey; set => SetValue(ref _resourceKey, value); }
@@ -82,7 +82,7 @@ public class StructuredLogsViewModel
         {
             var filters = GetFilters();
 
-            logs = _telemetryRepository.GetLogSummaries(new GetLogsContext
+            logs = _dataSource.TelemetryRepository.GetLogSummaries(new GetLogsContext
             {
                 ResourceKeys = ResourceKey is { } key ? [key] : [],
                 StartIndex = StartIndex,

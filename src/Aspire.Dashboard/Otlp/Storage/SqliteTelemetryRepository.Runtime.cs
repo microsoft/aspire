@@ -190,6 +190,12 @@ public sealed partial class SqliteTelemetryRepository
         RaiseSubscriptionChanged(_resourceSubscriptions);
     }
 
+    private void NotifyPeersChanged()
+    {
+        RaiseSubscriptionChanged(_tracesSubscriptions);
+        RaiseSubscriptionChanged(_resourceSubscriptions);
+    }
+
     private void NotifyMetricsAdded()
     {
         RaiseSubscriptionChanged(_metricsSubscriptions);

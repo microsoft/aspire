@@ -25,7 +25,7 @@ using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
-public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository
+public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, ITelemetryRepositoryWriter
 {
     internal const int MaxResourceViewCount = TelemetryRepositoryLimits.MaxResourceViewCount;
     internal const int MaxInstrumentCount = TelemetryRepositoryLimits.MaxInstrumentCount;
@@ -1973,23 +1973,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository
 
     public OtlpResource? GetPeerResource(OtlpSpan span)
     {
-        var peer = ResolveUninstrumentedPeerResource(span, _outgoingPeerResolvers);
-        if (peer == null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var resourceKey = ResourceKey.Create(name: peer.DisplayName, instanceId: peer.Name);
-            var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
-            return resource;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogInformation(ex, "Error adding peer resource.");
-            return null;
-        }
+        return span.UninstrumentedPeer;
     }
 
     private void CalculateTraceUninstrumentedPeers(OtlpTrace trace)
@@ -1999,11 +1983,11 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository
             // A span may indicate a call to another service but the service isn't instrumented.
             var hasPeerService = OtlpHelpers.GetPeerAddress(span.Attributes) != null;
             var hasUninstrumentedPeer = hasPeerService && span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer && !span.GetChildSpans().Any();
-            var uninstrumentedPeer = hasUninstrumentedPeer ? ResolveUninstrumentedPeerResource(span, _outgoingPeerResolvers) : null;
+            var uninstrumentedPeerKey = hasUninstrumentedPeer ? ResolveUninstrumentedPeerResourceKey(span, _outgoingPeerResolvers) : null;
 
-            if (uninstrumentedPeer != null)
+            if (uninstrumentedPeerKey is { } peerKey)
             {
-                if (span.UninstrumentedPeer?.ResourceKey.EqualsCompositeName(uninstrumentedPeer.Name) ?? false)
+                if (span.UninstrumentedPeer?.ResourceKey == peerKey)
                 {
                     // Already the correct value. No changes needed.
                     continue;
@@ -2011,8 +1995,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository
 
                 try
                 {
-                    var resourceKey = ResourceKey.Create(name: uninstrumentedPeer.DisplayName, instanceId: uninstrumentedPeer.Name);
-                    var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
+                    var (resource, _) = GetOrAddResource(peerKey, uninstrumentedPeer: true);
                     trace.SetSpanUninstrumentedPeer(span, resource);
                 }
                 catch (Exception ex)
@@ -2027,14 +2010,23 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository
         }
     }
 
-    private static ResourceViewModel? ResolveUninstrumentedPeerResource(OtlpSpan span, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+    private static ResourceKey? ResolveUninstrumentedPeerResourceKey(OtlpSpan span, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
     {
-        // Attempt to resolve uninstrumented peer to a friendly name from the span.
         foreach (var resolver in outgoingPeerResolvers)
         {
-            if (resolver.TryResolvePeer(span.Attributes, out _, out var matchedResourced))
+            if (!resolver.TryResolvePeer(span.Attributes, out var name, out var matchedResource))
             {
-                return matchedResourced;
+                continue;
+            }
+
+            if (matchedResource is not null)
+            {
+                return ResourceKey.Create(matchedResource.DisplayName, matchedResource.Name);
+            }
+
+            if (!string.IsNullOrEmpty(name))
+            {
+                return new ResourceKey(name, InstanceId: null);
             }
         }
 

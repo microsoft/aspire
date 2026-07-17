@@ -81,7 +81,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required ILogger<ConsoleLogs> Logger { get; init; }
@@ -254,7 +256,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 return;
             }
 
-            var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_resourceSubscriptionToken);
+            var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_resourceSubscriptionToken);
 
             Logger.LogDebug("Received initial resource snapshot with {ResourceCount} resources.", snapshot.Length);
 
@@ -1003,7 +1005,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
             Logger.LogDebug("Subscribing to console logs with subscription {SubscriptionId} to resource {ResourceName}.", subscription.SubscriptionId, subscription.Resource.Name);
 
-            var logSubscription = DashboardClient.SubscribeConsoleLogs(subscription.Resource.Name, subscription.CancellationToken);
+            var logSubscription = DataSource.ResourceRepository.SubscribeConsoleLogs(subscription.Resource.Name, subscription.CancellationToken);
 
             // For "All" subscriptions, only update status once when starting
             if (_isSubscribedToAll && _consoleLogsSubscriptions.Count == 1)

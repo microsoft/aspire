@@ -278,7 +278,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
 
         // Data from the server.
         builder.Services.TryAddSingleton<DashboardClient>();
-        builder.Services.AddScoped<DashboardDataSource>();
+        builder.Services.AddScoped(services => new DashboardDataSource(
+            services.GetRequiredService<IDashboardRunStore>(),
+            services.GetRequiredService<ITelemetryRepository>(),
+            services.GetRequiredService<IResourceRepository>(),
+            services.GetRequiredService<IRepositoryFactory>()));
         builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
         builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();
 
@@ -301,41 +305,36 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
         builder.Services.AddSingleton(services => new DashboardSqliteDatabase(
             services.GetRequiredService<DashboardRunStore>().DatabasePath));
-        builder.Services.AddSingleton<SqliteTelemetryRepository>(services =>
-        {
-            return new SqliteTelemetryRepository(
-                services.GetRequiredService<DashboardSqliteDatabase>(),
-                services.GetRequiredService<ILoggerFactory>(),
-                services.GetRequiredService<IOptions<DashboardOptions>>(),
-                services.GetRequiredService<PauseManager>(),
-                services.GetServices<IOutgoingPeerResolver>());
-        });
-        builder.Services.AddScoped<ITelemetryRepository, SelectedTelemetryRepository>();
-        builder.Services.AddSingleton<SqliteResourceRepository>(services =>
-        {
-            return new SqliteResourceRepository(
-                services.GetRequiredService<DashboardSqliteDatabase>(),
-                services.GetRequiredService<IKnownPropertyLookup>(),
-                services.GetRequiredService<ILoggerFactory>());
-        });
-        builder.Services.AddSingleton<IResourceRepositoryWriter>(services => services.GetRequiredService<SqliteResourceRepository>());
-        builder.Services.AddScoped<IResourceRepository>(services => services.GetRequiredService<IDashboardClient>());
+        builder.Services.AddSingleton<IRepositoryFactory>(services => new RepositoryFactory(
+            services.GetRequiredService<DashboardSqliteDatabase>(),
+            services.GetRequiredService<ILoggerFactory>(),
+            services.GetRequiredService<IOptions<DashboardOptions>>(),
+            services.GetRequiredService<PauseManager>(),
+            services.GetServices<IOutgoingPeerResolver>,
+            services.GetRequiredService<IKnownPropertyLookup>()));
+        builder.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<IRepositoryFactory>()
+            .CreateTelemetryRepository(services.GetRequiredService<DashboardSqliteDatabase>()));
+        builder.Services.AddSingleton<ITelemetryRepositoryWriter>(services =>
+            (ITelemetryRepositoryWriter)services.GetRequiredService<ITelemetryRepository>());
+        builder.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<IRepositoryFactory>()
+            .CreateResourceRepository(services.GetRequiredService<DashboardSqliteDatabase>()));
+        builder.Services.AddSingleton<IResourceRepositoryWriter>(services =>
+            (IResourceRepositoryWriter)services.GetRequiredService<IResourceRepository>());
         builder.Services.AddTransient<StructuredLogsViewModel>();
 
         builder.Services.AddTransient(services => new OtlpLogsService(
             services.GetRequiredService<ILogger<OtlpLogsService>>(),
-            services.GetRequiredService<SqliteTelemetryRepository>()));
+            services.GetRequiredService<ITelemetryRepositoryWriter>()));
         builder.Services.AddTransient(services => new OtlpTraceService(
             services.GetRequiredService<ILogger<OtlpTraceService>>(),
-            services.GetRequiredService<SqliteTelemetryRepository>()));
+            services.GetRequiredService<ITelemetryRepositoryWriter>()));
         builder.Services.AddTransient(services => new OtlpMetricsService(
             services.GetRequiredService<ILogger<OtlpMetricsService>>(),
-            services.GetRequiredService<SqliteTelemetryRepository>()));
+            services.GetRequiredService<ITelemetryRepositoryWriter>()));
 
         // Telemetry API.
         builder.Services.AddSingleton(services => new TelemetryApiService(
-            services.GetRequiredService<SqliteTelemetryRepository>(),
-            services.GetServices<IOutgoingPeerResolver>()));
+            services.GetRequiredService<ITelemetryRepository>()));
 
         builder.Services.AddTransient<TracesViewModel>();
         builder.Services.AddSingleton<IOutgoingPeerResolver>(services =>
@@ -354,7 +353,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<ConsoleLogsFetcher>();
         builder.Services.AddScoped<TelemetryExportService>();
         builder.Services.AddScoped(services => new TelemetryImportService(
-            services.GetRequiredService<SqliteTelemetryRepository>(),
+            services.GetRequiredService<ITelemetryRepositoryWriter>(),
             services.GetRequiredService<IOptionsMonitor<DashboardOptions>>(),
             services.GetRequiredService<ILogger<TelemetryImportService>>()));
         builder.Services.AddSingleton<IInstrumentUnitResolver, DefaultInstrumentUnitResolver>();

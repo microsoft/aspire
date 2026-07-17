@@ -70,7 +70,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         });
 
         // Assert
-        var viewModel = Services.GetRequiredService<StructuredLogsViewModel>();
+        var viewModel = cut.Instance.ViewModel;
 
         Assert.NotNull(viewModel.ResourceKey);
         Assert.Equal("TestApp", viewModel.ResourceKey.Value.Name);
@@ -99,7 +99,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         });
 
         // Assert
-        var viewModel = Services.GetRequiredService<StructuredLogsViewModel>();
+        var viewModel = cut.Instance.ViewModel;
 
         Assert.Collection(viewModel.Filters,
             f =>
@@ -139,7 +139,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         });
 
         // Assert
-        var viewModel = Services.GetRequiredService<StructuredLogsViewModel>();
+        var viewModel = cut.Instance.ViewModel;
 
         Assert.Collection(viewModel.Filters,
             f =>
@@ -177,7 +177,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         });
 
         // Assert
-        var viewModel = Services.GetRequiredService<StructuredLogsViewModel>();
+        var viewModel = cut.Instance.ViewModel;
 
         Assert.Collection(viewModel.Filters,
             f =>
@@ -269,6 +269,6 @@ public partial class StructuredLogsTests : DashboardTestContext
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<StructuredLogs>>(NullLogger<StructuredLogs>.Instance);
-        Services.AddSingleton<StructuredLogsViewModel>();
+        Services.AddTransient<StructuredLogsViewModel>();
     }
 }

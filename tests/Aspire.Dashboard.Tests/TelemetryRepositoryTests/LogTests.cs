@@ -36,7 +36,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -96,7 +96,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        repository.AsWriter().AddTraces(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -119,7 +119,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                 }
             }
         });
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -247,7 +247,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -306,7 +306,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -347,7 +347,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -409,7 +409,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -485,7 +485,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -537,7 +537,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -590,7 +590,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -665,7 +665,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act 1
         var addContext1 = new AddContext();
-        repository.AddLogs(addContext1, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext1, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -702,7 +702,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         var addContext2 = new AddContext();
-        repository.AddLogs(addContext2, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext2, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -750,7 +750,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -794,7 +794,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             task = Task.Run(() =>
             {
                 var addContext = new AddContext();
-                repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+                repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
                 {
                     new ResourceLogs
                     {
@@ -838,7 +838,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         }
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -936,7 +936,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Act
         var addContext = new AddContext();
         logger.LogInformation("Writing log 1");
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -958,7 +958,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         logger.LogInformation("Received log 1 callback");
 
         logger.LogInformation("Writing log 2");
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -991,7 +991,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1038,7 +1038,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     {
         var repository = CreateRepository();
         var expectedMessage = $"matches-{fragment}-literal";
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        repository.AsWriter().AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1078,7 +1078,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1125,7 +1125,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1224,7 +1224,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1312,7 +1312,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1353,7 +1353,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.ClearStructuredLogs();
+        repository.AsWriter().ClearStructuredLogs();
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1377,7 +1377,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1418,7 +1418,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.ClearStructuredLogs(new ResourceKey("resource1", "123"));
+        repository.AsWriter().ClearStructuredLogs(new ResourceKey("resource1", "123"));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1451,7 +1451,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1492,7 +1492,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.ClearStructuredLogs(new ResourceKey("resource1", null));
+        repository.AsWriter().ClearStructuredLogs(new ResourceKey("resource1", null));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1518,7 +1518,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1559,7 +1559,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1600,7 +1600,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1643,7 +1643,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1685,7 +1685,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1723,7 +1723,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     {
         var repository = CreateRepository();
 
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        repository.AsWriter().AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {

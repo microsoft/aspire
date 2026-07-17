@@ -176,7 +176,7 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     private static void AddResource(ITelemetryRepository repository, string name, string? instanceId = null)
     {
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        repository.AsWriter().AddTraces(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {

@@ -34,7 +34,9 @@ public partial class SpanDetails : IDisposable
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required IJSRuntime JS { get; init; }

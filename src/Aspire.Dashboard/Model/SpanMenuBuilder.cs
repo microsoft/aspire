@@ -4,7 +4,6 @@
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
@@ -27,8 +26,7 @@ public sealed class SpanMenuBuilder
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
     private readonly NavigationManager _navigationManager;
     private readonly DashboardDialogService _dialogService;
-    private readonly ITelemetryRepository _telemetryRepository;
-    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
+    private readonly DashboardDataSource _dataSource;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="SpanMenuBuilder"/> class.
@@ -37,14 +35,12 @@ public sealed class SpanMenuBuilder
         IStringLocalizer<ControlsStrings> controlsLoc,
         NavigationManager navigationManager,
         DashboardDialogService dialogService,
-        ITelemetryRepository telemetryRepository,
-        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+        DashboardDataSource dataSource)
     {
         _controlsLoc = controlsLoc;
         _navigationManager = navigationManager;
         _dialogService = dialogService;
-        _telemetryRepository = telemetryRepository;
-        _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
+        _dataSource = dataSource;
     }
 
     /// <summary>
@@ -99,7 +95,7 @@ public sealed class SpanMenuBuilder
             Icon = s_bracesIcon,
             OnClick = async () =>
             {
-                var result = ExportHelpers.GetSpanAsJson(span, _telemetryRepository, _outgoingPeerResolvers);
+                var result = ExportHelpers.GetSpanAsJson(span, _dataSource.TelemetryRepository);
                 await TextVisualizerDialog.OpenDialogAsync(new OpenTextVisualizerDialogOptions
                 {
                     DialogService = _dialogService,

@@ -158,6 +158,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
         context.Services.AddSingleton<InMemoryTelemetryRepository>();
         context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<InMemoryTelemetryRepository>());
+        context.Services.AddSingleton<ITelemetryRepositoryWriter>(services => services.GetRequiredService<InMemoryTelemetryRepository>());
         context.Services.AddSingleton<PauseManager>();
         context.Services.AddSingleton<IDialogService, DialogService>();
         context.Services.AddSingleton<ILocalStorage>(localStorage ?? new TestLocalStorage());
@@ -165,6 +166,13 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<IDashboardRunStore>(dashboardRunStore ?? new TestDashboardRunStore());
         context.Services.AddSingleton<IDashboardRunSelection, TestDashboardRunSelection>();
         context.Services.AddSingleton<IDashboardClient, TestDashboardClient>();
+        context.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<IDashboardClient>());
+        context.Services.AddSingleton<IRepositoryFactory, TestRepositoryFactory>();
+        context.Services.AddScoped(services => new DashboardDataSource(
+            services.GetRequiredService<IDashboardRunStore>(),
+            services.GetRequiredService<ITelemetryRepository>(),
+            services.GetRequiredService<IResourceRepository>(),
+            services.GetRequiredService<IRepositoryFactory>()));
         context.Services.AddSingleton<ShortcutManager>();
         context.Services.AddSingleton<LibraryConfiguration>();
         context.Services.AddSingleton<IKeyCodeService, KeyCodeService>();
@@ -214,6 +222,17 @@ internal static class FluentUISetupHelpers
         public void SelectRun(string? runId)
         {
             SelectedRunId = runId;
+        }
+    }
+
+    private sealed class TestRepositoryFactory(
+        ITelemetryRepository telemetryRepository,
+        IDashboardClient dashboardClient) : IRepositoryFactory
+    {
+        public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) => telemetryRepository;
+        public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) => dashboardClient;
+        public void Dispose()
+        {
         }
     }
 

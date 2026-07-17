@@ -60,7 +60,12 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required ILogger<Metrics> Logger { get; init; }
@@ -236,7 +241,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
 
     private Task ClearMetrics(ResourceKey? key)
     {
-        TelemetryRepository.ClearMetrics(key);
+        TelemetryRepositoryWriter.ClearMetrics(key);
         return Task.CompletedTask;
     }
 

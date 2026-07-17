@@ -12,18 +12,18 @@ namespace Aspire.Dashboard.Otlp;
 public sealed class OtlpMetricsService
 {
     private readonly ILogger<OtlpMetricsService> _logger;
-    private readonly ITelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepositoryWriter _telemetryRepositoryWriter;
 
-    public OtlpMetricsService(ILogger<OtlpMetricsService> logger, ITelemetryRepository telemetryRepository)
+    public OtlpMetricsService(ILogger<OtlpMetricsService> logger, ITelemetryRepositoryWriter telemetryRepositoryWriter)
     {
         _logger = logger;
-        _telemetryRepository = telemetryRepository;
+        _telemetryRepositoryWriter = telemetryRepositoryWriter;
     }
 
     public ExportMetricsServiceResponse Export(ExportMetricsServiceRequest request)
     {
         var addContext = new AddContext();
-        _telemetryRepository.AddMetrics(addContext, request.ResourceMetrics);
+        _telemetryRepositoryWriter.AddMetrics(addContext, request.ResourceMetrics);
 
         _logger.LogDebug("Processed metrics export. Success count: {SuccessCount}, failure count: {FailureCount}", addContext.SuccessCount, addContext.FailureCount);
 

@@ -67,6 +67,6 @@ public class TracesTests : DashboardTestContext
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<Traces>>(NullLogger<Traces>.Instance);
-        Services.AddSingleton<TracesViewModel>();
+        Services.AddTransient<TracesViewModel>();
     }
 }

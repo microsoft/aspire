@@ -307,31 +307,28 @@ public sealed class DashboardDataSourceTests : IDisposable
         }
 
         using var currentRunStore = CreateRunStore(options);
-        using var currentTelemetryRepository = CreateTelemetryRepository(currentRunStore.DatabasePath, options);
-        using var currentResourceRepository = CreateResourceRepository(currentRunStore.DatabasePath);
-        using var dataSource = CreateDataSource(
-            currentRunStore,
-            currentTelemetryRepository,
-            currentResourceRepository,
-            options);
-        using ITelemetryRepository selectedTelemetryRepository = new SelectedTelemetryRepository(dataSource);
-        Assert.Empty(selectedTelemetryRepository.GetResources());
+        var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
+        using var repositoryFactory = CreateRepositoryFactory(currentDatabase, options);
+        var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
+        var currentResourceRepository = repositoryFactory.CreateResourceRepository(currentDatabase);
+        using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
+        Assert.Empty(dataSource.TelemetryRepository.GetResources());
 
         dataSource.SelectRun(historicalRunId);
 
         Assert.True(dataSource.IsReadOnly);
         Assert.Equal(historicalRunId, dataSource.SelectedRun.RunId);
         Assert.Equal("api", Assert.Single(dataSource.ResourceRepository.GetResources()).Name);
-        Assert.Equal("TestService", Assert.Single(selectedTelemetryRepository.GetResources()).ResourceName);
-        Assert.Equal("Test Value!", Assert.Single(selectedTelemetryRepository.GetLogs(new GetLogsContext
+        Assert.Equal("TestService", Assert.Single(dataSource.TelemetryRepository.GetResources()).ResourceName);
+        Assert.Equal("Test Value!", Assert.Single(dataSource.TelemetryRepository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
         }).Items).Message);
-        Assert.Throws<InvalidOperationException>(() => dataSource.TelemetryRepository.ClearMetrics());
-        Assert.Throws<InvalidOperationException>(() => dataSource.TelemetryRepository.ClearSelectedSignals([]));
+        Assert.Empty(currentTelemetryRepository.GetResources());
+        Assert.Empty(currentResourceRepository.GetResources());
 
         await using var currentClient = new DashboardClient(
             NullLoggerFactory.Instance,
@@ -353,7 +350,7 @@ public sealed class DashboardDataSourceTests : IDisposable
 
         dataSource.SelectRun(runId: null);
 
-        Assert.Empty(selectedTelemetryRepository.GetResources());
+        Assert.Empty(dataSource.TelemetryRepository.GetResources());
         Assert.False(dataSource.IsReadOnly);
     }
 
@@ -362,13 +359,11 @@ public sealed class DashboardDataSourceTests : IDisposable
     {
         var options = CreateOptions();
         using var currentRunStore = CreateRunStore(options);
-        using var currentTelemetryRepository = CreateTelemetryRepository(currentRunStore.DatabasePath, options);
-        using var currentResourceRepository = CreateResourceRepository(currentRunStore.DatabasePath);
-        using var dataSource = CreateDataSource(
-            currentRunStore,
-            currentTelemetryRepository,
-            currentResourceRepository,
-            options);
+        var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
+        using var repositoryFactory = CreateRepositoryFactory(currentDatabase, options);
+        var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
+        var currentResourceRepository = repositoryFactory.CreateResourceRepository(currentDatabase);
+        using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
         dataSource.SelectRun("missing");
 
         Assert.False(dataSource.IsReadOnly);
@@ -413,20 +408,16 @@ public sealed class DashboardDataSourceTests : IDisposable
         return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance);
     }
 
-    private static DashboardDataSource CreateDataSource(
-        DashboardRunStore runStore,
-        SqliteTelemetryRepository telemetryRepository,
-        SqliteResourceRepository resourceRepository,
+    private static RepositoryFactory CreateRepositoryFactory(
+        DashboardSqliteDatabase currentDatabase,
         IOptions<DashboardOptions> options)
     {
-        return new DashboardDataSource(
-            runStore,
-            telemetryRepository,
-            resourceRepository,
+        return new RepositoryFactory(
+            currentDatabase,
             NullLoggerFactory.Instance,
             options,
             new PauseManager(),
-            [],
+            static () => [],
             new MockKnownPropertyLookup());
     }
 

@@ -27,7 +27,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -118,7 +118,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -234,7 +234,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -327,7 +327,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -410,7 +410,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     public void GetInstrumentLatestEndTime()
     {
         var repository = CreateRepository();
-        repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -464,7 +464,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -543,7 +543,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -661,7 +661,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -714,7 +714,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.ClearMetrics();
+        repository.AsWriter().ClearMetrics();
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -736,7 +736,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -789,7 +789,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.ClearMetrics(new ResourceKey("resource1", "456"));
+        repository.AsWriter().ClearMetrics(new ResourceKey("resource1", "456"));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -894,7 +894,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -947,7 +947,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.ClearMetrics(new ResourceKey("resource1", null));
+        repository.AsWriter().ClearMetrics(new ResourceKey("resource1", null));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1036,7 +1036,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         var addContext = new AddContext();
 
         // Act
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -1118,7 +1118,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             }
         };
 
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -1166,7 +1166,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -1229,7 +1229,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {

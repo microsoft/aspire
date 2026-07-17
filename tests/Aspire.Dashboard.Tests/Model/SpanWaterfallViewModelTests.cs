@@ -29,7 +29,7 @@ public sealed class SpanWaterfallViewModelTests
         trace.AddSpan(TelemetryTestHelpers.CreateOtlpSpan(app2, trace, scope, spanId: "1-1", parentSpanId: "1", startDate: new DateTime(2001, 1, 1, 1, 1, 3, DateTimeKind.Utc)));
 
         // Act
-        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], []));
+        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], []));
 
         // Assert
         Assert.Collection(vm,
@@ -60,7 +60,7 @@ public sealed class SpanWaterfallViewModelTests
         var log = new OtlpLogEntry(TelemetryTestHelpers.CreateLogRecord(traceId: trace.TraceId, spanId: "1"), app1View, scope, context);
 
         // Act
-        var vm = SpanWaterfallViewModel.Create(trace, [log], new SpanWaterfallViewModel.TraceDetailState([], [], []));
+        var vm = SpanWaterfallViewModel.Create(trace, [log], new SpanWaterfallViewModel.TraceDetailState([], []));
 
         // Assert
         Assert.Collection(vm,
@@ -76,7 +76,7 @@ public sealed class SpanWaterfallViewModelTests
     }
 
     [Fact]
-    public void Create_OutgoingPeers_BrowserLink()
+    public void Create_OutgoingPeers_UsesPeerAddressWhenPeerIsNotPersisted()
     {
         // Arrange
         var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
@@ -89,20 +89,44 @@ public sealed class SpanWaterfallViewModelTests
         trace.AddSpan(TelemetryTestHelpers.CreateOtlpSpan(app2, trace, scope, spanId: "2", parentSpanId: null, startDate: new DateTime(2001, 2, 1, 1, 1, 2, DateTimeKind.Utc), kind: OtlpSpanKind.Client));
 
         // Act
-        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([new BrowserLinkOutgoingPeerResolver()], [], []));
+        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], []));
 
         // Assert
         Assert.Collection(vm,
             e =>
             {
                 Assert.Equal("1", e.Span.SpanId);
-                Assert.Equal("Browser Link", e.UninstrumentedPeer);
+                Assert.Equal("localhost", e.UninstrumentedPeer);
             },
             e =>
             {
                 Assert.Equal("2", e.Span.SpanId);
                 Assert.Null(e.UninstrumentedPeer);
             });
+    }
+
+    [Fact]
+    public void Create_OutgoingPeers_UsesPersistedNameOnlyPeer()
+    {
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var app = new OtlpResource("app", "instance", uninstrumentedPeer: false, context);
+        var browserLink = new OtlpResource("Browser Link", instanceId: null, uninstrumentedPeer: true, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
+        var scope = TelemetryTestHelpers.CreateOtlpScope(context);
+        trace.AddSpan(TelemetryTestHelpers.CreateOtlpSpan(
+            app,
+            trace,
+            scope,
+            spanId: "1",
+            parentSpanId: null,
+            startDate: new DateTime(2001, 1, 1, 1, 1, 2, DateTimeKind.Utc),
+            kind: OtlpSpanKind.Client,
+            attributes: [KeyValuePair.Create(OtlpSpan.ServerAddressAttributeKey, "localhost")],
+            uninstrumentedPeer: browserLink));
+
+        var viewModel = Assert.Single(SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [app, browserLink])));
+
+        Assert.Equal("Browser Link", viewModel.UninstrumentedPeer);
     }
 
     [Theory]
@@ -142,7 +166,7 @@ public sealed class SpanWaterfallViewModelTests
         var vm = SpanWaterfallViewModel.Create(
             trace,
             [],
-            new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
+            new SpanWaterfallViewModel.TraceDetailState([], [])).First();
 
         // Act
         var result = vm.MatchesFilter(filter, typeFilter: null, structuredFilters: null, a => a.Resource.ResourceName, out _);
@@ -202,7 +226,7 @@ public sealed class SpanWaterfallViewModelTests
         var vm = SpanWaterfallViewModel.Create(
             trace,
             [],
-            new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
+            new SpanWaterfallViewModel.TraceDetailState([], [])).First();
 
         // Act 1
         var result1 = vm.MatchesFilter(string.Empty, typeFilter: spanType.Id?.Filter, structuredFilters: null, a => a.Resource.ResourceName, out _);
@@ -234,7 +258,7 @@ public sealed class SpanWaterfallViewModelTests
         trace.AddSpan(parentSpan);
         trace.AddSpan(childSpan);
 
-        var vms = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], []));
+        var vms = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], []));
         var parent = vms[0];
         var child = vms[1];
 
@@ -256,7 +280,7 @@ public sealed class SpanWaterfallViewModelTests
         trace.AddSpan(parentSpan);
         trace.AddSpan(childSpan);
 
-        var vms = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], []));
+        var vms = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], []));
         var parent = vms[0];
         var child = vms[1];
 
@@ -297,7 +321,7 @@ public sealed class SpanWaterfallViewModelTests
             statusCode: OtlpSpanStatusCode.Unset, statusMessage: null, kind: OtlpSpanKind.Client);
         trace.AddSpan(span);
 
-        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
+        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [])).First();
 
         var filters = new List<FieldTelemetryFilter>
         {
@@ -333,7 +357,7 @@ public sealed class SpanWaterfallViewModelTests
             statusCode: OtlpSpanStatusCode.Unset, statusMessage: null, kind: OtlpSpanKind.Client);
         trace.AddSpan(span);
 
-        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
+        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [])).First();
 
         // One filter matches, one doesn't — AND logic means the span shouldn't match.
         var filters = new List<FieldTelemetryFilter>
@@ -370,7 +394,7 @@ public sealed class SpanWaterfallViewModelTests
             statusCode: OtlpSpanStatusCode.Unset, statusMessage: null, kind: OtlpSpanKind.Client);
         trace.AddSpan(span);
 
-        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], [])).First();
+        var vm = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [])).First();
 
         // Filter would exclude the span, but it's disabled.
         var filters = new List<FieldTelemetryFilter>
@@ -409,7 +433,7 @@ public sealed class SpanWaterfallViewModelTests
         trace.AddSpan(parentSpan);
         trace.AddSpan(childSpan);
 
-        var vms = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], [], []));
+        var vms = SpanWaterfallViewModel.Create(trace, [], new SpanWaterfallViewModel.TraceDetailState([], []));
         var parent = vms[0];
         var child = vms[1];
 

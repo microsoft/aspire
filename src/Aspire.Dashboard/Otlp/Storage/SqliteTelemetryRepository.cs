@@ -15,7 +15,7 @@ namespace Aspire.Dashboard.Otlp.Storage;
 /// <summary>
 /// Persists telemetry to SQLite and exposes it through the dashboard telemetry model.
 /// </summary>
-public sealed partial class SqliteTelemetryRepository : ITelemetryRepository
+public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, ITelemetryRepositoryWriter
 {
     private readonly DashboardSqliteDatabase _database;
     private readonly OtlpContext _otlpContext;
@@ -23,6 +23,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository
     private readonly IReadOnlyList<IOutgoingPeerResolver> _outgoingPeerResolvers;
     private readonly List<IDisposable> _outgoingPeerSubscriptions = [];
     private readonly object _writeLock = new();
+    private int _disposed;
 
     private static string CreateContainsLikePattern(string value) => $"%{EscapeLikePattern(value)}%";
 
@@ -71,6 +72,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository
                 _outgoingPeerSubscriptions.Add(resolver.OnPeerChanges(() =>
                 {
                     RecalculateUninstrumentedPeers();
+                    NotifyPeersChanged();
                     return Task.CompletedTask;
                 }));
             }
@@ -144,23 +146,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository
     public bool HasUpdatedTrace(OtlpTrace trace) => HasUpdatedTraceInDatabase(trace);
     public OtlpTrace? GetTrace(string traceId) => GetTraceFromDatabase(traceId);
     public OtlpSpan? GetSpan(string traceId, string spanId) => GetSpanFromDatabase(traceId, spanId);
-    public OtlpResource? GetPeerResource(OtlpSpan span)
-    {
-        if (span.UninstrumentedPeer is not null)
-        {
-            return span.UninstrumentedPeer;
-        }
-
-        foreach (var resolver in _outgoingPeerResolvers)
-        {
-            if (resolver.TryResolvePeer(span.Attributes, out _, out var matchedResource) && matchedResource is not null)
-            {
-                return GetResource(ResourceKey.Create(matchedResource.DisplayName, matchedResource.Name));
-            }
-        }
-
-        return null;
-    }
+    public OtlpResource? GetPeerResource(OtlpSpan span) => span.UninstrumentedPeer;
     public List<OtlpInstrumentSummary> GetInstrumentsSummaries(ResourceKey key) => GetInstrumentsSummariesFromDatabase(key);
     public OtlpInstrumentData? GetInstrument(GetInstrumentRequest request) => GetInstrumentFromDatabase(request);
     public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName) =>
@@ -210,6 +196,11 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository
 
     public void Dispose()
     {
+        if (Interlocked.Exchange(ref _disposed, 1) != 0)
+        {
+            return;
+        }
+
         foreach (var subscription in _outgoingPeerSubscriptions)
         {
             subscription.Dispose();

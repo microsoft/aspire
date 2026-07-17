@@ -58,7 +58,12 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public StructuredLogsPageViewModel PageViewModel { get; set; } = null!;
 
     [Inject]
-    public required ITelemetryRepository TelemetryRepository { get; init; }
+    private DashboardDataSource DataSource { get; set; } = null!;
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required StructuredLogsViewModel ViewModel { get; init; }
@@ -559,7 +564,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private Task ClearStructureLogs(ResourceKey? key)
     {
-        TelemetryRepository.ClearStructuredLogs(key);
+        TelemetryRepositoryWriter.ClearStructuredLogs(key);
         return Task.CompletedTask;
     }
 

@@ -17,7 +17,7 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class TelemetryImportService
 {
-    private readonly ITelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepositoryWriter _telemetryRepositoryWriter;
     private readonly IOptionsMonitor<DashboardOptions> _options;
     private readonly ILogger<TelemetryImportService> _logger;
 
@@ -29,12 +29,12 @@ public sealed class TelemetryImportService
     /// <summary>
     /// Initializes a new instance of the <see cref="TelemetryImportService"/> class.
     /// </summary>
-    /// <param name="telemetryRepository">The telemetry repository.</param>
+    /// <param name="telemetryRepositoryWriter">The telemetry repository writer.</param>
     /// <param name="options">The dashboard options.</param>
     /// <param name="logger">The logger.</param>
-    public TelemetryImportService(ITelemetryRepository telemetryRepository, IOptionsMonitor<DashboardOptions> options, ILogger<TelemetryImportService> logger)
+    public TelemetryImportService(ITelemetryRepositoryWriter telemetryRepositoryWriter, IOptionsMonitor<DashboardOptions> options, ILogger<TelemetryImportService> logger)
     {
-        _telemetryRepository = telemetryRepository;
+        _telemetryRepositoryWriter = telemetryRepositoryWriter;
         _options = options;
         _logger = logger;
     }
@@ -165,7 +165,7 @@ public sealed class TelemetryImportService
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        _telemetryRepository.AddLogs(addContext, protobufRequest.ResourceLogs);
+        _telemetryRepositoryWriter.AddLogs(addContext, protobufRequest.ResourceLogs);
 
         _logger.LogDebug("Imported logs: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }
@@ -176,7 +176,7 @@ public sealed class TelemetryImportService
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        _telemetryRepository.AddTraces(addContext, protobufRequest.ResourceSpans);
+        _telemetryRepositoryWriter.AddTraces(addContext, protobufRequest.ResourceSpans);
 
         _logger.LogDebug("Imported traces: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }
@@ -187,7 +187,7 @@ public sealed class TelemetryImportService
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        _telemetryRepository.AddMetrics(addContext, protobufRequest.ResourceMetrics);
+        _telemetryRepositoryWriter.AddMetrics(addContext, protobufRequest.ResourceMetrics);
 
         _logger.LogDebug("Imported metrics: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }

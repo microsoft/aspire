@@ -249,8 +249,8 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Services.AddSingleton<IDashboardClient>(dashboardClient);
         Services.AddSingleton<IconResolver>();
         Services.AddSingleton<ConsoleLogsManager>();
-        Services.AddSingleton<ConsoleLogsFetcher>();
-        Services.AddSingleton<TelemetryExportService>();
+        Services.AddScoped<ConsoleLogsFetcher>();
+        Services.AddScoped<TelemetryExportService>();
         Services.AddSingleton<TelemetryImportService>();
 
         FluentUISetupHelpers.SetupFluentUIComponents(this);

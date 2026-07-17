@@ -187,21 +187,14 @@ public sealed partial class SqliteTelemetryRepository
             var hasPeerAddress = OtlpHelpers.GetPeerAddress(span.Attributes) is not null;
             if (hasPeerAddress && span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer && !span.GetChildSpans().Any())
             {
-                foreach (var resolver in _outgoingPeerResolvers)
+                if (TryResolvePeerResourceKey(span.Attributes, out var peerKey))
                 {
-                    if (!resolver.TryResolvePeer(span.Attributes, out _, out var matchedResource) || matchedResource is null)
-                    {
-                        continue;
-                    }
-
-                    var peerKey = ResourceKey.Create(matchedResource.DisplayName, matchedResource.Name);
                     peerResourceId = GetOrAddTelemetryResource(connection, transaction, peerKey);
                     connection.Execute(
                         "UPDATE telemetry_resources SET uninstrumented_peer = 1 WHERE resource_id = @ResourceId;",
                         new { ResourceId = peerResourceId },
                         transaction);
                     peer = new OtlpResource(peerKey.Name, peerKey.InstanceId, uninstrumentedPeer: true, _otlpContext);
-                    break;
                 }
             }
 
@@ -1244,14 +1237,8 @@ public sealed partial class SqliteTelemetryRepository
                     (OtlpSpanKind)span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer &&
                     !parents.Contains((span.TraceId, span.SpanId)))
                 {
-                    foreach (var resolver in _outgoingPeerResolvers)
+                    if (TryResolvePeerResourceKey(spanAttributes, out var peerKey))
                     {
-                        if (!resolver.TryResolvePeer(spanAttributes, out _, out var matchedResource) || matchedResource is null)
-                        {
-                            continue;
-                        }
-
-                        var peerKey = ResourceKey.Create(matchedResource.DisplayName, matchedResource.Name);
                         if (!peerResourceIds.TryGetValue(peerKey, out var resourceId))
                         {
                             resourceId = GetOrAddTelemetryResource(connection, transaction, peerKey);
@@ -1262,7 +1249,6 @@ public sealed partial class SqliteTelemetryRepository
                                 transaction);
                         }
                         peerResourceId = resourceId;
-                        break;
                     }
                 }
 
@@ -1291,6 +1277,32 @@ public sealed partial class SqliteTelemetryRepository
             }), transaction);
             transaction.Commit();
         }
+    }
+
+    private bool TryResolvePeerResourceKey(KeyValuePair<string, string>[] attributes, out ResourceKey peerKey)
+    {
+        foreach (var resolver in _outgoingPeerResolvers)
+        {
+            if (!resolver.TryResolvePeer(attributes, out var name, out var matchedResource))
+            {
+                continue;
+            }
+
+            if (matchedResource is not null)
+            {
+                peerKey = ResourceKey.Create(matchedResource.DisplayName, matchedResource.Name);
+                return true;
+            }
+
+            if (!string.IsNullOrEmpty(name))
+            {
+                peerKey = new ResourceKey(name, InstanceId: null);
+                return true;
+            }
+        }
+
+        peerKey = default;
+        return false;
     }
 
     private void ClearTracesFromDatabase(ResourceKey? resourceKey)

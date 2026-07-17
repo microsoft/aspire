@@ -8,7 +8,7 @@ namespace Aspire.Dashboard.Model;
 
 public class TracesViewModel
 {
-    private readonly ITelemetryRepository _telemetryRepository;
+    private readonly DashboardDataSource _dataSource;
     private readonly List<FieldTelemetryFilter> _filters = new();
 
     private PagedResult<TraceSummary>? _traces;
@@ -18,9 +18,9 @@ public class TracesViewModel
     private int _count;
     private SpanType? _spanType;
 
-    public TracesViewModel(ITelemetryRepository telemetryRepository)
+    public TracesViewModel(DashboardDataSource dataSource)
     {
-        _telemetryRepository = telemetryRepository;
+        _dataSource = dataSource;
     }
 
     public ResourceKey? ResourceKey { get => _resourceKey; set => SetValue(ref _resourceKey, value); }
@@ -80,7 +80,7 @@ public class TracesViewModel
         {
             var filters = GetFilters();
 
-            var result = _telemetryRepository.GetTraceSummaries(new GetTracesRequest
+            var result = _dataSource.TelemetryRepository.GetTraceSummaries(new GetTracesRequest
             {
                 ResourceKeys = ResourceKey is { } key ? [key] : [],
                 StartIndex = StartIndex,
