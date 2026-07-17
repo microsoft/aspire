@@ -13,7 +13,7 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuTests : DashboardTestContext
 {
     [Fact]
-    public void ClickItem_RestoreFocusOnItemClickTrue_FocusesAnchor()
+    public void ClickItem_ButtonAnchoredMenu_FocusesAnchorAfterCallback()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -51,7 +51,6 @@ public class AspireMenuTests : DashboardTestContext
             builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), anchor);
             builder.AddAttribute(3, nameof(AspireMenuButton.Title), "View options");
             builder.AddAttribute(4, nameof(AspireMenuButton.Items), items);
-            builder.AddAttribute(5, nameof(AspireMenuButton.RestoreFocusOnItemClick), true);
             builder.CloseComponent();
         });
 
@@ -68,7 +67,7 @@ public class AspireMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public void ClickItem_RestoreFocusOnItemClickFalse_DoesNotFocusAnchor()
+    public void ClickItem_ButtonAnchoredMenu_FocusesAnchorByDefault()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -78,6 +77,7 @@ public class AspireMenuTests : DashboardTestContext
 
         var anchor = "view-options-button";
         var itemClicked = false;
+        var focusElementInvocationHandler = JSInterop.SetupVoid("focusElement", anchor);
         var items = new List<MenuButtonItem>
         {
             new()
@@ -104,12 +104,10 @@ public class AspireMenuTests : DashboardTestContext
 
         cut.Find($"#{anchor}").Click();
         cut.WaitForElement("fluent-menu-item").Click();
-
         Assert.True(itemClicked);
-        var focusElementInvocations = JSInterop.Invocations
-            .Where(invocation => invocation.Identifier == "focusElement")
-            .ToArray();
-        Assert.Empty(focusElementInvocations);
+        var invocation = Assert.Single(focusElementInvocationHandler.Invocations);
+        Assert.Collection(invocation.Arguments,
+            argument => Assert.Equal(anchor, Assert.IsType<string>(argument)));
     }
 
     [Fact]
@@ -183,6 +181,36 @@ public class AspireMenuTests : DashboardTestContext
         await Task.Yield();
 
         Assert.DoesNotContain(JSInterop.Invocations, invocation => invocation.Identifier == "initializeAspirePopupKeyboardNavigation");
+    }
+
+    [Fact]
+    public void ClickItem_ContextMenu_DoesNotFocusPositioningAnchor()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var items = new List<MenuButtonItem>
+        {
+            new()
+            {
+                Text = "Show hidden resources",
+                OnClick = () => Task.CompletedTask
+            }
+        };
+
+        var cut = RenderComponent<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "resources-summary-layout-id");
+            builder.Add(p => p.Anchored, false);
+            builder.Add(p => p.Open, true);
+            builder.Add(p => p.Items, items);
+        });
+
+        cut.Find("fluent-menu-item").Click();
+
+        Assert.DoesNotContain(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
     }
 
     [Fact]

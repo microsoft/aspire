@@ -616,8 +616,8 @@ public partial class ResourcesTests : DashboardTestContext
             builder.AddCascadingValue(viewport);
         });
 
-        var menuButton = cut.FindComponent<AspireMenuButton>();
-        Assert.True(menuButton.Instance.RestoreFocusOnItemClick);
+        var menu = cut.FindComponent<AspireMenu>();
+        Assert.True(menu.Instance.RestoreFocusOnItemClick);
     }
 
     [Fact]

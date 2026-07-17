@@ -48,10 +48,17 @@ public sealed class MockDashboardClient : IDashboardClient
 #pragma warning restore CS0067
     public Task ReconnectAsync() => Task.CompletedTask;
     public ValueTask DisposeAsync() => ValueTask.CompletedTask;
-    public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken) => throw new NotImplementedException();
+    public Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken)
+    {
+        return Task.FromResult(new ResourceCommandResponseViewModel
+        {
+            Kind = Aspire.Dashboard.Model.ResourceCommandResponseKind.Succeeded
+        });
+    }
+
     public Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken) => throw new NotImplementedException();
-    public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
-    public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
+    public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => EmptyConsoleLogs();
+    public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken) => EmptyConsoleLogs();
 
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
     {
@@ -67,6 +74,12 @@ public sealed class MockDashboardClient : IDashboardClient
         yield return [];
     }
 
+    private static async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> EmptyConsoleLogs()
+    {
+        await Task.CompletedTask;
+        yield break;
+    }
+
     public IAsyncEnumerable<WatchInteractionsResponseUpdate> SubscribeInteractionsAsync(CancellationToken cancellationToken)
     {
         throw new NotImplementedException();
@@ -77,7 +90,7 @@ public sealed class MockDashboardClient : IDashboardClient
         throw new NotImplementedException();
     }
 
-    public ResourceViewModel? GetResource(string resourceName) => null;
+    public ResourceViewModel? GetResource(string resourceName) => (_resources ?? [TestResource1]).SingleOrDefault(r => r.Name == resourceName);
 
     public IReadOnlyList<ResourceViewModel> GetResources() => _resources ?? [];
 }
