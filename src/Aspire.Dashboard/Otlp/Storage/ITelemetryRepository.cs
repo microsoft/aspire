@@ -56,6 +56,7 @@ public interface ITelemetryRepository : IDisposable
     OtlpResource? GetPeerResource(OtlpSpan span);
     List<OtlpInstrumentSummary> GetInstrumentsSummaries(ResourceKey key);
     OtlpInstrumentData? GetInstrument(GetInstrumentRequest request);
+    DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName);
 
     IAsyncEnumerable<OtlpSpan> WatchSpansAsync(WatchSpansRequest request, CancellationToken cancellationToken);
     IAsyncEnumerable<OtlpLogEntry> WatchLogsAsync(WatchLogsRequest request, CancellationToken cancellationToken);
@@ -64,15 +65,4 @@ public interface ITelemetryRepository : IDisposable
     void ClearTraces(ResourceKey? resourceKey = null);
     void ClearStructuredLogs(ResourceKey? resourceKey = null);
     void ClearMetrics(ResourceKey? resourceKey = null);
-}
-
-internal interface IMetricTelemetryRepository
-{
-    DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName);
-}
-
-internal static class MetricTelemetryRepositoryExtensions
-{
-    public static DateTime? GetInstrumentLatestEndTime(this ITelemetryRepository repository, ResourceKey resourceKey, string meterName, string instrumentName) =>
-        ((IMetricTelemetryRepository)repository).GetInstrumentLatestEndTime(resourceKey, meterName, instrumentName);
 }
