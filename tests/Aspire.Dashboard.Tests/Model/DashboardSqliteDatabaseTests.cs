@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Diagnostics;
+using Aspire.Dashboard.Otlp.Model;
 using Aspire.Tests;
 using Dapper;
 using Microsoft.Data.Sqlite;
@@ -31,6 +32,7 @@ public sealed class DashboardSqliteDatabaseTests : IDisposable
         Assert.Equal("SELECT sqlite", activity.OperationName);
         Assert.Equal(ActivityKind.Client, activity.Kind);
         Assert.Equal("sqlite", activity.GetTagItem("db.system.name"));
+        Assert.Equal("dashboard.db", activity.GetTagItem(OtlpSpan.PeerServiceAttributeKey));
         Assert.Equal("dashboard.db", activity.GetTagItem("db.namespace"));
         Assert.Equal("SELECT", activity.GetTagItem("db.operation.name"));
         Assert.Equal(ActivityStatusCode.Unset, activity.Status);

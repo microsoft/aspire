@@ -84,3 +84,5 @@ CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_dimension_order
     ON telemetry_metric_points(dimension_id, point_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_time
     ON telemetry_metric_points(dimension_id, start_time_ticks, end_time_ticks);
+CREATE UNIQUE INDEX IF NOT EXISTS ix_telemetry_metric_exemplars_identity
+    ON telemetry_metric_exemplars(point_id, start_time_ticks, exemplar_value);

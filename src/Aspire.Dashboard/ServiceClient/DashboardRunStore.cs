@@ -19,6 +19,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 {
     private const string TemporaryDirectoryPrefix = "aspire-dashboard-";
 
+    internal const string DatabaseFileName = "dashboard.db";
     internal const int MaxApplicationDirectoryNameLength = 80;
     internal const int MaxRuns = 10;
     internal const int SchemaVersion = DashboardSqliteDatabase.SchemaVersion;
@@ -57,7 +58,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 RunDirectory = _temporaryDirectory;
                 _runLock = OpenRunLock(RunDirectory);
                 DeleteAbandonedTemporaryDirectories(deleteRunDirectory);
-                DatabasePath = Path.Combine(RunDirectory, "dashboard.db");
+                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 break;
             case DashboardPersistenceMode.Runs:
                 var applicationDirectory = GetApplicationDirectory(options.Value.Data.Directory, applicationName);
@@ -65,13 +66,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 RunDirectory = Path.Combine(_runsDirectory, runId);
                 Directory.CreateDirectory(RunDirectory);
                 _runLock = OpenRunLock(RunDirectory);
-                DatabasePath = Path.Combine(RunDirectory, "dashboard.db");
+                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 _metadataPath = Path.Combine(RunDirectory, "run.json");
                 break;
             case DashboardPersistenceMode.Append:
                 RunDirectory = GetApplicationDirectory(options.Value.Data.Directory, applicationName);
                 Directory.CreateDirectory(RunDirectory);
-                DatabasePath = Path.Combine(RunDirectory, "dashboard.db");
+                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 if (File.Exists(DatabasePath) && !DashboardSqliteDatabase.IsCompatible(DatabasePath))
                 {
                     DashboardSqliteDatabase.ClearPools();
@@ -104,7 +105,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         {
             if (!IsTemporaryDatabaseDirectory(directory) ||
                 string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase) ||
-                !File.Exists(Path.Combine(directory, "dashboard.db")))
+                !File.Exists(Path.Combine(directory, DatabaseFileName)))
             {
                 continue;
             }

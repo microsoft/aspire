@@ -3,7 +3,6 @@
 
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
-using System.Collections.Concurrent;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Microsoft.FluentUI.AspNetCore.Components;
@@ -20,7 +19,6 @@ public sealed partial class SqliteTelemetryRepository
     private readonly List<Subscription> _metricsSubscriptions = [];
     private readonly List<Subscription> _tracesSubscriptions = [];
     private readonly Dictionary<ResourceKey, int> _resourceUnviewedErrorLogs = [];
-    private readonly ConcurrentDictionary<ResourceKey, OtlpResource> _resourceCache = [];
     private TimeSpan _subscriptionMinExecuteInterval = TimeSpan.FromMilliseconds(100);
 
     private readonly object _watchersLock = new();

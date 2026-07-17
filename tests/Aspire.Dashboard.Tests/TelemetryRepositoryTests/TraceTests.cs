@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Tests;
 using Aspire.Tests.Shared.DashboardModel;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
@@ -2322,9 +2325,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestPeer", s.UninstrumentedPeer.ResourceName);
             });
 
-            var serviceNames = repository.GetTraceFieldValues(KnownResourceFields.ServiceNameField);
-            Assert.Equal(2, serviceNames["TestService"]);
-            Assert.Equal(1, serviceNames["TestPeer"]);
+        var serviceNames = repository.GetTraceFieldValues(KnownResourceFields.ServiceNameField);
+        Assert.Equal(2, serviceNames["TestService"]);
+        Assert.Equal(1, serviceNames["TestPeer"]);
     }
 
     [Fact]
@@ -3675,4 +3678,89 @@ public sealed class InMemoryTraceTests : TraceTests
 public sealed class SqliteTraceTests : TraceTests
 {
     protected override bool UseSqlite => true;
+
+    [Fact]
+    public void AddTraces_BatchesSpansAndDetailsAcrossResources()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        repository.AsWriter().AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            CreateResourceSpans("app-one", "trace-one", "warm-one-span"),
+            CreateResourceSpans("app-two", "trace-two", "warm-two-span")
+        });
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("trace ingestion test").Start();
+
+        var context = new AddContext();
+        repository.AsWriter().AddTraces(context, new RepeatedField<ResourceSpans>
+        {
+            CreateResourceSpans("app-one", "trace-one", "span-one"),
+            CreateResourceSpans("app-two", "trace-two", "span-two")
+        });
+
+        var queries = activities
+            .Where(activity => activity.ParentSpanId == parent.SpanId)
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
+            .ToList();
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_spans", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_attributes", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_events", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_event_attributes", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_links", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_link_attributes", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("WITH peer_updates", StringComparison.Ordinal));
+        Assert.Single(queries, query =>
+            query.StartsWith("SELECT", StringComparison.Ordinal) &&
+            query.Contains("s.trace_id AS TraceId", StringComparison.Ordinal) &&
+            query.Contains("FROM telemetry_span_attributes", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_span_events", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_span_links", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.StartsWith("UPDATE telemetry_resources SET has_traces", StringComparison.Ordinal));
+        Assert.Equal(2, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+
+        static ResourceSpans CreateResourceSpans(string resourceName, string traceId, string spanId)
+        {
+            var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+            return new ResourceSpans
+            {
+                Resource = CreateResource(name: resourceName),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: traceId,
+                                spanId: spanId,
+                                startTime: testTime,
+                                endTime: testTime.AddMinutes(1),
+                                attributes: [KeyValuePair.Create("span-key", "span-value")],
+                                events:
+                                [
+                                    new Span.Types.Event
+                                    {
+                                        Name = "event",
+                                        TimeUnixNano = 1,
+                                        Attributes = { new KeyValue { Key = "event-key", Value = new AnyValue { StringValue = "event-value" } } }
+                                    }
+                                ],
+                                links:
+                                [
+                                    new Span.Types.Link
+                                    {
+                                        TraceId = ByteString.CopyFromUtf8("target-trace"),
+                                        SpanId = ByteString.CopyFromUtf8("target-span"),
+                                        Attributes = { new KeyValue { Key = "link-key", Value = new AnyValue { StringValue = "link-value" } } }
+                                    }
+                                ])
+                        }
+                    }
+                }
+            };
+        }
+    }
 }

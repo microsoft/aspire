@@ -6,6 +6,9 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Tests;
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using Microsoft.Data.Sqlite;
@@ -22,6 +25,102 @@ namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 public sealed class SqliteTelemetryPersistenceTests : IDisposable
 {
     private readonly string _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-telemetry-persistence-tests-").FullName;
+
+    [Fact]
+    public void Cache_UsesCanonicalResourceViewAndScopeAcrossSignals()
+    {
+        var databasePath = Path.Combine(_temporaryDirectory, "canonical-cache.db");
+        var startTime = new DateTime(2025, 4, 5, 6, 7, 8, DateTimeKind.Utc);
+        var resource = CreateResource(attributes: [KeyValuePair.Create("resource-key", "resource-value")]);
+        var scope = CreateScope(name: "SharedScope", attributes: [KeyValuePair.Create("scope-key", "scope-value")]);
+        using var repository = CreateRepository(databasePath);
+
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = resource,
+                ScopeLogs = { new ScopeLogs { Scope = scope, LogRecords = { CreateLogRecord() } } }
+            }
+        });
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = resource,
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = scope,
+                        Spans = { CreateSpan("cache-trace", "cache-span", startTime, startTime.AddSeconds(1)) }
+                    }
+                }
+            }
+        });
+        repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = resource,
+                ScopeMetrics = { new ScopeMetrics { Scope = scope, Metrics = { CreateSumMetric("requests", startTime) } } }
+            }
+        });
+
+        var cachedResource = Assert.Single(repository.GetResources());
+        var log = Assert.Single(repository.GetLogs(CreateLogsContext()).Items);
+        var span = Assert.Single(Assert.Single(repository.GetTraces(GetTracesRequest.ForResourceKey(cachedResource.ResourceKey)).PagedResult.Items).Spans);
+        var instrument = Assert.Single(repository.GetInstrumentsSummaries(cachedResource.ResourceKey));
+
+        Assert.Same(cachedResource, log.ResourceView.Resource);
+        Assert.Same(cachedResource, span.Source.Resource);
+        Assert.Same(log.ResourceView, span.Source);
+        Assert.Same(log.Scope, span.Scope);
+        Assert.Same(log.Scope, instrument.Parent);
+    }
+
+    [Fact]
+    public void Cache_HydratesPersistedMetadataOnce()
+    {
+        var databasePath = Path.Combine(_temporaryDirectory, "lazy-cache.db");
+        var startTime = new DateTime(2025, 4, 5, 6, 7, 8, DateTimeKind.Utc);
+        using (var repository = CreateRepository(databasePath))
+        {
+            repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+            {
+                new ResourceLogs
+                {
+                    Resource = CreateResource(attributes: [KeyValuePair.Create("resource-key", "resource-value")]),
+                    ScopeLogs = { new ScopeLogs { Scope = CreateScope("TestScope"), LogRecords = { CreateLogRecord() } } }
+                }
+            });
+            repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+            {
+                new ResourceMetrics
+                {
+                    Resource = CreateResource(),
+                    ScopeMetrics = { new ScopeMetrics { Scope = CreateScope("TestScope"), Metrics = { CreateSumMetric("requests", startTime) } } }
+                }
+            });
+        }
+
+        using var historicalRepository = CreateRepository(databasePath, readOnly: true);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(historicalRepository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("cache hydration test").Start();
+        var firstResource = Assert.Single(historicalRepository.GetResources());
+        Assert.NotEmpty(activities);
+        activities.Clear();
+
+        var secondResource = Assert.Single(historicalRepository.GetResources());
+        var summary = Assert.Single(historicalRepository.GetInstrumentsSummaries(firstResource.ResourceKey));
+        var view = Assert.Single(firstResource.GetViews());
+
+        Assert.Same(firstResource, secondResource);
+        Assert.Same(firstResource, view.Resource);
+        Assert.Equal("requests", summary.Name);
+        Assert.Empty(activities);
+    }
 
     [Fact]
     public void Logs_ReopenFromNormalizedRowsWithStableIds()

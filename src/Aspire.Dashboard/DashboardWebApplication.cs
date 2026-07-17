@@ -304,6 +304,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         {
             builder.Services.AddOpenTelemetry()
                 .WithTracing(tracing => tracing
+                    .AddAspNetCoreInstrumentation()
                     .AddSource(TracingSqliteConnection.ActivitySourceName)
                     .AddOtlpExporter());
         }
@@ -348,6 +349,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddTransient<TracesViewModel>();
         builder.Services.AddSingleton<IOutgoingPeerResolver>(services =>
             new ResourceOutgoingPeerResolver(services.GetRequiredService<DashboardClient>()));
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, DashboardSqliteOutgoingPeerResolver>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, BrowserLinkOutgoingPeerResolver>());
 
         builder.Services.AddFluentUIComponents();
