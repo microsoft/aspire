@@ -1,0 +1,17 @@
+{
+  "id": "servicebus-azureeventsource-collection-modified",
+  "type": "flaky-test",
+  "title": "Flaky: AspireServiceBusExtensionsTests.NamespaceWorksInConnectionStrings fails with Collection was modified in AzureEventSourceListener",
+  "test_name": "Aspire.Azure.Messaging.ServiceBus.Tests.AspireServiceBusExtensionsTests.NamespaceWorksInConnectionStrings(useKeyed: False)",
+  "error_pattern": "System.InvalidOperationException : Collection was modified; enumeration operation may not execute.\n   at System.Collections.Generic.List`1.Enumerator.MoveNext()\n   at Azure.Core.Diagnostics.AzureEventSourceListener..ctor(Action`1 log, EventLevel level)\n   at Microsoft.Extensions.Azure.AzureEventSourceLogForwarder.Start()\n   at Microsoft.Extensions.Azure.AzureClientFactory`2.CreateClient(String name)",
+  "occurrences": [
+    {
+      "run_id": 29602181228,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29602181228",
+      "job": "Tests / Azure.Messaging.ServiceBus / Azure.Messaging.ServiceBus (windows-latest)",
+      "pr_number": 15857,
+      "observed_at": "2026-07-17T18:57:00Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18815"
+}

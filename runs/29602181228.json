@@ -1,0 +1,38 @@
+{
+  "run_id": 29602181228,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29602181228",
+  "analyzed_at": "2026-07-17T18:57:00Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 15857,
+    "title": "Write Vite HTTPS config wrapper to node_modules/.aspire instead of node_modules/.bin",
+    "author": "danegsta",
+    "state": "closed",
+    "head_branch": "danegsta/viteHttps",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/15857"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Azure.Messaging.ServiceBus / Azure.Messaging.ServiceBus (windows-latest)",
+      "id": 87957102778,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29602181228/job/87957102778",
+      "classification": "flaky-test",
+      "reason": "The failing test is in Azure.Messaging.ServiceBus which is unrelated to the PR changes (JavaScript/Vite hosting). The error is a thread-safety race condition in Azure SDK's AzureEventSourceListener during DI client initialization.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Azure.Messaging.ServiceBus.Tests.AspireServiceBusExtensionsTests.NamespaceWorksInConnectionStrings(useKeyed: False)",
+      "job": "Tests / Azure.Messaging.ServiceBus / Azure.Messaging.ServiceBus (windows-latest)",
+      "error": "System.InvalidOperationException : Collection was modified; enumeration operation may not execute.",
+      "stack_trace": "at System.Collections.Generic.List`1.Enumerator.MoveNext()\n   at Azure.Core.Diagnostics.AzureEventSourceListener..ctor(Action`1 log, EventLevel level)\n   at Microsoft.Extensions.Azure.AzureEventSourceLogForwarder.Start()\n   at Microsoft.Extensions.Azure.AzureClientFactory`2.CreateClient(String name)",
+      "classification": "flaky",
+      "reason": "The failure is a thread-safety race condition in Azure SDK's AzureEventSourceListener (a List being modified during enumeration). This is unrelated to the PR which only modifies JavaScript/Vite hosting code. Only net10.0 failed while net8.0 and net9.0 passed, indicating intermittent timing issue."
+    }
+  ],
+  "causes": ["servicebus-azureeventsource-collection-modified"]
+}
