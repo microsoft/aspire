@@ -69,6 +69,22 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         }
     }
 
+    public bool HaveConsoleLogsBeenLoaded(string resourceName)
+    {
+        lock (_lock)
+        {
+            ThrowIfDisposed();
+            using var connection = _database.OpenConnection();
+            return connection.QuerySingle<bool>("""
+                SELECT COALESCE((
+                    SELECT console_logs_loaded
+                    FROM dashboard_resources
+                    WHERE resource_name = @ResourceName
+                ), 0);
+                """, new { ResourceName = resourceName });
+        }
+    }
+
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -184,13 +200,18 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             ThrowIfDisposed();
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
+            var resourcesWithLoadedConsoleLogs = connection.Query<string>("""
+                SELECT resource_name
+                FROM dashboard_resources
+                WHERE console_logs_loaded = 1;
+                """, transaction: transaction).ToHashSet(StringComparers.ResourceName);
             connection.Execute("DELETE FROM dashboard_resources;", transaction: transaction);
             _resources.Clear();
 
             foreach (var resource in resources)
             {
                 var viewModel = CreateViewModel(resource);
-                SaveResource(connection, transaction, resource, viewModel.ReplicaIndex);
+                SaveResource(connection, transaction, resource, viewModel.ReplicaIndex, resourcesWithLoadedConsoleLogs.Contains(resource.Name));
                 _resources[resource.Name] = viewModel;
                 changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, viewModel));
             }
@@ -235,6 +256,21 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         PublishResourceChanges(viewModelChanges);
     }
 
+    void IResourceRepositoryWriter.MarkConsoleLogsLoaded(string resourceName)
+    {
+        EnsureWritable();
+        lock (_lock)
+        {
+            ThrowIfDisposed();
+            using var connection = _database.OpenConnection();
+            connection.Execute("""
+                UPDATE dashboard_resources
+                SET console_logs_loaded = 1
+                WHERE resource_name = @ResourceName;
+                """, new { ResourceName = resourceName });
+        }
+    }
+
     void IResourceRepositoryWriter.AddConsoleLogs(string resourceName, IReadOnlyList<ConsoleLogLine> logLines)
     {
         EnsureWritable();
@@ -250,6 +286,11 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             ThrowIfDisposed();
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
+            connection.Execute("""
+                UPDATE dashboard_resources
+                SET console_logs_loaded = 1
+                WHERE resource_name = @ResourceName;
+                """, new { ResourceName = resourceName }, transaction);
             if (!_consoleLogIds.TryGetValue(resourceName, out var resourceLogIds))
             {
                 resourceLogIds = [];

@@ -16,7 +16,7 @@
             {
                 <div class="console-empty-message" role="status" aria-live="polite">
                     <FluentIcon Value="@(new Icons.Regular.Size24.SlideText())" aria-hidden="true" />
-                    <span>@Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsFound)]</span>
+                    <span>@(NoLogsMessage ?? Loc[nameof(ConsoleLogs.ConsoleLogsNoLogsFound)])</span>
                 </div>
             }
             else if (!string.IsNullOrWhiteSpace(FilterText) && logEntries.EntriesCount > 0 && GetVisibleEntries().Count == 0)

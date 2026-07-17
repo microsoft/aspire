@@ -9,5 +9,6 @@ internal interface IResourceRepositoryWriter
 {
     void ReplaceResources(IReadOnlyList<Resource> resources);
     void ApplyChanges(IReadOnlyList<WatchResourcesChange> changes);
+    void MarkConsoleLogsLoaded(string resourceName);
     void AddConsoleLogs(string resourceName, IReadOnlyList<ConsoleLogLine> logLines);
 }

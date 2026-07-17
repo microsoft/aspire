@@ -51,6 +51,7 @@ internal sealed class DashboardClient : IDashboardClient
     private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
 
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
+    private readonly HashSet<string> _loadedConsoleLogResources = new(StringComparers.ResourceName);
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly CancellationToken _clientCancellationToken;
@@ -906,6 +907,8 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
+        MarkConsoleLogsLoaded(resourceName);
+
         // It's ok to dispose CTS with using because this method exits after it is finished being used.
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
@@ -948,6 +951,8 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
+        MarkConsoleLogsLoaded(resourceName);
+
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
         var call = _client!.WatchResourceConsoleLogs(
@@ -960,6 +965,24 @@ internal sealed class DashboardClient : IDashboardClient
             _resourceRepositoryWriter?.AddConsoleLogs(resourceName, response.LogLines);
             yield return CreateLogLines(response.LogLines);
         }
+    }
+
+    public bool HaveConsoleLogsBeenLoaded(string resourceName)
+    {
+        lock (_lock)
+        {
+            return _loadedConsoleLogResources.Contains(resourceName);
+        }
+    }
+
+    private void MarkConsoleLogsLoaded(string resourceName)
+    {
+        lock (_lock)
+        {
+            _loadedConsoleLogResources.Add(resourceName);
+        }
+
+        _resourceRepositoryWriter?.MarkConsoleLogsLoaded(resourceName);
     }
 
     private static ResourceLogLine[] CreateLogLines(IList<ConsoleLogLine> logLines)

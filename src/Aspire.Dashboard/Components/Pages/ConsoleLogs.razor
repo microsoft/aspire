@@ -151,6 +151,7 @@
                         IsTimestampUtc="@_isTimestampUtc"
                         NoWrapLogs="@_noWrapLogs"
                         ShowNoLogsMessage="@_showNoLogsMessage"
+                        NoLogsMessage="@GetNoLogsMessage()"
                         ShowResourcePrefix="@_isSubscribedToAll"/>
                 </div>
                 <div style="@(_activeView == ConsoleLogsView.Terminal ? "display: contents;" : "display: none;")">
@@ -171,6 +172,7 @@
                     IsTimestampUtc="@_isTimestampUtc"
                     NoWrapLogs="@_noWrapLogs"
                     ShowNoLogsMessage="@_showNoLogsMessage"
+                    NoLogsMessage="@GetNoLogsMessage()"
                     ShowResourcePrefix="@_isSubscribedToAll"/>
             }
         </MainSection>

@@ -13,18 +13,28 @@ public sealed partial class SqliteResourceRepository
 {
     private static void SaveResource(SqliteConnection connection, IDbTransaction transaction, Resource resource, int replicaIndex)
     {
+        var consoleLogsLoaded = connection.QuerySingleOrDefault<bool>("""
+            SELECT console_logs_loaded
+            FROM dashboard_resources
+            WHERE resource_name = @ResourceName;
+            """, new { ResourceName = resource.Name }, transaction);
+        SaveResource(connection, transaction, resource, replicaIndex, consoleLogsLoaded);
+    }
+
+    private static void SaveResource(SqliteConnection connection, IDbTransaction transaction, Resource resource, int replicaIndex, bool consoleLogsLoaded)
+    {
         connection.Execute("DELETE FROM dashboard_resources WHERE resource_name = @ResourceName;", new { ResourceName = resource.Name }, transaction);
         connection.Execute("""
             INSERT INTO dashboard_resources (
                 resource_name, replica_index, resource_type, display_name, uid, state,
                 created_at_seconds, created_at_nanos, state_style,
                 started_at_seconds, started_at_nanos, stopped_at_seconds, stopped_at_nanos,
-                is_hidden, supports_detailed_telemetry, icon_name, icon_variant)
+                is_hidden, supports_detailed_telemetry, icon_name, icon_variant, console_logs_loaded)
             VALUES (
                 @Name, @ReplicaIndex, @ResourceType, @DisplayName, @Uid, @State,
                 @CreatedAtSeconds, @CreatedAtNanos, @StateStyle,
                 @StartedAtSeconds, @StartedAtNanos, @StoppedAtSeconds, @StoppedAtNanos,
-                @IsHidden, @SupportsDetailedTelemetry, @IconName, @IconVariant);
+                @IsHidden, @SupportsDetailedTelemetry, @IconName, @IconVariant, @ConsoleLogsLoaded);
             """, new
         {
             resource.Name,
@@ -43,7 +53,8 @@ public sealed partial class SqliteResourceRepository
             resource.IsHidden,
             resource.SupportsDetailedTelemetry,
             IconName = resource.HasIconName ? resource.IconName : null,
-            IconVariant = resource.HasIconVariant ? (int?)resource.IconVariant : null
+            IconVariant = resource.HasIconVariant ? (int?)resource.IconVariant : null,
+            ConsoleLogsLoaded = consoleLogsLoaded
         }, transaction);
 
         InsertEnvironment(connection, transaction, resource);
