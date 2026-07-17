@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Dapper;
+using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -9,7 +10,7 @@ namespace Aspire.Dashboard.ServiceClient;
 /// <summary>
 /// Creates consistently configured connections to a dashboard run database.
 /// </summary>
-internal sealed class DashboardSqliteDatabase
+internal sealed class DashboardSqliteDatabase : IDisposable
 {
     private const string SchemaResourcePrefix = "Aspire.Dashboard.ServiceClient.DatabaseSchema.";
 
@@ -18,6 +19,7 @@ internal sealed class DashboardSqliteDatabase
     private static readonly Lazy<IReadOnlyList<string>> s_schemaScripts = new(LoadSchemaScripts);
 
     private readonly string _connectionString;
+    private readonly ActivitySource _activitySource = new(TracingSqliteConnection.ActivitySourceName);
     private readonly object _schemaLock = new();
     private bool _schemaInitialized;
 
@@ -46,6 +48,8 @@ internal sealed class DashboardSqliteDatabase
 
     public bool IsReadOnly { get; }
 
+    internal ActivitySource ActivitySource => _activitySource;
+
     public static bool IsCompatible(string databasePath)
     {
         if (!File.Exists(databasePath))
@@ -53,7 +57,7 @@ internal sealed class DashboardSqliteDatabase
             return false;
         }
 
-        var database = new DashboardSqliteDatabase(databasePath, readOnly: true, pooling: false);
+        using var database = new DashboardSqliteDatabase(databasePath, readOnly: true, pooling: false);
         try
         {
             using var connection = database.OpenConnection();
@@ -74,7 +78,7 @@ internal sealed class DashboardSqliteDatabase
 
     public SqliteConnection OpenConnection()
     {
-        var connection = new SqliteConnection(_connectionString);
+        var connection = new TracingSqliteConnection(_connectionString, DatabasePath, _activitySource);
         connection.Open();
         connection.Execute("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
 
@@ -88,6 +92,8 @@ internal sealed class DashboardSqliteDatabase
         using var connection = new SqliteConnection(_connectionString);
         SqliteConnection.ClearPool(connection);
     }
+
+    public void Dispose() => _activitySource.Dispose();
 
     public void InitializeSchema()
     {

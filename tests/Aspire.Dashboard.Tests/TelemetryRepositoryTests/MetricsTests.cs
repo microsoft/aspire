@@ -1,11 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Runtime.InteropServices;
 using System.Text;
+using System.Diagnostics;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Tests;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
@@ -1286,5 +1289,183 @@ public sealed class InMemoryMetricsTests : MetricsTests
 
 public sealed class SqliteMetricsTests : MetricsTests
 {
+    private static readonly DateTime s_queryTestTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+
     protected override bool UseSqlite => true;
+
+    [Fact]
+    public void AddMetrics_ReusesInstrumentAndDimensionLookupsWithinBatch()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("metric ingestion test").Start();
+
+        var context = new AddContext();
+        repository.AsWriter().AddMetrics(context, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(1), value: 1),
+                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(2), value: 2),
+                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(3), value: 2)
+                        }
+                    }
+                }
+            }
+        });
+
+        var queries = activities
+            .Where(activity => activity.ParentSpanId == parent.SpanId)
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
+            .ToList();
+        Assert.Single(queries, query => query.Contains("SELECT instrument_id", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
+        var insertQuery = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_points", StringComparison.Ordinal));
+        Assert.Equal(2, insertQuery.Split("INSERT INTO telemetry_metric_points", StringSplitOptions.None).Length - 1);
+        Assert.Equal(3, context.SuccessCount);
+    }
+
+    [Fact]
+    public void AddMetrics_BatchesHistogramChildrenAndDimensionTrimming()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("metric ingestion test").Start();
+
+        var context = new AddContext();
+        repository.AsWriter().AddMetrics(context, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateHistogramMetric(metricName: "histogram", startTime: s_queryTestTime.AddMinutes(1)),
+                            CreateSumMetric(metricName: "sum", startTime: s_queryTestTime.AddMinutes(1), attributes: [KeyValuePair.Create("series", "one")]),
+                            CreateSumMetric(metricName: "sum", startTime: s_queryTestTime.AddMinutes(1), attributes: [KeyValuePair.Create("series", "two")])
+                        }
+                    }
+                }
+            }
+        });
+
+        var queries = activities
+            .Where(activity => activity.ParentSpanId == parent.SpanId)
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
+            .ToList();
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_histogram_bucket_counts", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_histogram_explicit_bounds", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
+        Assert.Equal(3, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+    }
+
+    [Fact]
+    public void AddMetrics_UpdateOnlyBatch_DoesNotTrimMetricPoints()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateResourceMetrics(CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(1), value: 1))
+        });
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("metric update test").Start();
+
+        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(2), value: 1),
+                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(3), value: 1),
+                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(4), value: 1)
+                        }
+                    }
+                }
+            }
+        });
+
+        var queries = activities
+            .Where(activity => activity.ParentSpanId == parent.SpanId)
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
+            .ToList();
+        Assert.DoesNotContain(queries, query => query.Contains("SELECT resource_id", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_scopes", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_scope_attributes", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.Contains("SELECT instrument_id", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
+        var updateQuery = Assert.Single(queries, query => query.Contains("UPDATE telemetry_metric_points", StringComparison.Ordinal));
+        Assert.Contains("WITH updates", updateQuery, StringComparison.Ordinal);
+        var instrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+        var value = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(instrument!.Dimensions).Values));
+        Assert.Equal(4UL, value.Count);
+        Assert.Equal(s_queryTestTime.AddMinutes(4), value.End);
+    }
+
+    [Fact]
+    public void ClearMetrics_InvalidatesMetricIngestionCache()
+    {
+        var repository = CreateRepository();
+        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateResourceMetrics(CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(1), value: 1))
+        });
+
+        repository.AsWriter().ClearMetrics();
+
+        var context = new AddContext();
+        repository.AsWriter().AddMetrics(context, new RepeatedField<ResourceMetrics>
+        {
+            CreateResourceMetrics(CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(2), value: 2))
+        });
+
+        Assert.Equal(1, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+        Assert.Single(repository.GetInstrumentsSummaries(CreateResource().GetResourceKey()));
+    }
+
+    private static ResourceMetrics CreateResourceMetrics(Metric metric) => new()
+    {
+        Resource = CreateResource(),
+        ScopeMetrics =
+        {
+            new ScopeMetrics
+            {
+                Scope = CreateScope(name: "test-meter"),
+                Metrics = { metric }
+            }
+        }
+    };
 }

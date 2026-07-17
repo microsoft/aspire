@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
+using System.Diagnostics;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Logs.V1;
@@ -22,6 +23,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     private readonly PauseManager _pauseManager;
     private readonly IReadOnlyList<IOutgoingPeerResolver> _outgoingPeerResolvers;
     private readonly List<IDisposable> _outgoingPeerSubscriptions = [];
+    private readonly bool _ownsDatabase;
     private readonly object _writeLock = new();
     private int _disposed;
 
@@ -37,6 +39,8 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
             .Replace("_", "!_", StringComparison.Ordinal);
     }
 
+            internal ActivitySource SqlActivitySource => _database.ActivitySource;
+
     public SqliteTelemetryRepository(
         string databasePath,
         ILoggerFactory loggerFactory,
@@ -46,6 +50,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         bool readOnly = false)
         : this(new DashboardSqliteDatabase(databasePath, readOnly), loggerFactory, dashboardOptions, pauseManager, outgoingPeerResolvers)
     {
+        _ownsDatabase = true;
     }
 
     internal SqliteTelemetryRepository(
@@ -99,7 +104,18 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         }
 
         EnsureWritable();
-        NotifyLogsAdded(AddLogsToDatabase(context, resourceLogs));
+        try
+        {
+            NotifyLogsAdded(AddLogsToDatabase(context, resourceLogs));
+        }
+        catch
+        {
+            lock (_writeLock)
+            {
+                ClearIngestionCaches();
+            }
+            throw;
+        }
     }
 
     public void AddMetrics(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
@@ -128,7 +144,18 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         }
 
         EnsureWritable();
-        NotifySpansAdded(AddTracesToDatabase(context, resourceSpans));
+        try
+        {
+            NotifySpansAdded(AddTracesToDatabase(context, resourceSpans));
+        }
+        catch
+        {
+            lock (_writeLock)
+            {
+                ClearIngestionCaches();
+            }
+            throw;
+        }
     }
 
     public PagedResult<OtlpLogEntry> GetLogs(GetLogsContext context) => GetLogsFromDatabase(context);
@@ -207,6 +234,10 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         }
         DisposeWatchers();
         _database.ClearPool();
+        if (_ownsDatabase)
+        {
+            _database.Dispose();
+        }
     }
 
 }
