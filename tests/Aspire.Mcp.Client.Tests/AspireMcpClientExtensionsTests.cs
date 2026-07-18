@@ -1,13 +1,16 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Microsoft.AspNetCore.Http.Features;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.ServiceDiscovery;
 using ModelContextProtocol.Client;
 using Microsoft.Extensions.Options;
 using System.Collections.Concurrent;
+using System.Diagnostics.CodeAnalysis;
 using System.Net;
 using System.IO.Pipelines;
 using System.Text;
@@ -333,6 +336,55 @@ public class AspireMcpClientExtensionsTests
 
         Assert.Null(exception);
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "http://resolved-mcp/mcp");
+    }
+
+    public static TheoryData<EndPoint, string> PlatformServiceDiscoveryEndpoints { get; } = new()
+    {
+        { new DnsEndPoint("platform-mcp", 5001), "https://platform-mcp:5001/mcp" },
+        { new IPEndPoint(IPAddress.Loopback, 5001), "https://127.0.0.1:5001/mcp" },
+    };
+
+    [Theory]
+    [MemberData(nameof(PlatformServiceDiscoveryEndpoints))]
+    public void McpClientResolvesPlatformServiceDiscoveryEndpoint(EndPoint endPoint, string expectedEndpoint)
+    {
+        var handler = new SuccessfulInitializationHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.AddSingleton<IServiceEndpointProviderFactory>(new StaticServiceEndpointProviderFactory(endPoint));
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var exception = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.Null(exception);
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == expectedEndpoint);
+    }
+
+    [Fact]
+    public async Task McpClientSelectsNextServiceDiscoveryEndpointAfterReconnect()
+    {
+        var handler = new FailPingOnceHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            ["services:mcp:https:0"] = "https://replica-one",
+            ["services:mcp:https:1"] = "https://replica-two",
+        });
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var healthChecks = host.Services.GetRequiredService<HealthCheckService>();
+        var firstResult = await healthChecks.CheckHealthAsync();
+        var secondResult = await healthChecks.CheckHealthAsync();
+
+        Assert.Equal(HealthStatus.Unhealthy, firstResult.Status);
+        Assert.Equal(HealthStatus.Healthy, secondResult.Status);
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://replica-one/mcp");
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://replica-two/mcp");
     }
 
     [Fact]
@@ -680,6 +732,34 @@ public class AspireMcpClientExtensionsTests
             }
 
             base.Dispose(disposing);
+        }
+    }
+
+    private sealed class StaticServiceEndpointProviderFactory(params EndPoint[] endPoints) : IServiceEndpointProviderFactory
+    {
+        public bool TryCreateProvider(ServiceEndpointQuery query, [NotNullWhen(true)] out IServiceEndpointProvider? provider)
+        {
+            provider = new StaticServiceEndpointProvider(endPoints);
+
+            return true;
+        }
+    }
+
+    private sealed class StaticServiceEndpointProvider(EndPoint[] endPoints) : IServiceEndpointProvider
+    {
+        public ValueTask PopulateAsync(IServiceEndpointBuilder endpoints, CancellationToken cancellationToken)
+        {
+            foreach (var endPoint in endPoints)
+            {
+                endpoints.Endpoints.Add(ServiceEndpoint.Create(endPoint, new FeatureCollection()));
+            }
+
+            return ValueTask.CompletedTask;
+        }
+
+        public ValueTask DisposeAsync()
+        {
+            return ValueTask.CompletedTask;
         }
     }
 

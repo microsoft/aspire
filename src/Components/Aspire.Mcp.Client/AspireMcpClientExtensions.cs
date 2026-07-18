@@ -10,6 +10,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.ServiceDiscovery;
 using ModelContextProtocol.Client;
 using ModelContextProtocol.Protocol;
+using System.Net;
 
 namespace Microsoft.Extensions.Hosting;
 
@@ -264,6 +265,7 @@ public static class AspireMcpClientExtensions
         private readonly CancellationTokenSource _creationCancellation = new();
         private ReconnectableMcpClient? _client;
         private readonly object _lock = new();
+        private int _endpointIndex = -1;
         private int _disposed;
 
         public McpClientRegistration(
@@ -383,7 +385,7 @@ public static class AspireMcpClientExtensions
             }
         }
 
-        private static async Task<Uri> ResolveEndpointAsync(Uri endpoint, ServiceEndpointResolver? serviceEndpointResolver, CancellationToken cancellationToken)
+        private async Task<Uri> ResolveEndpointAsync(Uri endpoint, ServiceEndpointResolver? serviceEndpointResolver, CancellationToken cancellationToken)
         {
             if (endpoint.Scheme is not "https+http")
             {
@@ -396,23 +398,70 @@ public static class AspireMcpClientExtensions
             }
 
             var endpointSource = await serviceEndpointResolver.GetEndpointsAsync(endpoint.GetLeftPart(UriPartial.Authority), cancellationToken).ConfigureAwait(false);
-            var resolvedUri = endpointSource.Endpoints
-                .Select(static serviceEndpoint => serviceEndpoint.EndPoint)
-                .OfType<UriEndPoint>()
-                .Select(static uriEndpoint => uriEndpoint.Uri)
+            var resolvedUris = endpointSource.Endpoints
+                .Select(serviceEndpoint => CreateResolvedEndpointUri(serviceEndpoint, endpoint))
+                .OfType<Uri>()
                 .Where(static uri => uri.Scheme is "http" or "https")
-                .OrderByDescending(static uri => uri.Scheme is "https")
-                .FirstOrDefault();
+                .GroupBy(static uri => uri.Scheme is "https" ? 0 : 1)
+                .OrderBy(static group => group.Key)
+                .FirstOrDefault()
+                ?.ToArray();
 
-            if (resolvedUri is null)
+            if (resolvedUris is null || resolvedUris.Length == 0)
             {
                 throw new InvalidOperationException($"No HTTP or HTTPS endpoint was found for MCP service '{endpoint.Host}'.");
             }
 
+            return resolvedUris[GetNextEndpointIndex(resolvedUris.Length)];
+        }
+
+        private static Uri? CreateResolvedEndpointUri(ServiceEndpoint serviceEndpoint, Uri endpoint)
+        {
+            return serviceEndpoint.EndPoint switch
+            {
+                UriEndPoint uriEndPoint => CreateResolvedEndpointUri(uriEndPoint.Uri, endpoint),
+                DnsEndPoint dnsEndPoint => CreateResolvedEndpointUri(endpoint, dnsEndPoint.Host, dnsEndPoint.Port),
+                IPEndPoint ipEndPoint => CreateResolvedEndpointUri(endpoint, serviceEndpoint.Features.Get<IHostNameFeature>()?.HostName ?? ipEndPoint.Address.ToString(), ipEndPoint.Port),
+                _ => null,
+            };
+        }
+
+        private static Uri CreateResolvedEndpointUri(Uri resolvedUri, Uri endpoint)
+        {
             return new UriBuilder(resolvedUri)
             {
                 Path = endpoint.AbsolutePath,
             }.Uri;
+        }
+
+        private static Uri CreateResolvedEndpointUri(Uri endpoint, string host, int port)
+        {
+            var builder = new UriBuilder(GetFirstScheme(endpoint), host)
+            {
+                Path = endpoint.AbsolutePath,
+            };
+
+            if (port > 0)
+            {
+                builder.Port = port;
+            }
+
+            return builder.Uri;
+        }
+
+        private static string GetFirstScheme(Uri endpoint)
+        {
+            var scheme = endpoint.Scheme;
+            var separatorIndex = scheme.IndexOf('+', StringComparison.Ordinal);
+
+            return separatorIndex < 0 ? scheme : scheme[..separatorIndex];
+        }
+
+        private int GetNextEndpointIndex(int endpointCount)
+        {
+            var index = Interlocked.Increment(ref _endpointIndex);
+
+            return (int)((uint)index % (uint)endpointCount);
         }
     }
 
