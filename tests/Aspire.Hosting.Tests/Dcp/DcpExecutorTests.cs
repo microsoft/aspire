@@ -3402,7 +3402,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
         Assert.True(container.Spec.Persistent.GetValueOrDefault());
         Assert.Equal(parentProcessIdentity.ProcessId, container.Spec.MonitorPid);
-        Assert.Equal(parentProcessIdentity.Timestamp, container.Spec.MonitorTimestamp);
+        Assert.NotNull(container.Spec.MonitorTimestamp);
+        Assert.Equal(parentProcessIdentity.Timestamp, container.Spec.MonitorTimestamp.Value, TimeSpan.FromMicroseconds(1));
 
         var executables = kubernetesService.CreatedResources.OfType<Executable>()
             .Where(e => e.AppModelResourceName is "worker" or "project")
@@ -3412,7 +3413,8 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         {
             Assert.True(exe.Spec.Persistent.GetValueOrDefault());
             Assert.Equal(parentProcessIdentity.ProcessId, exe.Spec.MonitorPid);
-            Assert.Equal(parentProcessIdentity.Timestamp, exe.Spec.MonitorTimestamp);
+            Assert.NotNull(exe.Spec.MonitorTimestamp);
+            Assert.Equal(parentProcessIdentity.Timestamp, exe.Spec.MonitorTimestamp.Value, TimeSpan.FromMicroseconds(1));
             Assert.Equal(ExecutionType.Process, exe.Spec.ExecutionType);
         });
     }
@@ -6117,6 +6119,44 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             "{\"udsPath\":\"/tmp/aspire/term.sock\",\"socketMode\":\"connect\",\"cols\":100,\"rows\":30}",
             json);
+    }
+
+    [Fact]
+    public void MonitorTimestamps_SerializeToDcpMicroTimeWireContract()
+    {
+        var wholeSecondTimestamp = DateTime.SpecifyKind(DateTime.MinValue.AddMinutes(6).AddSeconds(30), DateTimeKind.Utc);
+        var fractionalSecondTimestamp = DateTime.SpecifyKind(DateTime.MinValue.AddMinutes(6).AddSeconds(30).AddMilliseconds(123), DateTimeKind.Utc);
+
+        AssertMonitorTimestamp(new ContainerSpec { MonitorPid = 1234, MonitorTimestamp = wholeSecondTimestamp }, "0001-01-01T00:06:30.000000Z");
+        AssertMonitorTimestamp(new ContainerSpec { MonitorPid = 1234, MonitorTimestamp = fractionalSecondTimestamp }, "0001-01-01T00:06:30.123000Z");
+        AssertMonitorTimestamp(new ExecutableSpec { MonitorPid = 1234, MonitorTimestamp = wholeSecondTimestamp }, "0001-01-01T00:06:30.000000Z");
+        AssertMonitorTimestamp(new ExecutableSpec { MonitorPid = 1234, MonitorTimestamp = fractionalSecondTimestamp }, "0001-01-01T00:06:30.123000Z");
+
+        static void AssertMonitorTimestamp<T>(T spec, string expected)
+        {
+            // DCP models monitorTimestamp as Kubernetes metav1.MicroTime:
+            //   "0001-01-01T00:06:30.000000Z"
+            // Kubernetes requires exactly six fractional digits, while System.Text.Json's
+            // default DateTime converter trims trailing zeroes and can produce values
+            // such as "0001-01-01T00:06:30Z" that DCP rejects.
+            var json = JsonSerializer.Serialize(spec);
+            using var document = JsonDocument.Parse(json);
+
+            Assert.Equal(expected, document.RootElement.GetProperty("monitorTimestamp").GetString());
+        }
+    }
+
+    [Fact]
+    public void MonitorTimestamps_DeserializeFromDcpMicroTimeWireContract()
+    {
+        var containerSpec = JsonSerializer.Deserialize<ContainerSpec>("""{"monitorPid":1234,"monitorTimestamp":"0001-01-01T00:06:30.123000Z"}""");
+        var executableSpec = JsonSerializer.Deserialize<ExecutableSpec>("""{"monitorPid":1234,"monitorTimestamp":"0001-01-01T00:06:30.123000Z"}""");
+        var expectedTimestamp = DateTime.SpecifyKind(DateTime.MinValue.AddMinutes(6).AddSeconds(30).AddMilliseconds(123), DateTimeKind.Utc);
+
+        Assert.NotNull(containerSpec);
+        Assert.Equal(expectedTimestamp, containerSpec.MonitorTimestamp);
+        Assert.NotNull(executableSpec);
+        Assert.Equal(expectedTimestamp, executableSpec.MonitorTimestamp);
     }
 
     private static DcpExecutor CreateAppExecutor(

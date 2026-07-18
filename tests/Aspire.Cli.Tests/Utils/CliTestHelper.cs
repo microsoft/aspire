@@ -126,7 +126,6 @@ internal static class CliTestHelper
         services.AddSingleton(options.AddCommandPrompterFactory);
         services.AddSingleton(options.PublishCommandPrompterFactory);
         services.AddTransient(options.DotNetCliExecutionFactoryFactory);
-        services.AddTransient<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         services.AddTransient(options.DotNetCliRunnerFactory);
         services.AddTransient(options.NuGetPackageCacheFactory);
         services.AddSingleton<TemplateNuGetConfigService>();
@@ -171,7 +170,6 @@ internal static class CliTestHelper
         // Bundle layout services - return null/no-op implementations to trigger SDK mode fallback
         // This ensures backward compatibility: no layout found = use legacy SDK mode
         services.AddSingleton(options.LayoutDiscoveryFactory);
-        services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         services.AddTransient<LayoutProcessRunner>();
         services.AddTransient<ProcessTreeGracefulShutdownService>();
         // Mirror Program.cs so consumers (e.g. GuestAppHostProject) that depend on the

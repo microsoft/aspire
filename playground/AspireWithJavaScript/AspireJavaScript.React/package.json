@@ -32,6 +32,7 @@
     "uuid": "14.0.0",
     "esbuild": "0.28.1",
     "http-proxy-middleware": "3.0.7",
-    "launch-editor": "2.14.1"
+    "launch-editor": "2.14.1",
+    "websocket-driver": "0.7.5"
   }
 }
