@@ -6,7 +6,9 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "The `PublishAsConnectionString` extension methods in Aspire.Hosting and Aspire.Hosting.Azure are now marked obsolete. This API only changes the manifest representation of a resource and can mislead callers into thinking it converts resources for all publishers. Callers should switch to `AddConnectionString` in publish-mode app model code.",
-  "docsPrs": [],
+  "docsPrs": [
+    1237
+  ],
   "docsRequired": true,
   "emoji": "🚫",
   "firstMergedAt": "2026-06-09T07:43:57Z",

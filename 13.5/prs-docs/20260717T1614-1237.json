@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents PublishAsConnectionString obsolete change from microsoft/aspire#18044",
+  "mergedAt": "2026-07-17T16:14:29Z",
+  "number": 1237,
+  "runDate": "2026-07-18T00:19:42Z",
+  "status": "included",
+  "title": "[docs] Obsolete PublishAsConnectionString migration guidance"
+}
