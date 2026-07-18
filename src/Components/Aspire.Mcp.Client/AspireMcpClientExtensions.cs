@@ -355,9 +355,13 @@ public static class AspireMcpClientExtensions
             HttpClientTransport? transport = null;
             try
             {
-                var resolvedEndpoint = await ResolveEndpointAsync(endpoint, serviceEndpointResolver, _creationCancellation.Token).ConfigureAwait(false);
-                var transportOptions = new HttpClientTransportOptions { Endpoint = resolvedEndpoint };
+                var defaultTransportEndpoint = CreateInitialTransportEndpoint(endpoint);
+                var transportOptions = new HttpClientTransportOptions { Endpoint = defaultTransportEndpoint };
                 configureTransportOptions?.Invoke(transportOptions);
+                var endpointToResolve = endpoint.Scheme is "https+http" && Equals(transportOptions.Endpoint, defaultTransportEndpoint)
+                    ? endpoint
+                    : transportOptions.Endpoint;
+                transportOptions.Endpoint = await ResolveEndpointAsync(endpointToResolve, serviceEndpointResolver, _creationCancellation.Token).ConfigureAwait(false);
                 McpClientSettings.ValidateEndpoint(transportOptions.Endpoint);
                 var clientOptions = new McpClientOptions();
                 configureClientOptions?.Invoke(clientOptions);
@@ -383,6 +387,13 @@ public static class AspireMcpClientExtensions
                 }
                 throw;
             }
+        }
+
+        private static Uri CreateInitialTransportEndpoint(Uri endpoint)
+        {
+            return endpoint.Scheme is "https+http"
+                ? CreateResolvedEndpointUri(endpoint, endpoint.Host, endpoint.Port)
+                : endpoint;
         }
 
         private async Task<Uri> ResolveEndpointAsync(Uri endpoint, ServiceEndpointResolver? serviceEndpointResolver, CancellationToken cancellationToken)

@@ -277,7 +277,10 @@ public class AspireMcpClientExtensionsTests
     [Fact]
     public void AddMcpClientSupportsConfiguringOnlyTransportOptions()
     {
+        var handler = new RequestRecordingHandler();
         var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.AddServiceDiscovery();
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
         var transportOptionsConfigured = false;
 
         builder.AddMcpClient(
@@ -292,6 +295,7 @@ public class AspireMcpClientExtensionsTests
         _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
 
         Assert.True(transportOptionsConfigured);
+        Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://transport-only/mcp");
     }
 
     [Theory]
