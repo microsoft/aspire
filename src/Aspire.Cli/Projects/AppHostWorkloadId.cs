@@ -3,6 +3,7 @@
 
 using System.IO.Hashing;
 using System.Text;
+using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Projects;
 
@@ -21,7 +22,11 @@ internal static class AppHostWorkloadId
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appHostPath);
 
-        var normalizedPath = Path.GetFullPath(appHostPath).ToLowerInvariant();
+        var normalizedPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        if (OperatingSystem.IsWindows())
+        {
+            normalizedPath = normalizedPath.ToLowerInvariant();
+        }
 
         var hashBytes = XxHash3.Hash(Encoding.UTF8.GetBytes(normalizedPath));
         return Prefix + Convert.ToHexString(hashBytes).ToLowerInvariant();
