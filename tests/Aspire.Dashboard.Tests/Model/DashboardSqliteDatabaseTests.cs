@@ -13,7 +13,7 @@ namespace Aspire.Dashboard.Tests.Model;
 
 public sealed class DashboardSqliteDatabaseTests : IDisposable
 {
-    private readonly string _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-sqlite-tests-").FullName;
+    private readonly string _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-tests-dashboard-sqlite-").FullName;
 
     [Fact]
     public async Task DapperQuery_CreatesActivityWithQueryInformation()

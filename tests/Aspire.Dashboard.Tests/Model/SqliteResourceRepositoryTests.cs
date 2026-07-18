@@ -10,17 +10,15 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class SqliteResourceRepositoryTests : IDisposable
+public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHelper)
 {
-    private readonly string _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-resource-tests-").FullName;
-
     [Fact]
     public void Resources_PersistAndReplayWithEquivalentValues()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "dashboard.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var resource = CreateResource("api-123", "api");
 
-        using (var repository = CreateRepository(databasePath))
+        using (var repository = CreateRepository(workspace.Path))
         {
             var writer = (IResourceRepositoryWriter)repository;
             writer.ReplaceResources([resource]);
@@ -33,14 +31,15 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
             Assert.Equal("Running", repository.GetResource(resource.Name)!.State);
         }
 
-        using var historicalRepository = CreateRepository(databasePath, readOnly: true);
+        using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
         AssertResource(Assert.Single(historicalRepository.GetResources()), resource, replicaIndex: 1, state: "Running");
     }
 
     [Fact]
     public async Task ResourceSubscription_ReceivesUpsertAndDelete()
     {
-        using var repository = CreateRepository(Path.Combine(_temporaryDirectory, "subscription.db"));
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var writer = (IResourceRepositoryWriter)repository;
         var subscription = await repository.SubscribeResourcesAsync(CancellationToken.None);
         Assert.Empty(subscription.InitialState);
@@ -62,8 +61,8 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     [Fact]
     public async Task ConsoleLogs_UseInsertionOrderAndAllowLineNumbersToRestart()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "console.db");
-        using (var repository = CreateRepository(databasePath))
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using (var repository = CreateRepository(workspace.Path))
         {
             var writer = (IResourceRepositoryWriter)repository;
             writer.AddConsoleLogs("api", [
@@ -73,14 +72,14 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
             writer.AddConsoleLogs("api", [new ConsoleLogLine { LineNumber = 2, Text = "second-updated", IsStdErr = true }]);
         }
 
-        using (var restartedRepository = CreateRepository(databasePath))
+        using (var restartedRepository = CreateRepository(workspace.Path))
         {
             ((IResourceRepositoryWriter)restartedRepository).AddConsoleLogs(
                 "api",
                 [new ConsoleLogLine { LineNumber = 1, Text = "first-after-restart" }]);
         }
 
-        using var historicalRepository = CreateRepository(databasePath, readOnly: true);
+        using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
         var batches = new List<IReadOnlyList<global::Aspire.Dashboard.Model.ResourceLogLine>>();
         await foreach (var batch in historicalRepository.GetConsoleLogs("api", CancellationToken.None))
         {
@@ -96,8 +95,8 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     [Fact]
     public void ConsoleLogsLoaded_PersistsWithoutLogLines()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "console-loaded.db");
-        using (var repository = CreateRepository(databasePath))
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using (var repository = CreateRepository(workspace.Path))
         {
             var writer = (IResourceRepositoryWriter)repository;
             writer.ReplaceResources([CreateResource("api", "api"), CreateResource("worker", "worker")]);
@@ -115,7 +114,7 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
             Assert.True(repository.HaveConsoleLogsBeenLoaded("api"));
         }
 
-        using var historicalRepository = CreateRepository(databasePath, readOnly: true);
+        using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
         Assert.True(historicalRepository.HaveConsoleLogsBeenLoaded("api"));
         Assert.False(historicalRepository.HaveConsoleLogsBeenLoaded("worker"));
     }
@@ -123,7 +122,7 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     [Fact]
     public void Resources_AllFieldsAndRecursiveValuesRoundTrip()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "all-fields.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var nestedValue = new Value
         {
             StructValue = new Struct
@@ -219,12 +218,12 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
             }
         });
 
-        using (var repository = CreateRepository(databasePath))
+        using (var repository = CreateRepository(workspace.Path))
         {
             ((IResourceRepositoryWriter)repository).ReplaceResources([resource]);
         }
 
-        using var historicalRepository = CreateRepository(databasePath, readOnly: true);
+        using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
         var actual = Assert.Single(historicalRepository.GetResources());
         Assert.Equal("Running", actual.State);
         Assert.Equal("success", actual.StateStyle);
@@ -258,19 +257,19 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     [Fact]
     public void Resources_BulkLoadKeepsChildRecordsIsolated()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "multiple-resources.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var resources = new[]
         {
             CreateResourceWithChildren("api", "API", "api-value"),
             CreateResourceWithChildren("worker", "Worker", "worker-value")
         };
 
-        using (var repository = CreateRepository(databasePath))
+        using (var repository = CreateRepository(workspace.Path))
         {
             ((IResourceRepositoryWriter)repository).ReplaceResources(resources);
         }
 
-        using var historicalRepository = CreateRepository(databasePath, readOnly: true);
+        using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
         var actualResources = historicalRepository.GetResources().OrderBy(resource => resource.Name).ToList();
         Assert.Collection(actualResources,
             resource => AssertResourceChildren(resource, "api-value"),
@@ -280,8 +279,9 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     [Fact]
     public void Schema_HasNoSerializedResourceColumns()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "schema.db");
-        using (CreateRepository(databasePath))
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        using (CreateRepository(workspace.Path))
         {
         }
 
@@ -306,8 +306,9 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     [Fact]
     public void Schema_ResourceRepositoryInitializesAllEmbeddedScripts()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "complete-schema.db");
-        using (CreateRepository(databasePath))
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        using (CreateRepository(workspace.Path))
         {
         }
 
@@ -346,8 +347,9 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     [Fact]
     public void Schema_TelemetryResourceInstanceIdUniquenessPreservesNullAndEmpty()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "resource-instance-ids.db");
-        using (CreateRepository(databasePath))
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        using (CreateRepository(workspace.Path))
         {
         }
 
@@ -369,8 +371,9 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
     [Fact]
     public void Schema_AllDashboardTablesAreStrict()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "strict-schema.db");
-        using (CreateRepository(databasePath))
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        using (CreateRepository(workspace.Path))
         {
         }
 
@@ -397,9 +400,15 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
         Assert.Empty(nonStrictTableNames);
     }
 
-    private static SqliteResourceRepository CreateRepository(string databasePath, bool readOnly = false)
+    private static string GetDatabasePath(string workspacePath) => Path.Combine(workspacePath, "dashboard.db");
+
+    private static SqliteResourceRepository CreateRepository(string workspacePath, bool readOnly = false)
     {
-        return new SqliteResourceRepository(databasePath, new MockKnownPropertyLookup(), NullLoggerFactory.Instance, readOnly);
+        return new SqliteResourceRepository(
+            GetDatabasePath(workspacePath),
+            new MockKnownPropertyLookup(),
+            NullLoggerFactory.Instance,
+            readOnly);
     }
 
     private static Resource CreateResource(string name, string displayName)
@@ -454,10 +463,5 @@ public sealed class SqliteResourceRepositoryTests : IDisposable
         Assert.Equal(expected.Uid, actual.Uid);
         Assert.Equal(replicaIndex, actual.ReplicaIndex);
         Assert.Equal(state, actual.State);
-    }
-
-    public void Dispose()
-    {
-        Directory.Delete(_temporaryDirectory, recursive: true);
     }
 }

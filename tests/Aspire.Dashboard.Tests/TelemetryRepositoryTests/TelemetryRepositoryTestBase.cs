@@ -45,7 +45,7 @@ public abstract class TelemetryRepositoryTestBase : IDisposable
         ITelemetryRepository repository;
         if (UseSqlite)
         {
-            var temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-telemetry-tests-").FullName;
+            var temporaryDirectory = Directory.CreateTempSubdirectory("aspire-tests-dashboard-telemetry-").FullName;
             _temporaryDirectories.Add(temporaryDirectory);
             var sqliteRepository = new SqliteTelemetryRepository(
                 Path.Combine(temporaryDirectory, "dashboard.db"),
