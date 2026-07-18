@@ -92,10 +92,18 @@ var frontend = builder.AddProject<Projects.MyFrontend>("frontend")
     .WaitFor(basketService)
     .WithReference(catalogService)
     .WaitFor(catalogService)
-    // Modify the display text of the URLs
-    .WithUrls(c => c.Urls.ForEach(u => u.DisplayText = $"Online store ({u.Endpoint?.EndpointName})"))
-    // Don't show the non-HTTPS link on the resources page (details only)
-    .WithUrlForEndpoint("http", url => url.DisplayLocation = UrlDisplayLocation.DetailsOnly)
+    .WithUrls(c =>
+    {
+        var hasHttpsUrl = c.Urls.Any(u => string.Equals(u.Endpoint?.EndpointName, "https", StringComparison.OrdinalIgnoreCase));
+        c.Urls.ForEach(u =>
+        {
+            u.DisplayText = $"Online store ({u.Endpoint?.EndpointName})";
+            if (hasHttpsUrl && string.Equals(u.Endpoint?.EndpointName, "http", StringComparison.OrdinalIgnoreCase))
+            {
+                u.DisplayLocation = UrlDisplayLocation.DetailsOnly;
+            }
+        });
+    })
     // Add health relative URL (show in details only)
     .WithUrlForEndpoint("https", ep => new() { Url = "/health", DisplayText = "Health", DisplayLocation = UrlDisplayLocation.DetailsOnly })
     .WithHttpHealthCheck("/health");

@@ -43,6 +43,8 @@ namespace Aspire.Dashboard.ServiceClient;
 /// </remarks>
 internal sealed class DashboardClient : IDashboardClient
 {
+    internal const string ActivitySourceName = "Aspire.Dashboard.ResourceService";
+
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
 
@@ -52,6 +54,7 @@ internal sealed class DashboardClient : IDashboardClient
 
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly HashSet<string> _loadedConsoleLogResources = new(StringComparers.ResourceName);
+    private readonly ActivitySource _activitySource = new(ActivitySourceName);
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly CancellationToken _clientCancellationToken;
@@ -242,6 +245,7 @@ internal sealed class DashboardClient : IDashboardClient
     // For testing purposes
     internal int OutgoingResourceSubscriberCount => _outgoingResourceChannels.Count;
     internal int OutgoingInteractionSubscriberCount => _outgoingInteractionChannels.Count;
+    internal ActivitySource ActivitySource => _activitySource;
     internal void SetDashboardServiceClient(Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient client) => _client = client;
     internal Task ResourceWatchCompleteTask => _resourceWatchCompleteTcs.Task;
     internal Task InteractionWatchCompleteTask => _interactionWatchCompleteTcs.Task;
@@ -328,7 +332,12 @@ internal sealed class DashboardClient : IDashboardClient
         }
 
         SetConnectionState(DashboardConnectionState.Connecting);
-        _connection = Task.Run(() => ConnectAndWatchAsync(_clientCancellationToken), _clientCancellationToken);
+        // The connection watches resources for the lifetime of the dashboard. Don't let the request or
+        // component that first accesses the client become the parent of that long-running operation.
+        using (ExecutionContext.SuppressFlow())
+        {
+            _connection = Task.Run(() => ConnectAndWatchAsync(_clientCancellationToken), _clientCancellationToken);
+        }
     }
 
     async Task ConnectAndWatchAsync(CancellationToken cancellationToken)
@@ -555,6 +564,9 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: cancellationToken).ConfigureAwait(false))
         {
+            using var activity = _activitySource.StartActivity("Process resource update", ActivityKind.Consumer);
+            activity?.SetTag("aspire.dashboard.resource_update.type", response.KindCase.ToString());
+
             List<ResourceViewModelChange>? changes = null;
             var shouldUpdateConnectionState = false;
 
@@ -1136,6 +1148,7 @@ internal sealed class DashboardClient : IDashboardClient
             _channel?.Dispose();
 
             await TaskHelpers.WaitIgnoreCancelAsync(_connection, _logger, "Unexpected error from connection task.").ConfigureAwait(false);
+            _activitySource.Dispose();
         }
     }
 

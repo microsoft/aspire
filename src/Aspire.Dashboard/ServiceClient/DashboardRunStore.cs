@@ -32,6 +32,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private readonly FileStream? _runLock;
     private readonly DashboardRunMetadata _metadata;
     private readonly ILogger<DashboardRunStore> _logger;
+    private readonly Lazy<IReadOnlyList<DashboardRunDescriptor>> _runs;
 
     public DashboardRunStore(IOptions<DashboardOptions> options, ILogger<DashboardRunStore> logger)
         : this(options, logger, static directory => Directory.Delete(directory, recursive: true))
@@ -96,6 +97,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             WriteMetadata(_metadata);
             PruneRuns(deleteRunDirectory);
         }
+
+        _runs = new(LoadRuns);
     }
 
     private void DeleteAbandonedTemporaryDirectories(Action<string> deleteRunDirectory)
@@ -135,7 +138,9 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     public DashboardPersistenceMode PersistenceMode { get; }
     public bool SupportsRunSelection => PersistenceMode == DashboardPersistenceMode.Runs;
 
-    public IReadOnlyList<DashboardRunDescriptor> GetRuns()
+    public IReadOnlyList<DashboardRunDescriptor> GetRuns() => _runs.Value;
+
+    private IReadOnlyList<DashboardRunDescriptor> LoadRuns()
     {
         var runs = new List<DashboardRunDescriptor>
         {
@@ -144,7 +149,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
         if (!SupportsRunSelection || !Directory.Exists(_runsDirectory))
         {
-            return runs;
+            return runs.ToArray();
         }
 
         foreach (var directory in Directory.EnumerateDirectories(_runsDirectory))
@@ -167,11 +172,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
                 if (metadata is { SchemaVersion: SchemaVersion })
                 {
-                    var descriptor = CreateDescriptor(metadata, directory, isCurrent: false);
-                    if (DashboardSqliteDatabase.IsCompatible(descriptor.DatabasePath))
-                    {
-                        runs.Add(descriptor);
-                    }
+                    runs.Add(CreateDescriptor(metadata, directory, isCurrent: false));
                 }
             }
             catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
@@ -180,7 +181,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             }
         }
 
-        return runs.OrderByDescending(run => run.IsCurrent).ThenByDescending(run => run.StartedAtUtc).ToList();
+        return runs.OrderByDescending(run => run.IsCurrent).ThenByDescending(run => run.StartedAtUtc).ToArray();
     }
 
     public void Dispose()
@@ -271,6 +272,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     {
         return new DashboardRunDescriptor(
             metadata.RunId,
+            metadata.SchemaVersion,
             metadata.StartedAtUtc,
             metadata.EndedAtUtc,
             metadata.CleanShutdown,
@@ -342,6 +344,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
 internal sealed record DashboardRunDescriptor(
     string RunId,
+    int SchemaVersion,
     DateTimeOffset StartedAtUtc,
     DateTimeOffset? EndedAtUtc,
     bool CleanShutdown,

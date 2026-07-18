@@ -271,6 +271,7 @@ public partial class MainLayoutTests : DashboardTestContext
         [
             new(
                 RunId: "current",
+                SchemaVersion: DashboardRunStore.SchemaVersion,
                 StartedAtUtc: DateTimeOffset.UnixEpoch,
                 EndedAtUtc: null,
                 CleanShutdown: false,
@@ -284,6 +285,8 @@ public partial class MainLayoutTests : DashboardTestContext
             OnGetAsync = _ => throw new InvalidOperationException("Run selection should not be read.")
         };
         SetupMainLayoutServices(dashboardRunStore: runStore, sessionStorage: sessionStorage);
+        var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
+        var getRunsCallCount = runStore.GetRunsCallCount;
 
         var cut = RenderComponent<MainLayout>(builder =>
         {
@@ -293,7 +296,7 @@ public partial class MainLayoutTests : DashboardTestContext
         });
 
         Assert.Empty(cut.FindComponents<DashboardRunSelect>());
-        var runSelection = Assert.IsType<FluentUISetupHelpers.TestDashboardRunSelection>(Services.GetRequiredService<IDashboardRunSelection>());
+    Assert.Equal(getRunsCallCount, runStore.GetRunsCallCount);
         Assert.Null(runSelection.SelectedRunId);
     }
 
@@ -302,6 +305,7 @@ public partial class MainLayoutTests : DashboardTestContext
     {
         var historicalRun = new DashboardRunDescriptor(
             RunId: "historical",
+            SchemaVersion: DashboardRunStore.SchemaVersion,
             StartedAtUtc: new DateTimeOffset(2025, 1, 2, 12, 30, 0, TimeSpan.Zero),
             EndedAtUtc: new DateTimeOffset(2025, 1, 2, 13, 30, 0, TimeSpan.Zero),
             CleanShutdown: true,
@@ -312,6 +316,7 @@ public partial class MainLayoutTests : DashboardTestContext
         [
             new(
                 RunId: "current",
+                SchemaVersion: DashboardRunStore.SchemaVersion,
                 StartedAtUtc: DateTimeOffset.UnixEpoch,
                 EndedAtUtc: null,
                 CleanShutdown: false,
@@ -422,6 +427,7 @@ public partial class MainLayoutTests : DashboardTestContext
         [
             new(
                 RunId: "current",
+                SchemaVersion: DashboardRunStore.SchemaVersion,
                 StartedAtUtc: DateTimeOffset.UnixEpoch,
                 EndedAtUtc: null,
                 CleanShutdown: false,

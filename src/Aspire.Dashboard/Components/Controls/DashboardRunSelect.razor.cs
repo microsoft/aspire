@@ -51,7 +51,7 @@ public partial class DashboardRunSelect : ComponentBase
                 Icon = string.Equals(run.RunId, SelectedRunId, StringComparison.Ordinal)
                     ? new Icons.Regular.Size16.Checkmark()
                     : null,
-                OnClick = () => SelectedRunIdChanged.InvokeAsync(run.RunId)
+                OnClick = () => SelectedRunIdChanged.InvokeAsync(run.IsCurrent ? null : run.RunId)
             });
 
             if (run.IsCurrent && _runs.Any(candidate => !candidate.IsCurrent))

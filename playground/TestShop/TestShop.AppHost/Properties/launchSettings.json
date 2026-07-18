@@ -10,6 +10,18 @@
         "DOTNET_ENVIRONMENT": "Development"
       }
     },
+    "https (profiling)": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "dotnetRunMessages": true,
+      "applicationUrl": "https://TestShop.dev.localhost:16319;http://TestShop.dev.localhost:16320",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "DOTNET_ENVIRONMENT": "Development",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"
+      }
+    },
     "http": {
       "commandName": "Project",
       "launchBrowser": true,

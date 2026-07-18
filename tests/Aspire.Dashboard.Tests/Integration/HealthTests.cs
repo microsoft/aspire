@@ -64,6 +64,31 @@ public class HealthTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(ActivityKind.Server, activity.Kind);
     }
 
+    [Fact]
+    public async Task OtlpExporterConfigured_ExportsResourceServiceActivity()
+    {
+        var exportedActivity = new TaskCompletionSource<Activity>(TaskCreationOptions.RunContinuationsAsynchronously);
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            config => config["OTEL_EXPORTER_OTLP_ENDPOINT"] = "http://127.0.0.1:1",
+            builder => builder.Services.AddOpenTelemetry()
+                .WithTracing(tracing => tracing.AddProcessor(
+                    new SimpleActivityExportProcessor(new TestActivityExporter(
+                        exportedActivity,
+                        activity => activity.Source.Name == DashboardClient.ActivitySourceName)))));
+        await app.StartAsync().DefaultTimeout();
+        var dashboardClient = app.Services.GetRequiredService<DashboardClient>();
+
+        using (var activity = dashboardClient.ActivitySource.StartActivity("Test resource update", ActivityKind.Consumer))
+        {
+            Assert.NotNull(activity);
+        }
+
+        var exported = await exportedActivity.Task.DefaultTimeout();
+        Assert.Equal(DashboardClient.ActivitySourceName, exported.Source.Name);
+        Assert.Equal(ActivityKind.Consumer, exported.Kind);
+    }
+
     private sealed class TestActivityExporter(
         TaskCompletionSource<Activity> exportedActivity,
         Func<Activity, bool> predicate) : BaseExporter<Activity>
