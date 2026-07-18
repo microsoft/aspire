@@ -543,6 +543,51 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_ForceReturnsCleanupFailureWhenDcpCannotStart()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var processFactory = new TestProcessExecutionFactory();
+        processFactory.CreateExecutionCallback = (args, env, _, options) =>
+            new TestProcessExecution(
+                "dcp",
+                args,
+                env,
+                options,
+                (_, _, _) => Task.FromResult((0, (string?)null)),
+                () => processFactory.AttemptCount)
+            {
+                StartReturnValue = false
+            };
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Single(processFactory.CreatedExecutions);
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("Failed to clean up persistent resources", error, StringComparison.Ordinal);
+        Assert.Contains("Failed to start process:", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task StopCommand_ForceReturnsFailureWhenDcpIsUnavailable()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

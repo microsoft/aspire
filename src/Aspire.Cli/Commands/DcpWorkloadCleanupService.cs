@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Shared;
@@ -35,11 +36,22 @@ internal sealed class DcpWorkloadCleanupService(
             return DcpWorkloadCleanupResult.NotFound();
         }
 
-        var (exitCode, output, error) = await layoutProcessRunner.RunAsync(
-            dcpPath,
-            ["cleanup", workloadId],
-            workingDirectory: executionContext.WorkingDirectory.FullName,
-            ct: cancellationToken).ConfigureAwait(false);
+        int exitCode;
+        string output;
+        string error;
+        try
+        {
+            (exitCode, output, error) = await layoutProcessRunner.RunAsync(
+                dcpPath,
+                ["cleanup", workloadId],
+                workingDirectory: executionContext.WorkingDirectory.FullName,
+                ct: cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or IOException or UnauthorizedAccessException)
+        {
+            logger.LogWarning(ex, "Failed to start DCP cleanup process at '{DcpPath}'.", dcpPath);
+            return new DcpWorkloadCleanupResult(CliExitCodes.FailedToDotnetRunAppHost, string.Empty, ex.Message, DcpFound: true);
+        }
 
         if (!string.IsNullOrWhiteSpace(output))
         {
