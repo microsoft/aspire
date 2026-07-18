@@ -66,6 +66,7 @@ public sealed partial class SqliteTelemetryRepository
                             continue;
                         }
 
+                        EnsureCachedInstruments(connection, transaction, cachedResource, cachedScope, scopeMetrics.Metrics);
                         foreach (var metric in scopeMetrics.Metrics)
                         {
                             AddMetricToDatabase(connection, transaction, context, cachedResource, cachedScope, metric, _metricIngestionState, pointBatch);
@@ -594,23 +595,36 @@ public sealed partial class SqliteTelemetryRepository
     {
         foreach (var batch in dimensions.Chunk(MaxMetricPointBatchSize))
         {
-            var sql = new StringBuilder();
+            var sql = new StringBuilder("""
+                INSERT INTO telemetry_metric_dimensions (instrument_id, attribute_hash)
+                VALUES
+                """);
             var parameters = new DynamicParameters();
             for (var index = 0; index < batch.Length; index++)
             {
-                sql.Append(CultureInfo.InvariantCulture, $$"""
-                    INSERT INTO telemetry_metric_dimensions (instrument_id, attribute_hash)
-                    VALUES (@InstrumentId{{index}}, @AttributeHash{{index}})
-                    RETURNING dimension_id;
-                    """);
+                if (index > 0)
+                {
+                    sql.AppendLine(",");
+                }
+                sql.Append(CultureInfo.InvariantCulture, $"    (@InstrumentId{index}, @AttributeHash{index})");
                 parameters.Add($"InstrumentId{index}", batch[index].InstrumentId);
                 parameters.Add($"AttributeHash{index}", batch[index].AttributeHash);
             }
+            sql.Append("""
 
-            using var reader = connection.QueryMultiple(sql.ToString(), parameters, transaction);
-            for (var index = 0; index < batch.Length; index++)
+                RETURNING dimension_id AS DimensionId, instrument_id AS InstrumentId, attribute_hash AS AttributeHash;
+                """);
+
+            // Hash collisions can produce indistinguishable inserted rows. Their IDs are interchangeable here
+            // because attributes and points are associated only after an ID is assigned to each pending dimension.
+            var pendingDimensions = batch
+                .GroupBy(dimension => (dimension.InstrumentId, dimension.AttributeHash))
+                .ToDictionary(group => group.Key, group => new Queue<PendingMetricDimension>(group));
+            foreach (var insertedDimension in connection.Query<InsertedMetricDimensionRecord>(sql.ToString(), parameters, transaction))
             {
-                batch[index].Dimension.DimensionId = reader.ReadSingle<long>();
+                pendingDimensions[(insertedDimension.InstrumentId, insertedDimension.AttributeHash)]
+                    .Dequeue()
+                    .Dimension.DimensionId = insertedDimension.DimensionId;
             }
         }
     }
@@ -1099,6 +1113,13 @@ public sealed partial class SqliteTelemetryRepository
     }
 
     private sealed record PendingMetricDimension(long InstrumentId, long AttributeHash, MetricDimensionState Dimension);
+
+    private sealed class InsertedMetricDimensionRecord
+    {
+        public required long DimensionId { get; init; }
+        public required long InstrumentId { get; init; }
+        public required long AttributeHash { get; init; }
+    }
 
     private sealed record PendingMetricDimensionAttribute(MetricDimensionState Dimension, int Ordinal, string Key, string Value);
 

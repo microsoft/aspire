@@ -1328,7 +1328,7 @@ public sealed class SqliteMetricsTests : MetricsTests
             .Select(activity => (string)activity.GetTagItem("db.query.text")!)
             .ToList();
         Assert.Single(queries, query => query.Contains("SELECT instrument_id", StringComparison.Ordinal));
-        Assert.Single(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
         var insertQuery = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_points", StringComparison.Ordinal));
         Assert.Equal(2, insertQuery.Split("INSERT INTO telemetry_metric_points", StringSplitOptions.None).Length - 1);
@@ -1371,10 +1371,12 @@ public sealed class SqliteMetricsTests : MetricsTests
             .ToList();
         Assert.Single(queries, query => query.Contains("SELECT instrument_id", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("SELECT COUNT(*) FROM telemetry_metric_instruments", StringComparison.Ordinal));
-        Assert.Equal(2, queries.Count(query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal)));
+        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
         Assert.DoesNotContain(queries, query => query.StartsWith("SELECT COUNT(*) FROM telemetry_metric_dimensions", StringComparison.Ordinal));
+        var instrumentInsert = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_instruments", StringComparison.Ordinal));
+        Assert.Equal(2, instrumentInsert.Split("@InstrumentName", StringSplitOptions.None).Length - 1);
         var dimensionInsert = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_dimensions", StringComparison.Ordinal));
-        Assert.Equal(3, dimensionInsert.Split("INSERT INTO telemetry_metric_dimensions", StringSplitOptions.None).Length - 1);
+        Assert.Equal(3, dimensionInsert.Split("@InstrumentId", StringSplitOptions.None).Length - 1);
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_dimension_attributes", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_histogram_bucket_counts", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_histogram_explicit_bounds", StringComparison.Ordinal));
