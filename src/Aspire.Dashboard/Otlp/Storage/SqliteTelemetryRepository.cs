@@ -39,7 +39,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
             .Replace("_", "!_", StringComparison.Ordinal);
     }
 
-            internal ActivitySource SqlActivitySource => _database.ActivitySource;
+    internal ActivitySource SqlActivitySource => _database.ActivitySource;
 
     public SqliteTelemetryRepository(
         string databasePath,

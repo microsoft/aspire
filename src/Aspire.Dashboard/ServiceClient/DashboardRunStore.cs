@@ -103,8 +103,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         var temporaryRoot = Directory.GetParent(RunDirectory)!.FullName;
         foreach (var directory in Directory.EnumerateDirectories(temporaryRoot, $"{TemporaryDirectoryPrefix}*"))
         {
-            if (!IsTemporaryDatabaseDirectory(directory) ||
-                string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase) ||
+            if (string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase) ||
                 !File.Exists(Path.Combine(directory, DatabaseFileName)))
             {
                 continue;
@@ -130,15 +129,6 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
     }
 
-    private static bool IsTemporaryDatabaseDirectory(string directory)
-    {
-        // Directory.CreateTempSubdirectory appends a Path.GetRandomFileName value such as "a1b2c3d4.e5f".
-        // Checking that exact shape avoids matching other Aspire test and tool directories with longer prefixes.
-        var directoryName = Path.GetFileName(directory);
-        var randomName = directoryName.AsSpan(TemporaryDirectoryPrefix.Length);
-        return randomName is { Length: 12 } && randomName[8] == '.';
-    }
-
     public string RunDirectory { get; }
     public string DatabasePath { get; }
     public string RunId => _metadata.RunId;
@@ -160,6 +150,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         foreach (var directory in Directory.EnumerateDirectories(_runsDirectory))
         {
             if (string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            // Filter out in-progress runs that are owned by other Dashboard instances.
+            using var runLock = TryOpenRunLock(directory);
+            if (runLock is null)
             {
                 continue;
             }

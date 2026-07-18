@@ -22,18 +22,16 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public sealed class SqliteTelemetryPersistenceTests : IDisposable
+public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutputHelper)
 {
-    private readonly string _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-telemetry-persistence-tests-").FullName;
-
     [Fact]
     public void Cache_UsesCanonicalResourceViewAndScopeAcrossSignals()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "canonical-cache.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var startTime = new DateTime(2025, 4, 5, 6, 7, 8, DateTimeKind.Utc);
         var resource = CreateResource(attributes: [KeyValuePair.Create("resource-key", "resource-value")]);
         var scope = CreateScope(name: "SharedScope", attributes: [KeyValuePair.Create("scope-key", "scope-value")]);
-        using var repository = CreateRepository(databasePath);
+        using var repository = CreateRepository(workspace.Path);
 
         repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
@@ -82,9 +80,9 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     [Fact]
     public void Cache_HydratesPersistedMetadataOnce()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "lazy-cache.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var startTime = new DateTime(2025, 4, 5, 6, 7, 8, DateTimeKind.Utc);
-        using (var repository = CreateRepository(databasePath))
+        using (var repository = CreateRepository(workspace.Path))
         {
             repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
             {
@@ -104,7 +102,7 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
             });
         }
 
-        using var historicalRepository = CreateRepository(databasePath, readOnly: true);
+        using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
         var activities = new ConcurrentQueue<Activity>();
         using var listener = ActivityListenerHelper.Create(historicalRepository.SqlActivitySource, onActivityStopped: activities.Enqueue);
         using var parent = new Activity("cache hydration test").Start();
@@ -125,9 +123,10 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     [Fact]
     public void Logs_ReopenFromNormalizedRowsWithStableIds()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "dashboard.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
         long logId;
-        using (var repository = CreateRepository(databasePath))
+        using (var repository = CreateRepository(workspace.Path))
         {
             repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
             {
@@ -149,7 +148,7 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
             logId = log.InternalId;
         }
 
-        using (var historicalRepository = CreateRepository(databasePath, readOnly: true))
+        using (var historicalRepository = CreateRepository(workspace.Path, readOnly: true))
         {
             var log = Assert.Single(historicalRepository.GetLogs(CreateLogsContext()).Items);
             Assert.Equal(logId, log.InternalId);
@@ -170,7 +169,8 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     [Fact]
     public void Traces_ReopenFromNormalizedRowsWithStableEventIds()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "dashboard.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
         var startTime = new DateTime(2025, 1, 2, 3, 4, 5, DateTimeKind.Utc);
         var link = new Span.Types.Link
         {
@@ -179,7 +179,7 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
             TraceState = "state"
         };
         Guid eventId;
-        using (var repository = CreateRepository(databasePath))
+        using (var repository = CreateRepository(workspace.Path))
         {
             repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
             {
@@ -212,7 +212,7 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
             eventId = Assert.Single(trace.FirstSpan.Events).InternalId;
         }
 
-        using (var historicalRepository = CreateRepository(databasePath, readOnly: true))
+        using (var historicalRepository = CreateRepository(workspace.Path, readOnly: true))
         {
             var trace = Assert.Single(historicalRepository.GetTraces(GetTracesRequest.ForResourceKey(new ResourceKey("TestService", "TestId"))).PagedResult.Items);
             Assert.Equal("TestSource", trace.FirstSpan.Scope.Name);
@@ -237,9 +237,10 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     [Fact]
     public void Metrics_ReopenFromNormalizedRows()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "dashboard.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
         var startTime = new DateTime(2025, 2, 3, 4, 5, 6, DateTimeKind.Utc);
-        using (var repository = CreateRepository(databasePath))
+        using (var repository = CreateRepository(workspace.Path))
         {
             repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
             {
@@ -258,7 +259,7 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
             });
         }
 
-        using (var historicalRepository = CreateRepository(databasePath, readOnly: true))
+        using (var historicalRepository = CreateRepository(workspace.Path, readOnly: true))
         {
             var resourceKey = new ResourceKey("TestService", "TestId");
             var summary = Assert.Single(historicalRepository.GetInstrumentsSummaries(resourceKey));
@@ -288,9 +289,10 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     [Fact]
     public void Metrics_EquivalentAttributesShareIndexedDimension()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "metric-dimensions.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
         var startTime = new DateTime(2025, 2, 3, 4, 5, 6, DateTimeKind.Utc);
-        using (var repository = CreateRepository(databasePath))
+        using (var repository = CreateRepository(workspace.Path))
         {
             var addContext = new AddContext();
             foreach (var attributes in new[]
@@ -331,10 +333,11 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     [Fact]
     public void Scopes_AreSharedAcrossLogsTracesAndMetrics()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "shared-scopes.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
         var startTime = new DateTime(2025, 3, 4, 5, 6, 7, DateTimeKind.Utc);
         var scope = CreateScope(name: "SharedScope", attributes: [KeyValuePair.Create("scope-key", "scope-value")]);
-        using (var repository = CreateRepository(databasePath))
+        using (var repository = CreateRepository(workspace.Path))
         {
             repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
             {
@@ -422,8 +425,9 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     [Fact]
     public void ResourceViews_EquivalentAttributesShareNormalizedRows()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "resource-views.db");
-        using (var repository = CreateRepository(databasePath))
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        using (var repository = CreateRepository(workspace.Path))
         {
             var addContext = new AddContext();
             repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
@@ -468,8 +472,9 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     [Fact]
     public void ResourceViews_LimitRejectsNewNormalizedRow()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "resource-view-limit.db");
-        using var repository = CreateRepository(databasePath);
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
         {
@@ -530,10 +535,11 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
     [Fact]
     public void Scopes_AreDeletedAfterTheirFinalOwnerIsCleared()
     {
-        var databasePath = Path.Combine(_temporaryDirectory, "scope-cleanup.db");
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
         var startTime = new DateTime(2025, 3, 4, 5, 6, 7, DateTimeKind.Utc);
         var scope = CreateScope("SharedScope");
-        using var repository = CreateRepository(databasePath);
+        using var repository = CreateRepository(workspace.Path);
         repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
@@ -590,10 +596,12 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
         return (long)command.ExecuteScalar()!;
     }
 
-    private static SqliteTelemetryRepository CreateRepository(string databasePath, bool readOnly = false)
+    private static string GetDatabasePath(string workspacePath) => Path.Combine(workspacePath, "dashboard.db");
+
+    private static SqliteTelemetryRepository CreateRepository(string workspacePath, bool readOnly = false)
     {
         return new SqliteTelemetryRepository(
-            databasePath,
+            GetDatabasePath(workspacePath),
             NullLoggerFactory.Instance,
             Options.Create(new DashboardOptions()),
             new PauseManager(),
@@ -610,10 +618,5 @@ public sealed class SqliteTelemetryPersistenceTests : IDisposable
             Count = 10,
             Filters = []
         };
-    }
-
-    public void Dispose()
-    {
-        Directory.Delete(_temporaryDirectory, recursive: true);
     }
 }

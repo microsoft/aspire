@@ -20,9 +20,9 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class DashboardDataSourceTests : IDisposable
+public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
-    private readonly string _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-runs-tests-").FullName;
+    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
 
     [Fact]
     public void RunDirectory_IsNestedUnderApplicationDirectoryAndRuns()
@@ -32,7 +32,7 @@ public sealed class DashboardDataSourceTests : IDisposable
         using var runStore = CreateRunStore(options);
 
         var applicationDirectoryName = DashboardRunStore.GetApplicationDirectoryName("My Dashboard");
-        var expectedRunsDirectory = Path.Combine(_temporaryDirectory, applicationDirectoryName, "runs");
+        var expectedRunsDirectory = Path.Combine(_workspace.Path, applicationDirectoryName, "runs");
         Assert.Equal(expectedRunsDirectory, Directory.GetParent(runStore.RunDirectory)!.FullName);
     }
 
@@ -50,7 +50,7 @@ public sealed class DashboardDataSourceTests : IDisposable
             new DashboardSqliteDatabase(databasePath).InitializeSchema();
 
             Assert.False(runStore.SupportsRunSelection);
-            Assert.False(runDirectory.StartsWith(_temporaryDirectory, StringComparison.OrdinalIgnoreCase));
+            Assert.False(runDirectory.StartsWith(_workspace.Path, StringComparison.OrdinalIgnoreCase));
             Assert.Collection(runStore.GetRuns(), run => Assert.True(run.IsCurrent));
             Assert.True(File.Exists(databasePath));
         }
@@ -94,9 +94,9 @@ public sealed class DashboardDataSourceTests : IDisposable
     }
 
     [Fact]
-    public void NoneMode_DoesNotDeleteOtherDashboardTemporaryDirectories()
+    public void NoneMode_DoesNotDeleteTemporaryDirectoriesWithOtherNames()
     {
-        var otherDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-telemetry-tests-").FullName;
+        var otherDirectory = Directory.CreateTempSubdirectory("unrelated-").FullName;
         File.WriteAllText(Path.Combine(otherDirectory, "dashboard.db"), string.Empty);
 
         try
@@ -163,7 +163,7 @@ public sealed class DashboardDataSourceTests : IDisposable
     [InlineData("CREATE TABLE dashboard_schema (version); INSERT INTO dashboard_schema VALUES ('invalid');")]
     public void IsCompatible_ReturnsFalseForMalformedSchema(string schemaSql)
     {
-        var databasePath = Path.Combine(_temporaryDirectory, $"malformed-{Guid.NewGuid():N}.db");
+        var databasePath = Path.Combine(_workspace.Path, $"malformed-{Guid.NewGuid():N}.db");
         using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
         {
             connection.Open();
@@ -224,9 +224,41 @@ public sealed class DashboardDataSourceTests : IDisposable
     }
 
     [Fact]
+    public void GetRuns_ExcludesRunOwnedByAnotherDashboard()
+    {
+        var options = CreateOptions();
+        string historicalRunId;
+
+        using (var historicalRunStore = CreateRunStore(options))
+        {
+            historicalRunId = historicalRunStore.RunId;
+            using var historicalTelemetryRepository = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
+        }
+
+        using var activeRunStore = CreateRunStore(options);
+        using var activeTelemetryRepository = CreateTelemetryRepository(activeRunStore.DatabasePath, options);
+        using var currentRunStore = CreateRunStore(options);
+        using var currentTelemetryRepository = CreateTelemetryRepository(currentRunStore.DatabasePath, options);
+
+        Assert.Collection(
+            currentRunStore.GetRuns(),
+            currentRun =>
+            {
+                Assert.True(currentRun.IsCurrent);
+                Assert.Equal(currentRunStore.RunId, currentRun.RunId);
+            },
+            historicalRun =>
+            {
+                Assert.False(historicalRun.IsCurrent);
+                Assert.Equal(historicalRunId, historicalRun.RunId);
+                Assert.NotEqual(activeRunStore.RunId, historicalRun.RunId);
+            });
+    }
+
+    [Fact]
     public void RunsMode_DeletesOldestRunWhenLimitIsExceeded()
     {
-        var applicationDirectory = Path.Combine(_temporaryDirectory, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
+        var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
         var runsDirectory = Path.Combine(applicationDirectory, "runs");
         var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
             .Select(index => Path.Combine(
@@ -250,7 +282,7 @@ public sealed class DashboardDataSourceTests : IDisposable
     [Fact]
     public void RunsMode_DoesNotDeleteActiveExpiredRun()
     {
-        var applicationDirectory = Path.Combine(_temporaryDirectory, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
+        var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
         var runsDirectory = Path.Combine(applicationDirectory, "runs");
         var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
             .Select(index => Path.Combine(
@@ -279,7 +311,7 @@ public sealed class DashboardDataSourceTests : IDisposable
     [Fact]
     public void RunsMode_DeleteExpiredRunFails_LogsWarningAndContinues()
     {
-        var applicationDirectory = Path.Combine(_temporaryDirectory, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
+        var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
         var runsDirectory = Path.Combine(applicationDirectory, "runs");
         var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
             .Select(index => Path.Combine(
@@ -336,7 +368,7 @@ public sealed class DashboardDataSourceTests : IDisposable
     [Fact]
     public void SqliteDatabase_ConfiguresLikeAndForeignKeys()
     {
-        var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "connection.db"));
+        var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "connection.db"));
         using (var connection = database.OpenConnection())
         using (var command = connection.CreateCommand())
         {
@@ -480,7 +512,7 @@ public sealed class DashboardDataSourceTests : IDisposable
             ApplicationName = applicationName,
             Data = new DashboardDataOptions
             {
-                Directory = _temporaryDirectory,
+                Directory = _workspace.Path,
                 PersistenceMode = persistenceMode
             }
         });
@@ -521,6 +553,6 @@ public sealed class DashboardDataSourceTests : IDisposable
 
     public void Dispose()
     {
-        Directory.Delete(_temporaryDirectory, recursive: true);
+        _workspace.Dispose();
     }
 }

@@ -907,6 +907,10 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
+        // Console-log persistence is demand-driven rather than always-on. This known limitation means
+        // historical runs can omit logs for resources that were never viewed or exported. The historical
+        // Console Logs page checks this capture state and displays a notice when logs aren't available.
+        // See https://github.com/microsoft/aspire/issues/18823.
         MarkConsoleLogsLoaded(resourceName);
 
         // It's ok to dispose CTS with using because this method exits after it is finished being used.

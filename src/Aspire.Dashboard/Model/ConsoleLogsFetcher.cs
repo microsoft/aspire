@@ -34,6 +34,9 @@ public sealed class ConsoleLogsFetcher
         var logEntries = new List<LogEntry>();
         var logParser = new LogParser(ConsoleColor.Black);
 
+        // Export uses the persisted snapshot, which can omit logs that weren't captured by a demand-driven
+        // subscription. This is a known limitation; the historical Console Logs page displays a notice when
+        // logs aren't available for the selected run. See https://github.com/microsoft/aspire/issues/18823.
         await foreach (var batch in _dataSource.ResourceRepository.GetConsoleLogs(resourceName, cancellationToken).ConfigureAwait(false))
         {
             foreach (var logLine in batch)
