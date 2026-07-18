@@ -289,6 +289,43 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
+    public void Resources_DuplicateEndpointUrlsRoundTrip()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var resource = CreateResource("frontend-cqgvshvm", "frontend");
+        resource.Urls.AddRange(
+        [
+            CreateUrl("http", "Online store (http)", "http://frontend-testshop.dev.localhost:5266/"),
+            CreateUrl("http", "Online store (http)", "http://localhost:5266/", isInternal: true),
+            CreateUrl("https", "Online store (https)", "https://frontend-testshop.dev.localhost:7269/"),
+            CreateUrl("https", "Online store (https)", "https://localhost:7269/", isInternal: true),
+            CreateUrl("https", "Health", "https://localhost:7269/health", isInternal: true)
+        ]);
+
+        using (var repository = CreateRepository(workspace.Path))
+        {
+            ((IResourceRepositoryWriter)repository).ReplaceResources([resource]);
+        }
+
+        using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
+        var actual = Assert.Single(historicalRepository.GetResources());
+        Assert.Collection(actual.Urls,
+            url => AssertUrl(url, "http", "Online store (http)", "http://frontend-testshop.dev.localhost:5266/", isInternal: false),
+            url => AssertUrl(url, "http", "Online store (http)", "http://localhost:5266/", isInternal: true),
+            url => AssertUrl(url, "https", "Online store (https)", "https://frontend-testshop.dev.localhost:7269/", isInternal: false),
+            url => AssertUrl(url, "https", "Online store (https)", "https://localhost:7269/", isInternal: true),
+            url => AssertUrl(url, "https", "Health", "https://localhost:7269/health", isInternal: true));
+
+        static void AssertUrl(global::Aspire.Dashboard.Model.UrlViewModel actual, string endpointName, string displayName, string url, bool isInternal)
+        {
+            Assert.Equal(endpointName, actual.EndpointName);
+            Assert.Equal(displayName, actual.DisplayProperties.DisplayName);
+            Assert.Equal(url, actual.Url.ToString());
+            Assert.Equal(isInternal, actual.IsInternal);
+        }
+    }
+
+    [Fact]
     public void Resources_BulkLoadKeepsChildRecordsIsolated()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
@@ -542,6 +579,17 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             ResourceType = "Project",
             Uid = $"uid-{name}",
             CreatedAt = Timestamp.FromDateTime(DateTime.UnixEpoch)
+        };
+    }
+
+    private static Url CreateUrl(string endpointName, string displayName, string url, bool isInternal = false)
+    {
+        return new Url
+        {
+            EndpointName = endpointName,
+            FullUrl = url,
+            IsInternal = isInternal,
+            DisplayProperties = new UrlDisplayProperties { DisplayName = displayName }
         };
     }
 

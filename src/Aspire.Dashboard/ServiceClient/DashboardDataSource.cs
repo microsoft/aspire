@@ -76,7 +76,11 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
             var historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
             try
             {
-                historicalDatabase.ValidateSchemaVersion(selectedRun.SchemaVersion);
+                if (!historicalDatabase.ValidateSchemaVersion(selectedRun.SchemaVersion))
+                {
+                    throw new InvalidOperationException(
+                        $"Dashboard database for run '{selectedRun.RunId}' does not match run metadata schema version '{selectedRun.SchemaVersion}'.");
+                }
                 _historicalTelemetryRepository = _repositoryFactory.CreateTelemetryRepository(historicalDatabase);
                 _historicalResourceRepository = _repositoryFactory.CreateResourceRepository(historicalDatabase);
                 _historicalDatabase = historicalDatabase;
