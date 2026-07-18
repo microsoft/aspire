@@ -5,3 +5,9 @@ using Aspire;
 using Aspire.Mcp.Client;
 
 [assembly: ConfigurationSchema("Aspire:Mcp:Client", typeof(McpClientSettings))]
+
+[assembly: LoggingCategories(
+    "ModelContextProtocol.Authentication.ClientOAuthProvider",
+    "ModelContextProtocol.Client.AutoDetectingClientSessionTransport",
+    "ModelContextProtocol.Client.HttpClientTransport",
+    "ModelContextProtocol.Client.McpClient")]

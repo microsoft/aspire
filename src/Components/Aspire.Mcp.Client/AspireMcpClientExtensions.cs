@@ -493,6 +493,9 @@ public static class AspireMcpClientExtensions
 
         public override IAsyncDisposable RegisterNotificationHandler(string method, Func<JsonRpcNotification, CancellationToken, ValueTask> handler)
         {
+            ArgumentException.ThrowIfNullOrWhiteSpace(method);
+            ArgumentNullException.ThrowIfNull(handler);
+
             var registration = new NotificationRegistration(this, method, handler);
             while (true)
             {

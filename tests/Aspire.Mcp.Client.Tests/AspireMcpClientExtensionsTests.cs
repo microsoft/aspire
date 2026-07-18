@@ -211,6 +211,21 @@ public class AspireMcpClientExtensionsTests
     }
 
     [Fact]
+    public void ConfigurationSchemaIncludesMcpLoggingCategories()
+    {
+        using var schema = JsonDocument.Parse(File.ReadAllText(Path.Combine(AppContext.BaseDirectory, "ConfigurationSchema.json")));
+        var logLevelProperties = schema.RootElement
+            .GetProperty("definitions")
+            .GetProperty("logLevel")
+            .GetProperty("properties");
+
+        Assert.True(logLevelProperties.TryGetProperty("ModelContextProtocol.Authentication.ClientOAuthProvider", out _));
+        Assert.True(logLevelProperties.TryGetProperty("ModelContextProtocol.Client.AutoDetectingClientSessionTransport", out _));
+        Assert.True(logLevelProperties.TryGetProperty("ModelContextProtocol.Client.HttpClientTransport", out _));
+        Assert.True(logLevelProperties.TryGetProperty("ModelContextProtocol.Client.McpClient", out _));
+    }
+
+    [Fact]
     public void ConfigurationSchemaRejectsInvalidConfiguration()
     {
         var schema = JsonSchema.FromFile(Path.Combine(AppContext.BaseDirectory, "ConfigurationSchema.json"), new BuildOptions
@@ -592,6 +607,30 @@ public class AspireMcpClientExtensionsTests
         var unexpectedResult = await Task.WhenAny(unexpectedNotification.Task, Task.Delay(TimeSpan.FromSeconds(1)));
         Assert.NotSame(unexpectedNotification.Task, unexpectedResult);
         Assert.Equal(1, Volatile.Read(ref notificationCount));
+    }
+
+    [Fact]
+    public async Task AddMcpClientDoesNotRetainInvalidNotificationHandlers()
+    {
+        var handler = new NotificationRecoveryHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        builder.AddMcpClient("mcp");
+
+        using var host = builder.Build();
+        var client = host.Services.GetRequiredService<McpClient>();
+
+        Assert.Throws<ArgumentException>(() => client.RegisterNotificationHandler(" ", (_, _) => ValueTask.CompletedTask));
+        Assert.Throws<ArgumentNullException>(() => client.RegisterNotificationHandler("test/notification", null!));
+
+        await handler.InitialStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
+        var failure = await Record.ExceptionAsync(async () => await client.PingAsync());
+        Assert.NotNull(failure);
+
+        var exception = Record.Exception(() => _ = client.ServerInfo);
+
+        Assert.Null(exception);
+        await handler.ReplacementStream.Task.WaitAsync(TimeSpan.FromSeconds(10));
     }
 
     [Theory]

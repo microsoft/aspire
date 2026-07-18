@@ -1,4 +1,22 @@
 {
+  "definitions": {
+    "logLevel": {
+      "properties": {
+        "ModelContextProtocol.Authentication.ClientOAuthProvider": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "ModelContextProtocol.Client.AutoDetectingClientSessionTransport": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "ModelContextProtocol.Client.HttpClientTransport": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "ModelContextProtocol.Client.McpClient": {
+          "$ref": "#/definitions/logLevelThreshold"
+        }
+      }
+    }
+  },
   "type": "object",
   "properties": {
     "Aspire": {
