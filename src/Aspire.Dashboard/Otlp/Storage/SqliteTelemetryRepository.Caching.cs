@@ -15,6 +15,8 @@ namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed partial class SqliteTelemetryRepository
 {
+    private const int MaxInstrumentBatchSize = 100;
+
     private readonly object _cacheLock = new();
     private readonly Dictionary<ResourceKey, CachedResource> _cachedResourcesByKey = [];
     private readonly Dictionary<long, CachedResource> _cachedResourcesById = [];
@@ -250,34 +252,10 @@ public sealed partial class SqliteTelemetryRepository
                 return instrument;
             }
 
-            if (!resourceScope.InstrumentsLoaded)
+            EnsureCachedInstrumentsLoaded(connection, transaction, resource, resourceScope);
+            if (resourceScope.Instruments.TryGetValue(metric.Name, out instrument))
             {
-                var records = connection.Query<CachedInstrumentRecord>("""
-                SELECT instrument_id AS InstrumentId,
-                    resource_id AS ResourceId,
-                    scope_id AS ScopeId,
-                    instrument_name AS InstrumentName,
-                    description AS Description,
-                    unit AS Unit,
-                    instrument_type AS InstrumentType,
-                    aggregation_temporality AS AggregationTemporality,
-                    has_overflow AS HasOverflow
-                FROM telemetry_metric_instruments
-                WHERE resource_id = @ResourceId AND scope_id = @ScopeId;
-                """, new
-                {
-                    resource.ResourceId,
-                    ScopeId = resourceScope.Scope.ScopeId
-                }, transaction);
-                foreach (var loadedRecord in records)
-                {
-                    AddCachedInstrument(resourceScope, loadedRecord);
-                }
-                resourceScope.InstrumentsLoaded = true;
-                if (resourceScope.Instruments.TryGetValue(metric.Name, out instrument))
-                {
-                    return instrument;
-                }
+                return instrument;
             }
 
             var instrumentCount = resource.InstrumentCount ??= connection.QuerySingle<int>(
@@ -321,8 +299,128 @@ public sealed partial class SqliteTelemetryRepository
                 HasOverflow = false
             };
             resource.InstrumentCount++;
+            _metricIngestionState.LoadedDimensionInstruments.Add(instrumentId);
+            _metricIngestionState.DimensionCounts[instrumentId] = 0;
             return AddCachedInstrument(resourceScope, record);
         }
+    }
+
+    private void EnsureCachedInstruments(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        CachedResource resource,
+        CachedResourceScope resourceScope,
+        RepeatedField<Metric> metrics)
+    {
+        lock (_cacheLock)
+        {
+            EnsureCachedInstrumentsLoaded(connection, transaction, resource, resourceScope);
+
+            var pendingMetrics = metrics
+                .Where(metric => !string.IsNullOrEmpty(metric.Name) && metric.DataCase is
+                    Metric.DataOneofCase.Gauge or Metric.DataOneofCase.Sum or Metric.DataOneofCase.Histogram)
+                .DistinctBy(metric => metric.Name, StringComparer.Ordinal)
+                .Where(metric => !resourceScope.Instruments.ContainsKey(metric.Name))
+                .ToList();
+            if (pendingMetrics.Count == 0)
+            {
+                return;
+            }
+
+            var instrumentCount = resource.InstrumentCount ??= connection.QuerySingle<int>(
+                "SELECT COUNT(*) FROM telemetry_metric_instruments WHERE resource_id = @ResourceId;",
+                new { resource.ResourceId },
+                transaction);
+            var availableCount = Math.Max(0, TelemetryRepositoryLimits.MaxInstrumentCount - instrumentCount);
+            foreach (var batch in pendingMetrics.Take(availableCount).Chunk(MaxInstrumentBatchSize))
+            {
+                var sql = new StringBuilder("""
+                    INSERT INTO telemetry_metric_instruments (
+                        resource_id, scope_id, instrument_name, description, unit, instrument_type,
+                        aggregation_temporality, is_monotonic)
+                    VALUES
+                    """);
+                var parameters = new DynamicParameters();
+                parameters.Add("ResourceId", resource.ResourceId);
+                parameters.Add("ScopeId", resourceScope.Scope.ScopeId);
+                for (var index = 0; index < batch.Length; index++)
+                {
+                    if (index > 0)
+                    {
+                        sql.AppendLine(",");
+                    }
+                    sql.Append(CultureInfo.InvariantCulture, $"    (@ResourceId, @ScopeId, @InstrumentName{index}, @Description{index}, @Unit{index}, @InstrumentType{index}, @AggregationTemporality{index}, @IsMonotonic{index})");
+                    parameters.Add($"InstrumentName{index}", batch[index].Name);
+                    parameters.Add($"Description{index}", batch[index].Description);
+                    parameters.Add($"Unit{index}", batch[index].Unit);
+                    parameters.Add($"InstrumentType{index}", (int)MapMetricType(batch[index].DataCase));
+                    parameters.Add($"AggregationTemporality{index}", (int)MapAggregationTemporality(batch[index]));
+                    parameters.Add($"IsMonotonic{index}", batch[index].DataCase == Metric.DataOneofCase.Sum && batch[index].Sum.IsMonotonic);
+                }
+                sql.Append("""
+
+                    RETURNING instrument_id AS InstrumentId, instrument_name AS InstrumentName;
+                    """);
+
+                var metricsByName = batch.ToDictionary(metric => metric.Name, StringComparer.Ordinal);
+                var insertedRecords = connection.Query<InsertedInstrumentRecord>(sql.ToString(), parameters, transaction).ToList();
+
+                foreach (var insertedRecord in insertedRecords)
+                {
+                    var metric = metricsByName[insertedRecord.InstrumentName];
+                    AddCachedInstrument(resourceScope, new CachedInstrumentRecord
+                    {
+                        InstrumentId = insertedRecord.InstrumentId,
+                        ResourceId = resource.ResourceId,
+                        ScopeId = resourceScope.Scope.ScopeId,
+                        InstrumentName = metric.Name,
+                        Description = metric.Description,
+                        Unit = metric.Unit,
+                        InstrumentType = (int)MapMetricType(metric.DataCase),
+                        AggregationTemporality = (int)MapAggregationTemporality(metric),
+                        HasOverflow = false
+                    });
+                    _metricIngestionState.LoadedDimensionInstruments.Add(insertedRecord.InstrumentId);
+                    _metricIngestionState.DimensionCounts[insertedRecord.InstrumentId] = 0;
+                }
+                resource.InstrumentCount += insertedRecords.Count;
+            }
+        }
+    }
+
+    private void EnsureCachedInstrumentsLoaded(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        CachedResource resource,
+        CachedResourceScope resourceScope)
+    {
+        if (resourceScope.InstrumentsLoaded)
+        {
+            return;
+        }
+
+        var records = connection.Query<CachedInstrumentRecord>("""
+            SELECT instrument_id AS InstrumentId,
+                resource_id AS ResourceId,
+                scope_id AS ScopeId,
+                instrument_name AS InstrumentName,
+                description AS Description,
+                unit AS Unit,
+                instrument_type AS InstrumentType,
+                aggregation_temporality AS AggregationTemporality,
+                has_overflow AS HasOverflow
+            FROM telemetry_metric_instruments
+            WHERE resource_id = @ResourceId AND scope_id = @ScopeId;
+            """, new
+        {
+            resource.ResourceId,
+            ScopeId = resourceScope.Scope.ScopeId
+        }, transaction);
+        foreach (var loadedRecord in records)
+        {
+            AddCachedInstrument(resourceScope, loadedRecord);
+        }
+        resourceScope.InstrumentsLoaded = true;
     }
 
     private void ClearIngestionCaches()
@@ -728,5 +826,11 @@ public sealed partial class SqliteTelemetryRepository
         public required int InstrumentType { get; init; }
         public required int AggregationTemporality { get; init; }
         public required bool HasOverflow { get; init; }
+    }
+
+    private sealed class InsertedInstrumentRecord
+    {
+        public required long InstrumentId { get; init; }
+        public required string InstrumentName { get; init; }
     }
 }

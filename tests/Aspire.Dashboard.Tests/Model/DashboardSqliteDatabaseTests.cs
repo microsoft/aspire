@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Concurrent;
+using System.Data.Common;
 using System.Diagnostics;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Tests;
@@ -53,6 +54,66 @@ public sealed class DashboardSqliteDatabaseTests : IDisposable
         Assert.Equal(ActivityStatusCode.Error, activity.Status);
         Assert.Equal(exception.Message, activity.StatusDescription);
         Assert.Equal(typeof(SqliteException).FullName, activity.GetTagItem("error.type"));
+    }
+
+    [Fact]
+    public void DataReader_ActivityStopsWhenReaderIsDisposed()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"), pooling: false);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
+        using DbConnection connection = database.OpenConnection();
+        using var command = connection.CreateCommand();
+        var query = $"SELECT '{Guid.NewGuid():N}';";
+        command.CommandText = query;
+
+        var reader = command.ExecuteReader();
+
+        Assert.DoesNotContain(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+        Assert.True(reader.Read());
+        reader.Dispose();
+        Assert.Single(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+    }
+
+    [Fact]
+    public void DapperQueryMultiple_ActivitySpansAllResultSets()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"), pooling: false);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
+        using var connection = database.OpenConnection();
+        var query = $"SELECT '{Guid.NewGuid():N}'; SELECT '{Guid.NewGuid():N}';";
+
+        using (var results = connection.QueryMultiple(query))
+        {
+            Assert.DoesNotContain(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+            Assert.NotEmpty(results.ReadSingle<string>());
+            Assert.DoesNotContain(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+            Assert.NotEmpty(results.ReadSingle<string>());
+        }
+
+        Assert.Single(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+    }
+
+    [Fact]
+    public void CommitTransaction_CreatesActivityWithDatabaseInformation()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"), pooling: false);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
+        using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        connection.Execute("SELECT 1;", transaction: transaction);
+        transaction.Commit();
+
+        var activity = Assert.Single(activities, activity => Equals(activity.GetTagItem("db.query.text"), "COMMIT;"));
+        Assert.Equal("COMMIT sqlite", activity.OperationName);
+        Assert.Equal(ActivityKind.Client, activity.Kind);
+        Assert.Equal("sqlite", activity.GetTagItem("db.system.name"));
+        Assert.Equal("dashboard.db", activity.GetTagItem(OtlpSpan.PeerServiceAttributeKey));
+        Assert.Equal("dashboard.db", activity.GetTagItem("db.namespace"));
+        Assert.Equal("COMMIT", activity.GetTagItem("db.operation.name"));
     }
 
     [Fact]

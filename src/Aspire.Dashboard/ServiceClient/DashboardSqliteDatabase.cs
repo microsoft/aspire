@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Dapper;
+using System.Data;
 using System.Diagnostics;
 using Microsoft.Data.Sqlite;
 
@@ -76,7 +77,7 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         }
     }
 
-    public SqliteConnection OpenConnection()
+    public TracingSqliteConnection OpenConnection()
     {
         var connection = new TracingSqliteConnection(_connectionString, DatabasePath, _activitySource);
         connection.Open();
@@ -165,7 +166,7 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         return scripts;
     }
 
-    private static void ValidateSchemaVersion(SqliteConnection connection, SqliteTransaction? transaction)
+    private static void ValidateSchemaVersion(SqliteConnection connection, IDbTransaction? transaction)
     {
         var version = connection.QuerySingle<int>("SELECT version FROM dashboard_schema;", transaction: transaction);
         if (version != SchemaVersion)
