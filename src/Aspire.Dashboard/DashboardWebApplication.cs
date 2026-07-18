@@ -305,6 +305,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             builder.Services.AddOpenTelemetry()
                 .WithTracing(tracing => tracing
                     .AddAspNetCoreInstrumentation()
+                    .AddSource(DashboardClient.ActivitySourceName)
                     .AddSource(TracingSqliteConnection.ActivitySourceName)
                     .AddOtlpExporter());
         }

@@ -73,37 +73,12 @@ CREATE TABLE IF NOT EXISTS dashboard_resource_relationships (
     PRIMARY KEY (resource_name, ordinal)
 ) STRICT;
 
-CREATE TABLE IF NOT EXISTS dashboard_values (
-    value_id INTEGER PRIMARY KEY AUTOINCREMENT,
-    resource_name TEXT NOT NULL REFERENCES dashboard_resources(resource_name) ON DELETE CASCADE,
-    value_kind INTEGER NOT NULL,
-    string_value TEXT NULL,
-    number_value REAL NULL,
-    bool_value INTEGER NULL
-) STRICT;
-
-CREATE TABLE IF NOT EXISTS dashboard_value_map_entries (
-    parent_value_id INTEGER NOT NULL REFERENCES dashboard_values(value_id) ON DELETE CASCADE,
-    ordinal INTEGER NOT NULL,
-    map_key TEXT NOT NULL,
-    child_value_id INTEGER NOT NULL REFERENCES dashboard_values(value_id) ON DELETE CASCADE,
-    PRIMARY KEY (parent_value_id, ordinal),
-    UNIQUE (parent_value_id, map_key)
-) STRICT;
-
-CREATE TABLE IF NOT EXISTS dashboard_value_list_items (
-    parent_value_id INTEGER NOT NULL REFERENCES dashboard_values(value_id) ON DELETE CASCADE,
-    ordinal INTEGER NOT NULL,
-    child_value_id INTEGER NOT NULL REFERENCES dashboard_values(value_id) ON DELETE CASCADE,
-    PRIMARY KEY (parent_value_id, ordinal)
-) STRICT;
-
 CREATE TABLE IF NOT EXISTS dashboard_resource_properties (
     resource_name TEXT NOT NULL REFERENCES dashboard_resources(resource_name) ON DELETE CASCADE,
     ordinal INTEGER NOT NULL,
     name TEXT NOT NULL,
     display_name TEXT NULL,
-    value_id INTEGER NOT NULL REFERENCES dashboard_values(value_id),
+    value TEXT NOT NULL CHECK (json_valid(value)),
     is_sensitive INTEGER NULL,
     is_highlighted INTEGER NOT NULL,
     sort_order INTEGER NULL,
@@ -116,7 +91,7 @@ CREATE TABLE IF NOT EXISTS dashboard_resource_commands (
     name TEXT NOT NULL,
     display_name TEXT NOT NULL,
     confirmation_message TEXT NULL,
-    parameter_value_id INTEGER NULL REFERENCES dashboard_values(value_id),
+    parameter_value TEXT NULL CHECK (parameter_value IS NULL OR json_valid(parameter_value)),
     is_highlighted INTEGER NOT NULL,
     icon_name TEXT NULL,
     icon_variant INTEGER NULL,

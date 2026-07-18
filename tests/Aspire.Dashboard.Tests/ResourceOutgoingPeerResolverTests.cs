@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
@@ -186,6 +187,22 @@ public class ResourceOutgoingPeerResolverTests
                 yield return [item];
             }
         }
+    }
+
+    [Fact]
+    public async Task Constructor_AmbientActivity_DoesNotFlowToResourceWatch()
+    {
+        var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var dashboardClient = new MockDashboardClient(subscribeResult.Task);
+        using var activity = new Activity("request").Start();
+        var resolver = new ResourceOutgoingPeerResolver(dashboardClient);
+
+        Assert.Null(await dashboardClient.ActivityOnSubscribe.Task.DefaultTimeout());
+
+        var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        sourceChannel.Writer.Complete();
+        subscribeResult.SetResult(new ResourceViewModelSubscription([], sourceChannel.Reader.ReadAllAsync()));
+        await resolver.DisposeAsync().DefaultTimeout();
     }
 
     [Fact]
@@ -415,6 +432,7 @@ public class ResourceOutgoingPeerResolverTests
 
     private sealed class MockDashboardClient(Task<ResourceViewModelSubscription> subscribeResult) : IDashboardClient
     {
+        public TaskCompletionSource<Activity?> ActivityOnSubscribe { get; } = new(TaskCreationOptions.RunContinuationsAsynchronously);
         public bool IsEnabled => true;
         public Task WhenConnected => Task.CompletedTask;
         public string ApplicationName => "ApplicationName";
@@ -433,6 +451,10 @@ public class ResourceOutgoingPeerResolverTests
         public Task SendInteractionRequestAsync(WatchInteractionsRequestUpdate request, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> SubscribeConsoleLogs(string resourceName, CancellationToken cancellationToken) => throw new NotImplementedException();
         public IAsyncEnumerable<WatchInteractionsResponseUpdate> SubscribeInteractionsAsync(CancellationToken cancellationToken) => throw new NotImplementedException();
-        public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken) => subscribeResult;
+        public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
+        {
+            ActivityOnSubscribe.TrySetResult(Activity.Current);
+            return subscribeResult;
+        }
     }
 }

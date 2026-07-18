@@ -4,6 +4,7 @@
 using Dapper;
 using System.Data;
 using System.Diagnostics;
+using System.Globalization;
 using Microsoft.Data.Sqlite;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -15,7 +16,7 @@ internal sealed class DashboardSqliteDatabase : IDisposable
 {
     private const string SchemaResourcePrefix = "Aspire.Dashboard.ServiceClient.DatabaseSchema.";
 
-    internal const int SchemaVersion = 9;
+    internal const int SchemaVersion = 10;
 
     private static readonly Lazy<IReadOnlyList<string>> s_schemaScripts = new(LoadSchemaScripts);
 
@@ -64,7 +65,7 @@ internal sealed class DashboardSqliteDatabase : IDisposable
             using var connection = database.OpenConnection();
             var version = connection.QuerySingleOrDefault<int?>("""
                 SELECT CASE
-                    WHEN COUNT(*) = 1 AND typeof(MAX(version)) = 'integer' THEN MAX(version)
+                    WHEN COUNT(*) = 1 THEN MAX(version)
                     ELSE NULL
                 END
                 FROM dashboard_schema;
@@ -84,6 +85,23 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         connection.Execute("PRAGMA foreign_keys = ON; PRAGMA busy_timeout = 5000;");
 
         return connection;
+    }
+
+    internal void ValidateSchemaVersion(int metadataSchemaVersion)
+    {
+        using var connection = OpenConnection();
+        var schemaVersion = connection.QuerySingleOrDefault<int?>("""
+            SELECT CASE
+                WHEN COUNT(*) = 1 THEN MAX(version)
+                ELSE NULL
+            END
+            FROM dashboard_schema;
+            """);
+        if (schemaVersion != metadataSchemaVersion)
+        {
+            throw new InvalidOperationException(
+            $"Dashboard database schema version '{schemaVersion?.ToString(CultureInfo.InvariantCulture) ?? "invalid"}' does not match run metadata schema version '{metadataSchemaVersion}'.");
+        }
     }
 
     public static void ClearPools() => SqliteConnection.ClearAllPools();

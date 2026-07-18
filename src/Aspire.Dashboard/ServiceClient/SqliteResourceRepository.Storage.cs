@@ -2,8 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Data;
+using System.Globalization;
+using System.Text;
 using Aspire.DashboardService.Proto.V1;
 using Dapper;
+using Google.Protobuf;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Data.Sqlite;
 
@@ -11,305 +14,306 @@ namespace Aspire.Dashboard.ServiceClient;
 
 public sealed partial class SqliteResourceRepository
 {
-    private static void SaveResource(SqliteConnection connection, IDbTransaction transaction, Resource resource, int replicaIndex)
-    {
-        var consoleLogsLoaded = connection.QuerySingleOrDefault<bool>("""
-            SELECT console_logs_loaded
-            FROM dashboard_resources
-            WHERE resource_name = @ResourceName;
-            """, new { ResourceName = resource.Name }, transaction);
-        SaveResource(connection, transaction, resource, replicaIndex, consoleLogsLoaded);
-    }
+    private const int MaxWriteBatchSize = 100;
 
-    private static void SaveResource(SqliteConnection connection, IDbTransaction transaction, Resource resource, int replicaIndex, bool consoleLogsLoaded)
+    private static void InsertResources(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<ResourceToSave> resources)
     {
-        connection.Execute("DELETE FROM dashboard_resources WHERE resource_name = @ResourceName;", new { ResourceName = resource.Name }, transaction);
-        connection.Execute("""
-            INSERT INTO dashboard_resources (
-                resource_name, replica_index, resource_type, display_name, uid, state,
-                created_at_seconds, created_at_nanos, state_style,
-                started_at_seconds, started_at_nanos, stopped_at_seconds, stopped_at_nanos,
-                is_hidden, supports_detailed_telemetry, icon_name, icon_variant, console_logs_loaded)
-            VALUES (
-                @Name, @ReplicaIndex, @ResourceType, @DisplayName, @Uid, @State,
-                @CreatedAtSeconds, @CreatedAtNanos, @StateStyle,
-                @StartedAtSeconds, @StartedAtNanos, @StoppedAtSeconds, @StoppedAtNanos,
-                @IsHidden, @SupportsDetailedTelemetry, @IconName, @IconVariant, @ConsoleLogsLoaded);
-            """, new
+        foreach (var batch in resources.Chunk(MaxWriteBatchSize))
         {
-            resource.Name,
-            ReplicaIndex = replicaIndex,
-            resource.ResourceType,
-            resource.DisplayName,
-            resource.Uid,
-            State = resource.HasState ? resource.State : null,
-            CreatedAtSeconds = resource.CreatedAt?.Seconds,
-            CreatedAtNanos = resource.CreatedAt?.Nanos,
-            StateStyle = resource.HasStateStyle ? resource.StateStyle : null,
-            StartedAtSeconds = resource.StartedAt?.Seconds,
-            StartedAtNanos = resource.StartedAt?.Nanos,
-            StoppedAtSeconds = resource.StoppedAt?.Seconds,
-            StoppedAtNanos = resource.StoppedAt?.Nanos,
-            resource.IsHidden,
-            resource.SupportsDetailedTelemetry,
-            IconName = resource.HasIconName ? resource.IconName : null,
-            IconVariant = resource.HasIconVariant ? (int?)resource.IconVariant : null,
-            ConsoleLogsLoaded = consoleLogsLoaded
-        }, transaction);
+            var sql = new StringBuilder("""
+                INSERT INTO dashboard_resources (
+                    resource_name, replica_index, resource_type, display_name, uid, state,
+                    created_at_seconds, created_at_nanos, state_style,
+                    started_at_seconds, started_at_nanos, stopped_at_seconds, stopped_at_nanos,
+                    is_hidden, supports_detailed_telemetry, icon_name, icon_variant, console_logs_loaded)
+                VALUES
+                """);
+            var parameters = new DynamicParameters();
+            for (var index = 0; index < batch.Length; index++)
+            {
+                var resourceToSave = batch[index];
+                var resource = resourceToSave.Resource;
+                if (index > 0)
+                {
+                    sql.AppendLine(",");
+                }
 
-        InsertEnvironment(connection, transaction, resource);
-        InsertUrls(connection, transaction, resource);
-        InsertVolumes(connection, transaction, resource);
-        InsertHealthReports(connection, transaction, resource);
-        InsertRelationships(connection, transaction, resource);
-        InsertProperties(connection, transaction, resource);
-        InsertCommands(connection, transaction, resource);
+                sql.Append(CultureInfo.InvariantCulture, $"""
+                    (@Name{index}, @ReplicaIndex{index}, @ResourceType{index}, @DisplayName{index}, @Uid{index}, @State{index},
+                     @CreatedAtSeconds{index}, @CreatedAtNanos{index}, @StateStyle{index},
+                     @StartedAtSeconds{index}, @StartedAtNanos{index}, @StoppedAtSeconds{index}, @StoppedAtNanos{index},
+                     @IsHidden{index}, @SupportsDetailedTelemetry{index}, @IconName{index}, @IconVariant{index}, @ConsoleLogsLoaded{index})
+                    """);
+                parameters.Add($"Name{index}", resource.Name);
+                parameters.Add($"ReplicaIndex{index}", resourceToSave.ReplicaIndex);
+                parameters.Add($"ResourceType{index}", resource.ResourceType);
+                parameters.Add($"DisplayName{index}", resource.DisplayName);
+                parameters.Add($"Uid{index}", resource.Uid);
+                parameters.Add($"State{index}", resource.HasState ? resource.State : null);
+                parameters.Add($"CreatedAtSeconds{index}", resource.CreatedAt?.Seconds);
+                parameters.Add($"CreatedAtNanos{index}", resource.CreatedAt?.Nanos);
+                parameters.Add($"StateStyle{index}", resource.HasStateStyle ? resource.StateStyle : null);
+                parameters.Add($"StartedAtSeconds{index}", resource.StartedAt?.Seconds);
+                parameters.Add($"StartedAtNanos{index}", resource.StartedAt?.Nanos);
+                parameters.Add($"StoppedAtSeconds{index}", resource.StoppedAt?.Seconds);
+                parameters.Add($"StoppedAtNanos{index}", resource.StoppedAt?.Nanos);
+                parameters.Add($"IsHidden{index}", resource.IsHidden);
+                parameters.Add($"SupportsDetailedTelemetry{index}", resource.SupportsDetailedTelemetry);
+                parameters.Add($"IconName{index}", resource.HasIconName ? resource.IconName : null);
+                parameters.Add($"IconVariant{index}", resource.HasIconVariant ? (int?)resource.IconVariant : null);
+                parameters.Add($"ConsoleLogsLoaded{index}", resourceToSave.ConsoleLogsLoaded);
+            }
+
+            sql.Append(';');
+            connection.Execute(sql.ToString(), parameters, transaction);
+        }
+
+        var resourceModels = resources.Select(resource => resource.Resource).ToArray();
+        InsertEnvironment(connection, transaction, resourceModels);
+        InsertUrls(connection, transaction, resourceModels);
+        InsertVolumes(connection, transaction, resourceModels);
+        InsertHealthReports(connection, transaction, resourceModels);
+        InsertRelationships(connection, transaction, resourceModels);
+        var properties = new List<PropertyToSave>();
+        var commands = new List<CommandToSave>();
+        foreach (var resource in resourceModels)
+        {
+            foreach (var (property, ordinal) in resource.Properties.Select((item, ordinal) => (item, ordinal)))
+            {
+                properties.Add(new(resource.Name, ordinal, property));
+            }
+
+#pragma warning disable CS0612 // ResourceCommand.Parameter must be persisted for compatibility with older AppHosts.
+            foreach (var (command, ordinal) in resource.Commands.Select((item, ordinal) => (item, ordinal)))
+            {
+                var parameterJsonValue = command.Parameter is not null ? JsonFormatter.Default.Format(command.Parameter) : null;
+                commands.Add(new(resource.Name, ordinal, command, parameterJsonValue));
+            }
+#pragma warning restore CS0612
+        }
+
+        InsertProperties(connection, transaction, properties);
+        InsertCommands(connection, transaction, commands);
     }
 
-    private static void InsertEnvironment(SqliteConnection connection, IDbTransaction transaction, Resource resource)
+    private static void InsertEnvironment(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        connection.Execute("""
+        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.Environment.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
             INSERT INTO dashboard_resource_environment (resource_name, ordinal, name, value, is_from_spec)
-            VALUES (@ResourceName, @Ordinal, @Name, @Value, @IsFromSpec);
-            """, resource.Environment.Select((item, ordinal) => new
+            VALUES
+            """, static (sql, parameters, row, index) =>
         {
-            ResourceName = resource.Name,
-            Ordinal = ordinal,
-            item.Name,
-            Value = item.HasValue ? item.Value : null,
-            item.IsFromSpec
-        }), transaction);
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Name{index}, @Value{index}, @IsFromSpec{index})");
+            parameters.Add($"ResourceName{index}", row.ResourceName);
+            parameters.Add($"Ordinal{index}", row.Ordinal);
+            parameters.Add($"Name{index}", row.Item.Name);
+            parameters.Add($"Value{index}", row.Item.HasValue ? row.Item.Value : null);
+            parameters.Add($"IsFromSpec{index}", row.Item.IsFromSpec);
+        });
     }
 
-    private static void InsertUrls(SqliteConnection connection, IDbTransaction transaction, Resource resource)
+    private static void InsertUrls(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        connection.Execute("""
+        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.Urls.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
             INSERT INTO dashboard_resource_urls (
                 resource_name, ordinal, endpoint_name, full_url, is_internal, is_inactive, display_sort_order, display_name)
-            VALUES (
-                @ResourceName, @Ordinal, @EndpointName, @FullUrl, @IsInternal, @IsInactive, @DisplaySortOrder, @DisplayName);
-            """, resource.Urls.Select((item, ordinal) => new
+            VALUES
+            """, static (sql, parameters, row, index) =>
         {
-            ResourceName = resource.Name,
-            Ordinal = ordinal,
-            EndpointName = item.HasEndpointName ? item.EndpointName : null,
-            item.FullUrl,
-            item.IsInternal,
-            item.IsInactive,
-            DisplaySortOrder = item.DisplayProperties.SortOrder,
-            DisplayName = item.DisplayProperties.DisplayName
-        }), transaction);
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @EndpointName{index}, @FullUrl{index}, @IsInternal{index}, @IsInactive{index}, @DisplaySortOrder{index}, @DisplayName{index})");
+            parameters.Add($"ResourceName{index}", row.ResourceName);
+            parameters.Add($"Ordinal{index}", row.Ordinal);
+            parameters.Add($"EndpointName{index}", row.Item.HasEndpointName ? row.Item.EndpointName : null);
+            parameters.Add($"FullUrl{index}", row.Item.FullUrl);
+            parameters.Add($"IsInternal{index}", row.Item.IsInternal);
+            parameters.Add($"IsInactive{index}", row.Item.IsInactive);
+            parameters.Add($"DisplaySortOrder{index}", row.Item.DisplayProperties.SortOrder);
+            parameters.Add($"DisplayName{index}", row.Item.DisplayProperties.DisplayName);
+        });
     }
 
-    private static void InsertVolumes(SqliteConnection connection, IDbTransaction transaction, Resource resource)
+    private static void InsertVolumes(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        connection.Execute("""
+        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.Volumes.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
             INSERT INTO dashboard_resource_volumes (resource_name, ordinal, source, target, mount_type, is_read_only)
-            VALUES (@ResourceName, @Ordinal, @Source, @Target, @MountType, @IsReadOnly);
-            """, resource.Volumes.Select((item, ordinal) => new
+            VALUES
+            """, static (sql, parameters, row, index) =>
         {
-            ResourceName = resource.Name,
-            Ordinal = ordinal,
-            item.Source,
-            item.Target,
-            item.MountType,
-            item.IsReadOnly
-        }), transaction);
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Source{index}, @Target{index}, @MountType{index}, @IsReadOnly{index})");
+            parameters.Add($"ResourceName{index}", row.ResourceName);
+            parameters.Add($"Ordinal{index}", row.Ordinal);
+            parameters.Add($"Source{index}", row.Item.Source);
+            parameters.Add($"Target{index}", row.Item.Target);
+            parameters.Add($"MountType{index}", row.Item.MountType);
+            parameters.Add($"IsReadOnly{index}", row.Item.IsReadOnly);
+        });
     }
 
-    private static void InsertHealthReports(SqliteConnection connection, IDbTransaction transaction, Resource resource)
+    private static void InsertHealthReports(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        connection.Execute("""
+        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.HealthReports.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
             INSERT INTO dashboard_resource_health_reports (
                 resource_name, ordinal, status, key, description, exception, last_run_at_seconds, last_run_at_nanos)
-            VALUES (
-                @ResourceName, @Ordinal, @Status, @Key, @Description, @Exception, @LastRunAtSeconds, @LastRunAtNanos);
-            """, resource.HealthReports.Select((item, ordinal) => new
+            VALUES
+            """, static (sql, parameters, row, index) =>
         {
-            ResourceName = resource.Name,
-            Ordinal = ordinal,
-            Status = item.HasStatus ? (int?)item.Status : null,
-            item.Key,
-            item.Description,
-            item.Exception,
-            LastRunAtSeconds = item.LastRunAt?.Seconds,
-            LastRunAtNanos = item.LastRunAt?.Nanos
-        }), transaction);
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Status{index}, @Key{index}, @Description{index}, @Exception{index}, @LastRunAtSeconds{index}, @LastRunAtNanos{index})");
+            parameters.Add($"ResourceName{index}", row.ResourceName);
+            parameters.Add($"Ordinal{index}", row.Ordinal);
+            parameters.Add($"Status{index}", row.Item.HasStatus ? (int?)row.Item.Status : null);
+            parameters.Add($"Key{index}", row.Item.Key);
+            parameters.Add($"Description{index}", row.Item.Description);
+            parameters.Add($"Exception{index}", row.Item.Exception);
+            parameters.Add($"LastRunAtSeconds{index}", row.Item.LastRunAt?.Seconds);
+            parameters.Add($"LastRunAtNanos{index}", row.Item.LastRunAt?.Nanos);
+        });
     }
 
-    private static void InsertRelationships(SqliteConnection connection, IDbTransaction transaction, Resource resource)
+    private static void InsertRelationships(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        connection.Execute("""
+        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.Relationships.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
             INSERT INTO dashboard_resource_relationships (
                 resource_name, ordinal, related_resource_name, relationship_type)
-            VALUES (@ResourceName, @Ordinal, @RelatedResourceName, @RelationshipType);
-            """, resource.Relationships.Select((item, ordinal) => new
+            VALUES
+            """, static (sql, parameters, row, index) =>
         {
-            ResourceName = resource.Name,
-            Ordinal = ordinal,
-            RelatedResourceName = item.ResourceName,
-            RelationshipType = item.Type
-        }), transaction);
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @RelatedResourceName{index}, @RelationshipType{index})");
+            parameters.Add($"ResourceName{index}", row.ResourceName);
+            parameters.Add($"Ordinal{index}", row.Ordinal);
+            parameters.Add($"RelatedResourceName{index}", row.Item.ResourceName);
+            parameters.Add($"RelationshipType{index}", row.Item.Type);
+        });
     }
 
-    private static void InsertProperties(SqliteConnection connection, IDbTransaction transaction, Resource resource)
+    private static void ExecuteInsertBatches<T>(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        IEnumerable<T> rows,
+        string insertPrefix,
+        Action<StringBuilder, DynamicParameters, T, int> appendValues)
     {
-        foreach (var (property, ordinal) in resource.Properties.Select((item, ordinal) => (item, ordinal)))
+        foreach (var batch in rows.Chunk(MaxWriteBatchSize))
         {
-            var valueId = InsertValue(connection, transaction, resource.Name, property.Value);
-            connection.Execute("""
-                INSERT INTO dashboard_resource_properties (
-                    resource_name, ordinal, name, display_name, value_id, is_sensitive, is_highlighted, sort_order)
-                VALUES (
-                    @ResourceName, @Ordinal, @Name, @DisplayName, @ValueId, @IsSensitive, @IsHighlighted, @SortOrder);
-                """, new
+            var sql = new StringBuilder(insertPrefix);
+            var parameters = new DynamicParameters();
+            for (var index = 0; index < batch.Length; index++)
             {
-                ResourceName = resource.Name,
-                Ordinal = ordinal,
-                property.Name,
-                DisplayName = property.HasDisplayName ? property.DisplayName : null,
-                ValueId = valueId,
-                IsSensitive = property.HasIsSensitive ? (bool?)property.IsSensitive : null,
-                property.IsHighlighted,
-                SortOrder = property.HasSortOrder ? (int?)property.SortOrder : null
-            }, transaction);
+                if (index > 0)
+                {
+                    sql.AppendLine(",");
+                }
+
+                appendValues(sql, parameters, batch[index], index);
+            }
+
+            sql.Append(';');
+            connection.Execute(sql.ToString(), parameters, transaction);
         }
     }
 
-    private static void InsertCommands(SqliteConnection connection, IDbTransaction transaction, Resource resource)
+    private static void InsertProperties(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<PropertyToSave> properties)
     {
-#pragma warning disable CS0612 // ResourceCommand.Parameter must be persisted for compatibility with older AppHosts.
-        foreach (var (command, commandOrdinal) in resource.Commands.Select((item, ordinal) => (item, ordinal)))
+        ExecuteInsertBatches(connection, transaction, properties, """
+            INSERT INTO dashboard_resource_properties (
+                resource_name, ordinal, name, display_name, value, is_sensitive, is_highlighted, sort_order)
+            VALUES
+            """, static (sql, parameters, row, index) =>
         {
-            long? parameterValueId = command.Parameter is not null
-                ? InsertValue(connection, transaction, resource.Name, command.Parameter)
-                : null;
-            connection.Execute("""
-                INSERT INTO dashboard_resource_commands (
-                    resource_name, ordinal, name, display_name, confirmation_message, parameter_value_id,
-                    is_highlighted, icon_name, icon_variant, display_description, state)
-                VALUES (
-                    @ResourceName, @Ordinal, @Name, @DisplayName, @ConfirmationMessage, @ParameterValueId,
-                    @IsHighlighted, @IconName, @IconVariant, @DisplayDescription, @State);
-                """, new
-            {
-                ResourceName = resource.Name,
-                Ordinal = commandOrdinal,
-                command.Name,
-                command.DisplayName,
-                ConfirmationMessage = command.HasConfirmationMessage ? command.ConfirmationMessage : null,
-                ParameterValueId = parameterValueId,
-                command.IsHighlighted,
-                IconName = command.HasIconName ? command.IconName : null,
-                IconVariant = command.HasIconVariant ? (int?)command.IconVariant : null,
-                DisplayDescription = command.HasDisplayDescription ? command.DisplayDescription : null,
-                State = (int)command.State
-            }, transaction);
-
-            foreach (var (input, inputOrdinal) in command.ArgumentInputs.Select((item, ordinal) => (item, ordinal)))
-            {
-                connection.Execute("""
-                    INSERT INTO dashboard_resource_command_inputs (
-                        resource_name, command_ordinal, ordinal, label, placeholder, input_type, required, value,
-                        description, enable_description_markdown, max_length, allow_custom_choice, loading,
-                        update_state_on_change, name, disabled, max_file_size, allow_multiple_files, file_filter)
-                    VALUES (
-                        @ResourceName, @CommandOrdinal, @Ordinal, @Label, @Placeholder, @InputType, @Required, @Value,
-                        @Description, @EnableDescriptionMarkdown, @MaxLength, @AllowCustomChoice, @Loading,
-                        @UpdateStateOnChange, @Name, @Disabled, @MaxFileSize, @AllowMultipleFiles, @FileFilter);
-                    """, new
-                {
-                    ResourceName = resource.Name,
-                    CommandOrdinal = commandOrdinal,
-                    Ordinal = inputOrdinal,
-                    input.Label,
-                    input.Placeholder,
-                    InputType = (int)input.InputType,
-                    input.Required,
-                    input.Value,
-                    input.Description,
-                    input.EnableDescriptionMarkdown,
-                    input.MaxLength,
-                    input.AllowCustomChoice,
-                    input.Loading,
-                    input.UpdateStateOnChange,
-                    input.Name,
-                    input.Disabled,
-                    input.MaxFileSize,
-                    input.AllowMultipleFiles,
-                    input.FileFilter
-                }, transaction);
-
-                connection.Execute("""
-                    INSERT INTO dashboard_resource_command_input_options (
-                        resource_name, command_ordinal, input_ordinal, option_key, option_value)
-                    VALUES (@ResourceName, @CommandOrdinal, @InputOrdinal, @OptionKey, @OptionValue);
-                    """, input.Options.Select(option => new
-                {
-                    ResourceName = resource.Name,
-                    CommandOrdinal = commandOrdinal,
-                    InputOrdinal = inputOrdinal,
-                    OptionKey = option.Key,
-                    OptionValue = option.Value
-                }), transaction);
-
-                connection.Execute("""
-                    INSERT INTO dashboard_resource_command_input_validation_errors (
-                        resource_name, command_ordinal, input_ordinal, ordinal, validation_error)
-                    VALUES (@ResourceName, @CommandOrdinal, @InputOrdinal, @Ordinal, @ValidationError);
-                    """, input.ValidationErrors.Select((validationError, ordinal) => new
-                {
-                    ResourceName = resource.Name,
-                    CommandOrdinal = commandOrdinal,
-                    InputOrdinal = inputOrdinal,
-                    Ordinal = ordinal,
-                    ValidationError = validationError
-                }), transaction);
-            }
-        }
-#pragma warning restore CS0612
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Name{index}, @DisplayName{index}, @Value{index}, @IsSensitive{index}, @IsHighlighted{index}, @SortOrder{index})");
+            parameters.Add($"ResourceName{index}", row.ResourceName);
+            parameters.Add($"Ordinal{index}", row.Ordinal);
+            parameters.Add($"Name{index}", row.Property.Name);
+            parameters.Add($"DisplayName{index}", row.Property.HasDisplayName ? row.Property.DisplayName : null);
+            parameters.Add($"Value{index}", JsonFormatter.Default.Format(row.Property.Value));
+            parameters.Add($"IsSensitive{index}", row.Property.HasIsSensitive ? (bool?)row.Property.IsSensitive : null);
+            parameters.Add($"IsHighlighted{index}", row.Property.IsHighlighted);
+            parameters.Add($"SortOrder{index}", row.Property.HasSortOrder ? (int?)row.Property.SortOrder : null);
+        });
     }
 
-    private static long InsertValue(SqliteConnection connection, IDbTransaction transaction, string resourceName, Value value)
+    private static void InsertCommands(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<CommandToSave> commands)
     {
-        var valueId = connection.QuerySingle<long>("""
-            INSERT INTO dashboard_values (resource_name, value_kind, string_value, number_value, bool_value)
-            VALUES (@ResourceName, @ValueKind, @StringValue, @NumberValue, @BoolValue)
-            RETURNING value_id;
-            """, new
+        ExecuteInsertBatches(connection, transaction, commands, """
+            INSERT INTO dashboard_resource_commands (
+                resource_name, ordinal, name, display_name, confirmation_message, parameter_value,
+                is_highlighted, icon_name, icon_variant, display_description, state)
+            VALUES
+            """, static (sql, parameters, row, index) =>
         {
-            ResourceName = resourceName,
-            ValueKind = (int)value.KindCase,
-            StringValue = value.KindCase == Value.KindOneofCase.StringValue ? value.StringValue : null,
-            NumberValue = value.KindCase == Value.KindOneofCase.NumberValue ? (double?)value.NumberValue : null,
-            BoolValue = value.KindCase == Value.KindOneofCase.BoolValue ? (bool?)value.BoolValue : null
-        }, transaction);
+            var command = row.Command;
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Name{index}, @DisplayName{index}, @ConfirmationMessage{index}, @ParameterValue{index}, @IsHighlighted{index}, @IconName{index}, @IconVariant{index}, @DisplayDescription{index}, @State{index})");
+            parameters.Add($"ResourceName{index}", row.ResourceName);
+            parameters.Add($"Ordinal{index}", row.Ordinal);
+            parameters.Add($"Name{index}", command.Name);
+            parameters.Add($"DisplayName{index}", command.DisplayName);
+            parameters.Add($"ConfirmationMessage{index}", command.HasConfirmationMessage ? command.ConfirmationMessage : null);
+            parameters.Add($"ParameterValue{index}", row.ParameterJsonValue);
+            parameters.Add($"IsHighlighted{index}", command.IsHighlighted);
+            parameters.Add($"IconName{index}", command.HasIconName ? command.IconName : null);
+            parameters.Add($"IconVariant{index}", command.HasIconVariant ? (int?)command.IconVariant : null);
+            parameters.Add($"DisplayDescription{index}", command.HasDisplayDescription ? command.DisplayDescription : null);
+            parameters.Add($"State{index}", (int)command.State);
+        });
 
-        if (value.KindCase == Value.KindOneofCase.StructValue)
+        var inputs = commands.SelectMany(command => command.Command.ArgumentInputs.Select((input, ordinal) => (Command: command, Ordinal: ordinal, Input: input))).ToArray();
+        ExecuteInsertBatches(connection, transaction, inputs, """
+            INSERT INTO dashboard_resource_command_inputs (
+                resource_name, command_ordinal, ordinal, label, placeholder, input_type, required, value,
+                description, enable_description_markdown, max_length, allow_custom_choice, loading,
+                update_state_on_change, name, disabled, max_file_size, allow_multiple_files, file_filter)
+            VALUES
+            """, static (sql, parameters, row, index) =>
         {
-            var ordinal = 0;
-            foreach (var field in value.StructValue.Fields)
-            {
-                var childValueId = InsertValue(connection, transaction, resourceName, field.Value);
-                connection.Execute("""
-                    INSERT INTO dashboard_value_map_entries (parent_value_id, ordinal, map_key, child_value_id)
-                    VALUES (@ParentValueId, @Ordinal, @MapKey, @ChildValueId);
-                    """, new { ParentValueId = valueId, Ordinal = ordinal++, MapKey = field.Key, ChildValueId = childValueId }, transaction);
-            }
-        }
-        else if (value.KindCase == Value.KindOneofCase.ListValue)
-        {
-            foreach (var (item, ordinal) in value.ListValue.Values.Select((item, ordinal) => (item, ordinal)))
-            {
-                var childValueId = InsertValue(connection, transaction, resourceName, item);
-                connection.Execute("""
-                    INSERT INTO dashboard_value_list_items (parent_value_id, ordinal, child_value_id)
-                    VALUES (@ParentValueId, @Ordinal, @ChildValueId);
-                    """, new { ParentValueId = valueId, Ordinal = ordinal, ChildValueId = childValueId }, transaction);
-            }
-        }
+            var input = row.Input;
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @CommandOrdinal{index}, @Ordinal{index}, @Label{index}, @Placeholder{index}, @InputType{index}, @Required{index}, @Value{index}, @Description{index}, @EnableDescriptionMarkdown{index}, @MaxLength{index}, @AllowCustomChoice{index}, @Loading{index}, @UpdateStateOnChange{index}, @Name{index}, @Disabled{index}, @MaxFileSize{index}, @AllowMultipleFiles{index}, @FileFilter{index})");
+            parameters.Add($"ResourceName{index}", row.Command.ResourceName);
+            parameters.Add($"CommandOrdinal{index}", row.Command.Ordinal);
+            parameters.Add($"Ordinal{index}", row.Ordinal);
+            parameters.Add($"Label{index}", input.Label);
+            parameters.Add($"Placeholder{index}", input.Placeholder);
+            parameters.Add($"InputType{index}", (int)input.InputType);
+            parameters.Add($"Required{index}", input.Required);
+            parameters.Add($"Value{index}", input.Value);
+            parameters.Add($"Description{index}", input.Description);
+            parameters.Add($"EnableDescriptionMarkdown{index}", input.EnableDescriptionMarkdown);
+            parameters.Add($"MaxLength{index}", input.MaxLength);
+            parameters.Add($"AllowCustomChoice{index}", input.AllowCustomChoice);
+            parameters.Add($"Loading{index}", input.Loading);
+            parameters.Add($"UpdateStateOnChange{index}", input.UpdateStateOnChange);
+            parameters.Add($"Name{index}", input.Name);
+            parameters.Add($"Disabled{index}", input.Disabled);
+            parameters.Add($"MaxFileSize{index}", input.MaxFileSize);
+            parameters.Add($"AllowMultipleFiles{index}", input.AllowMultipleFiles);
+            parameters.Add($"FileFilter{index}", input.FileFilter);
+        });
 
-        return valueId;
+        ExecuteInsertBatches(connection, transaction, inputs.SelectMany(row => row.Input.Options.Select(option => (row.Command, InputOrdinal: row.Ordinal, Option: option))), """
+            INSERT INTO dashboard_resource_command_input_options (
+                resource_name, command_ordinal, input_ordinal, option_key, option_value)
+            VALUES
+            """, static (sql, parameters, row, index) =>
+        {
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @CommandOrdinal{index}, @InputOrdinal{index}, @OptionKey{index}, @OptionValue{index})");
+            parameters.Add($"ResourceName{index}", row.Command.ResourceName);
+            parameters.Add($"CommandOrdinal{index}", row.Command.Ordinal);
+            parameters.Add($"InputOrdinal{index}", row.InputOrdinal);
+            parameters.Add($"OptionKey{index}", row.Option.Key);
+            parameters.Add($"OptionValue{index}", row.Option.Value);
+        });
+
+        ExecuteInsertBatches(connection, transaction, inputs.SelectMany(row => row.Input.ValidationErrors.Select((validationError, ordinal) => (row.Command, InputOrdinal: row.Ordinal, Ordinal: ordinal, ValidationError: validationError))), """
+            INSERT INTO dashboard_resource_command_input_validation_errors (
+                resource_name, command_ordinal, input_ordinal, ordinal, validation_error)
+            VALUES
+            """, static (sql, parameters, row, index) =>
+        {
+            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @CommandOrdinal{index}, @InputOrdinal{index}, @Ordinal{index}, @ValidationError{index})");
+            parameters.Add($"ResourceName{index}", row.Command.ResourceName);
+            parameters.Add($"CommandOrdinal{index}", row.Command.Ordinal);
+            parameters.Add($"InputOrdinal{index}", row.InputOrdinal);
+            parameters.Add($"Ordinal{index}", row.Ordinal);
+            parameters.Add($"ValidationError{index}", row.ValidationError);
+        });
     }
 
     private static IEnumerable<StoredResource> LoadResourceRecords(SqliteConnection connection)
@@ -358,13 +362,13 @@ public sealed partial class SqliteResourceRepository
             FROM dashboard_resource_relationships
             ORDER BY resource_name, ordinal;
 
-            SELECT resource_name AS ResourceName, name AS Name, display_name AS DisplayName, value_id AS ValueId,
+            SELECT resource_name AS ResourceName, name AS Name, display_name AS DisplayName, value AS JsonValue,
                 is_sensitive AS IsSensitive, is_highlighted AS IsHighlighted, sort_order AS SortOrder
             FROM dashboard_resource_properties
             ORDER BY resource_name, ordinal;
 
             SELECT resource_name AS ResourceName, ordinal AS Ordinal, name AS Name, display_name AS DisplayName,
-                confirmation_message AS ConfirmationMessage, parameter_value_id AS ParameterValueId,
+                confirmation_message AS ConfirmationMessage, parameter_value AS ParameterJsonValue,
                 is_highlighted AS IsHighlighted, icon_name AS IconName, icon_variant AS IconVariant,
                 display_description AS DisplayDescription, state AS State
             FROM dashboard_resource_commands
@@ -389,17 +393,6 @@ public sealed partial class SqliteResourceRepository
             FROM dashboard_resource_command_input_validation_errors
             ORDER BY resource_name, command_ordinal, input_ordinal, ordinal;
 
-            SELECT value_id AS ValueId, value_kind AS ValueKind, string_value AS StringValue,
-                number_value AS NumberValue, bool_value AS BoolValue
-            FROM dashboard_values;
-
-            SELECT parent_value_id AS ParentValueId, map_key AS MapKey, child_value_id AS ChildValueId
-            FROM dashboard_value_map_entries
-            ORDER BY parent_value_id, ordinal;
-
-            SELECT parent_value_id AS ParentValueId, child_value_id AS ChildValueId
-            FROM dashboard_value_list_items
-            ORDER BY parent_value_id, ordinal;
             """);
 
         var resourceRecords = reader.Read<ResourceRecord>().AsList();
@@ -413,9 +406,6 @@ public sealed partial class SqliteResourceRepository
         var inputs = reader.Read<InputRecord>().ToLookup(record => (record.ResourceName, record.CommandOrdinal));
         var options = reader.Read<OptionRecord>().ToLookup(record => (record.ResourceName, record.CommandOrdinal, record.InputOrdinal));
         var validationErrors = reader.Read<ValidationErrorRecord>().ToLookup(record => (record.ResourceName, record.CommandOrdinal, record.InputOrdinal));
-        var values = reader.Read<ValueRecord>().ToDictionary(record => record.ValueId);
-        var mapValues = reader.Read<MapValueRecord>().ToLookup(record => record.ParentValueId);
-        var listValues = reader.Read<ListValueRecord>().ToLookup(record => record.ParentValueId);
 
         foreach (var record in resourceRecords)
         {
@@ -484,7 +474,7 @@ public sealed partial class SqliteResourceRepository
                 var item = new ResourceProperty
                 {
                     Name = property.Name,
-                    Value = MaterializeValue(property.ValueId, values, mapValues, listValues),
+                    Value = MaterializeValue(property.JsonValue),
                     IsHighlighted = property.IsHighlighted
                 };
                 if (property.DisplayName is not null)
@@ -516,9 +506,9 @@ public sealed partial class SqliteResourceRepository
                 {
                     command.ConfirmationMessage = commandRecord.ConfirmationMessage;
                 }
-                if (commandRecord.ParameterValueId is not null)
+                if (commandRecord.ParameterJsonValue is not null)
                 {
-                    command.Parameter = MaterializeValue(commandRecord.ParameterValueId.Value, values, mapValues, listValues);
+                    command.Parameter = MaterializeValue(commandRecord.ParameterJsonValue);
                 }
                 if (commandRecord.IconName is not null)
                 {
@@ -569,47 +559,7 @@ public sealed partial class SqliteResourceRepository
         }
     }
 
-    private static Value MaterializeValue(
-        long valueId,
-        IReadOnlyDictionary<long, ValueRecord> values,
-        ILookup<long, MapValueRecord> mapValues,
-        ILookup<long, ListValueRecord> listValues)
-    {
-        var record = values[valueId];
-        var value = new Value();
-        switch ((Value.KindOneofCase)record.ValueKind)
-        {
-            case Value.KindOneofCase.NullValue:
-                value.NullValue = NullValue.NullValue;
-                break;
-            case Value.KindOneofCase.NumberValue:
-                value.NumberValue = record.NumberValue!.Value;
-                break;
-            case Value.KindOneofCase.StringValue:
-                value.StringValue = record.StringValue!;
-                break;
-            case Value.KindOneofCase.BoolValue:
-                value.BoolValue = record.BoolValue!.Value;
-                break;
-            case Value.KindOneofCase.StructValue:
-                value.StructValue = new Struct();
-                foreach (var child in mapValues[valueId])
-                {
-                    value.StructValue.Fields.Add(child.MapKey, MaterializeValue(child.ChildValueId, values, mapValues, listValues));
-                }
-                break;
-            case Value.KindOneofCase.ListValue:
-                value.ListValue = new ListValue();
-                value.ListValue.Values.Add(listValues[valueId].Select(child => MaterializeValue(child.ChildValueId, values, mapValues, listValues)));
-                break;
-            case Value.KindOneofCase.None:
-                break;
-            default:
-                throw new InvalidOperationException($"Unknown dashboard value kind '{record.ValueKind}'.");
-        }
-
-        return value;
-    }
+    private static Value MaterializeValue(string jsonValue) => JsonParser.Default.Parse<Value>(jsonValue);
 
     private static void SetOptionalResourceFields(Resource resource, ResourceRecord record)
     {
@@ -647,6 +597,12 @@ public sealed partial class SqliteResourceRepository
     {
         return new Timestamp { Seconds = seconds, Nanos = nanos ?? 0 };
     }
+
+    private sealed record ResourceToSave(Resource Resource, int ReplicaIndex, bool ConsoleLogsLoaded);
+
+    private sealed record PropertyToSave(string ResourceName, int Ordinal, ResourceProperty Property);
+
+    private sealed record CommandToSave(string ResourceName, int Ordinal, ResourceCommand Command, string? ParameterJsonValue);
 
     private sealed record StoredResource(Resource Resource, int ReplicaIndex);
 
@@ -715,7 +671,7 @@ public sealed partial class SqliteResourceRepository
         public required string ResourceName { get; init; }
         public required string Name { get; init; }
         public string? DisplayName { get; init; }
-        public required long ValueId { get; init; }
+        public required string JsonValue { get; init; }
         public bool? IsSensitive { get; init; }
         public required bool IsHighlighted { get; init; }
         public int? SortOrder { get; init; }
@@ -728,7 +684,7 @@ public sealed partial class SqliteResourceRepository
         public required string Name { get; init; }
         public required string DisplayName { get; init; }
         public string? ConfirmationMessage { get; init; }
-        public long? ParameterValueId { get; init; }
+        public string? ParameterJsonValue { get; init; }
         public required bool IsHighlighted { get; init; }
         public string? IconName { get; init; }
         public int? IconVariant { get; init; }
@@ -783,25 +739,4 @@ public sealed partial class SqliteResourceRepository
         public required string ValidationError { get; init; }
     }
 
-    private sealed class ValueRecord
-    {
-        public required long ValueId { get; init; }
-        public required int ValueKind { get; init; }
-        public string? StringValue { get; init; }
-        public double? NumberValue { get; init; }
-        public bool? BoolValue { get; init; }
-    }
-
-    private sealed class MapValueRecord
-    {
-        public required long ParentValueId { get; init; }
-        public required string MapKey { get; init; }
-        public required long ChildValueId { get; init; }
-    }
-
-    private sealed class ListValueRecord
-    {
-        public required long ParentValueId { get; init; }
-        public required long ChildValueId { get; init; }
-    }
 }

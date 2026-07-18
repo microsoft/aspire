@@ -18,6 +18,7 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
+    private bool _isRunSelectionInitialized;
     private bool _isSwitchingRuns;
 
     private IDisposable? _themeChangedSubscription;
@@ -36,8 +37,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     internal const string HelpButtonId = "dashboard-help-button";
     internal const string SettingsButtonId = "dashboard-settings-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
-    private IReadOnlyList<DashboardRunDescriptor> _runOptions = [];
-    private DashboardRunDescriptor? _selectedRun;
 
     [Inject]
     public required ThemeManager ThemeManager { get; init; }
@@ -89,16 +88,16 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     protected override async Task OnInitializedAsync()
     {
-        _runOptions = RunStore.GetRuns();
-        string? selectedRunId = null;
         if (RunStore.SupportsRunSelection)
         {
+            var runOptions = RunStore.GetRuns();
             var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
-            selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+            var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
+            var selectedRun = runOptions.FirstOrDefault(run => string.Equals(run.RunId, selectedRunId, StringComparison.Ordinal))
+                ?? runOptions.Single(run => run.IsCurrent);
+            RunSelection.SelectRun(selectedRun.IsCurrent ? null : selectedRun.RunId);
         }
-        _selectedRun = _runOptions.FirstOrDefault(run => string.Equals(run.RunId, selectedRunId, StringComparison.Ordinal))
-            ?? _runOptions.Single(run => run.IsCurrent);
-        RunSelection.SelectRun(_selectedRun.IsCurrent ? null : _selectedRun.RunId);
+        _isRunSelectionInitialized = true;
 
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
         // Note that this event could be raised from a settings dialog opened in a different browser window.
@@ -238,8 +237,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private async Task SwitchDashboardRunAsync(string? runId)
     {
-        var selectedRun = _runOptions.FirstOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
-        if (selectedRun is null || string.Equals(selectedRun.RunId, _selectedRun?.RunId, StringComparison.Ordinal))
+        var selectedRunId = RunSelection.SelectedRun is { IsCurrent: false } selectedRun ? selectedRun.RunId : null;
+        if (string.Equals(runId, selectedRunId, StringComparison.Ordinal))
         {
             return;
         }
@@ -249,8 +248,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
         try
         {
-            RunSelection.SelectRun(selectedRun.IsCurrent ? null : selectedRun.RunId);
-            _selectedRun = selectedRun;
+            RunSelection.SelectRun(runId);
         }
         finally
         {
@@ -258,7 +256,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             await InvokeAsync(StateHasChanged);
         }
 
-        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, selectedRun.IsCurrent ? string.Empty : selectedRun.RunId);
+        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, runId ?? string.Empty);
     }
 
     private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)

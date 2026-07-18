@@ -24,7 +24,7 @@ internal static class TestDashboardDataSource
         public bool SupportsRunSelection => false;
 
         public IReadOnlyList<DashboardRunDescriptor> GetRuns() =>
-            [new("current", DateTimeOffset.UnixEpoch, null, false, "TestApp", string.Empty, IsCurrent: true)];
+            [new("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", string.Empty, IsCurrent: true)];
     }
 
     private sealed class TestRepositoryFactory(

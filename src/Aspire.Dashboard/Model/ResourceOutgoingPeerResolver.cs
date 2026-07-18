@@ -31,52 +31,59 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             return;
         }
 
-        _watchTask = Task.Run(async () =>
+        // This watcher lives for the lifetime of the resolver. Don't let the request or component that
+        // causes the resolver to be constructed become the parent of that long-running operation.
+        using (ExecutionContext.SuppressFlow())
         {
-            var (snapshot, subscription) = await resourceService.SubscribeResourcesAsync(_watchContainersTokenSource.Token).ConfigureAwait(false);
+            _watchTask = Task.Run(() => WatchResourcesAsync(resourceService));
+        }
+    }
 
-            if (snapshot.Length > 0)
+    private async Task WatchResourcesAsync(IDashboardClient resourceService)
+    {
+        var (snapshot, subscription) = await resourceService.SubscribeResourcesAsync(_watchContainersTokenSource.Token).ConfigureAwait(false);
+
+        if (snapshot.Length > 0)
+        {
+            foreach (var resource in snapshot)
             {
-                foreach (var resource in snapshot)
-                {
-                    var added = _resourceByName.TryAdd(resource.Name, resource);
-                    Debug.Assert(added, "Should not receive duplicate resources in initial snapshot data.");
-                }
-
-                await RaisePeerChangesAsync().ConfigureAwait(false);
+                var added = _resourceByName.TryAdd(resource.Name, resource);
+                Debug.Assert(added, "Should not receive duplicate resources in initial snapshot data.");
             }
 
-            await foreach (var changes in subscription.WithCancellation(_watchContainersTokenSource.Token).ConfigureAwait(false))
+            await RaisePeerChangesAsync().ConfigureAwait(false);
+        }
+
+        await foreach (var changes in subscription.WithCancellation(_watchContainersTokenSource.Token).ConfigureAwait(false))
+        {
+            var hasPeerRelevantChanges = false;
+
+            foreach (var (changeType, resource) in changes)
             {
-                var hasPeerRelevantChanges = false;
-
-                foreach (var (changeType, resource) in changes)
+                if (changeType == ResourceViewModelChangeType.Upsert)
                 {
-                    if (changeType == ResourceViewModelChangeType.Upsert)
-                    {
-                        if (!_resourceByName.TryGetValue(resource.Name, out var existingResource) || 
-                            !ArePeerRelevantPropertiesEquivalent(resource, existingResource))
-                        {
-                            hasPeerRelevantChanges = true;
-                        }
-
-                        _resourceByName[resource.Name] = resource;
-                    }
-                    else if (changeType == ResourceViewModelChangeType.Delete)
+                    if (!_resourceByName.TryGetValue(resource.Name, out var existingResource) ||
+                        !ArePeerRelevantPropertiesEquivalent(resource, existingResource))
                     {
                         hasPeerRelevantChanges = true;
-
-                        var removed = _resourceByName.TryRemove(resource.Name, out _);
-                        Debug.Assert(removed, "Cannot remove unknown resource.");
                     }
-                }
 
-                if (hasPeerRelevantChanges)
+                    _resourceByName[resource.Name] = resource;
+                }
+                else if (changeType == ResourceViewModelChangeType.Delete)
                 {
-                    await RaisePeerChangesAsync().ConfigureAwait(false);
+                    hasPeerRelevantChanges = true;
+
+                    var removed = _resourceByName.TryRemove(resource.Name, out _);
+                    Debug.Assert(removed, "Cannot remove unknown resource.");
                 }
             }
-        });
+
+            if (hasPeerRelevantChanges)
+            {
+                await RaisePeerChangesAsync().ConfigureAwait(false);
+            }
+        }
     }
 
     private static bool ArePeerRelevantPropertiesEquivalent(ResourceViewModel resource1, ResourceViewModel resource2)

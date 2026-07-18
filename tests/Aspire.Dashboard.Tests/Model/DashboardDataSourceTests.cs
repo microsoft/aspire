@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
@@ -34,6 +35,16 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var applicationDirectoryName = DashboardRunStore.GetApplicationDirectoryName("My Dashboard");
         var expectedRunsDirectory = Path.Combine(_workspace.Path, applicationDirectoryName, "runs");
         Assert.Equal(expectedRunsDirectory, Directory.GetParent(runStore.RunDirectory)!.FullName);
+    }
+
+    [Fact]
+    public void RunMetadata_IncludesSchemaVersion()
+    {
+        using var runStore = CreateRunStore(CreateOptions());
+        using var metadata = JsonDocument.Parse(File.ReadAllText(Path.Combine(runStore.RunDirectory, "run.json")));
+
+        Assert.Equal(DashboardRunStore.SchemaVersion, metadata.RootElement.GetProperty("SchemaVersion").GetInt32());
+        Assert.Equal(DashboardRunStore.SchemaVersion, Assert.Single(runStore.GetRuns()).SchemaVersion);
     }
 
     [Fact]
@@ -158,17 +169,15 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.True(DashboardSqliteDatabase.IsCompatible(databasePath));
     }
 
-    [Theory]
-    [InlineData("CREATE TABLE dashboard_schema (version INTEGER NOT NULL); INSERT INTO dashboard_schema VALUES (8), (8);")]
-    [InlineData("CREATE TABLE dashboard_schema (version); INSERT INTO dashboard_schema VALUES ('invalid');")]
-    public void IsCompatible_ReturnsFalseForMalformedSchema(string schemaSql)
+    [Fact]
+    public void IsCompatible_ReturnsFalseForMultipleSchemaVersions()
     {
         var databasePath = Path.Combine(_workspace.Path, $"malformed-{Guid.NewGuid():N}.db");
         using (var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False"))
         {
             connection.Open();
             using var command = connection.CreateCommand();
-            command.CommandText = schemaSql;
+            command.CommandText = "CREATE TABLE dashboard_schema (version INTEGER NOT NULL) STRICT; INSERT INTO dashboard_schema VALUES (8), (8);";
             command.ExecuteNonQuery();
         }
 
@@ -221,6 +230,17 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
                 Assert.NotNull(historicalRun.EndedAtUtc);
                 Assert.Equal(historicalRunId, historicalRun.RunId);
             });
+    }
+
+    [Fact]
+    public void GetRuns_ReusesLazySnapshot()
+    {
+        using var runStore = CreateRunStore(CreateOptions());
+
+        var first = runStore.GetRuns();
+        var second = runStore.GetRuns();
+
+        Assert.Same(first, second);
     }
 
     [Fact]
@@ -344,14 +364,16 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void GetRuns_ExcludesIncompatibleDatabaseWithoutDeletingIt()
+    public void GetRuns_DoesNotReadDatabaseSchemaUntilRunIsSelected()
     {
         var options = CreateOptions();
         string incompatibleDatabasePath;
+        string incompatibleRunId;
 
         using (var incompatibleRunStore = CreateRunStore(options))
         {
             incompatibleDatabasePath = incompatibleRunStore.DatabasePath;
+            incompatibleRunId = incompatibleRunStore.RunId;
             using var connection = new SqliteConnection($"Data Source={incompatibleDatabasePath};Pooling=False");
             connection.Open();
             using var command = connection.CreateCommand();
@@ -361,8 +383,26 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         using var currentRunStore = CreateRunStore(options);
 
-        Assert.Collection(currentRunStore.GetRuns(), run => Assert.True(run.IsCurrent));
+        Assert.Collection(
+            currentRunStore.GetRuns(),
+            run => Assert.True(run.IsCurrent),
+            run =>
+            {
+                Assert.Equal(incompatibleRunId, run.RunId);
+                Assert.Equal(DashboardRunStore.SchemaVersion, run.SchemaVersion);
+            });
         Assert.True(File.Exists(incompatibleDatabasePath));
+
+        var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
+        using var repositoryFactory = CreateRepositoryFactory(currentDatabase, options);
+        var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
+        var currentResourceRepository = repositoryFactory.CreateResourceRepository(currentDatabase);
+        using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => dataSource.SelectRun(incompatibleRunId));
+        Assert.Equal(
+            $"Dashboard database schema version '1' does not match run metadata schema version '{DashboardRunStore.SchemaVersion}'.",
+            exception.Message);
     }
 
     [Fact]

@@ -1,10 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Tests;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Microsoft.AspNetCore.InternalTesting;
@@ -292,6 +295,61 @@ public sealed class DashboardClientTests
     }
 
     [Fact]
+    public async Task WhenConnected_AmbientActivity_DoesNotFlowToConnection()
+    {
+        await using var instance = CreateResourceServiceClient();
+        var serviceClient = new MockDashboardServiceClient();
+        instance.SetDashboardServiceClient(serviceClient);
+
+        using var activity = new Activity("request").Start();
+
+        await instance.WhenConnected.DefaultTimeout();
+
+        Assert.Null(serviceClient.ActivityOnGetApplicationInformation);
+    }
+
+    [Fact]
+    public async Task WatchResources_ResponseCreatesActivity()
+    {
+        await using var instance = CreateResourceServiceClient();
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            ResourceUpdates =
+            [
+                new WatchResourcesUpdate { InitialData = new InitialResourceData() },
+                new WatchResourcesUpdate { Changes = new WatchResourcesChanges() }
+            ]
+        });
+        var activities = new ConcurrentQueue<Activity>();
+        var activitiesReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = ActivityListenerHelper.Create(instance.ActivitySource, onActivityStopped: activity =>
+        {
+            activities.Enqueue(activity);
+            if (activities.Count == 2)
+            {
+                activitiesReceived.TrySetResult();
+            }
+        });
+
+        _ = instance.WhenConnected;
+        await activitiesReceived.Task.DefaultTimeout();
+        await instance.DisposeAsync().DefaultTimeout();
+
+        Assert.Collection(
+            activities,
+            activity => AssertActivity(activity, WatchResourcesUpdate.KindOneofCase.InitialData),
+            activity => AssertActivity(activity, WatchResourcesUpdate.KindOneofCase.Changes));
+
+        static void AssertActivity(Activity activity, WatchResourcesUpdate.KindOneofCase kind)
+        {
+            Assert.Equal(DashboardClient.ActivitySourceName, activity.Source.Name);
+            Assert.Equal("Process resource update", activity.OperationName);
+            Assert.Equal(ActivityKind.Consumer, activity.Kind);
+            Assert.Equal(kind.ToString(), activity.GetTagItem("aspire.dashboard.resource_update.type"));
+        }
+    }
+
+    [Fact]
     public async Task ConnectionState_SetConnected_FiresEvent()
     {
         await using var instance = CreateResourceServiceClient();
@@ -556,6 +614,9 @@ public sealed class DashboardClientTests
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
         public string MinDashboardVersion { get; init; } = "";
         public IReadOnlyList<WatchResourceConsoleLogsUpdate> ConsoleLogUpdates { get; init; } = [];
+        public IReadOnlyList<WatchResourcesUpdate> ResourceUpdates { get; init; } = [];
+        public Activity? ActivityOnGetApplicationInformation { get; private set; }
+        private int _resourceUpdatesReturned;
 
         public override AsyncServerStreamingCall<WatchResourceConsoleLogsUpdate> WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest request, CallOptions options)
         {
@@ -580,6 +641,7 @@ public sealed class DashboardClientTests
 
         public override AsyncUnaryCall<ApplicationInformationResponse> GetApplicationInformationAsync(ApplicationInformationRequest request, CallOptions options)
         {
+            ActivityOnGetApplicationInformation = Activity.Current;
             if (FailOnGetApplicationInformation)
             {
                 return new AsyncUnaryCall<ApplicationInformationResponse>(
@@ -653,7 +715,7 @@ public sealed class DashboardClientTests
         {
             var reader = FailOnWatchResources
                 ? (IAsyncStreamReader<WatchResourcesUpdate>)new FailingAsyncStreamReader<WatchResourcesUpdate>()
-                : new AsyncStreamReader<WatchResourcesUpdate>();
+                : new AsyncStreamReader<WatchResourcesUpdate>(Interlocked.Exchange(ref _resourceUpdatesReturned, 1) == 0 ? ResourceUpdates : []);
 
             return new AsyncServerStreamingCall<WatchResourcesUpdate>(
                 reader,

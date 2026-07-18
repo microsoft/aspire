@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
@@ -159,6 +160,12 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         resource.Urls.Add(new Url
         {
             EndpointName = "https",
+            FullUrl = "https://api.dev.localhost:5001/path",
+            DisplayProperties = new UrlDisplayProperties { SortOrder = 3, DisplayName = "Secure endpoint" }
+        });
+        resource.Urls.Add(new Url
+        {
+            EndpointName = "https",
             FullUrl = "https://localhost:5001/path",
             IsInternal = true,
             DisplayProperties = new UrlDisplayProperties { SortOrder = 3, DisplayName = "Secure endpoint" }
@@ -182,10 +189,12 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             IsHighlighted = true,
             SortOrder = 7
         });
+#pragma warning disable CS0612 // ResourceCommand.Parameter must be persisted for compatibility with older AppHosts.
         resource.Commands.Add(new ResourceCommand
         {
             Name = "configure",
             DisplayName = "Configure",
+            Parameter = nestedValue.Clone(),
             DisplayDescription = "Configure the resource",
             ConfirmationMessage = "Continue?",
             IsHighlighted = true,
@@ -217,10 +226,23 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
                 }
             }
         });
+#pragma warning restore CS0612
 
         using (var repository = CreateRepository(workspace.Path))
         {
             ((IResourceRepositoryWriter)repository).ReplaceResources([resource]);
+        }
+
+        using (var connection = new SqliteConnection($"Data Source={GetDatabasePath(workspace.Path)};Mode=ReadOnly;Pooling=False"))
+        {
+            connection.Open();
+            using var sqliteCommand = connection.CreateCommand();
+            sqliteCommand.CommandText = """
+                SELECT COUNT(*)
+                FROM dashboard_resource_commands
+                WHERE json_extract(parameter_value, '$.name') = 'database';
+                """;
+            Assert.Equal(1L, sqliteCommand.ExecuteScalar());
         }
 
         using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
@@ -248,7 +270,19 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         Assert.Equal("Safe", input.Options["safe"]);
         Assert.Equal("Fast", input.Options["fast"]);
         Assert.Equal("Choose a mode", Assert.Single(input.ValidationErrors));
-        Assert.Equal("https", Assert.Single(actual.Urls).EndpointName);
+        Assert.Collection(actual.Urls,
+            url =>
+            {
+                Assert.Equal("https", url.EndpointName);
+                Assert.Equal("api.dev.localhost", url.Url.Host);
+                Assert.False(url.IsInternal);
+            },
+            url =>
+            {
+                Assert.Equal("https", url.EndpointName);
+                Assert.Equal("localhost", url.Url.Host);
+                Assert.True(url.IsInternal);
+            });
         Assert.Equal("/data", Assert.Single(actual.Volumes).Target);
         Assert.Equal("database", Assert.Single(actual.Relationships).ResourceName);
         Assert.Equal("ready", Assert.Single(actual.HealthReports).Name);
@@ -277,6 +311,31 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
+    public void Resources_MultipleResourcesArePersistedWithBatchedQueries()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
+        var writer = (IResourceRepositoryWriter)repository;
+
+        var replaceQueries = CaptureSqlQueries(() => writer.ReplaceResources([
+            CreateResourceWithChildren("api", "API", "api-value"),
+            CreateResourceWithChildren("worker", "Worker", "worker-value")
+        ]));
+        AssertBatchedResourceQueries(replaceQueries);
+
+        var applyQueries = CaptureSqlQueries(() => writer.ApplyChanges([
+            new WatchResourcesChange { Upsert = CreateResourceWithChildren("api", "API", "api-updated") },
+            new WatchResourcesChange { Upsert = CreateResourceWithChildren("worker", "Worker", "worker-updated") }
+        ]));
+        AssertBatchedResourceQueries(applyQueries);
+
+        var resources = repository.GetResources().OrderBy(resource => resource.Name).ToArray();
+        Assert.Collection(resources,
+            resource => AssertResourceChildren(resource, "api-updated"),
+            resource => AssertResourceChildren(resource, "worker-updated"));
+    }
+
+    [Fact]
     public void Schema_HasNoSerializedResourceColumns()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
@@ -301,6 +360,69 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             WHERE name = 'payload' OR upper(type) = 'BLOB';
             """;
         Assert.Equal(0L, command.ExecuteScalar());
+    }
+
+    [Fact]
+    public void Values_AreStoredOnOwnerRowsAsValidatedJson()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        var resource = CreateResource("api", "API");
+        resource.Properties.Add(new ResourceProperty
+        {
+            Name = "nested",
+            Value = new Value
+            {
+                StructValue = new Struct
+                {
+                    Fields =
+                    {
+                        ["name"] = Value.ForString("database"),
+                        ["values"] = new Value
+                        {
+                            ListValue = new ListValue
+                            {
+                                Values =
+                                {
+                                    Value.ForNumber(42.5),
+                                    Value.ForBool(true),
+                                    new Value { NullValue = NullValue.NullValue }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+
+        using (var repository = CreateRepository(workspace.Path))
+        {
+            ((IResourceRepositoryWriter)repository).ReplaceResources([resource]);
+        }
+
+        using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT COUNT(*)
+            FROM dashboard_resource_properties
+            WHERE typeof(value) = 'text'
+                AND json_valid(value)
+                AND json_extract(value, '$.name') = 'database'
+                AND json_array_length(value, '$.values') = 3;
+            """;
+        Assert.Equal(1L, command.ExecuteScalar());
+
+        command.CommandText = """
+            SELECT COUNT(*)
+            FROM sqlite_schema
+            WHERE type = 'table'
+                AND name IN ('dashboard_values', 'dashboard_value_map_entries', 'dashboard_value_list_items');
+            """;
+        Assert.Equal(0L, command.ExecuteScalar());
+
+        command.CommandText = "UPDATE dashboard_resource_properties SET value = 'invalid' WHERE resource_name = 'api';";
+        Assert.Throws<SqliteException>(() => command.ExecuteNonQuery());
     }
 
     [Fact]
@@ -444,6 +566,50 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             }
         });
         return resource;
+    }
+
+    private static IReadOnlyList<string> CaptureSqlQueries(Action action)
+    {
+        var queries = new List<string>();
+        using var operation = new Activity("Capture resource persistence queries").Start();
+        using var listener = new ActivityListener
+        {
+            ShouldListenTo = source => source.Name == TracingSqliteConnection.ActivitySourceName,
+            Sample = static (ref ActivityCreationOptions<ActivityContext> _) => ActivitySamplingResult.AllData,
+            ActivityStopped = activity =>
+            {
+                if (activity.TraceId == operation.TraceId && activity.GetTagItem("db.query.text") is string query)
+                {
+                    queries.Add(query);
+                }
+            }
+        };
+        ActivitySource.AddActivityListener(listener);
+
+        action();
+
+        return queries;
+    }
+
+    private static void AssertBatchedResourceQueries(IReadOnlyList<string> queries)
+    {
+        Assert.Equal(11, queries.Count);
+
+        string[] insertedTables =
+        [
+            "dashboard_resources",
+            "dashboard_resource_environment",
+            "dashboard_resource_properties",
+            "dashboard_resource_commands",
+            "dashboard_resource_command_inputs",
+            "dashboard_resource_command_input_options",
+            "dashboard_resource_command_input_validation_errors"
+        ];
+
+        foreach (var table in insertedTables)
+        {
+            Assert.Single(queries, query => query.TrimStart().StartsWith($"INSERT INTO {table} ", StringComparison.Ordinal));
+        }
     }
 
     private static void AssertResourceChildren(global::Aspire.Dashboard.Model.ResourceViewModel resource, string expected)

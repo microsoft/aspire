@@ -202,6 +202,7 @@ internal static class FluentUISetupHelpers
             [
                 new(
                 RunId: "current",
+                SchemaVersion: DashboardRunStore.SchemaVersion,
                 StartedAtUtc: DateTimeOffset.UnixEpoch,
                 EndedAtUtc: null,
                 CleanShutdown: false,
@@ -210,18 +211,29 @@ internal static class FluentUISetupHelpers
                 IsCurrent: true)
             ];
 
-        public IReadOnlyList<DashboardRunDescriptor> GetRuns() => _runs;
+        public int GetRunsCallCount { get; private set; }
+
+        public IReadOnlyList<DashboardRunDescriptor> GetRuns()
+        {
+            GetRunsCallCount++;
+            return _runs;
+        }
 
         public bool SupportsRunSelection => supportsRunSelection;
     }
 
-    internal sealed class TestDashboardRunSelection : IDashboardRunSelection
+    internal sealed class TestDashboardRunSelection(IDashboardRunStore runStore) : IDashboardRunSelection
     {
+        public DashboardRunDescriptor SelectedRun { get; private set; } = runStore.GetRuns().Single(run => run.IsCurrent);
+
         public string? SelectedRunId { get; private set; }
 
         public void SelectRun(string? runId)
         {
-            SelectedRunId = runId;
+            var runs = runStore.GetRuns();
+            SelectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal))
+                ?? runs.Single(run => run.IsCurrent);
+            SelectedRunId = SelectedRun.IsCurrent ? null : SelectedRun.RunId;
         }
     }
 

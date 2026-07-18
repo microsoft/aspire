@@ -20,8 +20,9 @@
                 <ApplicationName/>
             </FluentAnchor>
             <div class="flex-filler"></div>
-            @if (RunStore.SupportsRunSelection && _selectedRun is { } selectedRun)
+            @if (RunStore.SupportsRunSelection && _isRunSelectionInitialized)
             {
+                var selectedRun = RunSelection.SelectedRun;
                 <DashboardRunSelect @key="selectedRun.RunId"
                                     SelectedRunId="@selectedRun.RunId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
@@ -66,8 +67,9 @@
                 <ApplicationName/>
             </FluentAnchor>
             <div class="flex-filler"></div>
-            @if (RunStore.SupportsRunSelection && _selectedRun is { } selectedRun)
+            @if (RunStore.SupportsRunSelection && _isRunSelectionInitialized)
             {
+                var selectedRun = RunSelection.SelectedRun;
                 <DashboardRunSelect @key="selectedRun.RunId"
                                     SelectedRunId="@selectedRun.RunId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
@@ -100,8 +102,9 @@
     <div class="layout-body-container">
         <FluentBodyContent Class="custom-body-content body-content">
             <FluentToastProvider MaxToastCount="3" Timeout="5000" />
-            @if (!_isSwitchingRuns && _selectedRun is { } selectedRun)
+            @if (!_isSwitchingRuns && _isRunSelectionInitialized)
             {
+                var selectedRun = RunSelection.SelectedRun;
                 <CascadingValue @key="selectedRun.RunId" Name="DashboardRunId" Value="selectedRun.RunId" IsFixed="true">
                     @Body
                 </CascadingValue>
@@ -112,9 +115,10 @@
     <FluentDialogProvider/>
     <FluentTooltipProvider />
     <FluentMenuProvider />
-    @if (!_isSwitchingRuns && _selectedRun is not null)
+    @if (!_isSwitchingRuns && _isRunSelectionInitialized)
     {
-        <CascadingValue @key="_selectedRun.RunId" Name="DashboardRunProviders" Value="_selectedRun.RunId" IsFixed="true">
+        var selectedRun = RunSelection.SelectedRun;
+        <CascadingValue @key="selectedRun.RunId" Name="DashboardRunProviders" Value="selectedRun.RunId" IsFixed="true">
             <InteractionsProvider />
             <ResourceServiceConnectionProvider />
         </CascadingValue>

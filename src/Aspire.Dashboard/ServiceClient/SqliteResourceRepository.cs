@@ -209,15 +209,17 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 """, transaction: transaction).ToHashSet(StringComparers.ResourceName);
             connection.Execute("DELETE FROM dashboard_resources;", transaction: transaction);
             _resources.Clear();
+            var resourcesToSave = new List<ResourceToSave>(resources.Count);
 
             foreach (var resource in resources)
             {
                 var viewModel = CreateViewModel(resource);
-                SaveResource(connection, transaction, resource, viewModel.ReplicaIndex, resourcesWithLoadedConsoleLogs.Contains(resource.Name));
+                resourcesToSave.Add(new(resource, viewModel.ReplicaIndex, resourcesWithLoadedConsoleLogs.Contains(resource.Name)));
                 _resources[resource.Name] = viewModel;
                 changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, viewModel));
             }
 
+            InsertResources(connection, transaction, resourcesToSave);
             transaction.Commit();
         }
 
@@ -234,6 +236,22 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             ThrowIfDisposed();
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
+            var affectedResourceNames = changes
+                .Select(change => change.KindCase switch
+                {
+                    WatchResourcesChange.KindOneofCase.Upsert => change.Upsert.Name,
+                    WatchResourcesChange.KindOneofCase.Delete => change.Delete.ResourceName,
+                    _ => null
+                })
+                .Where(name => name is not null)
+                .Distinct(StringComparers.ResourceName)
+                .ToArray();
+            var resourcesWithLoadedConsoleLogs = connection.Query<string>("""
+                SELECT resource_name
+                FROM dashboard_resources
+                WHERE resource_name IN @ResourceNames AND console_logs_loaded = 1;
+                """, new { ResourceNames = affectedResourceNames }, transaction).ToHashSet(StringComparers.ResourceName);
+            var resourcesToSave = new Dictionary<string, ResourceToSave>(StringComparers.ResourceName);
 
             foreach (var change in changes)
             {
@@ -241,17 +259,19 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 {
                     var resource = change.Upsert;
                     var viewModel = CreateViewModel(resource);
-                    SaveResource(connection, transaction, resource, viewModel.ReplicaIndex);
+                    resourcesToSave[resource.Name] = new(resource, viewModel.ReplicaIndex, resourcesWithLoadedConsoleLogs.Contains(resource.Name));
                     _resources[resource.Name] = viewModel;
                     viewModelChanges.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, viewModel));
                 }
                 else if (change.KindCase == WatchResourcesChange.KindOneofCase.Delete && _resources.Remove(change.Delete.ResourceName, out var removed))
                 {
-                    connection.Execute("DELETE FROM dashboard_resources WHERE resource_name = @ResourceName;", new { ResourceName = change.Delete.ResourceName }, transaction);
+                    resourcesToSave.Remove(change.Delete.ResourceName);
                     viewModelChanges.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Delete, removed));
                 }
             }
 
+            connection.Execute("DELETE FROM dashboard_resources WHERE resource_name IN @ResourceNames;", new { ResourceNames = affectedResourceNames }, transaction);
+            InsertResources(connection, transaction, resourcesToSave.Values.ToArray());
             transaction.Commit();
         }
 

@@ -7,6 +7,7 @@ namespace Aspire.Dashboard.ServiceClient;
 
 internal interface IDashboardRunSelection
 {
+    DashboardRunDescriptor SelectedRun { get; }
     void SelectRun(string? runId);
 }
 
@@ -52,6 +53,8 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
     internal bool IsReadOnly { get; private set; }
 
+    DashboardRunDescriptor IDashboardRunSelection.SelectedRun => SelectedRun;
+
     void IDashboardRunSelection.SelectRun(string? runId) => SelectRun(runId);
 
     internal void SelectRun(string? runId)
@@ -70,9 +73,19 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
         if (!selectedRun.IsCurrent)
         {
-            _historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
-            _historicalTelemetryRepository = _repositoryFactory.CreateTelemetryRepository(_historicalDatabase);
-            _historicalResourceRepository = _repositoryFactory.CreateResourceRepository(_historicalDatabase);
+            var historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
+            try
+            {
+                historicalDatabase.ValidateSchemaVersion(selectedRun.SchemaVersion);
+                _historicalTelemetryRepository = _repositoryFactory.CreateTelemetryRepository(historicalDatabase);
+                _historicalResourceRepository = _repositoryFactory.CreateResourceRepository(historicalDatabase);
+                _historicalDatabase = historicalDatabase;
+            }
+            catch
+            {
+                historicalDatabase.Dispose();
+                throw;
+            }
             TelemetryRepository = _historicalTelemetryRepository;
             ResourceRepository = _historicalResourceRepository;
             IsReadOnly = true;
