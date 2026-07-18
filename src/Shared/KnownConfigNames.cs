@@ -115,6 +115,7 @@ internal static class KnownConfigNames
     public const string DebugSessionServerCertificate = "DEBUG_SESSION_SERVER_CERTIFICATE";
     public const string DcpInstanceIdPrefix = "DCP_INSTANCE_ID_PREFIX";
     public const string DcpWorkloadId = "DCP_WORKLOAD_ID";
+    public const string DcpPublisherCliPath = "DcpPublisher__CliPath";
 
     public static class Legacy
     {

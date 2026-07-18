@@ -402,6 +402,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.True(noBuild);
             Assert.False(noRestore);
             Assert.Equal(bundleRoot.FullName, env!["AspireCliBundlePath"]);
+            Assert.Equal(
+                BundleDiscovery.GetDcpExecutablePath(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName)),
+                env[KnownConfigNames.DcpPublisherCliPath]);
             Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env![BundleDiscovery.DcpPathEnvVar]);
             Assert.Equal(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
@@ -464,10 +467,13 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         runner.RunAsyncCallback = (projectFile, _, _, _, _, env, _, _, _) =>
         {
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
+            Assert.Equal(
+                BundleDiscovery.GetDcpExecutablePath(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName)),
+                env![KnownConfigNames.DcpPublisherCliPath]);
 
-            // DCP/Dashboard env vars must NOT be injected for non-CliBundle AppHosts —
+            // ASPIRE_DCP_PATH/Dashboard env vars must NOT be injected for non-CliBundle AppHosts —
             // they would clobber the per-RID NuGet metadata path the AppHost was built against.
-            Assert.False(env!.ContainsKey(BundleDiscovery.DcpPathEnvVar));
+            Assert.False(env.ContainsKey(BundleDiscovery.DcpPathEnvVar));
             Assert.False(env.ContainsKey(BundleDiscovery.DashboardPathEnvVar));
 
             // Terminal host env vars must be injected even though AspireUseCliBundle=false.
@@ -485,6 +491,57 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             NoRestore = false,
             WorkingDirectory = _workspace.WorkspaceRoot,
             EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(0, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostDoesNotOverwriteConfiguredDcpPublisherCliPath()
+    {
+        UseFakeRepoRoot();
+        var appHostFile = CreateProjectAppHost();
+        var customDcpPath = BundleDiscovery.GetDcpExecutablePath(Path.Combine(_workspace.WorkspaceRoot.FullName, "custom-dcp"));
+        _ = CreateCliBundle(out var layout);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) =>
+            {
+                return (0, JsonDocument.Parse($$"""
+                    {
+                      "Properties": {
+                        "MSBuildVersion": "17.0.0",
+                        "IsAspireHost": "true",
+                        "AspireHostingSDKVersion": "{{VersionHelper.GetDefaultTemplateVersion()}}",
+                        "AspireUseCliBundle": "false"
+                      },
+                      "Items": {}
+                    }
+                    """));
+            }
+        };
+        var project = CreateDotNetAppHostProject(runner, layout);
+
+        runner.RunAsyncCallback = (projectFile, _, _, _, _, env, _, _, _) =>
+        {
+            Assert.Equal(appHostFile.FullName, projectFile.FullName);
+            Assert.Equal(customDcpPath, env![KnownConfigNames.DcpPublisherCliPath]);
+            Assert.False(env.ContainsKey(BundleDiscovery.DcpPathEnvVar));
+            return Task.FromResult(0);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>
+            {
+                [KnownConfigNames.DcpPublisherCliPath] = customDcpPath
+            }
         }, CancellationToken.None);
 
         Assert.Equal(0, exitCode);
@@ -1423,6 +1480,9 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.True(noBuild);
             Assert.False(noRestore);
             Assert.False(options.NoLaunchProfile);
+            Assert.Equal(
+                BundleDiscovery.GetDcpExecutablePath(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName)),
+                env![KnownConfigNames.DcpPublisherCliPath]);
             Assert.Equal(Path.Combine(bundleRoot.FullName, BundleDiscovery.DcpDirectoryName), env![BundleDiscovery.DcpPathEnvVar]);
             Assert.Equal(
                 Path.Combine(bundleRoot.FullName, BundleDiscovery.ManagedDirectoryName, BundleDiscovery.GetExecutableFileName(BundleDiscovery.ManagedExecutableName)),
