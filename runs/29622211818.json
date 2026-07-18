@@ -1,0 +1,47 @@
+{
+  "run_id": 29622211818,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29622211818",
+  "analyzed_at": "2026-07-18T00:34:43Z",
+  "verdict": "mixed",
+  "pr": {
+    "number": 18813,
+    "title": "Update dependencies from microsoft/dcp",
+    "author": "dotnet-maestro[bot]",
+    "state": "closed",
+    "head_branch": "darc-main-75c4da3f-0819-4c22-b156-d759ec9529c6",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18813"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.Dotnet / Hosting.Dotnet (windows-latest)",
+      "id": 88019625385,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29622211818/job/88019625385",
+      "classification": "transient-infra",
+      "reason": "Exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED) occurred in post-test upload/cleanup steps after all 15 tests passed successfully. This is a known Windows runner infrastructure failure.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Cli / Cli (ubuntu-latest)",
+      "id": 88019625711,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29622211818/job/88019625711",
+      "classification": "code-issue",
+      "reason": "Test LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable failed: expected 2 output messages but only got ['Failed to start the AppHost.']. The PR updates DCP dependency versions which directly affects AppHost launch behavior tested here.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable",
+      "job": "Tests / Cli / Cli (ubuntu-latest)",
+      "error": "Assert.Collection() Failure: Mismatched item count\nCollection:     [\"Failed to start the AppHost.\"]\nExpected count: 2\nActual count:   1",
+      "stack_trace": "at Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AppHostLauncherTests.cs:line 506\n   at Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable() in /home/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AppHostLauncherTests.cs:line 527",
+      "classification": "code-issue",
+      "reason": "The test expects 2 specific output messages when a forked child process exits before the monitor starts, but only received 1 ('Failed to start the AppHost.'). The PR updates DCP dependency versions (eng/Version.Details.xml, eng/Versions.props) which affects AppHost process behavior. The missing second message suggests the DCP update changed fork/monitor initialization behavior."
+    }
+  ],
+  "causes": ["windows-process-init-failure-0xc0000142"]
+}
