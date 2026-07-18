@@ -4,7 +4,6 @@
 using Dapper;
 using System.Data;
 using System.Diagnostics;
-using System.Globalization;
 using Microsoft.Data.Sqlite;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -63,14 +62,7 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         try
         {
             using var connection = database.OpenConnection();
-            var version = connection.QuerySingleOrDefault<int?>("""
-                SELECT CASE
-                    WHEN COUNT(*) = 1 THEN MAX(version)
-                    ELSE NULL
-                END
-                FROM dashboard_schema;
-                """);
-            return version == SchemaVersion;
+            return ValidateSchemaVersion(connection, transaction: null, SchemaVersion);
         }
         catch (SqliteException)
         {
@@ -87,21 +79,10 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         return connection;
     }
 
-    internal void ValidateSchemaVersion(int metadataSchemaVersion)
+    internal bool ValidateSchemaVersion(int metadataSchemaVersion)
     {
         using var connection = OpenConnection();
-        var schemaVersion = connection.QuerySingleOrDefault<int?>("""
-            SELECT CASE
-                WHEN COUNT(*) = 1 THEN MAX(version)
-                ELSE NULL
-            END
-            FROM dashboard_schema;
-            """);
-        if (schemaVersion != metadataSchemaVersion)
-        {
-            throw new InvalidOperationException(
-            $"Dashboard database schema version '{schemaVersion?.ToString(CultureInfo.InvariantCulture) ?? "invalid"}' does not match run metadata schema version '{metadataSchemaVersion}'.");
-        }
+        return ValidateSchemaVersion(connection, transaction: null, metadataSchemaVersion);
     }
 
     public static void ClearPools() => SqliteConnection.ClearAllPools();
@@ -133,9 +114,9 @@ internal sealed class DashboardSqliteDatabase : IDisposable
                 FROM sqlite_schema
                 WHERE type = 'table' AND name = 'dashboard_schema';
                 """) != 0;
-            if (schemaTableExists)
+            if (schemaTableExists && !ValidateSchemaVersion(connection, transaction: null, SchemaVersion))
             {
-                ValidateSchemaVersion(connection, transaction: null);
+                throw new InvalidOperationException("The dashboard database schema does not match the expected version.");
             }
 
             using var transaction = connection.BeginTransaction();
@@ -144,7 +125,10 @@ internal sealed class DashboardSqliteDatabase : IDisposable
                 connection.Execute(script, new { SchemaVersion }, transaction);
             }
 
-            ValidateSchemaVersion(connection, transaction);
+            if (!ValidateSchemaVersion(connection, transaction, SchemaVersion))
+            {
+                throw new InvalidOperationException("The dashboard database schema was not initialized to the expected version.");
+            }
             transaction.Commit();
             _schemaInitialized = true;
         }
@@ -184,12 +168,15 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         return scripts;
     }
 
-    private static void ValidateSchemaVersion(SqliteConnection connection, IDbTransaction? transaction)
+    private static bool ValidateSchemaVersion(SqliteConnection connection, IDbTransaction? transaction, int expectedVersion)
     {
-        var version = connection.QuerySingle<int>("SELECT version FROM dashboard_schema;", transaction: transaction);
-        if (version != SchemaVersion)
-        {
-            throw new InvalidOperationException($"Unsupported dashboard database schema version '{version}'.");
-        }
+        var version = connection.QuerySingleOrDefault<int?>("""
+            SELECT CASE
+                WHEN COUNT(*) = 1 THEN MAX(version)
+                ELSE NULL
+            END
+            FROM dashboard_schema;
+            """, transaction: transaction);
+        return version == expectedVersion;
     }
 }

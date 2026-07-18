@@ -401,7 +401,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         var exception = Assert.Throws<InvalidOperationException>(() => dataSource.SelectRun(incompatibleRunId));
         Assert.Equal(
-            $"Dashboard database schema version '1' does not match run metadata schema version '{DashboardRunStore.SchemaVersion}'.",
+            $"Dashboard database for run '{incompatibleRunId}' does not match run metadata schema version '{DashboardRunStore.SchemaVersion}'.",
             exception.Message);
     }
 
