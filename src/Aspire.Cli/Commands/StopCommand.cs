@@ -259,7 +259,7 @@ internal sealed class StopCommand : BaseCommand
     {
         var appHostPath = appHostFile.FullName;
         var appHostDisplayPath = FileSystemHelper.ShortenPaths([appHostPath], _environment)[appHostPath];
-        var workloadId = AppHostWorkloadId.Create(appHostFile, _environment.IsWindows());
+        var workloadId = AppHostWorkloadId.Create(appHostFile);
         var cleanupResult = await InteractionService.ShowStatusAsync(
             string.Format(CultureInfo.CurrentCulture, StopCommandStrings.CleaningPersistentResources, appHostDisplayPath),
             () => _dcpCleanupService.CleanupAsync(workloadId, cancellationToken),

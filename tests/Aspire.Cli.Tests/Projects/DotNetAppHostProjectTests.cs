@@ -270,7 +270,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public async Task RunAsync_SingleFileAppHostWithoutRunJsonPassesDevelopmentEnvironmentToRunner()
     {
         var appHostFile = CreateSingleFileAppHost();
-        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
         var runner = new TestDotNetCliRunner();
         var project = CreateDotNetAppHostProject(runner);
 
@@ -760,7 +760,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     {
         var appHostFile = CreateProjectAppHost();
         var appHostCommand = CreateBuiltAppHostCommand("AppHost");
-        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
         Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
         File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
             {
@@ -1920,7 +1920,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Action<CliServiceCollectionTestOptions>? configureServices = null)
     {
         var appHostFile = CreateProjectAppHost();
-        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
         var runner = new TestDotNetCliRunner
         {
             BuildAsyncCallback = (_, _, _, _) => 0,

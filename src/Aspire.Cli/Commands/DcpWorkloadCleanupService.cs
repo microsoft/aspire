@@ -20,55 +20,57 @@ internal sealed class DcpWorkloadCleanupService(
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(workloadId);
 
-        using var layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dcp-cleanup", cancellationToken).ConfigureAwait(false);
-        var dcpDirectory = layoutLease?.Layout.GetDcpPath() ??
-            layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
-        if (dcpDirectory is null)
-        {
-            logger.LogWarning("Could not find DCP in the Aspire layout.");
-            return DcpWorkloadCleanupResult.NotFound();
-        }
-
-        var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
-        if (!File.Exists(dcpPath))
-        {
-            logger.LogWarning("Could not find DCP executable at '{DcpPath}'.", dcpPath);
-            return DcpWorkloadCleanupResult.NotFound();
-        }
-
-        int exitCode;
-        string output;
-        string error;
+        BundleLayoutLease? layoutLease = null;
         try
         {
-            (exitCode, output, error) = await layoutProcessRunner.RunAsync(
+            layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dcp-cleanup", cancellationToken).ConfigureAwait(false);
+            var dcpDirectory = layoutLease?.Layout.GetDcpPath() ??
+                layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
+            if (dcpDirectory is null)
+            {
+                logger.LogWarning("Could not find DCP in the Aspire layout.");
+                return DcpWorkloadCleanupResult.NotFound();
+            }
+
+            var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
+            if (!File.Exists(dcpPath))
+            {
+                logger.LogWarning("Could not find DCP executable at '{DcpPath}'.", dcpPath);
+                return DcpWorkloadCleanupResult.NotFound();
+            }
+
+            var (exitCode, output, error) = await layoutProcessRunner.RunAsync(
                 dcpPath,
                 ["cleanup", workloadId],
                 workingDirectory: executionContext.WorkingDirectory.FullName,
                 ct: cancellationToken).ConfigureAwait(false);
+
+            if (!string.IsNullOrWhiteSpace(output))
+            {
+                logger.LogDebug("DCP cleanup stdout: {Output}", output.Trim());
+            }
+
+            if (!string.IsNullOrWhiteSpace(error))
+            {
+                logger.LogDebug("DCP cleanup stderr: {Error}", error.Trim());
+            }
+
+            if (exitCode != 0)
+            {
+                logger.LogWarning("DCP cleanup exited with code {ExitCode}.", exitCode);
+            }
+
+            return new DcpWorkloadCleanupResult(exitCode, output, error, DcpFound: true);
         }
         catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or IOException or UnauthorizedAccessException)
         {
-            logger.LogWarning(ex, "Failed to start DCP cleanup process at '{DcpPath}'.", dcpPath);
+            logger.LogWarning(ex, "Failed to run DCP cleanup.");
             return new DcpWorkloadCleanupResult(CliExitCodes.FailedToDotnetRunAppHost, string.Empty, ex.Message, DcpFound: true);
         }
-
-        if (!string.IsNullOrWhiteSpace(output))
+        finally
         {
-            logger.LogDebug("DCP cleanup stdout: {Output}", output.Trim());
+            layoutLease?.Dispose();
         }
-
-        if (!string.IsNullOrWhiteSpace(error))
-        {
-            logger.LogDebug("DCP cleanup stderr: {Error}", error.Trim());
-        }
-
-        if (exitCode != 0)
-        {
-            logger.LogWarning("DCP cleanup exited with code {ExitCode}.", exitCode);
-        }
-
-        return new DcpWorkloadCleanupResult(exitCode, output, error, DcpFound: true);
     }
 }
 

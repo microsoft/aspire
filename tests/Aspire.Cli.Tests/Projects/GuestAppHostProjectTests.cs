@@ -933,7 +933,7 @@ public class GuestAppHostProjectTests : IDisposable
         var appHostPath = Path.Combine(_workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "// test apphost");
         var appHostFile = new FileInfo(appHostPath);
-        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
 
         var projectFactory = new TestAppHostServerProjectFactory
         {

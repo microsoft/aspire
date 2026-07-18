@@ -330,7 +330,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         var processFactory = new TestProcessExecutionFactory();
-        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
 
         var projectLocator = new TestProjectLocator
         {
@@ -364,7 +364,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         var processFactory = new TestProcessExecutionFactory();
-        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
 
         var projectLocator = new TestProjectLocator
         {
@@ -399,7 +399,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var discoveredAppHostFile = new FileInfo(Path.Combine(discoveredAppHostDirectory.FullName, "Discovered.AppHost.csproj"));
         await File.WriteAllTextAsync(discoveredAppHostFile.FullName, "<Project />");
         var processFactory = new TestProcessExecutionFactory();
-        var expectedWorkloadId = AppHostWorkloadId.Create(runningAppHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(runningAppHostFile);
         var projectLocatorInvoked = false;
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
@@ -441,7 +441,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         var processFactory = new TestProcessExecutionFactory();
-        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
 
         var projectLocator = new TestProjectLocator
         {
@@ -476,7 +476,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         var processFactory = new TestProcessExecutionFactory();
-        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var outOfScopeAppHostFile = Path.Combine(workspace.WorkspaceRoot.FullName, "OtherWorkspace", "Other.AppHost.csproj");
@@ -588,6 +588,44 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_ForceReturnsCleanupFailureWhenBundleLayoutCannotBeAcquired()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var processFactory = new TestProcessExecutionFactory();
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.BundleServiceFactory = _ => new TestBundleService(isBundle: true)
+            {
+                EnsureExtractedException = new InvalidOperationException("Bundle extraction failed.")
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Empty(processFactory.CreatedExecutions);
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("Failed to clean up persistent resources", error, StringComparison.Ordinal);
+        Assert.Contains("Bundle extraction failed.", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task StopCommand_ForceReturnsFailureWhenDcpIsUnavailable()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -664,7 +702,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
         var processFactory = new TestProcessExecutionFactory();
-        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile, OperatingSystem.IsWindows());
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostFile.FullName, int.MaxValue - 10));

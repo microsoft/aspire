@@ -794,13 +794,17 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 
     public Layout.LayoutConfiguration? Layout { get; set; }
 
+    public Exception? EnsureExtractedException { get; set; }
+
     public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
 
     public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
+        => EnsureExtractedException is not null
+            ? Task.FromException<BundleLayoutLease?>(EnsureExtractedException)
+            : Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }
