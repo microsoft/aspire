@@ -309,18 +309,22 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
     }
 
     [Theory]
-    [InlineData(null, null, "Runs")]
-    [InlineData("", null, "Runs")]
-    [InlineData("   ", null, "Runs")]
-    [InlineData(null, "   ", "Runs")]
-    [InlineData(null, "None", "None")]
-    [InlineData("Runs", "None", "Runs")]
+    [InlineData(null, null, "Runs", false)]
+    [InlineData("", null, "Runs", false)]
+    [InlineData("   ", null, "Runs", false)]
+    [InlineData(null, "   ", "Runs", false)]
+    [InlineData(null, "None", "None", false)]
+    [InlineData("Runs", "None", "None", false)]
+    [InlineData("Runs", "None", "None", true)]
     public async Task ConfigureEnvironmentVariables_ConfiguresDashboardRunStorageRootApplicationNameAndPersistenceMode(
         string? configuredPersistenceMode,
         string? configuredPersistenceModeEnvironmentAlias,
-        string expectedPersistenceMode)
+        string expectedPersistenceMode,
+        bool configureExplicitAliases)
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var explicitDataDirectory = Path.Combine(workspace.Path, "custom-dashboard");
+        var explicitApplicationName = "Explicit Dashboard";
         var resourceLoggerService = new ResourceLoggerService();
         var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
         var configuration = new ConfigurationBuilder()
@@ -329,7 +333,9 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
                 ["Aspire:Store:Path"] = workspace.Path,
                 ["AppHost:DashboardApplicationName"] = "My App.AppHost",
                 ["Aspire:Dashboard:PersistenceMode"] = configuredPersistenceMode,
-                [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = configuredPersistenceModeEnvironmentAlias
+                [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = configuredPersistenceModeEnvironmentAlias,
+                [DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] = configureExplicitAliases ? explicitDataDirectory : null,
+                [DashboardConfigNames.DashboardApplicationName.EnvVarName] = configureExplicitAliases ? explicitApplicationName : null
             })
             .Build();
         var dashboardOptions = Options.Create(new DashboardOptions
@@ -350,9 +356,11 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         await hook.ConfigureEnvironmentVariables(new EnvironmentCallbackContext(context, environmentVariables: environmentVariables, resource: dashboardResource));
 
         Assert.Equal(
-            Path.Combine(workspace.Path, ".aspire", "dashboard"),
+            configureExplicitAliases ? explicitDataDirectory : Path.Combine(workspace.Path, ".aspire", "dashboard"),
             environmentVariables[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName]);
-        Assert.Equal("My App", environmentVariables[DashboardConfigNames.DashboardApplicationName.EnvVarName]);
+        Assert.Equal(
+            configureExplicitAliases ? explicitApplicationName : "My App",
+            environmentVariables[DashboardConfigNames.DashboardApplicationName.EnvVarName]);
         Assert.Equal(expectedPersistenceMode, environmentVariables[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName]);
     }
 
