@@ -414,13 +414,13 @@ public partial class ConsoleLogsTests : DashboardTestContext
     public void HistoricalRun_NoLogs_DisplaysCaptureStatus(bool consoleLogsWereLoaded, string expectedMessage)
     {
         var testResource = ModelTestHelpers.CreateResource(resourceName: "test-resource", state: KnownResourceState.Running);
+        testResource.ConsoleLogsLoaded = consoleLogsWereLoaded;
         var dashboardClient = new TestDashboardClient(
             isEnabled: true,
             consoleLogsChannelProvider: _ => Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>(),
             resourceChannelProvider: Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>,
             initialResources: [testResource],
-            isReadOnly: true,
-            loadedConsoleLogResourceNames: consoleLogsWereLoaded ? new HashSet<string>(StringComparers.ResourceName) { testResource.Name } : null);
+            isReadOnly: true);
         SetupConsoleLogsServices(dashboardClient);
 
         var cut = RenderConsoleLogsPage(CreateViewport(isDesktop: true), testResource.Name);

@@ -336,7 +336,8 @@ public sealed partial class SqliteResourceRepository
                 is_hidden AS IsHidden,
                 supports_detailed_telemetry AS SupportsDetailedTelemetry,
                 icon_name AS IconName,
-                icon_variant AS IconVariant
+                icon_variant AS IconVariant,
+                console_logs_loaded AS ConsoleLogsLoaded
             FROM dashboard_resources
             ORDER BY rowid;
 
@@ -555,7 +556,7 @@ public sealed partial class SqliteResourceRepository
             }
 #pragma warning restore CS0612
 
-            yield return new StoredResource(resource, record.ReplicaIndex);
+            yield return new StoredResource(resource, record.ReplicaIndex, record.ConsoleLogsLoaded);
         }
     }
 
@@ -604,7 +605,7 @@ public sealed partial class SqliteResourceRepository
 
     private sealed record CommandToSave(string ResourceName, int Ordinal, ResourceCommand Command, string? ParameterJsonValue);
 
-    private sealed record StoredResource(Resource Resource, int ReplicaIndex);
+    private sealed record StoredResource(Resource Resource, int ReplicaIndex, bool ConsoleLogsLoaded);
 
     private sealed class ResourceRecord
     {
@@ -625,6 +626,7 @@ public sealed partial class SqliteResourceRepository
         public required bool SupportsDetailedTelemetry { get; init; }
         public string? IconName { get; init; }
         public int? IconVariant { get; init; }
+        public required bool ConsoleLogsLoaded { get; init; }
     }
 
     private sealed class EnvironmentRecord
