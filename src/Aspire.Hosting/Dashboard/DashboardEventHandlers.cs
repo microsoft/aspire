@@ -599,21 +599,21 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         context.EnvironmentVariables[KnownAspNetCoreConfigNames.Environment] = environment;
         context.EnvironmentVariables[DashboardConfigNames.ResourceServiceUrlName.EnvVarName] = resourceServiceUrl;
-        if (configuration["AppHost:DashboardApplicationName"] is { Length: > 0 } applicationName)
-        {
-            context.EnvironmentVariables[DashboardConfigNames.DashboardApplicationName.EnvVarName] = DashboardService.GetDashboardApplicationName(applicationName);
-        }
-        if (configuration["Aspire:Store:Path"] is { Length: > 0 } aspireStorePath)
-        {
-            context.EnvironmentVariables[DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] = Path.Combine(aspireStorePath, ".aspire", "dashboard");
-        }
-        var persistenceMode = configuration["Aspire:Dashboard:PersistenceMode"];
-        if (string.IsNullOrWhiteSpace(persistenceMode))
-        {
-            persistenceMode = configuration[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName];
-        }
-        context.EnvironmentVariables[DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] =
-            string.IsNullOrWhiteSpace(persistenceMode) ? "Runs" : persistenceMode;
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardApplicationName,
+            "AppHost:DashboardApplicationName",
+            transform: DashboardService.GetDashboardApplicationName);
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardDataDirectoryName,
+            "Aspire:Store:Path",
+            transform: static aspireStorePath => Path.Combine(aspireStorePath, ".aspire", "dashboard"));
+        SetEnvironmentVariableWithFallback(
+            context,
+            DashboardConfigNames.DashboardPersistenceModeName,
+            "Aspire:Dashboard:PersistenceMode",
+            defaultValue: "Runs");
 
         PopulateDashboardUrls(context);
 
@@ -724,7 +724,34 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         {
             context.EnvironmentVariables[DashboardConfigNames.DebugSessionTelemetryOptOutName.EnvVarName] = optOutValue;
         }
+    }
 
+    private void SetEnvironmentVariableWithFallback(
+        EnvironmentCallbackContext context,
+        ConfigName configName,
+        string fallbackConfigurationKey,
+        string? defaultValue = null,
+        Func<string, string>? transform = null)
+    {
+        if (!string.IsNullOrWhiteSpace(configuration[configName.EnvVarName]))
+        {
+            return;
+        }
+
+        var value = configuration[fallbackConfigurationKey];
+        if (string.IsNullOrWhiteSpace(value))
+        {
+            value = defaultValue;
+        }
+        else if (transform is not null)
+        {
+            value = transform(value);
+        }
+
+        if (!string.IsNullOrWhiteSpace(value))
+        {
+            context.EnvironmentVariables[configName.EnvVarName] = value;
+        }
     }
 
     private class EndpointGenerationContext
