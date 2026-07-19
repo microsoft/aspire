@@ -20,7 +20,6 @@ public class TestDashboardClient : IDashboardClient
     private readonly Func<string, string, CommandViewModel, ExecuteResourceCommandOptions, CancellationToken, Task<ResourceCommandResponseViewModel>>? _executeResourceCommand;
     private readonly Channel<WatchInteractionsRequestUpdate>? _sendInteractionUpdateChannel;
     private readonly IList<ResourceViewModel>? _initialResources;
-    private readonly IReadOnlySet<string> _loadedConsoleLogResourceNames;
 
     public bool IsEnabled { get; }
     public bool IsReadOnly { get; }
@@ -44,8 +43,7 @@ public class TestDashboardClient : IDashboardClient
         Channel<WatchInteractionsRequestUpdate>? sendInteractionUpdateChannel = null,
         IList<ResourceViewModel>? initialResources = null,
         Task? whenConnected = null,
-        bool isReadOnly = false,
-        IReadOnlySet<string>? loadedConsoleLogResourceNames = null)
+        bool isReadOnly = false)
     {
         IsEnabled = isEnabled ?? false;
         IsReadOnly = isReadOnly;
@@ -58,7 +56,6 @@ public class TestDashboardClient : IDashboardClient
         _executeResourceCommand = executeResourceCommand;
         _sendInteractionUpdateChannel = sendInteractionUpdateChannel;
         _initialResources = initialResources;
-        _loadedConsoleLogResourceNames = loadedConsoleLogResourceNames ?? new HashSet<string>(StringComparers.ResourceName);
     }
 
     public ValueTask DisposeAsync()
@@ -100,8 +97,6 @@ public class TestDashboardClient : IDashboardClient
             yield return item;
         }
     }
-
-    public bool HaveConsoleLogsBeenLoaded(string resourceName) => _loadedConsoleLogResourceNames.Contains(resourceName);
 
     public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, [EnumeratorCancellation] CancellationToken cancellationToken)
     {

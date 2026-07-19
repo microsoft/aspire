@@ -496,10 +496,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // hosting messages (WaitFor, startup failures) are visible immediately
         // on selection. The user picks Terminal explicitly from the ⋯ menu.
         _activeView = ConsoleLogsView.Console;
+        var selectedResource = selectedResourceName is not null
+            ? _resourceByName.GetValueOrDefault(selectedResourceName)
+            : null;
 
         if (!DashboardClient.IsReadOnly &&
-            !isAllSelected && selectedResourceName is not null &&
-            _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
+            !isAllSelected && selectedResource is not null &&
             selectedResource.HasTerminal() &&
             selectedResource.TryGetTerminalReplicaInfo(out var replicaIndex, out _))
         {
@@ -527,7 +529,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
         ResetNoLogsMessage();
 
-        _consoleLogsWereLoaded = !DashboardClient.IsReadOnly || WereConsoleLogsLoaded(isAllSelected, selectedResourceName);
+        _consoleLogsWereLoaded = !DashboardClient.IsReadOnly || WereConsoleLogsLoaded(isAllSelected, selectedResource);
 
         await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
 
@@ -537,11 +539,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _isSubscribedToAll = true;
             await SubscribeToAllResourcesAsync();
         }
-        else if (selectedResourceName is not null && _resourceByName.TryGetValue(selectedResourceName, out var resource))
+        else if (selectedResource is not null)
         {
             // Subscribe to single resource
             _isSubscribedToAll = false;
-            await SubscribeToSingleResourceAsync(resource);
+            await SubscribeToSingleResourceAsync(selectedResource);
         }
         else
         {
@@ -562,16 +564,16 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         UpdateMenuButtons();
     }
 
-    private bool WereConsoleLogsLoaded(bool isAllSelected, string? selectedResourceName)
+    private bool WereConsoleLogsLoaded(bool isAllSelected, ResourceViewModel? selectedResource)
     {
         if (isAllSelected)
         {
             return _resourceByName.Values
                 .Where(resource => !resource.IsResourceHidden(_showHiddenResources))
-                .Any(resource => DashboardClient.HaveConsoleLogsBeenLoaded(resource.Name));
+                .Any(resource => resource.ConsoleLogsLoaded);
         }
 
-        return selectedResourceName is not null && DashboardClient.HaveConsoleLogsBeenLoaded(selectedResourceName);
+        return selectedResource?.ConsoleLogsLoaded == true;
     }
 
     private string GetNoLogsMessage() => _consoleLogsWereLoaded

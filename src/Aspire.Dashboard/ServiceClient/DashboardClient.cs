@@ -53,7 +53,6 @@ internal sealed class DashboardClient : IDashboardClient
     private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
 
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly HashSet<string> _loadedConsoleLogResources = new(StringComparers.ResourceName);
     private readonly ActivitySource _activitySource = new(ActivitySourceName);
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
@@ -581,6 +580,11 @@ internal sealed class DashboardClient : IDashboardClient
 
                 if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
                 {
+                    var resourcesWithLoadedConsoleLogs = _resourceByName.Values
+                        .Where(resource => resource.ConsoleLogsLoaded)
+                        .Select(resource => resource.Name)
+                        .ToHashSet(StringComparers.ResourceName);
+
                     // Populate our map using the initial data.
                     _resourceByName.Clear();
 
@@ -590,6 +594,7 @@ internal sealed class DashboardClient : IDashboardClient
                     {
                         // Add to map.
                         var viewModel = resource.ToViewModel(CalculateReplicaIndex(resource.DisplayName), _knownPropertyLookup, _logger);
+                        viewModel.ConsoleLogsLoaded = resourcesWithLoadedConsoleLogs.Contains(resource.Name);
                         _resourceByName[resource.Name] = viewModel;
 
                         // Send this update to any subscribers too.
@@ -610,6 +615,10 @@ internal sealed class DashboardClient : IDashboardClient
                         {
                             // Upsert (i.e. add or replace)
                             var viewModel = change.Upsert.ToViewModel(CalculateReplicaIndex(change.Upsert.DisplayName), _knownPropertyLookup, _logger);
+                            if (_resourceByName.TryGetValue(change.Upsert.Name, out var existingResource))
+                            {
+                                viewModel.ConsoleLogsLoaded = existingResource.ConsoleLogsLoaded;
+                            }
                             _resourceByName[change.Upsert.Name] = viewModel;
                             changes.Add(new(ResourceViewModelChangeType.Upsert, viewModel));
                         }
@@ -983,19 +992,14 @@ internal sealed class DashboardClient : IDashboardClient
         }
     }
 
-    public bool HaveConsoleLogsBeenLoaded(string resourceName)
-    {
-        lock (_lock)
-        {
-            return _loadedConsoleLogResources.Contains(resourceName);
-        }
-    }
-
     private void MarkConsoleLogsLoaded(string resourceName)
     {
         lock (_lock)
         {
-            _loadedConsoleLogResources.Add(resourceName);
+            if (_resourceByName.TryGetValue(resourceName, out var resource))
+            {
+                resource.ConsoleLogsLoaded = true;
+            }
         }
 
         _resourceRepositoryWriter?.MarkConsoleLogsLoaded(resourceName);

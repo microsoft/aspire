@@ -60,6 +60,36 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
+    public async Task ResourceSubscription_ReplaceResourcesDeletesOmittedResources()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
+        var writer = (IResourceRepositoryWriter)repository;
+        writer.ReplaceResources([CreateResource("api", "api"), CreateResource("worker", "worker")]);
+
+        var subscription = await repository.SubscribeResourcesAsync(CancellationToken.None);
+        Assert.Equal(2, subscription.InitialState.Length);
+        using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+        await using var enumerator = subscription.Subscription.GetAsyncEnumerator(cts.Token);
+
+        writer.ReplaceResources([CreateResource("api", "api")]);
+
+        Assert.True(await enumerator.MoveNextAsync().AsTask().DefaultTimeout());
+        Assert.Collection(
+            enumerator.Current,
+            change =>
+            {
+                Assert.Equal(ResourceViewModelChangeType.Delete, change.ChangeType);
+                Assert.Equal("worker", change.Resource.Name);
+            },
+            change =>
+            {
+                Assert.Equal(ResourceViewModelChangeType.Upsert, change.ChangeType);
+                Assert.Equal("api", change.Resource.Name);
+            });
+    }
+
+    [Fact]
     public async Task ConsoleLogs_UseInsertionOrderAndAllowLineNumbersToRestart()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
@@ -101,23 +131,24 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         {
             var writer = (IResourceRepositoryWriter)repository;
             writer.ReplaceResources([CreateResource("api", "api"), CreateResource("worker", "worker")]);
-            Assert.False(repository.HaveConsoleLogsBeenLoaded("api"));
+            Assert.False(repository.GetResource("api")!.ConsoleLogsLoaded);
 
             writer.MarkConsoleLogsLoaded("api");
 
-            Assert.True(repository.HaveConsoleLogsBeenLoaded("api"));
-            Assert.False(repository.HaveConsoleLogsBeenLoaded("worker"));
+            var readQueries = CaptureSqlQueries(() => Assert.True(repository.GetResource("api")!.ConsoleLogsLoaded));
+            Assert.Empty(readQueries);
+            Assert.False(repository.GetResource("worker")!.ConsoleLogsLoaded);
 
             writer.ApplyChanges([new WatchResourcesChange { Upsert = CreateResource("api", "api") }]);
-            Assert.True(repository.HaveConsoleLogsBeenLoaded("api"));
+            Assert.True(repository.GetResource("api")!.ConsoleLogsLoaded);
 
             writer.ReplaceResources([CreateResource("api", "api"), CreateResource("worker", "worker")]);
-            Assert.True(repository.HaveConsoleLogsBeenLoaded("api"));
+            Assert.True(repository.GetResource("api")!.ConsoleLogsLoaded);
         }
 
         using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
-        Assert.True(historicalRepository.HaveConsoleLogsBeenLoaded("api"));
-        Assert.False(historicalRepository.HaveConsoleLogsBeenLoaded("worker"));
+        Assert.True(historicalRepository.GetResource("api")!.ConsoleLogsLoaded);
+        Assert.False(historicalRepository.GetResource("worker")!.ConsoleLogsLoaded);
     }
 
     [Fact]
@@ -641,7 +672,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
     private static void AssertBatchedResourceQueries(IReadOnlyList<string> queries)
     {
-        Assert.Equal(11, queries.Count);
+        Assert.Equal(10, queries.Count);
 
         string[] insertedTables =
         [

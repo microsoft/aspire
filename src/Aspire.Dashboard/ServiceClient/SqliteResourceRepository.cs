@@ -71,22 +71,6 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         }
     }
 
-    public bool HaveConsoleLogsBeenLoaded(string resourceName)
-    {
-        lock (_lock)
-        {
-            ThrowIfDisposed();
-            using var connection = _database.OpenConnection();
-            return connection.QuerySingle<bool>("""
-                SELECT COALESCE((
-                    SELECT console_logs_loaded
-                    FROM dashboard_resources
-                    WHERE resource_name = @ResourceName
-                ), 0);
-                """, new { ResourceName = resourceName });
-        }
-    }
-
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
     {
         lock (_lock)
@@ -202,11 +186,19 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             ThrowIfDisposed();
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
-            var resourcesWithLoadedConsoleLogs = connection.Query<string>("""
-                SELECT resource_name
-                FROM dashboard_resources
-                WHERE console_logs_loaded = 1;
-                """, transaction: transaction).ToHashSet(StringComparers.ResourceName);
+            var replacementResourceNames = resources.Select(resource => resource.Name).ToHashSet(StringComparers.ResourceName);
+            foreach (var (resourceName, viewModel) in _resources)
+            {
+                if (!replacementResourceNames.Contains(resourceName))
+                {
+                    changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Delete, viewModel));
+                }
+            }
+            var resourcesWithLoadedConsoleLogs = _resources.Values
+                .Where(resource => resource.ConsoleLogsLoaded)
+                .Select(resource => resource.Name)
+                .ToHashSet(StringComparers.ResourceName);
+
             connection.Execute("DELETE FROM dashboard_resources;", transaction: transaction);
             _resources.Clear();
             var resourcesToSave = new List<ResourceToSave>(resources.Count);
@@ -214,7 +206,8 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
             foreach (var resource in resources)
             {
                 var viewModel = CreateViewModel(resource);
-                resourcesToSave.Add(new(resource, viewModel.ReplicaIndex, resourcesWithLoadedConsoleLogs.Contains(resource.Name)));
+                viewModel.ConsoleLogsLoaded = resourcesWithLoadedConsoleLogs.Contains(resource.Name);
+                resourcesToSave.Add(new(resource, viewModel.ReplicaIndex, viewModel.ConsoleLogsLoaded));
                 _resources[resource.Name] = viewModel;
                 changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, viewModel));
             }
@@ -246,11 +239,6 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 .Where(name => name is not null)
                 .Distinct(StringComparers.ResourceName)
                 .ToArray();
-            var resourcesWithLoadedConsoleLogs = connection.Query<string>("""
-                SELECT resource_name
-                FROM dashboard_resources
-                WHERE resource_name IN @ResourceNames AND console_logs_loaded = 1;
-                """, new { ResourceNames = affectedResourceNames }, transaction).ToHashSet(StringComparers.ResourceName);
             var resourcesToSave = new Dictionary<string, ResourceToSave>(StringComparers.ResourceName);
 
             foreach (var change in changes)
@@ -259,7 +247,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 {
                     var resource = change.Upsert;
                     var viewModel = CreateViewModel(resource);
-                    resourcesToSave[resource.Name] = new(resource, viewModel.ReplicaIndex, resourcesWithLoadedConsoleLogs.Contains(resource.Name));
+                    resourcesToSave[resource.Name] = new(resource, viewModel.ReplicaIndex, viewModel.ConsoleLogsLoaded);
                     _resources[resource.Name] = viewModel;
                     viewModelChanges.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, viewModel));
                 }
@@ -290,6 +278,10 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 SET console_logs_loaded = 1
                 WHERE resource_name = @ResourceName;
                 """, new { ResourceName = resourceName });
+            if (_resources.TryGetValue(resourceName, out var resource))
+            {
+                resource.ConsoleLogsLoaded = true;
+            }
         }
     }
 
@@ -347,6 +339,10 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 }
             }
             transaction.Commit();
+            if (_resources.TryGetValue(resourceName, out var resource))
+            {
+                resource.ConsoleLogsLoaded = true;
+            }
             channels = (_consoleChannels.GetValueOrDefault(resourceName) ?? []).ToArray();
         }
 
@@ -360,7 +356,9 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     {
         if (_resources.TryGetValue(resource.Name, out var existingResource))
         {
-            return resource.ToViewModel(existingResource.ReplicaIndex, _knownPropertyLookup, _logger);
+            var viewModel = resource.ToViewModel(existingResource.ReplicaIndex, _knownPropertyLookup, _logger);
+            viewModel.ConsoleLogsLoaded = existingResource.ConsoleLogsLoaded;
+            return viewModel;
         }
 
         var replicaIndex = _resources.Values.Count(r => string.Equals(r.DisplayName, resource.DisplayName, StringComparisons.ResourceName)) + 1;
@@ -372,7 +370,9 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         using var connection = _database.OpenConnection();
         foreach (var storedResource in LoadResourceRecords(connection))
         {
-            _resources[storedResource.Resource.Name] = storedResource.Resource.ToViewModel(storedResource.ReplicaIndex, _knownPropertyLookup, _logger);
+            var viewModel = storedResource.Resource.ToViewModel(storedResource.ReplicaIndex, _knownPropertyLookup, _logger);
+            viewModel.ConsoleLogsLoaded = storedResource.ConsoleLogsLoaded;
+            _resources[storedResource.Resource.Name] = viewModel;
         }
     }
 
