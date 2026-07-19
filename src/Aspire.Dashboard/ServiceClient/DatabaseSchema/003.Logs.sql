@@ -34,6 +34,8 @@ CREATE TABLE IF NOT EXISTS telemetry_resource_view_attributes (
     PRIMARY KEY (resource_view_id, ordinal)
 ) STRICT;
 
+-- Scope identity intentionally uses the name only. Scope attributes aren't used by the Dashboard today,
+-- so the version and attributes from the first observed scope are retained for later telemetry with the same name.
 CREATE TABLE IF NOT EXISTS telemetry_scopes (
     scope_id INTEGER PRIMARY KEY AUTOINCREMENT,
     scope_name TEXT NOT NULL UNIQUE,

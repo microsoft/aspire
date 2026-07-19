@@ -219,6 +219,8 @@ internal static class FluentUISetupHelpers
             return _runs;
         }
 
+        public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => null;
+
         public bool SupportsRunSelection => supportsRunSelection;
     }
 

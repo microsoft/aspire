@@ -24,6 +24,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
     private ITelemetryRepository? _historicalTelemetryRepository;
     private IResourceRepository? _historicalResourceRepository;
     private DashboardSqliteDatabase? _historicalDatabase;
+    private IDisposable? _historicalRunLease;
 
     internal DashboardDataSource(
         IDashboardRunStore runStore,
@@ -73,6 +74,8 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
         if (!selectedRun.IsCurrent)
         {
+            var historicalRunLease = _runStore.TryAcquireRunLease(selectedRun)
+                ?? throw new InvalidOperationException($"Dashboard run '{selectedRun.RunId}' is no longer available.");
             var historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
             try
             {
@@ -84,10 +87,12 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
                 _historicalTelemetryRepository = _repositoryFactory.CreateTelemetryRepository(historicalDatabase);
                 _historicalResourceRepository = _repositoryFactory.CreateResourceRepository(historicalDatabase);
                 _historicalDatabase = historicalDatabase;
+                _historicalRunLease = historicalRunLease;
             }
             catch
             {
                 historicalDatabase.Dispose();
+                historicalRunLease.Dispose();
                 throw;
             }
             TelemetryRepository = _historicalTelemetryRepository;
@@ -115,5 +120,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
         (_historicalResourceRepository as IDisposable)?.Dispose();
         _historicalDatabase?.Dispose();
         _historicalDatabase = null;
+        _historicalRunLease?.Dispose();
+        _historicalRunLease = null;
     }
 }

@@ -13,6 +13,7 @@ internal interface IDashboardRunStore
 {
     bool SupportsRunSelection { get; }
     IReadOnlyList<DashboardRunDescriptor> GetRuns();
+    IDisposable? TryAcquireRunLease(DashboardRunDescriptor run);
 }
 
 internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
@@ -140,6 +141,12 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
     public IReadOnlyList<DashboardRunDescriptor> GetRuns() => _runs.Value;
 
+    public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run)
+    {
+        var runDirectory = Path.GetDirectoryName(run.DatabasePath)!;
+        return TryOpenRunLock(runDirectory);
+    }
+
     private IReadOnlyList<DashboardRunDescriptor> LoadRuns()
     {
         var runs = new List<DashboardRunDescriptor>
@@ -258,7 +265,16 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     {
         try
         {
-            return OpenRunLock(runDirectory);
+            var runLock = OpenRunLock(runDirectory);
+            // The lock file is adjacent to the run directory, so OpenOrCreate can recreate it after pruning has already
+            // deleted the directory. Check after acquiring the lock to avoid racing with a cooperating pruner.
+            if (!Directory.Exists(runDirectory))
+            {
+                runLock.Dispose();
+                return null;
+            }
+
+            return runLock;
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
