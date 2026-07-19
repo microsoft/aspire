@@ -298,6 +298,23 @@ public class AspireMcpClientExtensionsTests
         Assert.Contains(handler.RequestUris, uri => uri.ToString() == "https://transport-only/mcp");
     }
 
+    [Fact]
+    public void AddMcpClientDefaultsTransportNameToConnectionName()
+    {
+        var handler = new RequestRecordingHandler();
+        var builder = Host.CreateEmptyApplicationBuilder(null);
+        builder.Configuration["ConnectionStrings:mcp"] = "https://user:password@example.com/mcp?token=secret";
+        builder.Services.ConfigureHttpClientDefaults(http => http.ConfigurePrimaryHttpMessageHandler(() => handler));
+        string? transportName = null;
+
+        builder.AddMcpClient("mcp", configureTransportOptions: options => transportName = options.Name);
+
+        using var host = builder.Build();
+        _ = Record.Exception(() => _ = host.Services.GetRequiredService<McpClient>());
+
+        Assert.Equal("mcp", transportName);
+    }
+
     [Theory]
     [InlineData("ftp://mcp/mcp")]
     public void AddMcpClientRejectsInvalidTransportEndpoint(string endpoint)

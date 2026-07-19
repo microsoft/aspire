@@ -216,6 +216,7 @@ public static class AspireMcpClientExtensions
         var registrationKey = new object();
         builder.Services.AddHttpClient();
         builder.Services.AddKeyedSingleton<McpClientRegistration>(registrationKey, (serviceProvider, _) => new McpClientRegistration(
+            connectionName,
             endpoint,
             configureClientOptions,
             configureTransportOptions,
@@ -269,6 +270,7 @@ public static class AspireMcpClientExtensions
         private int _disposed;
 
         public McpClientRegistration(
+            string connectionName,
             Uri endpoint,
             Action<McpClientOptions>? configureClientOptions,
             Action<HttpClientTransportOptions>? configureTransportOptions,
@@ -276,7 +278,7 @@ public static class AspireMcpClientExtensions
             ILoggerFactory loggerFactory,
             ServiceEndpointResolver? serviceEndpointResolver)
         {
-            _createClient = () => CreateClientAsync(endpoint, configureClientOptions, configureTransportOptions, httpClientFactory, loggerFactory, serviceEndpointResolver);
+            _createClient = () => CreateClientAsync(connectionName, endpoint, configureClientOptions, configureTransportOptions, httpClientFactory, loggerFactory, serviceEndpointResolver);
         }
 
         public McpClient GetClient()
@@ -344,6 +346,7 @@ public static class AspireMcpClientExtensions
             }
 
         private async Task<DisposableMcpClient> CreateClientAsync(
+            string connectionName,
             Uri endpoint,
             Action<McpClientOptions>? configureClientOptions,
             Action<HttpClientTransportOptions>? configureTransportOptions,
@@ -356,8 +359,13 @@ public static class AspireMcpClientExtensions
             try
             {
                 var defaultTransportEndpoint = CreateInitialTransportEndpoint(endpoint);
-                var transportOptions = new HttpClientTransportOptions { Endpoint = defaultTransportEndpoint };
+                var transportOptions = new HttpClientTransportOptions
+                {
+                    Endpoint = defaultTransportEndpoint,
+                    Name = connectionName,
+                };
                 configureTransportOptions?.Invoke(transportOptions);
+                transportOptions.Name ??= connectionName;
                 var endpointToResolve = endpoint.Scheme is "https+http" && Equals(transportOptions.Endpoint, defaultTransportEndpoint)
                     ? endpoint
                     : transportOptions.Endpoint;
