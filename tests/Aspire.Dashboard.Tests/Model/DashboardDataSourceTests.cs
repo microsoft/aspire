@@ -329,6 +329,54 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void SelectedHistoricalRun_HoldsLeaseUntilSelectionChanges()
+    {
+        var options = CreateOptions();
+        string historicalRunId;
+        string historicalRunDirectory;
+
+        using (var historicalRunStore = CreateRunStore(options))
+        {
+            historicalRunId = historicalRunStore.RunId;
+            historicalRunDirectory = historicalRunStore.RunDirectory;
+            using var historicalTelemetryRepository = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
+        }
+
+        using var currentRunStore = CreateRunStore(options);
+        var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
+        using var repositoryFactory = CreateRepositoryFactory(currentDatabase, options);
+        var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
+        var currentResourceRepository = repositoryFactory.CreateResourceRepository(currentDatabase);
+        using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
+        dataSource.SelectRun(historicalRunId);
+
+        var runsDirectory = Path.GetDirectoryName(historicalRunDirectory)!;
+        foreach (var index in Enumerable.Range(1, DashboardRunStore.MaxRuns - 2))
+        {
+            Directory.CreateDirectory(Path.Combine(
+                runsDirectory,
+                $"{DateTimeOffset.UtcNow.AddDays(index):yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}"));
+        }
+
+        var deletedRunDirectories = new List<string>();
+        using var pruningRunStore = new DashboardRunStore(
+            options,
+            NullLogger<DashboardRunStore>.Instance,
+            deletedRunDirectories.Add);
+
+        Assert.Empty(deletedRunDirectories);
+        Assert.True(Directory.Exists(historicalRunDirectory));
+
+        dataSource.SelectRun(runId: null);
+        using var nextPruningRunStore = new DashboardRunStore(
+            options,
+            NullLogger<DashboardRunStore>.Instance,
+            deletedRunDirectories.Add);
+
+        Assert.Equal(historicalRunDirectory, Assert.Single(deletedRunDirectories));
+    }
+
+    [Fact]
     public void RunsMode_DeleteExpiredRunFails_LogsWarningAndContinues()
     {
         var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));

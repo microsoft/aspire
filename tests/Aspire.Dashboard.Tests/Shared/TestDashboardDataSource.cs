@@ -25,6 +25,8 @@ internal static class TestDashboardDataSource
 
         public IReadOnlyList<DashboardRunDescriptor> GetRuns() =>
             [new("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", string.Empty, IsCurrent: true)];
+
+        public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => null;
     }
 
     private sealed class TestRepositoryFactory(

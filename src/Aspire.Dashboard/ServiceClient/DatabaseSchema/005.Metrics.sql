@@ -84,5 +84,7 @@ CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_dimension_order
     ON telemetry_metric_points(dimension_id, point_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_metric_points_time
     ON telemetry_metric_points(dimension_id, start_time_ticks, end_time_ticks);
+-- Exemplar identity intentionally omits span/trace IDs and filtered attributes. Distinct exemplars that share a
+-- point, timestamp, and value can be collapsed, but that combination is unlikely to occur in real-world telemetry.
 CREATE UNIQUE INDEX IF NOT EXISTS ix_telemetry_metric_exemplars_identity
     ON telemetry_metric_exemplars(point_id, start_time_ticks, exemplar_value);
