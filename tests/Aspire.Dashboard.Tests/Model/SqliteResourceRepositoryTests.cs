@@ -96,11 +96,17 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         using (var repository = CreateRepository(workspace.Path))
         {
             var writer = (IResourceRepositoryWriter)repository;
-            writer.AddConsoleLogs("api", [
+            var insertQueries = CaptureSqlQueries(() => writer.AddConsoleLogs("api", [
                 new ConsoleLogLine { LineNumber = 2, Text = "second", IsStdErr = true },
                 new ConsoleLogLine { LineNumber = 1, Text = "first" }
+            ]));
+            var insertQuery = Assert.Single(insertQueries, query => query.TrimStart().StartsWith("INSERT INTO console_logs ", StringComparison.Ordinal));
+            Assert.Contains("(@ResourceName, @LineNumber0, @Content0, @IsStdErr0),", insertQuery, StringComparison.Ordinal);
+            Assert.Contains("(@ResourceName, @LineNumber1, @Content1, @IsStdErr1)", insertQuery, StringComparison.Ordinal);
+            writer.AddConsoleLogs("api", [
+                new ConsoleLogLine { LineNumber = 2, Text = "second-updated", IsStdErr = true },
+                new ConsoleLogLine { LineNumber = 3, Text = "third" }
             ]);
-            writer.AddConsoleLogs("api", [new ConsoleLogLine { LineNumber = 2, Text = "second-updated", IsStdErr = true }]);
         }
 
         using (var restartedRepository = CreateRepository(workspace.Path))
@@ -118,9 +124,33 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         }
         var lines = Assert.Single(batches);
         Assert.Collection(lines,
-            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(2, "second-updated", true), line),
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(2, "second", true), line),
             line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(1, "first", false), line),
+            line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(3, "third", false), line),
             line => Assert.Equal(new global::Aspire.Dashboard.Model.ResourceLogLine(1, "first-after-restart", false), line));
+    }
+
+    [Fact]
+    public async Task ConsoleLogs_InsertsAreBatched()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
+        var writer = (IResourceRepositoryWriter)repository;
+        var logLines = Enumerable.Range(1, 101)
+            .Select(lineNumber => new ConsoleLogLine { LineNumber = lineNumber, Text = $"Line {lineNumber}" })
+            .ToArray();
+
+        var queries = CaptureSqlQueries(() => writer.AddConsoleLogs("api", logLines));
+
+        Assert.Equal(2, queries.Count(query => query.TrimStart().StartsWith("INSERT INTO console_logs ", StringComparison.Ordinal)));
+        var batches = new List<IReadOnlyList<global::Aspire.Dashboard.Model.ResourceLogLine>>();
+        await foreach (var batch in repository.GetConsoleLogs("api", CancellationToken.None))
+        {
+            batches.Add(batch);
+        }
+        var persistedLines = Assert.Single(batches);
+        Assert.Equal(Enumerable.Range(1, 101), persistedLines.Select(line => line.LineNumber));
+        Assert.Equal(logLines.Select(line => line.Text), persistedLines.Select(line => line.Content));
     }
 
     [Fact]

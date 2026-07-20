@@ -96,6 +96,39 @@ public sealed partial class SqliteResourceRepository
         InsertCommands(connection, transaction, commands);
     }
 
+    private static void InsertConsoleLogs(
+        SqliteConnection connection,
+        IDbTransaction transaction,
+        string resourceName,
+        IReadOnlyList<ConsoleLogToInsert> consoleLogs)
+    {
+        foreach (var batch in consoleLogs.Chunk(MaxWriteBatchSize))
+        {
+            var sql = new StringBuilder("""
+                INSERT INTO console_logs (resource_name, line_number, content, is_stderr)
+                VALUES
+                """);
+            var parameters = new DynamicParameters();
+            parameters.Add("ResourceName", resourceName);
+            for (var index = 0; index < batch.Length; index++)
+            {
+                var consoleLog = batch[index];
+                if (index > 0)
+                {
+                    sql.AppendLine(",");
+                }
+
+                sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName, @LineNumber{index}, @Content{index}, @IsStdErr{index})");
+                parameters.Add($"LineNumber{index}", consoleLog.LineNumber);
+                parameters.Add($"Content{index}", consoleLog.Content);
+                parameters.Add($"IsStdErr{index}", consoleLog.IsStdErr);
+            }
+
+            sql.Append(';');
+            connection.Execute(sql.ToString(), parameters, transaction);
+        }
+    }
+
     private static void InsertEnvironment(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
         ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.Environment.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
@@ -600,6 +633,8 @@ public sealed partial class SqliteResourceRepository
     }
 
     private sealed record ResourceToSave(Resource Resource, int ReplicaIndex, bool ConsoleLogsLoaded);
+
+    private sealed record ConsoleLogToInsert(int LineNumber, string Content, bool IsStdErr);
 
     private sealed record PropertyToSave(string ResourceName, int Ordinal, ResourceProperty Property);
 
