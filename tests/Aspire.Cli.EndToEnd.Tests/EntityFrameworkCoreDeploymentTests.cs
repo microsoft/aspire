@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Xml.Linq;
 using Aspire.Cli.EndToEnd.Tests.Helpers;
 using Hex1b.Automation;
 using Xunit;
@@ -44,9 +45,12 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
 
         await ScaffoldApplicationAsync(auto, counter, workspace);
 
+        var appHostSha = Guid.NewGuid().ToString("N");
+        var composeProject = $"aspire-compose-{appHostSha[..8]}";
+
         try
         {
-            await auto.TypeAsync("unset ASPIRE_PLAYGROUND");
+            await auto.TypeAsync($"unset ASPIRE_PLAYGROUND; export AppHostSha={appHostSha}");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter);
 
@@ -59,7 +63,7 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(1));
 
             await VerifyComposeArtifactsAsync(auto, counter);
-            await VerifyDeploymentAsync(auto, counter);
+            await VerifyDeploymentAsync(auto, counter, composeProject);
 
             await auto.AspireDestroyAsync(counter);
         }
@@ -69,11 +73,9 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
             // Compose has started but before deployment state has been persisted.
             await auto.TypeAsync(
                 "if [ -f deploy-output/.env.Production ]; then " +
-                GetComposeProjectCommand() + "; " +
-                "if [ -n \"$compose_project\" ]; then " +
-                "docker compose --project-name \"$compose_project\" --env-file deploy-output/.env.Production " +
+                $"docker compose --project-name {composeProject} --env-file deploy-output/.env.Production " +
                 "-f deploy-output/docker-compose.yaml down --volumes --remove-orphans " +
-                "|| echo 'WARNING: fallback compose cleanup failed'; fi; fi");
+                "|| echo 'WARNING: fallback compose cleanup failed'; fi");
             await auto.EnterAsync();
             await auto.WaitForAnyPromptAsync(counter, TimeSpan.FromMinutes(2));
         }
@@ -243,13 +245,28 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
             """);
 
         var apiProjectPath = Path.Combine(apiDirectory, $"{ProjectName}.ApiService.csproj");
-        var apiProject = File.ReadAllText(apiProjectPath);
-        const string targetFramework = "<TargetFramework>net10.0</TargetFramework>";
-        Assert.Contains(targetFramework, apiProject);
-        apiProject = apiProject.Replace(
-            targetFramework,
-            targetFramework + Environment.NewLine + $"    <RuntimeIdentifiers>{targetRuntime}</RuntimeIdentifiers>");
-        File.WriteAllText(apiProjectPath, apiProject);
+        var apiProject = XDocument.Load(apiProjectPath, LoadOptions.PreserveWhitespace);
+        var targetFrameworkProperty = apiProject
+            .Descendants()
+            .SingleOrDefault(element => element.Name.LocalName is "TargetFramework" or "TargetFrameworks");
+        Assert.NotNull(targetFrameworkProperty);
+
+        var propertyGroup = targetFrameworkProperty.Parent;
+        Assert.NotNull(propertyGroup);
+
+        var runtimeIdentifiersProperty = propertyGroup
+            .Elements()
+            .SingleOrDefault(element => element.Name.LocalName == "RuntimeIdentifiers");
+        if (runtimeIdentifiersProperty is null)
+        {
+            propertyGroup.Add(new XElement(propertyGroup.Name.Namespace + "RuntimeIdentifiers", targetRuntime));
+        }
+        else
+        {
+            runtimeIdentifiersProperty.Value = targetRuntime;
+        }
+
+        apiProject.Save(apiProjectPath, SaveOptions.DisableFormatting);
     }
 
     private static async Task VerifyComposeArtifactsAsync(
@@ -261,7 +278,10 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
             "test -f deploy-output/docker-compose.yaml && " +
             "docker compose --env-file deploy-output/.env.Production " +
             "-f deploy-output/docker-compose.yaml config --format json | " +
-            "jq -e '(.services.migrations.environment | has(\"ConnectionStrings__db\")) and " +
+            "jq -e '((.services.migrations.environment | type) == \"object\" and " +
+            "(.services.migrations.environment | has(\"ConnectionStrings__db\")) or " +
+            "((.services.migrations.environment | type) == \"array\" and " +
+            "any(.services.migrations.environment[]; startswith(\"ConnectionStrings__db=\")))) and " +
             "(.services.migrations.depends_on.postgres.condition == \"service_healthy\") and " +
             "(.services.server.depends_on.migrations.condition == \"service_completed_successfully\")'");
         await auto.EnterAsync();
@@ -270,13 +290,12 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
 
     private static async Task VerifyDeploymentAsync(
         Hex1bTerminalAutomator auto,
-        SequenceCounter counter)
+        SequenceCounter counter,
+        string composeProject)
     {
         await auto.TypeAsync(
-            GetComposeProjectCommand() + " && " +
-            "test -n \"$compose_project\" && " +
             "migration_id=$(docker ps -aq " +
-            "--filter \"label=com.docker.compose.project=$compose_project\" " +
+            $"--filter \"label=com.docker.compose.project={composeProject}\" " +
             "--filter \"label=com.docker.compose.service=migrations\" | head -1) && " +
             "test -n \"$migration_id\" && " +
             "test \"$(docker inspect -f '{{.State.ExitCode}}' \"$migration_id\")\" = 0");
@@ -286,10 +305,8 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         // Compose does not publish the API port to the outer test container. Join the server's
         // network namespace and retry until the application is accepting requests.
         await auto.TypeAsync(
-            GetComposeProjectCommand() + " && " +
-            "test -n \"$compose_project\" && " +
             "server_id=$(docker ps -q " +
-            "--filter \"label=com.docker.compose.project=$compose_project\" " +
+            $"--filter \"label=com.docker.compose.project={composeProject}\" " +
             "--filter \"label=com.docker.compose.service=server\" | head -1) && " +
             "test -n \"$server_id\" && " +
             "succeeded=false; " +
@@ -302,9 +319,4 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
     }
-
-    private static string GetComposeProjectCommand() =>
-        "compose_project=$(docker ps -a " +
-        "--filter \"label=com.docker.compose.project.working_dir=$PWD/deploy-output\" " +
-        "--format '{{.Label \"com.docker.compose.project\"}}' | head -1)";
 }
