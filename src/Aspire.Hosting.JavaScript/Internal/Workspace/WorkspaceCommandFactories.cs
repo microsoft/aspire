@@ -81,6 +81,23 @@ internal static class WorkspaceCommandFactories
         static (workspaceName, scriptName) =>
             ["pnpm", "--filter", $"{workspaceName}^...", "run", "--if-present", scriptName];
 
+    /// <summary>
+    /// Builds the publish-time command that copies a single workspace member into a self-contained,
+    /// production-only directory: <c>pnpm --filter &lt;name&gt; deploy --prod &lt;target&gt;</c>. The target
+    /// receives the member's files plus a real <c>node_modules</c> with its dependencies — workspace
+    /// dependencies are injected (copied in), not symlinked outside the directory — so the runtime image
+    /// can copy just the target directory instead of the whole workspace. The member and its
+    /// workspace dependencies must already be built (deploy copies files, it does not run build scripts).
+    /// </summary>
+    /// <remarks>
+    /// pnpm 10's deploy uses the injected-dependencies implementation, which requires
+    /// <c>injectWorkspacePackages: true</c> in <c>pnpm-workspace.yaml</c>; the workspace configuration
+    /// validator enforces that. See https://pnpm.io/cli/deploy.
+    /// </remarks>
+    public static readonly Func<string, string, IReadOnlyList<string>> PnpmDeploy =
+        static (workspaceName, targetDirectory) =>
+            ["pnpm", "--filter", workspaceName, "deploy", "--prod", targetDirectory];
+
     public static readonly Func<string, string, IReadOnlyList<string>, IReadOnlyList<string>> Bun =
         static (workspaceName, scriptName, scriptArgs) =>
         {
