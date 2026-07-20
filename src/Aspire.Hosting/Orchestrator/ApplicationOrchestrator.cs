@@ -120,6 +120,18 @@ internal sealed class ApplicationOrchestrator
                 // Make error visible from completed task.
                 await completedTask.ConfigureAwait(false);
             }
+
+            // If the wait ended because the state was manually moved out of Waiting to anything
+            // other than Starting, treat that as an explicit cancellation of this startup attempt.
+            // This is used by the Stop command to abort a dependency-blocked start.
+            if (completedTask == waitForNonWaitingStateTask && waitForNonWaitingStateTask.IsCompletedSuccessfully)
+            {
+                var state = waitForNonWaitingStateTask.Result.Snapshot.State?.Text;
+                if (!string.Equals(state, KnownResourceStates.Starting, StringComparisons.ResourceState))
+                {
+                    throw new ResourceStartAbortedException(@event.Resource.Name, state);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -607,10 +619,64 @@ internal sealed class ApplicationOrchestrator
         }
     }
 
+    public Task RequestStartResourceAsync(string resourceName, CancellationToken cancellationToken)
+    {
+        cancellationToken.ThrowIfCancellationRequested();
+
+        var startTask = StartResourceAsync(resourceName, _shutdownCancellation.Token);
+
+        if (startTask.IsCompleted)
+        {
+            return startTask;
+        }
+
+        _ = ObserveBackgroundStartAsync(resourceName, startTask);
+        return Task.CompletedTask;
+    }
+
     public async Task StopResourceAsync(string resourceName, CancellationToken cancellationToken)
     {
         var resourceReference = _dcpExecutor.GetResource(resourceName);
+        var isWaiting = false;
+        await _notificationService.PublishUpdateAsync(
+            resourceReference.ModelResource,
+            resourceReference.DcpResourceName,
+            s =>
+            {
+                if (s.State?.Text == KnownResourceStates.Waiting)
+                {
+                    isWaiting = true;
+                    return s with
+                    {
+                        State = KnownResourceStates.NotStarted
+                    };
+                }
+
+                return s;
+            }).ConfigureAwait(false);
+
+        if (isWaiting)
+        {
+            return;
+        }
+
         await _dcpExecutor.StopResourceAsync(resourceReference, cancellationToken).ConfigureAwait(false);
+    }
+
+    private async Task ObserveBackgroundStartAsync(string resourceName, Task startTask)
+    {
+        try
+        {
+            await startTask.ConfigureAwait(false);
+        }
+        catch (OperationCanceledException) when (_shutdownCancellation.IsCancellationRequested)
+        {
+            // Expected when the host is shutting down while the start operation is still pending.
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "Failed to start resource '{ResourceName}'.", resourceName);
+        }
     }
 
     private async Task SetChildResourceAsync(IResource resource, string? state, DateTime? startTimeStamp, DateTime? stopTimeStamp)

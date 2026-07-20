@@ -29,7 +29,7 @@ public class ResourceCommandAnnotationTests
     [InlineData("stop", "Finished", ResourceCommandState.Hidden)]
     [InlineData("stop", "FailedToStart", ResourceCommandState.Hidden)]
     [InlineData("stop", "Unknown", ResourceCommandState.Hidden)]
-    [InlineData("stop", "Waiting", ResourceCommandState.Hidden)]
+    [InlineData("stop", "Waiting", ResourceCommandState.Enabled)]
     [InlineData("stop", "Building", ResourceCommandState.Hidden)]
     [InlineData("stop", "RuntimeUnhealthy", ResourceCommandState.Hidden)]
     [InlineData("stop", "", ResourceCommandState.Hidden)]

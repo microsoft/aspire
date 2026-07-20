@@ -7,6 +7,7 @@
 using Aspire.Dashboard.Model;
 using Aspire.Hosting.Dashboard;
 using Aspire.Hosting.Dcp;
+using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Orchestrator;
 using Aspire.Hosting.Pipelines;
@@ -549,13 +550,78 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Null(snapshotEvent.Snapshot.State?.Style);
     }
 
+    [Fact]
+    public async Task StopResourceAsync_WaitingResource_CancelsStartWithoutCallingDcpStop()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var resource = builder.AddExecutable("resource", "pwsh", ".");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var dcpExecutor = new TrackingDcpExecutor(resource.Resource, "resource");
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, dcpExecutor: dcpExecutor);
+        await appOrchestrator.RunApplicationAsync();
+
+        await resourceNotificationService.PublishUpdateAsync(resource.Resource, "resource", s => s with
+        {
+            State = KnownResourceStates.Waiting
+        });
+
+        await appOrchestrator.StopResourceAsync("resource", CancellationToken.None);
+
+        Assert.Equal(0, dcpExecutor.StopCalls);
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("resource", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.NotStarted, snapshotEvent.Snapshot.State?.Text);
+    }
+
+    [Fact]
+    public async Task RequestStartResourceAsync_DoesNotWaitForDcpStartCompletion()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var resource = builder.AddExecutable("resource", "pwsh", ".");
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var dcpExecutor = new TrackingDcpExecutor(resource.Resource, "resource")
+        {
+            BlockStart = true
+        };
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events, dcpExecutor: dcpExecutor);
+        await appOrchestrator.RunApplicationAsync();
+
+        await resourceNotificationService.PublishUpdateAsync(resource.Resource, "resource", s => s with
+        {
+            State = KnownResourceStates.Finished
+        });
+
+        await appOrchestrator.RequestStartResourceAsync("resource", CancellationToken.None);
+
+        Assert.Equal(1, dcpExecutor.StartCalls);
+
+        dcpExecutor.ReleaseStart();
+    }
+
     private ApplicationOrchestrator CreateOrchestrator(
         DistributedApplicationModel distributedAppModel,
         ResourceNotificationService notificationService,
         DcpExecutorEvents? dcpEvents = null,
         IDistributedApplicationEventing? applicationEventing = null,
         ResourceLoggerService? resourceLoggerService = null,
-        DashboardOptions? dashboardOptions = null)
+        DashboardOptions? dashboardOptions = null,
+        IDcpExecutor? dcpExecutor = null)
     {
         var services = new ServiceCollection();
         var configuration = new ConfigurationManager();
@@ -568,7 +634,7 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
 
         return new ApplicationOrchestrator(
             distributedAppModel,
-            new TestDcpExecutor(),
+            dcpExecutor ?? new TestDcpExecutor(),
             dcpEvents ?? new DcpExecutorEvents(),
             [],
             notificationService,
@@ -689,6 +755,47 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         public ValueTask<string?> GetConnectionStringAsync(CancellationToken cancellationToken = default)
         {
             return ValueTask.FromResult<string?>(connectionString);
+        }
+    }
+
+    private sealed class TrackingDcpExecutor(IResource modelResource, string dcpResourceName) : IDcpExecutor
+    {
+        private readonly TaskCompletionSource _startGate = new(TaskCreationOptions.RunContinuationsAsynchronously);
+        private readonly IResourceReference _resourceReference = new RenderedModelResource<Executable>(
+            modelResource,
+            new Executable(new ExecutableSpec())
+            {
+                Metadata = new() { Name = dcpResourceName }
+            });
+
+        public bool BlockStart { get; set; }
+        public int StartCalls { get; private set; }
+        public int StopCalls { get; private set; }
+
+        public IResourceReference GetResource(string resourceName) => _resourceReference;
+
+        public Task RunApplicationAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public async Task StartResourceAsync(IResourceReference resourceReference, CancellationToken cancellationToken)
+        {
+            StartCalls++;
+            if (BlockStart)
+            {
+                await _startGate.Task.WaitAsync(cancellationToken).ConfigureAwait(false);
+            }
+        }
+
+        public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+
+        public Task StopResourceAsync(IResourceReference resource, CancellationToken cancellationToken)
+        {
+            StopCalls++;
+            return Task.CompletedTask;
+        }
+
+        public void ReleaseStart()
+        {
+            _startGate.TrySetResult();
         }
     }
 

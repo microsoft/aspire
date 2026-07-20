@@ -1265,6 +1265,10 @@ internal sealed partial class DcpExecutor : IDcpExecutor, IDcpObjectFactory, IAs
             // more diagnostic information reduce logging level for DCP log category to Debug.
             await _executorEvents.PublishAsync(new OnResourceFailedToStartContext(cancellationToken, resourceType, resourceReference.ModelResource, resourceReference.DcpResourceName, ex.Message)).ConfigureAwait(false);
         }
+        catch (ResourceStartAbortedException ex)
+        {
+            _logger.LogDebug(ex, "Startup for resource '{ResourceName}' was canceled before creation.", resourceReference.ModelResource.Name);
+        }
         catch (Exception ex)
         {
             activity.SetError(ex);
