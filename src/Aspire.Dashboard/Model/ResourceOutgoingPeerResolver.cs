@@ -26,13 +26,13 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     private readonly object _lock = new();
     private readonly Task? _watchTask;
 
-    public ResourceOutgoingPeerResolver(IDashboardClient resourceService, DashboardActivitySource activitySource)
+    public ResourceOutgoingPeerResolver(IResourceRepository resourceRepository, DashboardActivitySource activitySource)
     {
         _activitySource = activitySource.ActivitySource;
         _watchContainersTokenSource = new();
         _watchContainersToken = _watchContainersTokenSource.Token;
 
-        if (!resourceService.IsEnabled)
+        if (resourceRepository is IDashboardClient { IsEnabled: false })
         {
             return;
         }
@@ -41,13 +41,13 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
         // causes the resolver to be constructed become the parent of that long-running operation.
         using (ExecutionContext.SuppressFlow())
         {
-            _watchTask = Task.Run(() => WatchResourcesAsync(resourceService));
+            _watchTask = Task.Run(() => WatchResourcesAsync(resourceRepository));
         }
     }
 
-    private async Task WatchResourcesAsync(IDashboardClient resourceService)
+    private async Task WatchResourcesAsync(IResourceRepository resourceRepository)
     {
-        var (snapshot, subscription) = await resourceService.SubscribeResourcesAsync(_watchContainersToken).ConfigureAwait(false);
+        var (snapshot, subscription) = await resourceRepository.SubscribeResourcesAsync(_watchContainersToken).ConfigureAwait(false);
 
         if (snapshot.Length > 0)
         {
