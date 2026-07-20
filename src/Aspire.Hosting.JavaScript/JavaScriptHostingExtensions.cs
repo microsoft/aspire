@@ -32,6 +32,9 @@ public static class JavaScriptHostingExtensions
 {
     private const string BrowserCapability = "browser";
     private const string DefaultJavaScriptRunScriptName = "dev";
+    // Target for `pnpm deploy` in PackageScript publish mode. Outside /app (the workspace root in the
+    // build stage) so the runtime stage can COPY just this self-contained directory.
+    private const string PackageScriptDeployPath = "/deploy";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
     // Help links surfaced when a required command is missing, mapped to a command by ResolveHelpLink.
@@ -1415,6 +1418,33 @@ public static class JavaScriptHostingExtensions
                                 {
                                     var runtimeImage = GetPackageScriptRuntimeImage(appDirectory, dockerfileContext.Services, baseImageAnnotation, packageManager, baseImage, workspaceRoot);
 
+                                    // A workspace member on a package manager with a self-contained deploy (pnpm)
+                                    // produces a pruned single-package directory instead of overlaying the whole
+                                    // workspace plus a prod-deps node_modules. The member and its workspace deps were
+                                    // already built above; deploy copies files (it does not build). The runtime then
+                                    // copies just that directory, so the entrypoint runs unfiltered from the package root.
+                                    if (c.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsDeployCtx) &&
+                                        wsDeployCtx.Workspace.GetDeployCommand(wsDeployCtx.WorkspaceProjectName, PackageScriptDeployPath) is { } deployArgs)
+                                    {
+                                        dockerBuilder.Run(string.Join(' ', deployArgs));
+
+                                        var deployRunCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
+                                            ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}"
+                                            : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName} {publishMode.RunScriptArguments}";
+
+                                        var deployRuntimeStage = dockerfileContext.Builder
+                                            .From(runtimeImage, "runtime")
+                                            .WorkDir("/app")
+                                            .CopyFrom("build", PackageScriptDeployPath, "/app");
+
+                                        packageManager.InitializeDockerRuntimeStage?.Invoke(deployRuntimeStage);
+
+                                        deployRuntimeStage
+                                            .Env("NODE_ENV", "production")
+                                            .Entrypoint(["sh", "-c", $"exec {deployRunCommand}"]);
+                                        break;
+                                    }
+
                                     // Production dependencies stage for optimized image
                                     var prodDepsStage = dockerfileContext.Builder
                                         .From(baseImage, "prod-deps")
@@ -1453,10 +1483,18 @@ public static class JavaScriptHostingExtensions
                                         prodDepsStage.Run(prodInstallCmd);
                                     }
 
-                                    // Runtime stage: copy build output then overlay prod deps
+                                    // Runtime stage: copy build output then overlay prod deps. For a workspace
+                                    // member the runtime copies the whole workspace and WORKDIRs at the root, so
+                                    // the entrypoint must be workspace-scoped (e.g. "pnpm --filter <member> run start")
+                                    // to find the member's script instead of looking for it in the root package.json.
+                                    // ScriptName is non-null in PackageScript mode (PublishAsPackageScript validates it).
+                                    var baseRunCommand = c.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsRunCtx)
+                                        ? string.Join(' ', wsRunCtx.Workspace.GetRunScriptCommand(wsRunCtx.WorkspaceProjectName, publishMode.ScriptName!, []))
+                                        : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}";
+
                                     var runCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
-                                        ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}"
-                                        : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName} {publishMode.RunScriptArguments}";
+                                        ? baseRunCommand
+                                        : $"{baseRunCommand} {publishMode.RunScriptArguments}";
 
                                     var runtimeStage = dockerfileContext.Builder
                                         .From(runtimeImage, "runtime")
@@ -2610,7 +2648,9 @@ public static class JavaScriptHostingExtensions
 
         builder
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand]))
+            // ProductionInstallArgs mirrors the per-app WithNpm default so a workspace member can be
+            // published with PublishAsPackageScript (the prod-deps stage requires it). See WithNpm.
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand]) { ProductionInstallArgs = "--omit=dev" })
             .WithRequiredCommand("npm", "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm");
 
         AddWorkspaceInstaller(builder);
@@ -2651,7 +2691,9 @@ public static class JavaScriptHostingExtensions
 
         builder
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
+            // ProductionInstallArgs mirrors the per-app WithBun default so a workspace member can be
+            // published with PublishAsPackageScript (the prod-deps stage requires it). See WithBun.
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]) { ProductionInstallArgs = "--production" })
             .WithRequiredCommand("bun", "https://bun.sh/docs/installation");
 
         if (!builder.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
@@ -2711,7 +2753,9 @@ public static class JavaScriptHostingExtensions
 
         builder
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
+            // ProductionInstallArgs mirrors the per-app WithYarn default so a workspace member can be
+            // published with PublishAsPackageScript (the prod-deps stage requires it). See WithYarn.
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]) { ProductionInstallArgs = "--production" })
             .WithRequiredCommand("yarn", "https://yarnpkg.com/getting-started/install");
 
         AddWorkspaceInstaller(builder);
@@ -2740,7 +2784,11 @@ public static class JavaScriptHostingExtensions
         {
             PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
             CommandSeparator = null,
-            InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm")
+            InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
+            // PublishAsPackageScript runtime images (node:*-alpine) have no pnpm, but the entrypoint runs
+            // `pnpm run <script>`. Enable pnpm during the image build so the first container start does not
+            // try to download it. Mirrors the per-app WithPnpm default.
+            InitializeDockerRuntimeStage = stage => stage.Run("corepack enable pnpm && pnpm --version"),
         };
 
         // Add package.json files from workspace packages so the lockfile matches during install
@@ -2748,7 +2796,9 @@ public static class JavaScriptHostingExtensions
 
         builder
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
+            // ProductionInstallArgs mirrors the per-app WithPnpm default so a workspace member can be
+            // published with PublishAsPackageScript (the prod-deps stage requires it). See WithPnpm.
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]) { ProductionInstallArgs = "--prod" })
             .WithRequiredCommand("pnpm", "https://pnpm.io/installation");
 
         AddWorkspaceInstaller(builder);

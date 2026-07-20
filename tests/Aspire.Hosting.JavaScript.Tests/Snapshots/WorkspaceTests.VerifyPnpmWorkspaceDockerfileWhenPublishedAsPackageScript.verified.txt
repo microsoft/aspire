@@ -1,0 +1,17 @@
+﻿FROM node:22-slim AS build
+WORKDIR /app
+RUN corepack enable pnpm
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY packages/api/package.json ./packages/api/package.json
+RUN --mount=type=cache,target=/pnpm/store pnpm install --frozen-lockfile
+COPY . .
+RUN pnpm --filter api^... run --if-present build
+RUN pnpm --filter api run build
+RUN pnpm --filter api deploy --prod /deploy
+
+FROM node:22-alpine AS runtime
+WORKDIR /app
+COPY --from=build /deploy /app
+RUN corepack enable pnpm && pnpm --version
+ENV NODE_ENV=production
+ENTRYPOINT ["sh","-c","exec pnpm run start"]
