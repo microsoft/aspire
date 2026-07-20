@@ -327,20 +327,20 @@ public static class AzureVirtualNetworkExtensions
                 $"The resource '{target.Name}' is already associated with a different delegated subnet. A resource can use only one delegated subnet.");
         }
 
-        // Reject delegating the subnet to a service that differs from an existing delegation. A subnet
-        // is delegated to a single service, so pointing it at a different one via WithDelegatedSubnet is
-        // a configuration error rather than a last-write-wins update. The comparison is case-insensitive
-        // because Azure service identifiers are not case-sensitive.
-        var conflictingDelegation = subnet.Resource.Annotations
+        // AzureSubnetResource emits only the last service-delegation annotation. Older annotations may
+        // still be present when callers appended the public annotation directly, so only that effective
+        // delegation can conflict with the target. Azure service identifiers are case-insensitive.
+        var existingDelegation = subnet.Resource.Annotations
             .OfType<AzureSubnetServiceDelegationAnnotation>()
-            .FirstOrDefault(annotation => !string.Equals(
-                annotation.ServiceName,
+            .LastOrDefault();
+        if (existingDelegation is not null
+            && !string.Equals(
+                existingDelegation.ServiceName,
                 target.DelegatedSubnetServiceName,
-                StringComparison.OrdinalIgnoreCase));
-        if (conflictingDelegation is not null)
+                StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException(
-                $"The subnet '{subnet.Resource.Name}' is already delegated to '{conflictingDelegation.ServiceName}' and cannot also be delegated to '{target.DelegatedSubnetServiceName}'.");
+                $"The subnet '{subnet.Resource.Name}' is already delegated to '{existingDelegation.ServiceName}' and cannot also be delegated to '{target.DelegatedSubnetServiceName}'.");
         }
 
         builder.WithAnnotation(

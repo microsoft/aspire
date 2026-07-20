@@ -623,13 +623,10 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
             sql.Annotations.Add(new AdminDeploymentScriptSubnetAnnotation(aciSubnet.Resource));
         }
 
-        // Always delegate the subnet to ACI. Route through WithServiceDelegation (which uses
-        // Replace) rather than appending the annotation directly, so the subnet retains a single
-        // service-delegation annotation. This preserves the invariant WithServiceDelegation's
-        // Replace relies on: if the caller supplied an explicit subnet they had already delegated,
-        // that delegation is replaced (ACI is required for the admin deployment script to run in
-        // the subnet) instead of leaving two delegation annotations behind, which would later make
-        // WithServiceDelegation/WithDelegatedSubnet throw when it calls SingleOrDefault().
+        // Always delegate the subnet to ACI. WithServiceDelegation removes existing delegation
+        // annotations before appending ACI's required delegation, so an explicit subnet retains a
+        // single effective delegation. ACI must replace a caller's previous delegation for the admin
+        // deployment script to run in that subnet.
         builder.CreateResourceBuilder(aciSubnetResource)
             .WithServiceDelegation(AciSubnetDelegationServiceId);
     }
@@ -641,9 +638,8 @@ public class AzureSqlServerResource : AzureProvisioningResource, IResourceWithCo
         public IResourceBuilder<T> WithAnnotation<TAnnotation>(TAnnotation annotation, ResourceAnnotationMutationBehavior behavior = ResourceAnnotationMutationBehavior.Append) where TAnnotation : IResourceAnnotation
         {
             // Mirror DistributedApplicationResourceBuilder<T>.WithAnnotation's Replace handling so
-            // callers that rely on single-annotation semantics (e.g. WithServiceDelegation, which
-            // keeps a subnet to one delegation) behave identically when routed through this
-            // publish-time builder instead of the real app-model builder.
+            // publish-time configuration behaves identically when routed through this builder
+            // instead of the real app-model builder.
             if (behavior == ResourceAnnotationMutationBehavior.Replace
                 && Resource.Annotations.OfType<TAnnotation>().SingleOrDefault() is { } existingAnnotation)
             {

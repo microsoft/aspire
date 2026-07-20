@@ -317,6 +317,25 @@ public class AzureVirtualNetworkExtensionsTests
     }
 
     [Fact]
+    public void WithDelegatedSubnet_LastMatchingServiceDelegationCollapsesOlderConflicts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24")
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("ContainerApps", "Microsoft.App/environments"))
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("AppService", "microsoft.web/serverfarms"));
+
+        var environment = builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet);
+
+        Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+        var delegationAnnotation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
     public void WithDelegatedSubnet_DifferentSubnetThrows()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -535,9 +535,8 @@ public class AzureKubernetesEnvironmentExtensionsTests
         var aks = builder.AddAzureKubernetesEnvironment("aks");
         var lb = aks.AddLoadBalancer("lb", albSubnet);
 
-        // AGC requires trafficControllers, so the user's delegation is replaced (not appended). The
-        // subnet must keep exactly one delegation so a later WithServiceDelegation's Replace never
-        // encounters two annotations (which would throw via SingleOrDefault()).
+        // AGC requires trafficControllers, so the user's delegation is replaced rather than appended
+        // and the subnet retains exactly one effective delegation.
         var delegation = Assert.Single(albSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
         Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation.ServiceName);
 
@@ -564,6 +563,23 @@ public class AzureKubernetesEnvironmentExtensionsTests
         // Neither LB displaced a user delegation; the only prior delegation was AGC's own.
         Assert.Null(lb1.Resource.DisplacedDelegationServiceName);
         Assert.Null(lb2.Resource.DisplacedDelegationServiceName);
+    }
+
+    [Fact]
+    public void AddLoadBalancer_EquivalentDelegationWithDifferentCasing_DoesNotRecordDisplacement()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("vnet", "10.0.0.0/16");
+        var albSubnet = vnet.AddSubnet("alb", "10.0.4.0/24")
+            .WithServiceDelegation("microsoft.servicenetworking/trafficcontrollers");
+
+        var aks = builder.AddAzureKubernetesEnvironment("aks");
+        var lb = aks.AddLoadBalancer("lb", albSubnet);
+
+        var delegation = Assert.Single(albSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.ServiceNetworking/trafficControllers", delegation.ServiceName);
+        Assert.Null(lb.Resource.DisplacedDelegationServiceName);
     }
 
     [Fact]
