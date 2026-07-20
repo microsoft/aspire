@@ -189,7 +189,6 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'getExtensionFileStatus'; relativePaths: readonly string[] }
     | { name: 'getDiagnostics'; filePath: string }
     | { name: 'readClipboard' }
-    | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'getWorkspaceFolders' }
     | { name: 'getActiveEditor' }

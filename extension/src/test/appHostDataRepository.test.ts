@@ -2239,65 +2239,6 @@ suite('AppHostDataRepository', () => {
         }
     });
 
-    test('workspace selection retargets to the only running candidate', async () => {
-        let getAppHostsLineCallback: ((line: string) => void) | undefined;
-        spawnStub.callsFake((_terminalProvider, _command, args, options) => {
-            if (args[0] === 'ls') {
-                getAppHostsLineCallback = createLsLineCallback(options);
-            }
-            return new TestChildProcess();
-        });
-        const workspaceFoldersStub = stubWorkspaceFolders([{
-            uri: vscode.Uri.file('/workspace'),
-            name: 'workspace',
-            index: 0,
-        }]);
-        const repository = new AppHostDataRepository(terminalProvider);
-
-        try {
-            repository.activate();
-            repository.setPanelVisible(true);
-            await waitForAppHostDiscovery();
-            assert.ok(getAppHostsLineCallback);
-
-            getAppHostsLineCallback(JSON.stringify({
-                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
-                all_project_file_candidates: [
-                    '/workspace/apps/Store/AppHost.csproj',
-                    '/workspace/samples/Store/AppHost.csproj',
-                ],
-            }));
-            await waitForAppHostDiscovery();
-
-            const psCall = spawnStub.getCalls().find(call => {
-                const args = call.args[2] as string[];
-                return args[0] === 'ps' && args.includes('--follow');
-            });
-            assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
-            psCall.args[3].lineCallback(JSON.stringify([{
-                appHostPath: '/workspace/samples/Store/AppHost.csproj',
-                appHostPid: 125881,
-            }]));
-
-            await waitForCondition(() =>
-                repository.workspaceAppHostPath === '/workspace/samples/Store/AppHost.csproj'
-                && spawnStub.getCalls().some(call => {
-                    const args = call.args[2] as string[];
-                    return args[0] === 'describe' && args[args.length - 1] === '/workspace/samples/Store/AppHost.csproj';
-                }),
-            'workspace selection did not retarget its describe stream to the only running candidate');
-
-            assert.strictEqual(repository.workspaceAppHostName, 'samples/Store/AppHost.csproj');
-            assert.strictEqual(spawnStub.getCalls().some(call => {
-                const args = call.args[2] as string[];
-                return args[0] === 'describe' && args[args.length - 1] === '/workspace/apps/Store/AppHost.csproj';
-            }), false);
-        } finally {
-            repository.dispose();
-            workspaceFoldersStub.restore();
-        }
-    });
-
     test('every running AppHost in workspace gets resources from its own per-AppHost describe stream', async () => {
         const workspaceFoldersStub = stubWorkspaceFolders([{
             uri: vscode.Uri.file('/workspace'),

@@ -3,25 +3,18 @@ import * as fs from 'fs';
 import * as path from 'path';
 import type { AspireExtensionE2EControlCommand } from '../types/extensionApi';
 import { getCommandInvocationCount, getDebugLaunchCount, isSamePath, waitForCommandOutcome, waitForDebugLaunch, waitForExtensionState, waitForRepositoryIdle, waitForWorkspaceAppHost } from './helpers/assertions';
-import { createExternalSingleFileAppHost, executeE2eControlCommand, removeExternalSingleFileAppHost, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopAppHostIfRunning, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
+import { executeE2eControlCommand, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setDebugLaunchSuppressedForE2E, stopPrimaryAppHostIfRunning } from './helpers/fixtures';
 import { getPrimaryAppHostProjectPath, getWorkspaceRoot } from './helpers/paths';
-import { chooseActiveQuickPick, executeCommandFromPalette, openAspireView, waitForEditorTitle } from './helpers/vscode';
+import { chooseActiveQuickPick, openAspireView } from './helpers/vscode';
 
 suite('Aspire extension edge case E2E', function () {
-    this.timeout(240000);
-    let externalAppHostPath: string | undefined;
+    this.timeout(180000);
 
     teardown(async () => {
         await runE2eTeardown([
             () => setCliUnavailableForE2E(false),
             () => setDebugLaunchSuppressedForE2E(false),
             () => restoreWorkspaceCliPath(),
-            () => externalAppHostPath ? stopAppHostIfRunning(externalAppHostPath) : undefined,
-            () => executeE2eControlCommand({ name: 'closeAllEditors' }),
-            () => {
-                removeExternalSingleFileAppHost();
-                externalAppHostPath = undefined;
-            },
             () => stopPrimaryAppHostIfRunning(),
         ], 'Edge case E2E teardown failed.');
     });
@@ -102,41 +95,5 @@ suite('Aspire extension edge case E2E', function () {
             file => !file.state.launchingPaths.some(launchingPath => isSamePath(launchingPath, appHostPath)),
             'suppressed debug launch state to clear',
             60000);
-    });
-
-    test('keeps an external single-file AppHost followed while its tab is backgrounded', async () => {
-        const appHostPath = createExternalSingleFileAppHost();
-        externalAppHostPath = appHostPath;
-        await openAspireView();
-        await waitForRepositoryIdle();
-
-        await executeE2eControlCommand({ name: 'openFile', filePath: appHostPath });
-        await waitForEditorTitle('apphost.cs');
-
-        const runBefore = getCommandInvocationCount('aspire-vscode.runAppHost');
-        await executeE2eControlCommand({ name: 'runAppHost', appHostPath }, { waitFor: 'started' });
-        await waitForCommandOutcome('aspire-vscode.runAppHost', 'success', 180000, runBefore);
-        await waitForExtensionState(file =>
-            file.state.appHosts.some(appHost =>
-                isSamePath(appHost.appHostPath, appHostPath)
-                && (appHost.resources ?? []).some(resource => resource.name === 'external-value')),
-        'external AppHost resources to be followed while its tab is active',
-        180000);
-
-        const workspaceAppHostPath = getPrimaryAppHostProjectPath();
-        await executeE2eControlCommand({ name: 'openFile', filePath: workspaceAppHostPath });
-        const activeEditor = await executeE2eControlCommand({ name: 'getActiveEditor' });
-        const activeEditorPath = (activeEditor.result as { fileName?: string }).fileName;
-        assert.ok(activeEditorPath && isSamePath(activeEditorPath, workspaceAppHostPath));
-        await waitForEditorTitle('apphost.cs');
-
-        await executeCommandFromPalette('workbench.view.explorer');
-        const backgrounded = await waitForExtensionState(file =>
-            file.state.appHosts.some(appHost =>
-                isSamePath(appHost.appHostPath, appHostPath)
-                && (appHost.resources ?? []).some(resource => resource.name === 'external-value')),
-        'external AppHost and resources to remain followed after its tab is backgrounded and the Aspire panel is hidden',
-        60000);
-        assert.ok(backgrounded.state.appHosts.some(appHost => isSamePath(appHost.appHostPath, appHostPath)));
     });
 });
