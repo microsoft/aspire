@@ -1214,6 +1214,8 @@ suite('AppHostDataRepository', () => {
             });
             const exitCurrentDescribe = () => describeCalls().at(-1)!.args[3].exitCallback(1);
 
+            assert.strictEqual(describeCalls().length, 1, 'expected the initial describe stream once ps reports the host running');
+
             exitCurrentDescribe();
             await clock.tickAsync(5000);
             assert.strictEqual(describeCalls().length, 2);
