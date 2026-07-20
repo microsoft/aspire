@@ -18,7 +18,7 @@ namespace Aspire.Dashboard.Components.Layout;
 public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 {
     private bool _isNavMenuOpen;
-    private bool _isRunSelectionInitialized;
+    private bool _runSelectionChanged;
     private bool _isSwitchingRuns;
 
     private IDisposable? _themeChangedSubscription;
@@ -90,14 +90,13 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     {
         if (RunStore.SupportsRunSelection)
         {
-            var runOptions = RunStore.GetRuns();
             var selectedRunResult = await SessionStorage.GetAsync<string>(BrowserStorageKeys.SelectedDashboardRunId);
             var selectedRunId = selectedRunResult is { Success: true } ? selectedRunResult.Value : null;
-            var selectedRun = runOptions.FirstOrDefault(run => string.Equals(run.RunId, selectedRunId, StringComparison.Ordinal))
-                ?? runOptions.Single(run => run.IsCurrent);
-            RunSelection.SelectRun(selectedRun.IsCurrent ? null : selectedRun.RunId);
+            if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
+            {
+                RunSelection.SelectRun(selectedRunId);
+            }
         }
-        _isRunSelectionInitialized = true;
 
         // Theme change can be triggered from the settings dialog. This logic applies the new theme to the browser window.
         // Note that this event could be raised from a settings dialog opened in a different browser window.
@@ -237,9 +236,11 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     private async Task SwitchDashboardRunAsync(string? runId)
     {
+        _runSelectionChanged = true;
         var selectedRunId = RunSelection.SelectedRun is { IsCurrent: false } selectedRun ? selectedRun.RunId : null;
         if (string.Equals(runId, selectedRunId, StringComparison.Ordinal))
         {
+            await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, runId ?? string.Empty);
             return;
         }
 
