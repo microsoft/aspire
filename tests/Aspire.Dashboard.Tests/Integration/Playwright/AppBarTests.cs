@@ -64,5 +64,4 @@ public class AppBarTests : PlaywrightTestsBase<DashboardServerFixture>
             }
         });
     }
-
 }
