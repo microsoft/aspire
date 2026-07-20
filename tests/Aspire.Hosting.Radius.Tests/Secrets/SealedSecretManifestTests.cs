@@ -115,6 +115,49 @@ public class SealedSecretManifestTests : IDisposable
         Assert.Contains("ASPIRERADIUS044", ex.Message);
     }
 
+    [Theory]
+    [InlineData("Bad_Name")]
+    [InlineData("UPPER")]
+    [InlineData("name/withslash")]
+    [InlineData("-leadinghyphen")]
+    public void ReadMetadata_InvalidName_Throws_ASPIRERADIUS044(string name)
+    {
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            $"  name: {name}\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    username: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS044", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_InvalidNamespace_Throws_ASPIRERADIUS044()
+    {
+        // A DNS-1123 label caps at 63 chars, so a 64-char namespace is invalid.
+        var longNamespace = new string('a', 64);
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            $"  namespace: {longNamespace}\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    username: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS044", ex.Message);
+    }
+
     [Fact]
     public void ReadMetadata_PlaintextSecret_Throws_ASPIRERADIUS044()
     {

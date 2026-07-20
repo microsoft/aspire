@@ -256,6 +256,42 @@ public class AddRadiusSecretStoreTests
         Assert.Equal("ASPIRERADIUS006", attribute.DiagnosticId);
     }
 
+    [Theory]
+    [InlineData(0)]
+    [InlineData(-1)]
+    public void WithMaterializationTimeout_RejectsNonPositive(int seconds)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("tls", RadiusSecretStoreType.Generic);
+
+        Assert.Throws<ArgumentOutOfRangeException>(() => store.WithMaterializationTimeout(TimeSpan.FromSeconds(seconds)));
+    }
+
+    [Fact]
+    public void WithMaterializationTimeout_RejectsAboveTimerRange()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("tls", RadiusSecretStoreType.Generic);
+
+        // Values above int.MaxValue milliseconds cannot be represented by CancellationTokenSource.CancelAfter
+        // and would otherwise pass config-time validation only to throw mid-deploy.
+        Assert.Throws<ArgumentOutOfRangeException>(() => store.WithMaterializationTimeout(TimeSpan.MaxValue));
+        Assert.Throws<ArgumentOutOfRangeException>(() =>
+            store.WithMaterializationTimeout(TimeSpan.FromMilliseconds((double)int.MaxValue + 1)));
+    }
+
+    [Fact]
+    public void WithMaterializationTimeout_AcceptsMaxSupported()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("tls", RadiusSecretStoreType.Generic);
+        var max = TimeSpan.FromMilliseconds(int.MaxValue);
+
+        store.WithMaterializationTimeout(max);
+
+        Assert.Equal(max, store.Resource.MaterializationTimeout);
+    }
+
     private static string GenerateStoreBicep(Action<IResourceBuilder<RadiusEnvironmentResource>> configure)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

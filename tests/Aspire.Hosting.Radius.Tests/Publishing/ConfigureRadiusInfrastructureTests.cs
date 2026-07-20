@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIRERADIUS006 // Experimental: the secret-store APIs are exercised by the rename-rewire test.
+
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Radius.Publishing.Constructs;
@@ -298,5 +300,41 @@ public class ConfigureRadiusInfrastructureTests
         // App's environment reference must follow the rename.
         Assert.Contains("environment: renamedEnv.id", bicep);
         Assert.DoesNotContain("environment: myenv.id", bicep);
+    }
+
+    [Fact]
+    public void ConfigureCallback_SecretStoreRename_PropagatesToRecipeConfigAndScope()
+    {
+        // Secret stores are part of the ConfigureRadiusInfrastructure surface (opts.SecretStores),
+        // so renaming a store construct must update the recipeConfig `<store>.id` consumer reference,
+        // and renaming the legacy environment it is scoped to must update the store's environment id.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var user = builder.AddParameter("git-user", secret: true);
+        var pat = builder.AddParameter("git-pat", secret: true);
+        var env = builder.AddRadiusEnvironment("myenv");
+        var store = builder.AddRadiusSecretStore("git-creds", RadiusSecretStoreType.Generic)
+            .WithData(d => { d.Add("username", user); d.Add("pat", pat); });
+        env.WithTerraformGitAuthentication("github.com", store);
+        env.ConfigureRadiusInfrastructure(opts =>
+        {
+            opts.SecretStores[0].BicepIdentifier = "renamed_store";
+            opts.LegacyEnvironments[0].BicepIdentifier = "renamed_legacy_env";
+        });
+        builder.AddContainer("api", "myapp/api", "latest");
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        var context = new RadiusBicepPublishingContext(radiusEnv);
+        var bicep = context.GenerateBicep(model);
+
+        Assert.Contains("resource renamed_store", bicep);
+        // recipeConfig's terraform git PAT secret must reference the renamed store id.
+        Assert.Contains("renamed_store.id", bicep);
+        // The store's environment scope must reference the renamed legacy environment.
+        Assert.Contains("renamed_legacy_env.id", bicep);
+        // The old auto-generated identifiers must not leak into references.
+        Assert.DoesNotContain(" git_creds.id", bicep);
     }
 }

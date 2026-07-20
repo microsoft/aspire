@@ -218,9 +218,9 @@ public static class RadiusSecretStoreExtensions
     /// </para>
     /// </summary>
     /// <param name="store">The secret-store builder.</param>
-    /// <param name="timeout">A positive materialization timeout.</param>
+    /// <param name="timeout">A positive materialization timeout, at most <see cref="int.MaxValue"/> milliseconds (~24.85 days).</param>
     /// <returns>The same store builder for chaining.</returns>
-    /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeout"/> is not positive.</exception>
+    /// <exception cref="ArgumentOutOfRangeException"><paramref name="timeout"/> is not positive or exceeds the supported timer range.</exception>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Sealed-secret deploy-timing knob with no polyglot ATS equivalent.")]
     public static IResourceBuilder<RadiusSecretStoreResource> WithMaterializationTimeout(
@@ -228,9 +228,18 @@ public static class RadiusSecretStoreExtensions
         TimeSpan timeout)
     {
         ArgumentNullException.ThrowIfNull(store);
-        if (timeout <= TimeSpan.Zero)
+
+        // The deploy path bounds materialization with CancellationTokenSource.CancelAfter, which
+        // accepts at most int.MaxValue milliseconds (~24.85 days), and also adds this budget to
+        // DateTimeOffset.UtcNow. A larger value (e.g. TimeSpan.MaxValue) would pass a "positive"
+        // check yet throw ArgumentOutOfRangeException mid-deploy, so reject it here at configuration
+        // time. See https://learn.microsoft.com/dotnet/api/system.threading.cancellationtokensource.cancelafter.
+        if (timeout <= TimeSpan.Zero || timeout.TotalMilliseconds > int.MaxValue)
         {
-            throw new ArgumentOutOfRangeException(nameof(timeout), timeout, "The materialization timeout must be positive.");
+            throw new ArgumentOutOfRangeException(
+                nameof(timeout),
+                timeout,
+                "The materialization timeout must be positive and at most int.MaxValue milliseconds (~24.85 days).");
         }
 
         store.Resource.MaterializationTimeout = timeout;
@@ -284,7 +293,7 @@ public static class RadiusSecretStoreExtensions
 
         // The Secret name is a DNS-1123 subdomain; the namespace (when present) is a DNS-1123 label.
         // https://kubernetes.io/docs/concepts/overview/working-with-objects/names/
-        if (!IsDns1123Subdomain(name) || (ns is not null && !IsDns1123Label(ns)))
+        if (!KubernetesName.IsDns1123Subdomain(name) || (ns is not null && !KubernetesName.IsDns1123Label(ns)))
         {
             throw new ArgumentException(
                 $"Existing-secret reference '{namespaceAndName}' is invalid. The name must be a DNS-1123 subdomain and " +
@@ -294,46 +303,6 @@ public static class RadiusSecretStoreExtensions
         }
 
         return namespaceAndName;
-    }
-
-    // DNS-1123 label: 1-63 chars, lowercase alphanumeric or '-', must start and end alphanumeric.
-    private static bool IsDns1123Label(string value)
-    {
-        if (value.Length is 0 or > 63)
-        {
-            return false;
-        }
-
-        for (var i = 0; i < value.Length; i++)
-        {
-            var c = value[i];
-            var isEdge = i == 0 || i == value.Length - 1;
-            if (!(c is (>= 'a' and <= 'z') or (>= '0' and <= '9') || (!isEdge && c == '-')))
-            {
-                return false;
-            }
-        }
-
-        return true;
-    }
-
-    // DNS-1123 subdomain: 1-253 chars, a dot-separated series of DNS-1123 labels.
-    private static bool IsDns1123Subdomain(string value)
-    {
-        if (value.Length is 0 or > 253)
-        {
-            return false;
-        }
-
-        foreach (var label in value.Split('.'))
-        {
-            if (!IsDns1123Label(label))
-            {
-                return false;
-            }
-        }
-
-        return true;
     }
 
     // A secret store must declare exactly one population mode. Reject a second population call

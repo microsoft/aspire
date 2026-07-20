@@ -237,7 +237,7 @@ internal sealed class RadiusInfrastructureBuilder
 
         // Secret stores (Applications.Core/secretStores) — emitted after the legacy chain they
         // reference for scope. No-op when no store is declared.
-        EmitSecretStores(options, secretStoresForScope, legacyEnvConstruct, legacyAppConstruct);
+        var secretStoreConstructs = EmitSecretStores(options, secretStoresForScope, legacyEnvConstruct, legacyAppConstruct);
 
         // 4. Resource type instances — parent wiring depends on legacy vs UDT.
         // Track each builder-created instance's parent pair so RewireIdReferences
@@ -307,7 +307,8 @@ internal sealed class RadiusInfrastructureBuilder
             containerConnectionTargets.ToDictionary(
                 kv => kv.Key,
                 kv => kv.Value.ToDictionary(
-                    tkv => tkv.Key, tkv => tkv.Value.BicepIdentifier)));
+                    tkv => tkv.Key, tkv => tkv.Value.BicepIdentifier)),
+            secretStoreConstructs.Values.ToDictionary(c => c, c => c.BicepIdentifier));
 
         RunConfigureCallbacks(options);
 
@@ -318,6 +319,12 @@ internal sealed class RadiusInfrastructureBuilder
             legacyAppConstruct, legacyEnvConstruct, instanceParents,
             containerConnectionTargets,
             identifierSnapshot);
+
+        // Secret stores participate in the same escape-hatch surface, so their consumer references
+        // (recipeConfig `<store>.id`) and parent scope IDs must be rewired too when a callback
+        // renames a store construct or the legacy application/environment it is scoped to.
+        RewireSecretStoreReferences(secretStoresForScope, secretStoreConstructs,
+            legacyAppConstruct, legacyEnvConstruct, identifierSnapshot);
 
         // Surface recipe-parameter scopes that target a resource type with no emitted recipe
         // entry, and register any ParameterResource-backed recipe/inline-secret Bicep params.
@@ -379,7 +386,8 @@ internal sealed class RadiusInfrastructureBuilder
         string? LegacyAppId,
         Dictionary<RadiusRecipePackConstruct, string> RecipePackIds,
         Dictionary<RadiusResourceTypeConstruct, (string? EnvId, string AppId)> InstanceParentIds,
-        Dictionary<RadiusContainerConstruct, Dictionary<string, string>> ContainerConnectionTargetIds);
+        Dictionary<RadiusContainerConstruct, Dictionary<string, string>> ContainerConnectionTargetIds,
+        Dictionary<RadiusSecretStoreConstruct, string> SecretStoreIds);
 
     /// <summary>
     /// Returns <c>true</c> when <paramref name="resourceType"/> is a legacy
@@ -520,6 +528,80 @@ internal sealed class RadiusInfrastructureBuilder
 
     private static bool IdentifierChanged(ProvisionableResource resource, string? snapshotId)
         => !string.Equals(resource.BicepIdentifier, snapshotId, StringComparison.Ordinal);
+
+    /// <summary>
+    /// After callbacks run, rewire secret-store cross-references whose target was renamed:
+    /// <list type="bullet">
+    /// <item>a store's <c>ApplicationId</c>/<c>EnvironmentId</c> parent scope, if the legacy
+    /// application/environment it points at was renamed; and</item>
+    /// <item>the environment's <c>recipeConfig</c>, which references consumed stores by
+    /// <c>&lt;identifier&gt;.id</c>, if any store construct was renamed.</item>
+    /// </list>
+    /// Mirrors <see cref="RewireIdReferences"/> for the secret-store surface exposed via
+    /// <see cref="RadiusInfrastructureOptions.SecretStores"/>.
+    /// </summary>
+    private void RewireSecretStoreReferences(
+        IReadOnlyList<RadiusSecretStoreResource> stores,
+        IReadOnlyDictionary<string, RadiusSecretStoreConstruct> storeConstructs,
+        LegacyApplicationConstruct? legacyAppConstruct,
+        LegacyApplicationEnvironmentConstruct? legacyEnvConstruct,
+        IdentifierSnapshot snapshot)
+    {
+        if (storeConstructs.Count == 0)
+        {
+            return;
+        }
+
+        // Parent scope IDs: an application-scoped store references the legacy application, an
+        // environment-scoped store the legacy environment. If a callback renamed that parent
+        // construct, the store's ApplicationId/EnvironmentId still points at the old symbol.
+        var legacyAppRenamed = legacyAppConstruct is not null && IdentifierChanged(legacyAppConstruct, snapshot.LegacyAppId);
+        var legacyEnvRenamed = legacyEnvConstruct is not null && IdentifierChanged(legacyEnvConstruct, snapshot.LegacyEnvId);
+
+        if (legacyAppRenamed || legacyEnvRenamed)
+        {
+            foreach (var store in stores)
+            {
+                if (!storeConstructs.TryGetValue(store.Name, out var construct))
+                {
+                    continue;
+                }
+
+                // Mirror the scope selection used when the store was emitted (see EmitSecretStores).
+                if (store.Scope == RadiusSecretStoreScope.Application && legacyAppConstruct is not null)
+                {
+                    if (legacyAppRenamed)
+                    {
+                        construct.ApplicationId = BuildIdExpression(legacyAppConstruct);
+                    }
+                }
+                else if (legacyEnvConstruct is not null && legacyEnvRenamed)
+                {
+                    construct.EnvironmentId = BuildIdExpression(legacyEnvConstruct);
+                }
+            }
+        }
+
+        // recipeConfig references each consumed store by `<identifier>.id`. It is a single serialized
+        // object (not individually addressable per store), so — unlike the per-reference constructs
+        // above — the consistent way to honor a store rename is to rebuild the whole recipeConfig from
+        // the current constructs. Only do so when a store was actually renamed, preserving direct
+        // callback edits in every other case.
+        var anyStoreRenamed = false;
+        foreach (var (construct, snapId) in snapshot.SecretStoreIds)
+        {
+            if (!string.Equals(construct.BicepIdentifier, snapId, StringComparison.Ordinal))
+            {
+                anyStoreRenamed = true;
+                break;
+            }
+        }
+
+        if (anyStoreRenamed && legacyEnvConstruct is not null)
+        {
+            ApplySecretStoreConsumers(legacyEnvConstruct, storeConstructs);
+        }
+    }
 
     private (string ResourceType, string ApiVersion) ResolveResourceType(IResource resource)
     {
@@ -1608,7 +1690,7 @@ internal sealed class RadiusInfrastructureBuilder
     /// Applications.Core environment/application (secret stores are Applications.Core resources) and
     /// populated per mode (inline / existing / sealed).
     /// </summary>
-    private void EmitSecretStores(
+    private Dictionary<string, RadiusSecretStoreConstruct> EmitSecretStores(
         RadiusInfrastructureOptions options,
         IReadOnlyList<RadiusSecretStoreResource> stores,
         LegacyApplicationEnvironmentConstruct? legacyEnvConstruct,
@@ -1644,6 +1726,8 @@ internal sealed class RadiusInfrastructureBuilder
         }
 
         ApplySecretStoreConsumers(legacyEnvConstruct, storeConstructs);
+
+        return storeConstructs;
     }
 
     /// <summary>

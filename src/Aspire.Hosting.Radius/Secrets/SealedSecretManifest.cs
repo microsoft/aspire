@@ -204,6 +204,26 @@ internal static class SealedSecretManifest
 
         var ns = ReadScalar(metadata, "namespace");
         var namespaceWasExplicit = !string.IsNullOrWhiteSpace(ns);
+
+        // The resulting Secret is applied with `kubectl apply`, which enforces Kubernetes naming: the
+        // name must be a DNS-1123 subdomain and any explicit namespace a DNS-1123 label. Validate here
+        // so a bad manifest (e.g. 'Bad_Name', 'a/b', an overlong namespace) fails at publish rather
+        // than producing an artifact that is guaranteed to be rejected at deploy — mirroring the
+        // fail-fast validation on WithExistingSecret references.
+        if (!KubernetesName.IsDns1123Subdomain(name!))
+        {
+            throw new InvalidOperationException(
+                $"Secret store '{storeName}' references a SealedSecret manifest at '{manifestPath}' whose metadata.name " +
+                $"'{name}' is not a valid Kubernetes name (must be a DNS-1123 subdomain). Diagnostic: ASPIRERADIUS044.");
+        }
+
+        if (namespaceWasExplicit && !KubernetesName.IsDns1123Label(ns!))
+        {
+            throw new InvalidOperationException(
+                $"Secret store '{storeName}' references a SealedSecret manifest at '{manifestPath}' whose metadata.namespace " +
+                $"'{ns}' is not a valid Kubernetes namespace (must be a DNS-1123 label). Diagnostic: ASPIRERADIUS044.");
+        }
+
         return new Metadata(namespaceWasExplicit ? ns! : defaultNamespace, name!, namespaceWasExplicit);
     }
 
