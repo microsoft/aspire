@@ -339,18 +339,22 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .pills { display: flex; flex-wrap: wrap; gap: 5px; }
 .pills:empty { display: none; }
 .pill {
+  --pill-tone: var(--muted);
   display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; line-height: 1;
   padding: 0 8px; min-height: 20px; border-radius: 999px; border: 1px solid transparent;
+  /* The 25% foreground mix keeps small pill text above 4.5:1 in both fallback themes
+     without losing the signal hue used by the translucent background and border. */
+  color: color-mix(in srgb, var(--pill-tone), var(--fg) 25%);
 }
 /* Label-badge tones mirror pr-dashboard's signal pills (translucent wash + crisp ~50% colored border
    + saturated text), sourced from our semantic theme tokens. accent = sky blue (pr-dashboard maps
    Docs/Bots/Draft/Review-started to blue; purple stays reserved for brand). muted stays theme-neutral. */
-.pill.success { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); border-color: color-mix(in srgb, var(--success) 48%, transparent); }
-.pill.warning { color: var(--warning); background: color-mix(in srgb, var(--warning) 18%, transparent); border-color: color-mix(in srgb, var(--warning) 52%, transparent); }
-.pill.danger  { color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent);  border-color: color-mix(in srgb, var(--danger) 48%, transparent); }
-.pill.accent  { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
-.pill.info    { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
-.pill.muted   { color: var(--muted); background: color-mix(in srgb, var(--muted) 10%, transparent); border-color: color-mix(in srgb, var(--muted) 20%, transparent); }
+.pill.success { --pill-tone: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); border-color: color-mix(in srgb, var(--success) 48%, transparent); }
+.pill.warning { --pill-tone: var(--warning); background: color-mix(in srgb, var(--warning) 18%, transparent); border-color: color-mix(in srgb, var(--warning) 52%, transparent); }
+.pill.danger  { --pill-tone: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent);  border-color: color-mix(in srgb, var(--danger) 48%, transparent); }
+.pill.accent  { --pill-tone: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
+.pill.info    { --pill-tone: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
+.pill.muted   { background: color-mix(in srgb, var(--muted) 10%, transparent); border-color: color-mix(in srgb, var(--muted) 20%, transparent); }
 
 /* Sub-page scaffold */
 .page { padding: 16px; max-width: 760px; margin: 0 auto; }

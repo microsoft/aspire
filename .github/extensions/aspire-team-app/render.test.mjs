@@ -10,6 +10,7 @@ test("renderer neutral palette follows canvas theme tokens with light fallbacks"
   assert.match(STYLES, /--surface: color-mix\(in srgb, var\(--bg\), var\(--fg\) 5%\)/);
   assert.match(STYLES, /data-color-mode="light".*color-scheme: light/);
   assert.match(STYLES, /data-color-mode="dark".*color-scheme: dark/);
+  assert.match(STYLES, /color: color-mix\(in srgb, var\(--pill-tone\), var\(--fg\) 25%\)/);
   assert.doesNotMatch(STYLES, /var\(--n-/);
 });
 
