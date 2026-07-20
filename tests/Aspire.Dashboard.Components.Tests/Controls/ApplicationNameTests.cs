@@ -68,6 +68,7 @@ public class ApplicationNameTests : DashboardTestContext
         Services.AddLocalization();
         Services.AddSingleton<IConfiguration>(new ConfigurationManager());
         Services.AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance);
+        Services.AddSingleton<DashboardActivitySource>();
         Services.AddSingleton<IDashboardClient, DashboardClient>();
         Services.AddSingleton<BrowserTimeProvider>();
         Services.AddSingleton<IKnownPropertyLookup>(new MockKnownPropertyLookup());

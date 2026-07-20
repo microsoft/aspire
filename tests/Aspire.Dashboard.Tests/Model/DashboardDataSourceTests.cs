@@ -540,7 +540,9 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Empty(currentTelemetryRepository.GetResources());
         Assert.Empty(currentResourceRepository.GetResources());
 
+        using var activitySource = new DashboardActivitySource();
         await using var currentClient = new DashboardClient(
+            activitySource,
             NullLoggerFactory.Instance,
             new ConfigurationManager(),
             options,
