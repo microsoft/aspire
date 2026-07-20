@@ -197,6 +197,35 @@ public class BundleServiceIntegrationTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    [SkipOnPlatform(TestPlatforms.Linux | TestPlatforms.OSX | TestPlatforms.FreeBSD, "Windows file sharing semantics are required.")]
+    public async Task MoveDirectoryWithRetryAsync_FileTemporarilyLocked_RetriesUntilReleased()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var sourcePath = workspace.CreateDirectory("source").FullName;
+        var destinationPath = Path.Combine(workspace.WorkspaceRoot.FullName, "destination");
+        var lockedFilePath = Path.Combine(sourcePath, "locked.dll");
+        File.WriteAllText(lockedFilePath, "locked");
+
+        var service = CreateService(
+            new TestBundlePayloadProvider(CreateFakeBundlePayload()),
+            new TestLayoutDiscovery(workspace.WorkspaceRoot.FullName));
+
+        using var lockedFile = new FileStream(lockedFilePath, FileMode.Open, FileAccess.Read, FileShare.Read);
+        var moveTask = service.MoveDirectoryWithRetryAsync(
+            sourcePath,
+            destinationPath,
+            TestContext.Current.CancellationToken);
+
+        Assert.False(moveTask.IsCompleted);
+
+        lockedFile.Dispose();
+        await moveTask;
+
+        Assert.False(Directory.Exists(sourcePath));
+        Assert.True(Directory.Exists(destinationPath));
+    }
+
+    [Fact]
     public async Task EnsureExtractedAndAcquireLayoutAsync_ReturnsVersionRootedLayoutAndSkipsLeasedCleanup()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

@@ -149,6 +149,34 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
         Assert.False(BundleService.IsVersionedLayoutValid(dir));
     }
 
+    [Theory]
+    [InlineData(unchecked((int)0x80070005), true)] // ERROR_ACCESS_DENIED
+    [InlineData(unchecked((int)0x80070020), true)] // ERROR_SHARING_VIOLATION
+    [InlineData(unchecked((int)0x80070021), true)] // ERROR_LOCK_VIOLATION
+    [InlineData(unchecked((int)0x80070027), false)] // ERROR_HANDLE_DISK_FULL
+    [InlineData(unchecked((int)0x80070070), false)] // ERROR_DISK_FULL
+    [InlineData(unchecked((int)0x800700B7), false)] // ERROR_ALREADY_EXISTS
+    public void IsRetryableDirectoryMoveException_OnlyRetriesTransientWindowsLockErrors(int hresult, bool expected)
+    {
+        var exception = new IOException("Directory move failed.", hresult);
+
+        Assert.Equal(expected, BundleService.IsRetryableDirectoryMoveException(exception, isWindows: true));
+    }
+
+    [Fact]
+    public void IsRetryableDirectoryMoveException_RetriesUnauthorizedAccess()
+    {
+        Assert.True(BundleService.IsRetryableDirectoryMoveException(new UnauthorizedAccessException(), isWindows: true));
+    }
+
+    [Fact]
+    public void IsRetryableDirectoryMoveException_DoesNotRetryOnNonWindows()
+    {
+        var exception = new IOException("Directory move failed.", unchecked((int)0x80070020));
+
+        Assert.False(BundleService.IsRetryableDirectoryMoveException(exception, isWindows: false));
+    }
+
     [Fact]
     public void TryCleanupStaleVersions_RemovesNonActiveVersionsAndStaleTempDirs()
     {
