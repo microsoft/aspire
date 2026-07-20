@@ -95,6 +95,10 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             if (!_runSelectionChanged && !string.IsNullOrEmpty(selectedRunId))
             {
                 RunSelection.SelectRun(selectedRunId);
+                if (RunSelection.SelectedRun.IsCurrent)
+                {
+                    await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, string.Empty);
+                }
             }
         }
 
@@ -257,7 +261,8 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
             await InvokeAsync(StateHasChanged);
         }
 
-        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, runId ?? string.Empty);
+        var persistedRunId = RunSelection.SelectedRun is { IsCurrent: false } actualSelectedRun ? actualSelectedRun.RunId : string.Empty;
+        await SessionStorage.SetAsync(BrowserStorageKeys.SelectedDashboardRunId, persistedRunId);
     }
 
     private string? GetVisibleReturnFocusElementId(string? returnFocusElementId, string desktopButtonId)

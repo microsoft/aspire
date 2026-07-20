@@ -607,13 +607,12 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
         SetEnvironmentVariableWithFallback(
             context,
             DashboardConfigNames.DashboardDataDirectoryName,
-            "Aspire:Store:Path",
-            transform: static aspireStorePath => Path.Combine(aspireStorePath, ".aspire", "dashboard"));
+            DashboardConfigNames.DashboardDataDirectoryName.ConfigKey);
         SetEnvironmentVariableWithFallback(
             context,
             DashboardConfigNames.DashboardPersistenceModeName,
             "Aspire:Dashboard:PersistenceMode",
-            defaultValue: "Runs");
+            defaultValue: "Run");
 
         PopulateDashboardUrls(context);
 

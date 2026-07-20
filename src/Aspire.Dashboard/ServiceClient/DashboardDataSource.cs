@@ -74,8 +74,13 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
         if (!selectedRun.IsCurrent)
         {
-            var historicalRunLease = _runStore.TryAcquireRunLease(selectedRun)
-                ?? throw new InvalidOperationException($"Dashboard run '{selectedRun.RunId}' is no longer available.");
+            var historicalRunLease = _runStore.TryAcquireRunLease(selectedRun);
+            if (historicalRunLease is null)
+            {
+                SelectCurrentRun(runs.Single(run => run.IsCurrent));
+                return;
+            }
+
             var historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
             try
             {
@@ -101,9 +106,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
         }
         else
         {
-            TelemetryRepository = _currentTelemetryRepository;
-            ResourceRepository = _currentResourceRepository;
-            IsReadOnly = false;
+            SelectCurrentRun(selectedRun);
         }
 
         SelectedRun = selectedRun;
@@ -122,5 +125,13 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
         _historicalDatabase = null;
         _historicalRunLease?.Dispose();
         _historicalRunLease = null;
+    }
+
+    private void SelectCurrentRun(DashboardRunDescriptor currentRun)
+    {
+        TelemetryRepository = _currentTelemetryRepository;
+        ResourceRepository = _currentResourceRepository;
+        IsReadOnly = false;
+        SelectedRun = currentRun;
     }
 }

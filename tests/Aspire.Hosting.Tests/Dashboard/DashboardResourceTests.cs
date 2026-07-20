@@ -134,7 +134,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
             e =>
             {
                 Assert.Equal(DashboardConfigNames.DashboardPersistenceModeName.EnvVarName, e.Key);
-                Assert.Equal("Runs", e.Value);
+                Assert.Equal("Run", e.Value);
             },
             e =>
             {

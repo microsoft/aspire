@@ -65,6 +65,9 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--otlp-grpc-url http://localhost:4317")]
     [InlineData("--otlp-http-url http://localhost:4318")]
     [InlineData("--allow-anonymous")]
+    [InlineData("--application-name TestApp")]
+    [InlineData("--persistence Run")]
+    [InlineData("--persistence Resume")]
     [InlineData("--config-file-path /path/to/config.json")]
     public void DashboardRunCommand_ParsesOptionsWithoutErrors(string args)
     {
@@ -177,6 +180,9 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     [InlineData("--otlp-grpc-url http://localhost:9317", "--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:9317")]
     [InlineData("--otlp-http-url http://localhost:9318", "--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:9318")]
     [InlineData("--allow-anonymous", "--ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true")]
+    [InlineData("--application-name TestApp", "--ASPIRE_DASHBOARD_APPLICATION_NAME=TestApp")]
+    [InlineData("--persistence Run", "--ASPIRE_DASHBOARD_PERSISTENCE_MODE=Run")]
+    [InlineData("--persistence Resume", "--ASPIRE_DASHBOARD_PERSISTENCE_MODE=Resume")]
     [InlineData("--config-file-path /path/to/config.json", "--ASPIRE_DASHBOARD_CONFIG_FILE_PATH=/path/to/config.json")]
     public async Task DashboardRunCommand_IndividualOption_PassesCorrectArgToProcess(string cliArgs, string expectedArg)
     {
@@ -222,6 +228,26 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DashboardRunCommand_ConfiguresDashboardDebugLogging()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+
+        IDictionary<string, string>? capturedEnv = null;
+        var (services, _, executionFactory) = CreateServicesWithLayout(workspace);
+        executionFactory.AssertionCallback = (_, env, _, _) => { capturedEnv = env; };
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse("dashboard run");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.NotNull(capturedEnv);
+        Assert.Equal("Debug", capturedEnv["Logging__LogLevel__Default"]);
+    }
+
+    [Fact]
     public async Task DashboardRunCommand_UnmatchedTokens_ForwardedToProcess()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -258,7 +284,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         using var provider = services.BuildServiceProvider();
         var command = provider.GetRequiredService<RootCommand>();
-        var result = command.Parse("dashboard run --frontend-url http://localhost:5000 --otlp-grpc-url http://localhost:9317 --otlp-http-url http://localhost:9318 --allow-anonymous --config-file-path /my/config.json");
+        var result = command.Parse("dashboard run --frontend-url http://localhost:5000 --otlp-grpc-url http://localhost:9317 --otlp-http-url http://localhost:9318 --allow-anonymous --application-name TestApp --persistence Run --config-file-path /my/config.json");
 
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
@@ -270,6 +296,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL=http://localhost:9317", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL=http://localhost:9318", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_UNSECURED_ALLOW_ANONYMOUS=true", arg),
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_APPLICATION_NAME=TestApp", arg),
+            arg => Assert.Equal("--ASPIRE_DASHBOARD_PERSISTENCE_MODE=Run", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_API_ENABLED=true", arg),
             arg => Assert.Equal("--ASPIRE_DASHBOARD_CONFIG_FILE_PATH=/my/config.json", arg));
     }

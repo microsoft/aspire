@@ -5,13 +5,14 @@ using System.IO.Hashing;
 using System.Text;
 using Aspire.Cli.Acquisition;
 using Aspire.Hosting.Backchannel;
+using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Utils;
 
 internal static class CliPathHelper
 {
-    internal const string AspireHomeEnvironmentVariable = "ASPIRE_HOME";
+    internal const string AspireHomeEnvironmentVariable = AspireHomeDirectory.EnvironmentVariable;
 
     /// <summary>
     /// Name of the directory under <c>ASPIRE_HOME</c> that holds NuGet package caches keyed by
@@ -49,15 +50,11 @@ internal static class CliPathHelper
     }
 
     internal static string GetDefaultAspireHomeDirectory()
-        => GetDefaultAspireHomeDirectory(
-            Environment.GetEnvironmentVariable(AspireHomeEnvironmentVariable),
-            GetUserProfileDirectory());
+        => AspireHomeDirectory.GetDefault();
 
     internal static string GetDefaultAspireHomeDirectory(string? configuredAspireHome, string userProfileDirectory)
     {
-        return string.IsNullOrWhiteSpace(configuredAspireHome)
-            ? Path.Combine(userProfileDirectory, ".aspire")
-            : configuredAspireHome;
+        return AspireHomeDirectory.GetDefault(configuredAspireHome, userProfileDirectory);
     }
 
     /// <summary>
@@ -150,9 +147,6 @@ internal static class CliPathHelper
 
         return Path.GetDirectoryName(dogfoodDir);
     }
-
-    internal static string GetUserProfileDirectory()
-        => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
     /// <summary>
     /// Normalizes the casing of a filesystem <paramref name="path"/> so that paths which differ only

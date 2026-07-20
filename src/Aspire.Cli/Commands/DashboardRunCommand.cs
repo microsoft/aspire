@@ -53,6 +53,16 @@ internal sealed class DashboardRunCommand : BaseCommand
         Description = DashboardCommandStrings.AllowAnonymousOptionDescription
     };
 
+    private static readonly Option<string?> s_applicationNameOption = new("--application-name")
+    {
+        Description = DashboardCommandStrings.ApplicationNameOptionDescription
+    };
+
+    private static readonly Option<string?> s_persistenceModeOption = new("--persistence")
+    {
+        Description = DashboardCommandStrings.PersistenceModeOptionDescription
+    };
+
     private static readonly Option<string?> s_configFilePathOption = new("--config-file-path")
     {
         Description = DashboardCommandStrings.ConfigFilePathOptionDescription
@@ -77,6 +87,8 @@ internal sealed class DashboardRunCommand : BaseCommand
         Options.Add(s_otlpGrpcUrlOption);
         Options.Add(s_otlpHttpUrlOption);
         Options.Add(s_allowAnonymousOption);
+        Options.Add(s_applicationNameOption);
+        Options.Add(s_persistenceModeOption);
         Options.Add(s_configFilePathOption);
         TreatUnmatchedTokensAsErrors = false;
     }
@@ -108,7 +120,12 @@ internal sealed class DashboardRunCommand : BaseCommand
         // Tokens and keys are passed via environment variables (not command-line args)
         // to avoid exposing them in process listings (e.g. ps, Task Manager).
         string? browserToken = null;
-        var environmentVariables = new Dictionary<string, string>();
+        var environmentVariables = new Dictionary<string, string>
+        {
+            // Dashboard output is captured in the CLI log instead of written to the console,
+            // so include debug details without increasing console verbosity.
+            ["Logging__LogLevel__Default"] = LogLevel.Debug.ToString()
+        };
         layoutLease?.AddEnvironment(environmentVariables);
         if (!allowAnonymous && !ConfigSettingHasValue(unmatchedTokens, _environment, KnownConfigNames.DashboardUnsecuredAllowAnonymous))
         {
@@ -146,6 +163,8 @@ internal sealed class DashboardRunCommand : BaseCommand
         AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpGrpcUrlOption, KnownConfigNames.DashboardOtlpGrpcEndpointUrl, defaultValue: "http://localhost:4317");
         AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_otlpHttpUrlOption, KnownConfigNames.DashboardOtlpHttpEndpointUrl, defaultValue: "http://localhost:4318");
         AddBoolOptionArg(parseResult, args, unmatchedTokens, environment, s_allowAnonymousOption, KnownConfigNames.DashboardUnsecuredAllowAnonymous);
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_applicationNameOption, DashboardConfigNames.DashboardApplicationName.EnvVarName, defaultValue: null);
+        AddStringOptionArg(parseResult, args, unmatchedTokens, environment, s_persistenceModeOption, DashboardConfigNames.DashboardPersistenceModeName.EnvVarName, defaultValue: null);
 
         // Always enable the telemetry API so CLI commands (e.g. aspire otel) can query the dashboard,
         // unless the user has explicitly configured either the enabled or disabled setting.

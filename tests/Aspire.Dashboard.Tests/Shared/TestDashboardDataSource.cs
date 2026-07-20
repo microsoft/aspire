@@ -13,20 +13,10 @@ internal static class TestDashboardDataSource
         IResourceRepository resourceRepository)
     {
         return new DashboardDataSource(
-            new TestRunStore(),
+            new TestDashboardRunStore(),
             telemetryRepository,
             resourceRepository,
             new TestRepositoryFactory(telemetryRepository, resourceRepository));
-    }
-
-    private sealed class TestRunStore : IDashboardRunStore
-    {
-        public bool SupportsRunSelection => false;
-
-        public IReadOnlyList<DashboardRunDescriptor> GetRuns() =>
-            [new("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", string.Empty, IsCurrent: true)];
-
-        public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => null;
     }
 
     private sealed class TestRepositoryFactory(
@@ -36,4 +26,18 @@ internal static class TestDashboardDataSource
         public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) => telemetryRepository;
         public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) => resourceRepository;
     }
+}
+
+internal sealed class TestDashboardRunStore(
+    IReadOnlyList<DashboardRunDescriptor>? runs = null,
+    Func<DashboardRunDescriptor, IDisposable?>? tryAcquireRunLease = null) : IDashboardRunStore
+{
+    private readonly IReadOnlyList<DashboardRunDescriptor> _runs = runs ??
+        [new("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", string.Empty, IsCurrent: true)];
+
+    public bool SupportsRunSelection => _runs.Any(run => !run.IsCurrent);
+
+    public IReadOnlyList<DashboardRunDescriptor> GetRuns() => _runs;
+
+    public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => tryAcquireRunLease?.Invoke(run);
 }

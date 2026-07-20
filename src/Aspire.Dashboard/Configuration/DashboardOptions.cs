@@ -34,8 +34,8 @@ public sealed class DashboardDataOptions
 public enum DashboardPersistenceMode
 {
     None,
-    Runs,
-    Append
+    Run,
+    Resume
 }
 
 // Don't set values after validating/parsing options.

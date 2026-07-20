@@ -7,6 +7,8 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Dashboard.Tests.Shared;
+using Aspire.Shared;
 using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Data.Sqlite;
@@ -40,6 +42,18 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void ApplicationDirectory_WithoutDataDirectory_UsesDashboardDirectoryInAspireHome()
+    {
+        var applicationDirectoryName = DashboardRunStore.GetApplicationDirectoryName("My Dashboard");
+        var expectedDirectory = Path.Combine(
+            AspireHomeDirectory.GetDefault(),
+            "dashboard",
+            applicationDirectoryName);
+
+        Assert.Equal(expectedDirectory, DashboardRunStore.GetApplicationDirectory(dataRoot: null, "My Dashboard"));
+    }
+
+    [Fact]
     public void RunId_IsUtcTimestampWithMillisecondPrecision()
     {
         var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero));
@@ -58,6 +72,40 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.Equal(DashboardRunStore.SchemaVersion, metadata.RootElement.GetProperty("SchemaVersion").GetInt32());
         Assert.Equal(DashboardRunStore.SchemaVersion, Assert.Single(runStore.GetRuns()).SchemaVersion);
+    }
+
+    [Fact]
+    public void ConstructionAndGetRuns_LogResolvedStorageAndDiscoveredRuns()
+    {
+        var testSink = new TestSink();
+        using var loggerFactory = LoggerFactory.Create(builder =>
+        {
+            builder.SetMinimumLevel(LogLevel.Debug);
+            builder.AddProvider(new TestLoggerProvider(testSink));
+        });
+        using var runStore = new DashboardRunStore(
+            CreateOptions(),
+            loggerFactory.CreateLogger<DashboardRunStore>(),
+            TimeProvider.System);
+
+        Assert.Single(runStore.GetRuns());
+
+        Assert.Collection(
+            testSink.Writes,
+            initializationLog =>
+            {
+                Assert.Equal(LogLevel.Debug, initializationLog.LogLevel);
+                Assert.Equal(
+                    $"Dashboard run store initialized with persistence mode 'Run'. Run directory: '{runStore.RunDirectory}'. Database path: '{runStore.DatabasePath}'.",
+                    initializationLog.Message);
+            },
+            discoveryLog =>
+            {
+                Assert.Equal(LogLevel.Debug, discoveryLog.LogLevel);
+                Assert.Equal(
+                    $"Dashboard run discovery completed in directory '{Directory.GetParent(runStore.RunDirectory)!.FullName}'. Run count: 1. Run IDs: {runStore.RunId}.",
+                    discoveryLog.Message);
+            });
     }
 
     [Fact]
@@ -139,9 +187,26 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void AppendMode_ReusesApplicationDatabaseWithoutRunSelection()
+    public void ResumeMode_LogsCreatingDatabase()
     {
-        var options = CreateOptions("My Dashboard", DashboardPersistenceMode.Append);
+        var testSink = new TestSink();
+        var logger = new TestLogger<DashboardRunStore>(new TestLoggerFactory(testSink, enabled: true));
+
+        using var runStore = new DashboardRunStore(
+            CreateOptions($"Create-{Guid.NewGuid():N}", DashboardPersistenceMode.Resume),
+            logger,
+            TimeProvider.System);
+
+        var creationLog = Assert.Single(
+            testSink.Writes,
+            write => write.Message == $"Creating dashboard database at '{runStore.DatabasePath}'.");
+        Assert.Equal(LogLevel.Debug, creationLog.LogLevel);
+    }
+
+    [Fact]
+    public void ResumeMode_ReusesApplicationDatabaseWithoutRunSelection()
+    {
+        var options = CreateOptions("My Dashboard", DashboardPersistenceMode.Resume);
         string firstDatabasePath;
 
         using (var firstRunStore = CreateRunStore(options))
@@ -150,18 +215,24 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             new DashboardSqliteDatabase(firstDatabasePath).InitializeSchema();
         }
 
-        using var secondRunStore = CreateRunStore(options);
+        var testSink = new TestSink();
+        var logger = new TestLogger<DashboardRunStore>(new TestLoggerFactory(testSink, enabled: true));
+        using var secondRunStore = new DashboardRunStore(options, logger, TimeProvider.System);
 
         Assert.Equal(firstDatabasePath, secondRunStore.DatabasePath);
         Assert.False(secondRunStore.SupportsRunSelection);
         Assert.Collection(secondRunStore.GetRuns(), run => Assert.True(run.IsCurrent));
         Assert.True(DashboardSqliteDatabase.IsCompatible(secondRunStore.DatabasePath));
+        var resumeLog = Assert.Single(
+            testSink.Writes,
+            write => write.Message == $"Resuming dashboard database at '{secondRunStore.DatabasePath}'.");
+        Assert.Equal(LogLevel.Debug, resumeLog.LogLevel);
     }
 
     [Fact]
-    public void AppendMode_DeletesIncompatibleDatabase()
+    public void ResumeMode_DeletesIncompatibleDatabase()
     {
-        var options = CreateOptions(persistenceMode: DashboardPersistenceMode.Append);
+        var options = CreateOptions(persistenceMode: DashboardPersistenceMode.Resume);
         string databasePath;
 
         using (var firstRunStore = CreateRunStore(options))
@@ -174,10 +245,16 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             command.ExecuteNonQuery();
         }
 
-        using var secondRunStore = CreateRunStore(options);
+        var testSink = new TestSink();
+        var logger = new TestLogger<DashboardRunStore>(new TestLoggerFactory(testSink, enabled: true));
+        using var secondRunStore = new DashboardRunStore(options, logger, TimeProvider.System);
 
         Assert.Equal(databasePath, secondRunStore.DatabasePath);
         Assert.False(File.Exists(databasePath));
+        var incompatibleLog = Assert.Single(
+            testSink.Writes,
+            write => write.Message == $"Existing dashboard database at '{databasePath}' is incompatible with schema version {DashboardRunStore.SchemaVersion} and will be replaced.");
+        Assert.Equal(LogLevel.Information, incompatibleLog.LogLevel);
         new DashboardSqliteDatabase(databasePath).InitializeSchema();
         Assert.True(DashboardSqliteDatabase.IsCompatible(databasePath));
     }
@@ -289,7 +366,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void RunsMode_DeletesOldestRunWhenLimitIsExceeded()
+    public void RunMode_DeletesOldestRunWhenLimitIsExceeded()
     {
         var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
         var runsDirectory = Path.Combine(applicationDirectory, "runs");
@@ -313,7 +390,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void RunsMode_DoesNotDeleteActiveExpiredRun()
+    public void RunMode_DoesNotDeleteActiveExpiredRun()
     {
         var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
         var runsDirectory = Path.Combine(applicationDirectory, "runs");
@@ -392,7 +469,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void RunsMode_DeleteExpiredRunFails_LogsWarningAndContinues()
+    public void RunMode_DeleteExpiredRunFails_LogsWarningAndContinues()
     {
         var applicationDirectory = Path.Combine(_workspace.Path, DashboardRunStore.GetApplicationDirectoryName("TestApp"));
         var runsDirectory = Path.Combine(applicationDirectory, "runs");
@@ -609,9 +686,37 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Same(currentTelemetryRepository, dataSource.TelemetryRepository);
     }
 
+    [Fact]
+    public void UnavailableHistoricalRun_SelectsCurrentRun()
+    {
+        var options = CreateOptions();
+        string historicalRunId;
+
+        using (var historicalRunStore = CreateRunStore(options))
+        {
+            historicalRunId = historicalRunStore.RunId;
+        }
+
+        using var currentRunStore = CreateRunStore(options);
+        var runStore = new TestDashboardRunStore(currentRunStore.GetRuns(), tryAcquireRunLease: _ => null);
+        using var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
+        var repositoryFactory = CreateRepositoryFactory(options);
+        using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
+        using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
+        using var dataSource = new DashboardDataSource(runStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
+
+        dataSource.SelectRun(historicalRunId);
+
+        Assert.False(dataSource.IsReadOnly);
+        Assert.True(dataSource.SelectedRun.IsCurrent);
+        Assert.Equal(currentRunStore.RunId, dataSource.SelectedRun.RunId);
+        Assert.Same(currentResourceRepository, dataSource.ResourceRepository);
+        Assert.Same(currentTelemetryRepository, dataSource.TelemetryRepository);
+    }
+
     private IOptions<DashboardOptions> CreateOptions(
         string applicationName = "TestApp",
-        DashboardPersistenceMode persistenceMode = DashboardPersistenceMode.Runs)
+        DashboardPersistenceMode persistenceMode = DashboardPersistenceMode.Run)
     {
         return Options.Create(new DashboardOptions
         {

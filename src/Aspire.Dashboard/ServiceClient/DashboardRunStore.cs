@@ -5,6 +5,7 @@ using System.IO.Hashing;
 using System.Text;
 using System.Text.Json;
 using Aspire.Dashboard.Configuration;
+using Aspire.Shared;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -61,27 +62,42 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             case DashboardPersistenceMode.None:
                 _temporaryDirectory = Directory.CreateTempSubdirectory(TemporaryDirectoryPrefix).FullName;
                 RunDirectory = _temporaryDirectory;
+                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 _runLock = OpenRunLock(RunDirectory);
                 DeleteAbandonedTemporaryDirectories(deleteRunDirectory);
-                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 break;
-            case DashboardPersistenceMode.Runs:
+            case DashboardPersistenceMode.Run:
                 var applicationDirectory = GetApplicationDirectory(options.Value.Data.Directory, applicationName);
                 _runsDirectory = Path.Combine(applicationDirectory, "runs");
                 RunDirectory = Path.Combine(_runsDirectory, runId);
+                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 Directory.CreateDirectory(RunDirectory);
                 _runLock = OpenRunLock(RunDirectory);
-                DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 _metadataPath = Path.Combine(RunDirectory, "run.json");
                 break;
-            case DashboardPersistenceMode.Append:
+            case DashboardPersistenceMode.Resume:
+                // Resume mode uses a stable directory derived from the application name, so two dashboard instances
+                // with the same name can target the same database. Consider acquiring an exclusive process-lifetime
+                // lock here and failing the second instance at startup when it cannot acquire the lock.
                 RunDirectory = GetApplicationDirectory(options.Value.Data.Directory, applicationName);
-                Directory.CreateDirectory(RunDirectory);
                 DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
-                if (File.Exists(DatabasePath) && !DashboardSqliteDatabase.IsCompatible(DatabasePath))
+                Directory.CreateDirectory(RunDirectory);
+                if (!File.Exists(DatabasePath))
                 {
+                    _logger.LogDebug("Creating dashboard database at '{DatabasePath}'.", DatabasePath);
+                }
+                else if (!DashboardSqliteDatabase.IsCompatible(DatabasePath))
+                {
+                    _logger.LogInformation(
+                        "Existing dashboard database at '{DatabasePath}' is incompatible with schema version {SchemaVersion} and will be replaced.",
+                        DatabasePath,
+                        SchemaVersion);
                     ClearDatabasePool();
                     DeleteDatabaseFiles(DatabasePath);
+                }
+                else
+                {
+                    _logger.LogDebug("Resuming dashboard database at '{DatabasePath}'.", DatabasePath);
                 }
                 break;
             default:
@@ -103,6 +119,12 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         }
 
         _runs = new(LoadRuns);
+
+        _logger.LogDebug(
+            "Dashboard run store initialized with persistence mode '{PersistenceMode}'. Run directory: '{RunDirectory}'. Database path: '{DatabasePath}'.",
+            PersistenceMode,
+            RunDirectory,
+            DatabasePath);
     }
 
     private void DeleteAbandonedTemporaryDirectories(Action<string> deleteRunDirectory)
@@ -140,7 +162,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     public string DatabasePath { get; }
     public string RunId => _metadata.RunId;
     public DashboardPersistenceMode PersistenceMode { get; }
-    public bool SupportsRunSelection => PersistenceMode == DashboardPersistenceMode.Runs;
+    public bool SupportsRunSelection => PersistenceMode == DashboardPersistenceMode.Run;
 
     public IReadOnlyList<DashboardRunDescriptor> GetRuns() => _runs.Value;
 
@@ -157,41 +179,46 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             CreateDescriptor(_metadata, RunDirectory, isCurrent: true)
         };
 
-        if (!SupportsRunSelection || !Directory.Exists(_runsDirectory))
+        if (SupportsRunSelection && Directory.Exists(_runsDirectory))
         {
-            return runs.ToArray();
-        }
-
-        foreach (var directory in Directory.EnumerateDirectories(_runsDirectory))
-        {
-            if (string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase))
+            foreach (var directory in Directory.EnumerateDirectories(_runsDirectory))
             {
-                continue;
-            }
-
-            // Filter out in-progress runs that are owned by other Dashboard instances.
-            using var runLock = TryOpenRunLock(directory);
-            if (runLock is null)
-            {
-                continue;
-            }
-
-            var metadataPath = Path.Combine(directory, "run.json");
-            try
-            {
-                var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
-                if (metadata is { SchemaVersion: SchemaVersion })
+                if (string.Equals(directory, RunDirectory, StringComparison.OrdinalIgnoreCase))
                 {
-                    runs.Add(CreateDescriptor(metadata, directory, isCurrent: false));
+                    continue;
+                }
+
+                // Filter out in-progress runs that are owned by other Dashboard instances.
+                using var runLock = TryOpenRunLock(directory);
+                if (runLock is null)
+                {
+                    continue;
+                }
+
+                var metadataPath = Path.Combine(directory, "run.json");
+                try
+                {
+                    var metadata = JsonSerializer.Deserialize<DashboardRunMetadata>(File.ReadAllText(metadataPath));
+                    if (metadata is { SchemaVersion: SchemaVersion })
+                    {
+                        runs.Add(CreateDescriptor(metadata, directory, isCurrent: false));
+                    }
+                }
+                catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
+                {
+                    // Ignore incomplete or unreadable run metadata. A later dashboard process may still be writing it.
                 }
             }
-            catch (Exception exception) when (exception is IOException or UnauthorizedAccessException or JsonException)
-            {
-                // Ignore incomplete or unreadable run metadata. A later dashboard process may still be writing it.
-            }
         }
 
-        return runs.OrderByDescending(run => run.IsCurrent).ThenByDescending(run => run.StartedAtUtc).ToArray();
+        var orderedRuns = runs.OrderByDescending(run => run.IsCurrent).ThenByDescending(run => run.StartedAtUtc).ToArray();
+        _logger.LogDebug(
+            "Dashboard run discovery completed in directory '{RunsDirectory}'. Run count: {RunCount}. Run IDs: {RunIds}.",
+            _runsDirectory ?? RunDirectory,
+            orderedRuns.Length,
+            string.Join(", ", orderedRuns.Select(run => run.RunId)));
+
+        return orderedRuns;
     }
 
     public void Dispose()
@@ -307,11 +334,11 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             isCurrent);
     }
 
-    private static string GetApplicationDirectory(string? dataRoot, string applicationName)
+    internal static string GetApplicationDirectory(string? dataRoot, string applicationName)
     {
         if (string.IsNullOrWhiteSpace(dataRoot))
         {
-            dataRoot = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "Aspire", "Dashboard");
+            dataRoot = Path.Combine(AspireHomeDirectory.GetDefault(), "dashboard");
         }
 
         return Path.Combine(Path.GetFullPath(dataRoot), GetApplicationDirectoryName(applicationName));
