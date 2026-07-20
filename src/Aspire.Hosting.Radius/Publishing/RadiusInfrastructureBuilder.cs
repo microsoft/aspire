@@ -64,6 +64,10 @@ internal sealed class RadiusInfrastructureBuilder
     // which would emit duplicate `param` declarations (ASPIRERADIUS028). Keyed by Bicep identifier.
     private readonly Dictionary<string, string> _recipeParameterIdentifiers = new(StringComparer.Ordinal);
 
+    // Recipe parameters are user-supplied object graphs, so bound traversal to avoid
+    // unbounded recursion from accidental cycles or pathological nesting.
+    private const int MaxRecipeParameterNestingDepth = 32;
+
     /// <summary>
     /// Default recipe template paths per resource type.
     /// </summary>
@@ -1363,10 +1367,9 @@ internal sealed class RadiusInfrastructureBuilder
     /// </summary>
     private void ApplyRecipeParameters(BicepDictionary<object> target, IReadOnlyDictionary<string, object> parameters)
     {
-        var sink = (IDictionary<string, IBicepValue>)target;
         foreach (var (key, value) in parameters)
         {
-            sink[key] = ConvertRecipeParameterValue(value);
+            target[key] = ConvertRecipeParameterValue(value);
         }
     }
 
@@ -1375,19 +1378,109 @@ internal sealed class RadiusInfrastructureBuilder
     /// <see cref="ParameterResource"/> bindings (emitted as a Bicep <c>param</c> reference, never a
     /// resolved secret), provider-scope references, and literal/array/object values.
     /// </summary>
-    private IBicepValue ConvertRecipeParameterValue(object value)
+    private BicepValue<object> ConvertRecipeParameterValue(object? value) =>
+        ConvertRecipeParameterValue(value, new HashSet<object>(ReferenceEqualityComparer.Instance), depth: 0);
+
+    private BicepValue<object> ConvertRecipeParameterValue(object? value, HashSet<object> visited, int depth)
     {
+        if (depth > MaxRecipeParameterNestingDepth)
+        {
+            throw new NotSupportedException(
+                $"Recipe parameter values cannot be nested deeper than {MaxRecipeParameterNestingDepth} levels.");
+        }
+
         switch (value)
         {
+            case null:
+                return new BicepValue<object>(new NullLiteralExpression());
+            case BicepValue<object> bicepValue:
+                return bicepValue;
+            case IBicepValue alreadyBicep:
+                return new BicepValue<object>(alreadyBicep);
+            case BicepExpression expression:
+                return new BicepValue<object>(expression);
             case IResourceBuilder<ParameterResource> parameterBuilder:
                 return ParameterReference(GetOrAddRecipeParameter(parameterBuilder.Resource));
             case ParameterResource parameterResource:
                 return ParameterReference(GetOrAddRecipeParameter(parameterResource));
             case RadiusProviderReference providerReference:
-                return BicepPostProcessor.ToBicepValue(ResolveProviderReference(providerReference));
+                return ToRecipeBicepValue(ResolveProviderReference(providerReference));
+            case System.Collections.IDictionary dictionary:
+                return ConvertRecipeParameterObject(dictionary, visited, depth);
+            case string or int or long or bool or double or float or decimal:
+                return ToRecipeBicepValue(value);
+            case System.Collections.IEnumerable sequence:
+                return ConvertRecipeParameterArray(sequence, visited, depth);
             default:
-                return BicepPostProcessor.ToBicepValue(value);
+                return ToRecipeBicepValue(value);
         }
+    }
+
+    private BicepValue<object> ConvertRecipeParameterObject(
+        System.Collections.IDictionary dictionary,
+        HashSet<object> visited,
+        int depth)
+    {
+        if (!visited.Add(dictionary))
+        {
+            throw new NotSupportedException("Recipe parameter values cannot contain cycles.");
+        }
+
+        try
+        {
+            var result = new BicepDictionary<object>();
+            foreach (System.Collections.DictionaryEntry entry in dictionary)
+            {
+                if (entry.Key is not string key)
+                {
+                    throw new NotSupportedException(
+                        $"Recipe parameter object keys must be strings, but found '{entry.Key?.GetType().Name ?? "null"}'.");
+                }
+
+                result[key] = ConvertRecipeParameterValue(entry.Value, visited, depth + 1);
+            }
+
+            return new BicepValue<object>(result);
+        }
+        finally
+        {
+            visited.Remove(dictionary);
+        }
+    }
+
+    private BicepValue<object> ConvertRecipeParameterArray(
+        System.Collections.IEnumerable sequence,
+        HashSet<object> visited,
+        int depth)
+    {
+        if (!visited.Add(sequence))
+        {
+            throw new NotSupportedException("Recipe parameter values cannot contain cycles.");
+        }
+
+        try
+        {
+            var result = new BicepList<object>();
+            foreach (var element in sequence)
+            {
+                result.Add(ConvertRecipeParameterValue(element, visited, depth + 1));
+            }
+
+            return new BicepValue<object>(result);
+        }
+        finally
+        {
+            visited.Remove(sequence);
+        }
+    }
+
+    private static BicepValue<object> ToRecipeBicepValue(object value)
+    {
+        return BicepPostProcessor.ToBicepValue(value) switch
+        {
+            BicepValue<object> bicepValue => bicepValue,
+            var nestedValue => new BicepValue<object>(nestedValue)
+        };
     }
 
     /// <summary>
@@ -1592,15 +1685,6 @@ internal sealed class RadiusInfrastructureBuilder
                         ["key"] = consumer.Key!,
                     };
                     break;
-                case RadiusSecretStoreConsumerKind.GatewayTls:
-                    // Gateway TLS (tls.certificateFrom) is not yet supported (ASPIRERADIUS060): the
-                    // integration does not model Radius gateways yet, so there is no gateway resource
-                    // to attach the certificate reference to. Config-time validation rejects this
-                    // consumer before publish; throw defensively in case the gate is bypassed rather
-                    // than silently dropping the reference.
-                    throw new InvalidOperationException(
-                        $"Secret store '{consumer.Store.Name}' is referenced as a gateway TLS certificate " +
-                        $"for '{consumer.Selector}', which is not yet supported. Diagnostic: ASPIRERADIUS060.");
                 default:
                     throw new InvalidOperationException(
                         $"Unknown secret-store consumer kind '{consumer.Kind}' for store '{consumer.Store.Name}'.");
@@ -1741,6 +1825,7 @@ internal sealed class RadiusInfrastructureBuilder
             }
 
             var metadata = manifest.Metadata;
+            RadiusSecretStoreValidation.ValidateSealedSecretNamespace(store, metadata, manifest.SourcePath);
             return $"{metadata.Namespace}/{metadata.Name}";
         }
 

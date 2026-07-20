@@ -25,7 +25,7 @@ internal enum RadiusSecretStoreScope
 
 /// <summary>
 /// Represents a Radius <c>Applications.Core/secretStores@2023-10-01-preview</c> resource
-/// in the Aspire app model. Referenceable by consumers (recipe-config auth, gateway TLS)
+/// in the Aspire app model. Referenceable by consumers (recipe-config auth)
 /// via its fully-qualified UCP secret-store ID. Declared via
 /// <c>builder.AddRadiusSecretStore(...)</c> (application-scoped) or
 /// <c>radius.WithSecretStore(...)</c> (environment-scoped).
@@ -52,6 +52,8 @@ public sealed class RadiusSecretStoreResource : Resource
     /// <summary>
     /// The bounded time to wait for a sealed <c>Secret</c> to materialize in-cluster before
     /// <c>rad deploy</c>. Default 120s; overridable via <c>WithMaterializationTimeout</c>.
+    /// Bounds the whole apply&#8594;sync-poll&#8594;key-verify sequence (a single shared budget), so a
+    /// stalled <c>kubectl</c> apply or verify call is cancelled once it is exhausted.
     /// Used only by the sealed-secrets deploy path (see <see cref="MaterializationTimeoutWasSet"/>).
     /// </summary>
     public TimeSpan MaterializationTimeout { get; internal set; } = TimeSpan.FromSeconds(120);

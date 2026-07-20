@@ -118,12 +118,58 @@ public class SealedSecretApplyStepTests
     }
 
     [Fact]
+    public async Task WaitForSealedSecretSynced_TransientStatusProbeFailure_RetriesUntilSynced()
+    {
+        var statusProbeCalls = 0;
+
+        await SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+            "db-creds", "app", "db-creds", appliedGeneration: 4,
+            deadline: DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5),
+            timeout: TimeSpan.FromSeconds(5),
+            interval: TimeSpan.FromMilliseconds(1),
+            getStatus: ct => SealedSecretApplyStep.GetSealedSecretStatusAsync(
+                "app",
+                "db-creds",
+                "kind-radius",
+                ct,
+                (args, _) =>
+                {
+                    Assert.Equal(new[] { "get", "sealedsecret", "db-creds", "-n", "app", "-o", "json", "--context", "kind-radius" }, args);
+
+                    statusProbeCalls++;
+                    return statusProbeCalls == 1
+                        ? Task.FromResult((ExitCode: 1, StdOut: "", StdErr: "Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused"))
+                        : Task.FromResult((ExitCode: 0, StdOut: """
+                            {
+                              "metadata": {
+                                "generation": 4
+                              },
+                              "status": {
+                                "observedGeneration": 4,
+                                "conditions": [
+                                  {
+                                    "type": "Synced",
+                                    "status": "True"
+                                  }
+                                ]
+                              }
+                            }
+                            """, StdErr: ""));
+                }),
+            secretExists: _ => Task.FromResult(true),
+            cancellationToken: default);
+
+        Assert.Equal(2, statusProbeCalls);
+    }
+
+    [Fact]
     public async Task WaitForSealedSecretSynced_ReturnsOnceObservedGenerationMatchesSyncedTrueAndSecretExists()
     {
         var statusCalls = 0;
         var secretCalls = 0;
         await SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
             "db-creds", "app", "db-creds", appliedGeneration: 4,
+            deadline: DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5),
             timeout: TimeSpan.FromSeconds(5),
             interval: TimeSpan.FromMilliseconds(1),
             getStatus: _ =>
@@ -153,6 +199,7 @@ public class SealedSecretApplyStepTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
                 "db-creds", "app", "db-creds", appliedGeneration: 4,
+                deadline: DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5),
                 timeout: TimeSpan.FromSeconds(5),
                 interval: TimeSpan.FromMilliseconds(1),
                 getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(
@@ -172,6 +219,7 @@ public class SealedSecretApplyStepTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
                 "db-creds", "app", "db-creds", appliedGeneration: 4,
+                deadline: DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(10),
                 timeout: TimeSpan.FromMilliseconds(10),
                 interval: TimeSpan.FromMilliseconds(1),
                 getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(4, 3, [])),
@@ -185,18 +233,23 @@ public class SealedSecretApplyStepTests
     }
 
     [Fact]
-    public async Task WaitForSealedSecretSynced_FailsFastWhenGenerationAdvancesBeyondAppliedGeneration()
+    public async Task WaitForSealedSecretSynced_ConcurrentReapplyAdvancesGeneration_SyncsAgainstLiveGeneration()
     {
-        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
-            SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
-                "db-creds", "app", "db-creds", appliedGeneration: 4,
-                timeout: TimeSpan.FromSeconds(5),
-                interval: TimeSpan.FromMilliseconds(1),
-                getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(5, null, [])),
-                secretExists: _ => Task.FromResult(false),
-                cancellationToken: default));
-
-        Assert.Contains("concurrent modification", ex.Message);
+        // A sibling deploy that shares an application-scoped sealed store re-applies the same manifest
+        // and bumps generation to 5. That benign idempotent re-apply must not fail this wait: once the
+        // controller reports Synced=True for the live generation (5) and the Secret exists, the wait
+        // completes instead of throwing a "concurrent modification" failure.
+        await SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
+            "db-creds", "app", "db-creds", appliedGeneration: 4,
+            deadline: DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5),
+            timeout: TimeSpan.FromSeconds(5),
+            interval: TimeSpan.FromMilliseconds(1),
+            getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(
+                5,
+                5,
+                [new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null)])),
+            secretExists: _ => Task.FromResult(true),
+            cancellationToken: default);
     }
 
     [Fact]
@@ -213,6 +266,7 @@ public class SealedSecretApplyStepTests
                 // reports the Secret absent (so the loop keeps waiting past one iteration), then the
                 // second probe hangs until the remaining-budget guard cancels it and surfaces the
                 // ASPIRERADIUS058 timeout — guaranteeing at least two polls regardless of runner speed.
+                deadline: DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(250),
                 timeout: TimeSpan.FromMilliseconds(250),
                 interval: TimeSpan.FromMilliseconds(1),
                 getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(
@@ -243,6 +297,7 @@ public class SealedSecretApplyStepTests
         var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
             SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
                 "db-creds", "app", "db-creds", appliedGeneration: 4,
+                deadline: DateTimeOffset.UtcNow + TimeSpan.FromMilliseconds(50),
                 timeout: TimeSpan.FromMilliseconds(50),
                 interval: TimeSpan.FromMilliseconds(1),
                 getStatus: async ct =>
@@ -267,6 +322,7 @@ public class SealedSecretApplyStepTests
         await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
             SealedSecretApplyStep.WaitForSealedSecretSyncedAsync(
                 "db-creds", "app", "db-creds", appliedGeneration: 4,
+                deadline: DateTimeOffset.UtcNow + TimeSpan.FromSeconds(5),
                 timeout: TimeSpan.FromSeconds(5),
                 interval: TimeSpan.FromMilliseconds(1),
                 getStatus: _ => Task.FromResult(new SealedSecretApplyStep.SealedSecretStatusSnapshot(4, null, [])),
@@ -468,6 +524,104 @@ public class SealedSecretApplyStepTests
             appliedGeneration: 4);
 
         Assert.Equal(SealedSecretApplyStep.SealedSecretSyncDecisionKind.Synced, decision.Kind);
+    }
+
+    [Fact]
+    public void EvaluateSealedSecretSync_AdvancedGenerationSyncedTrue_ReturnsSynced()
+    {
+        // A concurrent identical re-apply advanced the live generation to 5 and the controller has
+        // observed and synced it; evaluating against the live generation yields Synced, not a failure.
+        var decision = SealedSecretApplyStep.EvaluateSealedSecretSync(
+            new SealedSecretApplyStep.SealedSecretStatusSnapshot(
+                5,
+                5,
+                [new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null)]),
+            appliedGeneration: 4);
+
+        Assert.Equal(SealedSecretApplyStep.SealedSecretSyncDecisionKind.Synced, decision.Kind);
+    }
+
+    [Fact]
+    public void EvaluateSealedSecretSync_AdvancedGenerationNotYetObserved_ReturnsWaiting()
+    {
+        // The live generation advanced to 5 but the controller has only observed generation 4, so the
+        // wait keeps polling until the latest generation is observed rather than declaring a failure.
+        var decision = SealedSecretApplyStep.EvaluateSealedSecretSync(
+            new SealedSecretApplyStep.SealedSecretStatusSnapshot(
+                5,
+                4,
+                [new SealedSecretApplyStep.SealedSecretCondition("Synced", "True", null)]),
+            appliedGeneration: 4);
+
+        Assert.Equal(SealedSecretApplyStep.SealedSecretSyncDecisionKind.Waiting, decision.Kind);
+    }
+
+    [Fact]
+    public void EvaluateSealedSecretSync_AdvancedGenerationSyncedFalse_ReturnsFailed()
+    {
+        var decision = SealedSecretApplyStep.EvaluateSealedSecretSync(
+            new SealedSecretApplyStep.SealedSecretStatusSnapshot(
+                5,
+                5,
+                [new SealedSecretApplyStep.SealedSecretCondition("Synced", "False", "no key could decrypt secret")]),
+            appliedGeneration: 4);
+
+        Assert.Equal(SealedSecretApplyStep.SealedSecretSyncDecisionKind.Failed, decision.Kind);
+    }
+
+    [Fact]
+    public async Task InvokeProbeWithRemainingBudget_HangingApply_CancelledWithin_ASPIRERADIUS066()
+    {
+        var stopwatch = System.Diagnostics.Stopwatch.StartNew();
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SealedSecretApplyStep.InvokeProbeWithRemainingBudgetAsync<int>(
+                async ct =>
+                {
+                    await Task.Delay(Timeout.Infinite, ct);
+                    return 0;
+                },
+                remaining: TimeSpan.FromMilliseconds(50),
+                cancellationToken: default,
+                createTimeoutException: () => SealedSecretApplyStep.CreateOperationTimeoutException(
+                    "db-creds", "app", "db-creds", "apply", TimeSpan.FromMilliseconds(50))));
+
+        stopwatch.Stop();
+        Assert.Contains("ASPIRERADIUS066", ex.Message);
+        Assert.Contains("apply", ex.Message);
+        Assert.True(stopwatch.Elapsed < TimeSpan.FromSeconds(5));
+    }
+
+    [Fact]
+    public async Task InvokeProbeWithRemainingBudget_CallerCancellation_SurfacesOperationCanceled()
+    {
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        // Caller cancellation must NOT be reported as a budget timeout (066); it surfaces as a plain
+        // OperationCanceledException so the pipeline can distinguish user cancellation from a hang.
+        await Assert.ThrowsAnyAsync<OperationCanceledException>(() =>
+            SealedSecretApplyStep.InvokeProbeWithRemainingBudgetAsync<int>(
+                async ct =>
+                {
+                    await Task.Delay(Timeout.Infinite, ct);
+                    return 0;
+                },
+                remaining: TimeSpan.FromSeconds(5),
+                cancellationToken: cts.Token,
+                createTimeoutException: () => SealedSecretApplyStep.CreateOperationTimeoutException(
+                    "db-creds", "app", "db-creds", "verify", TimeSpan.FromSeconds(5))));
+    }
+
+    [Fact]
+    public void CreateOperationTimeoutException_VerifyOperation_ContainsCodeOperationAndStore()
+    {
+        var ex = SealedSecretApplyStep.CreateOperationTimeoutException(
+            "db-creds", "app", "db-creds", "verify", TimeSpan.FromSeconds(30));
+
+        Assert.Contains("ASPIRERADIUS066", ex.Message);
+        Assert.Contains("verify", ex.Message);
+        Assert.Contains("db-creds", ex.Message);
+        Assert.Contains("app/db-creds", ex.Message);
     }
 
     [Fact]

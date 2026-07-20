@@ -17,7 +17,7 @@ namespace Aspire.Hosting.Radius.Annotations;
 /// </summary>
 internal sealed class RadiusSecretStoresAnnotation : IResourceAnnotation
 {
-    /// <summary>The consumer wirings (recipe-config auth / envSecrets / gateway TLS) referencing declared stores.</summary>
+    /// <summary>The consumer wirings (recipe-config auth / envSecrets) referencing declared stores.</summary>
     public List<RadiusSecretStoreConsumer> Consumers { get; } = [];
 
     /// <summary>

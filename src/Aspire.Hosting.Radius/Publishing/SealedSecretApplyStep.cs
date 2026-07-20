@@ -24,8 +24,10 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// <c>kubernetes.io/v1 Secret</c> before deploy. Scheduled after publish and before deploy,
 /// mirroring <see cref="RadCredentialRegisterStep"/>. A missing <c>kubectl</c> fails with
 /// <c>ASPIRERADIUS045</c>; an unresolvable kube-context fails with <c>ASPIRERADIUS059</c>;
-/// a never-synced <c>SealedSecret</c> fails with <c>ASPIRERADIUS058</c>
-/// (before <c>rad deploy</c>). No-op when no sealed store is declared (FR-008, FR-009, FR-010).
+/// a never-synced <c>SealedSecret</c> fails with <c>ASPIRERADIUS058</c>; a stalled
+/// <c>kubectl</c> apply/verify call that exhausts the materialization budget fails with
+/// <c>ASPIRERADIUS066</c> (before <c>rad deploy</c>). No-op when no sealed store is declared
+/// (FR-008, FR-009, FR-010).
 /// </summary>
 internal sealed class SealedSecretApplyStep
 {
@@ -100,6 +102,7 @@ internal sealed class SealedSecretApplyStep
         var manifestPath = ResolveManifestPath(storeOutputDir, store.Name, sourceManifestPath);
 
         var metadata = SealedSecretManifest.ReadMetadata(store.Name, manifestPath, defaultNamespace);
+        RadiusSecretStoreValidation.ValidateSealedSecretNamespace(store, metadata, manifestPath);
 
         // Pass -n only when the manifest omitted metadata.namespace: `kubectl apply -n X` fails when
         // the object already declares a different namespace, but when the manifest is namespace-less
@@ -107,11 +110,23 @@ internal sealed class SealedSecretApplyStep
         // checks the resolved namespace — so they must be pinned to the same value.
         var applyNamespace = metadata.NamespaceWasExplicit ? null : metadata.Namespace;
 
-        var appliedGeneration = await ApplyManifestAsync(manifestPath, applyNamespace, kubeContext, store.Name, metadata.Namespace, metadata.Name, logger, cancellationToken)
+        // One absolute deadline bounds the whole apply -> sync-poll -> key-verify sequence for this
+        // store, so a stalled `kubectl apply` or final key query can no longer hang indefinitely and
+        // the three phases share a single MaterializationTimeout budget instead of each getting a
+        // fresh one. The apply and verify kubectl calls are wrapped with the same remaining-budget
+        // helper the poll loop already uses, which cancels the linked token (killing the child
+        // process) when the budget is exhausted.
+        var deadline = DateTimeOffset.UtcNow + store.MaterializationTimeout;
+
+        var appliedGeneration = await InvokeProbeWithRemainingBudgetAsync(
+            ct => ApplyManifestAsync(manifestPath, applyNamespace, kubeContext, store.Name, metadata.Namespace, metadata.Name, logger, ct),
+            RemainingBudget(deadline),
+            cancellationToken,
+            () => CreateOperationTimeoutException(store.Name, metadata.Namespace, metadata.Name, "apply", store.MaterializationTimeout))
             .ConfigureAwait(false);
 
         await WaitForSealedSecretSyncedAsync(
-            store.Name, metadata.Namespace, metadata.Name, appliedGeneration, store.MaterializationTimeout, s_pollInterval,
+            store.Name, metadata.Namespace, metadata.Name, appliedGeneration, deadline, store.MaterializationTimeout, s_pollInterval,
             ct => GetSealedSecretStatusAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
             ct => SecretExistsAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
             cancellationToken).ConfigureAwait(false);
@@ -122,7 +137,11 @@ internal sealed class SealedSecretApplyStep
         // wiring reads, so verify each one is present in the materialized Secret before rad deploy.
         if (store.Population.Keys.Count > 0)
         {
-            var dataKeys = await GetSecretDataKeysAsync(metadata.Namespace, metadata.Name, kubeContext, cancellationToken)
+            var dataKeys = await InvokeProbeWithRemainingBudgetAsync(
+                ct => GetSecretDataKeysAsync(metadata.Namespace, metadata.Name, kubeContext, ct),
+                RemainingBudget(deadline),
+                cancellationToken,
+                () => CreateOperationTimeoutException(store.Name, metadata.Namespace, metadata.Name, "verify", store.MaterializationTimeout))
                 .ConfigureAwait(false);
             var missing = FindMissingDeclaredKeys(store.Population.Keys, dataKeys);
             if (missing.Count > 0)
@@ -163,7 +182,13 @@ internal sealed class SealedSecretApplyStep
         }
     }
 
-    /// <summary>Sealed secret stores scoped to this environment (environment-scoped owned here, plus application-scoped).</summary>
+    /// <summary>
+    /// Sealed secret stores this environment applies: environment-scoped stores it owns, plus every
+    /// application-scoped store. Application-scoped stores are intentionally applied by EVERY Radius
+    /// environment (rather than a single "owner") so a selective or reordered deploy of any single
+    /// environment still applies the store before its deploy. Concurrent identical re-apply is
+    /// tolerated by <see cref="EvaluateSealedSecretSync"/>.
+    /// </summary>
     private List<RadiusSecretStoreResource> GetSealedStores(DistributedApplicationModel model) =>
         model.Resources.OfType<RadiusSecretStoreResource>()
             .Where(s => s.Population.HasSealedSecret)
@@ -226,13 +251,13 @@ internal sealed class SealedSecretApplyStep
         string ns,
         string name,
         long appliedGeneration,
+        DateTimeOffset deadline,
         TimeSpan timeout,
         TimeSpan interval,
         Func<CancellationToken, Task<SealedSecretStatusSnapshot>> getStatus,
         Func<CancellationToken, Task<bool>> secretExists,
         CancellationToken cancellationToken)
     {
-        var deadline = DateTimeOffset.UtcNow + timeout;
         while (true)
         {
             var status = await InvokeProbeWithRemainingBudgetAsync(
@@ -278,7 +303,7 @@ internal sealed class SealedSecretApplyStep
         }
     }
 
-    private static async Task<T> InvokeProbeWithRemainingBudgetAsync<T>(
+    internal static async Task<T> InvokeProbeWithRemainingBudgetAsync<T>(
         Func<CancellationToken, Task<T>> probe,
         TimeSpan remaining,
         CancellationToken cancellationToken,
@@ -318,15 +343,42 @@ internal sealed class SealedSecretApplyStep
             "causes: the Sealed Secrets controller is not installed, the manifest was sealed for a " +
             "different namespace, or decryption failed. Diagnostic: ASPIRERADIUS058.");
 
+    // A stalled `kubectl apply` (operation "apply") or final `kubectl get secret -o json` key
+    // verification (operation "verify") that exhausts the store's materialization budget is NOT the
+    // Sealed Secrets controller failing to sync, so it gets its own code (066) rather than 058 —
+    // which would misattribute the hang to controller/decryption problems.
+    internal static InvalidOperationException CreateOperationTimeoutException(
+        string storeName,
+        string ns,
+        string name,
+        string operation,
+        TimeSpan timeout) =>
+        new(
+            $"The '{operation}' kubectl operation for sealed secret store '{storeName}' " +
+            $"(SealedSecret '{ns}/{name}') did not complete within the {timeout.TotalSeconds:0}s " +
+            "materialization budget and was cancelled. Ensure the cluster targeted by the active rad " +
+            "workspace is reachable and responsive, or raise the budget with WithMaterializationTimeout. " +
+            "Diagnostic: ASPIRERADIUS066.");
+
     internal static SealedSecretSyncDecision EvaluateSealedSecretSync(SealedSecretStatusSnapshot status, long appliedGeneration)
     {
-        if (status.Generation is not null && status.Generation.Value > appliedGeneration)
-        {
-            return SealedSecretSyncDecision.Failed(
-                $"the live SealedSecret generation advanced to {status.Generation} before generation {appliedGeneration} was observed, which indicates a concurrent modification");
-        }
+        // A sibling deploy (for example, a second Radius environment that shares an
+        // application-scoped sealed store) can apply the SAME manifest concurrently and bump
+        // metadata.generation after this step applied it. `kubectl apply` is idempotent, so that
+        // is a benign re-apply — NOT a corruption — and must not hard-fail this wait. We therefore
+        // evaluate sync against the latest live generation rather than only the one we applied.
+        // Correctness is still enforced: the controller must report Synced=True for the generation
+        // it has observed, and ApplyStoreAsync additionally verifies the Secret exists and carries
+        // every declared key before rad deploy. The residual tradeoff — a concurrent UNRELATED edit
+        // that still reports Synced=True and preserves the declared keys would be accepted — is
+        // acceptable because the store's namespace/name are deterministic and controlled by the
+        // emitted manifest, so the only realistic concurrent writer is another environment applying
+        // the identical manifest.
+        var targetGeneration = status.Generation is { } liveGeneration && liveGeneration > appliedGeneration
+            ? liveGeneration
+            : appliedGeneration;
 
-        if (status.ObservedGeneration == appliedGeneration)
+        if (status.ObservedGeneration == targetGeneration)
         {
             foreach (var condition in status.Conditions)
             {
@@ -433,12 +485,34 @@ internal sealed class SealedSecretApplyStep
 
     private static async Task<SealedSecretStatusSnapshot> GetSealedSecretStatusAsync(string ns, string name, string? kubeContext, CancellationToken cancellationToken)
     {
+        return await GetSealedSecretStatusAsync(
+            ns,
+            name,
+            kubeContext,
+            cancellationToken,
+            (args, ct) => RunKubectlAsync(args, logger: null, cancellationToken: ct, logStdout: false))
+            .ConfigureAwait(false);
+    }
+
+    internal static async Task<SealedSecretStatusSnapshot> GetSealedSecretStatusAsync(
+        string ns,
+        string name,
+        string? kubeContext,
+        CancellationToken cancellationToken,
+        Func<IReadOnlyList<string>, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>> runKubectl)
+    {
         var args = BuildGetSealedSecretArgs(ns, name, kubeContext);
-        var (exitCode, stdout, stderr) = await RunKubectlAsync(args, logger: null, cancellationToken, logStdout: false).ConfigureAwait(false);
+        var (exitCode, stdout, _) = await runKubectl(args, cancellationToken).ConfigureAwait(false);
         if (exitCode != 0)
         {
-            throw new InvalidOperationException(
-                $"Failed to query the SealedSecret '{ns}/{name}' with 'kubectl get sealedsecret': {stderr.Trim()}");
+            // During the bounded sync wait, `kubectl get sealedsecret` is a readiness probe, not the
+            // final deploy operation. Kubernetes can transiently return non-zero while the apiserver,
+            // CRD, cache, or target object is not yet observable; examples include:
+            //   Error from server (NotFound): sealedsecrets.bitnami.com "my-secret" not found
+            //   Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused
+            // Treat those probe failures like an empty status so the existing poll loop retries until
+            // the shared materialization deadline, which still surfaces ASPIRERADIUS058 on exhaustion.
+            return new SealedSecretStatusSnapshot(null, null, []);
         }
 
         return ParseSealedSecretStatus(stdout);

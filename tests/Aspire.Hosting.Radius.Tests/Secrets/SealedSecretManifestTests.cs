@@ -337,4 +337,162 @@ public class SealedSecretManifestTests : IDisposable
 
         Assert.Contains("ASPIRERADIUS044", ex.Message);
     }
+
+    [Fact]
+    public void ReadMetadata_PlaintextSecretInTopLevelLastAppliedAnnotation_Throws_ASPIRERADIUS063()
+    {
+        // `kubectl apply` stashes the full applied object under this annotation. It is NOT encrypted,
+        // so a plaintext Secret embedded here would be copied into artifacts and re-applied verbatim.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  namespace: app\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"db-creds\"},\"data\":{\"password\":\"c2VjcmV0\"}}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_PlaintextSecretInTemplateLastAppliedAnnotation_Throws_ASPIRERADIUS063()
+    {
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n" +
+            "  template:\n" +
+            "    metadata:\n" +
+            "      name: db-creds\n" +
+            "      annotations:\n" +
+            "        kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"Secret\",\"metadata\":{\"name\":\"db-creds\"},\"stringData\":{\"password\":\"secret\"}}'\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_MalformedLastAppliedAnnotation_FailsClosed_Throws_ASPIRERADIUS063()
+    {
+        // Present but unparseable content cannot be proven free of cleartext — fail closed.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: 'not-json{'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_NonScalarLastAppliedAnnotation_FailsClosed_Throws_ASPIRERADIUS063()
+    {
+        // A present annotation whose value is a YAML mapping (not the expected JSON string scalar)
+        // cannot be verified free of cleartext, so fail closed rather than skip it.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration:\n" +
+            "      kind: Secret\n" +
+            "      data:\n" +
+            "        password: c2VjcmV0\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_SecretWithNonObjectDataInAnnotation_FailsClosed_Throws_ASPIRERADIUS063()
+    {
+        // A `kind: Secret` whose `data` is a non-empty string (malformed but present) still carries
+        // potential cleartext and must fail closed.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"Secret\",\"metadata\":{\"name\":\"db-creds\"},\"data\":\"c2VjcmV0\"}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_SealedSecretInLastAppliedAnnotation_IsAllowed()
+    {
+        // An embedded *SealedSecret* carries no cleartext, so the annotation is fine.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  namespace: app\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"bitnami.com/v1alpha1\",\"kind\":\"SealedSecret\",\"metadata\":{\"name\":\"db-creds\"},\"spec\":{\"encryptedData\":{\"password\":\"AgBcipher\"}}}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
+
+        Assert.Equal("db-creds", metadata.Name);
+        Assert.Equal("app", metadata.Namespace);
+    }
+
+    [Fact]
+    public void ReadMetadata_EmptySecretInLastAppliedAnnotation_IsAllowed()
+    {
+        // A `kind: Secret` annotation with no data/stringData carries no cleartext, so it is not a leak.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  namespace: app\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"v1\",\"kind\":\"Secret\",\"metadata\":{\"name\":\"db-creds\"}}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
+
+        Assert.Equal("db-creds", metadata.Name);
+        Assert.Equal("app", metadata.Namespace);
+    }
 }

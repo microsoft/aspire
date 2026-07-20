@@ -97,9 +97,21 @@ public static class RadiusSecretStoreExtensions
         ArgumentNullException.ThrowIfNull(store);
         ArgumentNullException.ThrowIfNull(configure);
 
+        EnsureNotAlreadyPopulated(store.Resource);
+
+        // Build into a scratch population so a throwing callback leaves the store unpopulated:
+        // assignment is transactional, so a corrected retry is not wrongly blocked by the
+        // ASPIRERADIUS065 "already populated" guard.
+        var scratch = new RadiusSecretStorePopulation();
+        configure(new RadiusSecretStoreDataBuilder(scratch));
+
         var population = store.Resource.Population;
         population.HasInlineData = true;
-        configure(new RadiusSecretStoreDataBuilder(population));
+        foreach (var (key, binding) in scratch.Data)
+        {
+            population.Data[key] = binding;
+        }
+
         return store;
     }
 
@@ -122,10 +134,13 @@ public static class RadiusSecretStoreExtensions
         ArgumentNullException.ThrowIfNull(store);
         ArgumentException.ThrowIfNullOrWhiteSpace(namespaceAndName);
 
+        var validatedKeys = ValidateKeys(keys);
+        EnsureNotAlreadyPopulated(store.Resource);
+
         var population = store.Resource.Population;
         population.HasExistingSecret = true;
         population.ResourceReference = namespaceAndName;
-        AddKeys(population, keys);
+        population.Keys.AddRange(validatedKeys);
         return store;
     }
 
@@ -149,16 +164,22 @@ public static class RadiusSecretStoreExtensions
         ArgumentNullException.ThrowIfNull(store);
         ArgumentException.ThrowIfNullOrWhiteSpace(manifestPath);
 
+        var validatedKeys = ValidateKeys(keys);
+        EnsureNotAlreadyPopulated(store.Resource);
+
         var population = store.Resource.Population;
         population.HasSealedSecret = true;
         population.SealedManifestPath = manifestPath;
-        AddKeys(population, keys);
+        population.Keys.AddRange(validatedKeys);
         return store;
     }
 
     /// <summary>
     /// Overrides the per-store timeout for awaiting a <b>sealed</b> <c>Secret</c> to materialize
-    /// in-cluster before <c>rad deploy</c> (default 120 seconds).
+    /// in-cluster before <c>rad deploy</c> (default 120 seconds). The timeout bounds the whole
+    /// apply&#8594;sync-poll&#8594;key-verify sequence as a single shared budget, so a stalled
+    /// <c>kubectl apply</c> or verify call is cancelled with <c>ASPIRERADIUS066</c> once it is
+    /// exhausted.
     /// <para>
     /// This only affects the sealed-secret deploy path (<c>WithSealedSecret</c>). Calling it on a
     /// store that is not populated with <c>WithSealedSecret</c> is rejected by the validation gate
@@ -186,13 +207,31 @@ public static class RadiusSecretStoreExtensions
         return store;
     }
 
-    private static void AddKeys(RadiusSecretStorePopulation population, string[] keys)
+    // Validates every key without mutating the store's population, so a later invalid key cannot
+    // leave the population partially assigned (which would then trip the ASPIRERADIUS065 guard on a
+    // corrected retry). Returns the validated keys for the caller to commit atomically.
+    private static List<string> ValidateKeys(string[] keys)
     {
         ArgumentNullException.ThrowIfNull(keys);
         foreach (var key in keys)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(key, nameof(keys));
-            population.Keys.Add(key);
+        }
+
+        return [.. keys];
+    }
+
+    // A secret store must declare exactly one population mode. Reject a second population call
+    // (repeated same-mode or cross-mode) at the call site so misuse fails immediately with a clear
+    // stack trace, rather than silently appending keys across modes/manifests or reaching the gate.
+    [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    private static void EnsureNotAlreadyPopulated(RadiusSecretStoreResource store)
+    {
+        if (store.Population.IsPopulated)
+        {
+            throw new InvalidOperationException(
+                $"Secret store '{store.Name}' already declares a population mode; declare exactly one of " +
+                "WithData, WithExistingSecret, or WithSealedSecret, once. Diagnostic: ASPIRERADIUS065.");
         }
     }
 

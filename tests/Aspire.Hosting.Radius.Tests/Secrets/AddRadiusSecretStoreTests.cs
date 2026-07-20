@@ -113,6 +113,55 @@ public class AddRadiusSecretStoreTests
     }
 
     [Fact]
+    public void RepeatedSameModePopulation_ThrowsAtCallSite_ASPIRERADIUS065()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+            .WithExistingSecret("app/s", "k1");
+
+        // Calling the same population mode a second time previously silently appended keys; it now
+        // fails fast because a store must declare exactly one population mode, once.
+        var ex = Assert.Throws<InvalidOperationException>(() => store.WithExistingSecret("app/s", "k2"));
+        Assert.Contains("ASPIRERADIUS065", ex.Message);
+    }
+
+    [Fact]
+    public void CrossModePopulation_ThrowsAtCallSite_ASPIRERADIUS065()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var pass = builder.AddParameter("p", secret: true);
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+            .WithData(d => d.Add("k", pass));
+
+        var ex = Assert.Throws<InvalidOperationException>(() => store.WithExistingSecret("app/s", "k"));
+        Assert.Contains("ASPIRERADIUS065", ex.Message);
+    }
+
+    [Fact]
+    public void MultipleKeysInSingleCall_IsAllowed()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+            .WithExistingSecret("app/s", "k1", "k2", "k3");
+
+        Assert.Equal(["k1", "k2", "k3"], store.Resource.Population.Keys);
+    }
+
+    [Fact]
+    public void InvalidKeyInFirstCall_DoesNotPoisonCorrectedRetry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic);
+
+        // A first call that throws on an invalid key must not leave the population partially
+        // assigned; otherwise the corrected retry would wrongly trip the single-population guard.
+        Assert.Throws<ArgumentException>(() => store.WithExistingSecret("app/s", "ok", "  "));
+
+        store.WithExistingSecret("app/s", "ok");
+        Assert.Equal(["ok"], store.Resource.Population.Keys);
+    }
+
+    [Fact]
     public void AddRadiusSecretStore_IsGatedByExperimentalDiagnostic()
     {
         var method = typeof(RadiusSecretStoreExtensions)

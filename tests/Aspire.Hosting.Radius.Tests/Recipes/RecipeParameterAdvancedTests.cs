@@ -39,6 +39,43 @@ public class RecipeParameterAdvancedTests
         Assert.Contains("apiKey: recipeSecret", bicep);
     }
 
+    [Fact]
+    public void NestedParameterBoundValues_EmitParamReferencesAndPreserveLiteralShape()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var secret = builder.AddParameter("recipeSecret", "TopSecretValue", secret: true);
+        builder.AddRadiusEnvironment("myenv")
+            .WithRecipeParameters(p =>
+            {
+                p["settings"] = new Dictionary<string, object?>
+                {
+                    ["connection"] = new Dictionary<string, object?>
+                    {
+                        ["apiKey"] = secret,
+                        ["enabled"] = true,
+                        ["nullable"] = null,
+                    },
+                    ["items"] = new object?[] { "literal", secret, 7 },
+                };
+            });
+        builder.AddRedis("cache");
+
+        using var app = builder.Build();
+        var bicep = Publish(app);
+
+        Assert.DoesNotContain("TopSecretValue", bicep);
+        Assert.Contains("param recipeSecret string", bicep);
+        Assert.Contains("@secure()", bicep);
+        Assert.Contains("connection: {", bicep);
+        Assert.Contains("apiKey: recipeSecret", bicep);
+        Assert.Contains("enabled: true", bicep);
+        Assert.Contains("nullable: null", bicep);
+        Assert.Contains("items: [", bicep);
+        Assert.Contains("'literal'", bicep);
+        Assert.Contains("7", bicep);
+        Assert.True(bicep.Split("recipeSecret").Length - 1 >= 3);
+    }
+
     // T014 — resource-type scoping: scoped params only on that type; env-wide on all; type wins.
     [Fact]
     public void ResourceTypeScoped_OnlyOnThatType_UnionWithEnvWide_TypeWins()
@@ -89,6 +126,31 @@ public class RecipeParameterAdvancedTests
         var bicep = Publish(app);
 
         Assert.Contains("region: 'us-west-2'", bicep);
+    }
+
+    [Fact]
+    public void NestedProviderReferences_ResolveConfiguredScopeValuesAndPreserveLiteralShape()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv")
+            .WithAwsProvider("123456789012", "us-west-2", aws => aws.WithIrsa("arn:aws:iam::123456789012:role/radius"))
+            .WithRecipeParameters(p =>
+            {
+                p["scope"] = new Dictionary<string, object?>
+                {
+                    ["region"] = RadiusProviderReference.AwsRegion,
+                    ["items"] = new object?[] { RadiusProviderReference.AwsAccountId, "literal", false },
+                };
+            });
+        builder.AddRedis("cache");
+
+        using var app = builder.Build();
+        var bicep = Publish(app);
+
+        Assert.Contains("region: 'us-west-2'", bicep);
+        Assert.Contains("'123456789012'", bicep);
+        Assert.Contains("'literal'", bicep);
+        Assert.Contains("false", bicep);
     }
 
     // T026 — provider reference to an unconfigured provider fails at publish.

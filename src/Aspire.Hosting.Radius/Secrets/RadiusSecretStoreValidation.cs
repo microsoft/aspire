@@ -42,8 +42,9 @@ internal static class RadiusSecretStoreValidation
     /// exactly one (<c>ASPIRERADIUS041</c>), an inline key binds a non-secret parameter
     /// (<c>ASPIRERADIUS042</c>), a duplicate key is declared (<c>ASPIRERADIUS043</c>), an
     /// invalid encoding is set for the type (<c>ASPIRERADIUS047</c>), two stores share a
-    /// name within the same scope (<c>ASPIRERADIUS048</c>), or a non-sealed store sets
-    /// <c>WithMaterializationTimeout</c> (<c>ASPIRERADIUS062</c>).
+    /// Bicep identifier within the same emitted scope (<c>ASPIRERADIUS048</c>), an
+    /// application-scoped existing store uses a namespace-less reference (<c>ASPIRERADIUS055</c>),
+    /// or a non-sealed store sets <c>WithMaterializationTimeout</c> (<c>ASPIRERADIUS062</c>).
     /// </exception>
     internal static void Validate(DistributedApplicationModel model)
     {
@@ -144,8 +145,8 @@ internal static class RadiusSecretStoreValidation
         // ASPIRERADIUS055 — an application-scoped existing-secret store has no single owning environment,
         // so a bare '<name>' reference has no deterministic namespace to default to (it would otherwise
         // fall back to whichever environment happens to build the store). Require a fully-qualified
-        // '<namespace>/<name>' reference. Sealed stores are exempt: their namespace comes from the
-        // manifest metadata, not the reference.
+        // '<namespace>/<name>' reference. Sealed stores are checked after their manifest metadata is read
+        // because only then can we tell whether metadata.namespace was explicit or defaulted.
         if (store.Scope == RadiusSecretStoreScope.Application &&
             population.HasExistingSecret &&
             population.ResourceReference is { } reference &&
@@ -165,8 +166,8 @@ internal static class RadiusSecretStoreValidation
     /// <exception cref="InvalidOperationException">
     /// A consumer kind is incompatible with the store type (<c>ASPIRERADIUS051</c>), an
     /// <c>envSecrets</c> consumer references a key the store does not declare
-    /// (<c>ASPIRERADIUS052</c>), or a gateway TLS certificate is referenced
-    /// (<c>ASPIRERADIUS060</c>, not yet supported).
+    /// (<c>ASPIRERADIUS052</c>), or a key-specific <c>envSecrets</c> consumer references a store
+    /// that declares no keys (<c>ASPIRERADIUS064</c>).
     /// </exception>
     private static void ValidateConsumers(DistributedApplicationModel model)
     {
@@ -189,18 +190,6 @@ internal static class RadiusSecretStoreValidation
     {
         var store = consumer.Store;
 
-        // ASPIRERADIUS060 — gateway TLS (tls.certificateFrom) is not yet supported: the integration
-        // does not model Radius gateways yet, so there is no gateway resource to attach a certificate
-        // reference to. Reject at the gate so callers get an explicit failure rather than a silent
-        // no-op at emission.
-        if (consumer.Kind == RadiusSecretStoreConsumerKind.GatewayTls)
-        {
-            throw new InvalidOperationException(
-                $"Secret store '{store.Name}' is referenced as a gateway TLS certificate for '{consumer.Selector}', " +
-                "which is not yet supported (Radius gateways are not modeled yet). Remove the WithTlsCertificate call. " +
-                "Diagnostic: ASPIRERADIUS060.");
-        }
-
         // ASPIRERADIUS051 — the consumer kind must be compatible with the store type. Bicep-registry and
         // Terraform-git-PAT auth reference a basicAuthentication (username/password) store; envSecrets
         // can source from any type, so it is unconstrained.
@@ -219,16 +208,29 @@ internal static class RadiusSecretStoreValidation
                 "Diagnostic: ASPIRERADIUS051.");
         }
 
-        // ASPIRERADIUS052 — an envSecrets consumer must reference a key the store declares. Only enforce
-        // when the store declares an explicit key set (inline data, or an existing/sealed key list); a
-        // sealed/existing store with no declared keys materializes them out-of-band, so we cannot check.
+        // ASPIRERADIUS052 / ASPIRERADIUS064 — a key-specific envSecrets consumer must reference a key the
+        // store exposes. Emission only exposes explicitly declared keys, so:
+        //   * a keyless store (no inline data and no existing/sealed key list) cannot satisfy a
+        //     key-specific reference — the emitted envSecrets entry would dangle (ASPIRERADIUS064);
+        //   * a store with a non-empty declared set must contain the referenced key (ASPIRERADIUS052).
+        // A store with no declared keys that is referenced WITHOUT a specific key is left alone: such a
+        // sealed/existing store materializes its keys out-of-band and is intentionally unchecked.
         if (consumer.Kind == RadiusSecretStoreConsumerKind.EnvSecret && consumer.Key is { } key)
         {
             var declaredKeys = store.Population.HasInlineData
                 ? store.Population.Data.Keys.ToList()
                 : store.Population.Keys;
 
-            if (declaredKeys.Count > 0 && !declaredKeys.Contains(key, StringComparer.Ordinal))
+            if (declaredKeys.Count == 0)
+            {
+                throw new InvalidOperationException(
+                    $"Secret store '{store.Name}' declares no keys, but the recipe environment secret " +
+                    $"'{consumer.Selector}' references the key '{key}'. A key-specific envSecrets consumer requires " +
+                    "the store to declare that key (via WithData, or WithExistingSecret/WithSealedSecret with keys). " +
+                    "Diagnostic: ASPIRERADIUS064.");
+            }
+
+            if (!declaredKeys.Contains(key, StringComparer.Ordinal))
             {
                 throw new InvalidOperationException(
                     $"Secret store '{store.Name}' does not declare the key '{key}' referenced by the recipe " +
@@ -242,34 +244,85 @@ internal static class RadiusSecretStoreValidation
     {
         RadiusSecretStoreConsumerKind.BicepRegistryAuth => "Bicep registry authentication",
         RadiusSecretStoreConsumerKind.TerraformGitPat => "Terraform Git PAT authentication",
-        RadiusSecretStoreConsumerKind.GatewayTls => "gateway TLS",
         RadiusSecretStoreConsumerKind.EnvSecret => "recipe environment secret",
         _ => kind.ToString(),
     };
+
+    /// <summary>Validates that an application-scoped sealed store has deterministic manifest namespace metadata.</summary>
+    /// <exception cref="InvalidOperationException">
+    /// The store is application-scoped and its sealed manifest omitted <c>metadata.namespace</c> (<c>ASPIRERADIUS055</c>).
+    /// </exception>
+    internal static void ValidateSealedSecretNamespace(
+        RadiusSecretStoreResource store,
+        SealedSecretManifest.Metadata metadata,
+        string manifestPath)
+    {
+        if (store.Scope == RadiusSecretStoreScope.Application &&
+            store.Population.HasSealedSecret &&
+            !metadata.NamespaceWasExplicit)
+        {
+            throw new InvalidOperationException(
+                $"Application-scoped secret store '{store.Name}' references the SealedSecret manifest at " +
+                $"'{manifestPath}' without metadata.namespace. Application-scoped stores have no owning " +
+                "environment to default the namespace from; set metadata.namespace in the manifest. " +
+                "Diagnostic: ASPIRERADIUS055.");
+        }
+    }
 
     private static void ValidateNoDuplicateNames(IReadOnlyList<RadiusSecretStoreResource> stores)
     {
         // Aspire already enforces unique resource names, so exact-name collisions cannot occur.
         // Two distinct store names can still sanitize to the same Bicep identifier (e.g. 'db-creds'
         // and 'db.creds' both become 'db_creds'), which would emit duplicate resource symbols.
-        // Detect that within a scope (mirrors ASPIRERADIUS028 for recipe parameters).
-        var seen = new Dictionary<string, RadiusSecretStoreResource>(StringComparer.Ordinal);
+        // Application-scoped stores are emitted into every environment's app.bicep, so they must
+        // also be checked against every environment-scoped identifier, not just other app stores.
+        var appScoped = new Dictionary<string, RadiusSecretStoreResource>(StringComparer.Ordinal);
+        var envScoped = new Dictionary<(string? EnvironmentName, string Identifier), RadiusSecretStoreResource>();
+
         foreach (var store in stores)
         {
             var identifier = BicepPostProcessor.SanitizeIdentifier(store.Name);
-            var scopeKey = store.Scope == RadiusSecretStoreScope.Environment
-                ? $"env:{store.OwningEnvironment?.Name}:{identifier}"
-                : $"app:{identifier}";
 
-            if (seen.TryGetValue(scopeKey, out var existing))
+            if (store.Scope == RadiusSecretStoreScope.Application)
             {
-                throw new InvalidOperationException(
-                    $"Secret stores '{existing.Name}' and '{store.Name}' map to the same Bicep identifier " +
-                    $"'{identifier}' within the same scope. Rename one so they produce distinct identifiers. " +
-                    "Diagnostic: ASPIRERADIUS048.");
+                if (appScoped.TryGetValue(identifier, out var appCollision))
+                {
+                    ThrowDuplicateName(appCollision, store, identifier);
+                }
+
+                var envCollision = envScoped.FirstOrDefault(kvp => string.Equals(kvp.Key.Identifier, identifier, StringComparison.Ordinal));
+                if (envCollision.Value is not null)
+                {
+                    ThrowDuplicateName(envCollision.Value, store, identifier);
+                }
+
+                appScoped[identifier] = store;
+                continue;
             }
 
-            seen[scopeKey] = store;
+            var envKey = (store.OwningEnvironment?.Name, identifier);
+            if (envScoped.TryGetValue(envKey, out var sameEnvironmentCollision))
+            {
+                ThrowDuplicateName(sameEnvironmentCollision, store, identifier);
+            }
+
+            if (appScoped.TryGetValue(identifier, out var applicationCollision))
+            {
+                ThrowDuplicateName(applicationCollision, store, identifier);
+            }
+
+            envScoped[envKey] = store;
         }
+    }
+
+    private static void ThrowDuplicateName(
+        RadiusSecretStoreResource existing,
+        RadiusSecretStoreResource store,
+        string identifier)
+    {
+        throw new InvalidOperationException(
+            $"Secret stores '{existing.Name}' and '{store.Name}' map to the same Bicep identifier " +
+            $"'{identifier}' within the same emitted scope. Rename one so they produce distinct identifiers. " +
+            "Diagnostic: ASPIRERADIUS048.");
     }
 }

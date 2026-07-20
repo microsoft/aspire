@@ -16,9 +16,6 @@ internal enum RadiusSecretStoreConsumerKind
 
     /// <summary><c>recipeConfig.envSecrets['&lt;VAR&gt;'] = { source: &lt;storeId&gt;, key: &lt;k&gt; }</c>.</summary>
     EnvSecret,
-
-    /// <summary>Gateway <c>tls.certificateFrom</c>.</summary>
-    GatewayTls,
 }
 
 /// <summary>

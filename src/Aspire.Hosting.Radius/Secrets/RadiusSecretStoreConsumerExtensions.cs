@@ -13,8 +13,8 @@ namespace Aspire.Hosting;
 
 /// <summary>
 /// Fluent entry points for consuming a declared Radius secret store from its documented Radius
-/// consumers (environment <c>recipeConfig</c> authentication / <c>envSecrets</c>, and gateway
-/// TLS). Each reference is emitted by the store's fully-qualified UCP secret-store ID
+/// consumers (environment <c>recipeConfig</c> authentication / <c>envSecrets</c>). Each reference
+/// is emitted by the store's fully-qualified UCP secret-store ID
 /// (<c>/planes/radius/local/resourceGroups/&lt;group&gt;/providers/Applications.Core/secretStores/&lt;name&gt;</c>).
 /// All surface is experimental and gated by <c>ASPIRERADIUS006</c>.
 /// </summary>
@@ -63,55 +63,6 @@ public static class RadiusSecretStoreConsumerExtensions
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         return AddConsumer(radius, RadiusSecretStoreConsumerKind.EnvSecret, variableName, store, key);
-    }
-
-    /// <summary>
-    /// Records a <c>certificate</c> store as gateway TLS (<c>tls.certificateFrom</c>).
-    /// <para>
-    /// This consumer is <b>not yet supported</b>: the integration does not model Radius gateways yet,
-    /// so no <c>tls.certificateFrom</c> is emitted. The reference is recorded and rejected at the
-    /// publish/deploy validation gate with <c>ASPIRERADIUS060</c> so callers get an explicit failure
-    /// rather than a silent no-op. The receiver is left open (<typeparamref name="T"/>) because there
-    /// is no gateway resource type to constrain to yet; the wiring is recorded on the store's owning
-    /// environment so it can be emitted once gateways are modeled. See the README "Known limitations".
-    /// </para>
-    /// </summary>
-    /// <typeparam name="T">The gateway resource type. Unconstrained because gateways are not modeled yet.</typeparam>
-    /// <param name="gateway">The resource acting as the gateway.</param>
-    /// <param name="store">The <c>certificate</c> secret store supplying the TLS certificate.</param>
-    /// <returns>The same builder for chaining.</returns>
-    /// <exception cref="InvalidOperationException">
-    /// <paramref name="store"/> is application-scoped, so it has no owning environment to record the
-    /// reference against (<c>ASPIRERADIUS054</c>). Declare the certificate store on an environment
-    /// (<c>WithSecretStore</c>) to use it for gateway TLS.
-    /// </exception>
-    [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
-    [AspireExportIgnore(Reason = "Experimental Radius secret-store consumer surface; there is no polyglot ATS equivalent yet.")]
-    public static IResourceBuilder<T> WithTlsCertificate<T>(
-        this IResourceBuilder<T> gateway,
-        IResourceBuilder<RadiusSecretStoreResource> store)
-        where T : IResource
-    {
-        ArgumentNullException.ThrowIfNull(gateway);
-        ArgumentNullException.ThrowIfNull(store);
-
-        // Gateway TLS references are recorded on the store's owning environment (that is where
-        // recipeConfig-adjacent wiring lives). An application-scoped store has no single owning
-        // environment, so there is nowhere deterministic to record the reference — fail loudly
-        // instead of silently dropping it (which previously happened).
-        if (store.Resource.OwningEnvironment is not { } environment)
-        {
-            throw new InvalidOperationException(
-                $"Secret store '{store.Resource.Name}' is application-scoped and cannot be used for gateway TLS, " +
-                "which requires an environment-scoped certificate store. Declare it with WithSecretStore on an " +
-                "environment. Diagnostic: ASPIRERADIUS054.");
-        }
-
-        RadiusSecretStoresAnnotation.GetOrAdd(environment).Consumers.Add(
-            new RadiusSecretStoreConsumer(
-                RadiusSecretStoreConsumerKind.GatewayTls, store.Resource, gateway.Resource.Name, Key: null));
-
-        return gateway;
     }
 
     private static IResourceBuilder<RadiusEnvironmentResource> AddConsumer(

@@ -48,6 +48,14 @@ internal sealed class RadiusSecretStorePopulation
     public int DeclaredModeCount =>
         (HasInlineData ? 1 : 0) + (HasExistingSecret ? 1 : 0) + (HasSealedSecret ? 1 : 0);
 
+    /// <summary>
+    /// <see langword="true"/> once any population mode has been declared. Used to reject a
+    /// <b>second</b> population call (<c>ASPIRERADIUS065</c>): because each mode sets its own flag,
+    /// this catches both a repeated same-mode call and a cross-mode call, neither of which
+    /// <see cref="DeclaredModeCount"/> alone can distinguish from a single legitimate call.
+    /// </summary>
+    public bool IsPopulated => HasInlineData || HasExistingSecret || HasSealedSecret;
+
     /// <summary><see langword="true"/> when the store references a cluster <c>Secret</c> (existing or sealed).</summary>
     public bool IsSecretReference => HasExistingSecret || HasSealedSecret;
 }

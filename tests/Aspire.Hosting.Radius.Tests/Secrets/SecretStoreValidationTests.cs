@@ -5,14 +5,30 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Radius.Secrets;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Radius.Tests.Secrets;
 
-public class SecretStoreValidationTests
+public class SecretStoreValidationTests : IDisposable
 {
+    private readonly string _sealedManifestDirectory = Path.Combine(
+        AppContext.BaseDirectory,
+        "radius-secret-store-validation-tests",
+        Guid.NewGuid().ToString("N"));
+
+    public SecretStoreValidationTests() => Directory.CreateDirectory(_sealedManifestDirectory);
+
+    public void Dispose()
+    {
+        if (Directory.Exists(_sealedManifestDirectory))
+        {
+            Directory.Delete(_sealedManifestDirectory, recursive: true);
+        }
+    }
+
     private static void WithModel(
         Action<IDistributedApplicationBuilder> configure,
         Action<DistributedApplicationModel> assert)
@@ -28,6 +44,34 @@ public class SecretStoreValidationTests
     {
         var ex = Assert.Throws<InvalidOperationException>(() => RadiusSecretStoreValidation.Validate(model));
         return ex.Message;
+    }
+
+    private static void BuildOptions(DistributedApplicationModel model)
+    {
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+    }
+
+    private string WriteSealedSecretManifest(string? namespaceName)
+    {
+        var path = Path.Combine(_sealedManifestDirectory, $"{Guid.NewGuid():N}.sealed.yaml");
+        var namespaceYaml = namespaceName is null
+            ? string.Empty
+            : $"  namespace: {namespaceName}\n";
+
+        File.WriteAllText(
+            path,
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            namespaceYaml +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        return path;
     }
 
     [Fact]
@@ -69,18 +113,18 @@ public class SecretStoreValidationTests
     }
 
     [Fact]
-    public void BothPopulationModes_Throw_ASPIRERADIUS041()
+    public void BothPopulationModes_Throw_ASPIRERADIUS065()
     {
-        WithModel(
-            b =>
-            {
-                var p = b.AddParameter("p", secret: true);
-                b.AddRadiusEnvironment("radius");
-                b.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
-                    .WithData(d => d.Add("k", p))
-                    .WithExistingSecret("app/s", "k");
-            },
-            m => Assert.Contains("ASPIRERADIUS041", Validate(m)));
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var p = builder.AddParameter("p", secret: true);
+        builder.AddRadiusEnvironment("radius");
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+            .WithData(d => d.Add("k", p));
+
+        // A second population call (cross-mode here) is now rejected at the call site with 065,
+        // before the validation gate runs, so misuse fails immediately with a clear stack trace.
+        var ex = Assert.Throws<InvalidOperationException>(() => store.WithExistingSecret("app/s", "k"));
+        Assert.Contains("ASPIRERADIUS065", ex.Message);
     }
 
     [Fact]
@@ -191,22 +235,34 @@ public class SecretStoreValidationTests
     }
 
     [Fact]
-    public void GatewayTlsConsumer_Throws_ASPIRERADIUS060()
+    public void KeylessStoreWithKeySpecificEnvSecret_Throws_ASPIRERADIUS064()
     {
         WithModel(
             b =>
             {
                 var env = b.AddRadiusEnvironment("radius");
-                var gateway = b.AddContainer("gw", "img", "latest");
-                env.WithSecretStore("tls", RadiusSecretStoreType.Certificate, store =>
-                {
-                    var crt = b.AddParameter("crt", secret: true);
-                    var key = b.AddParameter("key", secret: true);
-                    store.WithData(d => { d.Add("tls.crt", crt); d.Add("tls.key", key); });
-                    gateway.WithTlsCertificate(store);
-                });
+                // Keyless existing store: WithExistingSecret with no key list declares no keys, so a
+                // key-specific envSecrets consumer against it would emit a dangling reference.
+                var store = b.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+                    .WithExistingSecret("prod/my-secret");
+                env.WithRecipeEnvironmentSecret("DB_PASSWORD", store, "password");
             },
-            m => Assert.Contains("ASPIRERADIUS060", Validate(m)));
+            m => Assert.Contains("ASPIRERADIUS064", Validate(m)));
+    }
+
+    [Fact]
+    public void KeylessStoreWithoutKeySpecificConsumer_IsAllowed()
+    {
+        WithModel(
+            b =>
+            {
+                b.AddRadiusEnvironment("radius");
+                // A keyless existing store that no key-specific envSecrets consumer references
+                // materializes its keys out-of-band and is intentionally left unchecked.
+                b.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+                    .WithExistingSecret("prod/my-secret");
+            },
+            RadiusSecretStoreValidation.Validate); // no throw
     }
 
     [Fact]
@@ -225,6 +281,56 @@ public class SecretStoreValidationTests
     }
 
     [Fact]
+    public void ApplicationScopedSealedSecretWithoutExplicitNamespace_Throws_ASPIRERADIUS055()
+    {
+        var manifestPath = WriteSealedSecretManifest(namespaceName: null);
+
+        WithModel(
+            b =>
+            {
+                b.AddRadiusEnvironment("radius");
+                b.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+                    .WithSealedSecret(manifestPath, "password");
+            },
+            m =>
+            {
+                var ex = Assert.Throws<InvalidOperationException>(() => BuildOptions(m));
+                Assert.Contains("ASPIRERADIUS055", ex.Message);
+                Assert.Contains("metadata.namespace", ex.Message);
+            });
+    }
+
+    [Fact]
+    public void ApplicationScopedSealedSecretWithExplicitNamespace_IsAllowed()
+    {
+        var manifestPath = WriteSealedSecretManifest("prod");
+
+        WithModel(
+            b =>
+            {
+                b.AddRadiusEnvironment("radius");
+                b.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+                    .WithSealedSecret(manifestPath, "password");
+            },
+            BuildOptions);
+    }
+
+    [Fact]
+    public void EnvironmentScopedSealedSecretWithoutExplicitNamespace_IsAllowed()
+    {
+        var manifestPath = WriteSealedSecretManifest(namespaceName: null);
+
+        WithModel(
+            b =>
+            {
+                var env = b.AddRadiusEnvironment("radius");
+                env.WithSecretStore("s", RadiusSecretStoreType.Generic, s =>
+                    s.WithSealedSecret(manifestPath, "password"));
+            },
+            BuildOptions);
+    }
+
+    [Fact]
     public void ApplicationScopedQualifiedExistingSecretReference_IsAllowed()
     {
         WithModel(
@@ -235,5 +341,41 @@ public class SecretStoreValidationTests
                     .WithExistingSecret("prod/my-secret", "k");
             },
             RadiusSecretStoreValidation.Validate); // no throw
+    }
+
+    [Fact]
+    public void ApplicationScopedStoreCollidesWithEnvironmentScopedIdentifier_Throws_ASPIRERADIUS048()
+    {
+        WithModel(
+            b =>
+            {
+                var env = b.AddRadiusEnvironment("env1");
+                env.WithSecretStore("radius", RadiusSecretStoreType.Generic, s =>
+                    s.WithExistingSecret("db-creds", "password"));
+                b.AddRadiusSecretStore("radiusenv", RadiusSecretStoreType.Generic)
+                    .WithExistingSecret("prod/db-creds", "password");
+            },
+            m =>
+            {
+                var message = Validate(m);
+                Assert.Contains("ASPIRERADIUS048", message);
+                Assert.EndsWith("Diagnostic: ASPIRERADIUS048.", message);
+            });
+    }
+
+    [Fact]
+    public void EnvironmentScopedStoresInDifferentEnvironmentsMayShareIdentifier()
+    {
+        WithModel(
+            b =>
+            {
+                var dev = b.AddRadiusEnvironment("dev");
+                var prod = b.AddRadiusEnvironment("prod");
+                dev.WithSecretStore("radius", RadiusSecretStoreType.Generic, s =>
+                    s.WithExistingSecret("db-creds", "password"));
+                prod.WithSecretStore("radiusenv", RadiusSecretStoreType.Generic, s =>
+                    s.WithExistingSecret("db-creds", "password"));
+            },
+            RadiusSecretStoreValidation.Validate);
     }
 }
