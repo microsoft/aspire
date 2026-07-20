@@ -154,6 +154,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Silently ignore and allow anti-forgery to automatically create a new valid cookie.
         builder.Logging.AddFilter("Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery", LogLevel.None);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
+        builder.Logging.AddFilter("Microsoft.Extensions.Localization", LogLevel.Information);
         builder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.None);
 #else
 
@@ -167,6 +168,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Logging.AddFilter("Aspire.Dashboard.Authentication", LogLevel.Information);
         builder.Logging.AddFilter("Aspire.Dashboard.Otlp", LogLevel.Information);
         builder.Logging.AddFilter("Microsoft", LogLevel.Information);
+        builder.Logging.AddFilter("Microsoft.Extensions.Localization", LogLevel.Information);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Cors", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Routing.EndpointMiddleware", LogLevel.Warning);

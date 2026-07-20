@@ -54,7 +54,7 @@ public sealed class DashboardOptionsTests
             {
                 [DashboardConfigNames.DashboardApplicationName.EnvVarName] = "My Dashboard",
                 [DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] = "/data/.aspire/dashboard",
-                [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = "append"
+                [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = "resume"
             })
             .Build();
         var options = new DashboardOptions
@@ -67,7 +67,7 @@ public sealed class DashboardOptionsTests
 
         Assert.Equal("My Dashboard", options.ApplicationName);
         Assert.Equal("/data/.aspire/dashboard", options.Data.Directory);
-        Assert.Equal(DashboardPersistenceMode.Append, options.Data.PersistenceMode);
+        Assert.Equal(DashboardPersistenceMode.Resume, options.Data.PersistenceMode);
     }
 
     [Fact]
@@ -86,7 +86,7 @@ public sealed class DashboardOptionsTests
 
         Assert.False(result.Succeeded);
         Assert.Equal(
-            "Failed to parse dashboard persistence mode 'invalid'. Possible values: None, Runs, Append.",
+            "Failed to parse dashboard persistence mode 'invalid'. Possible values: None, Run, Resume.",
             result.FailureMessage);
     }
 
