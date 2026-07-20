@@ -586,7 +586,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 /* Enterprise badge - makes a non-github.com account obvious */
 .ent-badge {
   display: inline-flex; align-items: center; gap: 4px; font-size: 10.5px; font-weight: 700; letter-spacing: .02em;
-  color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);
+  color: color-mix(in srgb, var(--blue), var(--fg) 25%); background: color-mix(in srgb, var(--blue) 14%, transparent);
   border: 1px solid color-mix(in srgb, var(--blue) 34%, transparent); border-radius: 999px; padding: 1px 8px 1px 6px; white-space: nowrap;
 }
 .ent-badge svg { width: 11px; height: 11px; }

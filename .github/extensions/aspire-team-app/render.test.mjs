@@ -4,13 +4,14 @@ import test from "node:test";
 
 import { APP_JS, STYLES } from "./render.mjs";
 
-test("renderer neutral palette follows canvas theme tokens with light fallbacks", () => {
+test("renderer theme styles follow canvas tokens with accessible light fallbacks", () => {
   assert.match(STYLES, /--bg: var\(--background-color-default, #ffffff\)/);
   assert.match(STYLES, /--fg: var\(--text-color-default, #1f2328\)/);
   assert.match(STYLES, /--surface: color-mix\(in srgb, var\(--bg\), var\(--fg\) 5%\)/);
   assert.match(STYLES, /data-color-mode="light".*color-scheme: light/);
   assert.match(STYLES, /data-color-mode="dark".*color-scheme: dark/);
   assert.match(STYLES, /color: color-mix\(in srgb, var\(--pill-tone\), var\(--fg\) 25%\)/);
+  assert.match(STYLES, /\.ent-badge \{[\s\S]*?color: color-mix\(in srgb, var\(--blue\), var\(--fg\) 25%\)/);
   assert.doesNotMatch(STYLES, /var\(--n-/);
 });
 
