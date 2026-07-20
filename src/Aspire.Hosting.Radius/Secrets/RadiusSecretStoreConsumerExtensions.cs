@@ -33,10 +33,10 @@ public static class RadiusSecretStoreConsumerExtensions
         IResourceBuilder<RadiusSecretStoreResource> store)
         => AddConsumer(radius, RadiusSecretStoreConsumerKind.BicepRegistryAuth, registryHost, store, key: null);
 
-    /// <summary>Uses a <c>basicAuthentication</c> store as a Terraform Git PAT in <c>recipeConfig</c>.</summary>
+    /// <summary>Uses a store exposing a <c>pat</c> key (optionally <c>username</c>) as a Terraform Git PAT in <c>recipeConfig</c>.</summary>
     /// <param name="radius">The Radius environment builder.</param>
     /// <param name="gitHost">The Git host the PAT authenticates against (e.g. <c>github.com</c>).</param>
-    /// <param name="store">The <c>basicAuthentication</c> secret store supplying the Git PAT.</param>
+    /// <param name="store">The secret store supplying the Git PAT; it must declare a <c>pat</c> key (typically a <c>generic</c> store).</param>
     /// <returns>The same environment builder for chaining.</returns>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Experimental Radius secret-store consumer surface; there is no polyglot ATS equivalent yet.")]

@@ -82,8 +82,9 @@ internal static class RadiusSecretStoreValidation
             ? population.Data.Keys.ToList()
             : population.Keys;
 
-        // ASPIRERADIUS043 — duplicate keys (only possible for the existing/sealed key list;
-        // inline keys are a dictionary and cannot collide).
+        // ASPIRERADIUS043 — duplicate keys. Inline keys are rejected as they are added (the data
+        // dictionary rejects a duplicate via RadiusSecretStoreDataBuilder.Add), so only the
+        // existing/sealed key list needs a duplicate scan here.
         if (population.IsSecretReference)
         {
             var seen = new HashSet<string>(StringComparer.Ordinal);
@@ -190,22 +191,39 @@ internal static class RadiusSecretStoreValidation
     {
         var store = consumer.Store;
 
-        // ASPIRERADIUS051 — the consumer kind must be compatible with the store type. Bicep-registry and
-        // Terraform-git-PAT auth reference a basicAuthentication (username/password) store; envSecrets
-        // can source from any type, so it is unconstrained.
-        var requiredType = consumer.Kind switch
-        {
-            RadiusSecretStoreConsumerKind.BicepRegistryAuth => (RadiusSecretStoreType?)RadiusSecretStoreType.BasicAuthentication,
-            RadiusSecretStoreConsumerKind.TerraformGitPat => RadiusSecretStoreType.BasicAuthentication,
-            _ => null,
-        };
-
-        if (requiredType is { } expected && store.Type != expected)
+        // ASPIRERADIUS051 — a Bicep private-registry auth consumer references a basicAuthentication
+        // (username/password) store, matching the OCI registry credential shape. envSecrets can source
+        // from any type, so it is unconstrained here (its per-key check is below).
+        if (consumer.Kind == RadiusSecretStoreConsumerKind.BicepRegistryAuth &&
+            store.Type != RadiusSecretStoreType.BasicAuthentication)
         {
             throw new InvalidOperationException(
                 $"Secret store '{store.Name}' of type '{store.Type.ToRadiusTypeString()}' is referenced as a " +
-                $"{DescribeKind(consumer.Kind)} consumer, which requires a '{expected.ToRadiusTypeString()}' store. " +
+                $"{DescribeKind(consumer.Kind)} consumer, which requires a '{RadiusSecretStoreType.BasicAuthentication.ToRadiusTypeString()}' store. " +
                 "Diagnostic: ASPIRERADIUS051.");
+        }
+
+        // ASPIRERADIUS051 — a Terraform Git PAT consumer references a store that must expose a 'pat' key
+        // (optionally with 'username'); this is the shape Radius reads for
+        // recipeConfig.terraform.authentication.git.pat, and it is typically a 'generic' store — NOT a
+        // basicAuthentication (username/password) store, whose 'password' key Radius never consumes here.
+        // See https://docs.radapp.io/guides/recipes/terraform/howto-private-registry/. Only enforce when
+        // the store declares its keys inline/explicitly; an existing/sealed store that materializes keys
+        // out-of-band is left unchecked (consistent with the envSecrets keyless handling below).
+        if (consumer.Kind == RadiusSecretStoreConsumerKind.TerraformGitPat)
+        {
+            var declaredKeys = store.Population.HasInlineData
+                ? store.Population.Data.Keys.ToList()
+                : store.Population.Keys;
+
+            if (declaredKeys.Count > 0 && !declaredKeys.Contains("pat", StringComparer.Ordinal))
+            {
+                throw new InvalidOperationException(
+                    $"Secret store '{store.Name}' is referenced as a {DescribeKind(consumer.Kind)} consumer but does not " +
+                    "declare the required 'pat' key (optionally with 'username'). Use a store that exposes a 'pat' key " +
+                    $"(typically a '{RadiusSecretStoreType.Generic.ToRadiusTypeString()}' store). Declared keys: " +
+                    $"{string.Join(", ", declaredKeys)}. Diagnostic: ASPIRERADIUS051.");
+            }
         }
 
         // ASPIRERADIUS052 / ASPIRERADIUS064 — a key-specific envSecrets consumer must reference a key the

@@ -146,6 +146,47 @@ public class AddRadiusSecretStoreTests
     }
 
     [Fact]
+    public void DuplicateInlineDataKey_ThrowsAtCallSite_ASPIRERADIUS043()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var pass = builder.AddParameter("db-pass", secret: true);
+        var store = builder.AddRadiusSecretStore("db-creds", RadiusSecretStoreType.Generic);
+
+        // A duplicate inline key must be rejected rather than silently overwriting the earlier binding.
+        var ex = Assert.Throws<InvalidOperationException>(() =>
+            store.WithData(d => { d.Add("password", pass); d.Add("password", pass); }));
+        Assert.Contains("ASPIRERADIUS043", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("/secret")]
+    [InlineData("app/")]
+    [InlineData("a/b/c")]
+    [InlineData("App_Creds")]
+    [InlineData("UPPER")]
+    [InlineData("APP/db-creds")]
+    public void InvalidExistingSecretReference_ThrowsAtCallSite(string reference)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("tls", RadiusSecretStoreType.Generic);
+
+        Assert.Throws<ArgumentException>(() => store.WithExistingSecret(reference, "k"));
+    }
+
+    [Theory]
+    [InlineData("db-creds")]
+    [InlineData("app/db-creds")]
+    [InlineData("app/db.creds")]
+    public void ValidExistingSecretReference_IsAccepted(string reference)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("tls", RadiusSecretStoreType.Generic)
+            .WithExistingSecret(reference, "k");
+
+        Assert.Equal(reference, store.Resource.Population.ResourceReference);
+    }
+
+    [Fact]
     public void EmptyExistingSecretKey_ThrowsAtCallSite()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);

@@ -204,6 +204,40 @@ public class SecretStoreValidationTests : IDisposable
     }
 
     [Fact]
+    public void TerraformGitPatStoreMissingPatKey_Throws_ASPIRERADIUS051()
+    {
+        WithModel(
+            b =>
+            {
+                var env = b.AddRadiusEnvironment("radius");
+                var user = b.AddParameter("u", secret: true);
+                var pass = b.AddParameter("p", secret: true);
+                // A basicAuthentication (username/password) store has no 'pat' key, so Radius cannot
+                // obtain a PAT for Terraform Git auth.
+                var store = b.AddRadiusSecretStore("git-creds", RadiusSecretStoreType.BasicAuthentication)
+                    .WithData(d => { d.Add("username", user); d.Add("password", pass); });
+                env.WithTerraformGitAuthentication("github.com", store);
+            },
+            m => Assert.Contains("ASPIRERADIUS051", Validate(m)));
+    }
+
+    [Fact]
+    public void TerraformGitPatStoreWithPatKey_IsValid()
+    {
+        WithModel(
+            b =>
+            {
+                var env = b.AddRadiusEnvironment("radius");
+                var user = b.AddParameter("u", secret: true);
+                var pat = b.AddParameter("pat", secret: true);
+                var store = b.AddRadiusSecretStore("git-creds", RadiusSecretStoreType.Generic)
+                    .WithData(d => { d.Add("username", user); d.Add("pat", pat); });
+                env.WithTerraformGitAuthentication("github.com", store);
+            },
+                RadiusSecretStoreValidation.Validate);
+    }
+
+    [Fact]
     public void EnvSecretReferencesUndeclaredKey_Throws_ASPIRERADIUS052()
     {
         WithModel(

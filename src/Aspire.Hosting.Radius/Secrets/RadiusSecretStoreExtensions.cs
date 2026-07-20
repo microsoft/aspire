@@ -167,7 +167,7 @@ public static class RadiusSecretStoreExtensions
 
         var population = store.Resource.Population;
         population.HasExistingSecret = true;
-        population.ResourceReference = namespaceAndName;
+        population.ResourceReference = ValidateSecretReference(namespaceAndName);
         population.Keys.AddRange(validatedKeys);
         return store;
     }
@@ -252,6 +252,90 @@ public static class RadiusSecretStoreExtensions
         return [.. keys];
     }
 
+    // Validates that an existing-secret reference is either a bare Kubernetes object name or exactly
+    // one '<namespace>/<name>' pair, and that each segment is a valid Kubernetes name. Radius's
+    // Kubernetes secret-store parser rejects anything else at deploy time, so validating at the API
+    // boundary keeps the failure fast and local. Accepted:  'db-creds', 'app/db-creds'. Rejected:
+    // '/secret' (empty namespace), 'namespace/' (empty name), 'a/b/c' (more than one separator), and
+    // names that are not DNS-1123-conformant (e.g. 'App_Creds', 'UPPER').
+    private static string ValidateSecretReference(string namespaceAndName)
+    {
+        var separatorCount = namespaceAndName.Count(c => c == '/');
+        if (separatorCount > 1)
+        {
+            throw new ArgumentException(
+                $"Existing-secret reference '{namespaceAndName}' is invalid. Use a bare '<name>' or a single " +
+                "'<namespace>/<name>' pair. Diagnostic: ASPIRERADIUS046.",
+                nameof(namespaceAndName));
+        }
+
+        string? ns = null;
+        string name;
+        if (separatorCount == 1)
+        {
+            var slash = namespaceAndName.IndexOf('/', StringComparison.Ordinal);
+            ns = namespaceAndName[..slash];
+            name = namespaceAndName[(slash + 1)..];
+        }
+        else
+        {
+            name = namespaceAndName;
+        }
+
+        // The Secret name is a DNS-1123 subdomain; the namespace (when present) is a DNS-1123 label.
+        // https://kubernetes.io/docs/concepts/overview/working-with-objects/names/
+        if (!IsDns1123Subdomain(name) || (ns is not null && !IsDns1123Label(ns)))
+        {
+            throw new ArgumentException(
+                $"Existing-secret reference '{namespaceAndName}' is invalid. The name must be a DNS-1123 subdomain and " +
+                "the optional namespace a DNS-1123 label (lowercase alphanumeric, '-', with '.' allowed in the name). " +
+                "Diagnostic: ASPIRERADIUS046.",
+                nameof(namespaceAndName));
+        }
+
+        return namespaceAndName;
+    }
+
+    // DNS-1123 label: 1-63 chars, lowercase alphanumeric or '-', must start and end alphanumeric.
+    private static bool IsDns1123Label(string value)
+    {
+        if (value.Length is 0 or > 63)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < value.Length; i++)
+        {
+            var c = value[i];
+            var isEdge = i == 0 || i == value.Length - 1;
+            if (!(c is (>= 'a' and <= 'z') or (>= '0' and <= '9') || (!isEdge && c == '-')))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    // DNS-1123 subdomain: 1-253 chars, a dot-separated series of DNS-1123 labels.
+    private static bool IsDns1123Subdomain(string value)
+    {
+        if (value.Length is 0 or > 253)
+        {
+            return false;
+        }
+
+        foreach (var label in value.Split('.'))
+        {
+            if (!IsDns1123Label(label))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
     // A secret store must declare exactly one population mode. Reject a second population call
     // (repeated same-mode or cross-mode) at the call site so misuse fails immediately with a clear
     // stack trace, rather than silently appending keys across modes/manifests or reaching the gate.
@@ -302,6 +386,7 @@ public sealed class RadiusSecretStoreDataBuilder
     /// <param name="encoding">Optional per-key encoding (defaults to the store type's default).</param>
     /// <returns>The same data builder for chaining.</returns>
     /// <exception cref="ArgumentException">The key is empty/whitespace.</exception>
+    /// <exception cref="InvalidOperationException">The key was already declared (<c>ASPIRERADIUS043</c>).</exception>
     public RadiusSecretStoreDataBuilder Add(
         string key,
         IResourceBuilder<ParameterResource> parameter,
@@ -310,7 +395,16 @@ public sealed class RadiusSecretStoreDataBuilder
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentNullException.ThrowIfNull(parameter);
 
-        _population.Data[key] = new RadiusSecretKeyBinding(parameter.Resource, encoding?.ToRadiusEncodingString());
+        // Reject a duplicate inline key rather than silently overwriting the earlier binding via the
+        // dictionary indexer: a silent overwrite would hide a duplicate declaration from the
+        // ASPIRERADIUS043 gate and could bind the store to the wrong parameter. This mirrors the
+        // duplicate-key rejection applied to the existing/sealed key list.
+        if (!_population.Data.TryAdd(key, new RadiusSecretKeyBinding(parameter.Resource, encoding?.ToRadiusEncodingString())))
+        {
+            throw new InvalidOperationException(
+                $"Secret-store data key '{key}' is declared more than once. Diagnostic: ASPIRERADIUS043.");
+        }
+
         return this;
     }
 }
