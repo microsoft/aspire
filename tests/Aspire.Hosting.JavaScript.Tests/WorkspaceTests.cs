@@ -48,6 +48,65 @@ public class WorkspaceTests
     }
 
     [Fact]
+    public async Task VerifyPnpmWorkspaceDockerfileWhenPublishedAsPackageScript()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var root = Path.Combine(tempDir.Path, "ws");
+        Directory.CreateDirectory(root);
+        // pnpm 10 is pinned and injectWorkspacePackages is set, so the member is published via
+        // `pnpm deploy` into a self-contained directory (the validator requires the inject flag on pnpm 10).
+        File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root", "packageManager": "pnpm@10.32.1" }""");
+        File.WriteAllText(Path.Combine(root, "pnpm-workspace.yaml"), "packages:\n  - \"packages/*\"\n\ninjectWorkspacePackages: true\n");
+        File.WriteAllText(Path.Combine(root, "pnpm-lock.yaml"), string.Empty);
+
+        var apiDir = Path.Combine(root, "packages", "api");
+        Directory.CreateDirectory(apiDir);
+        File.WriteAllText(Path.Combine(apiDir, "package.json"), """{ "name": "api", "scripts": { "build": "tsc", "start": "node dist/index.js" } }""");
+
+        var workspace = builder.AddPnpmWorkspace("ws", root);
+        // The build stage builds the member (and its workspace deps) then `pnpm deploy`s it to /deploy;
+        // the runtime stage copies only /deploy and runs the member's script unfiltered from that root.
+        var apiApp = workspace.AddJavaScriptApp("api", "api", "packages/api")
+            .WithBuildScript("build")
+            .PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(apiApp.Resource, tempDir.Path);
+
+        var dockerfile = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "api.Dockerfile"));
+
+        await Verify(dockerfile);
+    }
+
+    [Fact]
+    public async Task PnpmWorkspacePackageScriptThrowsWhenInjectWorkspacePackagesMissingOnPnpm10()
+    {
+        using var tempDir = new TestTempDirectory();
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var root = Path.Combine(tempDir.Path, "ws");
+        Directory.CreateDirectory(root);
+        // pnpm 10 pinned but injectWorkspacePackages is NOT set: `pnpm deploy` would fail in the container,
+        // so the workspace validator must reject the configuration up front.
+        File.WriteAllText(Path.Combine(root, "package.json"), """{ "name": "root", "packageManager": "pnpm@10.32.1" }""");
+        File.WriteAllText(Path.Combine(root, "pnpm-workspace.yaml"), "packages:\n  - \"packages/*\"\n");
+        File.WriteAllText(Path.Combine(root, "pnpm-lock.yaml"), string.Empty);
+
+        var apiDir = Path.Combine(root, "packages", "api");
+        Directory.CreateDirectory(apiDir);
+        File.WriteAllText(Path.Combine(apiDir, "package.json"), """{ "name": "api", "scripts": { "build": "tsc", "start": "node dist/index.js" } }""");
+
+        var workspace = builder.AddPnpmWorkspace("ws", root);
+        var apiApp = workspace.AddJavaScriptApp("api", "api", "packages/api")
+            .WithBuildScript("build")
+            .PublishAsPackageScript("start");
+
+        var ex = await Assert.ThrowsAsync<DistributedApplicationException>(() => ManifestUtils.GetManifest(apiApp.Resource, tempDir.Path));
+        Assert.Contains("injectWorkspacePackages", ex.Message, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task VerifyPnpmWorkspaceDockerfileBuildsDependenciesWithoutForwardingBuildArgs()
     {
         using var tempDir = new TestTempDirectory();
@@ -644,6 +703,23 @@ public class WorkspaceTests
         Assert.Null(new NpmWorkspaceResource("test", "/tmp").GetBuildDependenciesCommand("my-app", "build"));
         Assert.Null(new YarnWorkspaceResource("test", "/tmp").GetBuildDependenciesCommand("my-app", "build"));
         Assert.Null(new BunWorkspaceResource("test", "/tmp").GetBuildDependenciesCommand("my-app", "build"));
+    }
+
+    [Fact]
+    public void PnpmWorkspaceGetDeployCommandPrunesMemberToTargetDirectory()
+    {
+        var workspace = new PnpmWorkspaceResource("test", "/tmp");
+        Assert.Equal(["pnpm", "--filter", "my-app", "deploy", "--prod", "/deploy"], workspace.GetDeployCommand("my-app", "/deploy"));
+    }
+
+    [Fact]
+    public void GetDeployCommandReturnsNullWhenPackageManagerHasNoSelfContainedDeploy()
+    {
+        // Only pnpm has a self-contained "deploy" command. npm/yarn/bun opt out (null) so the
+        // PackageScript generator falls back to the prod-deps overlay shape for them.
+        Assert.Null(new NpmWorkspaceResource("test", "/tmp").GetDeployCommand("my-app", "/deploy"));
+        Assert.Null(new YarnWorkspaceResource("test", "/tmp").GetDeployCommand("my-app", "/deploy"));
+        Assert.Null(new BunWorkspaceResource("test", "/tmp").GetDeployCommand("my-app", "/deploy"));
     }
 
     [Fact]

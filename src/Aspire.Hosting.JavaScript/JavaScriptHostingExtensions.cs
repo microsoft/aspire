@@ -40,6 +40,9 @@ public static partial class JavaScriptHostingExtensions
     private const string DefaultNpmRegistry = "https://registry.npmjs.org/";
     private const string DefaultPnpmVersion = "10.30.1";
     private const string DefaultJavaScriptRunScriptName = "dev";
+    // Target for `pnpm deploy` in PackageScript publish mode. Outside /app (the workspace root in the
+    // build stage) so the runtime stage can COPY just this self-contained directory.
+    private const string PackageScriptDeployPath = "/deploy";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
     // Help links surfaced when a required command is missing, mapped to a command by ResolveHelpLink.
@@ -1910,110 +1913,147 @@ public static partial class JavaScriptHostingExtensions
                             case JavaScriptPublishMode.PackageScript:
                                 {
                                     var runtimeImage = GetPackageScriptRuntimeImage(appDirectory, dockerfileContext.Services, baseImageAnnotation, packageManager, baseImage, workspaceRoot);
-                                    var runCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
-                                        ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}"
-                                        : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName} {publishMode.RunScriptArguments}";
 
-                                if (packageManager.ExecutableName == "deno")
-                                {
-                                    var usesDefaultDenoRuntimeImage = string.Equals(runtimeImage, DefaultDenoImage, StringComparison.Ordinal);
-                                    var denoRuntimeStage = dockerfileContext.Builder
-                                        .From(runtimeImage, "runtime")
+                                    // A workspace member on a package manager with a self-contained deploy (pnpm)
+                                    // produces a pruned single-package directory instead of overlaying the whole
+                                    // workspace plus a prod-deps node_modules. The member and its workspace deps were
+                                    // already built above; deploy copies files (it does not build). The runtime then
+                                    // copies just that directory, so the entrypoint runs unfiltered from the package root.
+                                    if (c.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsDeployCtx) &&
+                                        wsDeployCtx.Workspace.GetDeployCommand(wsDeployCtx.WorkspaceProjectName, PackageScriptDeployPath) is { } deployArgs)
+                                    {
+                                        dockerBuilder.Run(string.Join(' ', deployArgs));
+
+                                        var deployRunCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
+                                            ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}"
+                                            : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName} {publishMode.RunScriptArguments}";
+
+                                        var deployRuntimeStage = dockerfileContext.Builder
+                                            .From(runtimeImage, "runtime")
+                                            .WorkDir("/app")
+                                            .CopyFrom("build", PackageScriptDeployPath, "/app");
+
+                                        packageManager.InitializeDockerRuntimeStage?.Invoke(deployRuntimeStage);
+
+                                        deployRuntimeStage
+                                            .Env("NODE_ENV", "production")
+                                            .Entrypoint(["sh", "-c", $"exec {deployRunCommand}"]);
+                                        break;
+                                    }
+
+                                    // Runtime stage: copy build output then overlay prod deps. For a workspace
+                                    // member the runtime copies the whole workspace and WORKDIRs at the root, so
+                                    // the entrypoint must be workspace-scoped (e.g. "pnpm --filter <member> run start")
+                                    // to find the member's script instead of looking for it in the root package.json.
+                                    // ScriptName is non-null in PackageScript mode (PublishAsPackageScript validates it).
+                                    var baseRunCommand = c.Resource.TryGetLastAnnotation<JavaScriptWorkspaceContextAnnotation>(out var wsRunCtx)
+                                        ? string.Join(' ', wsRunCtx.Workspace.GetRunScriptCommand(wsRunCtx.WorkspaceProjectName, publishMode.ScriptName!, []))
+                                        : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}";
+
+                                    var runCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
+                                        ? baseRunCommand
+                                        : $"{baseRunCommand} {publishMode.RunScriptArguments}";
+
+                                    if (packageManager.ExecutableName == "deno")
+                                    {
+                                        var usesDefaultDenoRuntimeImage = string.Equals(runtimeImage, DefaultDenoImage, StringComparison.Ordinal);
+                                        var denoRuntimeStage = dockerfileContext.Builder
+                                            .From(runtimeImage, "runtime")
+                                            .WorkDir("/app");
+
+                                        if (usesDefaultDenoRuntimeImage)
+                                        {
+                                            denoRuntimeStage.CopyFrom("build", "/app", "/app", DenoDefaultUserAndGroup);
+                                        }
+                                        else
+                                        {
+                                            denoRuntimeStage.CopyFrom("build", "/app", "/app");
+                                        }
+
+                                        // Carry the populated dependency store across stages so the container does not
+                                        // re-download dependencies on first run.
+                                        denoRuntimeStage.Env("DENO_DIR", DenoCacheDirectory);
+                                        if (usesDefaultDenoRuntimeImage)
+                                        {
+                                            denoRuntimeStage.CopyFrom("build", DenoCacheDirectory, DenoCacheDirectory, DenoDefaultUserAndGroup);
+                                        }
+                                        else
+                                        {
+                                            denoRuntimeStage.CopyFrom("build", DenoCacheDirectory, DenoCacheDirectory);
+                                        }
+
+                                        packageManager.InitializeDockerRuntimeStage?.Invoke(denoRuntimeStage);
+
+                                        denoRuntimeStage
+                                            .Env("NODE_ENV", "production");
+
+                                        if (usesDefaultDenoRuntimeImage)
+                                        {
+                                            denoRuntimeStage.User(DenoDefaultUser);
+                                        }
+
+                                        // Exec form (no `sh -c`) so the container also works with shell-less Deno
+                                        // runtime images such as denoland/deno:*-distroless.
+                                        denoRuntimeStage.Entrypoint(BuildDenoPackageScriptEntrypoint(
+                                            packageManager.ExecutableName,
+                                            packageManager.ScriptCommand ?? "run",
+                                            publishMode.ScriptName!,
+                                            publishMode.RunScriptArguments));
+                                        break;
+                                    }
+
+                                    // Production dependencies stage for optimized image
+                                    var prodDepsStage = dockerfileContext.Builder
+                                        .From(baseImage, "prod-deps")
                                         .WorkDir("/app");
 
-                                    if (usesDefaultDenoRuntimeImage)
+                                    packageManager.InitializeDockerBuildStage?.Invoke(prodDepsStage);
+
+                                    if (packageManager.PackageFilesPatterns.Count > 0)
                                     {
-                                        denoRuntimeStage.CopyFrom("build", "/app", "/app", DenoDefaultUserAndGroup);
+                                        foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
+                                        {
+                                            prodDepsStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
+                                        }
                                     }
                                     else
                                     {
-                                        denoRuntimeStage.CopyFrom("build", "/app", "/app");
+                                        prodDepsStage.Copy("package*.json", "./");
                                     }
 
-                                    // Carry the populated dependency store across stages so the container does not
-                                    // re-download dependencies on first run.
-                                    denoRuntimeStage.Env("DENO_DIR", DenoCacheDirectory);
-                                    if (usesDefaultDenoRuntimeImage)
+                                    // Install production-only dependencies using the same base install
+                                    // command as the build stage (e.g. 'ci' for npm, 'install --frozen-lockfile'
+                                    // for pnpm) plus the production-only flag (e.g. '--omit=dev').
+                                    var installAnnotation = c.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCmd) ? installCmd : null;
+                                    if (string.IsNullOrEmpty(installAnnotation?.ProductionInstallArgs))
                                     {
-                                        denoRuntimeStage.CopyFrom("build", DenoCacheDirectory, DenoCacheDirectory, DenoDefaultUserAndGroup);
+                                        throw new InvalidOperationException($"Package manager '{packageManager.ExecutableName}' does not have ProductionInstallArgs configured, which is required for PublishAsPackageScript.");
+                                    }
+
+                                    var prodInstallCmd = BuildProductionInstallCommand(packageManager, installAnnotation);
+                                    if (!string.IsNullOrEmpty(packageManager.CacheMount))
+                                    {
+                                        prodDepsStage.Run($"--mount=type=cache,target={packageManager.CacheMount} {prodInstallCmd}");
                                     }
                                     else
                                     {
-                                        denoRuntimeStage.CopyFrom("build", DenoCacheDirectory, DenoCacheDirectory);
+                                        prodDepsStage.Run(prodInstallCmd);
                                     }
 
-                                    packageManager.InitializeDockerRuntimeStage?.Invoke(denoRuntimeStage);
+                                    // Runtime stage: copy build output then overlay prod deps
+                                    var runtimeStage = dockerfileContext.Builder
+                                        .From(runtimeImage, "runtime")
+                                        .WorkDir("/app")
+                                        .CopyFrom("build", "/app", "/app")
+                                        .CopyFrom("prod-deps", "/app/node_modules", "./node_modules");
 
-                                    denoRuntimeStage
-                                        .Env("NODE_ENV", "production");
+                                    packageManager.InitializeDockerRuntimeStage?.Invoke(runtimeStage);
 
-                                    if (usesDefaultDenoRuntimeImage)
-                                    {
-                                        denoRuntimeStage.User(DenoDefaultUser);
-                                    }
-
-                                    // Exec form (no `sh -c`) so the container also works with shell-less Deno
-                                    // runtime images such as denoland/deno:*-distroless.
-                                    denoRuntimeStage.Entrypoint(BuildDenoPackageScriptEntrypoint(
-                                        packageManager.ExecutableName,
-                                        packageManager.ScriptCommand ?? "run",
-                                        publishMode.ScriptName!,
-                                        publishMode.RunScriptArguments));
+                                    runtimeStage
+                                        .Env("NODE_ENV", "production")
+                                        .Entrypoint(["sh", "-c", $"exec {runCommand}"]);
                                     break;
                                 }
-
-                                // Production dependencies stage for optimized image
-                                var prodDepsStage = dockerfileContext.Builder
-                                    .From(baseImage, "prod-deps")
-                                    .WorkDir("/app");
-
-                                packageManager.InitializeDockerBuildStage?.Invoke(prodDepsStage);
-
-                                if (packageManager.PackageFilesPatterns.Count > 0)
-                                {
-                                    foreach (var packageFilePattern in packageManager.PackageFilesPatterns)
-                                    {
-                                        prodDepsStage.Copy(packageFilePattern.Source, packageFilePattern.Destination);
-                                    }
-                                }
-                                else
-                                {
-                                    prodDepsStage.Copy("package*.json", "./");
-                                }
-
-                                // Install production-only dependencies using the same base install
-                                // command as the build stage (e.g. 'ci' for npm, 'install --frozen-lockfile'
-                                // for pnpm) plus the production-only flag (e.g. '--omit=dev').
-                                var installAnnotation = c.Resource.TryGetLastAnnotation<JavaScriptInstallCommandAnnotation>(out var installCmd) ? installCmd : null;
-                                if (string.IsNullOrEmpty(installAnnotation?.ProductionInstallArgs))
-                                {
-                                    throw new InvalidOperationException($"Package manager '{packageManager.ExecutableName}' does not have ProductionInstallArgs configured, which is required for PublishAsPackageScript.");
-                                }
-
-                                var prodInstallCmd = BuildProductionInstallCommand(packageManager, installAnnotation);
-                                if (!string.IsNullOrEmpty(packageManager.CacheMount))
-                                {
-                                    prodDepsStage.Run($"--mount=type=cache,target={packageManager.CacheMount} {prodInstallCmd}");
-                                }
-                                else
-                                {
-                                    prodDepsStage.Run(prodInstallCmd);
-                                }
-
-                                // Runtime stage: copy build output then overlay prod deps
-                                var runtimeStage = dockerfileContext.Builder
-                                    .From(runtimeImage, "runtime")
-                                    .WorkDir("/app")
-                                    .CopyFrom("build", "/app", "/app")
-                                    .CopyFrom("prod-deps", "/app/node_modules", "./node_modules");
-
-                                packageManager.InitializeDockerRuntimeStage?.Invoke(runtimeStage);
-
-                                runtimeStage
-                                    .Env("NODE_ENV", "production")
-                                    .Entrypoint(["sh", "-c", $"exec {runCommand}"]);
-                                break;
-                            }
                             case JavaScriptPublishMode.NextStandalone:
                                 {
                                     var runtimeImage = baseImageAnnotation?.RuntimeImage ?? GetDefaultBaseImage(appDirectory, "alpine", dockerfileContext.Services, workspaceRoot);
@@ -3406,7 +3446,9 @@ public static partial class JavaScriptHostingExtensions
 
         builder
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand]))
+            // ProductionInstallArgs mirrors the per-app WithNpm default so a workspace member can be
+            // published with PublishAsPackageScript (the prod-deps stage requires it). See WithNpm.
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand]) { ProductionInstallArgs = "--omit=dev" })
             .WithRequiredCommand("npm", "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm");
 
         AddWorkspaceInstaller(builder);
@@ -3447,7 +3489,9 @@ public static partial class JavaScriptHostingExtensions
 
         builder
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
+            // ProductionInstallArgs mirrors the per-app WithBun default so a workspace member can be
+            // published with PublishAsPackageScript (the prod-deps stage requires it). See WithBun.
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]) { ProductionInstallArgs = "--production" })
             .WithRequiredCommand("bun", "https://bun.sh/docs/installation");
 
         if (!builder.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
@@ -3507,7 +3551,9 @@ public static partial class JavaScriptHostingExtensions
 
         builder
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
+            // ProductionInstallArgs mirrors the per-app WithYarn default so a workspace member can be
+            // published with PublishAsPackageScript (the prod-deps stage requires it). See WithYarn.
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]) { ProductionInstallArgs = "--production" })
             .WithRequiredCommand("yarn", "https://yarnpkg.com/getting-started/install");
 
         AddWorkspaceInstaller(builder);
@@ -3536,7 +3582,11 @@ public static partial class JavaScriptHostingExtensions
         {
             PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
             CommandSeparator = null,
-            InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm")
+            InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
+            // PublishAsPackageScript runtime images (node:*-alpine) have no pnpm, but the entrypoint runs
+            // `pnpm run <script>`. Enable pnpm during the image build so the first container start does not
+            // try to download it. Mirrors the per-app WithPnpm default.
+            InitializeDockerRuntimeStage = stage => stage.Run("corepack enable pnpm && pnpm --version"),
         };
 
         // Add package.json files from workspace packages so the lockfile matches during install
@@ -3544,7 +3594,9 @@ public static partial class JavaScriptHostingExtensions
 
         builder
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
+            // ProductionInstallArgs mirrors the per-app WithPnpm default so a workspace member can be
+            // published with PublishAsPackageScript (the prod-deps stage requires it). See WithPnpm.
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]) { ProductionInstallArgs = "--prod" })
             .WithRequiredCommand("pnpm", "https://pnpm.io/installation");
 
         AddWorkspaceInstaller(builder);

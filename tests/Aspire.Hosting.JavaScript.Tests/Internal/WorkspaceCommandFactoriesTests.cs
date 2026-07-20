@@ -43,6 +43,16 @@ public class WorkspaceCommandFactoriesTests
     }
 
     [Fact]
+    public void PnpmDeployFiltersTheMemberAndPrunesToProduction()
+    {
+        var argv = WorkspaceCommandFactories.PnpmDeploy("web", "/deploy");
+        // "pnpm --filter <name> deploy --prod <target>" produces a self-contained, production-only
+        // copy of the member (workspace deps injected) at <target>. pnpm 10 requires
+        // injectWorkspacePackages: true for this; the workspace validator enforces that.
+        Assert.Equal(["pnpm", "--filter", "web", "deploy", "--prod", "/deploy"], argv);
+    }
+
+    [Fact]
     public void YarnUsesWorkspaceSelectorBeforeRun()
     {
         var argv = WorkspaceCommandFactories.Yarn("web", "build", ["a"]);

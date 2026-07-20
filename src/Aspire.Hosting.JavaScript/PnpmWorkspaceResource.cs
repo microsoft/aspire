@@ -20,4 +20,8 @@ public sealed class PnpmWorkspaceResource(string name, string workingDirectory)
     /// <inheritdoc />
     public override IReadOnlyList<string>? GetBuildDependenciesCommand(string workspaceProjectName, string scriptName)
         => WorkspaceCommandFactories.PnpmBuildDependencies(workspaceProjectName, scriptName);
+
+    /// <inheritdoc />
+    public override IReadOnlyList<string>? GetDeployCommand(string workspaceProjectName, string targetDirectory)
+        => WorkspaceCommandFactories.PnpmDeploy(workspaceProjectName, targetDirectory);
 }
