@@ -211,7 +211,7 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task VerifyWorkspaceDockerfileResolvesEntryPointRelativeToPackagePath()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var workspaceDir = Path.Combine(tempDir.Path, "workspace");

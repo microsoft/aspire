@@ -11,12 +11,12 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
-public class WorkspaceTests
+public class WorkspaceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task VerifyPnpmWorkspaceDockerfileCopiesMemberManifests()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // A two-member pnpm workspace on disk: packages/web and packages/api, each with a
@@ -50,7 +50,7 @@ public class WorkspaceTests
     [Fact]
     public async Task VerifyPnpmWorkspaceDockerfileWhenPublishedAsPackageScript()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var root = Path.Combine(tempDir.Path, "ws");
@@ -82,7 +82,7 @@ public class WorkspaceTests
     [Fact]
     public async Task PnpmWorkspacePackageScriptThrowsWhenInjectWorkspacePackagesMissingOnPnpm10()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var root = Path.Combine(tempDir.Path, "ws");
@@ -109,7 +109,7 @@ public class WorkspaceTests
     [Fact]
     public async Task VerifyPnpmWorkspaceDockerfileBuildsDependenciesWithoutForwardingBuildArgs()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var root = Path.Combine(tempDir.Path, "ws");
@@ -141,7 +141,7 @@ public class WorkspaceTests
     [Fact]
     public async Task VerifyNpmWorkspaceDockerfileBuildsMember()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // An npm workspace declares members via the root package.json "workspaces" array.
@@ -173,7 +173,7 @@ public class WorkspaceTests
     [Fact]
     public async Task VerifyBunWorkspaceDockerfileBuildsMember()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var root = Path.Combine(tempDir.Path, "ws");
@@ -203,7 +203,7 @@ public class WorkspaceTests
     [Fact]
     public async Task VerifyYarnWorkspaceDockerfileBuildsMember()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var root = Path.Combine(tempDir.Path, "ws");
@@ -233,7 +233,7 @@ public class WorkspaceTests
     [Fact]
     public async Task VerifyYarnPnPWorkspaceDockerfileReRunsInstallAfterSourceCopy()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // Yarn Berry / PnP: the presence of .yarnrc.yml + .yarn dir + .pnp.cjs switches the build to
@@ -491,7 +491,7 @@ public class WorkspaceTests
     [Fact]
     public void AddWorkspaceAppWithoutPackagePathDerivesItFromProjectName()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
 
         // The member "api" lives under packages/api on disk; omitting packagePath should resolve to
         // that directory via workspace discovery (matching the package.json "name").
@@ -519,7 +519,7 @@ public class WorkspaceTests
     [Fact]
     public void AddWorkspaceAppWithUnknownProjectNameAndNoPackagePathThrows()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
 
         var root = Path.Combine(tempDir.Path, "ws");
         Directory.CreateDirectory(root);
@@ -836,7 +836,7 @@ public class WorkspaceTests
     [Fact]
     public async Task WorkspaceStaticWebsiteContainerFilesSourceMatchesDockerfileCopyFrom()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var root = Path.Combine(tempDir.Path, "ws");
@@ -868,7 +868,7 @@ public class WorkspaceTests
     [Fact]
     public async Task WorkspaceNodeServerContainerFilesSourceMatchesDockerfileCopyFrom()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var root = Path.Combine(tempDir.Path, "ws");
@@ -898,7 +898,7 @@ public class WorkspaceTests
     [Fact]
     public async Task ContainerFilesSourceResolvesWorkspacePathRegardlessOfConfigOrder()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var root = Path.Combine(tempDir.Path, "ws");
@@ -933,7 +933,7 @@ public class WorkspaceTests
     [OuterloopTest("long-running docker build")]
     public async Task VerifyPnpmWorkspaceMemberDockerImageBuilds()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // A real two-member pnpm workspace where `web` depends on the workspace library `shared`
@@ -992,7 +992,7 @@ public class WorkspaceTests
     [OuterloopTest("long-running docker build")]
     public async Task VerifyYarnPnPWorkspaceMemberDockerImageBuilds()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // A Yarn Berry / PnP workspace (nodeLinker: pnp, .yarnrc.yml + .yarn dir + .pnp.cjs). The presence
@@ -1064,7 +1064,7 @@ public class WorkspaceTests
     [OuterloopTest("long-running docker build")]
     public async Task VerifyNpmWorkspaceMemberDockerImageBuilds()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // A real two-member npm workspace where `web` depends on the workspace library `shared`.
@@ -1133,7 +1133,7 @@ public class WorkspaceTests
     [OuterloopTest("long-running docker build")]
     public async Task VerifyBunWorkspaceMemberDockerImageBuilds()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // A real two-member bun workspace where `web` depends on the workspace library `shared`
