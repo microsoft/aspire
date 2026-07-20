@@ -3,7 +3,7 @@ import * as path from 'path';
 import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
-import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
+import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
 import { ProcessError, runProcess } from './process';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
@@ -295,6 +295,34 @@ builder.Build().Run();
 
 export function removeAdditionalAppHostCandidate(projectName = 'AspireE2E.SecondAppHost'): void {
     removePath(path.join(getWorkspaceRoot(), projectName), { recursive: true, force: true });
+}
+
+export function createExternalSingleFileAppHost(projectName = 'AspireE2E.ExternalAppHost'): string {
+    const runRoot = getRunRoot();
+    if (!runRoot) {
+        throw new Error('ASPIRE_EXTENSION_E2E_RUN_ROOT is required to create an external AppHost fixture.');
+    }
+
+    const projectDirectory = path.join(runRoot, 'external-apphosts', projectName);
+    removePath(projectDirectory, { recursive: true, force: true });
+    fs.mkdirSync(projectDirectory, { recursive: true });
+    const appHostPath = path.join(projectDirectory, 'apphost.cs');
+    fs.writeFileSync(appHostPath, `${csharpFileHeader}#:sdk Aspire.AppHost.Sdk@${getAppHostSdkVersion()}
+
+var builder = DistributedApplication.CreateBuilder(args);
+builder.AddParameter("external-value");
+
+builder.Build().Run();
+`);
+
+    return appHostPath;
+}
+
+export function removeExternalSingleFileAppHost(projectName = 'AspireE2E.ExternalAppHost'): void {
+    const runRoot = getRunRoot();
+    if (runRoot) {
+        removePath(path.join(runRoot, 'external-apphosts', projectName), { recursive: true, force: true });
+    }
 }
 
 export async function stopPrimaryAppHostIfRunning(): Promise<void> {
