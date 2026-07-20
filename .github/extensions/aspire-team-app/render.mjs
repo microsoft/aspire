@@ -1,7 +1,7 @@
 // Renderer assets for the Aspire Team App canvas iframe.
 //
 // Served from the per-instance loopback server. Styling leans on the documented
-// Copilot canvas theme tokens (with fallbacks that match the app's dark surface)
+// Copilot canvas theme tokens (with light fallbacks for standalone rendering)
 // so the dashboard reads as a first-party Copilot surface.
 //
 // UX model: this is a small surface, so there are no modals, overlays, or
@@ -49,26 +49,27 @@ export const HTML = `<!doctype html>
 
 export const STYLES = `
 :root {
-  --bg: var(--background-color-default, #0d1117);
-  --surface: var(--n-1, #161b22);
-  --surface-2: var(--n-2, #1c2128);
-  --surface-3: var(--n-3, #262c36);
-  --card: var(--n-2, #1e2530);
-  --card-hover: var(--n-3, #252d39);
+  color-scheme: light dark;
+  --bg: var(--background-color-default, #ffffff);
+  --surface: color-mix(in srgb, var(--bg), var(--fg) 5%);
+  --surface-2: color-mix(in srgb, var(--bg), var(--fg) 7%);
+  --surface-3: color-mix(in srgb, var(--bg), var(--fg) 10%);
+  --card: color-mix(in srgb, var(--bg), var(--fg) 4%);
+  --card-hover: color-mix(in srgb, var(--bg), var(--fg) 8%);
   --head-hover: color-mix(in srgb, var(--fg) 8%, transparent);
-  --fg: var(--text-color-default, #e6edf3);
-  --muted: var(--text-color-muted, #8b949e);
-  --border: var(--border-color-default, #30363d);
-  --border-soft: var(--n-2, #21262d);
-  --border-strong: var(--border-color-muted, #484f58);
-  --focus: var(--color-focus-outline, #4493f8);
+  --fg: var(--text-color-default, #1f2328);
+  --muted: var(--text-color-muted, #656d76);
+  --border: var(--border-color-default, #d0d7de);
+  --border-soft: color-mix(in srgb, var(--border), transparent 35%);
+  --border-strong: color-mix(in srgb, var(--border), var(--fg) 22%);
+  --focus: var(--color-focus-outline, #0969da);
   --white: var(--color-white, #fff);
 
   /* Brand purple - reserved for the brand mark, PR identity, and the loading accent */
-  --accent: #a371f7;
-  --accent-strong: #8957e5;
-  --accent-2: #6e5cf0;
-  --purple: #a371f7;
+  --accent: var(--true-color-purple, #8250df);
+  --accent-strong: color-mix(in srgb, var(--accent), var(--fg) 18%);
+  --accent-2: color-mix(in srgb, var(--accent), var(--blue) 22%);
+  --purple: var(--accent);
 
   /* Primary action green - matches the app's confirm button (sampled #347d39) */
   --green: #347d39;
@@ -77,16 +78,19 @@ export const STYLES = `
   --green-fg: #ffffff;
 
   /* Informational blue - links, identifiers, toggles, focus */
-  --blue: var(--true-color-blue, #4493f8);
+  --blue: var(--true-color-blue, #0969da);
 
-  --success: var(--true-color-green, #3fb950);
-  --warning: var(--true-color-yellow, #d29922);
-  --danger: var(--true-color-red, #f85149);
+  --success: var(--true-color-green, #1a7f37);
+  --warning: var(--true-color-yellow, #9a6700);
+  --danger: var(--true-color-red, #cf222e);
 
   --font: var(--font-sans, "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif);
   --mono: var(--font-mono, "Cascadia Code", "SFMono-Regular", Consolas, monospace);
   --radius: 6px;
 }
+
+:root[data-color-mode="light"], body[data-color-mode="light"] { color-scheme: light; }
+:root[data-color-mode="dark"], body[data-color-mode="dark"] { color-scheme: dark; }
 
 * { box-sizing: border-box; }
 html, body { margin: 0; height: 100%; }
@@ -327,7 +331,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .card:hover { border-color: var(--border-strong); background: var(--card-hover); }
 .card-top { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .card-title { font-weight: 600; font-size: 13px; line-height: 1.35; color: var(--fg); min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
-.card-title:hover { color: var(--white); }
+.card-title:hover { color: var(--blue); }
 .card-sub { display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 11.5px; }
 .card-sub .repo { font-family: var(--mono); }
 .avatar { width: 18px; height: 18px; border-radius: 50%; border: 1px solid var(--border); }
@@ -342,10 +346,10 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
    + saturated text), sourced from our semantic theme tokens. accent = sky blue (pr-dashboard maps
    Docs/Bots/Draft/Review-started to blue; purple stays reserved for brand). muted stays theme-neutral. */
 .pill.success { color: var(--success); background: color-mix(in srgb, var(--success) 14%, transparent); border-color: color-mix(in srgb, var(--success) 48%, transparent); }
-.pill.warning { color: #f3d46b; background: color-mix(in srgb, var(--warning) 18%, transparent); border-color: color-mix(in srgb, var(--warning) 52%, transparent); }
+.pill.warning { color: var(--warning); background: color-mix(in srgb, var(--warning) 18%, transparent); border-color: color-mix(in srgb, var(--warning) 52%, transparent); }
 .pill.danger  { color: var(--danger); background: color-mix(in srgb, var(--danger) 15%, transparent);  border-color: color-mix(in srgb, var(--danger) 48%, transparent); }
-.pill.accent  { color: #7ab9ff; background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
-.pill.info    { color: #7ab9ff; background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
+.pill.accent  { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
+.pill.info    { color: var(--blue); background: color-mix(in srgb, var(--blue) 14%, transparent);   border-color: color-mix(in srgb, var(--blue) 42%, transparent); }
 .pill.muted   { color: var(--muted); background: color-mix(in srgb, var(--muted) 10%, transparent); border-color: color-mix(in srgb, var(--muted) 20%, transparent); }
 
 /* Sub-page scaffold */
