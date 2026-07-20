@@ -326,8 +326,10 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         Assert.Equal(expectedMessage, errorMessage);
     }
 
-    [Fact]
-    public async Task DashboardRunCommand_WhenCancelled_DisplaysCancellationMessageAndReturnsSuccess()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task DashboardRunCommand_WhenCancelled_DisplaysCancellationMessageAndReturnsSuccess(bool slowShutdown)
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -341,7 +343,20 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
                 {
                     processOptions.StandardOutputCallback?.Invoke("Now listening on: http://localhost:18888");
                     readyTcs.TrySetResult();
-                    await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    try
+                    {
+                        await Task.Delay(Timeout.InfiniteTimeSpan, cancellationToken).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException)
+                    {
+                        if (slowShutdown)
+                        {
+                            await Task.Delay(500, CancellationToken.None);
+                        }
+
+                        throw;
+                    }
+
                     return 0;
                 }
             };
@@ -359,7 +374,11 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await pendingRun.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Single(testInteractionService.DisplayedCancellations);
+        Assert.Empty(testInteractionService.DisplayedCancellations);
+        var stoppingMessage = Assert.Single(testInteractionService.DisplayedMessages);
+        Assert.Equal(KnownEmojis.StopSign, stoppingMessage.Emoji);
+        Assert.Equal($"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", stoppingMessage.Message);
+        Assert.Null(stoppingMessage.ConsoleOverride);
     }
 
     [Theory]

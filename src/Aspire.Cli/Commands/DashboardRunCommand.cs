@@ -25,6 +25,11 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     protected override bool UpdateNotificationsEnabled => true;
 
+    protected override void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
+    {
+        InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true, consoleOverride);
+    }
+
     private readonly IBundleService _bundleService;
     private readonly LayoutProcessRunner _layoutProcessRunner;
     private readonly FileLoggerProvider _fileLoggerProvider;
@@ -412,8 +417,6 @@ internal sealed class DashboardRunCommand : BaseCommand
 
         if (cancellationToken.IsCancellationRequested)
         {
-            InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
-
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
@@ -464,8 +467,6 @@ internal sealed class DashboardRunCommand : BaseCommand
         }
         catch (OperationCanceledException)
         {
-            InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true);
-
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
