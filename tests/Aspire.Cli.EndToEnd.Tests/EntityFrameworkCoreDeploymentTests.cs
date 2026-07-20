@@ -69,10 +69,8 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
             // Compose has started but before deployment state has been persisted.
             await auto.TypeAsync(
                 "if [ -f deploy-output/.env.Production ]; then " +
-                "migration_image=$(awk -F= '$1 == \"MIGRATIONS_IMAGE\" { print $2 }' deploy-output/.env.Production); " +
-                "container_id=$(docker ps -aq --filter ancestor=\"$migration_image\" | head -1); " +
-                "if [ -n \"$container_id\" ]; then " +
-                "compose_project=$(docker inspect -f '{{ index .Config.Labels \"com.docker.compose.project\" }}' \"$container_id\"); " +
+                GetComposeProjectCommand() + "; " +
+                "if [ -n \"$compose_project\" ]; then " +
                 "docker compose --project-name \"$compose_project\" --env-file deploy-output/.env.Production " +
                 "-f deploy-output/docker-compose.yaml down --volumes --remove-orphans " +
                 "|| echo 'WARNING: fallback compose cleanup failed'; fi; fi");
@@ -121,7 +119,21 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
 
-        WriteApplicationFiles(workspace);
+        await auto.TypeAsync(
+            "case \"$(uname -m)\" in " +
+            "x86_64) echo linux-x64 ;; " +
+            "aarch64|arm64) echo linux-arm64 ;; " +
+            "*) echo \"Unsupported architecture: $(uname -m)\" >&2; exit 1 ;; " +
+            "esac > .aspire-e2e-rid");
+        await auto.EnterAsync();
+        await auto.WaitForSuccessPromptAsync(counter);
+
+        var projectDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName);
+        var targetRuntimePath = Path.Combine(projectDirectory, ".aspire-e2e-rid");
+        var targetRuntime = File.ReadAllText(targetRuntimePath).Trim();
+        File.Delete(targetRuntimePath);
+
+        WriteApplicationFiles(workspace, targetRuntime);
 
         // A valid design-time connection string lets this setup command create the initial migration
         // without starting PostgreSQL. The publish pipeline deliberately receives no such override.
@@ -134,7 +146,7 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
     }
 
-    private static void WriteApplicationFiles(TemporaryWorkspace workspace)
+    private static void WriteApplicationFiles(TemporaryWorkspace workspace, string targetRuntime)
     {
         var projectDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, ProjectName);
         var appHostDirectory = Path.Combine(projectDirectory, $"{ProjectName}.AppHost");
@@ -172,6 +184,7 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
                 // The startup project uses Microsoft.NET.Sdk.Web, so its framework-dependent
                 // bundle requires Microsoft.AspNetCore.App rather than the runtime-only image.
                 .PublishAsMigrationBundle(
+                    targetRuntime: "{{targetRuntime}}",
                     publishContainer: true,
                     baseImage: "mcr.microsoft.com/dotnet/aspnet:10.0")
                 .PublishAsDockerComposeService((_, service) =>
@@ -235,7 +248,7 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         Assert.Contains(targetFramework, apiProject);
         apiProject = apiProject.Replace(
             targetFramework,
-            targetFramework + Environment.NewLine + "    <RuntimeIdentifiers>linux-x64</RuntimeIdentifiers>");
+            targetFramework + Environment.NewLine + $"    <RuntimeIdentifiers>{targetRuntime}</RuntimeIdentifiers>");
         File.WriteAllText(apiProjectPath, apiProject);
     }
 
@@ -246,10 +259,11 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         // Check the exact deployment relationships rather than only proving that a Compose file exists.
         await auto.TypeAsync(
             "test -f deploy-output/docker-compose.yaml && " +
-            "grep -q '^  migrations:' deploy-output/docker-compose.yaml && " +
-            "grep -q 'ConnectionStrings__db:' deploy-output/docker-compose.yaml && " +
-            "grep -q 'service_healthy' deploy-output/docker-compose.yaml && " +
-            "grep -q 'service_completed_successfully' deploy-output/docker-compose.yaml");
+            "docker compose --env-file deploy-output/.env.Production " +
+            "-f deploy-output/docker-compose.yaml config --format json | " +
+            "jq -e '(.services.migrations.environment | has(\"ConnectionStrings__db\")) and " +
+            "(.services.migrations.depends_on.postgres.condition == \"service_healthy\") and " +
+            "(.services.server.depends_on.migrations.condition == \"service_completed_successfully\")'");
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
     }
@@ -259,16 +273,11 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         SequenceCounter counter)
     {
         await auto.TypeAsync(
-            "migration_image=$(awk -F= '$1 == \"MIGRATIONS_IMAGE\" { print $2 }' deploy-output/.env.Production) && " +
-            "server_image=$(awk -F= '$1 == \"SERVER_IMAGE\" { print $2 }' deploy-output/.env.Production) && " +
-            "test -n \"$migration_image\" && test -n \"$server_image\" && " +
-            "docker ps -a --filter ancestor=\"$migration_image\" --filter ancestor=\"$server_image\"");
-        await auto.EnterAsync();
-        await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
-
-        await auto.TypeAsync(
-            "migration_image=$(awk -F= '$1 == \"MIGRATIONS_IMAGE\" { print $2 }' deploy-output/.env.Production) && " +
-            "migration_id=$(docker ps -aq --filter ancestor=\"$migration_image\" | head -1) && " +
+            GetComposeProjectCommand() + " && " +
+            "test -n \"$compose_project\" && " +
+            "migration_id=$(docker ps -aq " +
+            "--filter \"label=com.docker.compose.project=$compose_project\" " +
+            "--filter \"label=com.docker.compose.service=migrations\" | head -1) && " +
             "test -n \"$migration_id\" && " +
             "test \"$(docker inspect -f '{{.State.ExitCode}}' \"$migration_id\")\" = 0");
         await auto.EnterAsync();
@@ -277,8 +286,11 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         // Compose does not publish the API port to the outer test container. Join the server's
         // network namespace and retry until the application is accepting requests.
         await auto.TypeAsync(
-            "server_image=$(awk -F= '$1 == \"SERVER_IMAGE\" { print $2 }' deploy-output/.env.Production) && " +
-            "server_id=$(docker ps -q --filter ancestor=\"$server_image\" | head -1) && " +
+            GetComposeProjectCommand() + " && " +
+            "test -n \"$compose_project\" && " +
+            "server_id=$(docker ps -q " +
+            "--filter \"label=com.docker.compose.project=$compose_project\" " +
+            "--filter \"label=com.docker.compose.service=server\" | head -1) && " +
             "test -n \"$server_id\" && " +
             "succeeded=false; " +
             "for i in $(seq 1 30); do " +
@@ -290,4 +302,9 @@ public sealed class EntityFrameworkCoreDeploymentTests(ITestOutputHelper output)
         await auto.EnterAsync();
         await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(3));
     }
+
+    private static string GetComposeProjectCommand() =>
+        "compose_project=$(docker ps -a " +
+        "--filter \"label=com.docker.compose.project.working_dir=$PWD/deploy-output\" " +
+        "--format '{{.Label \"com.docker.compose.project\"}}' | head -1)";
 }
