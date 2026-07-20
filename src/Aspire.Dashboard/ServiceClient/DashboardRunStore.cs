@@ -33,22 +33,25 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     private readonly FileStream? _runLock;
     private readonly DashboardRunMetadata _metadata;
     private readonly ILogger<DashboardRunStore> _logger;
+    private readonly TimeProvider _timeProvider;
     private readonly Lazy<IReadOnlyList<DashboardRunDescriptor>> _runs;
 
-    public DashboardRunStore(IOptions<DashboardOptions> options, ILogger<DashboardRunStore> logger)
-        : this(options, logger, static directory => Directory.Delete(directory, recursive: true))
+    public DashboardRunStore(IOptions<DashboardOptions> options, ILogger<DashboardRunStore> logger, TimeProvider timeProvider)
+        : this(options, logger, timeProvider, static directory => Directory.Delete(directory, recursive: true))
     {
     }
 
     internal DashboardRunStore(
         IOptions<DashboardOptions> options,
         ILogger<DashboardRunStore> logger,
+        TimeProvider timeProvider,
         Action<string> deleteRunDirectory)
     {
         _logger = logger;
+        _timeProvider = timeProvider;
         var applicationName = string.IsNullOrWhiteSpace(options.Value.ApplicationName) ? "Aspire" : options.Value.ApplicationName;
-        var startedAt = DateTimeOffset.UtcNow;
-        var runId = $"{startedAt:yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}";
+        var startedAt = timeProvider.GetUtcNow();
+        var runId = $"{startedAt:yyyyMMddTHHmmssfffZ}";
         PersistenceMode = options.Value.Data.PersistenceMode;
 
         // Persistent run directories should be located under a directory scoped to the current user. Do not set Unix modes here;
@@ -199,7 +202,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
 
             if (_metadataPath is not null)
             {
-                WriteMetadata(_metadata with { EndedAtUtc = DateTimeOffset.UtcNow, CleanShutdown = true });
+                WriteMetadata(_metadata with { EndedAtUtc = _timeProvider.GetUtcNow(), CleanShutdown = true });
             }
             else if (_temporaryDirectory is not null && Directory.Exists(_temporaryDirectory))
             {
