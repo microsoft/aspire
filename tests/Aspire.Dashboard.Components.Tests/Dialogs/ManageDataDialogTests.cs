@@ -8,14 +8,19 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.ManageData;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
 using Bunit;
+using Google.Protobuf.Collections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
+using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Components.Tests.Dialogs;
 
@@ -146,6 +151,59 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Assert.Equal(0, clickCount);
     }
 
+    [Fact]
+    public async Task Render_TelemetryOnlyResourceWithoutSignals_CanBeSelectedAndRemoved()
+    {
+        var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: []);
+        SetupManageDataDialogServices(dashboardClient);
+
+        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var resourceKey = new ResourceKey("orphan", "instance");
+        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: resourceKey.Name, instanceId: resourceKey.InstanceId),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("test-scope"),
+                        LogRecords = { CreateLogRecord() }
+                    }
+                }
+            }
+        });
+
+        var cut = RenderComponent<ManageDataDialog>();
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(repository.GetResources());
+            AssertSelectionCheckboxCount(cut, 2);
+            AssertSelectionCheckbox(cut, "orphan", "true");
+        });
+
+        repository.ClearStructuredLogs(resourceKey);
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Single(repository.GetResources());
+            AssertSelectionCheckboxCount(cut, 2);
+            AssertSelectionCheckbox(cut, "orphan", "true");
+        });
+
+        await cut.InvokeAsync(() => GetResourceRows(cut).Single().Click());
+        cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "orphan", "false"));
+
+        await cut.InvokeAsync(() => GetResourceRows(cut).Single().Click());
+        cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "orphan", "true"));
+
+        cut.Find("fluent-button[aria-label='Remove selected']").Click();
+
+        cut.WaitForAssertion(() => Assert.Empty(repository.GetResources()));
+    }
+
     private void SetupManageDataDialogServices(TestDashboardClient dashboardClient)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
@@ -251,5 +309,11 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     private static IReadOnlyList<IElement> GetSelectionCheckboxes(IRenderedComponent<ManageDataDialog> cut)
     {
         return cut.FindComponent<FluentDataGrid<ManageDataGridItem>>().FindAll("[role='checkbox']");
+    }
+
+    private static IReadOnlyList<IElement> GetResourceRows(IRenderedComponent<ManageDataDialog> cut)
+    {
+        return cut.FindComponent<FluentDataGrid<ManageDataGridItem>>()
+            .FindAll(".fluent-data-grid-row:not([row-type='header'], [row-type='sticky-header'])");
     }
 }

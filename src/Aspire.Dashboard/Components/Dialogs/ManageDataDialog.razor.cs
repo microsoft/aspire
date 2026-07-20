@@ -443,12 +443,9 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     {
         foreach (var row in _resourceDataRows.Values)
         {
-            foreach (var dataRow in row.TelemetryData)
+            if (!AreAllDataRowsSelected(row))
             {
-                if (!_selectedRows.Contains((row.Name, dataRow.DataType)))
-                {
-                    return false;
-                }
+                return false;
             }
         }
         return _resourceDataRows.Count > 0;
@@ -467,6 +464,11 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     /// </summary>
     private bool AreAllDataRowsSelected(ResourceDataRow row)
     {
+        if (row.TelemetryData.Count == 0)
+        {
+            return _selectedRows.Contains((row.Name, AspireDataType.Resource));
+        }
+
         foreach (var dataRow in row.TelemetryData)
         {
             if (!_selectedRows.Contains((row.Name, dataRow.DataType)))
@@ -482,6 +484,11 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     /// </summary>
     private bool AreNoDataRowsSelected(ResourceDataRow row)
     {
+        if (row.TelemetryData.Count == 0)
+        {
+            return !_selectedRows.Contains((row.Name, AspireDataType.Resource));
+        }
+
         foreach (var dataRow in row.TelemetryData)
         {
             if (_selectedRows.Contains((row.Name, dataRow.DataType)))
@@ -662,6 +669,14 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private void SelectAllDataTypesForResource(string resourceName, List<TelemetryDataRow> dataRows)
     {
+        _selectedRows.Remove((resourceName, AspireDataType.Resource));
+
+        if (dataRows.Count == 0)
+        {
+            _selectedRows.Add((resourceName, AspireDataType.Resource));
+            return;
+        }
+
         foreach (var dataRow in dataRows)
         {
             _selectedRows.Add((resourceName, dataRow.DataType));
