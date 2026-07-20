@@ -60,7 +60,7 @@ public class SealedSecretApplyStepTests
     }
 
     [Fact]
-    public void ParseActiveWorkspaceContext_NoDefault_FallsBackToFirstContext()
+    public void ParseActiveWorkspaceContext_NoDefault_SingleContext_ReturnsIt()
     {
         var config =
             "workspaces:\n" +
@@ -70,6 +70,43 @@ public class SealedSecretApplyStepTests
             "        context: only-cluster\n";
 
         Assert.Equal("only-cluster", SealedSecretApplyStep.ParseActiveWorkspaceContext(config));
+    }
+
+    [Fact]
+    public void ParseActiveWorkspaceContext_NoDefault_MultipleContexts_ReturnsNull()
+    {
+        // Without a `workspaces.default` selector there is no evidence which of several contexts is
+        // active, so the parser must fail closed rather than guessing the first one and applying the
+        // SealedSecret to the wrong cluster.
+        var config =
+            "workspaces:\n" +
+            "  items:\n" +
+            "    dev:\n" +
+            "      connection:\n" +
+            "        context: dev-cluster\n" +
+            "    prod:\n" +
+            "      connection:\n" +
+            "        context: prod-cluster\n";
+
+        Assert.Null(SealedSecretApplyStep.ParseActiveWorkspaceContext(config));
+    }
+
+    [Fact]
+    public void ParseActiveWorkspaceContext_NoDefault_RepeatedIdenticalContext_ReturnsIt()
+    {
+        // The same context repeated (e.g. duplicated workspace pointing at one cluster) resolves to a
+        // single distinct value, which is still unambiguous.
+        var config =
+            "workspaces:\n" +
+            "  items:\n" +
+            "    a:\n" +
+            "      connection:\n" +
+            "        context: shared\n" +
+            "    b:\n" +
+            "      connection:\n" +
+            "        context: shared\n";
+
+        Assert.Equal("shared", SealedSecretApplyStep.ParseActiveWorkspaceContext(config));
     }
 
     [Fact]

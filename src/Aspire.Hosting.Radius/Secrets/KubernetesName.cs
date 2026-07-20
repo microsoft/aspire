@@ -50,4 +50,24 @@ internal static class KubernetesName
 
         return true;
     }
+
+    // A Kubernetes Secret data key must consist of alphanumeric characters, '-', '_', or '.'
+    // (grammar `[-._a-zA-Z0-9]+`). https://kubernetes.io/docs/concepts/configuration/secret/
+    public static bool IsValidSecretDataKey(string value)
+    {
+        if (value.Length == 0)
+        {
+            return false;
+        }
+
+        foreach (var c in value)
+        {
+            if (c is not ((>= 'a' and <= 'z') or (>= 'A' and <= 'Z') or (>= '0' and <= '9') or '-' or '_' or '.'))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
 }

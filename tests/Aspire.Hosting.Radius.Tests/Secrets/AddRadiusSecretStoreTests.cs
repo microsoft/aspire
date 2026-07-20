@@ -245,6 +245,62 @@ public class AddRadiusSecretStoreTests
     }
 
     [Fact]
+    public void InvalidReferenceInFirstCall_DoesNotPoisonCorrectedRetry()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic);
+
+        // A first call that throws on an invalid reference must not leave HasExistingSecret set;
+        // otherwise the corrected retry would wrongly trip the ASPIRERADIUS065 single-population guard.
+        Assert.Throws<ArgumentException>(() => store.WithExistingSecret("BAD/REF", "ok"));
+
+        store.WithExistingSecret("app/s", "ok");
+        Assert.Equal("app/s", store.Resource.Population.ResourceReference);
+        Assert.Equal(["ok"], store.Resource.Population.Keys);
+    }
+
+    [Theory]
+    [InlineData("bad/key")]
+    [InlineData("bad key")]
+    [InlineData("bad:key")]
+    public void InvalidSecretDataKey_OnExistingSecret_ThrowsAtCallSite_ASPIRERADIUS067(string key)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic);
+
+        var ex = Assert.Throws<ArgumentException>(() => store.WithExistingSecret("app/s", key));
+        Assert.Contains("ASPIRERADIUS067", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("bad/key")]
+    [InlineData("bad key")]
+    [InlineData("bad:key")]
+    public void InvalidSecretDataKey_OnInlineData_ThrowsAtCallSite_ASPIRERADIUS067(string key)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var pass = builder.AddParameter("p", secret: true);
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic);
+
+        var ex = Assert.Throws<ArgumentException>(() => store.WithData(d => d.Add(key, pass)));
+        Assert.Contains("ASPIRERADIUS067", ex.Message);
+    }
+
+    [Theory]
+    [InlineData("valid-key")]
+    [InlineData("valid.key")]
+    [InlineData("valid_key")]
+    [InlineData("Valid0")]
+    public void ValidSecretDataKey_IsAccepted(string key)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic)
+            .WithExistingSecret("app/s", key);
+
+        Assert.Equal([key], store.Resource.Population.Keys);
+    }
+
+    [Fact]
     public void AddRadiusSecretStore_IsGatedByExperimentalDiagnostic()
     {
         var method = typeof(RadiusSecretStoreExtensions)

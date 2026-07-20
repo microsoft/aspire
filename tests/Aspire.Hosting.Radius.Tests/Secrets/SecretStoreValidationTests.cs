@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Radius.Secrets;
 using Aspire.Hosting.Utils;
@@ -84,6 +85,55 @@ public class SecretStoreValidationTests : IDisposable
                 b.AddContainer("api", "img", "latest");
             },
             RadiusSecretStoreValidation.Validate); // no throw
+    }
+
+    [Fact]
+    public void AppScopedStore_WithoutEnvironment_Throws_ASPIRERADIUS068()
+    {
+        WithModel(
+            b => b.AddRadiusSecretStore("appsecrets", RadiusSecretStoreType.Generic)
+                  .WithExistingSecret("app/appsecrets", "k"),
+            model =>
+            {
+                var ex = Assert.Throws<InvalidOperationException>(
+                    () => RadiusSecretStoreValidation.ValidateHasEnvironment(model));
+                Assert.Contains("ASPIRERADIUS068", ex.Message);
+                Assert.Contains("appsecrets", ex.Message);
+            });
+    }
+
+    [Fact]
+    public void AppScopedStore_WithEnvironment_HasEnvironmentIsNoOp()
+    {
+        WithModel(
+            b =>
+            {
+                b.AddRadiusEnvironment("radius");
+                b.AddRadiusSecretStore("appsecrets", RadiusSecretStoreType.Generic)
+                 .WithExistingSecret("app/appsecrets", "k");
+            },
+            RadiusSecretStoreValidation.ValidateHasEnvironment); // no throw
+    }
+
+    [Fact]
+    public async Task AppScopedStore_WithoutEnvironment_RegistersValidationGate()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("appsecrets", RadiusSecretStoreType.Generic)
+            .WithExistingSecret("app/appsecrets", "k");
+
+        // The gate is registered on the store resource itself (not an environment) so it runs even
+        // when the model has no Radius environment; verify the pipeline step is present and wired up.
+        var annotation = Assert.Single(store.Resource.Annotations.OfType<PipelineStepAnnotation>());
+        var steps = (await annotation.CreateStepsAsync(new PipelineStepFactoryContext
+        {
+            PipelineContext = null!,
+            Resource = store.Resource,
+        })).ToList();
+        var gate = Assert.Single(steps);
+        Assert.Equal("validate-radius-app-scoped-store-appsecrets", gate.Name);
+        Assert.Contains("publish", gate.RequiredBySteps);
+        Assert.Contains("deploy", gate.RequiredBySteps);
     }
 
     [Fact]

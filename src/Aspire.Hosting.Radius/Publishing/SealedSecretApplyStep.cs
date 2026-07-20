@@ -664,8 +664,9 @@ internal sealed class SealedSecretApplyStep
     //         connection:
     //           context: other-ctx
     // We read workspaces.default, then workspaces.items.<default>.connection.context. If the
-    // default selector is absent (older/single-workspace configs), we fall back to the first
-    // `context:` occurrence. Dependency-free: any miss returns null and the caller fails closed.
+    // default selector is absent (older/single-workspace configs), we fall back to the single
+    // `context:` value only when the file resolves to exactly one distinct context; multiple
+    // contexts fail closed (null). Dependency-free: any miss returns null and the caller fails closed.
     internal static string? ParseActiveWorkspaceContext(string text)
     {
         var lines = text.Replace("\r\n", "\n").Split('\n');
@@ -684,10 +685,32 @@ internal sealed class SealedSecretApplyStep
             return null;
         }
 
-        // Fallback: first `context:` anywhere (single-workspace configs without a default selector).
-        var match = System.Text.RegularExpressions.Regex.Match(
+        // Fallback for older/single-workspace configs without a `workspaces.default` selector: only
+        // accept it when the file resolves to exactly one distinct context. With multiple contexts
+        // there is no evidence which one is active, so fail closed (return null) and let the caller
+        // require an explicit override — applying to the wrong cluster is worse than failing.
+        var matches = System.Text.RegularExpressions.Regex.Matches(
             text, @"(?m)^\s*context:\s*(?<v>[^\s#]+)\s*$");
-        return match.Success ? match.Groups["v"].Value.Trim('\'', '"') : null;
+        string? single = null;
+        foreach (System.Text.RegularExpressions.Match m in matches)
+        {
+            var value = m.Groups["v"].Value.Trim('\'', '"');
+            if (value.Length == 0)
+            {
+                continue;
+            }
+
+            if (single is null)
+            {
+                single = value;
+            }
+            else if (!string.Equals(single, value, StringComparison.Ordinal))
+            {
+                return null;
+            }
+        }
+
+        return single;
     }
 
     internal static string RequireKubeContext(string? overrideContext, string? parsedContext, string attemptedConfigPath)

@@ -35,6 +35,57 @@ internal static class RadiusSecretStoreValidation
     }
 
     /// <summary>
+    /// Pipeline-step entry point for the orphaned application-scoped store gate. No-ops in Run mode.
+    /// </summary>
+    /// <remarks>
+    /// Application-scoped stores are emitted and validated by a Radius environment's publish/deploy
+    /// steps. Those steps only exist when the model contains at least one <see cref="RadiusEnvironmentResource"/>,
+    /// so an app-scoped store declared without any Radius environment would otherwise be silently
+    /// dropped (never emitted, never validated). This gate is registered directly on the store
+    /// resource so it runs regardless of environments and fails fast when no environment is present.
+    /// </remarks>
+    internal static Task ValidateHasEnvironmentAsync(PipelineStepContext context)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        if (context.ExecutionContext.IsRunMode)
+        {
+            return Task.CompletedTask;
+        }
+
+        ValidateHasEnvironment(context.Model);
+        return Task.CompletedTask;
+    }
+
+    /// <summary>
+    /// Rejects an application-scoped secret store declared without any Radius environment
+    /// (<c>ASPIRERADIUS068</c>).
+    /// </summary>
+    internal static void ValidateHasEnvironment(DistributedApplicationModel model)
+    {
+        ArgumentNullException.ThrowIfNull(model);
+
+        if (model.Resources.OfType<RadiusEnvironmentResource>().Any())
+        {
+            return;
+        }
+
+        var orphaned = model.Resources
+            .OfType<RadiusSecretStoreResource>()
+            .Where(static s => s.Scope == RadiusSecretStoreScope.Application)
+            .Select(static s => s.Name)
+            .ToList();
+
+        if (orphaned.Count > 0)
+        {
+            throw new InvalidOperationException(
+                $"Application-scoped Radius secret store(s) '{string.Join("', '", orphaned)}' were declared " +
+                "but the model contains no Radius environment. Application-scoped stores are emitted and " +
+                "deployed by a Radius environment; add one with AddRadiusEnvironment. Diagnostic: ASPIRERADIUS068.");
+        }
+    }
+
+    /// <summary>
     /// Validates every declared secret store over the whole application model.
     /// </summary>
     /// <exception cref="InvalidOperationException">

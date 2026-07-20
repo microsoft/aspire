@@ -1,8 +1,11 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES001 // Pipeline step APIs are experimental; consumed internally by the integration.
+
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius;
 using Aspire.Hosting.Radius.Secrets;
 
@@ -25,6 +28,29 @@ public static class RadiusSecretStoreExtensions
     /// <param name="type">The Radius secret-store type.</param>
     /// <returns>A builder for the new <see cref="RadiusSecretStoreResource"/>.</returns>
     /// <exception cref="ArgumentException">The name is empty/whitespace or not a valid resource-name segment.</exception>
+    /// <remarks>
+    /// <para>
+    /// The store is emitted and deployed by a Radius environment; the application model must contain
+    /// at least one environment added with <c>AddRadiusEnvironment</c> or publish/deploy fails with
+    /// <c>ASPIRERADIUS068</c>. In Run mode the store is inert and is not surfaced in the dashboard.
+    /// </para>
+    /// <para>
+    /// Populate the returned store with exactly one of <c>WithData</c> (Radius-created from Aspire
+    /// secret parameters), <c>WithExistingSecret</c> (reference a pre-existing Kubernetes Secret), or
+    /// <c>WithSealedSecret</c> (apply a Bitnami SealedSecret manifest).
+    /// </para>
+    /// </remarks>
+    /// <example>
+    /// Declare an application-scoped store populated inline from a secret parameter:
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    /// builder.AddRadiusEnvironment("radius");
+    ///
+    /// var apiKey = builder.AddParameter("api-key", secret: true);
+    /// builder.AddRadiusSecretStore("appsecrets", RadiusSecretStoreType.Generic)
+    ///        .WithData(data => data.Add("apiKey", apiKey));
+    /// </code>
+    /// </example>
     [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; there is no polyglot ATS equivalent yet.")]
     public static IResourceBuilder<RadiusSecretStoreResource> AddRadiusSecretStore(
@@ -40,9 +66,26 @@ public static class RadiusSecretStoreExtensions
         // Publish/deploy-only, mirroring AddRadiusEnvironment: in Run mode return an
         // unregistered builder so the store does not surface in the dashboard and no
         // artifact is emitted (FR-016).
-        return builder.ExecutionContext.IsRunMode
-            ? builder.CreateResourceBuilder(resource)
-            : builder.AddResource(resource);
+        if (builder.ExecutionContext.IsRunMode)
+        {
+            return builder.CreateResourceBuilder(resource);
+        }
+
+        var storeBuilder = builder.AddResource(resource);
+
+        // Application-scoped stores are emitted/validated by a Radius environment's publish/deploy
+        // steps. If the model has no Radius environment those steps never exist, so this gate –
+        // registered on the store resource itself – runs regardless of environments and fails fast
+        // (ASPIRERADIUS068) instead of silently dropping the store.
+        storeBuilder.WithAnnotation(new PipelineStepAnnotation(_ => new PipelineStep
+        {
+            Name = $"validate-radius-app-scoped-store-{name}",
+            Description = $"Ensures the application-scoped Radius secret store '{name}' has a Radius environment.",
+            Action = Aspire.Hosting.Radius.Secrets.RadiusSecretStoreValidation.ValidateHasEnvironmentAsync,
+            RequiredBySteps = [WellKnownPipelineSteps.Publish, WellKnownPipelineSteps.Deploy],
+        }));
+
+        return storeBuilder;
     }
 
     /// <summary>
@@ -162,12 +205,16 @@ public static class RadiusSecretStoreExtensions
         ArgumentNullException.ThrowIfNull(store);
         ArgumentException.ThrowIfNullOrWhiteSpace(namespaceAndName);
 
+        // Validate the reference and keys *before* marking the store populated, so that an invalid
+        // input throws without leaving HasExistingSecret set — otherwise a corrected retry would trip
+        // the ASPIRERADIUS065 "already populated" guard instead of succeeding.
+        var validatedReference = ValidateSecretReference(namespaceAndName);
         var validatedKeys = ValidateKeys(keys);
         EnsureNotAlreadyPopulated(store.Resource);
 
         var population = store.Resource.Population;
         population.HasExistingSecret = true;
-        population.ResourceReference = ValidateSecretReference(namespaceAndName);
+        population.ResourceReference = validatedReference;
         population.Keys.AddRange(validatedKeys);
         return store;
     }
@@ -256,6 +303,16 @@ public static class RadiusSecretStoreExtensions
         foreach (var key in keys)
         {
             ArgumentException.ThrowIfNullOrWhiteSpace(key, nameof(keys));
+
+            // A Secret data key that is not a valid Kubernetes key (e.g. 'bad/key') would only be
+            // rejected when the store is applied to the cluster; fail at the API boundary instead.
+            if (!KubernetesName.IsValidSecretDataKey(key))
+            {
+                throw new ArgumentException(
+                    $"Secret data key '{key}' is invalid. A Kubernetes Secret key may contain only alphanumeric " +
+                    "characters, '-', '_', or '.'. Diagnostic: ASPIRERADIUS067.",
+                    nameof(keys));
+            }
         }
 
         return [.. keys];
@@ -350,11 +407,11 @@ public sealed class RadiusSecretStoreDataBuilder
     /// (<c>secret: true</c>); a non-secret parameter is rejected at the validation gate
     /// (<c>ASPIRERADIUS042</c>).
     /// </summary>
-    /// <param name="key">The data key (non-empty).</param>
+    /// <param name="key">The data key (non-empty). Must be a valid Kubernetes Secret key.</param>
     /// <param name="parameter">The secret parameter supplying the value.</param>
     /// <param name="encoding">Optional per-key encoding (defaults to the store type's default).</param>
     /// <returns>The same data builder for chaining.</returns>
-    /// <exception cref="ArgumentException">The key is empty/whitespace.</exception>
+    /// <exception cref="ArgumentException">The key is empty/whitespace or not a valid Kubernetes Secret key (<c>ASPIRERADIUS067</c>).</exception>
     /// <exception cref="InvalidOperationException">The key was already declared (<c>ASPIRERADIUS043</c>).</exception>
     public RadiusSecretStoreDataBuilder Add(
         string key,
@@ -363,6 +420,16 @@ public sealed class RadiusSecretStoreDataBuilder
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(key);
         ArgumentNullException.ThrowIfNull(parameter);
+
+        // A Secret data key that is not a valid Kubernetes key (e.g. 'bad/key') would only be rejected
+        // when the store is applied to the cluster; fail at the API boundary instead.
+        if (!KubernetesName.IsValidSecretDataKey(key))
+        {
+            throw new ArgumentException(
+                $"Secret data key '{key}' is invalid. A Kubernetes Secret key may contain only alphanumeric " +
+                "characters, '-', '_', or '.'. Diagnostic: ASPIRERADIUS067.",
+                nameof(key));
+        }
 
         // Reject a duplicate inline key rather than silently overwriting the earlier binding via the
         // dictionary indexer: a silent overwrite would hide a duplicate declaration from the
