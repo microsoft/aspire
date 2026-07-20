@@ -1178,6 +1178,58 @@ suite('AppHostDataRepository', () => {
         }
     });
 
+    test('describe restart does not shrink below its current delay when polling is faster', async () => {
+        const clock = sinon.useFakeTimers();
+        const inspect = sinon.stub();
+        inspect.withArgs('appHostsPollingInterval').returns({ globalValue: 1000 });
+        inspect.withArgs('globalAppHostsPollingInterval').returns({});
+        const getConfigurationStub = sinon.stub(vscode.workspace, 'getConfiguration');
+        getConfigurationStub.withArgs('aspire').returns({
+            inspect,
+            get: sinon.stub().withArgs('appHostsPollingInterval', 30000).returns(30000),
+        } as unknown as vscode.WorkspaceConfiguration);
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            repository.setAppHostFilesOpen(['/workspace/AppHost.csproj']);
+            await waitForMicrotasks();
+            const psCall = spawnStub.getCalls().find(call => {
+                const args = call.args[2] as string[];
+                return args[0] === 'ps' && args.includes('--follow');
+            });
+            assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
+            psCall.args[3].lineCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1,
+            }]));
+            await waitForMicrotasks();
+
+            const describeCalls = () => spawnStub.getCalls().filter(call => {
+                const args = call.args[2] as string[];
+                return args[0] === 'describe' && args[args.length - 1] === '/workspace/AppHost.csproj';
+            });
+            const exitCurrentDescribe = () => describeCalls().at(-1)!.args[3].exitCallback(1);
+
+            exitCurrentDescribe();
+            await clock.tickAsync(5000);
+            assert.strictEqual(describeCalls().length, 2);
+
+            exitCurrentDescribe();
+            await clock.tickAsync(1000);
+            assert.strictEqual(describeCalls().length, 2, 'polling interval reduced the describe restart delay');
+            await clock.tickAsync(4000);
+            assert.strictEqual(describeCalls().length, 3, 'describe did not restart at the preserved 5s delay');
+        } finally {
+            repository.dispose();
+            getConfigurationStub.restore();
+            clock.restore();
+        }
+    });
+
     test('describe reports generic error when workspace AppHost exits with runtime failure', async () => {
         let getAppHostsLineCallback: ((line: string) => void) | undefined;
         spawnStub.onFirstCall().callsFake((_terminalProvider, _command, _args, options) => {

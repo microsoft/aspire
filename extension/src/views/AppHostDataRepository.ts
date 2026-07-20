@@ -1059,7 +1059,7 @@ export class AppHostDataRepository {
 
     private _scheduleDescribeRestart(appHostPath: string, stream: DescribeStream): void {
         const delay = stream.restartDelay;
-        const nextDelay = Math.min(delay * 2, this._getPollingIntervalMs());
+        const nextDelay = Math.max(delay, Math.min(delay * 2, this._getPollingIntervalMs()));
         extensionLogOutputChannel.info(`Restarting describe --follow --apphost ${appHostPath} in ${delay}ms`);
         stream.restartTimer = setTimeout(() => {
             stream.restartTimer = undefined;
