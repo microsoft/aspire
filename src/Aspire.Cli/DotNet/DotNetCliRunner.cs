@@ -74,14 +74,12 @@ internal sealed class ProcessInvocationOptions
     /// <summary>
     /// When <c>true</c>, the spawned process is given its own hidden console group (Windows) so the
     /// shutdown ladder in <see cref="ProcessExecution"/> can target the child with DCP's
-    /// <c>stop-process-tree</c> CTRL+C dance without also signalling the CLI. On Windows a
-    /// console-isolated child is additionally bound to the process-wide
-    /// <see cref="WindowsConsoleProcessJob"/> kill-on-close job as its crash-time safety net.
+    /// <c>stop-process-tree</c> CTRL+C dance without also signalling the CLI.
     /// </summary>
     /// <remarks>
     /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/> for
-    /// graceful shutdown. A non-isolated background helper that should not outlive the CLI can opt
-    /// into the same kill-on-close job — without a new console group — via <see cref="KillOnParentExit"/>.
+    /// graceful shutdown. Pair with <see cref="KillOnParentExit"/> when the child should also be
+    /// bound to the Windows kill-on-close job as a crash-time safety net.
     /// Leaving the signaler/service unset means cancellation falls back to
     /// <see cref="ProcessExecution"/>'s force-kill mode, preserving back-compat
     /// for the many non-Run callers (build, restore, package add, layout, etc.).
@@ -103,6 +101,21 @@ internal sealed class ProcessInvocationOptions
     /// guaranteed backstop on Windows, and the watchdog is the graceful, cross-platform mechanism.
     /// </remarks>
     public bool KillOnParentExit { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, the process is launched as a detached child that survives the launching CLI.
+    /// </summary>
+    public bool Detached { get; set; }
+
+    /// <summary>
+    /// Test hook for overriding the DCP executable used to launch detached Unix processes.
+    /// </summary>
+    internal string? DetachedUnixLauncherPathOverride { get; set; }
+
+    /// <summary>
+    /// Optional predicate for inherited environment variable names that should be removed before applying caller-supplied variables.
+    /// </summary>
+    public Func<string, bool>? EnvironmentVariableFilter { get; set; }
 
     /// <summary>
     /// Issues the graceful shutdown signal during the shutdown ladder (DCP
@@ -135,6 +148,9 @@ internal sealed class ProcessInvocationOptions
         KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
         IsolateConsole = IsolateConsole,
         KillOnParentExit = KillOnParentExit,
+        Detached = Detached,
+        DetachedUnixLauncherPathOverride = DetachedUnixLauncherPathOverride,
+        EnvironmentVariableFilter = EnvironmentVariableFilter,
         GracefulShutdownSignaler = GracefulShutdownSignaler,
         ShutdownService = ShutdownService,
     };
@@ -260,7 +276,7 @@ internal sealed class DotNetCliRunner(
             }
         }
 
-        var started = execution.Start();
+        var started = await execution.StartAsync(cancellationToken).ConfigureAwait(false);
         processActivity.AddDotNetProcessStartResult(started, started ? execution.ProcessId : null);
 
         if (!started)
@@ -367,6 +383,9 @@ internal sealed class DotNetCliRunner(
             // and intentionally keep the force-kill path.
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
+            Detached = options.Detached,
+            DetachedUnixLauncherPathOverride = options.DetachedUnixLauncherPathOverride,
+            EnvironmentVariableFilter = options.EnvironmentVariableFilter,
             GracefulShutdownSignaler = options.GracefulShutdownSignaler,
             ShutdownService = options.ShutdownService,
             StandardOutputCallback = line =>

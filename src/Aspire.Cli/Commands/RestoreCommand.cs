@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Globalization;
 using System.Text.Json;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -27,6 +28,8 @@ internal sealed class RestoreCommand : BaseCommand
     private readonly IProjectLocator _projectLocator;
     private readonly IAppHostProjectFactory _projectFactory;
     private readonly ILanguageDiscovery _languageDiscovery;
+    private readonly IDotNetCliRunner _runner;
+    private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly IInteractionService _interactionService;
     private readonly ILogger<RestoreCommand> _logger;
 
@@ -36,6 +39,9 @@ internal sealed class RestoreCommand : BaseCommand
         IProjectLocator projectLocator,
         IAppHostProjectFactory projectFactory,
         ILanguageDiscovery languageDiscovery,
+        IDotNetCliRunner runner,
+        IDotNetSdkInstaller sdkInstaller,
+        IInteractionService interactionService,
         ILogger<RestoreCommand> logger,
         CommonCommandServices services)
         : base("restore", RestoreCommandStrings.Description, services)
@@ -43,7 +49,9 @@ internal sealed class RestoreCommand : BaseCommand
         _projectLocator = projectLocator;
         _projectFactory = projectFactory;
         _languageDiscovery = languageDiscovery;
-        _interactionService = services.InteractionService;
+        _runner = runner;
+        _sdkInstaller = sdkInstaller;
+        _interactionService = interactionService;
         _logger = logger;
 
         Options.Add(s_appHostOption);

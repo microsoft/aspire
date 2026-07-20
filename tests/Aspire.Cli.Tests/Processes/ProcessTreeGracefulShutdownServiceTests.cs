@@ -20,7 +20,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
     [Fact]
     public async Task TryStopProcessTreeWithDcpAsync_UsesDcpStopProcessTreeArguments()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), string.Empty);
 
@@ -57,7 +57,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
     [Fact]
     public async Task TryStopProcessTreeWithDcpAsync_OmitsStartTimeWhenRequested()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), string.Empty);
 
@@ -82,7 +82,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
     [Fact]
     public async Task TryStopProcessTreeWithDcpAsync_UsesLeasedBundleDcpPathWhenAvailable()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var mutableDcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("bundle").CreateSubdirectory("dcp");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(mutableDcpDirectory.FullName), string.Empty);
 
@@ -145,7 +145,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "The test uses a Unix sleep process while simulating the Windows shutdown path.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), string.Empty);
 
@@ -201,7 +201,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "The signal-ignoring shell process is Unix-specific.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), string.Empty);
 
@@ -240,7 +240,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "The signal-ignoring shell process is Unix-specific.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), string.Empty);
 
@@ -279,7 +279,7 @@ public class ProcessTreeGracefulShutdownServiceTests(ITestOutputHelper outputHel
     {
         Assert.SkipWhen(OperatingSystem.IsWindows(), "The SIGTERM-based AppHost stop path is Unix-specific.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dcpDirectory = workspace.WorkspaceRoot.CreateSubdirectory("dcp");
         File.WriteAllText(BundleDiscovery.GetDcpExecutablePath(dcpDirectory.FullName), string.Empty);
 

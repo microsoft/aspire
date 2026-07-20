@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Globalization;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Interaction;
 using Aspire.Dashboard.Model.Markdown;
@@ -237,7 +238,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
         {
             if (file.Size > maxFileSize)
             {
-                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = $"Exceeds the maximum size of {FormatHelpers.FormatFileSize(maxFileSize)}" });
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = string.Format(CultureInfo.CurrentCulture, Loc[nameof(Resources.Dialogs.InteractionFileExceedsMaxSize)], FormatHelpers.FormatFileSize(maxFileSize)) });
                 continue;
             }
 
@@ -249,7 +250,7 @@ public partial class InteractionsInputDialog : IAsyncDisposable
             }
             catch (Exception ex) when (ex is not OperationCanceledException)
             {
-                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = "Upload failed" });
+                fileReferences.Add(new FileReferenceViewModel { Name = file.Name, ErrorMessage = Loc[nameof(Resources.Dialogs.InteractionFileUploadFailed)] });
             }
         }
 

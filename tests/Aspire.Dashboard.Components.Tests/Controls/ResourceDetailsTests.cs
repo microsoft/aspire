@@ -66,9 +66,11 @@ public class ResourceDetailsTests : DashboardTestContext
 
         var maskAllSwitch = cut.Find(".mask-all-switch");
 
-        // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the component.
-        var item = cut.FindComponents<FluentMenuItem>().Single(s => s.Instance.Class == maskAllSwitch.Attributes["class"]!.Value);
-        await cut.InvokeAsync(() => item.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
+        // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the menu item model.
+        var item = cut.FindComponents<AspireMenu>().SelectMany(m => m.Instance.Items).Single(s => s.Class == maskAllSwitch.Attributes["class"]!.Value);
+        Assert.NotNull(item.OnClick);
+        await cut.InvokeAsync(item.OnClick);
+        cut.Render();
 
         Assert.Collection(cut.Instance.FilteredEnvironmentVariables,
             e =>
@@ -156,9 +158,11 @@ public class ResourceDetailsTests : DashboardTestContext
 
         var maskAllSwitch = cut.Find(".mask-all-switch");
 
-        // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the component.
-        var item = cut.FindComponents<FluentMenuItem>().Single(s => s.Instance.Class == maskAllSwitch.Attributes["class"]!.Value);
-        await cut.InvokeAsync(() => item.Instance.OnClick.InvokeAsync(new MouseEventArgs()));
+        // HACK. Calling OnClick on the element isn't triggering the event correctly. Instead, call OnClick on the menu item model.
+        var item = cut.FindComponents<AspireMenu>().SelectMany(m => m.Instance.Items).Single(s => s.Class == maskAllSwitch.Attributes["class"]!.Value);
+        Assert.NotNull(item.OnClick);
+        await cut.InvokeAsync(item.OnClick);
+        cut.Render();
 
         Assert.Collection(cut.Instance.FilteredEnvironmentVariables,
             e =>

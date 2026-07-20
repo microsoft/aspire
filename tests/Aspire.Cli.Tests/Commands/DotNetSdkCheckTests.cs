@@ -3,7 +3,6 @@
 
 using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils.EnvironmentChecker;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -16,7 +15,7 @@ public class DotNetSdkCheckTests(ITestOutputHelper outputHelper)
     public async Task CheckAsync_SkipsCheck_WhenNoAppHostFound()
     {
         // No apphost in settings — skip .NET SDK check entirely
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var check = CreateDotNetSdkCheck(workspace,
             sdkCheckResult: (false, null, "10.0.100"),
             languageDiscovery: new TestLanguageDiscovery());
@@ -29,7 +28,7 @@ public class DotNetSdkCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_SkipsCheck_WhenNonDotNetAppHostFound()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var check = CreateDotNetSdkCheck(workspace,
             appHostFileName: "apphost.ts",
             sdkCheckResult: (false, null, "10.0.100"));
@@ -42,7 +41,7 @@ public class DotNetSdkCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_RunsCheck_WhenDotNetAppHostFound()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var check = CreateDotNetSdkCheck(workspace, appHostFileName: "MyAppHost.csproj");
 
         var results = await check.CheckAsync().DefaultTimeout();
@@ -51,7 +50,7 @@ public class DotNetSdkCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_ReturnsFail_WhenDotNetAppHostFound_AndSdkNotInstalled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var check = CreateDotNetSdkCheck(workspace,
             appHostFileName: "MyAppHost.csproj",
             sdkCheckResult: (false, null, "10.0.100"));
@@ -67,7 +66,7 @@ public class DotNetSdkCheckTests(ITestOutputHelper outputHelper)
     public async Task CheckAsync_SkipsCheck_WhenNoSettingsFileExists()
     {
         // No settings.json — can't determine language, skip .NET check
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var check = CreateDotNetSdkCheck(workspace);
 
         var results = await check.CheckAsync().DefaultTimeout();
@@ -78,7 +77,7 @@ public class DotNetSdkCheckTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CheckAsync_SkipsCheck_WhenLanguageNotRecognized()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var check = CreateDotNetSdkCheck(workspace, appHostFileName: "unknown.xyz");
 
         var results = await check.CheckAsync().DefaultTimeout();
@@ -97,7 +96,7 @@ public class DotNetSdkCheckTests(ITestOutputHelper outputHelper)
     [InlineData("a/b/c/d/e/f/apphost.cs", false)]
     public async Task CheckAsync_FallsBackToFileSystemScan_WhenNoSettingsFile(string relativePath, bool shouldRunCheck)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var check = CreateDotNetSdkCheck(workspace);
 
         // Create the file on disk (with nested directories) so FindFirstFile can discover it

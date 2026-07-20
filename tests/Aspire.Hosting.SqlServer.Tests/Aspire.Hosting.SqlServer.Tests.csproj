@@ -5,7 +5,6 @@
     <!-- SqlServer container tests need longer hang timeout than the default 10m -->
     <TestHangTimeout>20m</TestHangTimeout>
   </PropertyGroup>
-
   <ItemGroup>
     <ProjectReference Include="..\..\src\Aspire.Hosting.SqlServer\Aspire.Hosting.SqlServer.csproj" />
     <ProjectReference Include="..\..\src\Components\Aspire.Microsoft.Data.SqlClient\Aspire.Microsoft.Data.SqlClient.csproj" />

@@ -210,7 +210,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [Fact]
     public void PrDogfoodNewTemplateContract_AccountsForEveryRegisteredNewTemplate()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CreatePrDogfoodNewTemplateServices(workspace, processPath: null, dotNetRunner: new TestDotNetCliRunner());
 
@@ -239,7 +239,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
     [MemberData(nameof(PrDogfoodNewTemplateCases))]
     public async Task NewTemplate_PrDogfoodInstallHiveDiscovered_UsesPrChannel(PrDogfoodNewTemplateCase testCase)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var (processPath, packagesDirectory) = CreatePrDogfoodInstallLayout(workspace);
         var dotNetTemplateInstalls = new List<DotNetTemplateInstall>();
@@ -351,7 +351,7 @@ public class NewCommandTemplateConfigPersistenceTests(ITestOutputHelper outputHe
         bool registerIdentityChannel,
         string? explicitChannelArg)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {

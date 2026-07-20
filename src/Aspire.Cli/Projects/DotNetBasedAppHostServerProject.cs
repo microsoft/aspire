@@ -493,8 +493,9 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         // The execution local is forward-referenced by the log callbacks so they can read the
         // child's pid per line. ProcessInvocationOptions.StandardOutputCallback is Action<string>
-        // (line only), but the AppHost wants the pid in each trace line (#16729). The callbacks
-        // only fire after Start(), by which point `execution` is assigned and ProcessId is valid.
+        // (line only), but the AppHost wants the pid in each trace line (#16729). ProcessExecution
+        // publishes the child pid before it starts stdout/stderr pumps so immediate output can read
+        // ProcessId.
         IProcessExecution execution = null!;
 
         void OnStdout(string line)
@@ -514,6 +515,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
             StandardOutputCallback = OnStdout,
             StandardErrorCallback = OnStderr,
             IsolateConsole = runControl?.IsolateConsole ?? false,
+            KillOnParentExit = runControl?.KillOnParentExit ?? false,
             GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
             ShutdownService = runControl?.ShutdownService,
             // The graceful ladder always tree-kills on escalation; this fallback only matters when
@@ -526,7 +528,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
 
         try
         {
-            execution.Start();
+            await execution.StartAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {

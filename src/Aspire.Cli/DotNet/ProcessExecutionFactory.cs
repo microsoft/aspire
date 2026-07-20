@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Processes;
+using Aspire.Cli.Bundles;
+using Aspire.Cli.Layout;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 
@@ -10,13 +12,36 @@ namespace Aspire.Cli.DotNet;
 /// <summary>
 /// Creates process executions backed by real OS processes.
 /// </summary>
-internal sealed class ProcessExecutionFactory(
-    IEnvironment environment,
-    ILogger<ProcessExecutionFactory> logger) : IProcessExecutionFactory
+internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
 {
+    private readonly IEnvironment _environment;
+    private readonly ILogger<ProcessExecutionFactory> _logger;
+    private readonly ILayoutDiscovery? _layoutDiscovery;
+    private readonly IBundleService? _bundleService;
+    private readonly CliExecutionContext? _executionContext;
+
+    public ProcessExecutionFactory(IEnvironment environment, ILogger<ProcessExecutionFactory> logger)
+        : this(environment, logger, layoutDiscovery: null, bundleService: null, executionContext: null)
+    {
+    }
+
+    public ProcessExecutionFactory(
+        IEnvironment environment,
+        ILogger<ProcessExecutionFactory> logger,
+        ILayoutDiscovery? layoutDiscovery,
+        IBundleService? bundleService,
+        CliExecutionContext? executionContext)
+    {
+        _environment = environment;
+        _logger = logger;
+        _layoutDiscovery = layoutDiscovery;
+        _bundleService = bundleService;
+        _executionContext = executionContext;
+    }
+
     public IProcessExecution CreateExecution(string fileName, string[] args, IDictionary<string, string>? env, DirectoryInfo workingDirectory, ProcessInvocationOptions options)
     {
-        var effectiveLogger = options.SuppressLogging ? (ILogger)NullLogger.Instance : logger;
+        var effectiveLogger = options.SuppressLogging ? (ILogger)NullLogger.Instance : _logger;
 
         effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", fileName, workingDirectory.FullName, string.Join(" ", args));
 
@@ -34,6 +59,8 @@ internal sealed class ProcessExecutionFactory(
             WorkingDirectory = workingDirectory.FullName,
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
+            Detached = options.Detached,
+            DetachedUnixLauncherPath = options.DetachedUnixLauncherPathOverride,
         };
 
         foreach (var a in args)
@@ -44,6 +71,7 @@ internal sealed class ProcessExecutionFactory(
         // Touching Environment here snapshots the parent env on first access, so the strip below
         // applies even when the caller passes no explicit env. Then overlay the caller's env deltas.
         StripIdentityEnvVars(startInfo);
+        ApplyEnvironmentVariableFilter(startInfo, options.EnvironmentVariableFilter);
 
         foreach (var envVar in options.EnvironmentVariablesToRemove)
         {
@@ -59,12 +87,12 @@ internal sealed class ProcessExecutionFactory(
             }
         }
 
-        return Build(startInfo, fileName, effectiveLogger, options, environment);
+        return Build(startInfo, fileName, effectiveLogger, options, _environment, _layoutDiscovery, _bundleService, _executionContext);
     }
 
     public IProcessExecution CreateExecution(System.Diagnostics.ProcessStartInfo startInfo, ProcessInvocationOptions options)
     {
-        var effectiveLogger = options.SuppressLogging ? (ILogger)NullLogger.Instance : logger;
+        var effectiveLogger = options.SuppressLogging ? (ILogger)NullLogger.Instance : _logger;
 
         effectiveLogger.LogDebug("Running {FileName} in {WorkingDirectory} with args: {Args}", startInfo.FileName, startInfo.WorkingDirectory, string.Join(" ", startInfo.ArgumentList));
 
@@ -74,6 +102,8 @@ internal sealed class ProcessExecutionFactory(
             WorkingDirectory = startInfo.WorkingDirectory,
             IsolateConsole = options.IsolateConsole,
             KillOnParentExit = options.KillOnParentExit,
+            Detached = options.Detached,
+            DetachedUnixLauncherPath = options.DetachedUnixLauncherPathOverride,
         };
 
         foreach (var arg in startInfo.ArgumentList)
@@ -105,8 +135,9 @@ internal sealed class ProcessExecutionFactory(
         // into the child via startInfo.Environment (which is parent-seeded). Same rationale as the
         // other overload — see StripIdentityEnvVars.
         StripIdentityEnvVars(isolatedStartInfo);
+        ApplyEnvironmentVariableFilter(isolatedStartInfo, options.EnvironmentVariableFilter);
 
-        return Build(isolatedStartInfo, startInfo.FileName, effectiveLogger, options, environment);
+        return Build(isolatedStartInfo, startInfo.FileName, effectiveLogger, options, _environment, _layoutDiscovery, _bundleService, _executionContext);
     }
 
     // Strip ASPIRE_CLI_* identity overrides from every spawned process — both the isolated AppHost
@@ -126,14 +157,44 @@ internal sealed class ProcessExecutionFactory(
         }
     }
 
-    private static ProcessExecution Build(IsolatedProcessStartInfo startInfo, string fileName, ILogger logger, ProcessInvocationOptions options, IEnvironment environment)
+    private static void ApplyEnvironmentVariableFilter(IsolatedProcessStartInfo startInfo, Func<string, bool>? environmentVariableFilter)
     {
-        // Snapshot args + env now so the IProcessExecution surfaces them before Start() spawns the
+        if (environmentVariableFilter is null)
+        {
+            return;
+        }
+
+        var keysToRemove = new List<string>();
+        foreach (var key in startInfo.Environment.Keys)
+        {
+            if (environmentVariableFilter(key))
+            {
+                keysToRemove.Add(key);
+            }
+        }
+
+        foreach (var key in keysToRemove)
+        {
+            startInfo.Environment.Remove(key);
+        }
+    }
+
+    private static IProcessExecution Build(
+        IsolatedProcessStartInfo startInfo,
+        string fileName,
+        ILogger logger,
+        ProcessInvocationOptions options,
+        IEnvironment environment,
+        ILayoutDiscovery? layoutDiscovery,
+        IBundleService? bundleService,
+        CliExecutionContext? executionContext)
+    {
+        // Snapshot args + env now so the IProcessExecution surfaces them before StartAsync() spawns the
         // child. The extension-host launch path reads Arguments / EnvironmentVariables and returns
-        // without ever calling Start (DotNetCliRunner), so these must be valid pre-spawn.
+        // without ever calling StartAsync (DotNetCliRunner), so these must be valid pre-spawn.
         var argsSnapshot = startInfo.ArgumentList.ToArray();
         var envSnapshot = new Dictionary<string, string?>(startInfo.Environment, StringComparer.OrdinalIgnoreCase);
 
-        return new ProcessExecution(startInfo, fileName, argsSnapshot, envSnapshot, logger, options, environment);
+        return new ProcessExecution(startInfo, fileName, argsSnapshot, envSnapshot, logger, options, environment, layoutDiscovery, bundleService, executionContext);
     }
 }

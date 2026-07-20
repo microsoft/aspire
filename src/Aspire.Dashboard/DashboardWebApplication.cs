@@ -16,8 +16,6 @@ using Aspire.Shared;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Otlp;
 using Aspire.Dashboard.Otlp.Grpc;
 using Aspire.Dashboard.Otlp.Http;
@@ -306,10 +304,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Telemetry API.
         builder.Services.AddSingleton<TelemetryApiService>();
 
-        // AI assistant services.
-        builder.Services.AddTransient<AssistantChatViewModel>();
-        builder.Services.AddTransient<AssistantChatDataContext>();
-
         builder.Services.AddTransient<TracesViewModel>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, ResourceOutgoingPeerResolver>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, BrowserLinkOutgoingPeerResolver>());
@@ -327,12 +321,6 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<TelemetryExportService>();
         builder.Services.AddScoped<TelemetryImportService>();
         builder.Services.AddSingleton<IInstrumentUnitResolver, DefaultInstrumentUnitResolver>();
-
-        builder.Services.AddScoped<AIContextProvider>();
-        builder.Services.AddScoped<IAIContextProvider>(serviceProvider => serviceProvider.GetRequiredService<AIContextProvider>());
-        builder.Services.AddScoped<IAssistantDisplayContext>(serviceProvider => serviceProvider.GetRequiredService<AIContextProvider>());
-        builder.Services.AddScoped<IceBreakersBuilder>();
-        builder.Services.AddSingleton<ChatClientFactory>();
 
         // Time zone is set by the browser.
         builder.Services.AddScoped<BrowserTimeProvider>();

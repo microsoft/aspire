@@ -641,8 +641,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         // The execution local is forward-referenced by the log callbacks so they can read the
         // child's pid per line (ProcessInvocationOptions.StandardOutputCallback is line-only). The
         // log level + prefix differ from the dotnet-based server (#16729); keeping them here keeps
-        // this server's per-line behavior in one place. Callbacks only fire after Start(), so
-        // `execution` is assigned and ProcessId is valid by then.
+        // this server's per-line behavior in one place. ProcessExecution publishes the child pid before
+        // it starts stdout/stderr pumps so immediate output can read ProcessId.
         IProcessExecution execution = null!;
 
         void OnStdout(string line)
@@ -672,6 +672,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             StandardOutputCallback = OnStdout,
             StandardErrorCallback = OnStderr,
             IsolateConsole = runControl?.IsolateConsole ?? false,
+            KillOnParentExit = runControl?.KillOnParentExit ?? false,
             GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
             ShutdownService = runControl?.ShutdownService,
             KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
@@ -681,7 +682,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
         try
         {
-            execution.Start();
+            await execution.StartAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {

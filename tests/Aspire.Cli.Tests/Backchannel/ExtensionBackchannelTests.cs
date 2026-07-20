@@ -15,7 +15,7 @@ public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConnectAsync_WhenConnectionSetupFails_PropagatesFailureAndAllowsRetry()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var backchannel = CreateBackchannel("not-a-valid-endpoint", workspace.CreateExecutionContext());
 
         await Assert.ThrowsAsync<ArgumentException>(() => backchannel.ConnectAsync(CancellationToken.None)).DefaultTimeout();
@@ -25,7 +25,7 @@ public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConnectAsync_WhenConnectionSetupFails_PropagatesFailureToConcurrentWaitersAndAllowsRetry()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var setupEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseSetup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var setupException = new InvalidOperationException("Simulated setup failure.");
@@ -61,7 +61,7 @@ public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConnectAsync_WhenExtensionIsIncompatible_PropagatesFailureToConcurrentWaitersWithoutRetrying()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var setupEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var releaseSetup = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var setupException = new ExtensionIncompatibleException("Simulated incompatible extension.", "test-capability");
@@ -100,7 +100,7 @@ public class ExtensionBackchannelTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ConnectAsync_WhenConnectorIsCanceled_ConcurrentWaiterTakesOverSetup()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         using var firstConnectorCts = new CancellationTokenSource();
         var firstSetupEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var takeoverSetupEntered = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);

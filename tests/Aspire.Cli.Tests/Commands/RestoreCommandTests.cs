@@ -18,7 +18,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestoreCommand_WithDotNetAppHost_RunsDotNetRestore()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 
@@ -53,7 +53,7 @@ public class RestoreCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RestoreCommand_WithDotNetAppHostAndMissingSdk_ReturnsSdkNotInstalled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project Sdk=\"Microsoft.NET.Sdk\" />");
 

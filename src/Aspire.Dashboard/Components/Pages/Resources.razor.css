@@ -83,6 +83,18 @@
     margin-left: calc(var(--design-unit) * 3px);
 }
 
+::deep .resources-tab-header {
+    max-width: 100%;
+    min-width: 0;
+}
+
+/* FluentTabs keeps its horizontal tab list at max-content width. Constrain the host so
+   focus can scroll the selected tab into view when space is limited above ultra-low width. */
+::deep .resources-tab-header[orientation="horizontal"] {
+    overflow-x: auto;
+    overflow-y: hidden;
+}
+
 ::deep .resources-grid-container {
     overflow: auto;
     grid-area: resources-tab-content;

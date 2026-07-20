@@ -243,7 +243,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindMatchingSockets_FindsMatchingSocketFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
@@ -271,7 +271,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindMatchingSockets_FindsOldFormatSocketsWithoutPid()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var legacyBackchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "backchannels");
         Directory.CreateDirectory(legacyBackchannelsDir);
 
@@ -296,7 +296,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindMatchingSockets_DoesNotMatchSimilarHashes()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
@@ -322,7 +322,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindMatchingSockets_ReturnsEmptyWhenNoMatchingFiles()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
@@ -340,7 +340,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CleanupOrphanedSockets_CleansUpBothOldAndNewFormatSockets()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
@@ -372,7 +372,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
     [Fact]
     public void FindMatchingNonOrphanedSockets_RemovesDeadPidSocketsAndKeepsLiveAndPidlessSockets()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
@@ -415,7 +415,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
         var symlinkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
         Directory.CreateSymbolicLink(symlinkDirectory, realDirectory.FullName);
@@ -446,7 +446,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var homeDirectory = workspace.WorkspaceRoot.FullName;
 
         // Build a directory symlink ("link" -> "real") and reference the same on-disk AppHost
@@ -558,7 +558,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.SkipWhen(!OperatingSystem.IsWindows(),
             "Full-path normalization only applies on Windows.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
@@ -580,7 +580,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.SkipWhen(!OperatingSystem.IsWindows(),
             "Drive letter normalization only applies on Windows.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "bch");
         Directory.CreateDirectory(backchannelsDir);
 
@@ -616,7 +616,7 @@ public class AppHostHelperTests(ITestOutputHelper outputHelper)
         Assert.SkipWhen(!OperatingSystem.IsWindows(),
             "Legacy hash divergence only occurs on Windows where drive-letter casing is normalized.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var backchannelsDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "cli", "backchannels");
         Directory.CreateDirectory(backchannelsDir);
 

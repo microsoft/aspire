@@ -5,7 +5,7 @@ using System.Globalization;
 
 namespace Aspire.Hosting.Tests;
 
-public class ProcessStartTimeHelperTests
+public class ProcessStartTimeHelperTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void IsProcessRunning_CurrentProcess_ReturnsTrue()
@@ -105,26 +105,26 @@ public class ProcessStartTimeHelperTests
     public void TryGetLinuxProcessStartTicks_ReadsField22FromProcRoot()
     {
         // Exercise the shared /proc reader against a synthetic proc root so it runs on every OS (the real
-        // /proc only exists on Linux). This is the same reader (and procRoot seam) DcpProcessMonitor uses
+        // /proc only exists on Linux). This is the same reader (and workspace seam) DcpProcessMonitor uses
         // when it points at HOST_PROC for host-process inspection.
-        using var procRoot = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         const int pid = 4242;
         const ulong expectedStartTicks = 9876543UL;
 
-        var statDirectory = Directory.CreateDirectory(Path.Combine(procRoot.Path, pid.ToString(CultureInfo.InvariantCulture)));
+        var statDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, pid.ToString(CultureInfo.InvariantCulture)));
         var fields = Enumerable.Range(0, 20).Select(static i => i.ToString(CultureInfo.InvariantCulture)).ToArray();
         fields[0] = "S";
         fields[19] = expectedStartTicks.ToString(CultureInfo.InvariantCulture);
         File.WriteAllText(Path.Combine(statDirectory.FullName, "stat"), $"{pid} (proc name) {string.Join(' ', fields)}");
 
-        Assert.Equal(expectedStartTicks, ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(pid, procRoot.Path));
+        Assert.Equal(expectedStartTicks, ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(pid, workspace.WorkspaceRoot.FullName));
     }
 
     [Fact]
     public void TryGetLinuxProcessStartTicks_MissingStatFile_ReturnsNull()
     {
-        using var procRoot = new TestTempDirectory();
-        Assert.Null(ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(999999, procRoot.Path));
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        Assert.Null(ProcessStartTimeHelper.TryGetLinuxProcessStartTicks(999999, workspace.WorkspaceRoot.FullName));
     }
 
     [Theory]

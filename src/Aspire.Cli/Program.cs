@@ -445,7 +445,6 @@ public class Program
         builder.Services.AddSingleton<IFeatures, Features>();
         builder.Services.AddTelemetryServices();
         builder.Services.AddTransient<IProcessExecutionFactory, ProcessExecutionFactory>();
-        builder.Services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         // Windows-only crash-time safety net for interactive children spawned by
         // IsolatedProcess is provided by WindowsConsoleProcessJob.Shared — a process-wide
         // job created on first isolated spawn. The OS closes the job handle automatically on
@@ -593,6 +592,7 @@ public class Program
         builder.Services.AddSingleton<IEnvironmentCheck, DeprecatedAgentConfigCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, LegacySettingsFileCheck>();
         builder.Services.AddSingleton<IEnvironmentCheck, PendingMigrationsCheck>();
+        builder.Services.AddSingleton<IEnvironmentCheck, VsCodeExtensionCheck>();
         builder.Services.AddSingleton<IEnvironmentChecker, EnvironmentChecker>();
 
         // MCP server transport factory - creates transport only when needed to avoid
@@ -994,6 +994,22 @@ public class Program
             WindowsProcessInterop.SetConsoleCtrlHandler(nint.Zero, false);
         }
 
+        // A detached CLI can be launched from a bundle version that the parent resolved before
+        // forking. Acquire the lease immediately from the handoff environment so setup/upgrade
+        // cleanup cannot remove the running CLI's layout.
+        BundleVersionLease? acquiredBundleLease;
+        try
+        {
+            acquiredBundleLease = AcquireBundleLeaseFromEnvironment(args);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or DirectoryNotFoundException or ArgumentException or NotSupportedException)
+        {
+            Console.Error.WriteLine($"Failed to acquire Aspire bundle lease: {ex.Message}");
+            return CliExitCodes.FailedToStartCli;
+        }
+
+        using var bundleLease = acquiredBundleLease;
+
         // Setup handling of CTRL-C and SIGTERM as early as possible so that if
         // we get a signal anywhere that is not handled by Spectre Console
         // already that we know to trigger cancellation. The cancellation manager
@@ -1234,6 +1250,9 @@ public class Program
             await shutdownTelemetryTask;
         }
     }
+
+    internal static BundleVersionLease? AcquireBundleLeaseFromEnvironment(string[] args)
+        => BundleVersionLease.TryAcquireFromEnvironment("aspire-cli", args.FirstOrDefault());
 
     private static string GetCommandName(ParseResult r)
     {

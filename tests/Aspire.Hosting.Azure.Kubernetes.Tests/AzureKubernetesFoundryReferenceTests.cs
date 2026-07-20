@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES003
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Foundry;
 using Aspire.Hosting.Publishing;
 using Aspire.Hosting.Tests;
 using Aspire.Hosting.Utils;
@@ -12,15 +13,15 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.Azure.Tests;
 
-public class AzureKubernetesFoundryReferenceTests
+public class AzureKubernetesFoundryReferenceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task EndpointReferenceToFoundryHostedAgentIsResolvedAcrossComputeEnvironments()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(
             DistributedApplicationOperation.Publish,
-            tempDir.Path);
+            workspace.Path);
 
         builder.Services.AddSingleton<IResourceContainerImageManager, MockImageBuilder>();
 
@@ -33,7 +34,7 @@ public class AzureKubernetesFoundryReferenceTests
         var agent = builder.AddProject<Project>("agent", launchProfileName: null)
             .WithHttpEndpoint()
             .WithExternalHttpEndpoints();
-        agent.AsHostedAgent(project);
+        agent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         // The web app is deployed to Azure Kubernetes and references the Foundry hosted agent.
         // The Kubernetes publisher must delegate endpoint resolution to the Foundry compute
@@ -55,7 +56,7 @@ public class AzureKubernetesFoundryReferenceTests
         // The agent endpoint must resolve to the Foundry project endpoint composed with the deployed
         // hosted agent path because hosted-agent deployment creates the Foundry agent version with the
         // wrapper resource name.
-        var valuesPath = Directory.EnumerateFiles(tempDir.Path, "values.yaml", SearchOption.AllDirectories).Single();
+        var valuesPath = Directory.EnumerateFiles(workspace.Path, "values.yaml", SearchOption.AllDirectories).Single();
         var values = await File.ReadAllTextAsync(valuesPath);
 
         Assert.Contains("AGENT_HTTP: \"{project.outputs.endpoint}/agents/agent-ha\"", values);

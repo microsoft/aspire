@@ -541,6 +541,7 @@ internal class DotNetAppHostProject : IAppHostProject
             // package add, layout, and other short-lived invocations leave these unset so
             // they continue to use the shared ladder's force-kill mode.
             IsolateConsole = true,
+            KillOnParentExit = true,
             GracefulShutdownSignaler = _gracefulShutdownSignaler,
             ShutdownService = _shutdownService,
         };
