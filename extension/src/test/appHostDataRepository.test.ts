@@ -90,7 +90,7 @@ suite('AppHostDataRepository', () => {
         return sinon.stub(vscode.workspace, 'workspaceFolders').value(workspaceFolders);
     }
 
-    async function startDescribeForRunningAppHost(repository: AppHostDataRepository, appHostPath: string): Promise<sinon.SinonSpyCall> {
+    async function startDescribeForRunningAppHost(appHostPath: string): Promise<sinon.SinonSpyCall> {
         const psCall = spawnStub.getCalls().find(call => {
             const args = call.args[2] as string[];
             return args[0] === 'ps' && args.includes('--follow');
@@ -4374,7 +4374,7 @@ suite('AppHostDataRepository', () => {
             repository.activate();
             repository.setPanelVisible(true);
             await waitForMicrotasks();
-            const firstDescribeCall = await startDescribeForRunningAppHost(repository, '/workspace/AppHost.csproj');
+            const firstDescribeCall = await startDescribeForRunningAppHost('/workspace/AppHost.csproj');
             const firstLineCallback = firstDescribeCall.args[3].lineCallback;
             const firstExitCallback = firstDescribeCall.args[3].exitCallback;
 
@@ -4414,7 +4414,7 @@ suite('AppHostDataRepository', () => {
             repository.activate();
             repository.setPanelVisible(true);
             await waitForMicrotasks();
-            await startDescribeForRunningAppHost(repository, '/workspace/AppHost.csproj');
+            await startDescribeForRunningAppHost('/workspace/AppHost.csproj');
 
             repository.setPanelVisible(false);
             clock.tick(5000);
@@ -4458,7 +4458,7 @@ suite('AppHostDataRepository', () => {
             repository.activate();
             repository.setPanelVisible(true);
             await waitForMicrotasks();
-            await startDescribeForRunningAppHost(repository, '/workspace/AppHost.csproj');
+            await startDescribeForRunningAppHost('/workspace/AppHost.csproj');
 
             repository.setPanelVisible(false);
             assert.deepStrictEqual(taskkillCalls, [{
@@ -4506,7 +4506,7 @@ suite('AppHostDataRepository', () => {
             repository.activate();
             repository.setPanelVisible(true);
             await waitForMicrotasks();
-            await startDescribeForRunningAppHost(repository, '/workspace/AppHost.csproj');
+            await startDescribeForRunningAppHost('/workspace/AppHost.csproj');
             childProcess.markExited();
 
             repository.setPanelVisible(false);
