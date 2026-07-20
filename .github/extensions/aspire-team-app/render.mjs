@@ -342,8 +342,8 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   --pill-tone: var(--muted);
   display: inline-flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; line-height: 1;
   padding: 0 8px; min-height: 20px; border-radius: 999px; border: 1px solid transparent;
-  /* The 25% foreground mix keeps small pill text above 4.5:1 in both fallback themes
-     without losing the signal hue used by the translucent background and border. */
+  /* The 25% foreground mix keeps small pill text above 4.5:1 with the standalone
+     light fallback without losing the signal hue used across host themes. */
   color: color-mix(in srgb, var(--pill-tone), var(--fg) 25%);
 }
 /* Label-badge tones mirror pr-dashboard's signal pills (translucent wash + crisp ~50% colored border
