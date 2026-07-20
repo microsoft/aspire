@@ -335,6 +335,16 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
 
         var testInteractionService = new TestInteractionService();
         var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var stoppingMessageDisplayedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var shutdownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var expectedMessage = $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]";
+        testInteractionService.DisplayMessageCallback = (_, message, _) =>
+        {
+            if (message == expectedMessage)
+            {
+                stoppingMessageDisplayedTcs.TrySetResult();
+            }
+        };
         var (services, _, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
         executionFactory.CreateExecutionCallback = (_, _, _, options) =>
             new TestProcessExecution("fake", [], null, options, (_, _, _) => Task.FromResult((0, (string?)null)), () => 0)
@@ -351,7 +361,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
                     {
                         if (slowShutdown)
                         {
-                            await Task.Delay(500, CancellationToken.None);
+                            await shutdownTcs.Task.ConfigureAwait(false);
                         }
 
                         throw;
@@ -371,13 +381,26 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         await readyTcs.Task.DefaultTimeout();
         await cts.CancelAsync();
 
+        if (slowShutdown)
+        {
+            try
+            {
+                var firstCompletedTask = await Task.WhenAny(stoppingMessageDisplayedTcs.Task, pendingRun).DefaultTimeout();
+                Assert.Same(stoppingMessageDisplayedTcs.Task, firstCompletedTask);
+            }
+            finally
+            {
+                shutdownTcs.TrySetResult();
+            }
+        }
+
         var exitCode = await pendingRun.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.Empty(testInteractionService.DisplayedCancellations);
         var stoppingMessage = Assert.Single(testInteractionService.DisplayedMessages);
         Assert.Equal(KnownEmojis.StopSign, stoppingMessage.Emoji);
-        Assert.Equal($"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", stoppingMessage.Message);
+        Assert.Equal(expectedMessage, stoppingMessage.Message);
         Assert.Null(stoppingMessage.ConsoleOverride);
     }
 

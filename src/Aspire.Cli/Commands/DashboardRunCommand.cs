@@ -27,7 +27,7 @@ internal sealed class DashboardRunCommand : BaseCommand
 
     protected override void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
-        InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true, consoleOverride);
+        InteractionService.DisplayMessage(KnownEmojis.StopSign, $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]", allowMarkup: true, consoleOverride: consoleOverride);
     }
 
     private readonly IBundleService _bundleService;
