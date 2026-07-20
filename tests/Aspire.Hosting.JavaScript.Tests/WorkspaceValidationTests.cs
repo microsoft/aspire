@@ -8,12 +8,12 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
-public class WorkspaceValidationTests
+public class WorkspaceValidationTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task PublishFlagsMemberNameTypo()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         var root = CreatePnpmWorkspace(tempDir.Path);
@@ -33,7 +33,7 @@ public class WorkspaceValidationTests
     [Fact]
     public async Task PublishFlagsPackageManagerLockfileMismatch()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // A pnpm workspace whose only lockfile is yarn.lock — the configured PM (pnpm) disagrees.
@@ -58,7 +58,7 @@ public class WorkspaceValidationTests
     [Fact]
     public async Task PublishToleratesExtraLockfileWhenConfiguredManagerMatches()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // A pnpm workspace whose root also carries a stray yarn.lock. The configured PM (pnpm) has its own
@@ -84,7 +84,7 @@ public class WorkspaceValidationTests
     [Fact]
     public async Task PublishFlagsLockfilesWhenNoneMatchConfiguredManager()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // A pnpm workspace whose only lockfiles are yarn.lock + bun.lock — neither matches the configured
@@ -111,7 +111,7 @@ public class WorkspaceValidationTests
     [Fact]
     public async Task PublishFlagsMissingScript()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // The member declares only a "build" script, but the app references "compile".
@@ -136,7 +136,7 @@ public class WorkspaceValidationTests
     [Fact]
     public async Task PublishAggregatesMultipleProblems()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
 
         // Two problems at once: a yarn lockfile under a pnpm workspace AND a typo'd member name.
@@ -163,7 +163,7 @@ public class WorkspaceValidationTests
     [Fact]
     public async Task RunModeFlagsMemberNameTypoAtBeforeStart()
     {
-        using var tempDir = new TestTempDirectory();
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var root = CreatePnpmWorkspace(tempDir.Path);
