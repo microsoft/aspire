@@ -343,6 +343,11 @@ public sealed partial class SqliteTelemetryRepository
                 transaction);
         }
 
+        UpdatePeerSpans(connection, transaction, spanUpdates);
+    }
+
+    private static void UpdatePeerSpans(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<PeerSpanUpdateRecord> spanUpdates)
+    {
         foreach (var batch in spanUpdates.Chunk(MaxSpanDetailBatchSize))
         {
             var sql = new StringBuilder("""
@@ -1457,54 +1462,96 @@ public sealed partial class SqliteTelemetryRepository
     {
         lock (_writeLock)
         {
-            using var connection = _database.OpenConnection();
-            using var transaction = connection.BeginTransaction();
-            var spans = connection.Query<PeerRecalculationSpanRecord>("""
+            using var writeConnection = _database.OpenConnection();
+            using var transaction = writeConnection.BeginTransaction();
+            using var readConnection = _database.OpenConnection();
+            // Return one row per span attribute (or one row with null attributes for spans without any).
+            // The parents CTE marks spans that have children so processing below can restrict peer
+            // resolution to client/producer leaf spans that have a peer address. Ordering keeps every
+            // span's attributes contiguous, which lets the loop finalize one span when its identity
+            // changes instead of buffering all spans and attributes. A separate connection keeps the
+            // unbuffered reader open while completed spans are written in batches through the transaction.
+            var rows = readConnection.Query<PeerRecalculationRowRecord>("""
+                WITH parents AS (
+                    SELECT DISTINCT trace_id, parent_span_id AS span_id
+                    FROM telemetry_spans
+                    WHERE parent_span_id IS NOT NULL
+                )
                 SELECT
-                    trace_id AS TraceId,
-                    span_id AS SpanId,
-                    parent_span_id AS ParentSpanId,
-                    kind AS Kind
-                FROM telemetry_spans;
-                """, transaction: transaction).AsList();
-            var attributes = connection.Query<PeerRecalculationAttributeRecord>("""
-                SELECT
-                    trace_id AS TraceId,
-                    span_id AS SpanId,
-                    attribute_key AS AttributeKey,
-                    attribute_value AS AttributeValue
-                FROM telemetry_span_attributes
-                ORDER BY trace_id, span_id, ordinal;
-                """, transaction: transaction).ToLookup(record => (record.TraceId, record.SpanId));
-            var parents = spans
-                .Where(span => span.ParentSpanId is not null)
-                .Select(span => (span.TraceId, SpanId: span.ParentSpanId!))
-                .ToHashSet();
-            var peerResourceIds = new Dictionary<ResourceKey, long>();
-            var spanUpdates = new List<PeerSpanUpdateRecord>(spans.Count);
+                    spans.trace_id AS TraceId,
+                    spans.span_id AS SpanId,
+                    spans.kind AS Kind,
+                    parents.span_id IS NOT NULL AS HasChildren,
+                    attributes.attribute_key AS AttributeKey,
+                    attributes.attribute_value AS AttributeValue
+                FROM telemetry_spans AS spans
+                LEFT JOIN parents
+                    ON parents.trace_id = spans.trace_id
+                   AND parents.span_id = spans.span_id
+                LEFT JOIN telemetry_span_attributes AS attributes
+                    ON attributes.trace_id = spans.trace_id
+                   AND attributes.span_id = spans.span_id
+                ORDER BY spans.trace_id, spans.span_id, attributes.ordinal;
+                """, buffered: false);
+            var spanUpdates = new List<PeerSpanUpdateRecord>(MaxSpanDetailBatchSize);
+            var spanAttributes = new List<KeyValuePair<string, string>>();
+            PeerRecalculationRowRecord? currentSpan = null;
 
-            foreach (var span in spans)
+            foreach (var row in rows)
             {
-                var spanAttributes = attributes[(span.TraceId, span.SpanId)]
-                    .Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue))
-                    .ToArray();
-                long? peerResourceId = null;
-                if (spanAttributes.GetPeerAddress() is not null &&
-                    (OtlpSpanKind)span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer &&
-                    !parents.Contains((span.TraceId, span.SpanId)))
+                if (currentSpan is not null &&
+                    (!string.Equals(currentSpan.TraceId, row.TraceId, StringComparison.Ordinal) ||
+                     !string.Equals(currentSpan.SpanId, row.SpanId, StringComparison.Ordinal)))
                 {
-                    if (TryResolvePeerResourceKey(spanAttributes, out var peerKey))
+                    ProcessSpan(currentSpan, spanAttributes);
+                    spanAttributes.Clear();
+                }
+
+                currentSpan = row;
+                if (row.AttributeKey is not null)
+                {
+                    spanAttributes.Add(KeyValuePair.Create(row.AttributeKey, row.AttributeValue!));
+                }
+            }
+            if (currentSpan is not null)
+            {
+                ProcessSpan(currentSpan, spanAttributes);
+            }
+            FlushSpanUpdates();
+
+            writeConnection.Execute("""
+                UPDATE telemetry_resources
+                SET uninstrumented_peer = 1
+                WHERE resource_id IN (
+                    SELECT uninstrumented_peer_resource_id
+                    FROM telemetry_spans
+                    WHERE uninstrumented_peer_resource_id IS NOT NULL
+                );
+                """, transaction: transaction);
+            var lastUpdatedTimestampTicks = DateTime.UtcNow.Ticks;
+            writeConnection.Execute("""
+                UPDATE telemetry_traces
+                SET last_updated_timestamp_ticks = @LastUpdatedTimestampTicks
+                WHERE trace_id IN (SELECT trace_id FROM telemetry_spans);
+                """, new
+            {
+                LastUpdatedTimestampTicks = lastUpdatedTimestampTicks
+            }, transaction);
+            transaction.Commit();
+
+            void ProcessSpan(PeerRecalculationRowRecord span, IReadOnlyList<KeyValuePair<string, string>> attributes)
+            {
+                long? peerResourceId = null;
+                if ((OtlpSpanKind)span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer &&
+                    !span.HasChildren &&
+                    attributes.Count > 0)
+                {
+                    var attributeArray = attributes.ToArray();
+                    if (attributeArray.GetPeerAddress() is not null &&
+                        TryResolvePeerResourceKey(attributeArray, out var peerKey))
                     {
-                        if (!peerResourceIds.TryGetValue(peerKey, out var resourceId))
-                        {
-                            resourceId = GetOrAddCachedResource(connection, transaction, peerKey, uninstrumentedPeer: true).ResourceId;
-                            peerResourceIds.Add(peerKey, resourceId);
-                            connection.Execute(
-                                "UPDATE telemetry_resources SET uninstrumented_peer = 1 WHERE resource_id = @ResourceId;",
-                                new { ResourceId = resourceId },
-                                transaction);
-                        }
-                        peerResourceId = resourceId;
+                        var cachedPeerResource = GetOrAddCachedResource(writeConnection, transaction, peerKey, uninstrumentedPeer: true);
+                        peerResourceId = cachedPeerResource.ResourceId;
                     }
                 }
 
@@ -1514,24 +1561,22 @@ public sealed partial class SqliteTelemetryRepository
                     TraceId = span.TraceId,
                     SpanId = span.SpanId
                 });
+                if (spanUpdates.Count == MaxSpanDetailBatchSize)
+                {
+                    FlushSpanUpdates();
+                }
             }
 
-            connection.Execute("""
-                UPDATE telemetry_spans
-                SET uninstrumented_peer_resource_id = @PeerResourceId
-                WHERE trace_id = @TraceId AND span_id = @SpanId;
-                """, spanUpdates, transaction);
-            var lastUpdatedTimestampTicks = DateTime.UtcNow.Ticks;
-            connection.Execute("""
-                UPDATE telemetry_traces
-                SET last_updated_timestamp_ticks = @LastUpdatedTimestampTicks
-                WHERE trace_id = @TraceId;
-                """, spans.Select(span => span.TraceId).Distinct(StringComparer.Ordinal).Select(traceId => new
+            void FlushSpanUpdates()
             {
-                TraceId = traceId,
-                LastUpdatedTimestampTicks = lastUpdatedTimestampTicks
-            }), transaction);
-            transaction.Commit();
+                if (spanUpdates.Count == 0)
+                {
+                    return;
+                }
+
+                UpdatePeerSpans(writeConnection, transaction, spanUpdates);
+                spanUpdates.Clear();
+            }
         }
     }
 
@@ -1678,18 +1723,14 @@ public sealed partial class SqliteTelemetryRepository
         public required string SpanId { get; init; }
     }
 
-    private sealed class PeerRecalculationSpanRecord
+    private sealed class PeerRecalculationRowRecord
     {
         public required string TraceId { get; init; }
         public required string SpanId { get; init; }
-        public string? ParentSpanId { get; init; }
         public required int Kind { get; init; }
-    }
-
-    private sealed class PeerRecalculationAttributeRecord : AttributeRecord
-    {
-        public required string TraceId { get; init; }
-        public required string SpanId { get; init; }
+        public required bool HasChildren { get; init; }
+        public string? AttributeKey { get; init; }
+        public string? AttributeValue { get; init; }
     }
 
     private sealed class PeerSpanUpdateRecord
