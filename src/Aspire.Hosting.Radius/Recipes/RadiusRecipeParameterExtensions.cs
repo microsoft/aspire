@@ -40,6 +40,24 @@ public static class RadiusRecipeParameterExtensions
     /// </param>
     /// <returns>The same builder for chaining.</returns>
     /// <exception cref="ArgumentException">A parameter key is empty or whitespace.</exception>
+    /// <remarks>
+    /// Environment-wide parameters apply to every recipe entry in the environment's recipe pack.
+    /// A parameter scoped to a specific resource type via
+    /// <see cref="WithRecipeParameters(IResourceBuilder{RadiusEnvironmentResource}, string, Action{IDictionary{string, object}})"/>
+    /// overrides an environment-wide parameter of the same key for entries of that type.
+    /// </remarks>
+    /// <example>
+    /// Apply an environment-wide recipe parameter and a provider reference:
+    /// <code>
+    /// var builder = DistributedApplication.CreateBuilder(args);
+    /// builder.AddRadiusEnvironment("radius")
+    ///        .WithRecipeParameters(p =>
+    ///        {
+    ///            p["tier"] = "standard";
+    ///            p["region"] = RadiusProviderReference.AwsRegion;
+    ///        });
+    /// </code>
+    /// </example>
     // [AspireExportIgnore]: the configure callback over a mutable dictionary is not
     // representable in the Aspire type system catalog (ASPIREEXPORT008); the method
     // is part of the public C# API surface and the export is suppressed only for ATS.
