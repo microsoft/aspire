@@ -2217,12 +2217,13 @@ public static partial class JavaScriptHostingExtensions
         appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, appDirectory));
         var resource = new ViteAppResource(name, "npm", appDirectory);
 
-        return builder.CreateViteAppBuilder(resource, appDirectory, runScriptName);
+        return builder.CreateViteAppBuilder(resource, appHostId, appDirectory, runScriptName);
     }
 
     private static IResourceBuilder<ViteAppResource> CreateViteAppBuilder(
         this IDistributedApplicationBuilder builder,
         ViteAppResource resource,
+        string appHostId,
         string appDirectory,
         string runScriptName)
     {
@@ -3725,8 +3726,10 @@ public static partial class JavaScriptHostingExtensions
         ConfigureWorkspaceContext(resource, workspace, workspaceProjectName);
         ConfigureWorkspaceAppPath(resource, appDirectory, resolvedPackagePath);
 
+        var appHostId = builder.ApplicationBuilder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
+
         var resourceBuilder = builder.ApplicationBuilder
-            .CreateViteAppBuilder(resource, appDirectory, runScriptName)
+            .CreateViteAppBuilder(resource, appHostId, appDirectory, runScriptName)
             .WithParentRelationship(workspace);
 
         WireUpWorkspaceInstaller(builder, resourceBuilder);
