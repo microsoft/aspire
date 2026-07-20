@@ -23,7 +23,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     private readonly Dictionary<string, ResourceViewModel> _resources = new(StringComparers.ResourceName);
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _resourceChannels = [];
     private readonly Dictionary<string, ImmutableHashSet<Channel<IReadOnlyList<ResourceLogLine>>>> _consoleChannels = new(StringComparers.ResourceName);
-    private readonly Dictionary<string, Dictionary<int, long>> _consoleLogIds = new(StringComparers.ResourceName);
+    private readonly Dictionary<string, int> _lastConsoleLogLineNumbers = new(StringComparers.ResourceName);
     private bool _disposed;
 
     public SqliteResourceRepository(
@@ -305,40 +305,34 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 SET console_logs_loaded = 1
                 WHERE resource_name = @ResourceName;
                 """, new { ResourceName = resourceName }, transaction);
-            if (!_consoleLogIds.TryGetValue(resourceName, out var resourceLogIds))
-            {
-                resourceLogIds = [];
-                _consoleLogIds.Add(resourceName, resourceLogIds);
-            }
-
+            var lastLineNumber = _lastConsoleLogLineNumbers.GetValueOrDefault(resourceName, int.MinValue);
+            // A response can overlap a previously persisted response or repeat a line number within the
+            // same batch. Persist only new line numbers and keep the latest content for an in-batch repeat.
+            var consoleLogsToInsert = new List<ConsoleLogToInsert>(logLines.Count);
+            var consoleLogToInsertIndexes = new Dictionary<int, int>();
             foreach (var line in logLines)
             {
-                var parameters = new
+                if (line.LineNumber <= lastLineNumber)
                 {
-                    ResourceName = resourceName,
-                    line.LineNumber,
-                    Content = line.Text,
-                    line.IsStdErr
-                };
-                if (resourceLogIds.TryGetValue(line.LineNumber, out var consoleLogId))
+                    continue;
+                }
+
+                if (consoleLogToInsertIndexes.TryGetValue(line.LineNumber, out var index))
                 {
-                    connection.Execute("""
-                        UPDATE console_logs
-                        SET content = @Content, is_stderr = @IsStdErr
-                        WHERE console_log_id = @ConsoleLogId;
-                        """, new { parameters.Content, parameters.IsStdErr, ConsoleLogId = consoleLogId }, transaction);
+                    consoleLogsToInsert[index] = new(line.LineNumber, line.Text, line.IsStdErr);
                 }
                 else
                 {
-                    consoleLogId = connection.QuerySingle<long>("""
-                        INSERT INTO console_logs (resource_name, line_number, content, is_stderr)
-                        VALUES (@ResourceName, @LineNumber, @Content, @IsStdErr)
-                        RETURNING console_log_id;
-                        """, parameters, transaction);
-                    resourceLogIds.Add(line.LineNumber, consoleLogId);
+                    consoleLogToInsertIndexes.Add(line.LineNumber, consoleLogsToInsert.Count);
+                    consoleLogsToInsert.Add(new(line.LineNumber, line.Text, line.IsStdErr));
                 }
             }
+            InsertConsoleLogs(connection, transaction, resourceName, consoleLogsToInsert);
             transaction.Commit();
+            if (consoleLogsToInsert.Count > 0)
+            {
+                _lastConsoleLogLineNumbers[resourceName] = consoleLogsToInsert.Max(line => line.LineNumber);
+            }
             if (_resources.TryGetValue(resourceName, out var resource))
             {
                 resource.ConsoleLogsLoaded = true;
