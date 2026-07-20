@@ -80,4 +80,25 @@ public abstract class JavaScriptWorkspaceResource(string name, string workingDir
     /// <returns>The complete argv, or <see langword="null"/> when there is no dependency-build step.</returns>
     public virtual IReadOnlyList<string>? GetBuildDependenciesCommand(string workspaceProjectName, string scriptName)
         => null;
+
+    /// <summary>
+    /// Builds the command line (argv) that copies a single workspace member into a self-contained,
+    /// production-ready directory at <paramref name="targetDirectory"/>, or returns <see langword="null"/>
+    /// when this package manager has no such deploy capability.
+    /// </summary>
+    /// <remarks>
+    /// Publish-mode <c>PublishAsPackageScript</c> generation uses this (when non-null) to produce a pruned
+    /// single-package image: the build stage runs the deploy command after building the member, and the
+    /// runtime stage copies only <paramref name="targetDirectory"/> instead of the whole workspace plus an
+    /// overlaid production <c>node_modules</c>. The member and its workspace dependencies must already be
+    /// built (deploy copies files; it does not run build scripts). The base implementation returns
+    /// <see langword="null"/> (npm/yarn/bun have no equivalent); pnpm overrides it with <c>pnpm deploy</c>.
+    /// Tools layered on top (e.g. nx/turbo integrations) can override this to plug in their own pruning
+    /// (for example <c>turbo prune</c>).
+    /// </remarks>
+    /// <param name="workspaceProjectName">The name of the member (package.json name) within the workspace.</param>
+    /// <param name="targetDirectory">The absolute container path the member is deployed into (for example <c>/deploy</c>).</param>
+    /// <returns>The complete argv, or <see langword="null"/> when this package manager has no self-contained deploy.</returns>
+    public virtual IReadOnlyList<string>? GetDeployCommand(string workspaceProjectName, string targetDirectory)
+        => null;
 }
