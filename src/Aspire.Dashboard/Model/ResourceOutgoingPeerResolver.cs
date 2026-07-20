@@ -19,13 +19,17 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     private static partial Regex HostRegex();
 
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly CancellationTokenSource _watchContainersTokenSource = new();
+    private readonly CancellationTokenSource _watchContainersTokenSource;
+    private readonly CancellationToken _watchContainersToken;
     private readonly List<ModelSubscription> _subscriptions = [];
     private readonly object _lock = new();
     private readonly Task? _watchTask;
 
     public ResourceOutgoingPeerResolver(IDashboardClient resourceService)
     {
+        _watchContainersTokenSource = new();
+        _watchContainersToken = _watchContainersTokenSource.Token;
+
         if (!resourceService.IsEnabled)
         {
             return;
@@ -41,7 +45,7 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
 
     private async Task WatchResourcesAsync(IDashboardClient resourceService)
     {
-        var (snapshot, subscription) = await resourceService.SubscribeResourcesAsync(_watchContainersTokenSource.Token).ConfigureAwait(false);
+        var (snapshot, subscription) = await resourceService.SubscribeResourcesAsync(_watchContainersToken).ConfigureAwait(false);
 
         if (snapshot.Length > 0)
         {
@@ -54,7 +58,7 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
             await RaisePeerChangesAsync().ConfigureAwait(false);
         }
 
-        await foreach (var changes in subscription.WithCancellation(_watchContainersTokenSource.Token).ConfigureAwait(false))
+        await foreach (var changes in subscription.WithCancellation(_watchContainersToken).ConfigureAwait(false))
         {
             var hasPeerRelevantChanges = false;
 
