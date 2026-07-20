@@ -495,6 +495,94 @@ public class SealedSecretManifestTests : IDisposable
         Assert.Contains("ASPIRERADIUS063", ex.Message);
     }
 
+    [Theory]
+    [InlineData("bitnami.com/")]
+    [InlineData("bitnami.com/v1beta1")]
+    [InlineData("bitnami.com/v1alpha1x")]
+    public void ReadMetadata_MalformedOrUnsupportedApiVersion_Throws_ASPIRERADIUS044(string apiVersion)
+    {
+        // A `bitnami.com/*` prefix check used to accept the malformed value `bitnami.com/` and
+        // arbitrary unsupported versions; only the exact supported group/version is accepted so such
+        // manifests fail fast instead of at cluster apply time.
+        var path = Write(
+            $"apiVersion: {apiVersion}\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS044", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_EmbeddedSealedSecretWithPlaintextTemplateData_Throws_ASPIRERADIUS063()
+    {
+        // An embedded SealedSecret keeps its sealed payload under spec.encryptedData, but a crafted
+        // annotation can still carry cleartext under spec.template.data — the same field rejected on
+        // the outer manifest. That must fail closed rather than be copied verbatim into artifacts.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  namespace: app\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"apiVersion\":\"bitnami.com/v1alpha1\",\"kind\":\"SealedSecret\",\"metadata\":{\"name\":\"db-creds\"},\"spec\":{\"encryptedData\":{\"password\":\"AgBcipher\"},\"template\":{\"data\":{\"password\":\"c2VjcmV0\"}}}}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_EmbeddedSealedSecretWithPlaintextTemplateStringData_Throws_ASPIRERADIUS063()
+    {
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  namespace: app\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"SealedSecret\",\"spec\":{\"template\":{\"stringData\":{\"password\":\"secret\"}}}}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_EmbeddedSealedSecretWithEmptyTemplateData_IsAllowed()
+    {
+        // A SealedSecret whose template carries an empty data map has no cleartext and stays allowed.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  namespace: app\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"SealedSecret\",\"spec\":{\"encryptedData\":{\"password\":\"AgBcipher\"},\"template\":{\"data\":{}}}}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var metadata = SealedSecretManifest.ReadMetadata("store", path, "env-default");
+
+        Assert.Equal("db-creds", metadata.Name);
+        Assert.Equal("app", metadata.Namespace);
+    }
+
     [Fact]
     public void ReadMetadata_SealedSecretInLastAppliedAnnotation_IsAllowed()
     {

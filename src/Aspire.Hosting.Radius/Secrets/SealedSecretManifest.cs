@@ -27,6 +27,11 @@ internal readonly record struct ValidatedManifest(
 /// </summary>
 internal static class SealedSecretManifest
 {
+    // The only Bitnami SealedSecret group/version this integration accepts. Validating the exact
+    // value keeps manifest validation fail-fast; an unsupported version would fail at apply time.
+    // https://github.com/bitnami-labs/sealed-secrets
+    private const string SupportedApiVersion = "bitnami.com/v1alpha1";
+
     private static readonly UTF8Encoding s_utf8 = new(encoderShouldEmitUTF8Identifier: false, throwOnInvalidBytes: true);
 
     /// <summary>
@@ -151,12 +156,15 @@ internal static class SealedSecretManifest
                 "artifacts or applied to the cluster. Seal it with kubeseal first. Diagnostic: ASPIRERADIUS044.");
         }
 
+        // Require the exact supported group/version rather than any `bitnami.com/*` prefix: a
+        // malformed value like `bitnami.com/` or an unsupported future version would otherwise pass
+        // validation here and only fail when applied to the cluster.
         if (!string.Equals(kind, "SealedSecret", StringComparison.Ordinal) ||
-            apiVersion is null || !apiVersion.StartsWith("bitnami.com/", StringComparison.Ordinal))
+            !string.Equals(apiVersion, SupportedApiVersion, StringComparison.Ordinal))
         {
             throw new InvalidOperationException(
                 $"Secret store '{storeName}' references a manifest at '{manifestPath}' that is not an encrypted " +
-                "Bitnami SealedSecret (expected 'kind: SealedSecret' and an 'apiVersion' under 'bitnami.com/'; found " +
+                $"Bitnami SealedSecret (expected 'kind: SealedSecret' and 'apiVersion: {SupportedApiVersion}'; found " +
                 $"kind '{kind ?? "<none>"}', apiVersion '{apiVersion ?? "<none>"}'). Diagnostic: ASPIRERADIUS044.");
         }
 
@@ -333,12 +341,23 @@ internal static class SealedSecretManifest
             }
 
             // A well-formed non-Secret resource (the expected `kind: SealedSecret`, whose payload
-            // lives in `spec.encryptedData`) carries no cleartext and is allowed. Every other case —
-            // `kind: Secret`, or a missing/non-string `kind` we cannot positively rule out as a
-            // Secret — is treated as a potential leak whenever it carries any data/stringData.
+            // lives in `spec.encryptedData`) normally carries no cleartext. But an embedded
+            // SealedSecret can still smuggle plaintext under `spec.template.data` /
+            // `spec.template.stringData` (the same fields rejected on the outer manifest) or top-level
+            // data/stringData, and the annotation is copied verbatim into artifacts. Validate those
+            // recursively so a SealedSecret that carries any such cleartext fails closed. Other
+            // non-Secret kinds keep their prior allow behavior; only `kind: Secret` (or a
+            // missing/non-string kind we cannot rule out) is treated as a Secret below.
             if (kind is { ValueKind: JsonValueKind.String } kindElement &&
                 !string.Equals(kindElement.GetString(), "Secret", StringComparison.Ordinal))
             {
+                if (string.Equals(kindElement.GetString(), "SealedSecret", StringComparison.Ordinal) &&
+                    (((dataCount == 1 && HasNonEmptyValue(data)) || (stringDataCount == 1 && HasNonEmptyValue(stringData))) ||
+                     SealedSecretTemplateHasPlaintext(root)))
+                {
+                    return true;
+                }
+
                 return false;
             }
 
@@ -348,6 +367,68 @@ internal static class SealedSecretManifest
         {
             return true;
         }
+    }
+
+    // Inspects an embedded SealedSecret's spec.template for plaintext data/stringData. The template
+    // mirrors the Secret that will be produced; a well-formed SealedSecret seals values under
+    // spec.encryptedData and leaves the template free of cleartext. Fails closed (true) on a
+    // duplicated spec/template key or any non-empty template data/stringData.
+    private static bool SealedSecretTemplateHasPlaintext(JsonElement root)
+    {
+        if (!TryGetSingleObjectProperty(root, "spec", out var spec, out var specDuplicated))
+        {
+            return specDuplicated;
+        }
+
+        if (!TryGetSingleObjectProperty(spec, "template", out var template, out var templateDuplicated))
+        {
+            return templateDuplicated;
+        }
+
+        return TemplateFieldHasPlaintext(template, "data") || TemplateFieldHasPlaintext(template, "stringData");
+    }
+
+    private static bool TemplateFieldHasPlaintext(JsonElement template, string field)
+    {
+        JsonElement value = default;
+        var count = 0;
+        foreach (var property in template.EnumerateObject())
+        {
+            if (string.Equals(property.Name, field, StringComparison.Ordinal))
+            {
+                count++;
+                value = property.Value;
+            }
+        }
+
+        // A duplicated field is ambiguous and cannot be verified, so fail closed.
+        if (count > 1)
+        {
+            return true;
+        }
+
+        return count == 1 && HasNonEmptyValue(value);
+    }
+
+    // Returns the single object-valued property named <paramref name="name"/>. Sets
+    // <paramref name="duplicated"/> when the property appears more than once so the caller can fail
+    // closed; an absent property, or a value that is not a JSON object, yields false without a
+    // duplicate signal (there is no verifiable nested object to inspect).
+    private static bool TryGetSingleObjectProperty(JsonElement obj, string name, out JsonElement value, out bool duplicated)
+    {
+        value = default;
+        var count = 0;
+        foreach (var property in obj.EnumerateObject())
+        {
+            if (string.Equals(property.Name, name, StringComparison.Ordinal))
+            {
+                count++;
+                value = property.Value;
+            }
+        }
+
+        duplicated = count > 1;
+        return count == 1 && value.ValueKind == JsonValueKind.Object;
     }
 
     // For a `kind: Secret`, ANY non-empty representation of data/stringData is treated as a potential

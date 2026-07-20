@@ -15,12 +15,10 @@ namespace Aspire.Hosting.Radius.Tests.Secrets;
 
 public class SecretStoreValidationTests : IDisposable
 {
-    private readonly string _sealedManifestDirectory = Path.Combine(
-        AppContext.BaseDirectory,
-        "radius-secret-store-validation-tests",
-        Guid.NewGuid().ToString("N"));
-
-    public SecretStoreValidationTests() => Directory.CreateDirectory(_sealedManifestDirectory);
+    // Use a securely created temp subdirectory (repo guidance) instead of writing scratch manifests
+    // under the test assembly directory, which may be read-only in packaged runs and can collide
+    // across concurrently executing tests.
+    private readonly string _sealedManifestDirectory = Directory.CreateTempSubdirectory("radius-secret-store-validation-tests").FullName;
 
     public void Dispose()
     {

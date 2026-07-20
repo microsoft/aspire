@@ -52,10 +52,20 @@ internal static class KubernetesName
     }
 
     // A Kubernetes Secret data key must consist of alphanumeric characters, '-', '_', or '.'
-    // (grammar `[-._a-zA-Z0-9]+`). https://kubernetes.io/docs/concepts/configuration/secret/
+    // A Kubernetes Secret/ConfigMap data key must be non-empty, at most 253 characters, match the
+    // grammar `[-._a-zA-Z0-9]+`, and must not be "." or ".." or start with "..". This mirrors
+    // apimachinery's IsConfigMapKey so a key that would be rejected by the Kubernetes API is caught
+    // at publish time instead. See:
+    // - https://kubernetes.io/docs/concepts/configuration/secret/
+    // - https://github.com/kubernetes/apimachinery/blob/master/pkg/util/validation/validation.go (IsConfigMapKey)
     public static bool IsValidSecretDataKey(string value)
     {
-        if (value.Length == 0)
+        if (value.Length is 0 or > 253)
+        {
+            return false;
+        }
+
+        if (value is "." or ".." || value.StartsWith("..", StringComparison.Ordinal))
         {
             return false;
         }

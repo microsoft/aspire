@@ -542,14 +542,26 @@ internal sealed class SealedSecretApplyStep
     //   Unable to connect to the server: net/http: TLS handshake timeout
     //   ... i/o timeout
     //   Unexpected error ... EOF
-    internal static bool IsTransientKubectlFailure(string stderr) =>
-        stderr.Contains("Unable to connect to the server", StringComparison.Ordinal) ||
-        stderr.Contains("connection refused", StringComparison.Ordinal) ||
-        stderr.Contains("dial tcp", StringComparison.Ordinal) ||
-        stderr.Contains("i/o timeout", StringComparison.Ordinal) ||
-        stderr.Contains("TLS handshake timeout", StringComparison.Ordinal) ||
-        stderr.Contains("the server is currently unable to handle the request", StringComparison.Ordinal) ||
-        stderr.Contains("etcdserver: request timed out", StringComparison.Ordinal);
+    internal static bool IsTransientKubectlFailure(string stderr)
+    {
+        // A permanent TLS trust failure is also reported under the "Unable to connect to the server"
+        // prefix (e.g. `Unable to connect to the server: x509: certificate signed by unknown
+        // authority`). Retrying cannot fix an untrusted/expired/mismatched certificate, so exclude
+        // x509 errors up front — otherwise deploy would poll until the full materialization timeout
+        // and report a misleading sync-timeout instead of failing fast.
+        if (stderr.Contains("x509:", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return stderr.Contains("Unable to connect to the server", StringComparison.Ordinal) ||
+            stderr.Contains("connection refused", StringComparison.Ordinal) ||
+            stderr.Contains("dial tcp", StringComparison.Ordinal) ||
+            stderr.Contains("i/o timeout", StringComparison.Ordinal) ||
+            stderr.Contains("TLS handshake timeout", StringComparison.Ordinal) ||
+            stderr.Contains("the server is currently unable to handle the request", StringComparison.Ordinal) ||
+            stderr.Contains("etcdserver: request timed out", StringComparison.Ordinal);
+    }
 
     // Reads the materialized Secret's data-key names to verify the declared keys are present.
     // The Secret's `data` values are base64 secret material, so RunKubectlAsync is called with

@@ -263,12 +263,25 @@ public class AddRadiusSecretStoreTests
     [InlineData("bad/key")]
     [InlineData("bad key")]
     [InlineData("bad:key")]
+    [InlineData(".")]
+    [InlineData("..")]
+    [InlineData("..leading")]
     public void InvalidSecretDataKey_OnExistingSecret_ThrowsAtCallSite_ASPIRERADIUS067(string key)
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic);
 
         var ex = Assert.Throws<ArgumentException>(() => store.WithExistingSecret("app/s", key));
+        Assert.Contains("ASPIRERADIUS067", ex.Message);
+    }
+
+    [Fact]
+    public void SecretDataKey_ExceedingMaxLength_ThrowsAtCallSite_ASPIRERADIUS067()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("s", RadiusSecretStoreType.Generic);
+
+        var ex = Assert.Throws<ArgumentException>(() => store.WithExistingSecret("app/s", new string('a', 254)));
         Assert.Contains("ASPIRERADIUS067", ex.Message);
     }
 

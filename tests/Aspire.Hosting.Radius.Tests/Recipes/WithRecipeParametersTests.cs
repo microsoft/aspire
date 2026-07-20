@@ -59,6 +59,25 @@ public class WithRecipeParametersTests
     }
 
     [Fact]
+    public void BlankKeyInCall_DoesNotApplyEarlierKeys_MergeIsTransactional()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var env = builder.AddRadiusEnvironment("radius");
+
+        // A blank key later in the same call must abort the whole merge; mutating as we validate
+        // would leave "good" applied, so a caller that catches and retries would publish parameters
+        // from a failed call.
+        Assert.Throws<ArgumentException>(() => env.WithRecipeParameters(p =>
+        {
+            p["good"] = 1;
+            p["  "] = 2;
+        }));
+
+        var ann = env.Resource.Annotations.OfType<RadiusRecipeParametersAnnotation>().SingleOrDefault();
+        Assert.True(ann is null || !ann.EnvironmentWide.ContainsKey("good"));
+    }
+
+    [Fact]
     public void NullArguments_Throw()
     {
         var builder = DistributedApplication.CreateBuilder();

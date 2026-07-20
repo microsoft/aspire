@@ -1,10 +1,12 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text.Json;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Radius.Publishing;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Hosting.Radius.Tests.Publishing;
 
@@ -40,7 +42,7 @@ public class RadiusDeployParametersTests
     }
 
     [Fact]
-    public async Task ResolvedDeployParameters_RedactSecretValuesInLoggedCommand()
+    public async Task WriteDeployParametersFile_WritesOwnerOnlyArmParameterFile()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var secret = builder.AddParameter("recipeSecret", "TopSecretValue", secret: true);
@@ -53,27 +55,67 @@ public class RadiusDeployParametersTests
         var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
         RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
 
-        var options = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+        // BuildOptions attaches the RadiusDeployParametersAnnotation that the deploy step reads.
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
 
-        // Simulate the deploy step: build `--parameters id=value` tokens and collect secret values.
-        var args = new List<string> { "deploy", "app.bicep" };
-        var secretValues = new List<string>();
-        foreach (var (identifier, parameter) in options.RecipeParameterBindings)
+        // Exercise the *production* helper: the deploy step no longer passes `--parameters id=value`
+        // on the command line (which would expose secrets); it writes an owner-only ARM JSON file and
+        // passes `--parameters @<file>`. Assert that file contract rather than the obsolete flow.
+        var step = new RadiusDeploymentPipelineStep(radiusEnv);
+        var path = await step.WriteDeployParametersFileAsync(NullLogger.Instance, default);
+        Assert.NotNull(path);
+
+        try
         {
-            var value = await parameter.GetValueAsync(default) ?? string.Empty;
-            args.Add("--parameters");
-            args.Add($"{identifier}={value}");
-            if (parameter.Secret)
+            var json = await File.ReadAllTextAsync(path);
+            using var document = JsonDocument.Parse(json);
+            var root = document.RootElement;
+
+            Assert.Equal(
+                "https://schema.management.azure.com/schemas/2019-04-01/deploymentParameters.json#",
+                root.GetProperty("$schema").GetString());
+            Assert.Equal("1.0.0.0", root.GetProperty("contentVersion").GetString());
+            Assert.Equal(
+                "TopSecretValue",
+                root.GetProperty("parameters").GetProperty("recipeSecret").GetProperty("value").GetString());
+
+            // The file holds resolved secret material, so on Unix it must be owner read/write only.
+            if (!OperatingSystem.IsWindows())
             {
-                secretValues.Add(value);
+                var mode = File.GetUnixFileMode(path);
+                Assert.Equal(UnixFileMode.UserRead | UnixFileMode.UserWrite, mode);
+            }
+
+            // Cleanup removes the file (the deploy step deletes it in a finally block).
+            RadiusDeploymentPipelineStep.DeleteDeployParametersFile(path, NullLogger.Instance);
+            Assert.False(File.Exists(path));
+        }
+        finally
+        {
+            var directory = Path.GetDirectoryName(path);
+            if (directory is not null && Directory.Exists(directory))
+            {
+                Directory.Delete(directory, recursive: true);
             }
         }
+    }
 
-        var command = string.Join(' ', args);
-        Assert.Contains("recipeSecret=TopSecretValue", command);
+    [Fact]
+    public async Task WriteDeployParametersFile_ReturnsNull_WhenNoRecipeParameters()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("myenv");
+        builder.AddRedis("cache");
 
-        var redacted = RadCredentialRegisterStep.RedactSecretValues(command, secretValues);
-        Assert.DoesNotContain("TopSecretValue", redacted);
-        Assert.Contains("recipeSecret=***", redacted);
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var radiusEnv = model.Resources.OfType<RadiusEnvironmentResource>().First();
+        RadiusTestHelper.AttachDeploymentTargets(radiusEnv, model);
+        _ = new RadiusBicepPublishingContext(radiusEnv).BuildOptions(model);
+
+        var step = new RadiusDeploymentPipelineStep(radiusEnv);
+        var path = await step.WriteDeployParametersFileAsync(NullLogger.Instance, default);
+
+        Assert.Null(path);
     }
 }

@@ -59,7 +59,11 @@ internal sealed class RadiusRecipeParametersAnnotation : IResourceAnnotation
         IDictionary<string, object> source,
         string parameterName)
     {
-        foreach (var (key, value) in source)
+        // Validate every key first, then apply. Mutating target as we validate would leave earlier
+        // keys applied when a later key is blank; a caller that catches the exception and retries
+        // would then publish parameters from a failed call. Validate-then-apply keeps the merge
+        // transactional (all-or-nothing).
+        foreach (var key in source.Keys)
         {
             if (string.IsNullOrWhiteSpace(key))
             {
@@ -67,7 +71,10 @@ internal sealed class RadiusRecipeParametersAnnotation : IResourceAnnotation
                     "Recipe parameter keys must be non-empty and non-whitespace.",
                     parameterName);
             }
+        }
 
+        foreach (var (key, value) in source)
+        {
             target[key] = value;
         }
     }
