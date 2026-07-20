@@ -1086,7 +1086,7 @@ export class AppHostDataRepository {
             const resource: ResourceJson = JSON.parse(trimmed);
             if (resource.name) {
                 stream.resources.set(resource.name, resource);
-stream.receivedData = true;
+                stream.receivedData = true;
                 stream.restartDelay = 5000;
                 // A working stream proves the CLI supports `describe`, so any peer clears a CLI-wide
                 // banner. Once a host raises a scoped error, only that host's recovery clears it, even if
@@ -1804,7 +1804,7 @@ stream.receivedData = true;
                 return this._isCurrentPsFetch(fetchVersion);
             }
 
-        return !this._disposed && (force || this._dataActive);
+            return !this._disposed && (force || this._dataActive);
         };
 
         let cliPath: string;

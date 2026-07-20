@@ -90,6 +90,26 @@ suite('AppHostDataRepository', () => {
         return sinon.stub(vscode.workspace, 'workspaceFolders').value(workspaceFolders);
     }
 
+    async function startDescribeForRunningAppHost(repository: AppHostDataRepository, appHostPath: string): Promise<sinon.SinonSpyCall> {
+        const psCall = spawnStub.getCalls().find(call => {
+            const args = call.args[2] as string[];
+            return args[0] === 'ps' && args.includes('--follow');
+        });
+        assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
+        psCall.args[3].lineCallback(JSON.stringify([{
+            appHostPath,
+            appHostPid: 1,
+        }]));
+        await waitForMicrotasks();
+
+        const describeCall = spawnStub.getCalls().find(call => {
+            const args = call.args[2] as string[];
+            return args[0] === 'describe' && args[args.length - 1] === appHostPath;
+        });
+        assert.ok(describeCall, `expected a describe stream for ${appHostPath}`);
+        return describeCall;
+    }
+
     test('activate does not start describe while panel is hidden', async () => {
         const repository = new AppHostDataRepository(terminalProvider);
 
@@ -3711,19 +3731,51 @@ suite('AppHostDataRepository', () => {
     });
 
     test('hiding workspace panel before cli path resolves prevents describe from starting', async () => {
-        const cliPath = createDeferred<string>();
-        getCliPathStub.returns(cliPath.promise);
-        const repository = new AppHostDataRepository(terminalProvider);
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const discoveryEmitter = new vscode.EventEmitter<vscode.WorkspaceFolder>();
+        const appHostDiscoveryService = {
+            onDidChangeCandidates: discoveryEmitter.event,
+            discover: () => new Promise<CandidateAppHostDisplayInfo[]>(() => { }),
+            dispose: () => { },
+        };
+        const describeCliPath = createDeferred<string>();
+        getCliPathStub.onFirstCall().resolves('aspire');
+        getCliPathStub.onSecondCall().returns(describeCliPath.promise);
+        const repository = new AppHostDataRepository(terminalProvider, appHostDiscoveryService as unknown as AppHostDiscoveryService);
 
-        repository.activate();
-        repository.setPanelVisible(true);
-        repository.setPanelVisible(false);
-        cliPath.resolve('aspire');
-        await waitForMicrotasks();
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
 
-        assert.strictEqual(spawnStub.called, false);
+            const psCall = spawnStub.getCalls().find(call => {
+                const args = call.args[2] as string[];
+                return args[0] === 'ps' && args.includes('--follow');
+            });
+            assert.ok(psCall, 'expected an aspire ps --follow watch to be running');
+            psCall.args[3].lineCallback(JSON.stringify([{
+                appHostPath: '/workspace/AppHost.csproj',
+                appHostPid: 1,
+            }]));
+            await waitForMicrotasks();
 
-        repository.dispose();
+            assert.strictEqual(getCliPathStub.callCount, 2);
+            assert.strictEqual(spawnStub.getCalls().some(call => (call.args[2] as string[])[0] === 'describe'), false);
+
+            repository.setPanelVisible(false);
+            describeCliPath.resolve('aspire');
+            await waitForMicrotasks();
+
+            assert.strictEqual(spawnStub.getCalls().some(call => (call.args[2] as string[])[0] === 'describe'), false);
+        } finally {
+            repository.dispose();
+            discoveryEmitter.dispose();
+            workspaceFoldersStub.restore();
+        }
     });
 
     test('visible workspace panel tracks running AppHost with no resources from ps', async () => {
@@ -4306,43 +4358,63 @@ suite('AppHostDataRepository', () => {
     });
 
     test('late close from stopped describe does not orphan replacement', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
         const firstChildProcess = new TestChildProcess();
         const secondChildProcess = new TestChildProcess();
-        spawnStub.onFirstCall().returns(firstChildProcess);
-        spawnStub.onSecondCall().returns(secondChildProcess);
-        const repository = new AppHostDataRepository(terminalProvider);
-
-        repository.activate();
-        repository.setPanelVisible(true);
-        await waitForMicrotasks();
-        const firstLineCallback = spawnStub.firstCall.args[3].lineCallback;
-        const firstExitCallback = spawnStub.firstCall.args[3].exitCallback;
-
-        repository.setPanelVisible(false);
-        repository.setPanelVisible(true);
-        await waitForMicrotasks();
-
-        firstLineCallback(JSON.stringify({ name: 'stale' }));
-        firstExitCallback(0);
-        repository.setPanelVisible(false);
-
-        assert.strictEqual(repository.workspaceResources.length, 0);
-        assert.strictEqual(firstChildProcess.killed, true);
-        assert.strictEqual(secondChildProcess.killed, true);
-
-        repository.dispose();
-    });
-
-    test('stubborn describe is force killed', async () => {
-        const clock = sinon.useFakeTimers();
-        const childProcess = new TestChildProcess(false);
-        spawnStub.returns(childProcess);
+        const describeProcesses = [firstChildProcess, secondChildProcess];
+        spawnStub.callsFake((_terminalProvider, _command, args) =>
+            args[0] === 'describe' ? describeProcesses.shift()! : new TestChildProcess());
         const repository = new AppHostDataRepository(terminalProvider);
 
         try {
             repository.activate();
             repository.setPanelVisible(true);
             await waitForMicrotasks();
+            const firstDescribeCall = await startDescribeForRunningAppHost(repository, '/workspace/AppHost.csproj');
+            const firstLineCallback = firstDescribeCall.args[3].lineCallback;
+            const firstExitCallback = firstDescribeCall.args[3].exitCallback;
+
+            repository.setPanelVisible(false);
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+
+            const describeCalls = spawnStub.getCalls().filter(call => (call.args[2] as string[])[0] === 'describe');
+            assert.strictEqual(describeCalls.length, 2);
+
+            firstLineCallback(JSON.stringify({ name: 'stale' }));
+            firstExitCallback(0);
+            repository.setPanelVisible(false);
+
+            assert.strictEqual(repository.workspaceResources.length, 0);
+            assert.strictEqual(firstChildProcess.killed, true);
+            assert.strictEqual(secondChildProcess.killed, true);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
+    });
+
+    test('stubborn describe is force killed', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
+        const clock = sinon.useFakeTimers();
+        const childProcess = new TestChildProcess(false);
+        spawnStub.callsFake((_terminalProvider, _command, args) =>
+            args[0] === 'describe' ? childProcess : new TestChildProcess());
+        const repository = new AppHostDataRepository(terminalProvider);
+
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            await startDescribeForRunningAppHost(repository, '/workspace/AppHost.csproj');
 
             repository.setPanelVisible(false);
             clock.tick(5000);
@@ -4351,16 +4423,23 @@ suite('AppHostDataRepository', () => {
         } finally {
             repository.dispose();
             clock.restore();
+            workspaceFoldersStub.restore();
         }
     });
 
     test('Windows describe termination uses taskkill for the process tree', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
         const platformStub = sinon.stub(process, 'platform').value('win32');
         const spawnProcessStub = sinon.stub(nodeChildProcess, 'spawn');
         const clock = sinon.useFakeTimers();
         const childProcess = new TestChildProcess(false);
         Object.defineProperty(childProcess, 'pid', { value: 4242 });
-        spawnStub.returns(childProcess);
+        spawnStub.callsFake((_terminalProvider, _command, args) =>
+            args[0] === 'describe' ? childProcess : new TestChildProcess());
         const taskkillCalls: Array<{ command: string; args: string[]; windowsHide: boolean | undefined }> = [];
         spawnProcessStub.callsFake((command: string, args?: readonly string[], options?: nodeChildProcess.SpawnOptions) => {
             taskkillCalls.push({
@@ -4379,6 +4458,7 @@ suite('AppHostDataRepository', () => {
             repository.activate();
             repository.setPanelVisible(true);
             await waitForMicrotasks();
+            await startDescribeForRunningAppHost(repository, '/workspace/AppHost.csproj');
 
             repository.setPanelVisible(false);
             assert.deepStrictEqual(taskkillCalls, [{
@@ -4407,26 +4487,37 @@ suite('AppHostDataRepository', () => {
             clock.restore();
             spawnProcessStub.restore();
             platformStub.restore();
+            workspaceFoldersStub.restore();
         }
     });
 
     test('already-exited describe is not terminated again', async () => {
+        const workspaceFoldersStub = stubWorkspaceFolders([{
+            uri: vscode.Uri.file('/workspace'),
+            name: 'workspace',
+            index: 0,
+        }]);
         const childProcess = new TestChildProcess();
-        childProcess.markExited();
-        spawnStub.returns(childProcess);
+        spawnStub.callsFake((_terminalProvider, _command, args) =>
+            args[0] === 'describe' ? childProcess : new TestChildProcess());
         const repository = new AppHostDataRepository(terminalProvider);
 
-        repository.activate();
-        repository.setPanelVisible(true);
-        await waitForMicrotasks();
+        try {
+            repository.activate();
+            repository.setPanelVisible(true);
+            await waitForMicrotasks();
+            await startDescribeForRunningAppHost(repository, '/workspace/AppHost.csproj');
+            childProcess.markExited();
 
-        repository.setPanelVisible(false);
+            repository.setPanelVisible(false);
 
-        assert.strictEqual(childProcess.killed, false);
-        assert.strictEqual(childProcess.listenerCount('close'), 0);
-        assert.strictEqual(childProcess.listenerCount('exit'), 0);
-
-        repository.dispose();
+            assert.strictEqual(childProcess.killed, false);
+            assert.strictEqual(childProcess.listenerCount('close'), 0);
+            assert.strictEqual(childProcess.listenerCount('exit'), 0);
+        } finally {
+            repository.dispose();
+            workspaceFoldersStub.restore();
+        }
     });
 });
 
