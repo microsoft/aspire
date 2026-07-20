@@ -20,12 +20,13 @@
                 <ApplicationName/>
             </FluentAnchor>
             <div class="flex-filler"></div>
-            @if (RunStore.SupportsRunSelection && _isRunSelectionInitialized)
+            @if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;
                 <DashboardRunSelect @key="selectedRun.RunId"
                                     SelectedRunId="@selectedRun.RunId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
                                     SelectedRunIdChanged="@SwitchDashboardRunAsync" />
             }
             <FluentAnchor Class="header-button"
@@ -67,12 +68,13 @@
                 <ApplicationName/>
             </FluentAnchor>
             <div class="flex-filler"></div>
-            @if (RunStore.SupportsRunSelection && _isRunSelectionInitialized)
+            @if (RunStore.SupportsRunSelection)
             {
                 var selectedRun = RunSelection.SelectedRun;
                 <DashboardRunSelect @key="selectedRun.RunId"
                                     SelectedRunId="@selectedRun.RunId"
                                     SelectedRunIsCurrent="@selectedRun.IsCurrent"
+                                    SelectedRunStartedAtUtc="@selectedRun.StartedAtUtc"
                                     SelectedRunIdChanged="@SwitchDashboardRunAsync" />
             }
             <UserProfile/>
@@ -102,7 +104,7 @@
     <div class="layout-body-container">
         <FluentBodyContent Class="custom-body-content body-content">
             <FluentToastProvider MaxToastCount="3" Timeout="5000" />
-            @if (!_isSwitchingRuns && _isRunSelectionInitialized)
+            @if (!_isSwitchingRuns)
             {
                 var selectedRun = RunSelection.SelectedRun;
                 <CascadingValue @key="selectedRun.RunId" Name="DashboardRunId" Value="selectedRun.RunId" IsFixed="true">
@@ -115,7 +117,7 @@
     <FluentDialogProvider/>
     <FluentTooltipProvider />
     <FluentMenuProvider />
-    @if (!_isSwitchingRuns && _isRunSelectionInitialized)
+    @if (!_isSwitchingRuns)
     {
         var selectedRun = RunSelection.SelectedRun;
         <CascadingValue @key="selectedRun.RunId" Name="DashboardRunProviders" Value="selectedRun.RunId" IsFixed="true">

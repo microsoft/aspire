@@ -5,6 +5,7 @@
                       IconStartClass="application-run-status"
                       IconStartColor="@(SelectedRunIsCurrent ? Color.Success : Color.Warning)"
                       Items="@_menuItems"
+                      OnOpening="@LoadRuns"
                       ButtonAppearance="Appearance.Stealth"
                       ButtonClass="application-run-select-button"
                       HideIcon="true"

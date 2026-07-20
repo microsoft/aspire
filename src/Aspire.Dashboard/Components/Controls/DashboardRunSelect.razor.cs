@@ -12,16 +12,20 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class DashboardRunSelect : ComponentBase
 {
-    private IReadOnlyList<DashboardRunDescriptor> _runs = [];
     private readonly List<MenuButtonItem> _menuItems = [];
     private string RunSelectAriaLabel => Loc[nameof(LayoutResources.DashboardRunSelectAriaLabel)];
-    private string SelectedRunText => FormatRunOption(_runs.Single(run => string.Equals(run.RunId, SelectedRunId, StringComparison.Ordinal)));
+    private string SelectedRunText => SelectedRunIsCurrent
+        ? Loc[nameof(LayoutResources.DashboardRunSelectCurrent)]
+        : FormatHelpers.FormatTimeWithOptionalDate(TimeProvider, SelectedRunStartedAtUtc.UtcDateTime);
 
     [Parameter, EditorRequired]
     public required string SelectedRunId { get; set; }
 
     [Parameter]
     public bool SelectedRunIsCurrent { get; set; }
+
+    [Parameter]
+    public DateTimeOffset SelectedRunStartedAtUtc { get; set; }
 
     [Parameter]
     public EventCallback<string?> SelectedRunIdChanged { get; set; }
@@ -35,15 +39,11 @@ public partial class DashboardRunSelect : ComponentBase
     [Inject]
     internal IDashboardRunStore RunStore { get; init; } = null!;
 
-    protected override void OnInitialized()
+    private void LoadRuns()
     {
-        _runs = RunStore.GetRuns();
-    }
-
-    protected override void OnParametersSet()
-    {
+        var runs = RunStore.GetRuns();
         _menuItems.Clear();
-        foreach (var run in _runs)
+        foreach (var run in runs)
         {
             _menuItems.Add(new MenuButtonItem
             {
@@ -54,7 +54,7 @@ public partial class DashboardRunSelect : ComponentBase
                 OnClick = () => SelectedRunIdChanged.InvokeAsync(run.IsCurrent ? null : run.RunId)
             });
 
-            if (run.IsCurrent && _runs.Any(candidate => !candidate.IsCurrent))
+            if (run.IsCurrent && runs.Any(candidate => !candidate.IsCurrent))
             {
                 _menuItems.Add(new MenuButtonItem { IsDivider = true });
             }
