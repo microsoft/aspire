@@ -245,9 +245,6 @@ internal static class FluentUISetupHelpers
     {
         public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) => telemetryRepository;
         public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) => dashboardClient;
-        public void Dispose()
-        {
-        }
     }
 
     public static void SetupFluentUIComponents(TestContext context)

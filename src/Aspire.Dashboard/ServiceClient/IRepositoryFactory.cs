@@ -8,7 +8,7 @@ namespace Aspire.Dashboard.ServiceClient;
 /// <summary>
 /// Creates repositories for current and historical dashboard run databases.
 /// </summary>
-internal interface IRepositoryFactory : IDisposable
+internal interface IRepositoryFactory
 {
     /// <summary>
     /// Creates a telemetry repository for the specified database.

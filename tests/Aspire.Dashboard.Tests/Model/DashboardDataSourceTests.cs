@@ -343,10 +343,10 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         }
 
         using var currentRunStore = CreateRunStore(options);
-        var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
-        using var repositoryFactory = CreateRepositoryFactory(currentDatabase, options);
-        var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
-        var currentResourceRepository = repositoryFactory.CreateResourceRepository(currentDatabase);
+        using var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
+        var repositoryFactory = CreateRepositoryFactory(options);
+        using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
+        using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
         using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
         dataSource.SelectRun(historicalRunId);
 
@@ -441,10 +441,10 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             });
         Assert.True(File.Exists(incompatibleDatabasePath));
 
-        var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
-        using var repositoryFactory = CreateRepositoryFactory(currentDatabase, options);
-        var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
-        var currentResourceRepository = repositoryFactory.CreateResourceRepository(currentDatabase);
+        using var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
+        var repositoryFactory = CreateRepositoryFactory(options);
+        using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
+        using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
         using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
 
         var exception = Assert.Throws<InvalidOperationException>(() => dataSource.SelectRun(incompatibleRunId));
@@ -517,10 +517,10 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         }
 
         using var currentRunStore = CreateRunStore(options);
-        var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
-        using var repositoryFactory = CreateRepositoryFactory(currentDatabase, options);
-        var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
-        var currentResourceRepository = repositoryFactory.CreateResourceRepository(currentDatabase);
+        using var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
+        var repositoryFactory = CreateRepositoryFactory(options);
+        using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
+        using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
         using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
         Assert.Empty(dataSource.TelemetryRepository.GetResources());
 
@@ -579,10 +579,10 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     {
         var options = CreateOptions();
         using var currentRunStore = CreateRunStore(options);
-        var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
-        using var repositoryFactory = CreateRepositoryFactory(currentDatabase, options);
-        var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
-        var currentResourceRepository = repositoryFactory.CreateResourceRepository(currentDatabase);
+        using var currentDatabase = new DashboardSqliteDatabase(currentRunStore.DatabasePath);
+        var repositoryFactory = CreateRepositoryFactory(options);
+        using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
+        using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
         using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
         dataSource.SelectRun("missing");
 
@@ -628,12 +628,9 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance);
     }
 
-    private static RepositoryFactory CreateRepositoryFactory(
-        DashboardSqliteDatabase currentDatabase,
-        IOptions<DashboardOptions> options)
+    private static RepositoryFactory CreateRepositoryFactory(IOptions<DashboardOptions> options)
     {
         return new RepositoryFactory(
-            currentDatabase,
             NullLoggerFactory.Instance,
             options,
             new PauseManager(),

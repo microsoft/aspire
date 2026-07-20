@@ -35,8 +35,5 @@ internal static class TestDashboardDataSource
     {
         public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) => telemetryRepository;
         public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) => resourceRepository;
-        public void Dispose()
-        {
-        }
     }
 }

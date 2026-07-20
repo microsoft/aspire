@@ -282,9 +282,9 @@ public class ResourceOutgoingPeerResolverTests
         return ResourceOutgoingPeerResolver.TryResolvePeerCore(resources, attributes, out peerName, out _);
     }
 
-    private static ResourceOutgoingPeerResolver CreateResolver(IDashboardClient dashboardClient, DashboardActivitySource? activitySource = null)
+    private static ResourceOutgoingPeerResolver CreateResolver(IResourceRepository resourceRepository, DashboardActivitySource? activitySource = null)
     {
-        return new ResourceOutgoingPeerResolver(dashboardClient, activitySource ?? new DashboardActivitySource());
+        return new ResourceOutgoingPeerResolver(resourceRepository, activitySource ?? new DashboardActivitySource());
     }
 
     [Fact]
