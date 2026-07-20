@@ -163,6 +163,84 @@ public class SealedSecretApplyStepTests
     }
 
     [Fact]
+    public async Task GetSealedSecretStatus_PermanentFailure_ThrowsImmediately()
+    {
+        // A permanent failure (here RBAC-denied) will never resolve by waiting, so the status probe
+        // must surface it right away instead of masquerading as an empty status and burning the whole
+        // materialization budget before reporting a misleading sync-timeout.
+        var calls = 0;
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(() =>
+            SealedSecretApplyStep.GetSealedSecretStatusAsync(
+                "app",
+                "db-creds",
+                "kind-radius",
+                default,
+                (_, _) =>
+                {
+                    calls++;
+                    return Task.FromResult((ExitCode: 1, StdOut: "", StdErr: "Error from server (Forbidden): sealedsecrets.bitnami.com \"db-creds\" is forbidden: User cannot get resource"));
+                }));
+
+        Assert.Equal(1, calls);
+        Assert.Contains("db-creds", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetSealedSecretStatus_NotFound_ReturnsEmptyStatusForRetry()
+    {
+        // A NotFound for the target SealedSecret means "not observed yet" — return an empty snapshot
+        // so the poll loop keeps waiting.
+        var snapshot = await SealedSecretApplyStep.GetSealedSecretStatusAsync(
+            "app",
+            "db-creds",
+            "kind-radius",
+            default,
+            (_, _) => Task.FromResult((ExitCode: 1, StdOut: "", StdErr: "Error from server (NotFound): sealedsecrets.bitnami.com \"db-creds\" not found")));
+
+        Assert.Null(snapshot.Generation);
+        Assert.Null(snapshot.ObservedGeneration);
+        Assert.Empty(snapshot.Conditions);
+    }
+
+    [Theory]
+    [InlineData("Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused")]
+    [InlineData("Unable to connect to the server: net/http: TLS handshake timeout")]
+    [InlineData("Error from server: etcdserver: request timed out")]
+    public async Task GetSealedSecretStatus_TransientFailure_ReturnsEmptyStatusForRetry(string stderr)
+    {
+        var snapshot = await SealedSecretApplyStep.GetSealedSecretStatusAsync(
+            "app",
+            "db-creds",
+            "kind-radius",
+            default,
+            (_, _) => Task.FromResult((ExitCode: 1, StdOut: "", StdErr: stderr)));
+
+        Assert.Null(snapshot.Generation);
+        Assert.Empty(snapshot.Conditions);
+    }
+
+    [Theory]
+    [InlineData("Error from server (NotFound): sealedsecrets.bitnami.com \"db-creds\" not found", "db-creds", true)]
+    [InlineData("Error from server (NotFound): sealedsecrets.bitnami.com \"other\" not found", "db-creds", false)]
+    [InlineData("Error from server (NotFound): namespaces \"db-creds\" not found", "db-creds", false)]
+    [InlineData("error: exec plugin: invalid apiVersion; kubelogin not found", "db-creds", false)]
+    public void IsSealedSecretNotFound_MatchesOnlyTargetSealedSecret(string stderr, string name, bool expected)
+    {
+        Assert.Equal(expected, SealedSecretApplyStep.IsSealedSecretNotFound(stderr, name));
+    }
+
+    [Theory]
+    [InlineData("Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused", true)]
+    [InlineData("net/http: TLS handshake timeout", true)]
+    [InlineData("etcdserver: request timed out", true)]
+    [InlineData("Error from server (Forbidden): sealedsecrets.bitnami.com \"db-creds\" is forbidden", false)]
+    [InlineData("error: You must be logged in to the server (Unauthorized)", false)]
+    public void IsTransientKubectlFailure_MatchesOnlyConnectivityFailures(string stderr, bool expected)
+    {
+        Assert.Equal(expected, SealedSecretApplyStep.IsTransientKubectlFailure(stderr));
+    }
+
+    [Fact]
     public async Task WaitForSealedSecretSynced_ReturnsOnceObservedGenerationMatchesSyncedTrueAndSecretExists()
     {
         var statusCalls = 0;

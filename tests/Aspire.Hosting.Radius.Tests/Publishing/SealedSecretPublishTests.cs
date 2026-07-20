@@ -65,6 +65,24 @@ public class SealedSecretPublishTests : IDisposable
     }
 
     [Fact]
+    public void WithSealedSecret_RelativePath_IsResolvedAgainstAppHostDirectory()
+    {
+        // A relative manifest path must be anchored to the AppHost directory (not the process working
+        // directory) so `WithSealedSecret("./secrets/x.yaml", ...)` works no matter where the AppHost
+        // process is launched from.
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var store = builder.AddRadiusSecretStore("db-creds", RadiusSecretStoreType.Generic)
+            .WithSealedSecret(Path.Combine("secrets", "db-creds.sealed.yaml"), "username");
+
+        var resolved = store.Resource.Population.SealedManifestPath;
+        Assert.NotNull(resolved);
+        Assert.True(Path.IsPathFullyQualified(resolved));
+        Assert.Equal(
+            Path.GetFullPath(Path.Combine("secrets", "db-creds.sealed.yaml"), store.ApplicationBuilder.AppHostDirectory),
+            resolved);
+    }
+
+    [Fact]
     public void WithSealedSecret_MissingManifest_Throws_ASPIRERADIUS044()
     {
         var missing = Path.Combine(_dir, "does-not-exist.sealed.yaml");

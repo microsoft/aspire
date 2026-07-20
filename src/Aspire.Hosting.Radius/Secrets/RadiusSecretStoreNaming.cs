@@ -10,25 +10,27 @@ namespace Aspire.Hosting.Radius.Secrets;
 /// </summary>
 /// <remarks>
 /// A secret-store name is used verbatim as a Bicep symbol/resource name, a UCP-ID segment,
-/// and a Radius-created <c>Secret</c> name, so it must be a single valid resource-name
-/// segment. The grammar mirrors UCP/Azure Resource Manager resource names: 1-90 characters
-/// of ASCII letters, digits, <c>-</c>, <c>_</c>, and <c>.</c>, not starting or ending with
-/// <c>.</c>, with no consecutive <c>.</c>, and not a Windows reserved device name (the name
-/// can also become a filesystem path segment for a copied manifest, so it must be materializable
-/// on every platform).
+/// a Radius-created <c>Secret</c> name, and — in publish mode — as an Aspire resource name
+/// (the store builder calls <c>AddResource</c>, which enforces <see cref="ApplicationModel.ModelName"/>).
+/// To avoid a mode-dependent contract (run mode uses an unregistered builder and skips that check),
+/// the grammar is kept identical to Aspire's resource-name grammar: 1-64 characters of ASCII
+/// letters, digits, and <c>-</c>, starting with a letter, with no consecutive hyphens and no
+/// trailing hyphen. It additionally rejects Windows reserved device names, because the name can
+/// also become a filesystem path segment for a copied manifest and must be materializable on
+/// every platform.
 /// </remarks>
 internal static class RadiusSecretStoreNaming
 {
     /// <summary>
-    /// The maximum length of a Radius secret-store name, matching the UCP/Azure Resource
-    /// Manager resource-name limit.
+    /// The maximum length of a Radius secret-store name, matching Aspire's resource-name limit
+    /// (<c>ModelName.DefaultMaxLength</c>).
     /// </summary>
-    internal const int MaxNameLength = 90;
+    internal const int MaxNameLength = 64;
 
     // Windows reserved device names. A store name can be used as a `<name>` artifact path
-    // segment, so a name like `CON` or `NUL` (with or without an extension, e.g. `CON.bicep`)
-    // cannot be materialized on Windows even though Radius/UCP itself would accept it. Matching
-    // is case-insensitive.
+    // segment, so a name like `CON` or `NUL` cannot be materialized on Windows even though
+    // Radius/UCP itself would accept it. Consecutive-hyphen/dot forms cannot occur under the
+    // resource-name grammar, so a plain case-insensitive comparison of the whole name suffices.
     private static readonly HashSet<string> s_reservedDeviceNames = new(StringComparer.OrdinalIgnoreCase)
     {
         "CON", "PRN", "AUX", "NUL",
@@ -41,35 +43,39 @@ internal static class RadiusSecretStoreNaming
     /// </summary>
     internal static bool IsValidName([NotNullWhen(true)] string? name)
     {
-        if (string.IsNullOrWhiteSpace(name) || name.Length > MaxNameLength)
+        if (string.IsNullOrEmpty(name) || name.Length > MaxNameLength)
         {
             return false;
         }
 
-        // "." and ".." are relative-path tokens; a leading/trailing '.' is also disallowed
-        // by ARM/UCP and would produce a surprising directory segment.
-        if (name is "." or ".." || name[0] == '.' || name[^1] == '.')
+        // Mirror ModelName.TryValidateName's default rules exactly so a name accepted here is also
+        // accepted by AddResource in publish mode.
+        if (!char.IsAsciiLetter(name[0]) || name[^1] == '-')
         {
             return false;
         }
 
-        if (name.Contains("..", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
+        var previousHyphen = false;
         foreach (var c in name)
         {
-            if (!(char.IsAsciiLetterOrDigit(c) || c is '-' or '_' or '.'))
+            if (c == '-')
+            {
+                if (previousHyphen)
+                {
+                    return false;
+                }
+                previousHyphen = true;
+            }
+            else if (char.IsAsciiLetterOrDigit(c))
+            {
+                previousHyphen = false;
+            }
+            else
             {
                 return false;
             }
         }
 
-        // A reserved device name is reserved regardless of any extension, so compare the
-        // base name before the first '.' (e.g. `CON.bicep` -> `CON`).
-        var dotIndex = name.IndexOf('.', StringComparison.Ordinal);
-        var baseName = dotIndex < 0 ? name : name[..dotIndex];
-        return !s_reservedDeviceNames.Contains(baseName);
+        return !s_reservedDeviceNames.Contains(name);
     }
 }

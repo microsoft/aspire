@@ -116,6 +116,34 @@ public static class RadiusSecretStoreExtensions
     }
 
     /// <summary>
+    /// Populates the store inline (Radius-created) by binding a single data <paramref name="key"/>
+    /// to a secret parameter. This is a convenience over the callback overload for the common
+    /// single-key case; the value is emitted as a valueless <c>@secure()</c> Bicep <c>param</c> and
+    /// supplied at deploy time via <c>rad deploy --parameters</c>. Like the other population methods
+    /// this may be called at most once per store (a second population call throws
+    /// <c>ASPIRERADIUS065</c>); use the callback overload to bind multiple keys.
+    /// </summary>
+    /// <param name="store">The secret-store builder.</param>
+    /// <param name="key">The data key (non-empty).</param>
+    /// <param name="parameter">The secret parameter supplying the value (must be <c>secret: true</c>).</param>
+    /// <param name="encoding">Optional per-key encoding (defaults to the store type's default).</param>
+    /// <returns>The same store builder for chaining.</returns>
+    /// <exception cref="ArgumentException">The key is empty/whitespace.</exception>
+    [Experimental("ASPIRERADIUS006", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    [AspireExportIgnore(Reason = "Experimental Radius secret-store surface; the data binding is not ATS-compatible.")]
+    public static IResourceBuilder<RadiusSecretStoreResource> WithData(
+        this IResourceBuilder<RadiusSecretStoreResource> store,
+        string key,
+        IResourceBuilder<ParameterResource> parameter,
+        RadiusSecretStoreEncoding? encoding = null)
+    {
+        ArgumentNullException.ThrowIfNull(store);
+        ArgumentNullException.ThrowIfNull(parameter);
+
+        return store.WithData(s => s.Add(key, parameter, encoding));
+    }
+
+    /// <summary>
     /// References an existing cluster <c>Secret</c> by <c>&lt;namespace&gt;/&lt;name&gt;</c>
     /// (or a bare <c>&lt;name&gt;</c>, whose namespace defaults to the owning environment's).
     /// No secret value flows through Aspire.
@@ -169,7 +197,10 @@ public static class RadiusSecretStoreExtensions
 
         var population = store.Resource.Population;
         population.HasSealedSecret = true;
-        population.SealedManifestPath = manifestPath;
+        // Resolve a relative manifest path against the AppHost directory (not the process working
+        // directory), matching other hosting file APIs (e.g. KeycloakResourceBuilderExtensions), so
+        // the documented `./secrets/...` usage works regardless of where the AppHost is launched.
+        population.SealedManifestPath = Path.GetFullPath(manifestPath, store.ApplicationBuilder.AppHostDirectory);
         population.Keys.AddRange(validatedKeys);
         return store;
     }
@@ -243,9 +274,9 @@ public static class RadiusSecretStoreExtensions
         if (!RadiusSecretStoreNaming.IsValidName(name))
         {
             throw new ArgumentException(
-                $"Secret-store name '{name}' is invalid. It must be 1-90 characters of ASCII letters, digits, " +
-                "'-', '_', or '.', may not start or end with '.', may not contain '..', and may not be a reserved " +
-                "device name. Diagnostic: ASPIRERADIUS049.",
+                $"Secret-store name '{name}' is invalid. It must be 1-{RadiusSecretStoreNaming.MaxNameLength} characters of ASCII " +
+                "letters, digits, and '-', must start with a letter, may not contain consecutive hyphens, may not end with a " +
+                "hyphen, and may not be a reserved device name. Diagnostic: ASPIRERADIUS049.",
                 nameof(name));
         }
     }
