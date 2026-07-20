@@ -50,9 +50,12 @@ internal sealed record AppHostServerRunResult(
 /// <param name="IsolateConsole">
 /// When <see langword="true"/>, on Windows the server is spawned via <see cref="IsolatedProcess"/>
 /// into its own hidden console (CREATE_NEW_CONSOLE | SW_HIDE) so a graceful shutdown can
-/// <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c> against the server without also signalling the CLI,
-/// and the child is bound to the process-wide <see cref="WindowsConsoleProcessJob"/> kill-on-close
-/// safety net. On Unix the spawn is effectively the same as today's path.
+/// <c>AttachConsole</c> + post <c>CTRL_C_EVENT</c> against the server without also signalling the CLI.
+/// On Unix the spawn is effectively the same as today's path.
+/// </param>
+/// <param name="KillOnParentExit">
+/// When <see langword="true"/>, on Windows the server is bound to the process-wide
+/// <see cref="WindowsConsoleProcessJob"/> kill-on-close safety net.
 /// </param>
 /// <param name="GracefulShutdownSignaler">
 /// Issues the graceful shutdown signal during the shared ladder, or <see langword="null"/> to fall
@@ -64,6 +67,7 @@ internal sealed record AppHostServerRunResult(
 /// </param>
 internal sealed record AppHostServerRunControl(
     bool IsolateConsole = false,
+    bool KillOnParentExit = false,
     IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler = null,
     IGracefulShutdownWindow? ShutdownService = null);
 

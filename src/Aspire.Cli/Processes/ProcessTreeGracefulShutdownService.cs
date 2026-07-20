@@ -6,7 +6,6 @@ using System.Globalization;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
-using Aspire.Shared;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Processes;
@@ -273,19 +272,15 @@ internal sealed class ProcessTreeGracefulShutdownService(
             return true;
         }
 
-        using var layoutLease = await bundleService.EnsureExtractedAndAcquireLayoutAsync("cli", "dcp-stop-process-tree", cancellationToken).ConfigureAwait(false);
-        var dcpDirectory = layoutLease?.Layout.GetDcpPath() ??
-            layoutDiscovery.GetComponentPath(LayoutComponent.Dcp, executionContext.WorkingDirectory.FullName);
-        if (dcpDirectory is null)
+        using var dcpExecutable = await DcpExecutableResolver.TryGetDcpExecutableAsync(
+            layoutDiscovery,
+            bundleService,
+            executionContext,
+            "dcp-stop-process-tree",
+            cancellationToken).ConfigureAwait(false);
+        if (dcpExecutable is null)
         {
-            logger.LogWarning("Could not find DCP in the Aspire layout.");
-            return false;
-        }
-
-        var dcpPath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
-        if (!File.Exists(dcpPath))
-        {
-            logger.LogWarning("Could not find DCP executable at '{DcpPath}'.", dcpPath);
+            logger.LogWarning("Could not find DCP executable in the Aspire layout.");
             return false;
         }
 
@@ -308,7 +303,7 @@ internal sealed class ProcessTreeGracefulShutdownService(
         }
 
         var (exitCode, output, error) = await layoutProcessRunner.RunAsync(
-            dcpPath,
+            dcpExecutable.ExecutablePath,
             arguments,
             workingDirectory: executionContext.WorkingDirectory.FullName,
             ct: cancellationToken).ConfigureAwait(false);

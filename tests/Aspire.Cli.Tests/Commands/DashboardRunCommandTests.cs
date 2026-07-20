@@ -300,7 +300,7 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var testInteractionService = new TestInteractionService();
         var (services, managedPath, executionFactory) = CreateServicesWithLayout(workspace, interactionService: testInteractionService);
 
-        // Make CreateExecution return an execution whose Start() returns false,
+        // Make CreateExecution return an execution whose StartAsync() returns false,
         // which causes LayoutProcessRunner.StartAsync to throw InvalidOperationException.
         executionFactory.CreateExecutionCallback = (_, _, _, _) =>
             new TestProcessExecution(
