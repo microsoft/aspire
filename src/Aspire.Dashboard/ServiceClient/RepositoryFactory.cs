@@ -11,16 +11,21 @@ namespace Aspire.Dashboard.ServiceClient;
 /// <summary>
 /// Creates telemetry and resource repositories for dashboard run databases.
 /// </summary>
-internal sealed class RepositoryFactory(
-    ILoggerFactory loggerFactory,
-    IOptions<DashboardOptions> dashboardOptions,
-    PauseManager pauseManager,
-    Func<IEnumerable<IOutgoingPeerResolver>> outgoingPeerResolversAccessor,
-    IKnownPropertyLookup knownPropertyLookup) : IRepositoryFactory
+// IServiceProvider is required to defer resolving IOutgoingPeerResolver until a telemetry repository is created.
+// Constructor injection would create a cycle through ResourceOutgoingPeerResolver and IResourceRepository.
+internal sealed class RepositoryFactory(IServiceProvider serviceProvider) : IRepositoryFactory
 {
     public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) =>
-        new SqliteTelemetryRepository(database, loggerFactory, dashboardOptions, pauseManager, outgoingPeerResolversAccessor());
+        new SqliteTelemetryRepository(
+            database,
+            serviceProvider.GetRequiredService<ILoggerFactory>(),
+            serviceProvider.GetRequiredService<IOptions<DashboardOptions>>(),
+            serviceProvider.GetRequiredService<PauseManager>(),
+            serviceProvider.GetServices<IOutgoingPeerResolver>());
 
     public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) =>
-        new SqliteResourceRepository(database, knownPropertyLookup, loggerFactory);
+        new SqliteResourceRepository(
+            database,
+            serviceProvider.GetRequiredService<IKnownPropertyLookup>(),
+            serviceProvider.GetRequiredService<ILoggerFactory>());
 }
