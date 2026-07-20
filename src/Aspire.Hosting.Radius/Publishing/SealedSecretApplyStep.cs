@@ -502,7 +502,7 @@ internal sealed class SealedSecretApplyStep
         Func<IReadOnlyList<string>, CancellationToken, Task<(int ExitCode, string StdOut, string StdErr)>> runKubectl)
     {
         var args = BuildGetSealedSecretArgs(ns, name, kubeContext);
-        var (exitCode, stdout, _) = await runKubectl(args, cancellationToken).ConfigureAwait(false);
+        var (exitCode, stdout, stderr) = await runKubectl(args, cancellationToken).ConfigureAwait(false);
         if (exitCode != 0)
         {
             // During the bounded sync wait, `kubectl get sealedsecret` is a readiness probe, not the
@@ -510,13 +510,46 @@ internal sealed class SealedSecretApplyStep
             // CRD, cache, or target object is not yet observable; examples include:
             //   Error from server (NotFound): sealedsecrets.bitnami.com "my-secret" not found
             //   Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused
-            // Treat those probe failures like an empty status so the existing poll loop retries until
-            // the shared materialization deadline, which still surfaces ASPIRERADIUS058 on exhaustion.
-            return new SealedSecretStatusSnapshot(null, null, []);
+            // Treat ONLY those retryable failures as an empty status so the poll loop keeps retrying
+            // until the shared materialization deadline (which surfaces ASPIRERADIUS058 on exhaustion).
+            // Every other non-zero exit (auth/RBAC denied, bad context, missing auth-plugin executable,
+            // CRD absent) will never resolve by waiting, so fail fast rather than burning the whole
+            // timeout and then reporting a misleading sync-timeout error.
+            if (IsSealedSecretNotFound(stderr, name) || IsTransientKubectlFailure(stderr))
+            {
+                return new SealedSecretStatusSnapshot(null, null, []);
+            }
+
+            throw new InvalidOperationException(
+                $"Failed to query the SealedSecret '{ns}/{name}' with 'kubectl get sealedsecret': {stderr.Trim()}");
         }
 
         return ParseSealedSecretStatus(stdout);
     }
+
+    // A NotFound for the specific target SealedSecret CRD object means "not applied/observed yet";
+    // the canonical message is `Error from server (NotFound): sealedsecrets.bitnami.com "<name>" not
+    // found`. Match that exact phrasing (not a bare "not found") so unrelated client errors such as
+    // "exec plugin ... not found" or a NotFound for a different resource are NOT treated as retryable.
+    internal static bool IsSealedSecretNotFound(string stderr, string name) =>
+        stderr.Contains($"sealedsecrets.bitnami.com \"{name}\" not found", StringComparison.Ordinal);
+
+    // Recognizes transient connectivity/apiserver failures that a bounded retry can legitimately wait
+    // out (network blips, apiserver still starting, TLS not ready). Anything not matched here — in
+    // particular authorization/RBAC, invalid-context, and missing-auth-plugin errors — is permanent
+    // and should surface immediately. Observed kubectl phrasings:
+    //   Unable to connect to the server: dial tcp 127.0.0.1:6443: connect: connection refused
+    //   Unable to connect to the server: net/http: TLS handshake timeout
+    //   ... i/o timeout
+    //   Unexpected error ... EOF
+    internal static bool IsTransientKubectlFailure(string stderr) =>
+        stderr.Contains("Unable to connect to the server", StringComparison.Ordinal) ||
+        stderr.Contains("connection refused", StringComparison.Ordinal) ||
+        stderr.Contains("dial tcp", StringComparison.Ordinal) ||
+        stderr.Contains("i/o timeout", StringComparison.Ordinal) ||
+        stderr.Contains("TLS handshake timeout", StringComparison.Ordinal) ||
+        stderr.Contains("the server is currently unable to handle the request", StringComparison.Ordinal) ||
+        stderr.Contains("etcdserver: request timed out", StringComparison.Ordinal);
 
     // Reads the materialized Secret's data-key names to verify the declared keys are present.
     // The Secret's `data` values are base64 secret material, so RunKubectlAsync is called with

@@ -195,6 +195,9 @@ var pass = builder.AddParameter("db-pass", secret: true);
 builder.AddRadiusSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication)
        .WithData(d => { d.Add("username", user); d.Add("password", pass); });
 
+// For a single key there is a convenience overload:
+//   builder.AddRadiusSecretStore("api", RadiusSecretStoreType.Generic).WithData("api-key", apiKey);
+
 // Reference an existing cluster Secret (external operator / hand-applied).
 radius.WithSecretStore("tls-cert", RadiusSecretStoreType.Certificate, s =>
     s.WithExistingSecret("app/tls-cert", "tls.crt", "tls.key"));

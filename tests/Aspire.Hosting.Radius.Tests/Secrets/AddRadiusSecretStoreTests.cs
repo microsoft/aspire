@@ -87,10 +87,52 @@ public class AddRadiusSecretStoreTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddRadiusEnvironment("radius");
 
-        Assert.Throws<ArgumentException>(() =>
-            builder.AddRadiusSecretStore("bad/name", RadiusSecretStoreType.Generic));
-        Assert.Throws<ArgumentException>(() =>
-            builder.AddRadiusSecretStore("  ", RadiusSecretStoreType.Generic));
+        // The store name must match Aspire's resource-name grammar (letters/digits/hyphens, start with
+        // a letter, no consecutive/trailing hyphen, <= 64 chars) so that publish-mode AddResource does
+        // not reject a name that run mode accepted. Underscores, dots, digit-start, and over-length were
+        // previously accepted here but rejected by AddResource — a mode-dependent contract.
+        foreach (var invalid in new[] { "bad/name", "  ", "under_score", "dot.name", "1leading", "-leading", "trailing-", "a--b", new string('a', 65), "CON", "COM1" })
+        {
+            Assert.Throws<ArgumentException>(() =>
+                builder.AddRadiusSecretStore(invalid, RadiusSecretStoreType.Generic));
+        }
+    }
+
+    [Fact]
+    public void ValidStoreName_IsAccepted()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddRadiusEnvironment("radius");
+
+        foreach (var valid in new[] { "s", "db-creds", "a1", "a-b-c", new string('a', 64) })
+        {
+            var store = builder.AddRadiusSecretStore(valid, RadiusSecretStoreType.Generic);
+            Assert.Equal(valid, store.Resource.Name);
+        }
+    }
+
+    [Fact]
+    public void WithDataKeyParameterOverload_BindsSingleKey()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var pass = builder.AddParameter("db-pass", secret: true);
+        var store = builder.AddRadiusSecretStore("db-creds", RadiusSecretStoreType.Generic)
+            .WithData("password", pass);
+
+        Assert.True(store.Resource.Population.HasInlineData);
+        Assert.True(store.Resource.Population.Data.ContainsKey("password"));
+    }
+
+    [Fact]
+    public void WithDataKeyParameterOverload_SecondCall_ThrowsAtCallSite_ASPIRERADIUS065()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var pass = builder.AddParameter("db-pass", secret: true);
+        var store = builder.AddRadiusSecretStore("db-creds", RadiusSecretStoreType.Generic)
+            .WithData("username", pass);
+
+        var ex = Assert.Throws<InvalidOperationException>(() => store.WithData("password", pass));
+        Assert.Contains("ASPIRERADIUS065", ex.Message);
     }
 
     [Fact]

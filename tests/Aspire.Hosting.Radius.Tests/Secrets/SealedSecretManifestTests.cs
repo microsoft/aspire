@@ -495,4 +495,94 @@ public class SealedSecretManifestTests : IDisposable
         Assert.Equal("db-creds", metadata.Name);
         Assert.Equal("app", metadata.Namespace);
     }
+
+    [Fact]
+    public void ReadMetadata_DuplicateKindSmugglesPlaintextSecret_FailsClosed_Throws_ASPIRERADIUS063()
+    {
+        // System.Text.Json keeps duplicate property names and a single TryGetProperty("kind") lookup
+        // observes only ONE of them. A crafted payload can lead with `kind: Secret` + data and append a
+        // second `kind: SealedSecret` so a naive lookup clears it. Duplicate identity keys make the
+        // object ambiguous and must fail closed.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"Secret\",\"data\":{\"password\":\"c2VjcmV0\"},\"kind\":\"SealedSecret\"}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_MissingKindWithData_FailsClosed_Throws_ASPIRERADIUS063()
+    {
+        // Without a `kind` we cannot positively rule out a Secret, so any embedded data/stringData
+        // is treated as a potential cleartext leak rather than assumed safe.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"metadata\":{\"name\":\"db-creds\"},\"data\":{\"password\":\"c2VjcmV0\"}}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_NonStringKindWithData_FailsClosed_Throws_ASPIRERADIUS063()
+    {
+        // A non-string `kind` (here an object) is not positively a non-Secret kind, so an accompanying
+        // non-empty data payload must fail closed rather than being cleared.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":{\"nested\":\"SealedSecret\"},\"data\":{\"password\":\"c2VjcmV0\"}}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
+
+    [Fact]
+    public void ReadMetadata_DuplicateDataKeysInAnnotation_FailsClosed_Throws_ASPIRERADIUS063()
+    {
+        // Duplicate payload keys are likewise ambiguous (only one is observable), so fail closed even
+        // when one of them appears empty.
+        var path = Write(
+            "apiVersion: bitnami.com/v1alpha1\n" +
+            "kind: SealedSecret\n" +
+            "metadata:\n" +
+            "  name: db-creds\n" +
+            "  annotations:\n" +
+            "    kubectl.kubernetes.io/last-applied-configuration: '{\"kind\":\"Secret\",\"data\":{},\"data\":{\"password\":\"c2VjcmV0\"}}'\n" +
+            "spec:\n" +
+            "  encryptedData:\n" +
+            "    password: AgBcipher\n");
+
+        var ex = Assert.Throws<InvalidOperationException>(
+            () => SealedSecretManifest.ReadMetadata("store", path, "env-default"));
+
+        Assert.Contains("ASPIRERADIUS063", ex.Message);
+    }
 }

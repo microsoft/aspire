@@ -273,15 +273,56 @@ internal static class SealedSecretManifest
                 return true;
             }
 
-            var kind = root.TryGetProperty("kind", out var kindElement) && kindElement.ValueKind == JsonValueKind.String
-                ? kindElement.GetString()
-                : null;
-            if (!string.Equals(kind, "Secret", StringComparison.Ordinal))
+            // System.Text.Json preserves duplicate property names, and TryGetProperty silently
+            // observes only ONE of them, so a crafted payload could smuggle cleartext past the gate.
+            // For example, the following is a plaintext Secret, but TryGetProperty("kind") would
+            // return the trailing "SealedSecret" and wrongly clear it:
+            //   {"kind":"Secret","data":{"password":"cGFzcw=="},"kind":"SealedSecret"}
+            // Enumerate every property so duplicate/missing/non-string identity or payload keys all
+            // fail closed, rather than trusting a single lookup.
+            JsonElement? kind = null;
+            JsonElement data = default;
+            JsonElement stringData = default;
+            var kindCount = 0;
+            var dataCount = 0;
+            var stringDataCount = 0;
+
+            foreach (var property in root.EnumerateObject())
+            {
+                switch (property.Name)
+                {
+                    case "kind":
+                        kindCount++;
+                        kind = property.Value;
+                        break;
+                    case "data":
+                        dataCount++;
+                        data = property.Value;
+                        break;
+                    case "stringData":
+                        stringDataCount++;
+                        stringData = property.Value;
+                        break;
+                }
+            }
+
+            // Duplicated identity or payload keys make the object ambiguous; it cannot be verified.
+            if (kindCount > 1 || dataCount > 1 || stringDataCount > 1)
+            {
+                return true;
+            }
+
+            // A well-formed non-Secret resource (the expected `kind: SealedSecret`, whose payload
+            // lives in `spec.encryptedData`) carries no cleartext and is allowed. Every other case —
+            // `kind: Secret`, or a missing/non-string `kind` we cannot positively rule out as a
+            // Secret — is treated as a potential leak whenever it carries any data/stringData.
+            if (kind is { ValueKind: JsonValueKind.String } kindElement &&
+                !string.Equals(kindElement.GetString(), "Secret", StringComparison.Ordinal))
             {
                 return false;
             }
 
-            return HasNonEmptyValue(root, "data") || HasNonEmptyValue(root, "stringData");
+            return (dataCount == 1 && HasNonEmptyValue(data)) || (stringDataCount == 1 && HasNonEmptyValue(stringData));
         }
         catch (JsonException)
         {
@@ -292,15 +333,10 @@ internal static class SealedSecretManifest
     // For a `kind: Secret`, ANY non-empty representation of data/stringData is treated as a potential
     // cleartext leak — not only a non-empty JSON object. A well-formed Secret uses an object map, but
     // a hand-crafted/malformed annotation could carry cleartext as a string or array; those cannot be
-    // proven safe, so they fail closed. Absent, null, empty-object, empty-string, and empty-array
+    // proven safe, so they fail closed. Null, empty-object, empty-string, and empty-array
     // representations carry no data and are allowed.
-    private static bool HasNonEmptyValue(JsonElement obj, string name)
+    private static bool HasNonEmptyValue(JsonElement element)
     {
-        if (!obj.TryGetProperty(name, out var element))
-        {
-            return false;
-        }
-
         return element.ValueKind switch
         {
             JsonValueKind.Object => HasAnyChild(element),
