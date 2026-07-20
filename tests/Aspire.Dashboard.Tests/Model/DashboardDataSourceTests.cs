@@ -40,6 +40,17 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void RunId_IsUtcTimestampWithMillisecondPrecision()
+    {
+        var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero));
+
+        using var runStore = CreateRunStore(CreateOptions(), timeProvider);
+
+        Assert.Equal("20260720T123456789Z", runStore.RunId);
+        Assert.Equal(runStore.RunId, Path.GetFileName(runStore.RunDirectory));
+    }
+
+    [Fact]
     public void RunMetadata_IncludesSchemaVersion()
     {
         using var runStore = CreateRunStore(CreateOptions());
@@ -285,7 +296,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
             .Select(index => Path.Combine(
                 runsDirectory,
-                $"{DateTimeOffset.UtcNow.AddDays(-index):yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}"))
+                $"{DateTimeOffset.UtcNow.AddDays(-index):yyyyMMddTHHmmssfffZ}"))
             .ToList();
 
         foreach (var directory in historicalRunDirectories)
@@ -309,7 +320,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
             .Select(index => Path.Combine(
                 runsDirectory,
-                $"{DateTimeOffset.UtcNow.AddDays(-index):yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}"))
+                $"{DateTimeOffset.UtcNow.AddDays(-index):yyyyMMddTHHmmssfffZ}"))
             .ToList();
 
         foreach (var directory in historicalRunDirectories)
@@ -357,13 +368,14 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         {
             Directory.CreateDirectory(Path.Combine(
                 runsDirectory,
-                $"{DateTimeOffset.UtcNow.AddDays(index):yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}"));
+                $"{DateTimeOffset.UtcNow.AddDays(index):yyyyMMddTHHmmssfffZ}"));
         }
 
         var deletedRunDirectories = new List<string>();
         using var pruningRunStore = new DashboardRunStore(
             options,
             NullLogger<DashboardRunStore>.Instance,
+            TimeProvider.System,
             deletedRunDirectories.Add);
 
         Assert.Empty(deletedRunDirectories);
@@ -373,6 +385,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using var nextPruningRunStore = new DashboardRunStore(
             options,
             NullLogger<DashboardRunStore>.Instance,
+            TimeProvider.System,
             deletedRunDirectories.Add);
 
         Assert.Equal(historicalRunDirectory, Assert.Single(deletedRunDirectories));
@@ -386,7 +399,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var historicalRunDirectories = Enumerable.Range(1, DashboardRunStore.MaxRuns)
             .Select(index => Path.Combine(
                 runsDirectory,
-                $"{DateTimeOffset.UtcNow.AddDays(-index):yyyyMMddTHHmmssfffZ}-{Guid.NewGuid():N}"))
+                $"{DateTimeOffset.UtcNow.AddDays(-index):yyyyMMddTHHmmssfffZ}"))
             .ToList();
 
         foreach (var directory in historicalRunDirectories)
@@ -402,6 +415,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using var currentRunStore = new DashboardRunStore(
             CreateOptions(),
             logger,
+            TimeProvider.System,
             directory => throw new IOException($"The directory '{directory}' is in use."));
 
         var warning = Assert.Single(testSink.Writes);
@@ -625,9 +639,9 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         return new SqliteResourceRepository(databasePath, new MockKnownPropertyLookup(), NullLoggerFactory.Instance);
     }
 
-    private static DashboardRunStore CreateRunStore(IOptions<DashboardOptions> options)
+    private static DashboardRunStore CreateRunStore(IOptions<DashboardOptions> options, TimeProvider? timeProvider = null)
     {
-        return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance);
+        return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance, timeProvider ?? TimeProvider.System);
     }
 
     private RepositoryFactory CreateRepositoryFactory(IOptions<DashboardOptions> options)
@@ -651,5 +665,10 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         }
 
         _workspace.Dispose();
+    }
+
+    private sealed class FixedTimeProvider(DateTimeOffset utcNow) : TimeProvider
+    {
+        public override DateTimeOffset GetUtcNow() => utcNow;
     }
 }
