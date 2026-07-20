@@ -317,12 +317,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
         builder.Services.AddSingleton(services => new DashboardSqliteDatabase(
             services.GetRequiredService<DashboardRunStore>().DatabasePath));
-        builder.Services.AddSingleton<IRepositoryFactory>(services => new RepositoryFactory(
-            services.GetRequiredService<ILoggerFactory>(),
-            services.GetRequiredService<IOptions<DashboardOptions>>(),
-            services.GetRequiredService<PauseManager>(),
-            services.GetServices<IOutgoingPeerResolver>,
-            services.GetRequiredService<IKnownPropertyLookup>()));
+        builder.Services.AddSingleton<IRepositoryFactory>(services => new RepositoryFactory(services));
         builder.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<IRepositoryFactory>()
             .CreateTelemetryRepository(services.GetRequiredService<DashboardSqliteDatabase>()));
         builder.Services.AddSingleton<ITelemetryRepositoryWriter>(services =>

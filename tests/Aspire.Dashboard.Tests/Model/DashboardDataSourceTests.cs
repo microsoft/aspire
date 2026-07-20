@@ -11,6 +11,7 @@ using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Configuration;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
@@ -24,6 +25,7 @@ namespace Aspire.Dashboard.Tests.Model;
 public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
+    private readonly List<ServiceProvider> _serviceProviders = [];
 
     [Fact]
     public void RunDirectory_IsNestedUnderApplicationDirectoryAndRuns()
@@ -628,18 +630,26 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance);
     }
 
-    private static RepositoryFactory CreateRepositoryFactory(IOptions<DashboardOptions> options)
+    private RepositoryFactory CreateRepositoryFactory(IOptions<DashboardOptions> options)
     {
-        return new RepositoryFactory(
-            NullLoggerFactory.Instance,
-            options,
-            new PauseManager(),
-            static () => [],
-            new MockKnownPropertyLookup());
+        var serviceProvider = new ServiceCollection()
+            .AddSingleton<ILoggerFactory>(NullLoggerFactory.Instance)
+            .AddSingleton(options)
+            .AddSingleton<PauseManager>()
+            .AddSingleton<IKnownPropertyLookup, MockKnownPropertyLookup>()
+            .BuildServiceProvider();
+        _serviceProviders.Add(serviceProvider);
+
+        return new RepositoryFactory(serviceProvider);
     }
 
     public void Dispose()
     {
+        foreach (var serviceProvider in _serviceProviders)
+        {
+            serviceProvider.Dispose();
+        }
+
         _workspace.Dispose();
     }
 }
