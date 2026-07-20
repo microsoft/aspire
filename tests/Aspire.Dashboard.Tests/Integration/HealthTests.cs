@@ -75,17 +75,17 @@ public class HealthTests(ITestOutputHelper testOutputHelper)
                 .WithTracing(tracing => tracing.AddProcessor(
                     new SimpleActivityExportProcessor(new TestActivityExporter(
                         exportedActivity,
-                        activity => activity.Source.Name == DashboardClient.ActivitySourceName)))));
+                        activity => activity.Source.Name == DashboardActivitySource.ActivitySourceName)))));
         await app.StartAsync().DefaultTimeout();
-        var dashboardClient = app.Services.GetRequiredService<DashboardClient>();
+        var activitySource = app.Services.GetRequiredService<DashboardActivitySource>();
 
-        using (var activity = dashboardClient.ActivitySource.StartActivity("Test resource update", ActivityKind.Consumer))
+        using (var activity = activitySource.ActivitySource.StartActivity("Test resource update", ActivityKind.Consumer))
         {
             Assert.NotNull(activity);
         }
 
         var exported = await exportedActivity.Task.DefaultTimeout();
-        Assert.Equal(DashboardClient.ActivitySourceName, exported.Source.Name);
+        Assert.Equal(DashboardActivitySource.ActivitySourceName, exported.Source.Name);
         Assert.Equal(ActivityKind.Consumer, exported.Kind);
     }
 

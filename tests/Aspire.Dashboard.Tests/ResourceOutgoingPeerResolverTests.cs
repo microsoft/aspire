@@ -1,11 +1,13 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Tests;
 using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.AspNetCore.InternalTesting;
 using Xunit;
@@ -132,7 +134,7 @@ public class ResourceOutgoingPeerResolverTests
         var sourceChannel = Channel.CreateUnbounded<ResourceViewModelChange>();
         var resultChannel = Channel.CreateUnbounded<int>();
         var dashboardClient = new MockDashboardClient(tcs.Task);
-        var resolver = new ResourceOutgoingPeerResolver(dashboardClient);
+        var resolver = CreateResolver(dashboardClient);
         var changeCount = 0;
         resolver.OnPeerChanges(async () =>
         {
@@ -195,7 +197,7 @@ public class ResourceOutgoingPeerResolverTests
         var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
         var dashboardClient = new MockDashboardClient(subscribeResult.Task);
         using var activity = new Activity("request").Start();
-        var resolver = new ResourceOutgoingPeerResolver(dashboardClient);
+        var resolver = CreateResolver(dashboardClient);
 
         Assert.Null(await dashboardClient.ActivityOnSubscribe.Task.DefaultTimeout());
 
@@ -203,6 +205,44 @@ public class ResourceOutgoingPeerResolverTests
         sourceChannel.Writer.Complete();
         subscribeResult.SetResult(new ResourceViewModelSubscription([], sourceChannel.Reader.ReadAllAsync()));
         await resolver.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task ResourceChanges_CreateActivityForEachBatch()
+    {
+        using var activitySource = new DashboardActivitySource();
+        var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var activities = new ConcurrentQueue<Activity>();
+        var activitiesReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = ActivityListenerHelper.Create(activitySource.ActivitySource, onActivityStopped: activity =>
+        {
+            activities.Enqueue(activity);
+            if (activities.Count == 2)
+            {
+                activitiesReceived.TrySetResult();
+            }
+        });
+        var resolver = CreateResolver(new MockDashboardClient(subscribeResult.Task), activitySource);
+        subscribeResult.SetResult(new ResourceViewModelSubscription([], sourceChannel.Reader.ReadAllAsync()));
+
+        await sourceChannel.Writer.WriteAsync([new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, CreateResource("test", state: KnownResourceState.Starting))]);
+        await sourceChannel.Writer.WriteAsync([new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, CreateResource("test", state: KnownResourceState.Running))]);
+        await activitiesReceived.Task.DefaultTimeout();
+        sourceChannel.Writer.Complete();
+        await resolver.DisposeAsync().DefaultTimeout();
+
+        Assert.Collection(
+            activities,
+            AssertActivity,
+            AssertActivity);
+
+        static void AssertActivity(Activity activity)
+        {
+            Assert.Equal(DashboardActivitySource.ActivitySourceName, activity.Source.Name);
+            Assert.Equal("Process resource subscription changes", activity.OperationName);
+            Assert.Equal(ActivityKind.Consumer, activity.Kind);
+        }
     }
 
     [Fact]
@@ -240,6 +280,11 @@ public class ResourceOutgoingPeerResolverTests
     private static bool TryResolvePeerName(IDictionary<string, ResourceViewModel> resources, KeyValuePair<string, string>[] attributes, out string? peerName)
     {
         return ResourceOutgoingPeerResolver.TryResolvePeerCore(resources, attributes, out peerName, out _);
+    }
+
+    private static ResourceOutgoingPeerResolver CreateResolver(IDashboardClient dashboardClient, DashboardActivitySource? activitySource = null)
+    {
+        return new ResourceOutgoingPeerResolver(dashboardClient, activitySource ?? new DashboardActivitySource());
     }
 
     [Fact]

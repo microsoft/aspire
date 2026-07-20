@@ -13,7 +13,6 @@ using Grpc.Core;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Semver;
@@ -22,27 +21,13 @@ using DashboardResources = Aspire.Dashboard.Resources.Resources;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class DashboardClientTests
+public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
-    private readonly IConfiguration _configuration;
-    private readonly IOptions<DashboardOptions> _dashboardOptions;
-
-    public DashboardClientTests()
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder =>
     {
-        _configuration = new ConfigurationManager();
-
-        var options = new DashboardOptions
-        {
-            ResourceServiceClient =
-            {
-                AuthMode = ResourceClientAuthMode.Unsecured,
-                Url = "http://localhost:12345"
-            }
-        };
-        options.ResourceServiceClient.TryParseOptions(out _);
-
-        _dashboardOptions = Options.Create(options);
-    }
+        builder.AddXunit(testOutputHelper, LogLevel.Trace, DateTimeOffset.UtcNow);
+        builder.SetMinimumLevel(LogLevel.Trace);
+    });
 
     [Fact]
     public async Task SubscribeResources_OnCancel_ChannelRemoved()
@@ -160,7 +145,7 @@ public sealed class DashboardClientTests
     public async Task SubscribeConsoleLogs_ReceivesAndPersistsLogs()
     {
         var repositoryWriter = new RecordingResourceRepositoryWriter();
-        await using var instance = CreateResourceServiceClient(repositoryWriter);
+        await using var instance = CreateResourceServiceClient(resourceRepositoryWriter: repositoryWriter);
         instance.SetDashboardServiceClient(new MockDashboardServiceClient
         {
             ConsoleLogUpdates =
@@ -311,7 +296,8 @@ public sealed class DashboardClientTests
     [Fact]
     public async Task WatchResources_ResponseCreatesActivity()
     {
-        await using var instance = CreateResourceServiceClient();
+        using var activitySource = new DashboardActivitySource();
+        await using var instance = CreateResourceServiceClient(activitySource);
         instance.SetDashboardServiceClient(new MockDashboardServiceClient
         {
             ResourceUpdates =
@@ -322,7 +308,7 @@ public sealed class DashboardClientTests
         });
         var activities = new ConcurrentQueue<Activity>();
         var activitiesReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var listener = ActivityListenerHelper.Create(instance.ActivitySource, onActivityStopped: activity =>
+        using var listener = ActivityListenerHelper.Create(activitySource.ActivitySource, onActivityStopped: activity =>
         {
             activities.Enqueue(activity);
             if (activities.Count == 2)
@@ -342,7 +328,7 @@ public sealed class DashboardClientTests
 
         static void AssertActivity(Activity activity, WatchResourcesUpdate.KindOneofCase kind)
         {
-            Assert.Equal(DashboardClient.ActivitySourceName, activity.Source.Name);
+            Assert.Equal(DashboardActivitySource.ActivitySourceName, activity.Source.Name);
             Assert.Equal("Process resource update", activity.OperationName);
             Assert.Equal(ActivityKind.Consumer, activity.Kind);
             Assert.Equal(kind.ToString(), activity.GetTagItem("aspire.dashboard.resource_update.type"));
@@ -465,9 +451,9 @@ public sealed class DashboardClientTests
     public async Task ConnectWithRetry_LogsErrorWithTroubleshootingLink()
     {
         var testSink = new TestSink();
-        var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new TestLoggerProvider(testSink)));
+        _loggerFactory.AddProvider(new TestLoggerProvider(testSink));
 
-        await using var instance = new DashboardClient(loggerFactory, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>());
+        await using var instance = CreateResourceServiceClient();
         instance.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnGetApplicationInformation = true });
 
         IDashboardClient client = instance;
@@ -798,9 +784,41 @@ public sealed class DashboardClientTests
         }
     }
 
-    private DashboardClient CreateResourceServiceClient(IResourceRepositoryWriter? resourceRepositoryWriter = null)
+    private DashboardClient CreateResourceServiceClient(
+        DashboardActivitySource? activitySource = null,
+        IResourceRepositoryWriter? resourceRepositoryWriter = null)
     {
-        return new DashboardClient(NullLoggerFactory.Instance, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>(), resourceRepositoryWriter: resourceRepositoryWriter);
+        return CreateResourceServiceClient(_loggerFactory, activitySource, resourceRepositoryWriter);
+    }
+
+    private static DashboardClient CreateResourceServiceClient(
+        ILoggerFactory loggerFactory,
+        DashboardActivitySource? activitySource,
+        IResourceRepositoryWriter? resourceRepositoryWriter)
+    {
+        var options = new DashboardOptions
+        {
+            ResourceServiceClient =
+            {
+                AuthMode = ResourceClientAuthMode.Unsecured,
+                Url = "http://localhost:12345"
+            }
+        };
+        options.ResourceServiceClient.TryParseOptions(out _);
+
+        return new DashboardClient(
+            activitySource ?? new DashboardActivitySource(),
+            loggerFactory,
+            new ConfigurationManager(),
+            Options.Create(options),
+            new MockKnownPropertyLookup(),
+            new TestStringLocalizer<DashboardResources>(),
+            resourceRepositoryWriter: resourceRepositoryWriter);
+    }
+
+    public void Dispose()
+    {
+        _loggerFactory.Dispose();
     }
 
     private static CommandViewModel CreateCommand()

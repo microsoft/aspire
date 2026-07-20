@@ -43,8 +43,6 @@ namespace Aspire.Dashboard.ServiceClient;
 /// </remarks>
 internal sealed class DashboardClient : IDashboardClient
 {
-    internal const string ActivitySourceName = "Aspire.Dashboard.ResourceService";
-
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
 
@@ -53,7 +51,7 @@ internal sealed class DashboardClient : IDashboardClient
     private static readonly SemVersion? s_dashboardVersion = GetDashboardVersion();
 
     private readonly Dictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
-    private readonly ActivitySource _activitySource = new(ActivitySourceName);
+    private readonly ActivitySource _activitySource;
     private readonly InteractionCollection _pendingInteractionCollection = new();
     private readonly CancellationTokenSource _cts = new();
     private readonly CancellationToken _clientCancellationToken;
@@ -94,6 +92,7 @@ internal sealed class DashboardClient : IDashboardClient
     private Task? _connection;
 
     public DashboardClient(
+        DashboardActivitySource activitySource,
         ILoggerFactory loggerFactory,
         IConfiguration configuration,
         IOptions<DashboardOptions> dashboardOptions,
@@ -102,6 +101,7 @@ internal sealed class DashboardClient : IDashboardClient
         Action<SocketsHttpHandler>? configureHttpHandler = null,
         IResourceRepositoryWriter? resourceRepositoryWriter = null)
     {
+        _activitySource = activitySource.ActivitySource;
         _loggerFactory = loggerFactory;
         _knownPropertyLookup = knownPropertyLookup;
         _dashboardOptions = dashboardOptions.Value;
@@ -244,7 +244,6 @@ internal sealed class DashboardClient : IDashboardClient
     // For testing purposes
     internal int OutgoingResourceSubscriberCount => _outgoingResourceChannels.Count;
     internal int OutgoingInteractionSubscriberCount => _outgoingInteractionChannels.Count;
-    internal ActivitySource ActivitySource => _activitySource;
     internal void SetDashboardServiceClient(Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient client) => _client = client;
     internal Task ResourceWatchCompleteTask => _resourceWatchCompleteTcs.Task;
     internal Task InteractionWatchCompleteTask => _interactionWatchCompleteTcs.Task;
@@ -1152,7 +1151,6 @@ internal sealed class DashboardClient : IDashboardClient
             _channel?.Dispose();
 
             await TaskHelpers.WaitIgnoreCancelAsync(_connection, _logger, "Unexpected error from connection task.").ConfigureAwait(false);
-            _activitySource.Dispose();
         }
     }
 

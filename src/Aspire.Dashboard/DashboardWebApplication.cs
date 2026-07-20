@@ -279,6 +279,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         // Data from the server.
+        builder.Services.TryAddSingleton<DashboardActivitySource>();
         builder.Services.TryAddSingleton<DashboardClient>();
         builder.Services.AddScoped(services => new DashboardDataSource(
             services.GetRequiredService<IDashboardRunStore>(),
@@ -305,7 +306,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             builder.Services.AddOpenTelemetry()
                 .WithTracing(tracing => tracing
                     .AddAspNetCoreInstrumentation()
-                    .AddSource(DashboardClient.ActivitySourceName)
+                    .AddSource(DashboardActivitySource.ActivitySourceName)
                     .AddSource(TracingSqliteConnection.ActivitySourceName)
                     .AddOtlpExporter());
         }
@@ -333,23 +334,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
             (IResourceRepositoryWriter)services.GetRequiredService<IResourceRepository>());
         builder.Services.AddTransient<StructuredLogsViewModel>();
 
-        builder.Services.AddTransient(services => new OtlpLogsService(
-            services.GetRequiredService<ILogger<OtlpLogsService>>(),
-            services.GetRequiredService<ITelemetryRepositoryWriter>()));
-        builder.Services.AddTransient(services => new OtlpTraceService(
-            services.GetRequiredService<ILogger<OtlpTraceService>>(),
-            services.GetRequiredService<ITelemetryRepositoryWriter>()));
-        builder.Services.AddTransient(services => new OtlpMetricsService(
-            services.GetRequiredService<ILogger<OtlpMetricsService>>(),
-            services.GetRequiredService<ITelemetryRepositoryWriter>()));
+        builder.Services.AddTransient<OtlpLogsService>();
+        builder.Services.AddTransient<OtlpTraceService>();
+        builder.Services.AddTransient<OtlpMetricsService>();
 
         // Telemetry API.
-        builder.Services.AddSingleton(services => new TelemetryApiService(
-            services.GetRequiredService<ITelemetryRepository>()));
+        builder.Services.AddSingleton<TelemetryApiService>();
 
         builder.Services.AddTransient<TracesViewModel>();
-        builder.Services.AddSingleton<IOutgoingPeerResolver>(services =>
-            new ResourceOutgoingPeerResolver(services.GetRequiredService<DashboardClient>()));
+        builder.Services.AddSingleton<IOutgoingPeerResolver, ResourceOutgoingPeerResolver>();
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, DashboardSqliteOutgoingPeerResolver>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, BrowserLinkOutgoingPeerResolver>());
 
@@ -364,10 +357,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddScoped<ConsoleLogsManager>();
         builder.Services.AddScoped<ConsoleLogsFetcher>();
         builder.Services.AddScoped<TelemetryExportService>();
-        builder.Services.AddScoped(services => new TelemetryImportService(
-            services.GetRequiredService<ITelemetryRepositoryWriter>(),
-            services.GetRequiredService<IOptionsMonitor<DashboardOptions>>(),
-            services.GetRequiredService<ILogger<TelemetryImportService>>()));
+        builder.Services.AddScoped<TelemetryImportService>();
         builder.Services.AddSingleton<IInstrumentUnitResolver, DefaultInstrumentUnitResolver>();
 
         // Time zone is set by the browser.
