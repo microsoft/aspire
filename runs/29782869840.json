@@ -1,0 +1,38 @@
+{
+  "run_id": 29782869840,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29782869840",
+  "analyzed_at": "2026-07-20T22:37:05Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18527,
+    "title": "Unify workspace/global AppHost describe --follow streaming",
+    "author": "ellahathaway",
+    "state": "closed",
+    "head_branch": "ellahathaway-unify-apphost-describe-streaming",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18527"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (macos-latest)",
+      "id": 88488337619,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29782869840/job/88488337619",
+      "classification": "flaky-test",
+      "reason": "One CLI test failed (LaunchDetachedAsync_CleansUpChildProcessWhenCancelledAfterStart) with Assert.True() failure. All PR changes are in extension/ (VS Code extension) with no overlap with the CLI test area, indicating this is a flaky test unrelated to the PR.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_CleansUpChildProcessWhenCancelledAfterStart",
+      "job": "Tests / Cli / Cli (macos-latest)",
+      "error": "Assert.True() Failure\nExpected: True\nActual:   False",
+      "stack_trace": "at Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_CleansUpChildProcessWhenCancelledAfterStart() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AppHostLauncherTests.cs:line 624",
+      "classification": "flaky",
+      "reason": "The test is in AppHostLauncherTests (CLI area), but the PR only modifies VS Code extension files. The assertion failure with no error detail suggests a timing/race condition in process cleanup verification on macOS."
+    }
+  ],
+  "causes": ["cli-apphostlauncher-cleanuponcancel-flaky"]
+}

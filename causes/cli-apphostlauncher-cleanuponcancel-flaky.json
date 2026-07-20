@@ -1,0 +1,17 @@
+{
+  "id": "cli-apphostlauncher-cleanuponcancel-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: AppHostLauncherTests.LaunchDetachedAsync_CleansUpChildProcessWhenCancelledAfterStart fails intermittently on macOS",
+  "test_name": "Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_CleansUpChildProcessWhenCancelledAfterStart",
+  "error_pattern": "Assert.True() Failure\nExpected: True\nActual:   False\n   at Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_CleansUpChildProcessWhenCancelledAfterStart() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AppHostLauncherTests.cs:line 624",
+  "occurrences": [
+    {
+      "run_id": 29782869840,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29782869840",
+      "job": "Tests / Cli / Cli (macos-latest)",
+      "pr_number": 18527,
+      "observed_at": "2026-07-20T22:37:05Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18838"
+}
