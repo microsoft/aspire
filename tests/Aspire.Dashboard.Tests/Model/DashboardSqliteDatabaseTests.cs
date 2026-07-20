@@ -12,14 +12,14 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class DashboardSqliteDatabaseTests : IDisposable
+public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
-    private readonly string _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-tests-dashboard-sqlite-").FullName;
+    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
 
     [Fact]
     public async Task DapperQuery_CreatesActivityWithQueryInformation()
     {
-        using var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"), pooling: false);
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
         var activities = new ConcurrentQueue<Activity>();
         using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
         using var connection = database.OpenConnection();
@@ -42,7 +42,7 @@ public sealed class DashboardSqliteDatabaseTests : IDisposable
     [Fact]
     public void DapperFailure_SetsActivityErrorInformation()
     {
-        using var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"), pooling: false);
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
         var activities = new ConcurrentQueue<Activity>();
         using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
         using var connection = database.OpenConnection();
@@ -59,7 +59,7 @@ public sealed class DashboardSqliteDatabaseTests : IDisposable
     [Fact]
     public void DataReader_ActivityStopsWhenReaderIsDisposed()
     {
-        using var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"), pooling: false);
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
         var activities = new ConcurrentQueue<Activity>();
         using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
         using DbConnection connection = database.OpenConnection();
@@ -78,7 +78,7 @@ public sealed class DashboardSqliteDatabaseTests : IDisposable
     [Fact]
     public void DapperQueryMultiple_ActivitySpansAllResultSets()
     {
-        using var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"), pooling: false);
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
         var activities = new ConcurrentQueue<Activity>();
         using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
         using var connection = database.OpenConnection();
@@ -98,7 +98,7 @@ public sealed class DashboardSqliteDatabaseTests : IDisposable
     [Fact]
     public void CommitTransaction_CreatesActivityWithDatabaseInformation()
     {
-        using var database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"), pooling: false);
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
         var activities = new ConcurrentQueue<Activity>();
         using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
         using var connection = database.OpenConnection();
@@ -119,8 +119,8 @@ public sealed class DashboardSqliteDatabaseTests : IDisposable
     [Fact]
     public void ActivityListener_DoesNotCaptureOtherDatabaseActivities()
     {
-        using var observedDatabase = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "observed.db"), pooling: false);
-        using var otherDatabase = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "other.db"), pooling: false);
+        using var observedDatabase = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "observed.db"), pooling: false);
+        using var otherDatabase = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "other.db"), pooling: false);
         var activities = new ConcurrentQueue<Activity>();
         using var listener = ActivityListenerHelper.Create(observedDatabase.ActivitySource, onActivityStopped: activities.Enqueue);
         using var observedConnection = observedDatabase.OpenConnection();
@@ -135,7 +135,6 @@ public sealed class DashboardSqliteDatabaseTests : IDisposable
 
     public void Dispose()
     {
-        DashboardSqliteDatabase.ClearPools();
-        Directory.Delete(_temporaryDirectory, recursive: true);
+        _workspace.Dispose();
     }
 }

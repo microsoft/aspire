@@ -85,8 +85,6 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         return ValidateSchemaVersion(connection, transaction: null, metadataSchemaVersion);
     }
 
-    public static void ClearPools() => SqliteConnection.ClearAllPools();
-
     public void ClearPool()
     {
         using var connection = new SqliteConnection(_connectionString);

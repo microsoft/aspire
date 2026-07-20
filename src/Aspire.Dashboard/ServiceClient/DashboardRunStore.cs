@@ -77,7 +77,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 if (File.Exists(DatabasePath) && !DashboardSqliteDatabase.IsCompatible(DatabasePath))
                 {
-                    DashboardSqliteDatabase.ClearPools();
+                    ClearDatabasePool();
                     DeleteDatabaseFiles(DatabasePath);
                 }
                 break;
@@ -195,7 +195,7 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     {
         try
         {
-            DashboardSqliteDatabase.ClearPools();
+            ClearDatabasePool();
 
             if (_metadataPath is not null)
             {
@@ -210,6 +210,13 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         {
             _runLock?.Dispose();
         }
+    }
+
+    private void ClearDatabasePool()
+    {
+        // Clearing every pool can invalidate connections used by unrelated dashboard instances in the same process.
+        using var database = new DashboardSqliteDatabase(DatabasePath);
+        database.ClearPool();
     }
 
     private void WriteMetadata(DashboardRunMetadata metadata)
