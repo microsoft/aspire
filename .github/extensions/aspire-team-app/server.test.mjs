@@ -252,6 +252,10 @@ test("api/state streams progress and a state snapshot to connected SSE clients",
   const payload = JSON.parse(dataLine);
   assert.equal(payload.dashboard.authenticated, true);
   assert.ok(payload.prefs, "expected prefs in the state payload");
+  // Every broadcast/cached snapshot must carry a monotonic revision so the client can order
+  // partials and the final deterministically (a wall-clock fetchedAt collision otherwise drops
+  // the final or lets an out-of-order partial overwrite it).
+  assert.equal(typeof payload.dashboard.seq, "number", "expected a numeric seq on the streamed snapshot");
 });
 
 // Minimal GitHub GraphQL mock: scope probe, viewer, repo existence probe, and an empty

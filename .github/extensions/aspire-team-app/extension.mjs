@@ -171,6 +171,10 @@ const session = await joinSession({
 // only honest signal available: an extension cannot spawn an independent sub-session
 // (that is an agent tool), so a queued prompt genuinely waits for the current turn.
 let agentBusy = false;
+// Sends that have entered setAgentSend but not yet reached session.send(). Incremented
+// synchronously before the first await so two card clicks that arrive close together can't
+// both read agentBusy===false while suspended in session.log() and each claim "starting now".
+let sendsInFlight = 0;
 session.on("assistant.turn_start", () => { agentBusy = true; });
 session.on("session.idle", () => { agentBusy = false; });
 
@@ -181,10 +185,19 @@ session.on("session.idle", () => { agentBusy = false; });
 // turn rather than interrupting it — and return it so the button labels itself
 // "Queued …" vs "Sent" instead of always claiming success.
 setAgentSend(async ({ prompt, log }) => {
-  const queued = agentBusy;
-  if (log) {
-    await session.log(`Aspire Team App \u2014 ${log} (${queued ? "queued; starts after the current task" : "starting now"})`);
+  // Decide queued/starting *synchronously* here, before any await. agentBusy alone races:
+  // when two actions fire nearly together, both suspend in the session.log() await below
+  // before either calls session.send(), so both would read agentBusy===false. Also treat a
+  // send already in flight as outstanding work the next click queues behind.
+  const queued = agentBusy || sendsInFlight > 0;
+  sendsInFlight++;
+  try {
+    if (log) {
+      await session.log(`Aspire Team App \u2014 ${log} (${queued ? "queued; starts after the current task" : "starting now"})`);
+    }
+    const messageId = await session.send({ prompt });
+    return { messageId, queued };
+  } finally {
+    sendsInFlight--;
   }
-  const messageId = await session.send({ prompt });
-  return { messageId, queued };
 });

@@ -32,6 +32,11 @@ const clientInstance = new WeakMap();
 let cache = null;    // { dashboard, prefs, at }
 let inflight = null;
 let bgTimer = null;
+// Monotonic snapshot revision stamped on every dashboard we cache/broadcast (partial and
+// final, across every compute). The client applies snapshots strictly in seq order so a
+// wall-clock fetchedAt collision can't drop the final snapshot and an out-of-order partial
+// can't overwrite a newer one. Never reset — it only ever increments for the process.
+let stateSeq = 0;
 // Logger captured from the most recent startInstance so background (non-request) work —
 // the poller and stale-while-revalidate refreshes — has somewhere to report failures.
 let bgLog = null;
@@ -148,6 +153,8 @@ async function computeDashboard({ progress = true } = {}) {
       onPartial: stream
         ? (partial) => {
             decorateDashboard(partial, auth, active, prefs);
+            // Stamp a strictly increasing revision so the client can order/ignore snapshots.
+            partial.seq = ++stateSeq;
             // Publish the partial as the current cache so a canvas opening mid-load gets
             // the freshest data-so-far, and push it to already-open iframes.
             cache = { dashboard: partial, prefs, at: Date.now() };
@@ -157,6 +164,9 @@ async function computeDashboard({ progress = true } = {}) {
     });
     decorateDashboard(dashboard, auth, active, prefs);
   }
+  // Stamp the final (or unauthenticated) snapshot after any partials so it always carries the
+  // highest seq of this compute; the POST response returns this same cached object.
+  dashboard.seq = ++stateSeq;
   cache = { dashboard, prefs, at: Date.now() };
   if (stream) broadcastState(dashboard, prefs);
   return cache;

@@ -726,9 +726,17 @@ let loadError = null;
 // settings, etc.) is stashed here and applied when they return to the queue, so a
 // background refresh never clobbers an in-progress edit.
 let pendingState = null;
-// fetchedAt of the snapshot currently rendered. Used to drop duplicate SSE 'state' pushes
-// (the server re-broadcasts the final snapshot that the triggering request also applied).
-let lastAppliedAt = null;
+// Monotonic revision of the snapshot currently applied. fetchedAt is a wall-clock display
+// timestamp and is unsafe as a stream key: a partial and the final can share a millisecond,
+// and snapshots can arrive out of order. The server stamps a strictly increasing seq on
+// every partial/final; we apply only strictly-newer ones. -1 so the first real snapshot (0+)
+// always applies.
+let lastAppliedSeq = -1;
+// Record the revision of whatever snapshot was just assigned to state. Call at every point
+// that adopts a server snapshot so later SSE pushes are ordered against it.
+function adoptAppliedRev() {
+  if (state && typeof state.seq === "number") lastAppliedSeq = state.seq;
+}
 const expanded = new Set(); // account ids whose detail (sources + repos) is expanded
 const collapsedLanes = new Set(); // lane ids the user collapsed (survives re-render + SSE)
 const draftReposByAcct = {}; // account id -> working copy of that account's watched repos
@@ -829,7 +837,7 @@ async function load() {
     const res = await fetch("api/state");
     const data = await readJson(res);
     state = data.dashboard; prefs = data.prefs; loadError = null;
-    lastAppliedAt = (state && state.fetchedAt) || lastAppliedAt;
+    adoptAppliedRev();
   } catch (e) {
     loadError = String((e && e.message) || e);
   }
@@ -842,7 +850,7 @@ async function withRefresh(fn) {
     const data = await fn();
     if (data && data.dashboard) {
       state = data.dashboard; prefs = data.prefs; loadError = null;
-      lastAppliedAt = (state && state.fetchedAt) || lastAppliedAt;
+      adoptAppliedRev();
     }
   } catch (e) {
     loadError = String((e && e.message) || e);
@@ -905,10 +913,11 @@ function endProgress() {
 function applyPushedState(payload) {
   if (!payload || !payload.dashboard) return;
   if (view !== "queue") { pendingState = payload; return; }
-  const incoming = payload.dashboard.fetchedAt;
-  if (incoming && lastAppliedAt && incoming === lastAppliedAt) {
-    // Same snapshot we already show — keep refs current but skip a needless re-render.
-    state = payload.dashboard; prefs = payload.prefs;
+  const seq = payload.dashboard.seq;
+  if (typeof seq === "number" && seq <= lastAppliedSeq) {
+    // Stale or duplicate: an older/out-of-order partial, or the final we already applied via
+    // the triggering request's response. Reject outright — do not overwrite the newer state
+    // we already show (a duplicate carries identical content, a stale one carries older data).
     return;
   }
   applyState(payload);
@@ -917,7 +926,7 @@ function applyState(payload) {
   const scroller = document.scrollingElement;
   const top = scroller ? scroller.scrollTop : 0;
   state = payload.dashboard; prefs = payload.prefs; loadError = null;
-  lastAppliedAt = (state && state.fetchedAt) || lastAppliedAt;
+  adoptAppliedRev();
   render();
   if (top && scroller) scroller.scrollTop = top;
 }
@@ -1115,7 +1124,7 @@ function goView(next, forward) {
   if (next === "queue" && pendingState) {
     const payload = pendingState; pendingState = null;
     state = payload.dashboard; prefs = payload.prefs;
-    lastAppliedAt = (state && state.fetchedAt) || lastAppliedAt;
+    adoptAppliedRev();
   }
   render(forward === undefined ? undefined : forward);
 }
