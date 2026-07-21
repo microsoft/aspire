@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Resources;
@@ -18,6 +20,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     internal const string CheckName = "dev-certs";
     internal const string VersionCheckName = "dev-certs-version";
     internal const string CertUtilCheckName = "dev-certs-certutil";
+    internal const string OpenSslCertificateCacheCheckName = "dev-certs-openssl-cache";
 
     public int Order => 35; // After SDK check (30), before container checks (40+)
 
@@ -30,6 +33,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         {
             var trustResult = certificateToolRunner.CheckHttpCertificate();
             var results = EvaluateCertificateResults(trustResult.Certificates, environment);
+            AddLinuxOpenSslCertificateCacheWarnings(results, trustResult.Certificates, environment);
             AddLinuxCertificateToolWarnings(results, environment);
 
             return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>(results);
@@ -203,6 +207,122 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         return results;
     }
 
+    private static void AddLinuxOpenSslCertificateCacheWarnings(List<EnvironmentCheckResult> results, IReadOnlyList<DevCertInfo> certInfos, IEnvironment environment)
+    {
+        if (!environment.IsLinux())
+        {
+            return;
+        }
+
+        var currentCertificate = GetCurrentDevCertificate(certInfos);
+        if (currentCertificate?.Thumbprint is null)
+        {
+            return;
+        }
+
+        var trustPath = CertificateHelpers.GetDevCertsTrustPath(environment);
+        var cacheStatus = EvaluateOpenSslCertificateCache(trustPath, currentCertificate.Thumbprint);
+        if (cacheStatus is null)
+        {
+            return;
+        }
+
+        results.Add(new EnvironmentCheckResult
+        {
+            Category = EnvironmentCheckCategories.Environment,
+            Name = OpenSslCertificateCacheCheckName,
+            Status = EnvironmentCheckStatus.Warning,
+            Message = cacheStatus.Message,
+            Details = cacheStatus.Details,
+            Fix = s_cleanAndTrustFixCommand,
+            Link = "https://aka.ms/aspire-prerequisites#dev-certs"
+        });
+    }
+
+    private static DevCertInfo? GetCurrentDevCertificate(IReadOnlyList<DevCertInfo> certInfos)
+    {
+        var now = DateTimeOffset.Now;
+        return certInfos
+            .Where(c => c.IsHttpsDevelopmentCertificate &&
+                c.ValidityNotBefore <= now &&
+                now <= c.ValidityNotAfter &&
+                !string.IsNullOrEmpty(c.Thumbprint))
+            .OrderByDescending(c => c.Version)
+            .ThenByDescending(c => c.ValidityNotAfter)
+            .FirstOrDefault();
+    }
+
+    private static OpenSslCertificateCacheStatus? EvaluateOpenSslCertificateCache(string trustPath, string currentCertificateThumbprint)
+    {
+        if (!Directory.Exists(trustPath))
+        {
+            return new(
+                DoctorCommandStrings.DevCertsOpenSslCacheMissingCurrentCertificateMessage,
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, currentCertificateThumbprint));
+        }
+
+        string[] certificateFiles;
+        try
+        {
+            // The Linux dev-certs OpenSSL cache stores certificate files such as:
+            //   aspnetcore-localhost-<thumbprint>.pem
+            // OpenSSL/c_rehash can also create hash symlinks like <hash>.0 in the same directory,
+            // but only .pem/.crt/.cer files are certificate inputs that should be parsed here.
+            certificateFiles = Directory.GetFiles(trustPath)
+                .Where(IsOpenSslCertificateFile)
+                .ToArray();
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            return new(
+                DoctorCommandStrings.DevCertsOpenSslCacheUnreadableMessage,
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheUnreadableDetailsFormat, trustPath, ex.Message));
+        }
+
+        var cachedThumbprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+        var unreadableFiles = new List<string>();
+
+        foreach (var certificateFile in certificateFiles)
+        {
+            try
+            {
+                using var cachedCertificate = X509CertificateLoader.LoadCertificateFromFile(certificateFile);
+                if (cachedCertificate.Thumbprint is not null)
+                {
+                    cachedThumbprints.Add(cachedCertificate.Thumbprint);
+                }
+            }
+            catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException)
+            {
+                unreadableFiles.Add(Path.GetFileName(certificateFile));
+            }
+        }
+
+        if (unreadableFiles.Count > 0)
+        {
+            return new(
+                DoctorCommandStrings.DevCertsOpenSslCacheUnreadableMessage,
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheUnreadableFilesDetailsFormat, trustPath, string.Join(", ", unreadableFiles)));
+        }
+
+        if (!cachedThumbprints.Contains(currentCertificateThumbprint))
+        {
+            return new(
+                DoctorCommandStrings.DevCertsOpenSslCacheMissingCurrentCertificateMessage,
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, currentCertificateThumbprint));
+        }
+
+        return null;
+    }
+
+    private static bool IsOpenSslCertificateFile(string path)
+    {
+        var extension = Path.GetExtension(path);
+        return extension.Equals(".pem", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".crt", StringComparison.OrdinalIgnoreCase) ||
+            extension.Equals(".cer", StringComparison.OrdinalIgnoreCase);
+    }
+
     private static void AddLinuxCertificateToolWarnings(List<EnvironmentCheckResult> results, IEnvironment environment)
     {
         if (!environment.IsLinux())
@@ -288,4 +408,6 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         // We still prepend $SSL_CERT_DIR to be safe in case the user makes later modifications to their environment
         return $"export SSL_CERT_DIR=\"$SSL_CERT_DIR:{string.Join(':', systemCertDirs)}\"";
     }
+
+    private sealed record OpenSslCertificateCacheStatus(string Message, string Details);
 }

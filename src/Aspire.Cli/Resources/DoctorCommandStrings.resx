@@ -200,6 +200,24 @@
   <data name="DevCertsMissingCertUtilFix" xml:space="preserve">
     <value>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</value>
   </data>
+  <data name="DevCertsOpenSslCacheMissingCurrentCertificateMessage" xml:space="preserve">
+    <value>OpenSSL HTTPS development certificate cache is missing the current certificate</value>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingDetailsFormat" xml:space="preserve">
+    <value>The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</comment>
+  </data>
+  <data name="DevCertsOpenSslCacheUnreadableMessage" xml:space="preserve">
+    <value>OpenSSL HTTPS development certificate cache contains unreadable certificate files</value>
+  </data>
+  <data name="DevCertsOpenSslCacheUnreadableDetailsFormat" xml:space="preserve">
+    <value>Could not read the OpenSSL certificate cache at '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is the error message.</comment>
+  </data>
+  <data name="DevCertsOpenSslCacheUnreadableFilesDetailsFormat" xml:space="preserve">
+    <value>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</comment>
+  </data>
   <data name="DcpBundleNotFoundMessage" xml:space="preserve">
     <value>Developer Control Plane (DCP) bundle not found; skipping connection health checks</value>
   </data>

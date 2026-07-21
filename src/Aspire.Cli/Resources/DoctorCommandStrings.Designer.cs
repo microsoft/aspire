@@ -456,6 +456,51 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache is missing the current certificate.
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingCurrentCertificateMessage {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingCurrentCertificateMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates..
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache contains unreadable certificate files.
+        /// </summary>
+        public static string DevCertsOpenSslCacheUnreadableMessage {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not read the OpenSSL certificate cache at '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates..
+        /// </summary>
+        public static string DevCertsOpenSslCacheUnreadableDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates..
+        /// </summary>
+        public static string DevCertsOpenSslCacheUnreadableFilesDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableFilesDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Developer Control Plane (DCP) bundle not found; skipping connection health checks.
         /// </summary>
         public static string DcpBundleNotFoundMessage {

@@ -23,6 +23,8 @@ using ExecutableConfiguration = (IExecutionConfigurationResult Configuration, Ex
 /// </summary>
 internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreationContext>
 {
+    private const string SslCertDirEnvVar = "SSL_CERT_DIR";
+
     private readonly IConfiguration _configuration;
     private readonly DcpNameGenerator _nameGenerator;
     private readonly DistributedApplicationModel _model;
@@ -498,21 +500,14 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             .WithEnvironmentVariablesConfig()
             .WithCertificateTrustConfig(scope =>
             {
-                var dirs = new List<string> { certificatesOutputPath };
-                if (scope == CertificateTrustScope.Append)
-                {
-                    var existing = Environment.GetEnvironmentVariable("SSL_CERT_DIR");
-                    if (!string.IsNullOrEmpty(existing))
-                    {
-                        dirs.AddRange(existing.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
-                    }
-                }
-
                 return new()
                 {
                     CertificateBundlePath = ReferenceExpression.Create($"{bundleOutputPath}"),
-                    // Build the SSL_CERT_DIR value by combining the new certs directory with any existing directories.
-                    CertificateDirectoriesPath = ReferenceExpression.Create($"{string.Join(Path.PathSeparator, dirs)}"),
+                    CertificateDirectoriesPath = ReferenceExpression.Create($"{BuildCertificateDirectoriesPath(
+                        certificatesOutputPath,
+                        scope,
+                        Environment.GetEnvironmentVariable(SslCertDirEnvVar),
+                        includeWellKnownCertificateDirectories: OperatingSystem.IsLinux())}"),
                     RootCertificatesPath = certificatesRootDir,
                 };
             })
@@ -598,6 +593,33 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         return (configuration, pemCertificates);
+    }
+
+    internal static string BuildCertificateDirectoriesPath(
+        string certificatesOutputPath,
+        CertificateTrustScope scope,
+        string? existingSslCertDir,
+        bool includeWellKnownCertificateDirectories,
+        Func<string, bool>? directoryExists = null)
+    {
+        var dirs = new List<string> { certificatesOutputPath };
+        if (scope == CertificateTrustScope.Append)
+        {
+            if (existingSslCertDir is not null)
+            {
+                dirs.AddRange(existingSslCertDir.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
+            }
+            else if (includeWellKnownCertificateDirectories)
+            {
+                directoryExists ??= Directory.Exists;
+                // Do not invoke the openssl CLI here. This fallback is only for dotnet-run AppHosts
+                // where Aspire CLI did not already materialize OpenSSL's default directory into
+                // SSL_CERT_DIR, so reuse the same well-known certificate directories used for containers.
+                dirs.AddRange(ContainerCertificatePathsAnnotation.DefaultCertificateDirectoriesPaths.Where(directoryExists));
+            }
+        }
+
+        return string.Join(Path.PathSeparator, dirs);
     }
 
     private string GetCertificatesRootDirectory(RenderedModelResource<Executable> er, Executable exe)
