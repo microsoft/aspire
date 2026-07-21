@@ -228,7 +228,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             AssertButtonDisabled(cut, "Remove selected", expectedDisabled: true);
         });
 
-        await cut.InvokeAsync(() => GetResourceRows(cut).Single().Click());
+        await cut.InvokeAsync(() => cut.Find(".empty-data").Click());
         cut.WaitForAssertion(() =>
         {
             AssertSelectionCheckbox(cut, "orphan", "true");
@@ -353,11 +353,5 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     private static IReadOnlyList<IElement> GetSelectionCheckboxes(IRenderedComponent<ManageDataDialog> cut)
     {
         return cut.FindComponent<FluentDataGrid<ManageDataGridItem>>().FindAll("[role='checkbox']");
-    }
-
-    private static IReadOnlyList<IElement> GetResourceRows(IRenderedComponent<ManageDataDialog> cut)
-    {
-        return cut.FindComponent<FluentDataGrid<ManageDataGridItem>>()
-            .FindAll(".fluent-data-grid-row:not([row-type='header'], [row-type='sticky-header'])");
     }
 }

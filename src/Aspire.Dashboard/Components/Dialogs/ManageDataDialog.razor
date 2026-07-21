@@ -100,13 +100,13 @@
             <TemplateColumn Title="@Loc[nameof(Dialogs.ManageDataSummaryColumnHeader)]">
                 @if (context.IsResourceRow && context.ResourceRow is not null)
                 {
-                    <span @onclick:stopPropagation="true">
-                        @if (context.ResourceRow.TelemetryData.Count == 0)
-                        {
-                            <span class="empty-data"></span>
-                        }
-                        else
-                        {
+                    @if (context.ResourceRow.TelemetryData.Count == 0)
+                    {
+                        <span class="empty-data"></span>
+                    }
+                    else
+                    {
+                        <span @onclick:stopPropagation="true">
                             @foreach (var dataRow in context.ResourceRow.TelemetryData)
                             {
                                 <FluentButton Appearance="Appearance.Lightweight"
@@ -116,8 +116,8 @@
                                               aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
                                               Style="margin-right: 4px;" />
                             }
-                        }
-                    </span>
+                        </span>
+                    }
                 }
             </TemplateColumn>
         </ChildContent>
