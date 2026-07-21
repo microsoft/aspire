@@ -266,13 +266,16 @@ namespace Projects%3B
           DependsOnTargets="_ResolveAspireCliInvocation"
           Condition="'$(IsAspireHost)' == 'true' and '$(AspireUseCliBundle)' == 'true' and '$(_AspireCliRunHookSuppressed)' != 'true'">
     <PropertyGroup>
-      <!-- Probe the CLI version with Exec so the command runs through cmd.exe (Windows) or
-           /bin/sh (Unix): PATH/PATHEXT lookup and command shims such as aspire.cmd resolve the
-           same way they do for an interactive shell, and Exec owns the process, timeout, and
-           concurrent stream draining. -->
+      <!-- Probe the exact executable selected above so the version check and the eventual launch
+           cannot resolve different commands. This matters for DNX because dotnet run can prefer
+           an SDK-adjacent dnx over the command selected from PATH. Exec owns the process, timeout,
+           and concurrent stream draining. -->
       <_AspireCliVersionCommand Condition="'$(AspireCliPath)' != ''">"$(AspireCliPath)" --version</_AspireCliVersionCommand>
-      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">aspire --version</_AspireCliVersionCommand>
-      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">dnx $(_AspireCliDnxPackageId) -- --version</_AspireCliVersionCommand>
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">"$(_AspireResolvedCliPath)" --version</_AspireCliVersionCommand>
+      <_AspireCliVersionCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">"$(_AspireResolvedDnxPath)" --yes $(_AspireCliDnxPackageId) -- --version</_AspireCliVersionCommand>
+      <!-- A first-time DNX invocation may need to restore Aspire.Cli before reporting its version. -->
+      <_AspireCliVersionTimeout>5000</_AspireCliVersionTimeout>
+      <_AspireCliVersionTimeout Condition="'$(_AspireResolvedCliInvocationMode)' == 'Dnx'">120000</_AspireCliVersionTimeout>
     </PropertyGroup>
 
     <!-- The probe must never fail the build: IgnoreExitCode + ContinueOnError mean a missing,
@@ -284,7 +287,7 @@ namespace Projects%3B
           IgnoreExitCode="true"
           StandardOutputImportance="Low"
           StandardErrorImportance="Low"
-          Timeout="5000"
+          Timeout="$(_AspireCliVersionTimeout)"
           ContinueOnError="true">
       <Output TaskParameter="ConsoleOutput" ItemName="_AspireCliVersionOutput" />
       <Output TaskParameter="ExitCode" PropertyName="_AspireCliVersionExitCode" />
@@ -341,18 +344,18 @@ namespace Projects%3B
       <_AspireRunWorkingDirectory Condition="'$(FileBasedProgram)' == 'true' and '@(_AspireFileBasedAppHostDirectory)' != ''">@(_AspireFileBasedAppHostDirectory)</_AspireRunWorkingDirectory>
       <RunCommand Condition="'$(AspireCliPath)' != ''">$(AspireCliPath)</RunCommand>
       <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
-      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(OS)' != 'Windows_NT'">dnx</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(OS)' != 'Windows_NT'">$(_AspireResolvedDnxPath)</RunCommand>
       <!-- On Windows, Aspire can be installed as a command shim such as aspire.cmd.
            dotnet run starts RunCommand directly, so use cmd /C for the default PATH
            lookup to get the same PATHEXT resolution as an interactive shell. -->
       <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(OS)' == 'Windows_NT'">cmd</RunCommand>
-      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(OS)' != 'Windows_NT'">aspire</RunCommand>
+      <RunCommand Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(OS)' != 'Windows_NT'">$(_AspireResolvedCliPath)</RunCommand>
       <!-- dotnet run appends application arguments after ComputeRunArguments, so the double-dash separator
            must be present even when RunArguments is initially empty. -->
       <RunArguments Condition="'$(AspireCliPath)' != '' or '$(_AspireResolvedCliInvocationMode)' == 'Aspire'">run --project "$(_AspireRunProject)" --no-build --</RunArguments>
-      <!-- Do not pass dnx -y here. A restored local tool manifest runs without prompting; a missing
-           manifest/tool should fail instead of silently downloading and running an ad-hoc package. -->
-      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">$(_AspireCliDnxPackageId) -- run --project "$(_AspireRunProject)" --no-build --</RunArguments>
+      <!-- Bundle opt-in authorizes DNX to restore Aspire.Cli when it is not already available.
+           dotnet run is noninteractive, so DNX cannot ask for confirmation during the launch. -->
+      <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx'">--yes $(_AspireCliDnxPackageId) -- run --project "$(_AspireRunProject)" --no-build --</RunArguments>
       <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Dnx' and '$(OS)' == 'Windows_NT'">/C dnx $(RunArguments)</RunArguments>
       <RunArguments Condition="'$(AspireCliPath)' == '' and '$(_AspireResolvedCliInvocationMode)' == 'Aspire' and '$(OS)' == 'Windows_NT'">/C aspire $(RunArguments)</RunArguments>
       <RunArguments Condition="'$(_AspireOriginalRunArguments)' != ''">$(RunArguments) $(_AspireOriginalRunArguments)</RunArguments>
