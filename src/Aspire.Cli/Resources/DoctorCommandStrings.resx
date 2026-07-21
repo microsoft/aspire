@@ -210,10 +210,6 @@
   <data name="DevCertsOpenSslCacheUnreadableMessage" xml:space="preserve">
     <value>OpenSSL HTTPS development certificate cache contains unreadable certificate files</value>
   </data>
-  <data name="DevCertsOpenSslCacheUnreadableDetailsFormat" xml:space="preserve">
-    <value>Could not read the OpenSSL certificate cache at '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
-    <comment>{0} is the OpenSSL certificate cache directory. {1} is the error message.</comment>
-  </data>
   <data name="DevCertsOpenSslCacheUnreadableFilesDetailsFormat" xml:space="preserve">
     <value>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
     <comment>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</comment>

@@ -32,9 +32,9 @@ public class UnixCertificateManagerTests
             var certificatePath = Path.Combine(openSslDirectory.FullName, $"aspnetcore-localhost-{certificate.Thumbprint}.pem");
             File.WriteAllText(certificatePath, "not a certificate");
 
-            var exception = Record.Exception(() => manager.GetTrustLevel(certificate));
+            var trustLevel = manager.GetTrustLevel(certificate);
 
-            Assert.Null(exception);
+            Assert.Equal(CertificateManager.TrustLevel.None, trustLevel);
         }
         finally
         {

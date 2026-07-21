@@ -384,6 +384,94 @@ public class DevCertsCheckTests
     }
 
     [Fact]
+    public async Task CheckAsync_LinuxWithMissingOpenSslCertificateCacheDirectory_ReturnsOpenSslCertificateCacheWarning()
+    {
+        using var certificate = CreateCertificate();
+        var tempDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            CreateCertUtil(tempDirectory);
+            var trustDirectory = Path.Combine(tempDirectory.FullName, "missing-trust");
+
+            var certs = new List<DevCertInfo>
+            {
+                CreateDevCertInfo(CertificateManager.TrustLevel.Full, certificate, MinVersion),
+            };
+            var toolRunner = new TestCertificateToolRunner
+            {
+                CheckHttpCertificateCallback = () => new CertificateTrustResult
+                {
+                    HasCertificates = true,
+                    TrustLevel = CertificateManager.TrustLevel.Full,
+                    Certificates = certs
+                }
+            };
+            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+            {
+                ["PATH"] = tempDirectory.FullName,
+                [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory
+            });
+            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+
+            var results = await check.CheckAsync();
+
+            var cacheResult = Assert.Single(results, r => r.Name == DevCertsCheck.OpenSslCertificateCacheCheckName);
+            Assert.Equal(EnvironmentCheckStatus.Warning, cacheResult.Status);
+            Assert.Contains(certificate.Thumbprint, cacheResult.Details);
+            Assert.Contains("aspire certs clean", cacheResult.Fix);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task CheckAsync_LinuxWithMissingOpenSslCertificateCacheEntry_ReturnsOpenSslCertificateCacheWarning()
+    {
+        using var certificate = CreateCertificate();
+        var tempDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            CreateCertUtil(tempDirectory);
+            var trustDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.FullName, "trust"));
+
+            var certs = new List<DevCertInfo>
+            {
+                CreateDevCertInfo(CertificateManager.TrustLevel.Full, certificate, MinVersion),
+            };
+            var toolRunner = new TestCertificateToolRunner
+            {
+                CheckHttpCertificateCallback = () => new CertificateTrustResult
+                {
+                    HasCertificates = true,
+                    TrustLevel = CertificateManager.TrustLevel.Full,
+                    Certificates = certs
+                }
+            };
+            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+            {
+                ["PATH"] = tempDirectory.FullName,
+                [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
+            });
+            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+
+            var results = await check.CheckAsync();
+
+            var cacheResult = Assert.Single(results, r => r.Name == DevCertsCheck.OpenSslCertificateCacheCheckName);
+            Assert.Equal(EnvironmentCheckStatus.Warning, cacheResult.Status);
+            Assert.Contains(certificate.Thumbprint, cacheResult.Details);
+            Assert.Contains("aspire certs clean", cacheResult.Fix);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public async Task CheckAsync_LinuxWithCorruptOpenSslCertificateCache_ReturnsOpenSslCertificateCacheWarning()
     {
         using var certificate = CreateCertificate();

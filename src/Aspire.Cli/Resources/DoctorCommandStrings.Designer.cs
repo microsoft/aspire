@@ -483,15 +483,6 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Could not read the OpenSSL certificate cache at '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates..
-        /// </summary>
-        public static string DevCertsOpenSslCacheUnreadableDetailsFormat {
-            get {
-                return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableDetailsFormat", resourceCulture);
-            }
-        }
-
-        /// <summary>
         ///   Looks up a localized string similar to Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates..
         /// </summary>
         public static string DevCertsOpenSslCacheUnreadableFilesDetailsFormat {
