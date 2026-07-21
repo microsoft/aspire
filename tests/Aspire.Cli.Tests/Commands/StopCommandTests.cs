@@ -14,8 +14,10 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
+using Aspire.Cli.Utils;
 using Aspire.Shared;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Tests;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
@@ -193,7 +195,9 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath, int.MaxValue - 5));
+        var connection = CreateConnection(appHostPath, int.MaxValue - 5);
+        connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 5);
+        monitor.AddConnection("hash1", connection.SocketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -215,36 +219,23 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StopCommand_WithExplicitAppHostStopsAllRunningInstancesForThatAppHost()
+    public async Task StopCommand_WithExplicitAppHostFileDoesNotUseProjectLocatorBeforeSocketLookup()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var interactionService = new TestInteractionService();
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
-        var otherAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Other.AppHost.csproj"));
-        await File.WriteAllTextAsync(otherAppHostFile.FullName, "<Project />");
-
-        var firstProcessId = int.MaxValue - 13;
-        var secondProcessId = int.MaxValue - 14;
-        var firstConnection = CreateConnection(appHostFile.FullName, firstProcessId);
-        var secondConnection = CreateConnection(appHostFile.FullName, secondProcessId);
-        var otherConnection = CreateConnection(otherAppHostFile.FullName, int.MaxValue - 15);
-        var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket.hash1", firstConnection);
-        monitor.AddConnection("hash2", "socket.hash2", secondConnection);
-        monitor.AddConnection("hash3", "socket.hash3", otherConnection);
 
         var projectLocator = new TestProjectLocator
         {
             UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
-                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+                throw new InvalidOperationException("Explicit file stop should not require project validation.")
         };
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
             options.InteractionServiceFactory = _ => interactionService;
-            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
             options.ProjectLocatorFactory = _ => projectLocator;
         });
 
@@ -255,15 +246,10 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        var expectedIdentifier1 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, appHostFile.Name, firstProcessId);
-        var expectedIdentifier2 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, appHostFile.Name, secondProcessId);
+        var displayedMessage = Assert.Single(interactionService.DisplayedMessages);
         Assert.Equal(
-            new[]
-            {
-                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier1),
-                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier2)
-            }.OrderBy(message => message, StringComparer.Ordinal).ToArray(),
-            interactionService.DisplayedSuccess.OrderBy(message => message, StringComparer.Ordinal).ToArray());
+            string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("AppHost", "AppHost.csproj")),
+            displayedMessage.Message);
     }
 
     [Fact]
@@ -277,7 +263,9 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
         var appHostPath = Path.Combine(outOfScopeDir.FullName, "App1", "App1.AppHost", "App1.AppHost.csproj");
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false));
+        var connection = CreateConnection(appHostPath, int.MaxValue - 6, isInScope: false);
+        connection.SocketPath = CreateMatchingSocketFile(appHostPath, workspace, 6);
+        monitor.AddConnection("hash1", connection.SocketPath, connection);
 
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
         {
@@ -389,7 +377,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var projectLocator = new TestProjectLocator
         {
             UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
-                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+                throw new InvalidOperationException("Explicit file force stop should not require project validation.")
         };
 
         var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
@@ -457,7 +445,9 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var projectLocatorInvoked = false;
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(runningAppHostFile.FullName, int.MaxValue - 11));
+        var connection = CreateConnection(runningAppHostFile.FullName, int.MaxValue - 11);
+        connection.SocketPath = CreateMatchingSocketFile(runningAppHostFile.FullName, workspace, 11);
+        monitor.AddConnection("hash1", connection.SocketPath, connection);
 
         var projectLocator = new TestProjectLocator
         {
@@ -492,48 +482,25 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task StopCommand_ForceWithExplicitAppHostStopsAllRunningInstancesBeforeCleanup()
+    public async Task StopCommand_ForceWithExplicitAppHostFileCleansUpWithoutProjectValidation()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var interactionService = new TestInteractionService();
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
         var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
         await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
-        var otherAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Other.AppHost.csproj"));
-        await File.WriteAllTextAsync(otherAppHostFile.FullName, "<Project />");
         var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
-
-        var firstProcessId = int.MaxValue - 16;
-        var secondProcessId = int.MaxValue - 17;
-        var firstConnection = CreateConnection(appHostFile.FullName, firstProcessId);
-        var secondConnection = CreateConnection(appHostFile.FullName, secondProcessId);
-        var otherConnection = CreateConnection(otherAppHostFile.FullName, int.MaxValue - 18);
-        var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket.hash1", firstConnection);
-        monitor.AddConnection("hash2", "socket.hash2", secondConnection);
-        monitor.AddConnection("hash3", "socket.hash3", otherConnection);
-
-        var expectedIdentifier1 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, appHostFile.Name, firstProcessId);
-        var expectedIdentifier2 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, appHostFile.Name, secondProcessId);
-        var processFactory = new TestProcessExecutionFactory
-        {
-            AssertionCallback = (_, _, _, _) =>
-            {
-                Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier1));
-                Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier2));
-            }
-        };
+        var processFactory = new TestProcessExecutionFactory();
 
         var projectLocator = new TestProjectLocator
         {
             UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
-                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+                throw new InvalidOperationException("Explicit file force stop should not require project validation.")
         };
 
         var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
         {
             options.ProjectLocatorFactory = _ => projectLocator;
-            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
         });
 
         using var provider = services.BuildServiceProvider();
@@ -543,8 +510,6 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await result.InvokeAsync().DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier1));
-        Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier2));
         AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
     }
 
@@ -1023,7 +988,9 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
 
         var monitor = new TestAuxiliaryBackchannelMonitor();
-        monitor.AddConnection("hash1", "socket.hash1", CreateConnection(appHostFile.FullName, int.MaxValue - 10));
+        var connection = CreateConnection(appHostFile.FullName, int.MaxValue - 10);
+        connection.SocketPath = CreateMatchingSocketFile(appHostFile.FullName, workspace, 10);
+        monitor.AddConnection("hash1", connection.SocketPath, connection);
 
         var projectLocator = new TestProjectLocator
         {
@@ -1081,8 +1048,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         // The AppHost is reported with a process id that does not exist, so ProcessShutdownService observes
         // termination immediately and the stop reaches the socket-cleanup branch.
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "App1", "App1.AppHost.csproj");
-        var socketPath = Path.Combine(workspace.WorkspaceRoot.FullName, "a.sock");
-        File.WriteAllText(socketPath, "");
+        var socketPath = CreateMatchingSocketFile(appHostPath, workspace, 9);
         Assert.True(File.Exists(socketPath));
 
         var connection = CreateConnection(appHostPath, int.MaxValue - 9);
@@ -1185,6 +1151,23 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
                 ProcessId = processId
             }
         };
+    }
+
+    private static string CreateMatchingSocketFile(string appHostPath, TemporaryWorkspace workspace, int instanceId)
+    {
+        var homeDirectory = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".home"));
+        var backchannelsDirectory = Path.Combine(homeDirectory.FullName, ".aspire", "cli", "bch");
+        Directory.CreateDirectory(backchannelsDirectory);
+
+        var resolvedAppHostPath = PathNormalizer.ResolveSymlinks(appHostPath);
+        var prefix = AppHostHelper.ComputeAuxiliarySocketPrefix(resolvedAppHostPath, homeDirectory.FullName);
+        var appHostId = Path.GetFileName(prefix);
+        var instanceSuffix = instanceId.ToString("000", CultureInfo.InvariantCulture);
+        var socketPath = Path.Combine(
+            backchannelsDirectory,
+            $"{appHostId}a1b2c{instanceSuffix}.{Environment.ProcessId.ToString(CultureInfo.InvariantCulture)}");
+        File.WriteAllText(socketPath, "");
+        return socketPath;
     }
 
     private static string[] GetDisplayedText(TestInteractionService interactionService, ConcurrentQueue<string> statusMessages)
