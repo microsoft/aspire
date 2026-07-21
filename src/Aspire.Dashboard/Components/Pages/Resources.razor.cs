@@ -419,9 +419,18 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     {
         var selectedResourceHasChanged = false;
 
-        foreach (var parent in _sourceResourceByName.Values.ToList())
+        // Group replica children by their declared parent name once per batch instead of rescanning
+        // every resource for each candidate parent. This keeps recomputation close to O(n) instead of
+        // O(n^2) when there are many resources.
+        var childrenByParentName = _sourceResourceByName.Values
+            .Where(r => r.GetResourcePropertyValue(KnownProperties.Resource.ParentName) is { Length: > 0 })
+            .ToLookup(r => r.GetResourcePropertyValue(KnownProperties.Resource.ParentName)!, StringComparers.ResourceName);
+
+        // The dictionary isn't mutated while this loop runs: this method is only ever called with
+        // updateSource: false below, so it's safe to enumerate .Values directly without a defensive copy.
+        foreach (var parent in _sourceResourceByName.Values)
         {
-            var stateSource = GetReplicaStateSource(parent);
+            var stateSource = GetReplicaStateSource(parent, childrenByParentName);
             var updatedParent = stateSource is not null ? parent.WithStateFrom(stateSource) : parent;
 
             if (!_resourceByName.TryGetValue(parent.Name, out var displayedParent) ||
@@ -448,24 +457,60 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         return selectedResourceHasChanged;
     }
 
-    private ResourceViewModel? GetReplicaStateSource(ResourceViewModel parent)
+    private static ResourceViewModel? GetReplicaStateSource(ResourceViewModel parent, ILookup<string, ResourceViewModel> childrenByParentName)
     {
-        var children = _sourceResourceByName.Values
-            .Where(child => !ReferenceEquals(child, parent) && IsReplicaChild(parent, child))
-            .ToList();
+        ResourceViewModel? best = null;
+        var bestTier = int.MaxValue;
 
-        return GetMostRelevantReplica(children.Where(r => r.IsRunningState())) ??
-            GetMostRelevantReplica(children.Where(r => r.IsUnusableTransitoryState())) ??
-            GetMostRelevantReplica(children.Where(r => r.IsRuntimeUnhealthy() || r.IsFailedToStart())) ??
-            GetMostRelevantReplica(children.Where(r => !r.HasNoState()));
-
-        static ResourceViewModel? GetMostRelevantReplica(IEnumerable<ResourceViewModel> replicas)
+        foreach (var child in childrenByParentName[parent.Name])
         {
-            return replicas
-                .OrderBy(r => r.HealthStatus ?? HealthStatus.Unhealthy)
-                .ThenBy(r => r.ReplicaIndex)
-                .ThenBy(r => r.Name, StringComparers.ResourceName)
-                .FirstOrDefault();
+            if (ReferenceEquals(child, parent) || !IsReplicaChild(parent, child))
+            {
+                continue;
+            }
+
+            var tier = GetReplicaPriorityTier(child);
+            if (tier is null)
+            {
+                continue;
+            }
+
+            // Lower tier number wins outright; within the same tier the worst health, then the lowest
+            // replica index, then name order wins. This single pass replaces four separate Where/OrderBy
+            // scans but must preserve their exact priority and deterministic tie-break semantics.
+            if (tier < bestTier || (tier == bestTier && CompareReplicaRelevance(child, best!) < 0))
+            {
+                best = child;
+                bestTier = tier.Value;
+            }
+        }
+
+        return best;
+
+        // Running replicas always win over transitory (starting/building/waiting/stopping), which win
+        // over unhealthy/failed-to-start, which win over any other known state. Replicas with no state
+        // at all never contribute to the parent's displayed state.
+        static int? GetReplicaPriorityTier(ResourceViewModel r) => r switch
+        {
+            _ when r.IsRunningState() => 0,
+            _ when r.IsUnusableTransitoryState() => 1,
+            _ when r.IsRuntimeUnhealthy() || r.IsFailedToStart() => 2,
+            _ when !r.HasNoState() => 3,
+            _ => null
+        };
+
+        static int CompareReplicaRelevance(ResourceViewModel a, ResourceViewModel b)
+        {
+            var healthComparison = (a.HealthStatus ?? HealthStatus.Unhealthy).CompareTo(b.HealthStatus ?? HealthStatus.Unhealthy);
+            if (healthComparison != 0)
+            {
+                return healthComparison;
+            }
+
+            var replicaIndexComparison = a.ReplicaIndex.CompareTo(b.ReplicaIndex);
+            return replicaIndexComparison != 0
+                ? replicaIndexComparison
+                : StringComparers.ResourceName.Compare(a.Name, b.Name);
         }
     }
 
