@@ -168,7 +168,13 @@ async function computeDashboard({ progress = true } = {}) {
   // highest seq of this compute; the POST response returns this same cached object.
   dashboard.seq = ++stateSeq;
   cache = { dashboard, prefs, at: Date.now() };
-  if (stream) broadcastState(dashboard, prefs);
+  // Re-check the live SSE client set here instead of reusing the `stream` snapshot captured at the
+  // top of this compute. The browser constructs its EventSource and immediately GETs /api/state, and
+  // a stale-cache revalidation can begin before that stream registers — so `stream` may be false even
+  // though a client connects during this compute's GitHub fetch. Gating the final broadcast on the
+  // stale snapshot would suppress it for that just-connected client, leaving the canvas stale until
+  // the ~90s poll. The live set is authoritative at completion time.
+  if (sseClients.size > 0) { broadcastState(dashboard, prefs); }
   return cache;
 }
 

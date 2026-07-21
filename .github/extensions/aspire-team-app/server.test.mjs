@@ -339,6 +339,81 @@ test("api/state streams progress and a state snapshot to connected SSE clients",
   assert.equal(typeof payload.dashboard.seq, "number", "expected a numeric seq on the streamed snapshot");
 });
 
+test("computeDashboard streams the final snapshot to an SSE client that connects mid-compute", async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+
+  // Gate the PR-page GraphQL fetch on a deferred so the compute pauses mid-fetch. `gateReached`
+  // signals that the compute has already captured its `stream` flag (as false — no client yet) and
+  // reached loadDashboard, giving us a deterministic window to connect the SSE client afterward.
+  const base = makeGitHubMock();
+  let releasePrPage;
+  let signalGateReached;
+  const prPageGate = new Promise((resolve) => { releasePrPage = resolve; });
+  const gateReached = new Promise((resolve) => { signalGateReached = resolve; });
+  globalThis.fetch = async (url, options = {}) => {
+    if (!String(url).startsWith("http://127.0.0.1:")) {
+      const query = options.body ? JSON.parse(options.body).query ?? "" : "";
+      if (query.includes("pullRequests")) {
+        signalGateReached();
+        await prPageGate;
+      }
+    }
+    return base(url, options);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=ssemid-${Date.now()}`);
+  const entry = await server.startInstance("sse-mid-test", () => {});
+  t.after(() => server.stopInstance("sse-mid-test"));
+
+  // Start the compute with NO SSE client connected: `stream` is captured false. Don't await yet —
+  // the request stays pending inside the gated GitHub fetch.
+  const statePromise = fetch(new URL("api/state", entry.url));
+  await gateReached;
+
+  // Now connect the SSE client — after `stream` was captured false, but before the final broadcast.
+  const ac = new AbortController();
+  t.after(() => ac.abort());
+  const evRes = await fetch(new URL("events", entry.url), { signal: ac.signal });
+  const reader = evRes.body.getReader();
+  const decoder = new TextDecoder();
+  const records = [];
+  const readLoop = (async () => {
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) !== -1) {
+        const record = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        records.push(record);
+        if (record.startsWith("event: state")) return;
+      }
+    }
+  })();
+
+  // Release the gated fetch so the compute finishes and broadcasts its final snapshot.
+  releasePrPage();
+
+  await Promise.race([
+    readLoop,
+    new Promise((_, reject) => setTimeout(() => reject(new Error("SSE client that connected mid-compute never received the final state snapshot")), 5000)),
+  ]);
+  await statePromise;
+
+  const stateRecord = records.find((r) => r.startsWith("event: state"));
+  assert.ok(stateRecord, "expected the final state snapshot to reach the mid-compute SSE client");
+  const dataLine = stateRecord.split("\n").find((l) => l.startsWith("data: ")).slice(6);
+  assert.equal(JSON.parse(dataLine).dashboard.authenticated, true);
+});
+
 // Minimal GitHub GraphQL mock: scope probe, viewer, repo existence probe, and an empty
 // pull-request page. Loopback (127.0.0.1) requests fall through to the real fetch so the
 // test can drive the extension's own HTTP server.
