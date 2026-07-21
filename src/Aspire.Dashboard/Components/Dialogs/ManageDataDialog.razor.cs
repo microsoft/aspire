@@ -143,8 +143,9 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
             }
         }
 
-        // Remove selections for resources that no longer exist
-        _selectedRows.RemoveWhere(r => !_resourceDataRows.ContainsKey(r.ResourceName));
+        // Signals can be cleared outside this dialog. Remove selections that no longer
+        // correspond to a displayed row so hidden selections can't enable actions.
+        _selectedRows.RemoveWhere(selection => !IsSelectionAvailable(selection));
     }
 
     private async Task SubscribeResourcesAsync()
@@ -459,6 +460,11 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
         return _selectedRows.Count == 0;
     }
 
+    private bool AreNoneExportableSelected()
+    {
+        return !_selectedRows.Any(r => r.DataType is not AspireDataType.Resource);
+    }
+
     /// <summary>
     /// Returns true if all data rows for a resource are selected.
     /// </summary>
@@ -505,6 +511,18 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private IconCheckboxState GetDataRowCheckboxState(string resourceName, AspireDataType dataType) =>
         IsDataRowSelected(resourceName, dataType) ? IconCheckboxState.Checked : IconCheckboxState.Unchecked;
+
+    private bool IsSelectionAvailable((string ResourceName, AspireDataType DataType) selection)
+    {
+        if (!_resourceDataRows.TryGetValue(selection.ResourceName, out var row))
+        {
+            return false;
+        }
+
+        return row.TelemetryData.Count == 0
+            ? selection.DataType is AspireDataType.Resource
+            : row.TelemetryData.Any(dataRow => dataRow.DataType == selection.DataType);
+    }
 
     private static IconCheckboxState GetCheckboxState(bool isChecked, bool isUnchecked) => (isChecked, isUnchecked) switch
     {

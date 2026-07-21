@@ -19,6 +19,7 @@ using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
@@ -152,7 +153,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Render_TelemetryOnlyResourceWithoutSignals_CanBeSelectedAndRemoved()
+    public async Task Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource()
     {
         var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: []);
         SetupManageDataDialogServices(dashboardClient);
@@ -174,6 +175,22 @@ public sealed class ManageDataDialogTests : DashboardTestContext
                 }
             }
         });
+        var timestamp = DateTime.UnixEpoch;
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: resourceKey.Name, instanceId: resourceKey.InstanceId),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope("test-scope"),
+                        Spans = { CreateSpan(traceId: "trace", spanId: "span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
+                    }
+                }
+            }
+        });
 
         var cut = RenderComponent<ManageDataDialog>();
 
@@ -184,21 +201,40 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             AssertSelectionCheckbox(cut, "orphan", "true");
         });
 
+        await ExpandResourceRowsAsync(cut, expectedCount: 1);
+        cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "Structured logs for orphan", "true"));
+        await ClickSelectionCheckboxAsync(cut, "Structured logs for orphan", "true");
+
+        repository.ClearTraces(resourceKey);
+
+        cut.WaitForAssertion(() =>
+        {
+            AssertNoButtonHasAccessibleName(cut, "Traces");
+            AssertSelectionCheckbox(cut, "orphan", "false");
+            AssertButtonDisabled(cut, "Export selected", expectedDisabled: true);
+            AssertButtonDisabled(cut, "Remove selected", expectedDisabled: true);
+        });
+
         repository.ClearStructuredLogs(resourceKey);
 
         cut.WaitForAssertion(() =>
         {
             Assert.Single(repository.GetResources());
             AssertSelectionCheckboxCount(cut, 2);
-            AssertSelectionCheckbox(cut, "orphan", "true");
+            AssertSelectionCheckbox(cut, "orphan", "false");
+            AssertNoButtonHasAccessibleName(cut, "Structured logs");
             Assert.Single(cut.FindAll(".empty-data"));
+            AssertButtonDisabled(cut, "Export selected", expectedDisabled: true);
+            AssertButtonDisabled(cut, "Remove selected", expectedDisabled: true);
         });
 
         await cut.InvokeAsync(() => GetResourceRows(cut).Single().Click());
-        cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "orphan", "false"));
-
-        await cut.InvokeAsync(() => GetResourceRows(cut).Single().Click());
-        cut.WaitForAssertion(() => AssertSelectionCheckbox(cut, "orphan", "true"));
+        cut.WaitForAssertion(() =>
+        {
+            AssertSelectionCheckbox(cut, "orphan", "true");
+            AssertButtonDisabled(cut, "Export selected", expectedDisabled: true);
+            AssertButtonDisabled(cut, "Remove selected", expectedDisabled: false);
+        });
 
         cut.Find("fluent-button[aria-label='Remove selected']").Click();
 
@@ -299,6 +335,13 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             element =>
                 string.Equals(element.GetAttribute("title"), accessibleName, StringComparison.Ordinal) ||
                 string.Equals(element.GetAttribute("aria-label"), accessibleName, StringComparison.Ordinal));
+
+    private static void AssertButtonDisabled(IRenderedComponent<ManageDataDialog> cut, string accessibleName, bool expectedDisabled)
+    {
+        var button = cut.Find($"fluent-button[aria-label='{accessibleName}']");
+
+        Assert.Equal(expectedDisabled, button.HasAttribute("disabled"));
+    }
 
     private static bool ElementHasAccessibleName(IElement element, string accessibleName) =>
         string.Equals(element.GetAttribute("title"), accessibleName, StringComparison.Ordinal) &&
