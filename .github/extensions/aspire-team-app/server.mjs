@@ -269,7 +269,7 @@ function resolveActionPr(pr) {
   const repository = String(pr?.repository ?? "").trim();
   const number = Number.parseInt(pr?.number, 10);
   const canonical = Number.isInteger(number)
-    ? findCachedPr(repository, number)
+    ? findCachedPr(repository, number, pr?.url)
     : undefined;
   if (canonical) {
     return { repository: canonical.repository, number: canonical.number, url: canonical.url, title: canonical.title, author: canonical.author };
@@ -277,36 +277,60 @@ function resolveActionPr(pr) {
   return { repository, number, url: "", title: "", author: "" };
 }
 
-// Walk the cached dashboard for a PR/issue node matching owner/repo#number. The dashboard is
-// a small bounded object (lanes, attention, notifications, each holding these nodes), so a
-// recursive scan is cheap and stays correct if the exact shape changes. A node qualifies
-// when it carries a string repository, an integer number, and a non-empty url.
-function findCachedPr(repository, number) {
+// Parse the host out of a canonical PR url, lower-cased for comparison. Returns "" on any
+// malformed/empty input so a tampered hint simply fails to select a candidate.
+function hostOf(url) {
+  try {
+    return new URL(String(url)).host.toLowerCase();
+  } catch {
+    return "";
+  }
+}
+
+// Walk the cached dashboard for PR/issue nodes matching owner/repo#number. repository#number
+// is NOT globally unique across the GitHub hosts this app can watch at once (github.com plus a
+// GHES/EMU instance): two active accounts on different hosts can each hold a distinct PR with
+// the identical slug and number. So we collect EVERY match (deduped by canonical url, since one
+// PR can surface in several lanes) instead of stopping at the first, then disambiguate by the
+// host of the client-supplied url. That url is used ONLY to pick among the user's own cached
+// PRs — the returned url/title/author always come from the cache, never the client, so a
+// tampered hint can at worst fail to select a candidate. A single match resolves outright; when
+// multiple hosts collide we require the hint's host to select exactly one and otherwise reject
+// (undefined) rather than silently targeting whichever host the scan reached first.
+function findCachedPr(repository, number, urlHint) {
   const dashboard = cache?.dashboard;
   if (!dashboard || !repository) return undefined;
   const target = `${repository}#${number}`.toLowerCase();
-  let found;
+  const byUrl = new Map();
   const visit = (node) => {
-    if (found || !node || typeof node !== "object") return;
+    if (!node || typeof node !== "object") return;
     if (Array.isArray(node)) {
       for (const v of node) visit(v);
       return;
     }
     if (typeof node.repository === "string" && Number.isInteger(node.number) && typeof node.url === "string" && node.url
       && `${node.repository}#${node.number}`.toLowerCase() === target) {
-      found = {
-        repository: node.repository,
-        number: node.number,
-        url: node.url,
-        title: typeof node.title === "string" ? node.title : "",
-        author: typeof node.author === "string" ? node.author : "",
-      };
+      if (!byUrl.has(node.url)) {
+        byUrl.set(node.url, {
+          repository: node.repository,
+          number: node.number,
+          url: node.url,
+          title: typeof node.title === "string" ? node.title : "",
+          author: typeof node.author === "string" ? node.author : "",
+        });
+      }
+      // A matched PR node's own properties are never other top-level PRs, so don't descend
+      // into it (mirrors the original single-match traversal).
       return;
     }
     for (const v of Object.values(node)) visit(v);
   };
   visit(dashboard);
-  return found;
+  const matches = [...byUrl.values()];
+  if (matches.length <= 1) return matches[0];
+  const wantHost = hostOf(urlHint);
+  const onHost = wantHost ? matches.filter((m) => hostOf(m.url) === wantHost) : [];
+  return onHost.length === 1 ? onHost[0] : undefined;
 }
 
 function send(res, status, body, type = "application/json") {
