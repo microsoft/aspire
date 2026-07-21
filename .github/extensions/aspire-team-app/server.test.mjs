@@ -46,6 +46,29 @@ test("mutating POST rejects cross-site loopback requests before saving preferenc
   await assert.rejects(readFile(preferencesPath, "utf8"), { code: "ENOENT" });
 });
 
+test("isAllowedPostRequest pins the Host header to this server's loopback origin (blocks DNS rebinding)", async () => {
+  const server = await import(`./server.mjs?test=host-${Date.now()}`);
+  const { isAllowedPostRequest } = server;
+  const port = 54321;
+  const req = (host, extra = {}) => ({ headers: { host, ...extra }, socket: { localPort: port } });
+
+  // Legitimate same-origin call from the loopback iframe.
+  assert.equal(isAllowedPostRequest(req(`127.0.0.1:${port}`, { origin: `http://127.0.0.1:${port}`, "sec-fetch-site": "same-origin" })), true);
+  // A loopback host with no Origin / Sec-Fetch-Site (older clients) is still allowed.
+  assert.equal(isAllowedPostRequest(req(`localhost:${port}`)), true);
+
+  // DNS rebinding: a public hostname rebound to 127.0.0.1 is "same-origin" with itself, so Host,
+  // Origin, and Sec-Fetch-Site: same-origin all agree — but the hostname is not a loopback literal
+  // on our port, so it must be rejected before any mutating handler runs.
+  assert.equal(isAllowedPostRequest(req(`malicious.example:${port}`, { origin: `http://malicious.example:${port}`, "sec-fetch-site": "same-origin" })), false);
+  // Loopback hostname but a different local listener's port.
+  assert.equal(isAllowedPostRequest(req(`127.0.0.1:${port + 1}`)), false);
+  // A Host without an explicit port never matches an ephemeral listener.
+  assert.equal(isAllowedPostRequest(req("127.0.0.1")), false);
+  // Missing Host header.
+  assert.equal(isAllowedPostRequest({ headers: {}, socket: { localPort: port } }), false);
+});
+
 test("dashboard load retries after an inflight account probe rejection", async (t) => {
   await resetTestHome({
     accounts: {

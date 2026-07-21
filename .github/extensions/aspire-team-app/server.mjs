@@ -364,9 +364,20 @@ async function readBody(req) {
 // headers (older clients / direct navigations) are allowed through. This mirrors the
 // origin guard used by the sibling issue-triage-canvas extension so any browser page that
 // happens to reach the loopback port cannot drive preference/account/notification changes.
-function isAllowedPostRequest(req) {
+export function isAllowedPostRequest(req) {
   const host = req.headers.host;
   if (!host) {
+    return false;
+  }
+  // Pin the Host header to THIS server's real loopback origin — a loopback hostname on the exact
+  // ephemeral port this connection was accepted on (req.socket.localPort). We must not derive the
+  // expected origin from the attacker-controlled Host header, because that enables DNS rebinding:
+  // a page on evil.example.com (whose DNS is rebound to 127.0.0.1) is "same-origin" with its own
+  // hostname, so Host, Origin, and Sec-Fetch-Site: same-origin would all agree and a forged
+  // request could enqueue privileged Test/Review/conflict actions into the Copilot session. The
+  // socket's localPort can't be spoofed by request headers, so it is the trustworthy anchor.
+  // See https://en.wikipedia.org/wiki/DNS_rebinding.
+  if (!isLoopbackHost(host, req.socket?.localPort)) {
     return false;
   }
 
@@ -390,6 +401,30 @@ function isSameOrigin(origin, expectedOrigin) {
   } catch {
     return false;
   }
+}
+
+// A legitimate request carries a Host header naming this server's own loopback origin: a loopback
+// hostname (127.0.0.1 / localhost / [::1]) on the exact ephemeral port this connection landed on.
+// The server always listens on 127.0.0.1:<random port> and the iframe url embeds that port, so a
+// public hostname (even one that resolves to 127.0.0.1 via rebinding) or a mismatched/absent port
+// is never legitimate and is rejected before any mutating handler runs.
+function isLoopbackHost(hostHeader, localPort) {
+  if (!Number.isInteger(localPort)) {
+    return false;
+  }
+  let url;
+  try {
+    // Wrap the bare authority in a scheme so URL parses hostname/port (and normalizes IPv6 forms).
+    url = new URL(`http://${hostHeader}`);
+  } catch {
+    return false;
+  }
+  // Host must carry an explicit port matching the accepted socket. A default/absent port ("" ->
+  // 80) never matches an ephemeral listener, so a Host without a port is rejected too.
+  if (url.port === "" || Number(url.port) !== localPort) {
+    return false;
+  }
+  return url.hostname === "127.0.0.1" || url.hostname === "localhost" || url.hostname === "[::1]";
 }
 
 async function handle(req, res, log, instanceId) {
