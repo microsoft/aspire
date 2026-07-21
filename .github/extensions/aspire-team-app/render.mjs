@@ -2203,10 +2203,12 @@ function wire() {
       closeCbMenus();
       if (!wasOpen) openCbMenu(split, caret, menu);
     });
-    // Menu keyboard model (ARIA menu pattern): the items use roving tabindex (-1) and are
-    // driven from here. Arrow keys move between choices, Home/End jump to the ends, and both
-    // Escape and Tab close the menu and return focus to the caret so focus never escapes into
-    // <body> (the menu is portaled there while open). Enter/Space activate natively (buttons).
+    // Menu keyboard model (ARIA menu-button pattern): the items use roving tabindex (-1) and are
+    // driven from here. Arrow keys move between choices, Home/End jump to the ends. Escape closes
+    // the menu and returns focus to the caret. Tab must NOT be trapped: it closes the menu and
+    // re-anchors focus on the in-flow caret (so focus never lands in the portaled-away <body>),
+    // but does not preventDefault, so the browser's native Tab then advances focus to the next
+    // element per the pattern. Enter/Space activate natively (buttons).
     if (caret && menu) menu.addEventListener("keydown", (e) => {
       const items = Array.prototype.slice.call(menu.querySelectorAll(".cb-menu-item"));
       if (!items.length) return;
@@ -2215,7 +2217,8 @@ function wire() {
       else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
       else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
       else if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
-      else if (e.key === "Escape" || e.key === "Tab") { e.preventDefault(); closeCbMenus(); caret.focus(); }
+      else if (e.key === "Escape") { e.preventDefault(); closeCbMenus(); caret.focus(); }
+      else if (e.key === "Tab") { closeCbMenus(); caret.focus(); }
     });
     split.querySelectorAll(".cb-menu-item").forEach((mi) =>
       mi.addEventListener("click", (e) => {

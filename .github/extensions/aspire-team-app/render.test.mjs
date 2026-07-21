@@ -336,6 +336,20 @@ function createRendererHarness(overrides = {}) {
   return { app, api: sandbox.__test };
 }
 
+test("cb-menu keyboard model lets Tab traverse out of the menu instead of trapping focus", () => {
+  // Escape still cancels the default and returns focus to the caret (menu-button pattern).
+  assert.match(APP_JS, /e\.key === "Escape"\)\s*\{\s*e\.preventDefault\(\);\s*closeCbMenus\(\);\s*caret\.focus\(\);/);
+  // Tab has its own branch that closes the menu and re-anchors on the caret, but must NOT call
+  // preventDefault so the browser's native Tab moves focus to the next element rather than
+  // trapping the keyboard user inside the portaled menu.
+  const tabBranch = APP_JS.match(/e\.key === "Tab"\)\s*\{([^}]*)\}/);
+  assert.ok(tabBranch, "expected a dedicated Tab keydown branch");
+  assert.match(tabBranch[1], /closeCbMenus\(\)/);
+  assert.doesNotMatch(tabBranch[1], /preventDefault/);
+  // The old combined branch that trapped Tab alongside Escape is gone.
+  assert.doesNotMatch(APP_JS, /"Escape" \|\| e\.key === "Tab"/);
+});
+
 function jsonResponse(body, options = {}) {
   return {
     ok: options.ok ?? true,
