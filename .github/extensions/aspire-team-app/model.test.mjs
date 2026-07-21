@@ -142,16 +142,37 @@ test("computeFocusItems keeps the highest-priority lane per PR and excludes CI-f
   assert.equal(focus[0].bucketLabel, "Ready to merge");
 });
 
-test("computeFocusItems retains review-debt PRs aged past the focus limit", () => {
+test("computeFocusItems retains review-debt PRs through the full createAttentionBuckets pipeline", () => {
+  // Fresh unreviewed PR: comfortably within the focus window.
   const fresh = makePr({ number: 40, updatedAt: isoAgo(dayMs) });
-  // Unreviewed and untouched for 20 days: aged past the 14d focus limit on its updatedAt
-  // reference, so oldFirstSignal() flags it "review debt" and it must stay in the queue for
-  // the "Address review" action to be reachable — previously the age filter dropped it.
-  const reviewDebt = makePr({ number: 41, updatedAt: isoAgo(20 * dayMs) });
+  // Unreviewed and untouched for 20 days: still lands in "Needs review" but is aged past the 14d
+  // focus limit, so it only survives because isReviewDebt() retains it.
+  const needsReviewDebt = makePr({ number: 41, updatedAt: isoAgo(20 * dayMs) });
+  // Reviewed once, then gone quiet for 20 days with no newer commit: its ONLY bucket is "Stalled"
+  // (normally excluded from focus), yet oldFirstSignal() flags it "review debt". It must still
+  // reach the queue through the real createAttentionBuckets() -> computeFocusItems() path so the
+  // "Address review" action stays reachable.
+  const stalledDebt = makePr({
+    number: 42,
+    updatedAt: isoAgo(20 * dayMs),
+    lastCommitAt: isoAgo(21 * dayMs),
+    review: { state: "reviewed", reviewerCount: 1, commentedReviewCount: 1, lastReviewedAt: isoAgo(20 * dayMs) },
+  });
+  // Reviewed and idle for only 10 days: stalled but NOT review debt, so the Stalled gate keeps it
+  // out of focus (guards against re-flooding the queue with every idle PR).
+  const stalledFresh = makePr({
+    number: 43,
+    updatedAt: isoAgo(10 * dayMs),
+    lastCommitAt: isoAgo(11 * dayMs),
+    review: { state: "reviewed", reviewerCount: 1, commentedReviewCount: 1, lastReviewedAt: isoAgo(10 * dayMs) },
+  });
 
-  const focus = computeFocusItems([bucketWith("Needs review", fresh, reviewDebt)]);
+  const buckets = createAttentionBuckets([fresh, needsReviewDebt, stalledDebt, stalledFresh]);
+  const focus = computeFocusItems(buckets);
 
-  assert.deepEqual(focus.map((i) => i.pullRequest.number).sort((a, b) => a - b), [40, 41]);
+  assert.deepEqual(focus.map((i) => i.pullRequest.number).sort((a, b) => a - b), [40, 41, 42]);
+  // The Stalled-only debt PR is surfaced on its sole lane.
+  assert.equal(focus.find((i) => i.pullRequest.number === 42).bucketLabel, "Stalled");
 });
 
 test("computeCommunityItems includes active external contributors and excludes team, bots, and aged-out PRs", () => {

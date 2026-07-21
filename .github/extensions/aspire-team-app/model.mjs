@@ -748,8 +748,16 @@ export function computeFocusItems(buckets) {
     if (isWaitingOnAuthor(labels)) blocked.add(key);
   }
   const flat = buckets
-    .filter((b) => !excludedFocusBucketLabels.has(b.label))
-    .flatMap((b) => b.items.map((i) => ({ ...i, bucketLabel: b.label, bucketTone: b.tone })));
+    // "Stalled" is normally excluded so idle PRs don't flood focus, but a review-debt PR whose
+    // ONLY lane is "Stalled" (e.g. reviewed-then-gone-quiet, so no "Needs review"/actionable
+    // bucket) would never reach the retention filter below and the "Address review" action would
+    // be unreachable — the exact case oldFirstSignal() still flags. Let those single Stalled
+    // items through; the isReviewDebt gate keeps 7–14d stalled PRs out, and the age/community/CI
+    // filters below still apply. Non-Stalled excluded buckets stay fully excluded.
+    .filter((b) => !excludedFocusBucketLabels.has(b.label) || b.label === "Stalled")
+    .flatMap((b) => b.items
+      .filter((i) => b.label !== "Stalled" || isReviewDebt(i.pullRequest))
+      .map((i) => ({ ...i, bucketLabel: b.label, bucketTone: b.tone })));
 
   const byPr = new Map();
   for (const item of flat) {
