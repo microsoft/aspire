@@ -362,6 +362,11 @@ internal sealed class BundleService(
         {
             await MoveDirectoryWithRetryAsync(tempDir, activeVersionDir, cancellationToken).ConfigureAwait(false);
         }
+        catch (OperationCanceledException)
+        {
+            FileDeleteHelper.TryDeleteDirectory(tempDir);
+            throw;
+        }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             logger.LogError(ex, "Failed to promote {TempDir} to {ActiveDir}.", tempDir, activeVersionDir);
