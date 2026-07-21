@@ -853,8 +853,15 @@ async function load() {
   try {
     const res = await fetch("api/state");
     const data = await readJson(res);
-    state = data.dashboard; prefs = data.prefs; loadError = null;
-    adoptAppliedRev();
+    // GET /api/state may be served stale-while-revalidate, so a cached seq N can settle after the
+    // background stream already delivered seq N+1. Apply this response only when it is legacy (no seq)
+    // or strictly newer than what we've already applied, so a late stale load can't roll
+    // state/lastAppliedSeq backward. Mirrors the withRefresh/applyPushedState gate.
+    const seq = data.dashboard && data.dashboard.seq;
+    if (typeof seq !== "number" || seq > lastAppliedSeq) {
+      state = data.dashboard; prefs = data.prefs; loadError = null;
+      adoptAppliedRev();
+    }
   } catch (e) {
     loadError = String((e && e.message) || e);
   }
@@ -1030,6 +1037,12 @@ async function onCardAction(split, target) {
     // Clear the pending key once the request settles. The button keeps its own done/failed
     // state; a subsequent SSE re-render restores the default (now re-enabled) button.
     inflightActions.delete(key);
+    // If an SSE 'state' event re-rendered this card mid-request, our done/failed feedback landed on
+    // the now-detached old nodes, and the visible replacement was rendered disabled while the key was
+    // still pending. Re-render so it reflects the just-cleared inflight state instead of staying stuck
+    // disabled until the next SSE refresh. When the split is still connected we keep the deliberate
+    // no-re-render behavior above so the inline confirmation survives.
+    if (!split.isConnected) { render(); }
   }
 }
 

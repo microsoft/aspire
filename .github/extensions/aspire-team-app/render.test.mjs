@@ -160,6 +160,67 @@ test("withRefresh ignores a late older response so overlapping refreshes can't r
   assert.equal(api.getState().marker, "legacy");
 });
 
+test("load ignores a stale GET /api/state response so it can't rewind lastAppliedSeq", async () => {
+  // GET /api/state may be served stale-while-revalidate: the cached payload (seq 3) can settle after
+  // the background stream already delivered a newer snapshot (seq 5). fetch always returns the stale
+  // seq-3 payload here to model that race.
+  const stale = { dashboard: { seq: 3, marker: "stale", authenticated: false, accounts: [], message: "" }, prefs: {} };
+  const { api } = createRendererHarness({ fetch: async () => jsonResponse(stale) });
+
+  // Establish a newer applied revision (seq 5). withRefresh takes its data from fn, not fetch.
+  await api.withRefresh(async () => ({ dashboard: { seq: 5, marker: "fresh", authenticated: false, accounts: [], message: "" }, prefs: {} }));
+  assert.equal(api.getState().seq, 5);
+  assert.equal(api.getAppliedSeq(), 5);
+
+  // A stale forced load must be gated out — applying it would roll state and lastAppliedSeq backward.
+  await api.load();
+  assert.equal(api.getState().seq, 5);
+  assert.equal(api.getState().marker, "fresh");
+  assert.equal(api.getAppliedSeq(), 5);
+});
+
+test("onCardAction re-renders when an SSE refresh detached the card mid-request so the visible button isn't stuck disabled", async () => {
+  // The action POST resolves; api/state stays pending so the module-init load() can't render mid-test
+  // and pollute the assertions below.
+  const fetchMock = async (path) =>
+    String(path).includes("api/agent/action")
+      ? jsonResponse({ queued: false, target: "new-session" })
+      : new Promise(() => {});
+  const { app, api } = createRendererHarness({ fetch: fetchMock });
+  // A non-null state so render() produces output (render() early-returns when state is null).
+  api.setState({ authenticated: true, accounts: [], activeAccounts: [], notifications: [] });
+  api.setView("accounts");
+
+  const makeBtn = () => {
+    const cls = new Set();
+    return {
+      disabled: false,
+      innerHTML: "",
+      classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c) },
+    };
+  };
+  const makeSplit = (connected) => {
+    const main = makeBtn();
+    const caret = makeBtn();
+    return {
+      isConnected: connected,
+      dataset: { kind: "review", prUrl: "https://github.com/o/r/pull/1", prRepo: "o/r", prNumber: "1" },
+      querySelector: (sel) => (sel === ".cb-main" ? main : sel === ".cb-caret" ? caret : null),
+    };
+  };
+
+  // Detached split: a streamed 'state' event replaced the card while the POST was pending, so the
+  // visible replacement was rendered disabled. Settling must re-render so it reflects the cleared key.
+  app.innerHTML = "";
+  await api.onCardAction(makeSplit(false), "new-session");
+  assert.notEqual(app.innerHTML, "");
+
+  // Still-connected split: keep the deliberate no-re-render behavior so the inline confirmation stays.
+  app.innerHTML = "";
+  await api.onCardAction(makeSplit(true), "new-session");
+  assert.equal(app.innerHTML, "");
+});
+
 function createRendererHarness(overrides = {}) {
   const app = {
     innerHTML: "",
@@ -185,7 +246,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setState(value) { state = value; },\n  getState() { return state; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  onCardAction,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }
