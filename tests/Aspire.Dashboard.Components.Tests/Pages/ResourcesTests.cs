@@ -392,7 +392,7 @@ public partial class ResourcesTests : DashboardTestContext
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var parentName = "identityserver";
         var childName = "identityserver--0000003";
-        var childProperties = CreateParentProperties(parentName);
+        var childProperties = CreateChildProperties(parentName);
         var initialResources = new List<ResourceViewModel>
         {
             CreateResource(parentName, "AzureContainerApp", "Scaled to zero", null, stateStyle: "info"),
@@ -443,7 +443,7 @@ public partial class ResourcesTests : DashboardTestContext
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         var parentName = "identityserver";
         var childName = "identityserver--0000003";
-        var childProperties = CreateParentProperties(parentName);
+        var childProperties = CreateChildProperties(parentName);
         var initialResources = new List<ResourceViewModel>
         {
             CreateResource(parentName, "AzureContainerApp", "Scaled to zero", null, stateStyle: "info"),
@@ -533,7 +533,7 @@ public partial class ResourcesTests : DashboardTestContext
         };
     }
 
-    private static ImmutableDictionary<string, ResourcePropertyViewModel> CreateParentProperties(string parentName)
+    private static ImmutableDictionary<string, ResourcePropertyViewModel> CreateChildProperties(string parentName)
     {
         return ImmutableDictionary<string, ResourcePropertyViewModel>.Empty.Add(
             KnownProperties.Resource.ParentName,
