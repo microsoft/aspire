@@ -30,9 +30,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Resources.AIAssistant> AIAssistantLoc { get; init; }
-
-    [Inject]
     public required IJSRuntime JS { get; init; }
 
     private Task NavigateToAsync(string url)
@@ -181,15 +178,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
                 Loc[nameof(Resources.Layout.MainLayoutLaunchAIAgents)],
                 LaunchAIAgentsAsync,
                 new Icons.Regular.Size24.BotSparkle()
-            );
-        }
-
-        if (IsAIEnabled)
-        {
-            yield return new MobileNavMenuEntry(
-                AIAssistantLoc[nameof(Resources.AIAssistant.AIAssistantLaunchButtonText)],
-                LaunchAIAssistantAsync,
-                new AspireIcons.Size24.GitHubCopilot()
             );
         }
 

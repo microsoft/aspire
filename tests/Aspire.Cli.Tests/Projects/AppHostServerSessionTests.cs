@@ -599,7 +599,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<AppHostServerRunResult> RunAsync(
+        public async Task<AppHostServerRunResult> RunAsync(
             int hostPid,
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
@@ -619,13 +619,13 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             startInfo.ArgumentList.Add("--version");
 
             var execution = CreateServerExecution(startInfo, runControl);
-            execution.Start();
+            await execution.StartAsync(CancellationToken.None);
 
             StartedExecution = execution;
-            return Task.FromResult(new AppHostServerRunResult(
+            return new AppHostServerRunResult(
                 SocketPath: "test.sock",
                 OutputCollector: new OutputCollector(),
-                Execution: execution));
+                Execution: execution);
         }
     }
 
@@ -643,7 +643,7 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             CancellationToken cancellationToken = default) =>
             throw new NotSupportedException();
 
-        public Task<AppHostServerRunResult> RunAsync(
+        public async Task<AppHostServerRunResult> RunAsync(
             int hostPid,
             IReadOnlyDictionary<string, string>? environmentVariables = null,
             string[]? additionalArgs = null,
@@ -668,12 +668,12 @@ public class AppHostServerSessionTests(ITestOutputHelper outputHelper)
             }
 
             var execution = CreateServerExecution(startInfo, runControl);
-            execution.Start();
+            await execution.StartAsync(CancellationToken.None);
 
-            return Task.FromResult(new AppHostServerRunResult(
+            return new AppHostServerRunResult(
                 SocketPath: "test.sock",
                 OutputCollector: new OutputCollector(),
-                Execution: execution));
+                Execution: execution);
         }
     }
 

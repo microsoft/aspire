@@ -284,10 +284,13 @@ public static class AzureVirtualNetworkExtensions
     /// <param name="builder">The resource builder.</param>
     /// <param name="subnet">The subnet to associate with the resource.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when the resource is already associated with a different delegated subnet or the subnet is delegated to a different service.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// This method automatically configures the subnet with the appropriate service delegation
-    /// for the target resource type (e.g., "Microsoft.App/environments" for Azure Container Apps).
+    /// for the target resource type (for example, "Microsoft.App/environments" for Azure Container Apps
+    /// and "Microsoft.Web/serverFarms" for Azure App Service).
+    /// A resource can only be associated with one delegated subnet. Repeating the call with the same subnet is idempotent.
     /// </remarks>
     /// <example>
     /// This example configures an Azure Container App Environment to use a subnet:
@@ -310,14 +313,37 @@ public static class AzureVirtualNetworkExtensions
 
         var target = builder.Resource;
 
-        // Store the subnet ID reference on the target resource via annotation
-        builder.WithAnnotation(
-            new DelegatedSubnetAnnotation(ReferenceExpression.Create($"{subnet.Resource.Id}")));
+        var subnetId = ReferenceExpression.Create($"{subnet.Resource.Id}");
+        if (target.TryGetLastAnnotation<DelegatedSubnetAnnotation>(out var previousAnnotation) &&
+            previousAnnotation.SubnetId.ValueExpression != subnetId.ValueExpression)
+        {
+            throw new InvalidOperationException(
+                $"The resource '{target.Name}' is already associated with a different delegated subnet. A resource can use only one delegated subnet.");
+        }
 
-        // Add service delegation annotation to the subnet
-        subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
-            target.DelegatedSubnetServiceName,
-            target.DelegatedSubnetServiceName));
+        var conflictingDelegation = subnet.Resource.Annotations
+            .OfType<AzureSubnetServiceDelegationAnnotation>()
+            .FirstOrDefault(annotation => !string.Equals(
+                annotation.ServiceName,
+                target.DelegatedSubnetServiceName,
+                StringComparison.OrdinalIgnoreCase));
+        if (conflictingDelegation is not null)
+        {
+            throw new InvalidOperationException(
+                $"The subnet '{subnet.Resource.Name}' is already delegated to '{conflictingDelegation.ServiceName}' and cannot also be delegated to '{target.DelegatedSubnetServiceName}'.");
+        }
+
+        builder.WithAnnotation(
+            new DelegatedSubnetAnnotation(subnetId),
+            ResourceAnnotationMutationBehavior.Replace);
+
+        // The subnet provisioner emits a single delegation, so replacing prevents duplicate annotations
+        // when the same subnet is configured repeatedly.
+        subnet.WithAnnotation(
+            new AzureSubnetServiceDelegationAnnotation(
+                target.DelegatedSubnetServiceName,
+                target.DelegatedSubnetServiceName),
+            ResourceAnnotationMutationBehavior.Replace);
 
         return builder;
     }

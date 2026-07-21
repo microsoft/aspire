@@ -69,6 +69,7 @@ internal sealed class ContainerSpec
 
     // Optional parent process identity timestamp used with MonitorPid to guard against PID reuse.
     [JsonPropertyName("monitorTimestamp")]
+    [JsonConverter(typeof(KubernetesMicroTimeJsonConverter))]
     public DateTime? MonitorTimestamp { get; set; }
 
     [JsonPropertyName("networks")]

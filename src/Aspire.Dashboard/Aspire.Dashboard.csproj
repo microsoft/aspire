@@ -54,9 +54,6 @@
     <PackageReference Include="Grpc.Tools" VersionOverride="2.68.1" PrivateAssets="all" />
     <PackageReference Include="Hex1b" />
     <PackageReference Include="Humanizer.Core" />
-    <PackageReference Include="Microsoft.Extensions.AI" />
-    <PackageReference Include="Microsoft.Extensions.AI.OpenAI" />
-    <PackageReference Include="OpenAI" />
     <PackageReference Include="Markdig" />
     <PackageReference Include="Semver" />
     <PackageReference Include="Microsoft.AspNetCore.Authentication.Certificate" />
@@ -66,14 +63,9 @@
     <PackageReference Include="Microsoft.OpenApi" />
   </ItemGroup>
 
-  <!-- The following package references need to be lifted because MEAI depends on older versions -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.Extensions.DependencyInjection.Abstractions" VersionOverride="$(MicrosoftExtensionsDependencyInjectionAbstractionsPreviewVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Logging.Abstractions" VersionOverride="$(MicrosoftExtensionsLoggingAbstractionsPreviewVersion)" />
     <PackageReference Include="System.Text.Json" VersionOverride="$(SystemTextJsonPreviewVersion)" />
-    <PackageReference Include="Microsoft.Extensions.Primitives" VersionOverride="$(MicrosoftExtensionsPrimitivesPreviewVersion)" />
   </ItemGroup>
-
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Dashboard.Tests" />
@@ -88,11 +80,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Update="Resources\AIPrompts.Designer.cs">
-      <DependentUpon>AIPrompts.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
-    </Compile>
     <Compile Update="Resources\Columns.Designer.cs">
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
@@ -112,11 +99,6 @@
       <DesignTime>True</DesignTime>
       <AutoGen>True</AutoGen>
       <DependentUpon>Dialogs.resx</DependentUpon>
-    </Compile>
-    <Compile Update="Resources\AIAssistant.Designer.cs">
-      <DependentUpon>AIAssistant.resx</DependentUpon>
-      <DesignTime>True</DesignTime>
-      <AutoGen>True</AutoGen>
     </Compile>
     <Compile Update="Resources\Layout.Designer.cs">
       <DesignTime>True</DesignTime>
@@ -176,11 +158,6 @@
   </ItemGroup>
 
   <ItemGroup>
-    <EmbeddedResource Update="Resources\AIPrompts.resx">
-      <SubType>Designer</SubType>
-      <LastGenOutput>AIPrompts.Designer.cs</LastGenOutput>
-      <Generator>PublicResXFileCodeGenerator</Generator>
-    </EmbeddedResource>
     <EmbeddedResource Update="Resources\ControlsStrings.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>
       <XlfOutputItem>EmbeddedResource</XlfOutputItem>
@@ -201,13 +178,6 @@
       <SubType>Designer</SubType>
       <Generator>PublicResXFileCodeGenerator</Generator>
       <LastGenOutput>Dialogs.Designer.cs</LastGenOutput>
-    </EmbeddedResource>
-    <EmbeddedResource Update="Resources\AIAssistant.resx">
-      <XlfSourceFormat>Resx</XlfSourceFormat>
-      <XlfOutputItem>EmbeddedResource</XlfOutputItem>
-      <SubType>Designer</SubType>
-      <Generator>PublicResXFileCodeGenerator</Generator>
-      <LastGenOutput>AIAssistant.Designer.cs</LastGenOutput>
     </EmbeddedResource>
     <EmbeddedResource Update="Resources\Layout.resx">
       <XlfSourceFormat>Resx</XlfSourceFormat>
@@ -327,8 +297,6 @@
     <Compile Include="$(SharedDir)ConsoleLogs\LogEntry.cs" Link="Utils\ConsoleLogs\LogEntry.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogParser.cs" Link="Utils\ConsoleLogs\LogParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\LogPauseViewModel.cs" Link="Utils\ConsoleLogs\LogPauseViewModel.cs" />
-    <Compile Include="$(SharedDir)ConsoleLogs\PromptContext.cs" Link="Utils\ConsoleLogs\PromptContext.cs" />
-    <Compile Include="$(SharedDir)ConsoleLogs\SharedAIHelpers.cs" Link="Utils\ConsoleLogs\SharedAIHelpers.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\TimestampParser.cs" Link="Utils\ConsoleLogs\TimestampParser.cs" />
     <Compile Include="$(SharedDir)ConsoleLogs\UrlParser.cs" Link="Utils\ConsoleLogs\UrlParser.cs" />
     <Compile Include="$(SharedDir)KnownUrls.cs" Link="Utils\KnownUrls.cs" />

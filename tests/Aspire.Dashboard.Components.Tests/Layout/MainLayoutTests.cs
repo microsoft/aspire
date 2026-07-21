@@ -6,8 +6,6 @@ using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Tests;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
 using Aspire.Tests.Shared;
@@ -19,8 +17,6 @@ using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Components.Tooltip;
 using Microsoft.JSInterop;
 using Xunit;
-using AssistantModalDialog = Aspire.Dashboard.Components.Dialogs.AssistantModalDialog;
-using AssistantSidebarDialog = Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog;
 
 namespace Aspire.Dashboard.Components.Tests.Layout;
 
@@ -342,130 +338,17 @@ public partial class MainLayoutTests : DashboardTestContext
         });
     }
 
-    [Fact]
-    public async Task AssistantSidebarHide_RestoresFocusToLaunchButton()
-    {
-        var aiContextProvider = new TestAIContextProvider();
-        SetupMainLayoutServices(aiContextProvider: aiContextProvider);
-        JSInterop.SetupVoid("focusElement", _ => true);
-
-        var cut = RenderComponent<MainLayout>(builder =>
-        {
-            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
-        });
-
-        typeof(MainLayout)
-            .GetField("_assistantReturnFocusElementId", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-            .SetValue(cut.Instance, "dashboard-assistant-button");
-        typeof(MainLayout)
-            .GetField("_assistantSidebarWasVisible", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-            .SetValue(cut.Instance, true);
-
-        Func<Task> hideAssistantSidebarAsync = aiContextProvider.HideAssistantSidebarAsync;
-        await cut.InvokeAsync(hideAssistantSidebarAsync);
-
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Contains(JSInterop.Invocations, invocation =>
-                invocation.Identifier == "focusElement" &&
-                invocation.Arguments.Count == 1 &&
-                string.Equals((string?)invocation.Arguments[0], "dashboard-assistant-button", StringComparison.Ordinal));
-        });
-    }
-
-    [Fact]
-    public async Task PromptLaunchedAssistantSidebarHide_DoesNotReusePreviousFocusTarget()
-    {
-        var aiContextProvider = new TestAIContextProvider();
-        SetupMainLayoutServices(aiContextProvider: aiContextProvider);
-        JSInterop.SetupVoid("focusElement", _ => true);
-
-        var cut = RenderComponent<MainLayout>(builder =>
-        {
-            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
-        });
-
-        typeof(MainLayout)
-            .GetField("_assistantReturnFocusElementId", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-            .SetValue(cut.Instance, "dashboard-assistant-button");
-        typeof(MainLayout)
-            .GetField("_assistantSidebarWasVisible", System.Reflection.BindingFlags.Instance | System.Reflection.BindingFlags.NonPublic)!
-            .SetValue(cut.Instance, true);
-
-        Func<Task> launchPromptSidebarAsync = () => aiContextProvider.LaunchAssistantSidebarAsync(_ => Task.CompletedTask);
-        await cut.InvokeAsync(launchPromptSidebarAsync);
-
-        Func<Task> hideAssistantSidebarAsync = aiContextProvider.HideAssistantSidebarAsync;
-        await cut.InvokeAsync(hideAssistantSidebarAsync);
-
-        Assert.DoesNotContain(JSInterop.Invocations, invocation => invocation.Identifier == "focusElement");
-    }
-
-    [Fact]
-    public async Task AssistantModalDialogClose_RestoresFocusToLaunchButton()
-    {
-        DialogParameters? capturedParameters = null;
-        TestDialogService? dialogService = null;
-        dialogService = new TestDialogService(onShowDialog: (_, parameters) =>
-        {
-            capturedParameters = parameters;
-            return Task.FromResult<IDialogReference>(new DialogReference(parameters.Id, dialogService!));
-        });
-        var js = new RecordingJSRuntime();
-
-        await AssistantModalDialog.OpenDialogAsync(dialogService, js, "Assistant", new AssistantDialogViewModel { Chat = null! }, "dashboard-assistant-button");
-
-        Assert.NotNull(capturedParameters);
-
-        await capturedParameters.OnDialogClosing.InvokeAsync(null!);
-
-        Assert.Collection(js.Invocations,
-            invocation =>
-            {
-                Assert.Equal("focusElement", invocation.Identifier);
-                Assert.Collection(invocation.Arguments, argument => Assert.Equal("dashboard-assistant-button", argument));
-            });
-    }
-
-    [Theory]
-    [InlineData(true, "dashboard-assistant-button", "dashboard-navigation-button")]
-    [InlineData(false, "dashboard-assistant-button", "dashboard-assistant-button")]
-    [InlineData(false, null, null)]
-    public void AssistantSidebarSwitchToModal_UsesVisibleLauncherAsReturnFocusTarget(bool openedForMobileView, string? returnFocusElementId, string? expectedReturnFocusElementId)
-    {
-        Assert.Equal(expectedReturnFocusElementId, AssistantSidebarDialog.GetReturnFocusElementId(openedForMobileView, returnFocusElementId));
-    }
-
-    [Theory]
-    [InlineData(true, "dashboard-navigation-button", "dashboard-assistant-button")]
-    [InlineData(false, "dashboard-navigation-button", "dashboard-navigation-button")]
-    [InlineData(false, null, null)]
-    public void AssistantModalSwitchToSidebar_UsesVisibleLauncherAsReturnFocusTarget(bool openedForMobileView, string? returnFocusElementId, string? expectedReturnFocusElementId)
-    {
-        Assert.Equal(expectedReturnFocusElementId, AssistantModalDialog.GetSidebarReturnFocusElementId(openedForMobileView, returnFocusElementId));
-    }
-
     private void SetupMainLayoutServices(
         TestLocalStorage? localStorage = null,
         MessageService? messageService = null,
         Action<DashboardOptions>? configureOptions = null,
-        IDialogService? dialogService = null,
-        IAIContextProvider? aiContextProvider = null)
+        IDialogService? dialogService = null)
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this, localStorage: localStorage, messageService: messageService);
 
         if (dialogService is not null)
         {
             Services.AddSingleton(dialogService);
-        }
-
-        if (aiContextProvider is not null)
-        {
-            Services.AddSingleton(aiContextProvider);
-            if (aiContextProvider is IAssistantDisplayContext assistantDisplayContext)
-            {
-                Services.AddSingleton(assistantDisplayContext);
-            }
         }
 
         Services.AddOptions();

@@ -443,23 +443,3 @@ window.downloadStreamAsFile = async function (fileName, contentStreamReference) 
     anchorElement.remove();
     URL.revokeObjectURL(url);
 };
-
-window.attachChatClickEvent = function (containerId, interop) {
-    var container = document.getElementById(containerId);
-    if (!container) {
-        console.log(`Couldn't find container '${containerId}'.`);
-        return;
-    }
-
-    container.addEventListener('click', function (event) {
-        let anchorElement = event.target.closest('a');
-        if (anchorElement) {
-            // Only intercept if the link's host matches the current window's host (same domain)
-            if (anchorElement.host === window.location.host) {
-                event.preventDefault();
-                console.log('Link click intercepted:', anchorElement.href);
-                interop.invokeMethodAsync('NavigateUrl', anchorElement.href);
-            }
-        }
-    });
-}

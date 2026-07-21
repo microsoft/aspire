@@ -40,9 +40,9 @@
     <XunitRunnerJson>xunit.runner.json</XunitRunnerJson>
     <TestArchiveTestsDir>$(TestArchiveTestsDirForDeploymentEndToEndTests)</TestArchiveTestsDir>
 
-    <!-- Extended test session settings for deployment tests -->
-    <TestSessionTimeout>60m</TestSessionTimeout>
-    <TestHangTimeout>45m</TestHangTimeout>
+    <!-- The App Service VNet-integration upgrade test performs two full deployments. -->
+    <TestSessionTimeout>100m</TestSessionTimeout>
+    <TestHangTimeout>90m</TestHangTimeout>
   </PropertyGroup>
 
   <ItemGroup>

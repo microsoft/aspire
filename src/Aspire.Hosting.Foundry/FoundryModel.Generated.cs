@@ -77,6 +77,12 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel ClaudeSonnet46 = new() { Name = "claude-sonnet-4-6", Version = "1", Format = "Anthropic" };
+
+        /// <summary>
+        /// Claude Sonnet 5 is Anthropic's most capable Sonnet model yet, built for coding, agents, and professional work at scale. It brings near-Opus intelligence to the model teams run every day, with the same balance of capability, cost, and speed teams already re
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel ClaudeSonnet5 = new() { Name = "claude-sonnet-5", Version = "2", Format = "Anthropic" };
     }
 
     /// <summary>
@@ -229,10 +235,16 @@ public partial class FoundryModel
         public static readonly FoundryModel Llama3290BVisionInstruct = new() { Name = "Llama-3.2-90B-Vision-Instruct", Version = "5", Format = "Meta" };
 
         /// <summary>
+        /// Llama 3.3 70B Instruct offers enhanced reasoning, math, and instruction following with performance comparable to Llama 3.1 405B.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Llama3370BInstruct = new() { Name = "Llama-3.3-70B-Instruct", Version = "10", Format = "Meta" };
+
+        /// <summary>
         /// Llama 4 Maverick 17B 128E Instruct FP8 is great at precise image understanding and creative writing, offering high quality at a lower price compared to Llama 3.3 70B
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel Llama4Maverick17B128EInstructFP8 = new() { Name = "Llama-4-Maverick-17B-128E-Instruct-FP8", Version = "3", Format = "Meta" };
+        public static readonly FoundryModel Llama4Maverick17B128EInstructFP8 = new() { Name = "Llama-4-Maverick-17B-128E-Instruct-FP8", Version = "4", Format = "Meta" };
 
         /// <summary>
         /// Llama 4 Scout 17B 16E Instruct is great at multi-document summarization, parsing extensive user activity for personalized tasks, and reasoning over vast codebases.
@@ -2227,6 +2239,24 @@ public partial class FoundryModel
         public static readonly FoundryModel Gpt55 = new() { Name = "gpt-5.5", Version = "2026-04-24", Format = "OpenAI" };
 
         /// <summary>
+        /// GPT‑5.6-luna is OpenAI's most capable frontier model, built to deliver faster, more reliable results for complex professional work.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt56Luna = new() { Name = "gpt-5.6-luna", Version = "2026-07-09", Format = "OpenAI" };
+
+        /// <summary>
+        /// GPT‑5.6-sol is OpenAI's most capable frontier model, built to deliver faster, more reliable results for complex professional work.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt56Sol = new() { Name = "gpt-5.6-sol", Version = "2026-07-09", Format = "OpenAI" };
+
+        /// <summary>
+        /// GPT‑5.6-terra is OpenAI's most capable frontier model, built to deliver faster, more reliable results for complex professional work.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel Gpt56Terra = new() { Name = "gpt-5.6-terra", Version = "2026-07-09", Format = "OpenAI" };
+
+        /// <summary>
         /// Best suited for rich, asynchronous audio input/output interactions, such as creating spoken summaries from text.
         /// </summary>
         [AspireValue("FoundryModels")]
@@ -2248,7 +2278,7 @@ public partial class FoundryModel
         /// gpt-chat-latest (preview) is an advanced, natural, multimodal, and context-aware conversations for enterprise applications.
         /// </summary>
         [AspireValue("FoundryModels")]
-        public static readonly FoundryModel GptChatLatest = new() { Name = "gpt-chat-latest", Version = "2026-05-28", Format = "OpenAI" };
+        public static readonly FoundryModel GptChatLatest = new() { Name = "gpt-chat-latest", Version = "2026-06-24", Format = "OpenAI" };
 
         /// <summary>
         /// An efficient AI solution for diverse text and image tasks, including high quality, cheap text to image generation
@@ -2297,6 +2327,18 @@ public partial class FoundryModel
         /// </summary>
         [AspireValue("FoundryModels")]
         public static readonly FoundryModel GptRealtime2 = new() { Name = "gpt-realtime-2", Version = "2026-05-07", Format = "OpenAI" };
+
+        /// <summary>
+        /// Gpt‑realtime‑2.1 is a next‑generation speech‑to‑speech reasoning model that processes live audio input and generates audio responses with built‑in reasoning, enabling low‑latency conversational voice interactions.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptRealtime21 = new() { Name = "gpt-realtime-2.1", Version = "2026-07-07", Format = "OpenAI" };
+
+        /// <summary>
+        /// Gpt‑realtime‑2.1‑mini is a next‑generation speech‑to‑speech reasoning model that processes live audio input and generates audio responses with built‑in reasoning, enabling low‑latency conversational voice interactions.
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel GptRealtime21Mini = new() { Name = "gpt-realtime-2.1-mini", Version = "2026-07-07", Format = "OpenAI" };
 
         /// <summary>
         /// gpt-realtime-mini is a smaller version of gpt-realtime S2S (speech to speech) model built on chive architecture. This model excels at instruction following and is optimized for cost efficiency.
