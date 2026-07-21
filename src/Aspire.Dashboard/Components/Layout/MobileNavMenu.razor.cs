@@ -78,7 +78,7 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 
         if (_menu is { } menu)
         {
-            // FluentMenu doesn't unregister itself when disposed: https://github.com/microsoft/fluentui-blazor/issues/5032
+            // Remove this workaround once FluentMenu unregisters itself: https://github.com/microsoft/aspire/issues/18852
             ServiceProvider.GetService<IMenuService>()?.Remove(menu);
             _menu = null;
         }
