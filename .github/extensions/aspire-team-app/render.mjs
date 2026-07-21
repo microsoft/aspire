@@ -847,7 +847,12 @@ async function withRefresh(fn) {
   } catch (e) {
     loadError = String((e && e.message) || e);
   } finally {
-    refreshing = false; render();
+    // Always complete the progress bar here. The SSE 'progress' stream is the normal driver
+    // (setProgress -> endProgress at done>=total), but it may never deliver a terminal event:
+    // SSE can be disconnected, or this refresh can join a background compute started with
+    // progress:false that emits no progress events. Without this backstop the bar would stay
+    // active at its last width forever, so end it whenever the awaited operation settles.
+    refreshing = false; endProgress(); render();
   }
 }
 
@@ -880,6 +885,11 @@ function setProgress(done, total) {
 }
 function endProgress() {
   if (!loadbar) return;
+  // Clear any in-flight fade/reset timers so a second call (SSE completion followed by the
+  // withRefresh finally backstop, or vice versa) can't leave a dangling timer that fires a
+  // duplicate fade after the bar has already reset.
+  if (progFadeTimer) { clearTimeout(progFadeTimer); progFadeTimer = null; }
+  if (progResetTimer) { clearTimeout(progResetTimer); progResetTimer = null; }
   loadbar.style.width = "100%";
   // Fill to 100%, hold briefly, fade out, then reset width so the next cycle grows from
   // the left again rather than snapping back visibly.
