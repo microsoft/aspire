@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard bug fix: telemetry pause warning did not rerender until page refresh",
+  "mergedAt": "2026-07-21T07:25:04Z",
+  "number": 18841,
+  "runDate": "2026-07-21T12:30:51Z",
+  "status": "included",
+  "title": "Show telemetry pause warning immediately"
+}

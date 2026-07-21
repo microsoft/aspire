@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "The trace details grid could scroll the wrong ancestor element when its content exceeded the visible height. The container height is now set to 100% so scrolling stays within the grid.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\ud83d\udcdc",
+  "firstMergedAt": "2026-07-21T07:22:38Z",
+  "lastMergedAt": "2026-07-21T07:22:38Z",
+  "name": "Fix trace details grid scrolling",
+  "owner": "JamesNK",
+  "prs": [
+    18843
+  ]
+}

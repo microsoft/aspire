@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Resources with no remaining telemetry data types can now be selected and removed from the 'Manage logs and telemetry' page. Previously their checkbox and row were non-interactive, making removal impossible.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🗑️",
+  "firstMergedAt": "2026-07-21T07:44:13Z",
+  "lastMergedAt": "2026-07-21T07:44:13Z",
+  "name": "Fix removing resources without telemetry",
+  "owner": "JamesNK",
+  "prs": [
+    18829
+  ]
+}

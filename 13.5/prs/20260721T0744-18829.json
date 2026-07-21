@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard bug fix: resources without telemetry could not be selected or removed",
+  "mergedAt": "2026-07-21T07:44:13Z",
+  "number": 18829,
+  "runDate": "2026-07-21T12:30:51Z",
+  "status": "included",
+  "title": "Fix removing resources without telemetry"
+}

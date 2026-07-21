@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "\ud83d\udcca",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Pausing capture on the structured logs, traces, and metrics pages now displays the 'Capture paused' warning immediately. Previously the page did not rerender until it was manually refreshed.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "\u23f8\ufe0f",
+  "firstMergedAt": "2026-07-21T07:25:04Z",
+  "lastMergedAt": "2026-07-21T07:25:04Z",
+  "name": "Fix telemetry pause warning display",
+  "owner": "JamesNK",
+  "prs": [
+    18841
+  ]
+}

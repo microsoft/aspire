@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "The copy button on Markdown code blocks in the AI Agents dialog now has an accessible name ('Copy to clipboard'), allowing screen readers to announce it correctly instead of just 'button'.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "♿",
+  "firstMergedAt": "2026-07-21T12:09:40Z",
+  "lastMergedAt": "2026-07-21T12:09:40Z",
+  "name": "Accessible name for Markdown copy button",
+  "owner": "adamint",
+  "prs": [
+    18816
+  ]
+}

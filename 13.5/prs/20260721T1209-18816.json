@@ -1,0 +1,9 @@
+{
+  "author": "adamint",
+  "comment": "Dashboard accessibility improvement: add aria-label to Markdown copy button",
+  "mergedAt": "2026-07-21T12:09:40Z",
+  "number": 18816,
+  "runDate": "2026-07-21T12:30:51Z",
+  "status": "included",
+  "title": "Add accessible name to Markdown copy button"
+}

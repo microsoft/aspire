@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Dashboard bug fix: trace details grid scroll container height",
+  "mergedAt": "2026-07-21T07:22:38Z",
+  "number": 18843,
+  "runDate": "2026-07-21T12:30:51Z",
+  "status": "included",
+  "title": "Fix trace details grid scrolling"
+}
