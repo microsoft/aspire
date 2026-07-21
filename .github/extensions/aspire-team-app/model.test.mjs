@@ -142,6 +142,18 @@ test("computeFocusItems keeps the highest-priority lane per PR and excludes CI-f
   assert.equal(focus[0].bucketLabel, "Ready to merge");
 });
 
+test("computeFocusItems retains review-debt PRs aged past the focus limit", () => {
+  const fresh = makePr({ number: 40, updatedAt: isoAgo(dayMs) });
+  // Unreviewed and untouched for 20 days: aged past the 14d focus limit on its updatedAt
+  // reference, so oldFirstSignal() flags it "review debt" and it must stay in the queue for
+  // the "Address review" action to be reachable — previously the age filter dropped it.
+  const reviewDebt = makePr({ number: 41, updatedAt: isoAgo(20 * dayMs) });
+
+  const focus = computeFocusItems([bucketWith("Needs review", fresh, reviewDebt)]);
+
+  assert.deepEqual(focus.map((i) => i.pullRequest.number).sort((a, b) => a - b), [40, 41]);
+});
+
 test("computeCommunityItems includes active external contributors and excludes team, bots, and aged-out PRs", () => {
   const community = makePr({ number: 20, author: "randocontributor", authorType: "User", updatedAt: isoAgo(dayMs) });
   const mine = makePr({ number: 21, author: "octo", isMine: true });

@@ -714,6 +714,13 @@ function pullRequestFocusActivityAt(pr, bucketLabel) {
 function isWithinFocusAgeLimit(pr, bucketLabel) {
   return ageMs(pullRequestFocusActivityAt(pr, bucketLabel)) <= focusAgeLimitMs;
 }
+// A PR is in "review debt" once it has aged past the focus limit on the same reference
+// timestamp oldFirstSignal() uses to emit the review-debt signal. Kept in lockstep with
+// oldFirstSignal (both key off pullRequestAgingReferenceAt >= focusAgeLimitMs) so a PR the
+// signal flags as review debt is exactly a PR this predicate reports, and vice versa.
+function isReviewDebt(pr) {
+  return ageMs(pullRequestAgingReferenceAt(pr)) >= focusAgeLimitMs;
+}
 
 const excludedFocusBucketLabels = new Set(["Stalled", "Draft", "My draft PRs", "Docs", "Community Toolkit", "Bots / automation", "Community", "Aged out community", "Unresolved feedback", "Merge conflicts", "CI failing", "Author response"]);
 const disqualifyingFocusBucketLabels = new Set(["Draft", "My draft PRs", "Docs", "Community Toolkit", "Bots / automation", "Community", "Aged out community", "Unresolved feedback", "Merge conflicts"]);
@@ -754,7 +761,13 @@ export function computeFocusItems(buckets) {
     }
   }
   return [...byPr.values()]
-    .filter((i) => isWithinFocusAgeLimit(i.pullRequest, i.bucketLabel))
+    // Retain PRs within the focus window, plus review-debt PRs that have aged PAST the limit
+    // without a review. Those are exactly the cards the "review debt" signal / "Address review"
+    // action target (constants.mjs reviewDebtSignalLabel). Dropping them here previously made
+    // that action unreachable: the signal only fires at/after the same age boundary this filter
+    // cut them off at, so the two overlapped only at the exact 14-day instant. Keeping them
+    // makes the focus source set consistent with the signal that flags it.
+    .filter((i) => isWithinFocusAgeLimit(i.pullRequest, i.bucketLabel) || isReviewDebt(i.pullRequest))
     .filter((i) => !isCommunityPullRequest(i.pullRequest))
     .filter((i) => !isChecksFailing(i.pullRequest))
     .sort((a, b) => new Date(b.pullRequest.updatedAt) - new Date(a.pullRequest.updatedAt));
