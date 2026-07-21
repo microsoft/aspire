@@ -3,6 +3,7 @@
 
 using System.Collections.Concurrent;
 using System.Collections.Immutable;
+using AngleSharp.Dom;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
@@ -24,6 +25,74 @@ public class ResourceActionsTests : DashboardTestContext
 {
     [Fact]
     public void Render_DesktopActionsProvideKeyboardAccessibleLabels()
+    {
+        var (cut, restartButton, consoleLogsButton, actionsButton, resourcesLoc, controlsLoc) = RenderDesktopResourceActions();
+
+        Assert.Null(restartButton.GetAttribute("title"));
+        Assert.Null(consoleLogsButton.GetAttribute("title"));
+        Assert.Null(actionsButton.GetAttribute("title"));
+
+        Assert.Empty(cut.FindComponents<AspireTooltip>());
+
+        restartButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, restartButton.GetAttribute("id"), "Restart the resource");
+
+        consoleLogsButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, consoleLogsButton.GetAttribute("id"), resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value);
+
+        actionsButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, actionsButton.GetAttribute("id"), controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value);
+    }
+
+    [Fact]
+    public void Render_FocusThenMouseEnterThenMouseLeave_TooltipStaysVisibleUntilFocusout()
+    {
+        var (cut, restartButton, _, _, _, _) = RenderDesktopResourceActions();
+        var restartButtonId = restartButton.GetAttribute("id");
+
+        restartButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, restartButtonId, "Restart the resource");
+
+        restartButton.TriggerEvent("onmouseenter", new MouseEventArgs());
+        AssertTooltip(cut, restartButtonId, "Restart the resource");
+
+        // Moving the mouse away while keyboard focus remains must not hide the tooltip: focus
+        // and hover are tracked independently, so only the hover signal clears here.
+        restartButton.TriggerEvent("onmouseleave", new MouseEventArgs());
+        AssertTooltip(cut, restartButtonId, "Restart the resource");
+
+        // Once focus also leaves, neither signal remains active and the tooltip hides.
+        restartButton.TriggerEvent("onfocusout", new FocusEventArgs());
+        Assert.Empty(cut.FindComponents<AspireTooltip>());
+    }
+
+    [Fact]
+    public void Render_HoverOnly_TooltipShowsAndHidesWithMouseEvents()
+    {
+        var (cut, restartButton, _, _, _, _) = RenderDesktopResourceActions();
+        var restartButtonId = restartButton.GetAttribute("id");
+
+        restartButton.TriggerEvent("onmouseenter", new MouseEventArgs());
+        AssertTooltip(cut, restartButtonId, "Restart the resource");
+
+        restartButton.TriggerEvent("onmouseleave", new MouseEventArgs());
+        Assert.Empty(cut.FindComponents<AspireTooltip>());
+    }
+
+    [Fact]
+    public void Render_FocusOnly_TooltipShowsAndHidesWithFocusEvents()
+    {
+        var (cut, restartButton, _, _, _, _) = RenderDesktopResourceActions();
+        var restartButtonId = restartButton.GetAttribute("id");
+
+        restartButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, restartButtonId, "Restart the resource");
+
+        restartButton.TriggerEvent("onfocusout", new FocusEventArgs());
+        Assert.Empty(cut.FindComponents<AspireTooltip>());
+    }
+
+    private (IRenderedComponent<ResourceActions> Cut, IElement RestartButton, IElement ConsoleLogsButton, IElement ActionsButton, IStringLocalizer<Dashboard.Resources.Resources> ResourcesLoc, IStringLocalizer<ControlsStrings> ControlsLoc) RenderDesktopResourceActions()
     {
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         ResourceSetupHelpers.SetupResourcesPage(this, viewport);
@@ -61,20 +130,7 @@ public class ResourceActionsTests : DashboardTestContext
         var consoleLogsButton = cut.Find($"fluent-button[aria-label='{resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value}']");
         var actionsButton = cut.Find($"fluent-button[aria-label='{controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value}']");
 
-        Assert.Null(restartButton.GetAttribute("title"));
-        Assert.Null(consoleLogsButton.GetAttribute("title"));
-        Assert.Null(actionsButton.GetAttribute("title"));
-
-        Assert.Empty(cut.FindComponents<AspireTooltip>());
-
-        restartButton.TriggerEvent("onfocusin", new FocusEventArgs());
-        AssertTooltip(cut, restartButton.GetAttribute("id"), "Restart the resource");
-
-        consoleLogsButton.TriggerEvent("onfocusin", new FocusEventArgs());
-        AssertTooltip(cut, consoleLogsButton.GetAttribute("id"), resourcesLoc[nameof(Dashboard.Resources.Resources.ResourceActionConsoleLogsText)].Value);
-
-        actionsButton.TriggerEvent("onfocusin", new FocusEventArgs());
-        AssertTooltip(cut, actionsButton.GetAttribute("id"), controlsLoc[nameof(ControlsStrings.ActionsButtonText)].Value);
+        return (cut, restartButton, consoleLogsButton, actionsButton, resourcesLoc, controlsLoc);
     }
 
     private static void AssertTooltip(IRenderedFragment cut, string? anchor, string text)

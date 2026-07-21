@@ -20,6 +20,13 @@ public partial class ResourceActions : ComponentBase
     private readonly string _menuButtonId = $"resource-actions-menu-{Guid.NewGuid():N}";
     private string? _activeTooltipAnchor;
     private string? _activeTooltipText;
+
+    // Focus and hover are tracked independently per anchor because a keyboard user can tab to
+    // focus a button and then move the mouse over it (or vice versa). The tooltip must stay
+    // visible until neither signal remains active, so a mouseleave while still focused (or a
+    // focusout while still hovered) must not hide it.
+    private readonly HashSet<string> _focusedTooltipAnchors = new();
+    private readonly HashSet<string> _hoveredTooltipAnchors = new();
     private AspireMenuButton? _menuButton;
 
     [Inject]
@@ -86,15 +93,33 @@ public partial class ResourceActions : ComponentBase
 
     private string GetHighlightedCommandButtonId(int index) => $"{_highlightedCommandButtonIdPrefix}-{index}";
 
-    private void ShowTooltip(string anchor, string text)
+    private void ShowTooltip(string anchor, string text, bool isFocus)
     {
+        if (isFocus)
+        {
+            _focusedTooltipAnchors.Add(anchor);
+        }
+        else
+        {
+            _hoveredTooltipAnchors.Add(anchor);
+        }
+
         _activeTooltipAnchor = anchor;
         _activeTooltipText = text;
     }
 
-    private void HideTooltip(string anchor)
+    private void HideTooltip(string anchor, bool isFocus)
     {
-        if (_activeTooltipAnchor == anchor)
+        if (isFocus)
+        {
+            _focusedTooltipAnchors.Remove(anchor);
+        }
+        else
+        {
+            _hoveredTooltipAnchors.Remove(anchor);
+        }
+
+        if (_activeTooltipAnchor == anchor && !_focusedTooltipAnchors.Contains(anchor) && !_hoveredTooltipAnchors.Contains(anchor))
         {
             _activeTooltipAnchor = null;
             _activeTooltipText = null;
