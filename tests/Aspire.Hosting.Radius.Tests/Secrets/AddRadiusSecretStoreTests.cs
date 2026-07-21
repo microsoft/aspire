@@ -87,11 +87,13 @@ public class AddRadiusSecretStoreTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         builder.AddRadiusEnvironment("radius");
 
-        // The store name must match Aspire's resource-name grammar (letters/digits/hyphens, start with
-        // a letter, no consecutive/trailing hyphen, <= 64 chars) so that publish-mode AddResource does
-        // not reject a name that run mode accepted. Underscores, dots, digit-start, and over-length were
-        // previously accepted here but rejected by AddResource — a mode-dependent contract.
-        foreach (var invalid in new[] { "bad/name", "  ", "under_score", "dot.name", "1leading", "-leading", "trailing-", "a--b", new string('a', 65), "CON", "COM1" })
+        // The store name must be a strict subset of Aspire's resource-name grammar: lowercase
+        // letters/digits/hyphens, start with a letter, no consecutive/trailing hyphen, <= 64 chars.
+        // Lowercase is required because an inline store's name becomes the backing Kubernetes Secret
+        // name verbatim and Kubernetes rejects uppercase (non-DNS-1123) Secret names at deploy time.
+        // Underscores, dots, digit-start, and over-length were previously accepted here but rejected
+        // by AddResource — a mode-dependent contract.
+        foreach (var invalid in new[] { "bad/name", "  ", "under_score", "dot.name", "1leading", "-leading", "trailing-", "a--b", new string('a', 65), "CON", "COM1", "DbCreds", "UPPER", "Aleading" })
         {
             Assert.Throws<ArgumentException>(() =>
                 builder.AddRadiusSecretStore(invalid, RadiusSecretStoreType.Generic));

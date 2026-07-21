@@ -103,7 +103,12 @@ internal sealed class SealedSecretApplyStep
     {
         var manifestPath = ResolveManifestPath(storeOutputDir, store.Name, sourceManifestPath);
 
-        var metadata = SealedSecretManifest.ReadMetadata(store.Name, manifestPath, defaultNamespace);
+        // Read AND capture the exact validated bytes here, then apply those same bytes over kubectl
+        // stdin below. Re-opening the path in `kubectl apply -f <path>` would re-read a mutable file
+        // that could be swapped for an unvalidated (e.g. plaintext) manifest between validation and
+        // apply — a TOCTOU hole. Applying ValidatedManifest.Content closes that gap.
+        var validated = SealedSecretManifest.ReadValidated(store.Name, manifestPath, defaultNamespace);
+        var metadata = validated.Metadata;
         RadiusSecretStoreValidation.ValidateSealedSecretNamespace(store, metadata, manifestPath);
 
         // Pass -n only when the manifest omitted metadata.namespace: `kubectl apply -n X` fails when
@@ -121,7 +126,7 @@ internal sealed class SealedSecretApplyStep
         var deadline = DateTimeOffset.UtcNow + store.MaterializationTimeout;
 
         var appliedGeneration = await InvokeProbeWithRemainingBudgetAsync(
-            ct => ApplyManifestAsync(manifestPath, applyNamespace, kubeContext, store.Name, metadata.Namespace, metadata.Name, logger, ct),
+            ct => ApplyManifestAsync(validated.Content, applyNamespace, kubeContext, store.Name, metadata.Namespace, metadata.Name, manifestPath, logger, ct),
             RemainingBudget(deadline),
             cancellationToken,
             () => CreateOperationTimeoutException(store.Name, metadata.Namespace, metadata.Name, "apply", store.MaterializationTimeout))
@@ -197,10 +202,14 @@ internal sealed class SealedSecretApplyStep
             .Where(s => s.Scope == RadiusSecretStoreScope.Application || ReferenceEquals(s.OwningEnvironment, _environment))
             .ToList();
 
-    /// <summary>Builds the <c>kubectl apply</c> argument list, passing <c>-n</c> and <c>--context</c> only when supplied.</summary>
-    internal static IReadOnlyList<string> BuildApplyArgs(string manifestPath, string? kubeContext, string? @namespace = null)
+    /// <summary>
+    /// Builds the <c>kubectl apply</c> argument list, passing <c>-n</c> and <c>--context</c> only
+    /// when supplied. The manifest is streamed over stdin (<c>-f -</c>) rather than by path so the
+    /// exact validated bytes are applied and no mutable file is re-read at apply time.
+    /// </summary>
+    internal static IReadOnlyList<string> BuildApplyArgs(string? kubeContext, string? @namespace = null)
     {
-        var args = new List<string> { "apply", "-f", manifestPath, "-o", "json" };
+        var args = new List<string> { "apply", "-f", "-", "-o", "json" };
         if (!string.IsNullOrWhiteSpace(@namespace))
         {
             args.Add("-n");
@@ -472,14 +481,14 @@ internal sealed class SealedSecretApplyStep
         return new SealedSecretStatusSnapshot(generation, observedGeneration, conditions);
     }
 
-    private static async Task<long> ApplyManifestAsync(string manifestPath, string? @namespace, string? kubeContext, string storeName, string ns, string name, ILogger logger, CancellationToken cancellationToken)
+    private static async Task<long> ApplyManifestAsync(ReadOnlyMemory<byte> content, string? @namespace, string? kubeContext, string storeName, string ns, string name, string manifestPath, ILogger logger, CancellationToken cancellationToken)
     {
-        var args = BuildApplyArgs(manifestPath, kubeContext, @namespace);
-        var (exitCode, stdout, stderr) = await RunKubectlAsync(args, logger, cancellationToken, logStdout: false).ConfigureAwait(false);
+        var args = BuildApplyArgs(kubeContext, @namespace);
+        var (exitCode, stdout, stderr) = await RunKubectlAsync(args, logger, cancellationToken, logStdout: false, standardInput: content).ConfigureAwait(false);
         if (exitCode != 0)
         {
             throw new InvalidOperationException(
-                $"'kubectl apply -f {manifestPath}' failed with exit code {exitCode}: {stderr.Trim()}");
+                $"'kubectl apply -f -' for the SealedSecret manifest '{manifestPath}' failed with exit code {exitCode}: {stderr.Trim()}");
         }
 
         return ParseGeneration(stdout, storeName, ns, name);
@@ -854,7 +863,7 @@ internal sealed class SealedSecretApplyStep
     }
 
     private static async Task<(int ExitCode, string StdOut, string StdErr)> RunKubectlAsync(
-        IReadOnlyList<string> args, ILogger? logger, CancellationToken cancellationToken, bool logStdout = true)
+        IReadOnlyList<string> args, ILogger? logger, CancellationToken cancellationToken, bool logStdout = true, ReadOnlyMemory<byte>? standardInput = null)
     {
         var stdout = new StringBuilder();
         var stderr = new StringBuilder();
@@ -863,6 +872,7 @@ internal sealed class SealedSecretApplyStep
             StartInfo = new ProcessStartInfo
             {
                 FileName = "kubectl",
+                RedirectStandardInput = standardInput is not null,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
@@ -900,6 +910,23 @@ internal sealed class SealedSecretApplyStep
         process.Start();
         process.BeginOutputReadLine();
         process.BeginErrorReadLine();
+
+        // Stream the validated manifest bytes to `kubectl apply -f -` over stdin, then close the
+        // pipe so kubectl sees EOF. Writing before draining stdout/stderr is safe here because the
+        // apply payload is small (a single SealedSecret) and both output pipes are already being
+        // pumped by the async readers above.
+        if (standardInput is { } input)
+        {
+            try
+            {
+                await process.StandardInput.BaseStream.WriteAsync(input, cancellationToken).ConfigureAwait(false);
+                await process.StandardInput.BaseStream.FlushAsync(cancellationToken).ConfigureAwait(false);
+            }
+            finally
+            {
+                process.StandardInput.Close();
+            }
+        }
 
         try
         {
