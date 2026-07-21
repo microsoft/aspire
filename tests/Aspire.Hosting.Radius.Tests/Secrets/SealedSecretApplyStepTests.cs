@@ -141,6 +141,65 @@ public class SealedSecretApplyStepTests
     }
 
     [Fact]
+    public void ParseActiveWorkspaceContext_DefaultValueWithTrailingComment_IsHonored()
+    {
+        // A trailing inline comment on a scalar is valid YAML and must not become part of the value.
+        // The old line-oriented parser treated `prod # active` as the workspace name and failed to
+        // resolve the context.
+        var config =
+            "workspaces:\n" +
+            "  default: prod # active\n" +
+            "  items:\n" +
+            "    prod:\n" +
+            "      connection:\n" +
+            "        context: prod-cluster # cluster\n";
+
+        Assert.Equal("prod-cluster", SealedSecretApplyStep.ParseActiveWorkspaceContext(config));
+    }
+
+    [Fact]
+    public void ParseActiveWorkspaceContext_QuotedMappingKeys_AreHonored()
+    {
+        // Quoted mapping keys are valid YAML; the quotes are not part of the key name.
+        var config =
+            "\"workspaces\":\n" +
+            "  'default': prod\n" +
+            "  \"items\":\n" +
+            "    'prod':\n" +
+            "      \"connection\":\n" +
+            "        'context': prod-cluster\n";
+
+        Assert.Equal("prod-cluster", SealedSecretApplyStep.ParseActiveWorkspaceContext(config));
+    }
+
+    [Fact]
+    public void ParseActiveWorkspaceContext_FlowStyleMapping_IsHonored()
+    {
+        // Flow-style mappings ({ ... }) are valid YAML that the line-oriented parser could not read.
+        var config =
+            "workspaces:\n" +
+            "  default: prod\n" +
+            "  items:\n" +
+            "    prod: { connection: { kind: kubernetes, context: prod-cluster } }\n";
+
+        Assert.Equal("prod-cluster", SealedSecretApplyStep.ParseActiveWorkspaceContext(config));
+    }
+
+    [Fact]
+    public void ParseActiveWorkspaceContext_MalformedYaml_ReturnsNull()
+    {
+        // A malformed document must fail closed (null) so the caller requires an explicit override
+        // rather than applying to an arbitrary cluster.
+        var config =
+            "workspaces:\n" +
+            "  default: prod\n" +
+            "   items: broken-indent:\n" +
+            "  - not: a mapping\n";
+
+        Assert.Null(SealedSecretApplyStep.ParseActiveWorkspaceContext(config));
+    }
+
+    [Fact]
     public void BuildGetSecretArgs_TargetsNamespaceAndContext()
     {
         var args = SealedSecretApplyStep.BuildGetSecretArgs("app", "db-creds", "kind-radius");

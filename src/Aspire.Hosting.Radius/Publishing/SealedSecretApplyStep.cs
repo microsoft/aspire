@@ -14,6 +14,8 @@ using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Radius.Secrets;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
+using YamlDotNet.Core;
+using YamlDotNet.RepresentationModel;
 
 namespace Aspire.Hosting.Radius.Publishing;
 
@@ -678,51 +680,104 @@ internal sealed class SealedSecretApplyStep
     // We read workspaces.default, then workspaces.items.<default>.connection.context. If the
     // default selector is absent (older/single-workspace configs), we fall back to the single
     // `context:` value only when the file resolves to exactly one distinct context; multiple
-    // contexts fail closed (null). Dependency-free: any miss returns null and the caller fails closed.
+    // contexts fail closed (null). Parsed with YamlDotNet so real YAML (inline comments, quoted keys,
+    // flow-style mappings) is honored rather than a line-oriented approximation; any miss or malformed
+    // document returns null and the caller fails closed.
     internal static string? ParseActiveWorkspaceContext(string text)
     {
-        var lines = text.Replace("\r\n", "\n").Split('\n');
-
-        var defaultWorkspace = FindNestedScalar(lines, ["workspaces", "default"]);
-        if (!string.IsNullOrEmpty(defaultWorkspace))
+        YamlMappingNode? root;
+        try
         {
-            var context = FindNestedScalar(lines, ["workspaces", "items", defaultWorkspace, "connection", "context"]);
-            if (!string.IsNullOrEmpty(context))
-            {
-                return context;
-            }
-
-            // Once rad names an active workspace, guessing from another workspace would fail open to
-            // the wrong cluster. Return null so the caller requires an explicit override/remediation.
+            var stream = new YamlStream();
+            stream.Load(new StringReader(text));
+            root = stream.Documents.Count > 0 ? stream.Documents[0].RootNode as YamlMappingNode : null;
+        }
+        catch (YamlException)
+        {
             return null;
         }
 
-        // Fallback for older/single-workspace configs without a `workspaces.default` selector: only
-        // accept it when the file resolves to exactly one distinct context. With multiple contexts
-        // there is no evidence which one is active, so fail closed (return null) and let the caller
-        // require an explicit override — applying to the wrong cluster is worse than failing.
-        var matches = System.Text.RegularExpressions.Regex.Matches(
-            text, @"(?m)^\s*context:\s*(?<v>[^\s#]+)\s*$");
-        string? single = null;
-        foreach (System.Text.RegularExpressions.Match m in matches)
+        if (root is null)
         {
-            var value = m.Groups["v"].Value.Trim('\'', '"');
-            if (value.Length == 0)
-            {
-                continue;
-            }
+            return null;
+        }
 
-            if (single is null)
+        if (TryGetChild(root, "workspaces", out var workspacesNode) && workspacesNode is YamlMappingNode workspaces)
+        {
+            var defaultWorkspace = GetScalar(workspaces, "default");
+            if (!string.IsNullOrEmpty(defaultWorkspace))
             {
-                single = value;
-            }
-            else if (!string.Equals(single, value, StringComparison.Ordinal))
-            {
+                if (TryGetChild(workspaces, "items", out var itemsNode) && itemsNode is YamlMappingNode items &&
+                    TryGetChild(items, defaultWorkspace, out var wsNode) && wsNode is YamlMappingNode workspace &&
+                    TryGetChild(workspace, "connection", out var connNode) && connNode is YamlMappingNode connection)
+                {
+                    var context = GetScalar(connection, "context");
+                    if (!string.IsNullOrEmpty(context))
+                    {
+                        return context;
+                    }
+                }
+
+                // Once rad names an active workspace, guessing from another workspace would fail open
+                // to the wrong cluster. Return null so the caller requires an explicit override.
                 return null;
             }
         }
 
-        return single;
+        // Fallback for older/single-workspace configs without a `workspaces.default` selector: only
+        // accept a context when the file resolves to exactly one distinct value. With multiple
+        // contexts there is no evidence which one is active, so fail closed (return null) and let the
+        // caller require an explicit override — applying to the wrong cluster is worse than failing.
+        var contexts = new HashSet<string>(StringComparer.Ordinal);
+        CollectContextValues(root, contexts);
+        return contexts.Count == 1 ? contexts.First() : null;
+    }
+
+    private static bool TryGetChild(YamlMappingNode mapping, string key, out YamlNode node)
+    {
+        foreach (var (candidateKey, value) in mapping.Children)
+        {
+            if (candidateKey is YamlScalarNode scalarKey &&
+                string.Equals(scalarKey.Value, key, StringComparison.Ordinal))
+            {
+                node = value;
+                return true;
+            }
+        }
+
+        node = null!;
+        return false;
+    }
+
+    private static string? GetScalar(YamlMappingNode mapping, string key) =>
+        TryGetChild(mapping, key, out var node) && node is YamlScalarNode { Value: { Length: > 0 } value } ? value : null;
+
+    // Recursively collects every scalar `context:` value in the document so the single-workspace
+    // fallback can require exactly one distinct value.
+    private static void CollectContextValues(YamlNode node, ISet<string> contexts)
+    {
+        switch (node)
+        {
+            case YamlMappingNode mapping:
+                foreach (var (key, value) in mapping.Children)
+                {
+                    if (key is YamlScalarNode { Value: "context" } &&
+                        value is YamlScalarNode { Value: { Length: > 0 } contextValue })
+                    {
+                        contexts.Add(contextValue);
+                    }
+
+                    CollectContextValues(value, contexts);
+                }
+                break;
+
+            case YamlSequenceNode sequence:
+                foreach (var child in sequence.Children)
+                {
+                    CollectContextValues(child, contexts);
+                }
+                break;
+        }
     }
 
     internal static string RequireKubeContext(string? overrideContext, string? parsedContext, string attemptedConfigPath)
@@ -741,77 +796,6 @@ internal sealed class SealedSecretApplyStep
             $"Could not resolve the active Radius workspace kube-context from '{attemptedConfigPath}'. Configure " +
             $"the active rad workspace, or set {KubeContextOverrideEnvironmentVariable} to the kubectl context " +
             "that targets the same cluster before re-running deploy. Diagnostic: ASPIRERADIUS059.");
-    }
-
-    // Walks an indentation-nested mapping following <paramref name="path"/> key-by-key, returning
-    // the scalar value of the final key. Descends only through exact key matches at strictly deeper
-    // indentation than the matched parent, and bails out when the parent block ends (a line at or
-    // below the parent's indentation), so sibling subtrees can never be mistaken for the target.
-    private static string? FindNestedScalar(IReadOnlyList<string> lines, IReadOnlyList<string> path)
-    {
-        var level = 0;
-        var parentIndent = -1;
-
-        foreach (var raw in lines)
-        {
-            var (indent, key, value) = ParseKeyLine(raw);
-            if (key is null)
-            {
-                continue;
-            }
-
-            if (level > 0 && indent <= parentIndent)
-            {
-                // Left the current parent's block before finding the next key in the path.
-                return null;
-            }
-
-            if (indent > parentIndent && string.Equals(key, path[level], StringComparison.Ordinal))
-            {
-                if (level == path.Count - 1)
-                {
-                    return string.IsNullOrEmpty(value) ? null : value;
-                }
-
-                parentIndent = indent;
-                level++;
-            }
-        }
-
-        return null;
-    }
-
-    // Parses a single YAML line into (indentation, key, scalar value). Returns a null key for blank
-    // lines, comments, and non-`key: value` lines (e.g. list items). Quotes around the value are
-    // stripped; inline comments are not stripped (workspace/context values do not contain '#').
-    private static (int Indent, string? Key, string Value) ParseKeyLine(string raw)
-    {
-        if (string.IsNullOrWhiteSpace(raw))
-        {
-            return (0, null, string.Empty);
-        }
-
-        var indent = 0;
-        while (indent < raw.Length && (raw[indent] == ' ' || raw[indent] == '\t'))
-        {
-            indent++;
-        }
-
-        var trimmed = raw[indent..];
-        if (trimmed.StartsWith('#'))
-        {
-            return (indent, null, string.Empty);
-        }
-
-        var colon = trimmed.IndexOf(':');
-        if (colon < 0)
-        {
-            return (indent, null, string.Empty);
-        }
-
-        var key = trimmed[..colon].Trim();
-        var value = trimmed[(colon + 1)..].Trim().Trim('\'', '"');
-        return (indent, key, value);
     }
 
     private static async Task<bool> DetectKubectlAsync(CancellationToken cancellationToken)
