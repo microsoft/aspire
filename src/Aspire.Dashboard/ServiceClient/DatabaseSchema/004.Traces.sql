@@ -4,9 +4,13 @@
 CREATE TABLE IF NOT EXISTS telemetry_traces (
     trace_id TEXT PRIMARY KEY,
     first_span_timestamp_ticks INTEGER NOT NULL,
+    last_span_end_timestamp_ticks INTEGER NOT NULL,
     duration_ticks INTEGER NOT NULL,
     last_updated_timestamp_ticks INTEGER NOT NULL,
-    full_name TEXT NOT NULL
+    full_name TEXT NOT NULL,
+    primary_span_id TEXT NOT NULL,
+    has_error INTEGER NOT NULL CHECK (has_error IN (0, 1)),
+    has_gen_ai INTEGER NOT NULL CHECK (has_gen_ai IN (0, 1))
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS telemetry_spans (
@@ -24,7 +28,17 @@ CREATE TABLE IF NOT EXISTS telemetry_spans (
     status_message TEXT NULL,
     trace_state TEXT NULL,
     uninstrumented_peer_resource_id INTEGER NULL REFERENCES telemetry_resources(resource_id) ON DELETE SET NULL,
+    resource_order_ticks INTEGER NOT NULL,
     PRIMARY KEY (trace_id, span_id)
+) STRICT;
+
+CREATE TABLE IF NOT EXISTS telemetry_trace_resources (
+    trace_id TEXT NOT NULL REFERENCES telemetry_traces(trace_id) ON DELETE CASCADE,
+    resource_id INTEGER NOT NULL REFERENCES telemetry_resources(resource_id) ON DELETE CASCADE,
+    resource_order_ticks INTEGER NOT NULL,
+    total_spans INTEGER NOT NULL CHECK (total_spans > 0),
+    errored_spans INTEGER NOT NULL CHECK (errored_spans >= 0 AND errored_spans <= total_spans),
+    PRIMARY KEY (trace_id, resource_id)
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS telemetry_span_attributes (
@@ -80,6 +94,10 @@ CREATE INDEX IF NOT EXISTS ix_telemetry_spans_resource_order
     ON telemetry_spans(resource_id, start_time_ticks, trace_id, span_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_spans_trace_order
     ON telemetry_spans(trace_id, start_time_ticks, span_id);
+CREATE INDEX IF NOT EXISTS ix_telemetry_spans_parent
+    ON telemetry_spans(trace_id, parent_span_id);
+CREATE INDEX IF NOT EXISTS ix_telemetry_trace_resources_order
+    ON telemetry_trace_resources(trace_id, resource_order_ticks, resource_id);
 CREATE INDEX IF NOT EXISTS ix_telemetry_span_attributes_owner_key
     ON telemetry_span_attributes(trace_id, span_id, attribute_key);
 CREATE INDEX IF NOT EXISTS ix_telemetry_span_attributes_key_value_owner

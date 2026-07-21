@@ -168,11 +168,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<IDashboardClient, TestDashboardClient>();
         context.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<IDashboardClient>());
         context.Services.AddSingleton<IRepositoryFactory, TestRepositoryFactory>();
-        context.Services.AddScoped(services => new DashboardDataSource(
-            services.GetRequiredService<IDashboardRunStore>(),
-            services.GetRequiredService<ITelemetryRepository>(),
-            services.GetRequiredService<IResourceRepository>(),
-            services.GetRequiredService<IRepositoryFactory>()));
+        context.Services.AddScoped<DashboardDataSource>();
         context.Services.AddSingleton<ShortcutManager>();
         context.Services.AddSingleton<LibraryConfiguration>();
         context.Services.AddSingleton<IKeyCodeService, KeyCodeService>();

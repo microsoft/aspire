@@ -437,7 +437,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var repositoryFactory = CreateRepositoryFactory(options);
         using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
         using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
-        using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
+        using var dataSource = CreateDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
         dataSource.SelectRun(historicalRunId);
 
         var runsDirectory = Path.GetDirectoryName(historicalRunDirectory)!;
@@ -538,12 +538,18 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var repositoryFactory = CreateRepositoryFactory(options);
         using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
         using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
-        using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
+        var testSink = new TestSink();
+        var logger = new TestLogger<DashboardDataSource>(new TestLoggerFactory(testSink, enabled: true));
+        using var dataSource = CreateDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory, logger);
 
         var exception = Assert.Throws<InvalidOperationException>(() => dataSource.SelectRun(incompatibleRunId));
         Assert.Equal(
             $"Dashboard database for run '{incompatibleRunId}' does not match run metadata schema version '{DashboardRunStore.SchemaVersion}'.",
             exception.Message);
+        var failureLog = Assert.Single(testSink.Writes);
+        Assert.Equal(LogLevel.Warning, failureLog.LogLevel);
+        Assert.Equal($"Failed to switch to dashboard run '{incompatibleRunId}'.", failureLog.Message);
+        Assert.Same(exception, failureLog.Exception);
     }
 
     [Fact]
@@ -614,10 +620,16 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var repositoryFactory = CreateRepositoryFactory(options);
         using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
         using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
-        using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
+        var testSink = new TestSink();
+        var logger = new TestLogger<DashboardDataSource>(new TestLoggerFactory(testSink, enabled: true));
+        using var dataSource = CreateDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory, logger);
         Assert.Empty(dataSource.TelemetryRepository.GetResources());
 
         dataSource.SelectRun(historicalRunId);
+
+        var switchLog = Assert.Single(testSink.Writes);
+        Assert.Equal(LogLevel.Debug, switchLog.LogLevel);
+        Assert.Equal($"Switched dashboard run from '{currentRunStore.RunId}' to '{historicalRunId}'.", switchLog.Message);
 
         Assert.True(dataSource.IsReadOnly);
         Assert.Equal(historicalRunId, dataSource.SelectedRun.RunId);
@@ -676,7 +688,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var repositoryFactory = CreateRepositoryFactory(options);
         using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
         using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
-        using var dataSource = new DashboardDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
+        using var dataSource = CreateDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
         dataSource.SelectRun("missing");
 
         Assert.False(dataSource.IsReadOnly);
@@ -703,7 +715,9 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var repositoryFactory = CreateRepositoryFactory(options);
         using var currentTelemetryRepository = repositoryFactory.CreateTelemetryRepository(currentDatabase);
         using var currentResourceRepository = (SqliteResourceRepository)repositoryFactory.CreateResourceRepository(currentDatabase);
-        using var dataSource = new DashboardDataSource(runStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory);
+        var testSink = new TestSink();
+        var logger = new TestLogger<DashboardDataSource>(new TestLoggerFactory(testSink, enabled: true));
+        using var dataSource = CreateDataSource(runStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory, logger);
 
         dataSource.SelectRun(historicalRunId);
 
@@ -712,6 +726,9 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(currentRunStore.RunId, dataSource.SelectedRun.RunId);
         Assert.Same(currentResourceRepository, dataSource.ResourceRepository);
         Assert.Same(currentTelemetryRepository, dataSource.TelemetryRepository);
+        var failureLog = Assert.Single(testSink.Writes);
+        Assert.Equal(LogLevel.Warning, failureLog.LogLevel);
+        Assert.Equal($"Failed to switch to dashboard run '{historicalRunId}' because it is no longer available.", failureLog.Message);
     }
 
     private IOptions<DashboardOptions> CreateOptions(
@@ -747,6 +764,21 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     private static DashboardRunStore CreateRunStore(IOptions<DashboardOptions> options, TimeProvider? timeProvider = null)
     {
         return new DashboardRunStore(options, NullLogger<DashboardRunStore>.Instance, timeProvider ?? TimeProvider.System);
+    }
+
+    private static DashboardDataSource CreateDataSource(
+        IDashboardRunStore runStore,
+        ITelemetryRepository currentTelemetryRepository,
+        IResourceRepository currentResourceRepository,
+        IRepositoryFactory repositoryFactory,
+        ILogger<DashboardDataSource>? logger = null)
+    {
+        return new DashboardDataSource(
+            runStore,
+            currentTelemetryRepository,
+            currentResourceRepository,
+            repositoryFactory,
+            logger ?? NullLogger<DashboardDataSource>.Instance);
     }
 
     private RepositoryFactory CreateRepositoryFactory(IOptions<DashboardOptions> options)
