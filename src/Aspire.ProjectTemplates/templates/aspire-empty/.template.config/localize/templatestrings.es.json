@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "NET8.0 de destino",
   "symbols/Framework/choices/net9.0/description": "Net9.0 de destino",
   "symbols/Framework/choices/net10.0/description": "Destino net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/AspireVersion/description": "La versión de Aspire que se va a usar.",
   "symbols/AspireVersion/displayName": "Versión Aspire",
   "symbols/AspireVersion/choices/!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!/displayName": "!!REPLACE_WITH_LATEST_MAJOR_MINOR_VERSION!!",

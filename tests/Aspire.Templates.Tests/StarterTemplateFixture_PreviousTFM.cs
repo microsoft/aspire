@@ -8,7 +8,7 @@ namespace Aspire.Templates.Tests;
 public sealed class StarterTemplateFixture_PreviousTFM : TemplateAppFixture
 {
     public StarterTemplateFixture_PreviousTFM(IMessageSink diagnosticMessageSink)
-        : base(diagnosticMessageSink, "aspire-starter", tfm: TestTargetFramework.Previous)
+        : base(diagnosticMessageSink, "aspire-starter", tfm: TestTargetFramework.Net8)
     {
     }
 }

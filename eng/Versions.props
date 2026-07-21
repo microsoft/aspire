@@ -8,13 +8,18 @@
     <PreReleaseVersionLabel>preview.1</PreReleaseVersionLabel>
     <DefaultTargetFramework>net8.0</DefaultTargetFramework>
     <AllTargetFrameworks>$(DefaultTargetFramework);net9.0;net10.0</AllTargetFrameworks>
-    <!-- dotnet versions for running tests -->
-    <DotNetRuntimePreviousVersionForTesting>8.0.21</DotNetRuntimePreviousVersionForTesting>
-    <DotNetRuntimeCurrentVersionForTesting>9.0.10</DotNetRuntimeCurrentVersionForTesting>
-    <!-- dotnet 8.0 versions for running tests - used for templates tests -->
-    <DotNetSdkPreviousVersionForTesting>8.0.415</DotNetSdkPreviousVersionForTesting>
-    <!-- dotnet 9.0 versions for running tests - used for templates tests -->
-    <DotNetSdkCurrentVersionForTesting>9.0.306</DotNetSdkCurrentVersionForTesting>
+    <!-- dotnet versions for running template tests -->
+    <DotNetRuntimeNet8VersionForTesting>8.0.21</DotNetRuntimeNet8VersionForTesting>
+    <DotNetRuntimeNet9VersionForTesting>9.0.10</DotNetRuntimeNet9VersionForTesting>
+    <DotNetRuntimeNet10VersionForTesting>10.0.8</DotNetRuntimeNet10VersionForTesting>
+    <DotNetSdkNet8VersionForTesting>8.0.415</DotNetSdkNet8VersionForTesting>
+    <DotNetSdkNet9VersionForTesting>9.0.306</DotNetSdkNet9VersionForTesting>
+    <DotNetSdkNet11VersionForTesting>11.0.100-preview.6.26359.118</DotNetSdkNet11VersionForTesting>
+    <!-- Keep these aliases for global.json and non-template test infrastructure. -->
+    <DotNetRuntimePreviousVersionForTesting>$(DotNetRuntimeNet8VersionForTesting)</DotNetRuntimePreviousVersionForTesting>
+    <DotNetRuntimeCurrentVersionForTesting>$(DotNetRuntimeNet9VersionForTesting)</DotNetRuntimeCurrentVersionForTesting>
+    <DotNetSdkPreviousVersionForTesting>$(DotNetSdkNet8VersionForTesting)</DotNetSdkPreviousVersionForTesting>
+    <DotNetSdkCurrentVersionForTesting>$(DotNetSdkNet9VersionForTesting)</DotNetSdkCurrentVersionForTesting>
     <XunitV3Version>3.2.2</XunitV3Version>
     <XUnitAnalyzersVersion>1.21.0</XUnitAnalyzersVersion>
     <XunitRunnerVisualStudioVersion>3.1.5</XunitRunnerVisualStudioVersion>
@@ -67,6 +72,10 @@
   <PropertyGroup Label="BlazorAssets">
     <MicrosoftAspNetCoreAppInternalAssetsNet10Version>10.0.8</MicrosoftAspNetCoreAppInternalAssetsNet10Version>
     <MicrosoftAspNetCoreAppInternalAssetsNet11Version>11.0.0-preview.5.26302.115</MicrosoftAspNetCoreAppInternalAssetsNet11Version>
+  </PropertyGroup>
+  <!-- .NET 11.0 Package Versions used by project templates -->
+  <PropertyGroup Label="Net11Preview">
+    <MicrosoftAspNetCoreOpenApiNet11Version>11.0.0-preview.6.26359.118</MicrosoftAspNetCoreOpenApiNet11Version>
   </PropertyGroup>
   <!-- .NET 10.0 Package Versions -->
   <PropertyGroup Label="Preview">

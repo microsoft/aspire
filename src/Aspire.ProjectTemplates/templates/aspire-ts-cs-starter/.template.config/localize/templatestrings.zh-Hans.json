@@ -6,6 +6,7 @@
   "symbols/Framework/choices/net8.0/description": "目标 net8.0",
   "symbols/Framework/choices/net9.0/description": "目标 net9.0",
   "symbols/Framework/choices/net10.0/description": "目标 net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/UseRedisCache/displayName": "使用 Redis 进行缓存(需要受支持的容器运行时)(_U)",
   "symbols/UseRedisCache/description": "配置是否将应用程序设置为使用 Redis 进行缓存。需要支持的容器运行时才能在本地运行，有关详细信息，请访问 https://aka.ms/aspire/containers for more details。",
   "symbols/appHostHttpPort/description": "该端口号将用于 AppHost 项目的 launchSettings.json 中的 HTTP 终结点。",
