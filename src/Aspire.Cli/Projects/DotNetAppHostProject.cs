@@ -522,7 +522,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StandardErrorCallback = runOutputCollector.AppendError,
             StartDebugSession = context.StartDebugSession,
             Debug = context.Debug,
-            NoLaunchProfile = false,
             KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(_environment.IsWindows()),
             // Run path opts into the shared shutdown ladder so pure .NET AppHosts get the
             // same graceful-then-tree-kill semantics as TypeScript AppHosts (which already
