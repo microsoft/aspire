@@ -8,6 +8,16 @@
       },
       "applicationUrl": "https://localhost:15888"
     },
+    "https (browser only + telemetry)": {
+      "commandName": "Project",
+      "launchBrowser": true,
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development",
+        "OTEL_EXPORTER_OTLP_ENDPOINT": "http://localhost:4317",
+        "OTEL_EXPORTER_OTLP_PROTOCOL": "grpc"
+      },
+      "applicationUrl": "https://localhost:15888"
+    },
     "http (browser only)": {
       "commandName": "Project",
       "launchBrowser": true,

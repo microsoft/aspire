@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
 using Aspire.Dashboard.Configuration;
@@ -20,6 +21,7 @@ public sealed class TelemetryImportService
     private readonly ITelemetryRepositoryWriter _telemetryRepositoryWriter;
     private readonly IOptionsMonitor<DashboardOptions> _options;
     private readonly ILogger<TelemetryImportService> _logger;
+    private readonly ActivitySource _activitySource;
 
     /// <summary>
     /// Gets a value indicating whether import is enabled.
@@ -32,11 +34,17 @@ public sealed class TelemetryImportService
     /// <param name="telemetryRepositoryWriter">The telemetry repository writer.</param>
     /// <param name="options">The dashboard options.</param>
     /// <param name="logger">The logger.</param>
-    public TelemetryImportService(ITelemetryRepositoryWriter telemetryRepositoryWriter, IOptionsMonitor<DashboardOptions> options, ILogger<TelemetryImportService> logger)
+    /// <param name="activitySource">The dashboard activity source.</param>
+    public TelemetryImportService(
+        ITelemetryRepositoryWriter telemetryRepositoryWriter,
+        IOptionsMonitor<DashboardOptions> options,
+        ILogger<TelemetryImportService> logger,
+        DashboardActivitySource activitySource)
     {
         _telemetryRepositoryWriter = telemetryRepositoryWriter;
         _options = options;
         _logger = logger;
+        _activitySource = activitySource.ActivitySource;
     }
 
     /// <summary>
@@ -49,6 +57,8 @@ public sealed class TelemetryImportService
     /// <exception cref="InvalidOperationException">Thrown when import is disabled.</exception>
     public async Task ImportAsync(string fileName, Stream stream, CancellationToken cancellationToken)
     {
+        using var activity = _activitySource.StartActivity("Import telemetry data", ActivityKind.Internal);
+
         if (!IsImportEnabled)
         {
             throw new InvalidOperationException("Import is disabled.");
