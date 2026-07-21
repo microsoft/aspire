@@ -13,11 +13,15 @@ namespace Aspire.Hosting.Radius.Secrets;
 /// a Radius-created <c>Secret</c> name, and — in publish mode — as an Aspire resource name
 /// (the store builder calls <c>AddResource</c>, which enforces <see cref="ApplicationModel.ModelName"/>).
 /// To avoid a mode-dependent contract (run mode uses an unregistered builder and skips that check),
-/// the grammar is kept identical to Aspire's resource-name grammar: 1-64 characters of ASCII
-/// letters, digits, and <c>-</c>, starting with a letter, with no consecutive hyphens and no
-/// trailing hyphen. It additionally rejects Windows reserved device names, because the name can
-/// also become a filesystem path segment for a copied manifest and must be materializable on
-/// every platform.
+/// the grammar is a strict subset of Aspire's resource-name grammar: 1-64 characters of
+/// <em>lowercase</em> ASCII letters, digits, and <c>-</c>, starting with a letter, with no
+/// consecutive hyphens and no trailing hyphen. Lowercase is required (rather than the mixed case
+/// Aspire otherwise permits) because an inline store has no <c>properties.resource</c>, so Radius
+/// uses the store name directly as the backing Kubernetes <c>Secret</c> name and Kubernetes rejects
+/// non-DNS-1123 (uppercase) Secret names at deploy time. Keeping the grammar lowercase-only fails
+/// such names fast at the API/publish boundary instead. It additionally rejects Windows reserved
+/// device names, because the name can also become a filesystem path segment for a copied manifest
+/// and must be materializable on every platform.
 /// </remarks>
 internal static class RadiusSecretStoreNaming
 {
@@ -48,9 +52,11 @@ internal static class RadiusSecretStoreNaming
             return false;
         }
 
-        // Mirror ModelName.TryValidateName's default rules exactly so a name accepted here is also
-        // accepted by AddResource in publish mode.
-        if (!char.IsAsciiLetter(name[0]) || name[^1] == '-')
+        // Mirror ModelName.TryValidateName's default rules, but restrict letters to lowercase so a
+        // name accepted here is also accepted by AddResource in publish mode AND is a valid DNS-1123
+        // label — an inline store's name becomes the backing Kubernetes Secret name verbatim, and
+        // Kubernetes rejects uppercase Secret names at deploy time.
+        if (!char.IsAsciiLetterLower(name[0]) || name[^1] == '-')
         {
             return false;
         }
@@ -66,7 +72,7 @@ internal static class RadiusSecretStoreNaming
                 }
                 previousHyphen = true;
             }
-            else if (char.IsAsciiLetterOrDigit(c))
+            else if (char.IsAsciiLetterLower(c) || char.IsAsciiDigit(c))
             {
                 previousHyphen = false;
             }

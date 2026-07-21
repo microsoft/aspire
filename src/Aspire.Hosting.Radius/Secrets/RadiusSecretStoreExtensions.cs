@@ -309,8 +309,9 @@ public static class RadiusSecretStoreExtensions
             if (!KubernetesName.IsValidSecretDataKey(key))
             {
                 throw new ArgumentException(
-                    $"Secret data key '{key}' is invalid. A Kubernetes Secret key may contain only alphanumeric " +
-                    "characters, '-', '_', or '.'. Diagnostic: ASPIRERADIUS067.",
+                    $"Secret data key '{key}' is invalid. A Kubernetes Secret key must be 1-253 characters, may contain only " +
+                    "alphanumeric characters, '-', '_', or '.', and may not be '.' or '..' or start with '..'. " +
+                    "Diagnostic: ASPIRERADIUS067.",
                     nameof(keys));
             }
         }
@@ -384,9 +385,9 @@ public static class RadiusSecretStoreExtensions
         if (!RadiusSecretStoreNaming.IsValidName(name))
         {
             throw new ArgumentException(
-                $"Secret-store name '{name}' is invalid. It must be 1-{RadiusSecretStoreNaming.MaxNameLength} characters of ASCII " +
-                "letters, digits, and '-', must start with a letter, may not contain consecutive hyphens, may not end with a " +
-                "hyphen, and may not be a reserved device name. Diagnostic: ASPIRERADIUS049.",
+                $"Secret-store name '{name}' is invalid. It must be 1-{RadiusSecretStoreNaming.MaxNameLength} characters of " +
+                "lowercase ASCII letters, digits, and '-', must start with a letter, may not contain consecutive hyphens, may " +
+                "not end with a hyphen, and may not be a reserved device name. Diagnostic: ASPIRERADIUS049.",
                 nameof(name));
         }
     }
@@ -426,8 +427,9 @@ public sealed class RadiusSecretStoreDataBuilder
         if (!KubernetesName.IsValidSecretDataKey(key))
         {
             throw new ArgumentException(
-                $"Secret data key '{key}' is invalid. A Kubernetes Secret key may contain only alphanumeric " +
-                "characters, '-', '_', or '.'. Diagnostic: ASPIRERADIUS067.",
+                $"Secret data key '{key}' is invalid. A Kubernetes Secret key must be 1-253 characters, may contain only " +
+                "alphanumeric characters, '-', '_', or '.', and may not be '.' or '..' or start with '..'. " +
+                "Diagnostic: ASPIRERADIUS067.",
                 nameof(key));
         }
 

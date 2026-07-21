@@ -13,29 +13,29 @@ public class SealedSecretApplyStepTests
     [Fact]
     public void BuildApplyArgs_WithContext_PassesContextExplicitly()
     {
-        var args = SealedSecretApplyStep.BuildApplyArgs("/p/db.sealed.yaml", "kind-radius");
-        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-o", "json", "--context", "kind-radius" }, args);
+        var args = SealedSecretApplyStep.BuildApplyArgs("kind-radius");
+        Assert.Equal(new[] { "apply", "-f", "-", "-o", "json", "--context", "kind-radius" }, args);
     }
 
     [Fact]
     public void BuildApplyArgs_NoContext_OmitsContextFlag()
     {
-        var args = SealedSecretApplyStep.BuildApplyArgs("/p/db.sealed.yaml", null);
-        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-o", "json" }, args);
+        var args = SealedSecretApplyStep.BuildApplyArgs(null);
+        Assert.Equal(new[] { "apply", "-f", "-", "-o", "json" }, args);
     }
 
     [Fact]
     public void BuildApplyArgs_WithNamespace_PassesNamespaceExplicitly()
     {
-        var args = SealedSecretApplyStep.BuildApplyArgs("/p/db.sealed.yaml", "kind-radius", "app");
-        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-o", "json", "-n", "app", "--context", "kind-radius" }, args);
+        var args = SealedSecretApplyStep.BuildApplyArgs("kind-radius", "app");
+        Assert.Equal(new[] { "apply", "-f", "-", "-o", "json", "-n", "app", "--context", "kind-radius" }, args);
     }
 
     [Fact]
     public void BuildApplyArgs_NamespaceWithoutContext_PassesNamespaceOnly()
     {
-        var args = SealedSecretApplyStep.BuildApplyArgs("/p/db.sealed.yaml", null, "app");
-        Assert.Equal(new[] { "apply", "-f", "/p/db.sealed.yaml", "-o", "json", "-n", "app" }, args);
+        var args = SealedSecretApplyStep.BuildApplyArgs(null, "app");
+        Assert.Equal(new[] { "apply", "-f", "-", "-o", "json", "-n", "app" }, args);
     }
 
     [Fact]
