@@ -59,8 +59,9 @@ export const personalPickActions = {
   finishThis: "Finish this",
 };
 
-// The signal label emitted for a PR that has aged past the focus limit without a
-// review (see model.mjs oldFirstSignal). Shared so github.mjs can flag these cards
-// and the canvas can offer an "Address review" action, without the string drifting
+// The signal label emitted for a PR that has aged past the focus limit without an approving
+// review — a commented or previously reviewed PR still counts as review debt; only an approving
+// review clears it (see model.mjs isReviewDebt / oldFirstSignal). Shared so github.mjs can flag
+// these cards and the canvas can offer an "Address review" action, without the string drifting
 // between the producer (model) and the consumer (github serialization).
 export const reviewDebtSignalLabel = "review debt";

@@ -122,7 +122,8 @@ test("a rejecting request-error logger does not become an unhandled rejection", 
   });
   assert.equal(response.status, 500);
 
-  // Give any dangling logger promise a couple of turns to settle; with the fix it's swallowed.
+  // A rejected logger promise must be swallowed so it never surfaces as an unhandled rejection.
+  // Give any dangling promise a couple of turns to settle, then assert none was observed.
   await new Promise((r) => setTimeout(r, 30));
   assert.deepEqual(rejections, []);
 });
@@ -252,6 +253,13 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   received = null;
   const bad = await postAction(entry.url, { kind: "nope", pr });
   assert.equal(bad.status, 400);
+  assert.equal(received, null);
+
+  // A malformed PR number (untrusted request data) is rejected with a 400 and never bridged: the
+  // whole value is validated, so "123junk" must not be truncated to target real PR 123.
+  received = null;
+  const badNumber = await postAction(entry.url, { kind: "test", pr: { ...pr, number: "123junk" } });
+  assert.equal(badNumber.status, 400);
   assert.equal(received, null);
 });
 
@@ -543,9 +551,11 @@ test("a card action resolves against the last complete snapshot, not a mid-strea
   assert.equal(acted.status, 200);
   const actedBody = await acted.json();
 
-  // With the fix, resolution finds the PR in the last complete snapshot and keeps its enterprise
-  // host: the prompt targets the GHES URL and new-session degrades to current-session. Without it,
-  // the partial miss reconstructs a github.com URL and the action stays new-session (misrouted).
+  // Invariant: action resolution reads the last COMPLETE snapshot, not the mid-stream partial, so
+  // the enterprise PR is found there with its host-qualified URL — the prompt targets the GHES URL
+  // and new-session degrades to current-session. If resolution instead read the partial (which
+  // omits the not-yet-loaded enterprise PR), the miss would reconstruct a github.com URL and leave
+  // the action new-session, misrouting it to the same-slug dotcom repo.
   assert.equal(actedBody.target, "current-session");
   assert.match(received.prompt, /ghe\.example\.com:8443\/microsoft\/xrepo\/pull\/5/);
   assert.doesNotMatch(received.prompt, /github\.com\/microsoft\/xrepo/);

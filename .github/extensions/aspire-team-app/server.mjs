@@ -11,7 +11,7 @@ import { createServer } from "node:http";
 import { HTML, STYLES, APP_JS } from "./render.mjs";
 import { loadDashboard } from "./github.mjs";
 import { resolveAccounts } from "./accounts.mjs";
-import { buildAgentActionPrompt, buildAgentActionLog, resolveActionTarget } from "./agent.mjs";
+import { buildAgentActionPrompt, buildAgentActionLog, resolveActionTarget, toActionPrNumber } from "./agent.mjs";
 import {
   loadPrefs,
   savePrefs,
@@ -295,7 +295,7 @@ function broadcastRefresh() {
 // letting agent.mjs reconstruct a canonical github.com link rather than trust the client.
 function resolveActionPr(pr) {
   const repository = String(pr?.repository ?? "").trim();
-  const number = Number.parseInt(pr?.number, 10);
+  const number = toActionPrNumber(pr?.number);
   const canonical = Number.isInteger(number)
     ? findCachedPr(repository, number, pr?.url)
     : undefined;

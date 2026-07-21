@@ -125,7 +125,7 @@ test("cardActionBtn re-renders a disabled button while its action's POST is stil
   // can't re-queue the same agent action mid-request.
   api.inflightActions.add(api.actionKey(action.kind, pr.url, pr.repository, pr.number));
   const busy = api.cardActionBtn(pr, action);
-  assert.match(busy, /class="card-btn cb-main busy" data-target="new-session" disabled/);
+  assert.match(busy, /class="card-btn cb-main busy" data-target="new-session" aria-live="polite" disabled/);
   assert.match(busy, /class="card-btn cb-caret"[^>]*disabled/);
 
   // A different action on the same PR is unaffected — only the in-flight split is locked.

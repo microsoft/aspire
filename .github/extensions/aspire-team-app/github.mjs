@@ -657,8 +657,15 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
 
   const prById = new Map();   // url -> normalized PR (dedup across accounts)
   const issueById = new Map();
-  const okRepos = new Set();  // repos that succeeded under at least one account
-  const errorsRaw = [];       // { repo, message }
+  // Success/error are tracked per (host, repo), NOT per repo alone. The same owner/repo slug can
+  // exist on github.com and on a GHES/EMU host simultaneously, so a success on one host must not
+  // suppress the other host's failure — that would silently drop the failing host's PRs with no
+  // surfaced error. The GraphQL origin (acct.graphql) identifies the host (undefined for the
+  // github.com default). Accounts that share a host still collapse to one key, so duplicate
+  // credentials for the same slug keep de-duping as before.
+  const hostRepoKey = (graphql, repo) => `${graphql ?? ""}\n${repo}`;
+  const okRepos = new Set();  // hostRepoKey(host, repo) that succeeded under at least one account
+  const errorsRaw = [];       // { repo, host, message }
 
   // Streaming progress + incremental snapshots. Each (account, repo) fetch reports when it
   // settles so the caller can drive a deterministic progress bar (onProgress) and receive
@@ -690,7 +697,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
         (async () => {
           const { owner, name } = splitRepo(repo);
           if (!owner || !name) {
-            errorsRaw.push({ repo, message: `Invalid repo "${repo}"` });
+            errorsRaw.push({ repo, host: acct.graphql, message: `Invalid repo "${repo}"` });
             return;
           }
           try {
@@ -720,9 +727,9 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
                 after = conn.pageInfo.endCursor;
               }
             }
-            okRepos.add(repo);
+            okRepos.add(hostRepoKey(acct.graphql, repo));
           } catch (e) {
-            errorsRaw.push({ repo, message: `${repo}: ${e.message}` });
+            errorsRaw.push({ repo, host: acct.graphql, message: `${repo}: ${e.message}` });
           }
         })().then(reportDone),
       );
@@ -741,8 +748,9 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
     const visiblePrs = showDrafts ? allPrs : allPrs.filter((p) => !p.draft);
     const draftCount = allPrs.filter((p) => p.draft).length;
 
-    // Drop per-account errors for repos another active account could read.
-    const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(e.repo)).map((e) => e.message))];
+    // Drop per-account errors for (host, repo) pairs another active account could read on that same
+    // host — a success on a different host must not mask this host's failure.
+    const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(hostRepoKey(e.host, e.repo))).map((e) => e.message))];
 
     let lanes;
     if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
@@ -764,7 +772,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
         Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || "") }, extra || {});
       const focusCards = focusAll.map((f) => {
         const c = card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
-        // Flag review-debt cards (aged past the focus limit without a review) so the canvas can
+        // Flag review-debt cards (aged past the focus limit without an approving review) so the canvas can
         // offer an "Address review" button instead of Test/Review. Derive this from the shared
         // isReviewDebt predicate, NOT from c.signals: signalsFor truncates the display pills to a
         // few highest-priority signals, so a debt PR that also carries release/regression pills

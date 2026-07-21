@@ -28,6 +28,24 @@ test("isValidActionPr rejects malformed repository or non-positive number", () =
   assert.equal(isValidActionPr(normalizeActionPr({ repository: "aspire", number: 1 })), false);
   assert.equal(isValidActionPr(normalizeActionPr({ repository: "a/b/c", number: 1 })), false);
   assert.equal(isValidActionPr(normalizeActionPr({ repository: "microsoft/aspire", number: 0 })), false);
+
+  // A malformed number must fail rather than be truncated/re-based onto a real PR: the whole value
+  // is converted, so a trailing, exponential, hex, fractional, blank, or negative number is invalid
+  // (NaN) instead of parseInt's "123", "1", or 100.
+  for (const number of ["123junk", "1e2", "0x7b", "12.5", "  ", "-5"]) {
+    assert.equal(isValidActionPr(normalizeActionPr({ repository: "microsoft/aspire", number })), false, `number ${JSON.stringify(number)} should be invalid`);
+  }
+  assert.ok(Number.isNaN(normalizeActionPr({ repository: "microsoft/aspire", number: "123junk" }).number));
+
+  // repository is interpolated into the prompt/URL, so it is restricted to GitHub's identifier
+  // charset: backticks, a bare "https:/repo", whitespace, control chars, and ":" are rejected; an
+  // owner may not contain "_" though a repo name may, and ".", "_", "-" are otherwise allowed.
+  for (const repository of ["microsoft/asp\u0060ire", "https:/repo", "micro soft/aspire", "org/re:po", "org/re\npo", "org_x/repo"]) {
+    assert.equal(isValidActionPr(normalizeActionPr({ repository, number: 1 })), false, `repo ${JSON.stringify(repository)} should be invalid`);
+  }
+  for (const repository of ["dotnet/aspire.1p", "a/b.c_d-e", "microsoft/aspire-1p"]) {
+    assert.equal(isValidActionPr(normalizeActionPr({ repository, number: 1 })), true, `repo ${JSON.stringify(repository)} should be valid`);
+  }
 });
 
 test("buildAgentActionPrompt opens a sub-session with the right skill for test and review", () => {
@@ -104,9 +122,10 @@ test("buildAgentActionPrompt rejects a url whose path does not name the specifie
 });
 
 test("buildAgentActionPrompt preserves an enterprise (GHES) host, including an explicit port", () => {
-  // GHES instances legitimately serve on a non-default port (e.g. :8443). The url still names
-  // THIS PR's own owner/repo/pull/number, so it must be preserved rather than rewritten to
-  // github.com — the old hostname-only regex rejected the port and dispatched to the wrong host.
+  // GHES instances legitimately serve on a non-default port (e.g. :8443). When the url names THIS
+  // PR's own owner/repo/pull/number, safePrUrl preserves it verbatim — port included — instead of
+  // rewriting it to github.com, so the action dispatches to the enterprise host rather than a
+  // same-slug repo on dotcom. This locks in that a valid ":port" host survives validation.
   const ghes = buildAgentActionPrompt("test", { ...validPr, url: "https://ghe.example.com:8443/microsoft/aspire/pull/123" });
   assert.match(ghes, /https:\/\/ghe\.example\.com:8443\/microsoft\/aspire\/pull\/123/);
   assert.doesNotMatch(ghes, /github\.com/);

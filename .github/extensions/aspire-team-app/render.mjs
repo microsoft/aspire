@@ -1239,8 +1239,13 @@ function cardActionBtn(pr, a) {
   const inflight = inflightActions.has(actionKey(a.kind, pr.url || "", pr.repository || "", pr.number));
   const busyCls = inflight ? " busy" : "";
   const disabledAttr = inflight ? " disabled" : "";
+  // aria-live="polite" turns the main button into a live region: onCardAction rewrites its label
+  // in place to "Queued\u2026", "Running\u2026", or an error, but the button is disabled while the
+  // request runs so focus may move away. Announcing politely surfaces that async result to screen
+  // readers even after the button loses focus. A full re-render swaps in a fresh element with its
+  // initial label, which does not announce, so only the in-place status updates are spoken.
   return '<div class="cb-split"' + data + '>' +
-    '<button type="button" class="card-btn cb-main' + busyCls + '" data-target="new-session"' + disabledAttr + '>' +
+    '<button type="button" class="card-btn cb-main' + busyCls + '" data-target="new-session" aria-live="polite"' + disabledAttr + '>' +
       icon + '<span class="cb-label">' + esc(a.label) + "</span></button>" +
     '<button type="button" class="card-btn cb-caret" aria-haspopup="true" aria-expanded="false"' +
       ' title="Choose where to run" aria-label="Choose where to run ' + esc(a.label) + '"' + disabledAttr + '>' +

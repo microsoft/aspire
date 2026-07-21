@@ -123,6 +123,40 @@ test("loadDashboard reports fetch progress and streams a partial snapshot", asyn
   assert.equal(dashboard.counts.total, 1);
 });
 
+test("loadDashboard surfaces a repo error on one host even when the same slug succeeds on another host", async () => {
+  // The same owner/repo slug can exist on github.com and on a GHES/EMU host at once. Here the
+  // dotcom account reads "org/repo" fine while the enterprise account fails on its own "org/repo".
+  globalThis.fetch = async (url, options = {}) => {
+    const body = JSON.parse(options.body);
+    if (String(url).includes("ghe.example.com")) {
+      throw new Error("GHES boom");
+    }
+    return jsonResponse({ data: { repository: { isPrivate: false, pullRequests: {
+      nodes: [prNode(1, "2026-07-01T10:00:00Z")],
+      pageInfo: { hasNextPage: false, endCursor: null },
+    } } } });
+  };
+
+  const dashboard = await loadDashboard({
+    accounts: [
+      { token: "dotcom", login: "octo", repos: ["org/repo"] },
+      { token: "ghes", login: "octo-ghe", repos: ["org/repo"], graphql: "https://ghe.example.com/api/graphql" },
+    ],
+    mode: "ship",
+    release: "9.5",
+    prefs: {},
+    dismissed: [],
+    showDrafts: true,
+  });
+
+  // The dotcom success must NOT suppress the enterprise host's failure for the same slug — errors
+  // are keyed by (host, repo), so the GHES error is surfaced instead of silently dropping its PRs.
+  assert.ok(
+    dashboard.errors.some((m) => m.includes("org/repo") && m.includes("GHES boom")),
+    `expected a surfaced GHES error, got ${JSON.stringify(dashboard.errors)}`,
+  );
+});
+
 function page(after, firstNode, secondNode) {
   if (after == null) {
     return { nodes: [firstNode], pageInfo: { hasNextPage: true, endCursor: "cursor-1" } };

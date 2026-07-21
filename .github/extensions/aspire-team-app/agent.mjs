@@ -23,6 +23,19 @@
 export const AGENT_ACTION_KINDS = ["test", "review", "resolve-conflicts", "review-debt"];
 export const AGENT_ACTION_TARGETS = ["new-session", "current-session"];
 
+// Convert an untrusted client-supplied PR number to a strict positive integer, or NaN. Unlike
+// parseInt, the WHOLE value must be a canonical decimal integer: parseInt truncates/re-bases a
+// malformed value ("123junk" -> 123, "1e2" -> 1, "0x7b" -> ... ) and would silently target a
+// different real PR, so instead a JS value must already be an integer and a string must be
+// all-digits. Anything else becomes NaN, which fails isValidActionPr and yields the intended 400.
+export function toActionPrNumber(value) {
+  if (typeof value === "number") {
+    return Number.isInteger(value) ? value : NaN;
+  }
+  const s = String(value ?? "").trim();
+  return /^\d+$/.test(s) ? Number(s) : NaN;
+}
+
 // Parse the client-supplied PR descriptor into a known shape. Everything is coerced
 // to a trimmed string / integer so a malformed field can't smuggle structure into the
 // prompt; validity is checked separately by isValidActionPr.
@@ -30,7 +43,7 @@ export function normalizeActionPr(pr) {
   const raw = pr && typeof pr === "object" ? pr : {};
   return {
     repository: String(raw.repository ?? "").trim(),
-    number: Number.parseInt(raw.number, 10),
+    number: toActionPrNumber(raw.number),
     title: String(raw.title ?? "").trim(),
     author: String(raw.author ?? "").trim(),
     url: String(raw.url ?? "").trim(),
@@ -38,8 +51,13 @@ export function normalizeActionPr(pr) {
 }
 
 export function isValidActionPr(pr) {
-  // owner/repo with no whitespace or extra slashes, plus a positive PR number.
-  return /^[^/\s]+\/[^/\s]+$/.test(pr.repository) && Number.isInteger(pr.number) && pr.number > 0;
+  // Restrict owner/repo to GitHub's identifier character set: an owner (user/org login) is
+  // alphanumeric with single hyphens, and a repo name additionally allows "." and "_". pr.repository
+  // is untrusted — on a cache miss it is the raw client value, and it is interpolated into both the
+  // agent prompt and the reconstructed URL — so anything outside these sets (backticks, whitespace,
+  // control chars, or a ":" as in "https:/repo") must be rejected rather than smuggled through.
+  // Plus a positive integer PR number.
+  return /^[A-Za-z0-9-]+\/[A-Za-z0-9._-]+$/.test(pr.repository) && Number.isInteger(pr.number) && pr.number > 0;
 }
 
 // Normalize a possibly-missing target to a known value. Defaults to "new-session" so a
