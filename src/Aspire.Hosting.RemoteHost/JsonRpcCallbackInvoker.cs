@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json.Nodes;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Hosting.RemoteHost;
 
@@ -40,10 +40,10 @@ internal sealed class JsonRpcCallbackInvoker : ICallbackInvoker
 
         try
         {
-            return await _clientRpc.InvokeWithCancellationAsync<TResult>(
+            return (await _clientRpc.InvokeAsync<TResult>(
                 "invokeCallback",
                 [callbackId, args],
-                cts.Token).ConfigureAwait(false);
+                cts.Token).ConfigureAwait(false))!;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

@@ -6,7 +6,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Mcp.Tools;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Cli.Tests.Mcp;
 

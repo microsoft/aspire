@@ -232,9 +232,10 @@ internal sealed class RemoteHostProfilingTelemetry(IConfiguration configuration)
         }
         else if (TryGetAmbientRemoteParentContext(ambientActivity, out var ambientRemoteParent))
         {
-            // StreamJsonRpc creates an unexported server activity from the caller's
-            // traceparent. Parent profiling spans to the remote caller instead so
-            // exported CLI and RemoteHost spans are adjacent in the trace.
+            // Fall back to an ambient server activity that already carries a remote parent
+            // (for example one the JSON-RPC library created from the caller's traceparent).
+            // Parent profiling spans to the remote caller instead so exported CLI and
+            // RemoteHost spans are adjacent in the trace.
             activity = _activitySource.StartActivity(name, activityKind, ambientRemoteParent);
         }
         else if ((ambientActivity is null || ambientActivity.Source.Name != ActivitySourceName) &&
@@ -278,7 +279,7 @@ internal sealed class RemoteHostProfilingTelemetry(IConfiguration configuration)
             return;
         }
 
-        // Profiling spans can be siblings under StreamJsonRpc's short-lived activities.
+        // Profiling spans can be siblings under the JSON-RPC library's short-lived activities.
         // Seed the ambient ancestor chain with baggage so later profiling siblings reuse
         // the same session after an intermediate parent activity has ended.
         var sessionId = GetProfilingSessionIdFromAncestors(ambientActivity) ?? GetProfilingSessionId(activity) ?? GetConfiguredSessionId() ?? Guid.NewGuid().ToString("N");

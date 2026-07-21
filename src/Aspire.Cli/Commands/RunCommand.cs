@@ -23,7 +23,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
 using Spectre.Console.Rendering;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Cli.Commands;
 

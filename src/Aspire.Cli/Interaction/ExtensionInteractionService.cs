@@ -429,9 +429,16 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         // Materialize so we can iterate twice without re-enumerating a possibly lazy/one-shot source.
         var materialized = lines as IReadOnlyCollection<(OutputLineStream Stream, string Line)> ?? lines.ToList();
 
-        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayLinesAsync(materialized.Select(line => new DisplayLineState(
+        // Project to a concrete array (not a lazy Select iterator). Positional RPC arguments are
+        // serialized by their runtime type, and the AOT source generator can only serialize a type
+        // that is explicitly registered in BackchannelJsonSerializerContext. A lazy Select iterator
+        // is an unregisterable compiler-generated type, so we materialize to DisplayLineState[],
+        // which is registered. The wire payload (a JSON array of {stream, line}) is unchanged.
+        var displayLines = materialized.Select(line => new DisplayLineState(
             line.Stream == OutputLineStream.StdOut ? "stdout" : "stderr",
-            StringUtils.RemoveMarkup(line.Line))), _cancellationToken));
+            StringUtils.RemoveMarkup(line.Line))).ToArray();
+
+        var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayLinesAsync(displayLines, _cancellationToken));
         Debug.Assert(result);
 
         // Intentionally do NOT also write to the local console here. Unlike most Display* methods

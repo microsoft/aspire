@@ -12,7 +12,7 @@
   <ItemGroup>
     <PackageReference Include="OpenTelemetry.Exporter.OpenTelemetryProtocol" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
-    <PackageReference Include="StreamJsonRpc" />
+    <PackageReference Include="CurlyRpc" />
     <PackageReference Include="Microsoft.Extensions.Hosting" />
   </ItemGroup>
 

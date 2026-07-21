@@ -156,7 +156,7 @@ internal sealed class DotNetBasedAppHostServerProject : IAppHostServerProject
                     <AspireDashboardDir>{_repoRoot}artifacts/bin/Aspire.Dashboard/Debug/net8.0/</AspireDashboardDir>
                 </PropertyGroup>
                 <ItemGroup>
-                    <PackageReference Include="StreamJsonRpc" />
+                    <PackageReference Include="CurlyRpc" />
                     <PackageReference Include="Google.Protobuf" />
                 </ItemGroup>
             </Project>

@@ -3,6 +3,8 @@
 
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Tests.TestServices;
@@ -58,6 +60,67 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         Assert.Contains(logFilePath, outputString);
         Assert.DoesNotContain("\u001b]8;", outputString);
         Assert.DoesNotContain("file://", outputString);
+    }
+
+    [Fact]
+    public async Task DisplayLines_PassesMaterializedArrayToBackchannel()
+    {
+        // Regression: positional RPC arguments are serialized by their runtime type via
+        // options.GetTypeInfo(arg.GetType()), and the AOT source generator can only serialize a
+        // type that is registered in BackchannelJsonSerializerContext. DisplayLines must therefore
+        // hand the backchannel a concrete, registered DisplayLineState[] rather than a lazy Select
+        // iterator (a compiler-generated type that cannot be registered), otherwise serializing the
+        // displayLines RPC throws "JsonTypeInfo metadata for type ... was not provided".
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Out = new AnsiConsoleOutput(new StringWriter(new StringBuilder()))
+        });
+        var executionContext = workspace.CreateExecutionContext();
+        var consoleInteractionService = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(),
+            NullLoggerFactory.Instance,
+            new ConsoleLogBufferContext());
+
+        IEnumerable<DisplayLineState>? captured = null;
+        var backchannel = new TestExtensionBackchannel
+        {
+            DisplayLinesAsyncCallback = lines =>
+            {
+                captured = lines;
+                return Task.CompletedTask;
+            }
+        };
+
+        var extensionInteractionService = new ExtensionInteractionService(
+            consoleInteractionService,
+            backchannel,
+            extensionPromptEnabled: false,
+            logger: NullLogger<ExtensionInteractionService>.Instance);
+
+        extensionInteractionService.DisplayLines(
+        [
+            (OutputLineStream.StdOut, "hello"),
+            (OutputLineStream.StdErr, "[red]oops[/]")
+        ]);
+        await extensionInteractionService.FlushAsync();
+
+        Assert.NotNull(captured);
+        var materialized = Assert.IsType<DisplayLineState[]>(captured);
+        Assert.Equal(2, materialized.Length);
+        Assert.Equal("stdout", materialized[0].Stream);
+        Assert.Equal("hello", materialized[0].Line);
+        Assert.Equal("stderr", materialized[1].Stream);
+        Assert.Equal("oops", materialized[1].Line);
+
+        // Serialize exactly as the RPC layer does (by runtime type) to prove the materialized type
+        // resolves through the AOT context and produces the expected wire payload.
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        var json = JsonSerializer.Serialize(captured, options.GetTypeInfo(captured.GetType()));
+        Assert.Equal("[{\"stream\":\"stdout\",\"line\":\"hello\"},{\"stream\":\"stderr\",\"line\":\"oops\"}]", json);
     }
 
     [Fact]

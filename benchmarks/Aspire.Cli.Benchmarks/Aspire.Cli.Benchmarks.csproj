@@ -14,7 +14,7 @@
 
   <ItemGroup>
     <PackageReference Include="BenchmarkDotNet" />
-    <PackageReference Include="StreamJsonRpc" VersionOverride="$(StreamJsonRpcPackageVersionForCli)" />
+    <PackageReference Include="CurlyRpc" />
   </ItemGroup>
 
   <ItemGroup>

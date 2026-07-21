@@ -10,7 +10,7 @@ using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using ModelContextProtocol.Protocol;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Cli.Backchannel;
 
@@ -173,12 +173,16 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
             await socket.ConnectAsync(endpoint, cancellationToken).ConfigureAwait(false);
         }
 
-        // Create JSON-RPC connection with proper formatter
+        // Create JSON-RPC connection with the source-generated serializer options.
         var stream = new NetworkStream(socket, ownsSocket: true);
-        var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter()))
+        // CurlyRpc emits OpenTelemetry Activity spans natively, so no explicit activity-tracing configuration is required.
+        // ownsStreams: true so disposing this backchannel's rpc (see Dispose) closes the socket, letting the
+        // AppHost-side auxiliary backchannel service observe EOF and tear down its per-connection handler.
+        // The handler only closes the stream when it owns it, so ownsStreams: true is required for dispose to close the connection.
+        var rpc = new JsonRpc(new HeaderDelimitedMessageHandler(stream, stream, ownsStreams: true), new JsonRpcOptions
         {
-            ActivityTracingStrategy = new ActivityTracingStrategy()
-        };
+            SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()
+        });
         rpc.StartListening();
 
         logger.LogDebug("Connected to auxiliary backchannel at {SocketPath}", socketPath);
@@ -1034,10 +1038,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         var request = new GetTerminalInfoRequest { ResourceName = resourceName };
 
-        var response = await rpc.InvokeWithCancellationAsync<GetTerminalInfoResponse>(
+        var response = await rpc.InvokeAsync<GetTerminalInfoResponse>(
             "GetTerminalInfoAsync",
             [request],
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("AppHost returned a null GetTerminalInfo response.");
 
         _logger?.LogDebug("Terminal info for '{ResourceName}': available={Available}, replicas={ReplicaCount}",
             resourceName, response.IsAvailable, response.Replicas?.Length ?? 0);
@@ -1064,10 +1069,11 @@ internal sealed class AppHostAuxiliaryBackchannel : IAppHostAuxiliaryBackchannel
 
         var request = new ListTerminalsRequest();
 
-        var response = await rpc.InvokeWithCancellationAsync<ListTerminalsResponse>(
+        var response = await rpc.InvokeAsync<ListTerminalsResponse>(
             "ListTerminalsAsync",
             [request],
-            cancellationToken).ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("AppHost returned a null ListTerminals response.");
 
         _logger?.LogDebug("ListTerminals returned {Count} terminal-enabled resource(s).", response.Terminals.Length);
 

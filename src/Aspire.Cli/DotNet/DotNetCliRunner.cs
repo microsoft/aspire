@@ -23,7 +23,7 @@ using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
+using CurlyRpc;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.DotNet;
@@ -510,7 +510,7 @@ internal sealed class DotNetCliRunner(
                 logger.LogDebug("Connected to AppHost backchannel at {SocketPath}", socketPath);
                 return;
             }
-            catch (Exception ex) when ((ex is SocketException or RemoteRpcException) && execution is { HasExited: true })
+            catch (Exception ex) when ((ex is SocketException or JsonRpcException) && execution is { HasExited: true })
             {
                 // Log at Debug level - this is expected when AppHost crashes, the real error is in AppHost output
                 logger.LogDebug(ex, "AppHost process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", execution.ExitCode, socketPath);
@@ -521,7 +521,7 @@ internal sealed class DotNetCliRunner(
                 backchannelCompletionSource.SetException(backchannelException);
                 return;
             }
-            catch (Exception ex) when (ex is SocketException or RemoteRpcException)
+            catch (Exception ex) when (ex is SocketException or JsonRpcException)
             {
                 // If the process is taking a long time to open a back channel but
                 // it has not exited then it probably means that its a larger build

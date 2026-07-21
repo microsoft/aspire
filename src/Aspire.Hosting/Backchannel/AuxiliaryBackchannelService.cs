@@ -9,7 +9,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -163,21 +163,18 @@ internal sealed class AuxiliaryBackchannelService(
             // Set up JSON-RPC over the client socket
             using var stream = new NetworkStream(clientSocket, ownsSocket: true);
 
-            // Create JSON-RPC connection with proper System.Text.Json formatter so it doesn't use Newtonsoft.Json
-            // and handles correct MCP SDK type serialization
-            // Configure to use camelCase naming to match CLI's MCP SDK options
-            var formatter = new SystemTextJsonFormatter();
-            formatter.JsonSerializerOptions = new System.Text.Json.JsonSerializerOptions
+            // Create JSON-RPC connection with System.Text.Json options that match the CLI's MCP SDK
+            // serialization (camelCase naming) so MCP SDK types round-trip correctly.
+            var serializerOptions = new System.Text.Json.JsonSerializerOptions
             {
                 PropertyNameCaseInsensitive = true,
                 PropertyNamingPolicy = System.Text.Json.JsonNamingPolicy.CamelCase
             };
 
-            var handler = new HeaderDelimitedMessageHandler(stream, formatter);
-            using var rpc = new JsonRpc(handler, rpcTarget)
-            {
-                ActivityTracingStrategy = new ActivityTracingStrategy()
-            };
+            var handler = new HeaderDelimitedMessageHandler(stream, stream);
+            // CurlyRpc emits OpenTelemetry Activity spans natively, so no explicit activity-tracing configuration is required.
+            using var rpc = new JsonRpc(handler, new JsonRpcOptions { SerializerOptions = serializerOptions });
+            rpc.AddLocalRpcTarget(rpcTarget);
             rpc.StartListening();
 
             // Wait for the connection to be disposed (client disconnect or cancellation)

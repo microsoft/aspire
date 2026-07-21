@@ -20,7 +20,7 @@ using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
 using Spectre.Console;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Cli.Commands;
 

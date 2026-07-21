@@ -9,7 +9,7 @@ using Aspire.Hosting.RemoteHost.Diagnostics;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
-using StreamJsonRpc;
+using CurlyRpc;
 using Xunit;
 
 namespace Aspire.Hosting.RemoteHost.Tests;
@@ -127,9 +127,12 @@ public sealed class JsonRpcAuthenticationTests
         public async Task<JsonRpcClientHandle> ConnectAsync()
         {
             var stream = await ConnectToServerAsync(_socketPath, CancellationToken.None);
-            var formatter = new SystemTextJsonFormatter();
-            var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
-            var rpc = new JsonRpc(handler);
+            // Match the RemoteHost JsonRpcServer's wire casing (default PascalCase JsonSerializerOptions).
+            var handler = new HeaderDelimitedMessageHandler(stream, stream);
+            var rpc = new JsonRpc(handler, new JsonRpcOptions
+            {
+                SerializerOptions = new JsonSerializerOptions()
+            });
             rpc.StartListening();
 
             return new JsonRpcClientHandle(stream, rpc);
@@ -235,7 +238,7 @@ public sealed class JsonRpcAuthenticationTests
         public Task Completion => _rpc.Completion;
 
         public Task<T> InvokeAsync<T>(string methodName, params object?[] arguments)
-            => _rpc.InvokeWithCancellationAsync<T>(methodName, arguments, CancellationToken.None);
+            => _rpc.InvokeAsync<T>(methodName, arguments, CancellationToken.None)!;
 
         public async ValueTask DisposeAsync()
         {

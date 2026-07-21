@@ -12,7 +12,7 @@ using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -407,10 +407,13 @@ public class AuxiliaryBackchannelTests(ITestOutputHelper outputHelper)
         using var stream = new NetworkStream(socket, ownsSocket: true);
         using var rpc = JsonRpc.Attach(stream);
 
-        // Call StopAppHostAsync - this should return immediately and initiate shutdown asynchronously
+        // Call StopAppHostAsync - this should return immediately and initiate shutdown asynchronously.
+        // Use the no-result InvokeAsync(method, args, CancellationToken) overload so overload resolution
+        // does not bind to the generic InvokeAsync<TResult>.
         await rpc.InvokeAsync(
             "StopAppHostAsync",
-            Array.Empty<object>()
+            Array.Empty<object>(),
+            CancellationToken.None
         ).DefaultTimeout();
 
         // The app should eventually stop

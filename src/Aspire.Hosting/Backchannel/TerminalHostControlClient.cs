@@ -3,7 +3,7 @@
 
 using System.Net.Sockets;
 using Aspire.Shared.TerminalHost;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Hosting.Backchannel;
 
@@ -45,10 +45,13 @@ internal static class TerminalHostControlClient
 
         using var rpc = await ConnectWithRetryAsync(socketPath, timeoutCts.Token).ConfigureAwait(false);
 
-        return await rpc.InvokeWithCancellationAsync<TerminalHostSessionInfo>(
+        // The control surface always returns a session snapshot; a null result indicates a
+        // protocol violation by the host, so surface it as an error rather than a null deref later.
+        return await rpc.InvokeAsync<TerminalHostSessionInfo>(
             TerminalHostControlProtocol.GetSessionMethod,
             arguments: null,
-            timeoutCts.Token).ConfigureAwait(false);
+            timeoutCts.Token).ConfigureAwait(false)
+            ?? throw new InvalidOperationException("Terminal host control returned a null session.");
     }
 
     private static async Task<JsonRpc> ConnectWithRetryAsync(string socketPath, CancellationToken cancellationToken)
@@ -64,9 +67,21 @@ internal static class TerminalHostControlClient
             {
                 await socket.ConnectAsync(new UnixDomainSocketEndPoint(socketPath), cancellationToken).ConfigureAwait(false);
                 var stream = new NetworkStream(socket, ownsSocket: true);
-                var formatter = new SystemTextJsonFormatter();
-                var handler = new HeaderDelimitedMessageHandler(stream, stream, formatter);
-                var rpc = new JsonRpc(handler);
+                // ownsStreams: true so disposing the rpc (via `using var rpc`) closes the underlying
+                // socket. Each control probe opens a fresh connection, invokes, then disposes the rpc;
+                // the terminal-host control listener only frees its single active slot when the peer's
+                // connection closes (it observes EOF and completes its rpc.Completion). With the default
+                // ownsStreams: false the socket would stay open after dispose, the host would never see
+                // EOF, and every probe after the first would be refused.
+                var handler = new HeaderDelimitedMessageHandler(stream, stream, ownsStreams: true);
+                // Use the default System.Text.Json serialization (PascalCase property names, case-sensitive)
+                // so the terminal-host control wire stays byte-for-byte compatible with hosts from earlier
+                // Aspire versions. The protocol DTOs (TerminalHostSessionInfo, TerminalHostInfoResponse) are
+                // PascalCase with no [JsonPropertyName], so changing the casing would break version-skewed peers.
+                var rpc = new JsonRpc(handler, new JsonRpcOptions
+                {
+                    SerializerOptions = new System.Text.Json.JsonSerializerOptions()
+                });
                 rpc.StartListening();
                 return rpc;
             }

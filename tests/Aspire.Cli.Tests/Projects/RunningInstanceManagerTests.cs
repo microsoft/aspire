@@ -9,7 +9,7 @@ using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging.Abstractions;
-using StreamJsonRpc;
+using CurlyRpc;
 
 namespace Aspire.Cli.Tests.Projects;
 
@@ -89,8 +89,12 @@ public class RunningInstanceManagerTests
             {
                 var serverSocket = await _listener.AcceptAsync(_cts.Token).ConfigureAwait(false);
                 var serverStream = new NetworkStream(serverSocket, ownsSocket: true);
-                var messageHandler = new HeaderDelimitedMessageHandler(serverStream, serverStream, BackchannelJsonSerializerContext.CreateRpcMessageFormatter());
-                var rpc = new JsonRpc(messageHandler, Target);
+                var messageHandler = new HeaderDelimitedMessageHandler(serverStream, serverStream);
+                var rpc = new JsonRpc(messageHandler, new JsonRpcOptions
+                {
+                    SerializerOptions = BackchannelJsonSerializerContext.CreateJsonSerializerOptions()
+                });
+                rpc.AddLocalRpcTarget(Target);
                 rpc.StartListening();
                 _disposables.Add(rpc);
                 _disposables.Add(messageHandler);
