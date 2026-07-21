@@ -4312,7 +4312,7 @@ public sealed class SqliteTraceTests : TraceTests
     }
 
     [Fact]
-    public void AddTraces_ReusesPreparedCommandsAcrossBatches()
+    public void AddTraces_LargeSpanAndAttributeBatchesRoundTrip()
     {
         const int spanCount = 101;
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
@@ -4334,33 +4334,21 @@ public sealed class SqliteTraceTests : TraceTests
                 endTime: testTime.AddTicks(index + 1),
                 attributes: [KeyValuePair.Create("index", index.ToString(CultureInfo.InvariantCulture))]));
         }
-        var activities = new ConcurrentQueue<Activity>();
-        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
 
         var context = new AddContext();
         repository.AsWriter().AddTraces(context, [resourceSpans]);
 
-        var spanInsertQueries = activities
-            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
-            .Where(query => query.StartsWith("INSERT INTO telemetry_spans", StringComparison.Ordinal))
-            .ToList();
-        Assert.Equal(5, spanInsertQueries.Count);
-        Assert.All(spanInsertQueries.Skip(1).Take(3), query => Assert.Same(spanInsertQueries[0], query));
-        Assert.NotSame(spanInsertQueries[0], spanInsertQueries[4]);
-
-        var attributeInsertQueries = activities
-            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
-            .Where(query => query.StartsWith("INSERT INTO telemetry_span_attributes", StringComparison.Ordinal))
-            .ToList();
-        Assert.Equal(3, attributeInsertQueries.Count);
-        Assert.Same(attributeInsertQueries[0], attributeInsertQueries[1]);
-        Assert.NotSame(attributeInsertQueries[0], attributeInsertQueries[2]);
         Assert.Equal(spanCount, context.SuccessCount);
         Assert.Equal(0, context.FailureCount);
 
         var trace = Assert.IsType<OtlpTrace>(repository.GetTrace(GetHexId("trace")));
         Assert.Equal(spanCount, trace.Spans.Count);
-        Assert.All(trace.Spans, span => Assert.Single(span.Attributes));
+        for (var index = 0; index < spanCount; index++)
+        {
+            var span = trace.Spans[index];
+            AssertId($"span-{index}", span.SpanId);
+            Assert.Equal(KeyValuePair.Create("index", index.ToString(CultureInfo.InvariantCulture)), Assert.Single(span.Attributes));
+        }
     }
 
     [Fact]

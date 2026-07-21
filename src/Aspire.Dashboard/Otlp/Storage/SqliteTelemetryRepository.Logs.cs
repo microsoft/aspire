@@ -7,6 +7,7 @@ using System.Text;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Utils;
 using Dapper;
 using Google.Protobuf.Collections;
 using Microsoft.Data.Sqlite;
@@ -176,28 +177,20 @@ public sealed partial class SqliteTelemetryRepository
         var attributes = logs
             .SelectMany((pendingLog, logIndex) => pendingLog.Log.Attributes.Select((attribute, ordinal) => (LogId: logIds[logIndex], Ordinal: ordinal, Attribute: attribute)))
             .ToArray();
-        foreach (var attributeBatch in attributes.Chunk(MaxLogAttributeBatchSize))
-        {
-            var sql = new StringBuilder("""
-                INSERT INTO telemetry_log_attributes (log_id, ordinal, attribute_key, attribute_value)
-                VALUES
-                """);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < attributeBatch.Length; index++)
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            attributes,
+            MaxLogAttributeBatchSize,
+            "telemetry_log_attributes",
+            ["log_id", "ordinal", "attribute_key", "attribute_value"],
+            static (row, parameters) =>
             {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@LogId{index}, @Ordinal{index}, @Key{index}, @Value{index})");
-                parameters.Add($"LogId{index}", attributeBatch[index].LogId);
-                parameters.Add($"Ordinal{index}", attributeBatch[index].Ordinal);
-                parameters.Add($"Key{index}", attributeBatch[index].Attribute.Key);
-                parameters.Add($"Value{index}", attributeBatch[index].Attribute.Value);
-            }
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
-        }
+                parameters[0].Value = row.LogId;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.Attribute.Key;
+                parameters[3].Value = row.Attribute.Value;
+            });
     }
 
     private static void MarkResourcesHaveLogs(SqliteConnection connection, IDbTransaction transaction, HashSet<CachedResource> resources)

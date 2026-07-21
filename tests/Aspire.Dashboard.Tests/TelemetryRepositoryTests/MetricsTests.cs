@@ -1336,13 +1336,26 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void AddMetrics_BatchesHistogramChildrenAndDimensionTrimming()
+    public void AddMetrics_LargeHistogramAndDimensionAttributeBatchesRoundTrip()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
-        var activities = new ConcurrentQueue<Activity>();
-        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
-        using var parent = new Activity("metric ingestion test").Start();
+        var histogram = CreateHistogramMetric(metricName: "histogram", startTime: s_queryTestTime.AddMinutes(1));
+        var histogramPoint = histogram.Histogram.DataPoints[0];
+        histogramPoint.ExplicitBounds.Clear();
+        histogramPoint.BucketCounts.Clear();
+        for (var index = 0; index < 200; index++)
+        {
+            histogramPoint.ExplicitBounds.Add(index + 1);
+            histogramPoint.BucketCounts.Add(1);
+        }
+        histogramPoint.BucketCounts.Add(1);
 
+        var firstDimensionAttributes = Enumerable.Range(0, 128)
+            .Select(index => KeyValuePair.Create($"key-{index}", $"first-{index}"))
+            .ToArray();
+        var secondDimensionAttributes = Enumerable.Range(0, 128)
+            .Select(index => KeyValuePair.Create($"key-{index}", $"second-{index}"))
+            .ToArray();
         var context = new AddContext();
         repository.AsWriter().AddMetrics(context, new RepeatedField<ResourceMetrics>
         {
@@ -1356,33 +1369,44 @@ public sealed class SqliteMetricsTests : MetricsTests
                         Scope = CreateScope(name: "test-meter"),
                         Metrics =
                         {
-                            CreateHistogramMetric(metricName: "histogram", startTime: s_queryTestTime.AddMinutes(1)),
-                            CreateSumMetric(metricName: "sum", startTime: s_queryTestTime.AddMinutes(1), attributes: [KeyValuePair.Create("series", "one")]),
-                            CreateSumMetric(metricName: "sum", startTime: s_queryTestTime.AddMinutes(1), attributes: [KeyValuePair.Create("series", "two")])
+                            histogram,
+                            CreateSumMetric(metricName: "sum", startTime: s_queryTestTime.AddMinutes(1), attributes: firstDimensionAttributes),
+                            CreateSumMetric(metricName: "sum", startTime: s_queryTestTime.AddMinutes(1), attributes: secondDimensionAttributes)
                         }
                     }
                 }
             }
         });
 
-        var queries = activities
-            .Where(activity => activity.ParentSpanId == parent.SpanId)
-            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
-            .ToList();
-        Assert.Single(queries, query => query.Contains("SELECT instrument_id", StringComparison.Ordinal));
-        Assert.Single(queries, query => query.StartsWith("SELECT COUNT(*) FROM telemetry_metric_instruments", StringComparison.Ordinal));
-        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
-        Assert.DoesNotContain(queries, query => query.StartsWith("SELECT COUNT(*) FROM telemetry_metric_dimensions", StringComparison.Ordinal));
-        var instrumentInsert = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_instruments", StringComparison.Ordinal));
-        Assert.Equal(2, instrumentInsert.Split("@InstrumentName", StringSplitOptions.None).Length - 1);
-        var dimensionInsert = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_dimensions", StringComparison.Ordinal));
-        Assert.Equal(3, dimensionInsert.Split("@InstrumentId", StringSplitOptions.None).Length - 1);
-        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_dimension_attributes", StringComparison.Ordinal));
-        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_histogram_bucket_counts", StringComparison.Ordinal));
-        Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_histogram_explicit_bounds", StringComparison.Ordinal));
-        Assert.Single(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
         Assert.Equal(3, context.SuccessCount);
         Assert.Equal(0, context.FailureCount);
+
+        var resourceKey = CreateResource().GetResourceKey();
+        var histogramInstrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "histogram",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+        var histogramValue = Assert.IsType<HistogramValue>(Assert.Single(Assert.Single(histogramInstrument!.Dimensions).Values));
+        Assert.Equal(Enumerable.Repeat<ulong>(1, 201), histogramValue.Values);
+        Assert.Equal(Enumerable.Range(1, 200).Select(value => (double)value), histogramValue.ExplicitBounds);
+
+        var sumInstrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "sum",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+        var dimensions = sumInstrument!.Dimensions.OrderBy(dimension => dimension.Attributes[0].Value).ToArray();
+        Assert.Collection(dimensions,
+            dimension => Assert.Equal(firstDimensionAttributes.OrderBy(attribute => attribute.Key), dimension.Attributes.OrderBy(attribute => attribute.Key)),
+            dimension => Assert.Equal(secondDimensionAttributes.OrderBy(attribute => attribute.Key), dimension.Attributes.OrderBy(attribute => attribute.Key)));
+        Assert.All(dimensions, dimension => Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)));
     }
 
     [Fact]

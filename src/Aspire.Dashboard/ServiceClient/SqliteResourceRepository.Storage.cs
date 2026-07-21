@@ -2,8 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Data;
-using System.Globalization;
-using System.Text;
+using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Dapper;
 using Google.Protobuf;
@@ -18,55 +17,40 @@ public sealed partial class SqliteResourceRepository
 
     private static void InsertResources(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<ResourceToSave> resources)
     {
-        foreach (var batch in resources.Chunk(MaxWriteBatchSize))
-        {
-            var sql = new StringBuilder("""
-                INSERT INTO dashboard_resources (
-                    resource_name, replica_index, resource_type, display_name, uid, state,
-                    created_at_seconds, created_at_nanos, state_style,
-                    started_at_seconds, started_at_nanos, stopped_at_seconds, stopped_at_nanos,
-                    is_hidden, supports_detailed_telemetry, icon_name, icon_variant, console_logs_loaded)
-                VALUES
-                """);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            resources,
+            MaxWriteBatchSize,
+            "dashboard_resources",
+            [
+                "resource_name", "replica_index", "resource_type", "display_name", "uid", "state",
+                "created_at_seconds", "created_at_nanos", "state_style",
+                "started_at_seconds", "started_at_nanos", "stopped_at_seconds", "stopped_at_nanos",
+                "is_hidden", "supports_detailed_telemetry", "icon_name", "icon_variant", "console_logs_loaded"
+            ],
+            static (resourceToSave, parameters) =>
             {
-                var resourceToSave = batch[index];
                 var resource = resourceToSave.Resource;
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-
-                sql.Append(CultureInfo.InvariantCulture, $"""
-                    (@Name{index}, @ReplicaIndex{index}, @ResourceType{index}, @DisplayName{index}, @Uid{index}, @State{index},
-                     @CreatedAtSeconds{index}, @CreatedAtNanos{index}, @StateStyle{index},
-                     @StartedAtSeconds{index}, @StartedAtNanos{index}, @StoppedAtSeconds{index}, @StoppedAtNanos{index},
-                     @IsHidden{index}, @SupportsDetailedTelemetry{index}, @IconName{index}, @IconVariant{index}, @ConsoleLogsLoaded{index})
-                    """);
-                parameters.Add($"Name{index}", resource.Name);
-                parameters.Add($"ReplicaIndex{index}", resourceToSave.ReplicaIndex);
-                parameters.Add($"ResourceType{index}", resource.ResourceType);
-                parameters.Add($"DisplayName{index}", resource.DisplayName);
-                parameters.Add($"Uid{index}", resource.Uid);
-                parameters.Add($"State{index}", resource.HasState ? resource.State : null);
-                parameters.Add($"CreatedAtSeconds{index}", resource.CreatedAt?.Seconds);
-                parameters.Add($"CreatedAtNanos{index}", resource.CreatedAt?.Nanos);
-                parameters.Add($"StateStyle{index}", resource.HasStateStyle ? resource.StateStyle : null);
-                parameters.Add($"StartedAtSeconds{index}", resource.StartedAt?.Seconds);
-                parameters.Add($"StartedAtNanos{index}", resource.StartedAt?.Nanos);
-                parameters.Add($"StoppedAtSeconds{index}", resource.StoppedAt?.Seconds);
-                parameters.Add($"StoppedAtNanos{index}", resource.StoppedAt?.Nanos);
-                parameters.Add($"IsHidden{index}", resource.IsHidden);
-                parameters.Add($"SupportsDetailedTelemetry{index}", resource.SupportsDetailedTelemetry);
-                parameters.Add($"IconName{index}", resource.HasIconName ? resource.IconName : null);
-                parameters.Add($"IconVariant{index}", resource.HasIconVariant ? (int?)resource.IconVariant : null);
-                parameters.Add($"ConsoleLogsLoaded{index}", resourceToSave.ConsoleLogsLoaded);
-            }
-
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
-        }
+                parameters[0].Value = resource.Name;
+                parameters[1].Value = resourceToSave.ReplicaIndex;
+                parameters[2].Value = resource.ResourceType;
+                parameters[3].Value = resource.DisplayName;
+                parameters[4].Value = resource.Uid;
+                parameters[5].Value = resource.HasState ? resource.State : DBNull.Value;
+                parameters[6].Value = resource.CreatedAt?.Seconds ?? (object)DBNull.Value;
+                parameters[7].Value = resource.CreatedAt?.Nanos ?? (object)DBNull.Value;
+                parameters[8].Value = resource.HasStateStyle ? resource.StateStyle : DBNull.Value;
+                parameters[9].Value = resource.StartedAt?.Seconds ?? (object)DBNull.Value;
+                parameters[10].Value = resource.StartedAt?.Nanos ?? (object)DBNull.Value;
+                parameters[11].Value = resource.StoppedAt?.Seconds ?? (object)DBNull.Value;
+                parameters[12].Value = resource.StoppedAt?.Nanos ?? (object)DBNull.Value;
+                parameters[13].Value = resource.IsHidden;
+                parameters[14].Value = resource.SupportsDetailedTelemetry;
+                parameters[15].Value = resource.HasIconName ? resource.IconName : DBNull.Value;
+                parameters[16].Value = resource.HasIconVariant ? (int)resource.IconVariant : DBNull.Value;
+                parameters[17].Value = resourceToSave.ConsoleLogsLoaded;
+            });
 
         var resourceModels = resources.Select(resource => resource.Resource).ToArray();
         InsertEnvironment(connection, transaction, resourceModels);
@@ -102,251 +86,261 @@ public sealed partial class SqliteResourceRepository
         string resourceName,
         IReadOnlyList<ConsoleLogToInsert> consoleLogs)
     {
-        foreach (var batch in consoleLogs.Chunk(MaxWriteBatchSize))
-        {
-            var sql = new StringBuilder("""
-                INSERT INTO console_logs (resource_name, line_number, content, is_stderr)
-                VALUES
-                """);
-            var parameters = new DynamicParameters();
-            parameters.Add("ResourceName", resourceName);
-            for (var index = 0; index < batch.Length; index++)
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            consoleLogs,
+            MaxWriteBatchSize,
+            "console_logs",
+            ["resource_name", "line_number", "content", "is_stderr"],
+            (consoleLog, parameters) =>
             {
-                var consoleLog = batch[index];
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-
-                sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName, @LineNumber{index}, @Content{index}, @IsStdErr{index})");
-                parameters.Add($"LineNumber{index}", consoleLog.LineNumber);
-                parameters.Add($"Content{index}", consoleLog.Content);
-                parameters.Add($"IsStdErr{index}", consoleLog.IsStdErr);
-            }
-
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
-        }
+                parameters[0].Value = resourceName;
+                parameters[1].Value = consoleLog.LineNumber;
+                parameters[2].Value = consoleLog.Content;
+                parameters[3].Value = consoleLog.IsStdErr;
+            });
     }
 
     private static void InsertEnvironment(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.Environment.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
-            INSERT INTO dashboard_resource_environment (resource_name, ordinal, name, value, is_from_spec)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Name{index}, @Value{index}, @IsFromSpec{index})");
-            parameters.Add($"ResourceName{index}", row.ResourceName);
-            parameters.Add($"Ordinal{index}", row.Ordinal);
-            parameters.Add($"Name{index}", row.Item.Name);
-            parameters.Add($"Value{index}", row.Item.HasValue ? row.Item.Value : null);
-            parameters.Add($"IsFromSpec{index}", row.Item.IsFromSpec);
-        });
+        var rows = resources
+            .SelectMany(resource => resource.Environment.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item)))
+            .ToArray();
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            rows,
+            MaxWriteBatchSize,
+            "dashboard_resource_environment",
+            ["resource_name", "ordinal", "name", "value", "is_from_spec"],
+            static (row, parameters) =>
+            {
+                parameters[0].Value = row.ResourceName;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.Item.Name;
+                parameters[3].Value = row.Item.HasValue ? row.Item.Value : DBNull.Value;
+                parameters[4].Value = row.Item.IsFromSpec;
+            });
     }
 
     private static void InsertUrls(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.Urls.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
-            INSERT INTO dashboard_resource_urls (
-                resource_name, ordinal, endpoint_name, full_url, is_internal, is_inactive, display_sort_order, display_name)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @EndpointName{index}, @FullUrl{index}, @IsInternal{index}, @IsInactive{index}, @DisplaySortOrder{index}, @DisplayName{index})");
-            parameters.Add($"ResourceName{index}", row.ResourceName);
-            parameters.Add($"Ordinal{index}", row.Ordinal);
-            parameters.Add($"EndpointName{index}", row.Item.HasEndpointName ? row.Item.EndpointName : null);
-            parameters.Add($"FullUrl{index}", row.Item.FullUrl);
-            parameters.Add($"IsInternal{index}", row.Item.IsInternal);
-            parameters.Add($"IsInactive{index}", row.Item.IsInactive);
-            parameters.Add($"DisplaySortOrder{index}", row.Item.DisplayProperties.SortOrder);
-            parameters.Add($"DisplayName{index}", row.Item.DisplayProperties.DisplayName);
-        });
+        var rows = resources
+            .SelectMany(resource => resource.Urls.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item)))
+            .ToArray();
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            rows,
+            MaxWriteBatchSize,
+            "dashboard_resource_urls",
+            ["resource_name", "ordinal", "endpoint_name", "full_url", "is_internal", "is_inactive", "display_sort_order", "display_name"],
+            static (row, parameters) =>
+            {
+                parameters[0].Value = row.ResourceName;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.Item.HasEndpointName ? row.Item.EndpointName : DBNull.Value;
+                parameters[3].Value = row.Item.FullUrl;
+                parameters[4].Value = row.Item.IsInternal;
+                parameters[5].Value = row.Item.IsInactive;
+                parameters[6].Value = row.Item.DisplayProperties.SortOrder;
+                parameters[7].Value = row.Item.DisplayProperties.DisplayName;
+            });
     }
 
     private static void InsertVolumes(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.Volumes.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
-            INSERT INTO dashboard_resource_volumes (resource_name, ordinal, source, target, mount_type, is_read_only)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Source{index}, @Target{index}, @MountType{index}, @IsReadOnly{index})");
-            parameters.Add($"ResourceName{index}", row.ResourceName);
-            parameters.Add($"Ordinal{index}", row.Ordinal);
-            parameters.Add($"Source{index}", row.Item.Source);
-            parameters.Add($"Target{index}", row.Item.Target);
-            parameters.Add($"MountType{index}", row.Item.MountType);
-            parameters.Add($"IsReadOnly{index}", row.Item.IsReadOnly);
-        });
+        var rows = resources
+            .SelectMany(resource => resource.Volumes.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item)))
+            .ToArray();
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            rows,
+            MaxWriteBatchSize,
+            "dashboard_resource_volumes",
+            ["resource_name", "ordinal", "source", "target", "mount_type", "is_read_only"],
+            static (row, parameters) =>
+            {
+                parameters[0].Value = row.ResourceName;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.Item.Source;
+                parameters[3].Value = row.Item.Target;
+                parameters[4].Value = row.Item.MountType;
+                parameters[5].Value = row.Item.IsReadOnly;
+            });
     }
 
     private static void InsertHealthReports(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.HealthReports.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
-            INSERT INTO dashboard_resource_health_reports (
-                resource_name, ordinal, status, key, description, exception, last_run_at_seconds, last_run_at_nanos)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Status{index}, @Key{index}, @Description{index}, @Exception{index}, @LastRunAtSeconds{index}, @LastRunAtNanos{index})");
-            parameters.Add($"ResourceName{index}", row.ResourceName);
-            parameters.Add($"Ordinal{index}", row.Ordinal);
-            parameters.Add($"Status{index}", row.Item.HasStatus ? (int?)row.Item.Status : null);
-            parameters.Add($"Key{index}", row.Item.Key);
-            parameters.Add($"Description{index}", row.Item.Description);
-            parameters.Add($"Exception{index}", row.Item.Exception);
-            parameters.Add($"LastRunAtSeconds{index}", row.Item.LastRunAt?.Seconds);
-            parameters.Add($"LastRunAtNanos{index}", row.Item.LastRunAt?.Nanos);
-        });
+        var rows = resources
+            .SelectMany(resource => resource.HealthReports.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item)))
+            .ToArray();
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            rows,
+            MaxWriteBatchSize,
+            "dashboard_resource_health_reports",
+            ["resource_name", "ordinal", "status", "key", "description", "exception", "last_run_at_seconds", "last_run_at_nanos"],
+            static (row, parameters) =>
+            {
+                parameters[0].Value = row.ResourceName;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.Item.HasStatus ? (int)row.Item.Status : DBNull.Value;
+                parameters[3].Value = row.Item.Key;
+                parameters[4].Value = row.Item.Description;
+                parameters[5].Value = row.Item.Exception;
+                parameters[6].Value = row.Item.LastRunAt?.Seconds ?? (object)DBNull.Value;
+                parameters[7].Value = row.Item.LastRunAt?.Nanos ?? (object)DBNull.Value;
+            });
     }
 
     private static void InsertRelationships(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<Resource> resources)
     {
-        ExecuteInsertBatches(connection, transaction, resources.SelectMany(resource => resource.Relationships.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item))), """
-            INSERT INTO dashboard_resource_relationships (
-                resource_name, ordinal, related_resource_name, relationship_type)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @RelatedResourceName{index}, @RelationshipType{index})");
-            parameters.Add($"ResourceName{index}", row.ResourceName);
-            parameters.Add($"Ordinal{index}", row.Ordinal);
-            parameters.Add($"RelatedResourceName{index}", row.Item.ResourceName);
-            parameters.Add($"RelationshipType{index}", row.Item.Type);
-        });
-    }
-
-    private static void ExecuteInsertBatches<T>(
-        SqliteConnection connection,
-        IDbTransaction transaction,
-        IEnumerable<T> rows,
-        string insertPrefix,
-        Action<StringBuilder, DynamicParameters, T, int> appendValues)
-    {
-        foreach (var batch in rows.Chunk(MaxWriteBatchSize))
-        {
-            var sql = new StringBuilder(insertPrefix);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
+        var rows = resources
+            .SelectMany(resource => resource.Relationships.Select((item, ordinal) => (ResourceName: resource.Name, Ordinal: ordinal, Item: item)))
+            .ToArray();
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            rows,
+            MaxWriteBatchSize,
+            "dashboard_resource_relationships",
+            ["resource_name", "ordinal", "related_resource_name", "relationship_type"],
+            static (row, parameters) =>
             {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-
-                appendValues(sql, parameters, batch[index], index);
-            }
-
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
-        }
+                parameters[0].Value = row.ResourceName;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.Item.ResourceName;
+                parameters[3].Value = row.Item.Type;
+            });
     }
 
     private static void InsertProperties(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<PropertyToSave> properties)
     {
-        ExecuteInsertBatches(connection, transaction, properties, """
-            INSERT INTO dashboard_resource_properties (
-                resource_name, ordinal, name, display_name, value, is_sensitive, is_highlighted, sort_order)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Name{index}, @DisplayName{index}, @Value{index}, @IsSensitive{index}, @IsHighlighted{index}, @SortOrder{index})");
-            parameters.Add($"ResourceName{index}", row.ResourceName);
-            parameters.Add($"Ordinal{index}", row.Ordinal);
-            parameters.Add($"Name{index}", row.Property.Name);
-            parameters.Add($"DisplayName{index}", row.Property.HasDisplayName ? row.Property.DisplayName : null);
-            parameters.Add($"Value{index}", JsonFormatter.Default.Format(row.Property.Value));
-            parameters.Add($"IsSensitive{index}", row.Property.HasIsSensitive ? (bool?)row.Property.IsSensitive : null);
-            parameters.Add($"IsHighlighted{index}", row.Property.IsHighlighted);
-            parameters.Add($"SortOrder{index}", row.Property.HasSortOrder ? (int?)row.Property.SortOrder : null);
-        });
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            properties,
+            MaxWriteBatchSize,
+            "dashboard_resource_properties",
+            ["resource_name", "ordinal", "name", "display_name", "value", "is_sensitive", "is_highlighted", "sort_order"],
+            static (row, parameters) =>
+            {
+                parameters[0].Value = row.ResourceName;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.Property.Name;
+                parameters[3].Value = row.Property.HasDisplayName ? row.Property.DisplayName : DBNull.Value;
+                parameters[4].Value = JsonFormatter.Default.Format(row.Property.Value);
+                parameters[5].Value = row.Property.HasIsSensitive ? row.Property.IsSensitive : DBNull.Value;
+                parameters[6].Value = row.Property.IsHighlighted;
+                parameters[7].Value = row.Property.HasSortOrder ? row.Property.SortOrder : DBNull.Value;
+            });
     }
 
     private static void InsertCommands(SqliteConnection connection, IDbTransaction transaction, IReadOnlyList<CommandToSave> commands)
     {
-        ExecuteInsertBatches(connection, transaction, commands, """
-            INSERT INTO dashboard_resource_commands (
-                resource_name, ordinal, name, display_name, confirmation_message, parameter_value,
-                is_highlighted, icon_name, icon_variant, display_description, state)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            var command = row.Command;
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @Ordinal{index}, @Name{index}, @DisplayName{index}, @ConfirmationMessage{index}, @ParameterValue{index}, @IsHighlighted{index}, @IconName{index}, @IconVariant{index}, @DisplayDescription{index}, @State{index})");
-            parameters.Add($"ResourceName{index}", row.ResourceName);
-            parameters.Add($"Ordinal{index}", row.Ordinal);
-            parameters.Add($"Name{index}", command.Name);
-            parameters.Add($"DisplayName{index}", command.DisplayName);
-            parameters.Add($"ConfirmationMessage{index}", command.HasConfirmationMessage ? command.ConfirmationMessage : null);
-            parameters.Add($"ParameterValue{index}", row.ParameterJsonValue);
-            parameters.Add($"IsHighlighted{index}", command.IsHighlighted);
-            parameters.Add($"IconName{index}", command.HasIconName ? command.IconName : null);
-            parameters.Add($"IconVariant{index}", command.HasIconVariant ? (int?)command.IconVariant : null);
-            parameters.Add($"DisplayDescription{index}", command.HasDisplayDescription ? command.DisplayDescription : null);
-            parameters.Add($"State{index}", (int)command.State);
-        });
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            commands,
+            MaxWriteBatchSize,
+            "dashboard_resource_commands",
+            [
+                "resource_name", "ordinal", "name", "display_name", "confirmation_message", "parameter_value",
+                "is_highlighted", "icon_name", "icon_variant", "display_description", "state"
+            ],
+            static (row, parameters) =>
+            {
+                var command = row.Command;
+                parameters[0].Value = row.ResourceName;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = command.Name;
+                parameters[3].Value = command.DisplayName;
+                parameters[4].Value = command.HasConfirmationMessage ? command.ConfirmationMessage : DBNull.Value;
+                parameters[5].Value = row.ParameterJsonValue ?? (object)DBNull.Value;
+                parameters[6].Value = command.IsHighlighted;
+                parameters[7].Value = command.HasIconName ? command.IconName : DBNull.Value;
+                parameters[8].Value = command.HasIconVariant ? (int)command.IconVariant : DBNull.Value;
+                parameters[9].Value = command.HasDisplayDescription ? command.DisplayDescription : DBNull.Value;
+                parameters[10].Value = (int)command.State;
+            });
 
         var inputs = commands.SelectMany(command => command.Command.ArgumentInputs.Select((input, ordinal) => (Command: command, Ordinal: ordinal, Input: input))).ToArray();
-        ExecuteInsertBatches(connection, transaction, inputs, """
-            INSERT INTO dashboard_resource_command_inputs (
-                resource_name, command_ordinal, ordinal, label, placeholder, input_type, required, value,
-                description, enable_description_markdown, max_length, allow_custom_choice, loading,
-                update_state_on_change, name, disabled, max_file_size, allow_multiple_files, file_filter)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            var input = row.Input;
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @CommandOrdinal{index}, @Ordinal{index}, @Label{index}, @Placeholder{index}, @InputType{index}, @Required{index}, @Value{index}, @Description{index}, @EnableDescriptionMarkdown{index}, @MaxLength{index}, @AllowCustomChoice{index}, @Loading{index}, @UpdateStateOnChange{index}, @Name{index}, @Disabled{index}, @MaxFileSize{index}, @AllowMultipleFiles{index}, @FileFilter{index})");
-            parameters.Add($"ResourceName{index}", row.Command.ResourceName);
-            parameters.Add($"CommandOrdinal{index}", row.Command.Ordinal);
-            parameters.Add($"Ordinal{index}", row.Ordinal);
-            parameters.Add($"Label{index}", input.Label);
-            parameters.Add($"Placeholder{index}", input.Placeholder);
-            parameters.Add($"InputType{index}", (int)input.InputType);
-            parameters.Add($"Required{index}", input.Required);
-            parameters.Add($"Value{index}", input.Value);
-            parameters.Add($"Description{index}", input.Description);
-            parameters.Add($"EnableDescriptionMarkdown{index}", input.EnableDescriptionMarkdown);
-            parameters.Add($"MaxLength{index}", input.MaxLength);
-            parameters.Add($"AllowCustomChoice{index}", input.AllowCustomChoice);
-            parameters.Add($"Loading{index}", input.Loading);
-            parameters.Add($"UpdateStateOnChange{index}", input.UpdateStateOnChange);
-            parameters.Add($"Name{index}", input.Name);
-            parameters.Add($"Disabled{index}", input.Disabled);
-            parameters.Add($"MaxFileSize{index}", input.MaxFileSize);
-            parameters.Add($"AllowMultipleFiles{index}", input.AllowMultipleFiles);
-            parameters.Add($"FileFilter{index}", input.FileFilter);
-        });
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            inputs,
+            MaxWriteBatchSize,
+            "dashboard_resource_command_inputs",
+            [
+                "resource_name", "command_ordinal", "ordinal", "label", "placeholder", "input_type", "required", "value",
+                "description", "enable_description_markdown", "max_length", "allow_custom_choice", "loading",
+                "update_state_on_change", "name", "disabled", "max_file_size", "allow_multiple_files", "file_filter"
+            ],
+            static (row, parameters) =>
+            {
+                var input = row.Input;
+                parameters[0].Value = row.Command.ResourceName;
+                parameters[1].Value = row.Command.Ordinal;
+                parameters[2].Value = row.Ordinal;
+                parameters[3].Value = input.Label;
+                parameters[4].Value = input.Placeholder;
+                parameters[5].Value = (int)input.InputType;
+                parameters[6].Value = input.Required;
+                parameters[7].Value = input.Value;
+                parameters[8].Value = input.Description;
+                parameters[9].Value = input.EnableDescriptionMarkdown;
+                parameters[10].Value = input.MaxLength;
+                parameters[11].Value = input.AllowCustomChoice;
+                parameters[12].Value = input.Loading;
+                parameters[13].Value = input.UpdateStateOnChange;
+                parameters[14].Value = input.Name;
+                parameters[15].Value = input.Disabled;
+                parameters[16].Value = input.MaxFileSize;
+                parameters[17].Value = input.AllowMultipleFiles;
+                parameters[18].Value = input.FileFilter;
+            });
 
-        ExecuteInsertBatches(connection, transaction, inputs.SelectMany(row => row.Input.Options.Select(option => (row.Command, InputOrdinal: row.Ordinal, Option: option))), """
-            INSERT INTO dashboard_resource_command_input_options (
-                resource_name, command_ordinal, input_ordinal, option_key, option_value)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @CommandOrdinal{index}, @InputOrdinal{index}, @OptionKey{index}, @OptionValue{index})");
-            parameters.Add($"ResourceName{index}", row.Command.ResourceName);
-            parameters.Add($"CommandOrdinal{index}", row.Command.Ordinal);
-            parameters.Add($"InputOrdinal{index}", row.InputOrdinal);
-            parameters.Add($"OptionKey{index}", row.Option.Key);
-            parameters.Add($"OptionValue{index}", row.Option.Value);
-        });
+        var options = inputs
+            .SelectMany(row => row.Input.Options.Select(option => (row.Command, InputOrdinal: row.Ordinal, Option: option)))
+            .ToArray();
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            options,
+            MaxWriteBatchSize,
+            "dashboard_resource_command_input_options",
+            ["resource_name", "command_ordinal", "input_ordinal", "option_key", "option_value"],
+            static (row, parameters) =>
+            {
+                parameters[0].Value = row.Command.ResourceName;
+                parameters[1].Value = row.Command.Ordinal;
+                parameters[2].Value = row.InputOrdinal;
+                parameters[3].Value = row.Option.Key;
+                parameters[4].Value = row.Option.Value;
+            });
 
-        ExecuteInsertBatches(connection, transaction, inputs.SelectMany(row => row.Input.ValidationErrors.Select((validationError, ordinal) => (row.Command, InputOrdinal: row.Ordinal, Ordinal: ordinal, ValidationError: validationError))), """
-            INSERT INTO dashboard_resource_command_input_validation_errors (
-                resource_name, command_ordinal, input_ordinal, ordinal, validation_error)
-            VALUES
-            """, static (sql, parameters, row, index) =>
-        {
-            sql.Append(CultureInfo.InvariantCulture, $"(@ResourceName{index}, @CommandOrdinal{index}, @InputOrdinal{index}, @Ordinal{index}, @ValidationError{index})");
-            parameters.Add($"ResourceName{index}", row.Command.ResourceName);
-            parameters.Add($"CommandOrdinal{index}", row.Command.Ordinal);
-            parameters.Add($"InputOrdinal{index}", row.InputOrdinal);
-            parameters.Add($"Ordinal{index}", row.Ordinal);
-            parameters.Add($"ValidationError{index}", row.ValidationError);
-        });
+        var validationErrors = inputs
+            .SelectMany(row => row.Input.ValidationErrors.Select((validationError, ordinal) => (row.Command, InputOrdinal: row.Ordinal, Ordinal: ordinal, ValidationError: validationError)))
+            .ToArray();
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            validationErrors,
+            MaxWriteBatchSize,
+            "dashboard_resource_command_input_validation_errors",
+            ["resource_name", "command_ordinal", "input_ordinal", "ordinal", "validation_error"],
+            static (row, parameters) =>
+            {
+                parameters[0].Value = row.Command.ResourceName;
+                parameters[1].Value = row.Command.Ordinal;
+                parameters[2].Value = row.InputOrdinal;
+                parameters[3].Value = row.Ordinal;
+                parameters[4].Value = row.ValidationError;
+            });
     }
 
     private static IEnumerable<StoredResource> LoadResourceRecords(SqliteConnection connection)

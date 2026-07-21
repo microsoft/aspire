@@ -5,6 +5,7 @@ using System.Data;
 using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Utils;
 using Dapper;
 using Google.Protobuf.Collections;
 using Microsoft.Data.Sqlite;
@@ -16,6 +17,7 @@ namespace Aspire.Dashboard.Otlp.Storage;
 public sealed partial class SqliteTelemetryRepository
 {
     private const int MaxInstrumentBatchSize = 100;
+    private const int MaxMetadataAttributeBatchSize = 200;
 
     private readonly object _cacheLock = new();
     private readonly Dictionary<ResourceKey, CachedResource> _cachedResourcesByKey = [];
@@ -146,16 +148,23 @@ public sealed partial class SqliteTelemetryRepository
                     VALUES (@ResourceId)
                     RETURNING resource_view_id;
                     """, new { resource.ResourceId }, transaction);
-                connection.Execute("""
-                    INSERT INTO telemetry_resource_view_attributes (resource_view_id, ordinal, attribute_key, attribute_value)
-                    VALUES (@ResourceViewId, @Ordinal, @Key, @Value);
-                    """, incomingView.Properties.Select((property, ordinal) => new
-                {
-                    ResourceViewId = resourceViewId.Value,
-                    Ordinal = ordinal,
-                    property.Key,
-                    property.Value
-                }), transaction);
+                var properties = incomingView.Properties
+                    .Select((property, ordinal) => (Ordinal: ordinal, property.Key, property.Value))
+                    .ToArray();
+                SqliteBatchInsert.BatchInsertRows(
+                    connection,
+                    transaction,
+                    properties,
+                    MaxMetadataAttributeBatchSize,
+                    "telemetry_resource_view_attributes",
+                    ["resource_view_id", "ordinal", "attribute_key", "attribute_value"],
+                    (property, parameters) =>
+                    {
+                        parameters[0].Value = resourceViewId.Value;
+                        parameters[1].Value = property.Ordinal;
+                        parameters[2].Value = property.Key;
+                        parameters[3].Value = property.Value;
+                    });
             }
 
             return AddCachedResourceView(resource, resourceViewId.Value, incomingView.Properties);
@@ -215,16 +224,23 @@ public sealed partial class SqliteTelemetryRepository
                         VALUES (@ScopeName, @ScopeVersion)
                         RETURNING scope_id;
                         """, new { ScopeName = incomingScope.Name, ScopeVersion = incomingScope.Version }, transaction);
-                    connection.Execute("""
-                        INSERT INTO telemetry_scope_attributes (scope_id, ordinal, attribute_key, attribute_value)
-                        VALUES (@ScopeId, @Ordinal, @Key, @Value);
-                        """, incomingScope.Attributes.Select((attribute, ordinal) => new
-                    {
-                        ScopeId = scopeId,
-                        Ordinal = ordinal,
-                        attribute.Key,
-                        attribute.Value
-                    }), transaction);
+                    var attributes = incomingScope.Attributes
+                        .Select((attribute, ordinal) => (Ordinal: ordinal, attribute.Key, attribute.Value))
+                        .ToArray();
+                    SqliteBatchInsert.BatchInsertRows(
+                        connection,
+                        transaction,
+                        attributes,
+                        MaxMetadataAttributeBatchSize,
+                        "telemetry_scope_attributes",
+                        ["scope_id", "ordinal", "attribute_key", "attribute_value"],
+                        (attribute, parameters) =>
+                        {
+                            parameters[0].Value = scopeId;
+                            parameters[1].Value = attribute.Ordinal;
+                            parameters[2].Value = attribute.Key;
+                            parameters[3].Value = attribute.Value;
+                        });
                     cachedScope = GetOrAddCachedScope(scopeId, incomingScope.Name, incomingScope.Version, incomingScope.Attributes);
                 }
             }
