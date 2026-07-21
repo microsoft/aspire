@@ -430,9 +430,12 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         var registry = builder.AddAzureContainerRegistry("registry")
             .PublishAsExisting("myacr", "my-existing-resource-group");
 
-        builder.AddAzureContainerAppEnvironment("env1")
+        // Use letter-distinct environment names. The ACA managed environment name keeps only letters
+        // (digits are stripped), so names differing only by a digit (e.g. env1/env2) resolve to the same
+        // managed environment name within one resource group and trip ValidateManagedEnvironmentNames.
+        builder.AddAzureContainerAppEnvironment("east")
             .WithAzureContainerRegistry(registry);
-        builder.AddAzureContainerAppEnvironment("env2")
+        builder.AddAzureContainerAppEnvironment("west")
             .WithAzureContainerRegistry(registry);
 
         using var app = builder.Build();
@@ -442,15 +445,15 @@ public class AzureContainerAppEnvironmentExtensionsTests(ITestOutputHelper outpu
         var model = app.Services.GetRequiredService<DistributedApplicationModel>();
 
         // Each environment promotes its own standalone identity, disambiguated by the environment's (model-unique) name.
-        var identity1 = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "env1-mi");
-        var identity2 = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "env2-mi");
-        Assert.NotSame(identity1, identity2);
+        var identityEast = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "east-mi");
+        var identityWest = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "west-mi");
+        Assert.NotSame(identityEast, identityWest);
 
         // Each environment gets its own AcrPull role module scoped to the shared registry, so the two grants never collide.
-        var roles1 = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), resource => resource.Name == "env1-mi-roles-registry");
-        var roles2 = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), resource => resource.Name == "env2-mi-roles-registry");
-        Assert.Same(registry.Resource, roles1.TargetAzureResource);
-        Assert.Same(registry.Resource, roles2.TargetAzureResource);
+        var rolesEast = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), resource => resource.Name == "east-mi-roles-registry");
+        var rolesWest = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), resource => resource.Name == "west-mi-roles-registry");
+        Assert.Same(registry.Resource, rolesEast.TargetAzureResource);
+        Assert.Same(registry.Resource, rolesWest.TargetAzureResource);
     }
 
     [Fact]
