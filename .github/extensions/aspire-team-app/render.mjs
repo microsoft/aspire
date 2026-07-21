@@ -856,6 +856,12 @@ async function readJson(res) {
 }
 
 async function load() {
+  // Capture the applied revision at request start. GET /api/state may be served stale-while-
+  // revalidate and can still be in flight when an SSE 'state' event (applyPushedState) applies a
+  // newer snapshot. If the GET then fails, publishing its error would paint a failure banner over
+  // that newer valid state. Suppress the failure when a newer revision was applied after this
+  // request started (the withRefresh catch gates the same class of race with its refreshGen id).
+  const startSeq = lastAppliedSeq;
   try {
     const res = await fetch("api/state");
     const data = await readJson(res);
@@ -869,7 +875,11 @@ async function load() {
       adoptAppliedRev();
     }
   } catch (e) {
-    loadError = String((e && e.message) || e);
+    // Only publish this failure if no newer revision was applied while the GET was pending. A late
+    // failure from a superseded request must not clobber the newer valid state (or its banner).
+    if (lastAppliedSeq === startSeq) {
+      loadError = String((e && e.message) || e);
+    }
   }
   render();
 }

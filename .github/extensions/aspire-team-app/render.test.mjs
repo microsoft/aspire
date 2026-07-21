@@ -208,6 +208,29 @@ test("load ignores a stale GET /api/state response so it can't rewind lastApplie
   assert.equal(api.getAppliedSeq(), 5);
 });
 
+test("load suppresses its failure when a newer revision was applied while the GET was pending", async () => {
+  // A GET served stale-while-revalidate can still be in flight when an SSE 'state' event applies a
+  // newer snapshot (advancing lastAppliedSeq). Model that: this load()'s fetch stays pending until we
+  // reject it, and in between a newer snapshot lands via withRefresh. The late GET failure must not
+  // paint an error banner over the newer valid state.
+  let rejectFetch;
+  const { api } = createRendererHarness({ fetch: () => new Promise((_, reject) => { rejectFetch = reject; }) });
+  api.setLoadError(null);
+
+  // Start the GET; its fetch stays pending (rejectFetch now targets this call, not the module-init one).
+  const pending = api.load();
+
+  // A newer snapshot lands while the GET is pending, advancing lastAppliedSeq past load()'s start seq.
+  await api.withRefresh(async () => ({ dashboard: { seq: 12, marker: "fresh", authenticated: false, accounts: [], message: "" }, prefs: {} }));
+  assert.equal(api.getAppliedSeq(), 12);
+
+  // The GET now fails, but its error is suppressed because a newer revision was applied since it began.
+  rejectFetch(new Error("stale GET blip"));
+  await pending;
+  assert.equal(api.getLoadError(), null);
+  assert.equal(api.getState().marker, "fresh");
+});
+
 test("onCardAction re-renders when an SSE refresh detached the card mid-request so the visible button isn't stuck disabled", async () => {
   // The action POST resolves; api/state stays pending so the module-init load() can't render mid-test
   // and pollute the assertions below.

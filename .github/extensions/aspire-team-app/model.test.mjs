@@ -144,6 +144,22 @@ test("computeFocusItems keeps the highest-priority lane per PR and excludes CI-f
   assert.equal(focus[0].bucketLabel, "Ready to merge");
 });
 
+test("computeFocusItems keys focus identity by host so same-slug PRs on different hosts stay distinct", () => {
+  // The loader aggregates accounts across github.com and GHES/EMU, where the same owner/repo slug and
+  // PR number can both exist as two different PRs. Without the host in the focus identity, byPr would
+  // collapse them into a single card (and a disqualifying bucket on one host would block the other).
+  const comPr = makePr({ number: 500, url: "https://github.com/microsoft/aspire/pull/500", updatedAt: isoAgo(dayMs) });
+  const ghePr = makePr({ number: 500, url: "https://ghe.example.com/microsoft/aspire/pull/500", updatedAt: isoAgo(dayMs) });
+
+  const focus = computeFocusItems([bucketWith("Needs review", comPr, ghePr)]);
+
+  const urls = focus.map((i) => i.pullRequest.url).sort();
+  assert.deepEqual(urls, [
+    "https://ghe.example.com/microsoft/aspire/pull/500",
+    "https://github.com/microsoft/aspire/pull/500",
+  ]);
+});
+
 test("computeFocusItems retains review-debt PRs through the full createAttentionBuckets pipeline", () => {
   // Fresh unreviewed PR: comfortably within the focus window.
   const fresh = makePr({ number: 40, updatedAt: isoAgo(dayMs) });

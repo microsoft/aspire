@@ -735,8 +735,25 @@ const focusBucketRanks = new Map([
 function focusBucketRank(label) {
   return focusBucketRanks.has(label) ? focusBucketRanks.get(label) : Number.MAX_SAFE_INTEGER;
 }
+// The same owner/repo slug and PR number can exist on github.com and a GHES/EMU host at once (the
+// loader aggregates accounts across hosts, which is why github.mjs keys repo success/errors per
+// host too). Derive the host from the canonical PR url so the focus identity distinguishes them;
+// without it byPr would collapse two different PRs into one card and a disqualifying bucket on one
+// host would block the other host's PR. Fall back to "" when the url is absent or unparseable so
+// github.com-only data (and fixtures without a url) key exactly as before.
+function prHost(pr) {
+  const url = pr && pr.url;
+  if (typeof url !== "string" || url === "") {
+    return "";
+  }
+  try {
+    return new URL(url).host;
+  } catch {
+    return "";
+  }
+}
 function prKey(pr) {
-  return `${pr.repository.toLowerCase()}#${pr.number}`;
+  return `${prHost(pr)}\n${pr.repository.toLowerCase()}#${pr.number}`;
 }
 
 export function computeFocusItems(buckets) {
