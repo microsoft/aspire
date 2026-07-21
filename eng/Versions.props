@@ -71,7 +71,7 @@
        Versions must be available on the dnceng dotnet-public mirror (originally published to nuget.org). -->
   <PropertyGroup Label="BlazorAssets">
     <MicrosoftAspNetCoreAppInternalAssetsNet10Version>10.0.8</MicrosoftAspNetCoreAppInternalAssetsNet10Version>
-    <MicrosoftAspNetCoreAppInternalAssetsNet11Version>11.0.0-preview.5.26302.115</MicrosoftAspNetCoreAppInternalAssetsNet11Version>
+    <MicrosoftAspNetCoreAppInternalAssetsNet11Version>11.0.0-preview.6.26359.118</MicrosoftAspNetCoreAppInternalAssetsNet11Version>
   </PropertyGroup>
   <!-- .NET 11.0 Package Versions used by project templates -->
   <PropertyGroup Label="Net11Preview">
