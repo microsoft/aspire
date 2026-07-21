@@ -278,6 +278,34 @@ test("onCardAction retry inside the failure-restore window starts clean and isn'
   assert.ok(!cls.has("failed"));
 });
 
+test("setProgress doesn't fade the bar from a terminal SSE tick while another refresh is still in flight", () => {
+  // The harness runs setTimeout synchronously, so endProgress()'s fade + reset run inline: a faded
+  // bar ends with "active" removed and width "0". A non-faded bar stays "active" at width "100%".
+  const cls = new Set();
+  const loadbar = {
+    style: { width: "" },
+    classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c) },
+  };
+  const { api } = createRendererHarness({ loadbar });
+  cls.clear();
+  loadbar.style.width = "";
+
+  // Two overlapping withRefresh() calls in flight: the first compute's terminal tick must NOT fade
+  // the bar while the second is still fetching (the counter's "last operation settles" invariant).
+  api.setRefreshInFlight(2);
+  api.setProgress(1, 1);
+  assert.ok(cls.has("active"), "bar must stay active while a second refresh is still in flight");
+  assert.equal(loadbar.style.width, "100%");
+
+  // Once only the last refresh remains, its terminal tick completes and fades the bar.
+  cls.clear();
+  loadbar.style.width = "";
+  api.setRefreshInFlight(1);
+  api.setProgress(1, 1);
+  assert.ok(!cls.has("active"), "the last refresh's terminal tick should fade the bar");
+  assert.equal(loadbar.style.width, "0");
+});
+
 function createRendererHarness(overrides = {}) {
   const app = {
     innerHTML: "",
@@ -285,7 +313,7 @@ function createRendererHarness(overrides = {}) {
     classList: classList(),
   };
   const document = {
-    getElementById(id) { return id === "app" ? app : null; },
+    getElementById(id) { return id === "app" ? app : (id === "loadbar" ? (overrides.loadbar ?? null) : null); },
     querySelector: overrides.querySelector ?? (() => null),
     querySelectorAll: () => [],
     addEventListener() {},
@@ -303,7 +331,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  onCardAction,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  onCardAction,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }

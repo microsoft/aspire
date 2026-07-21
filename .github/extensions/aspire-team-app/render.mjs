@@ -925,7 +925,12 @@ function setProgress(done, total) {
   beginProgress();
   const pct = total > 0 ? Math.max(8, Math.min(100, Math.round((done / total) * 100))) : 8;
   loadbar.style.width = pct + "%";
-  if (total > 0 && done >= total) endProgress();
+  // Only fade on a terminal tick when this is the last in-flight refresh. Forced computes are
+  // serialized server-side, so when two withRefresh() calls overlap the FIRST compute emits its
+  // done>=total tick while the second is still fetching; fading here would bypass the counter's
+  // "last operation settles" invariant and flicker the bar back on at the second compute's first
+  // tick. withRefresh's finally (endProgress at refreshInFlight === 0) remains the backstop.
+  if (total > 0 && done >= total && refreshInFlight <= 1) { endProgress(); }
 }
 function endProgress() {
   if (!loadbar) return;
