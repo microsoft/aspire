@@ -221,6 +221,63 @@ test("onCardAction re-renders when an SSE refresh detached the card mid-request 
   assert.equal(app.innerHTML, "");
 });
 
+test("onCardAction retry inside the failure-restore window starts clean and isn't clobbered by the stale timer", async () => {
+  // Controllable timers: the harness default runs setTimeout synchronously, which would close the
+  // ~3.2s failure-restore window instantly. Capture callbacks so we fire them on demand instead.
+  const timers = new Map();
+  let nextId = 1;
+  const setTimeoutMock = (handler) => { const id = nextId++; timers.set(id, handler); return id; };
+  const clearTimeoutMock = (id) => { timers.delete(id); };
+
+  // First action POST fails (500 -> readJson throws); the retry succeeds. api/state stays pending so
+  // the module-init load() can't render mid-test and pollute the assertions.
+  let actionCalls = 0;
+  const fetchMock = async (path) => {
+    if (!String(path).includes("api/agent/action")) return new Promise(() => {});
+    actionCalls += 1;
+    return actionCalls === 1
+      ? jsonResponse({ error: "boom" }, { ok: false, status: 500 })
+      : jsonResponse({ queued: false, target: "new-session" });
+  };
+
+  const { api } = createRendererHarness({ fetch: fetchMock, setTimeout: setTimeoutMock, clearTimeout: clearTimeoutMock });
+
+  // One stable split/button reused across both clicks (the same still-connected card being retried).
+  const cls = new Set();
+  const defaultLabel = '<span class="cb-label">Start review</span>';
+  const main = {
+    disabled: false,
+    innerHTML: defaultLabel,
+    classList: { add: (c) => cls.add(c), remove: (c) => cls.delete(c), contains: (c) => cls.has(c) },
+  };
+  const split = {
+    isConnected: true,
+    dataset: { kind: "review", prUrl: "https://github.com/o/r/pull/1", prRepo: "o/r", prNumber: "1" },
+    querySelector: (sel) => (sel === ".cb-main" ? main : null),
+  };
+  // Drop any timers scheduled during module init so `timers` holds only what the actions schedule.
+  timers.clear();
+
+  // First attempt fails: the button shows the error, is re-enabled, and schedules a restore timer.
+  await api.onCardAction(split, "new-session");
+  assert.ok(cls.has("failed"), "first failure should mark the button .failed");
+  assert.equal(main.disabled, false, "failed button is re-enabled so it can be retried");
+  assert.match(main.innerHTML, /boom/);
+  assert.equal(timers.size, 1, "a restore timer should be pending after the failure");
+
+  // Retry inside the window succeeds. It must start from a clean slate: no inherited .failed styling.
+  await api.onCardAction(split, "new-session");
+  assert.ok(cls.has("done"), "retry success should mark the button .done");
+  assert.ok(!cls.has("failed"), "retry must not inherit the prior attempt's failure styling");
+  assert.match(main.innerHTML, /Requested/);
+
+  // The stale first timer must have been cancelled; firing whatever remains must not revert the
+  // retry's success label back to the default.
+  for (const cb of timers.values()) { cb(); }
+  assert.match(main.innerHTML, /Requested/, "a stale restore timer must not overwrite the retry's label");
+  assert.ok(!cls.has("failed"));
+});
+
 function createRendererHarness(overrides = {}) {
   const app = {
     innerHTML: "",

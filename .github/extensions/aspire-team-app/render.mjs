@@ -1005,6 +1005,18 @@ async function onCardAction(split, target) {
       author: d.prAuthor,
     },
   };
+  // If a prior attempt failed, the button was re-enabled immediately but still shows the failure
+  // label under a pending ~3.2s restore timer (see the catch below). A retry that lands inside that
+  // window would otherwise (a) inherit the .failed styling, (b) capture the failure HTML as its
+  // "original" so a later restore reverts to the wrong text, and (c) have its own outcome label
+  // clobbered when the stale timer fires mid-flight. Cancel that timer and restore the default label
+  // now so this attempt starts from a clean slate.
+  if (mainBtn._cbRestore) {
+    clearTimeout(mainBtn._cbRestore.timer);
+    mainBtn.classList.remove("failed");
+    mainBtn.innerHTML = mainBtn._cbRestore.original;
+    mainBtn._cbRestore = null;
+  }
   const original = mainBtn.innerHTML;
   mainBtn.classList.add("busy");
   mainBtn.disabled = true;
@@ -1031,8 +1043,13 @@ async function onCardAction(split, target) {
     mainBtn.disabled = false;
     if (caret) caret.disabled = false;
     mainBtn.innerHTML = '<span class="cb-ico">' + ICONS.x + '</span><span class="cb-label">' + esc(String((e && e.message) || "Failed")) + "</span>";
-    // Restore the original label after a beat so the user can retry.
-    setTimeout(() => { mainBtn.classList.remove("failed"); mainBtn.innerHTML = original; }, 3200);
+    // Restore the original label after a beat so the user can retry. Track the timer + original on
+    // the element so a retry landing inside this window can cancel it (see the top of this function)
+    // instead of letting a stale timer overwrite the retry's outcome label.
+    mainBtn._cbRestore = {
+      original,
+      timer: setTimeout(() => { mainBtn.classList.remove("failed"); mainBtn.innerHTML = original; mainBtn._cbRestore = null; }, 3200),
+    };
   } finally {
     // Clear the pending key once the request settles. The button keeps its own done/failed
     // state; a subsequent SSE re-render restores the default (now re-enabled) button.
