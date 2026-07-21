@@ -15,7 +15,22 @@ internal sealed class SkillBundleManifest
 
     public SkillBundleSupports? Supports { get; init; }
 
-    public SkillBundleSkill[] Skills { get; init; } = [];
+    public SkillBundleAsset[] Assets { get; init; } = [];
+}
+
+/// <summary>
+/// Describes the JSON shape for a published Aspire agent assets bundle.
+/// </summary>
+internal sealed class SkillBundleManifestJson
+{
+    public string? Version { get; init; }
+
+    public SkillBundleSupports? Supports { get; init; }
+
+    public SkillBundleAsset[]? Skills { get; init; }
+
+    public SkillBundleAsset[]? Extensions { get; init; }
+
 }
 
 /// <summary>
@@ -29,9 +44,9 @@ internal sealed class SkillBundleSupports
 }
 
 /// <summary>
-/// Describes a single skill in an Aspire skills bundle.
+/// Describes a single asset in an Aspire skills bundle.
 /// </summary>
-internal sealed class SkillBundleSkill
+internal sealed class SkillBundleAsset
 {
     public string? Name { get; init; }
 
@@ -78,7 +93,9 @@ internal sealed class EmbeddedAspireSkillsBundleMetadata
     ReadCommentHandling = JsonCommentHandling.Skip,
     PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase,
     PropertyNameCaseInsensitive = true)]
-[JsonSerializable(typeof(SkillBundleManifest))]
+[JsonSerializable(typeof(SkillBundleManifestJson))]
+[JsonSerializable(typeof(SkillBundleSupports))]
+[JsonSerializable(typeof(SkillBundleAsset[]))]
 [JsonSerializable(typeof(EmbeddedAspireSkillsBundleMetadata))]
 internal sealed partial class AspireSkillsJsonSerializerContext : JsonSerializerContext
 {

@@ -94,6 +94,8 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         Options.Add(s_suppressAgentInitOption);
         Options.Add(AgentInitCommand.s_skillLocationsOption);
         Options.Add(AgentInitCommand.s_skillsOption);
+        Options.Add(AgentInitCommand.s_extensionLocationsOption);
+        Options.Add(AgentInitCommand.s_extensionsOption);
 
         // Customize description based on whether staging channel is enabled
         var isStagingEnabled = KnownFeatures.IsStagingChannelEnabled(services.Features, configuration)
@@ -527,9 +529,11 @@ internal sealed class NewCommand : BaseCommand, IPackageMetaPrefetchingCommand
         var agentInitBinding = PromptBinding.CreateInvertedBoolConfirm(parseResult, s_suppressAgentInitOption, defaultValue: true);
         var skillLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillLocationsOption);
         var skillsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_skillsOption);
+        var extensionLocationsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionLocationsOption);
+        var extensionsBinding = PromptBinding.Create(parseResult, AgentInitCommand.s_extensionsOption);
         // The template already produced the AppHost, so don't pre-select the one-time aspireify
         // wiring skill — users can still opt into it from the prompt.
-        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, skillLocationsBinding, skillsBinding, AgentInitCommand.ExcludeOneTimeSetupSkillsFromDefaults, cancellationToken);
+        var agentInitResult = await _agentInitCommand.PromptAndChainAsync(InteractionService, templateResult.ExitCode, workspaceRoot, agentInitBinding, skillLocationsBinding, skillsBinding, extensionLocationsBinding, extensionsBinding, AgentInitCommand.ExcludeOneTimeSetupAgentAssetsFromDefaults, cancellationToken);
 
         if (templateResult.OutputPath is not null && ExtensionHelper.IsExtensionHost(InteractionService, out var extensionInteractionService, out _))
         {

@@ -493,13 +493,13 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             var items = choices.Cast<object>().ToList();
 
-            if (items.FirstOrDefault() is SkillLocation)
+            if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [SkillLocation.Standard, SkillLocation.ClaudeCode, SkillLocation.OpenCode];
+                return [AgentAssetLocation.StandardSkills, AgentAssetLocation.ClaudeCode, AgentAssetLocation.OpenCode];
             }
 
             return items
-                .OfType<SkillDefinition>()
+                .OfType<AgentAssetDefinition>()
                 .Where(static skill => skill.HasName(CommonAgentApplicators.AspireifySkillName))
                 .Cast<object>()
                 .ToList();
@@ -541,13 +541,13 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
         {
             var items = choices.Cast<object>().ToList();
 
-            if (items.FirstOrDefault() is SkillLocation)
+            if (items.FirstOrDefault() is AgentAssetLocation)
             {
-                return [SkillLocation.Standard];
+                return [AgentAssetLocation.StandardSkills];
             }
 
             return items
-                .OfType<SkillDefinition>()
+                .OfType<AgentAssetDefinition>()
                 .Where(static skill => skill.HasName(CommonAgentApplicators.AspireSkillName))
                 .Cast<object>()
                 .ToList();
@@ -594,7 +594,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_NonInteractive_WithSkillLocationsNone_DoesNotInstallAgentSkills()
+    public async Task InitCommand_NonInteractive_WithAgentAssetLocationsNone_DoesNotInstallAgentSkills()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
@@ -614,7 +614,7 @@ public class InitCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task InitCommand_NonInteractive_WithSkillLocationsAndSkills_InstallsOnlySpecifiedSkills()
+    public async Task InitCommand_NonInteractive_WithAgentAssetLocationsAndSkills_InstallsOnlySpecifiedSkills()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 

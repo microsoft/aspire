@@ -107,6 +107,26 @@
         <target state="needs-review-translation">管理 AI Agent 整合。</target>
         <note />
       </trans-unit>
+      <trans-unit id="ExtensionLocation_StandardDescription">
+        <source>Supported by GitHub Copilot CLI (also installs at ~/.copilot/extensions/)</source>
+        <target state="new">Supported by GitHub Copilot CLI (also installs at ~/.copilot/extensions/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ExtensionLocation_StandardName">
+        <source>GitHub Copilot extensions (.github/extensions/)</source>
+        <target state="new">GitHub Copilot extensions (.github/extensions/)</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AssetLocationsOptionDescription">
+        <source>Comma-separated list of agent asset locations to install (e.g. {0}), '{1}', or '{2}'</source>
+        <target state="new">Comma-separated list of agent asset locations to install (e.g. {0}), '{1}', or '{2}'</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_AssetsOptionDescription">
+        <source>Comma-separated list of agent assets to install. Bundle assets are loaded dynamically; CLI-provided assets include {0}. Use '{1}' or '{2}'</source>
+        <target state="new">Comma-separated list of agent assets to install. Bundle assets are loaded dynamically; CLI-provided assets include {0}. Use '{1}' or '{2}'</target>
+        <note />
+      </trans-unit>
       <trans-unit id="InitCommand_ConfigureMcpServer">
         <source>Install Aspire MCP server</source>
         <target state="new">Install Aspire MCP server</target>
@@ -123,8 +143,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_FailedToInstallSkill">
-        <source>Failed to install {0} skill at {1}: {2}</source>
-        <target state="new">Failed to install {0} skill at {1}: {2}</target>
+        <source>Failed to install {0} agent asset at {1}: {2}</source>
+        <target state="new">Failed to install {0} agent asset at {1}: {2}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledPlaywrightCli">
@@ -133,8 +153,8 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummary">
-        <source>Installed Aspire agent skills:</source>
-        <target state="new">Installed Aspire agent skills:</target>
+        <source>Installed Aspire agent assets:</source>
+        <target state="new">Installed Aspire agent assets:</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummaryLocations">
@@ -143,13 +163,23 @@
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_InstalledSkillsSummarySkills">
-        <source>Skills: {0}</source>
-        <target state="new">Skills: {0}</target>
+        <source>Assets: {0}</source>
+        <target state="new">Assets: {0}</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_PlaywrightCliSkipped">
         <source>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</source>
         <target state="new">Playwright CLI requires npm, which was not found on PATH. Skipping installation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectExtensionLocations">
+        <source>Where should extension files be installed?</source>
+        <target state="new">Where should extension files be installed?</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="InitCommand_SelectExtensions">
+        <source>Which extensions should be installed?</source>
+        <target state="new">Which extensions should be installed?</target>
         <note />
       </trans-unit>
       <trans-unit id="InitCommand_SkillLocationsOptionDescription">

@@ -2065,7 +2065,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandNonInteractive_WithSkillLocationsNone_DoesNotInstallAgentSkills()
+    public async Task NewCommandNonInteractive_WithAgentAssetLocationsNone_DoesNotInstallAgentSkills()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>
@@ -2090,7 +2090,7 @@ public class NewCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task NewCommandNonInteractive_WithSkillLocationsAndSkills_InstallsOnlySpecifiedSkills()
+    public async Task NewCommandNonInteractive_WithAgentAssetLocationsAndSkills_InstallsOnlySpecifiedSkills()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CreateServiceCollection(workspace, options =>

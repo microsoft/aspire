@@ -178,6 +178,24 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Where should extension files be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectExtensionLocations {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectExtensionLocations", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Which extensions should be installed?.
+        /// </summary>
+        internal static string InitCommand_SelectExtensions {
+            get {
+                return ResourceManager.GetString("InitCommand_SelectExtensions", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Install Aspire MCP server.
         /// </summary>
         internal static string InitCommand_ConfigureMcpServer {
@@ -205,7 +223,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Installed Aspire agent skills:.
+        ///   Looks up a localized string similar to Installed Aspire agent assets:.
         /// </summary>
         internal static string InitCommand_InstalledSkillsSummary {
             get {
@@ -214,7 +232,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Skills: {0}.
+        ///   Looks up a localized string similar to Assets: {0}.
         /// </summary>
         internal static string InitCommand_InstalledSkillsSummarySkills {
             get {
@@ -232,7 +250,7 @@ namespace Aspire.Cli.Resources {
         }
 
         /// <summary>
-        ///   Looks up a localized string similar to Failed to install {0} skill at {1}: {2}..
+        ///   Looks up a localized string similar to Failed to install {0} agent asset at {1}: {2}..
         /// </summary>
         internal static string InitCommand_FailedToInstallSkill {
             get {
@@ -399,6 +417,24 @@ namespace Aspire.Cli.Resources {
         internal static string SkillLocation_OpenCodeDescription {
             get {
                 return ResourceManager.GetString("SkillLocation_OpenCodeDescription", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to GitHub Copilot extensions (.github/extensions/).
+        /// </summary>
+        internal static string ExtensionLocation_StandardName {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_StandardName", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Supported by GitHub Copilot CLI (also installs at ~/.copilot/extensions/).
+        /// </summary>
+        internal static string ExtensionLocation_StandardDescription {
+            get {
+                return ResourceManager.GetString("ExtensionLocation_StandardDescription", resourceCulture);
             }
         }
 
@@ -585,18 +621,18 @@ namespace Aspire.Cli.Resources {
         /// <summary>
         ///   Looks up a localized string similar to Comma-separated list of skill locations to install (e.g. {0}), '{1}', or '{2}'.
         /// </summary>
-        internal static string InitCommand_SkillLocationsOptionDescription {
+        internal static string InitCommand_AssetLocationsOptionDescription {
             get {
-                return ResourceManager.GetString("InitCommand_SkillLocationsOptionDescription", resourceCulture);
+                return ResourceManager.GetString("InitCommand_AssetLocationsOptionDescription", resourceCulture);
             }
         }
 
         /// <summary>
         ///   Looks up a localized string similar to Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'.
         /// </summary>
-        internal static string InitCommand_SkillsOptionDescription {
+        internal static string InitCommand_AssetsOptionDescription {
             get {
-                return ResourceManager.GetString("InitCommand_SkillsOptionDescription", resourceCulture);
+                return ResourceManager.GetString("InitCommand_AssetsOptionDescription", resourceCulture);
             }
         }
 

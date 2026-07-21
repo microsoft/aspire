@@ -102,6 +102,12 @@
   <data name="InitCommand_SelectSkills" xml:space="preserve">
     <value>Which skills should be installed?</value>
   </data>
+  <data name="InitCommand_SelectExtensionLocations" xml:space="preserve">
+    <value>Where should extension files be installed?</value>
+  </data>
+  <data name="InitCommand_SelectExtensions" xml:space="preserve">
+    <value>Which extensions should be installed?</value>
+  </data>
   <data name="InitCommand_InstalledPlaywrightCli" xml:space="preserve">
     <value>Installed Playwright CLI.</value>
   </data>
@@ -109,16 +115,16 @@
     <value>Playwright CLI requires npm, which was not found on PATH. Skipping installation.</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummary" xml:space="preserve">
-    <value>Installed Aspire agent skills:</value>
+    <value>Installed Aspire agent assets:</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummarySkills" xml:space="preserve">
-    <value>Skills: {0}</value>
+    <value>Assets: {0}</value>
   </data>
   <data name="InitCommand_InstalledSkillsSummaryLocations" xml:space="preserve">
     <value>Locations: {0}</value>
   </data>
   <data name="InitCommand_FailedToInstallSkill" xml:space="preserve">
-    <value>Failed to install {0} skill at {1}: {2}</value>
+    <value>Failed to install {0} agent asset at {1}: {2}</value>
   </data>
   <data name="InitCommand_ConfiguresDetectedAgentEnvironments" xml:space="preserve">
     <value>(configures detected agent environments)</value>
@@ -173,6 +179,12 @@
   </data>
   <data name="SkillLocation_OpenCodeDescription" xml:space="preserve">
     <value>Legacy location for OpenCode skills</value>
+  </data>
+  <data name="ExtensionLocation_StandardName" xml:space="preserve">
+    <value>GitHub Copilot extensions (.github/extensions/)</value>
+  </data>
+  <data name="ExtensionLocation_StandardDescription" xml:space="preserve">
+    <value>Supported by GitHub Copilot CLI (also installs at ~/.copilot/extensions/)</value>
   </data>
   <data name="AspireSkillsInstaller_InstallingStatus" xml:space="preserve">
     <value>Installing Aspire skills...</value>
@@ -239,6 +251,12 @@
   </data>
   <data name="InitCommand_SkillsOptionDescription" xml:space="preserve">
     <value>Comma-separated list of skills to install. Bundle skills are loaded dynamically; CLI-provided skills include {0}. Use '{1}' or '{2}'</value>
+  </data>
+  <data name="InitCommand_AssetLocationsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of agent asset locations to install (e.g. {0}), '{1}', or '{2}'</value>
+  </data>
+  <data name="InitCommand_AssetsOptionDescription" xml:space="preserve">
+    <value>Comma-separated list of agent assets to install. Bundle assets are loaded dynamically; CLI-provided assets include {0}. Use '{1}' or '{2}'</value>
   </data>
   <data name="AgentTelemetryCommand_Description" xml:space="preserve">
     <value>Record AI agent skill and tool usage telemetry. Invoked by the Aspire agent telemetry hook scripts; not intended to be run directly.</value>

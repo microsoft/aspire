@@ -12,15 +12,18 @@ public class AspireSkillsBundleTests
 {
     private const string AspireSkillDescription = "Aspire CLI commands and workflows for distributed apps";
     private const string AspireifySkillDescription = "One-time setup: wire up AppHost with discovered projects";
+    private static readonly IAspireSkillsBundleProvider s_bundleProvider = new AspireSkillsBundleProvider();
 
-    private static SkillDefinition AspireSkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
+    private static AgentAssetDefinition AspireAgentAssetDefinition => AgentAssetDefinition.CreateAspireSkillsBundle(
         CommonAgentApplicators.AspireSkillName,
         AspireSkillDescription,
+        AgentAssetKind.Skill,
         installExcludedRelativePaths: ["evals"]);
 
-    private static SkillDefinition AspireifySkillDefinition => SkillDefinition.CreateAspireSkillsBundle(
+    private static AgentAssetDefinition AspireifyAgentAssetDefinition => AgentAssetDefinition.CreateAspireSkillsBundle(
         CommonAgentApplicators.AspireifySkillName,
-        AspireifySkillDescription);
+        AspireifySkillDescription,
+        AgentAssetKind.Skill);
 
     [Fact]
     public async Task LoadAsync_ValidatesManifestAndReturnsInstallableFiles()
@@ -36,8 +39,8 @@ public class AspireSkillsBundleTests
                 ["evals/evals.json"] = "{}"
             });
 
-            var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
-            var files = await bundle.GetSkillFilesAsync(AspireSkillDefinition, CancellationToken.None);
+            var bundle = await s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), AgentAssetKind.Skill, CancellationToken.None);
+            var files = await bundle.GetAgentAssetFilesAsync(AspireAgentAssetDefinition, CancellationToken.None);
 
             Assert.Equal(AspireSkillsInstaller.Version, bundle.Version);
             Assert.Contains(files, file => file.RelativePath == "SKILL.md");
@@ -51,7 +54,7 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
-    public async Task GetSkillDefinitions_ReturnsManifestSkills()
+    public async Task GetAgentAssetDefinitions_ReturnsManifestSkills()
     {
         var bundleDirectory = CreateTempDirectory();
 
@@ -63,13 +66,13 @@ public class AspireSkillsBundleTests
                 ["references/app-commands.md"] = "# App commands"
             });
 
-            var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
-            var skill = Assert.Single(bundle.GetSkillDefinitions());
+            var bundle = await s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), AgentAssetKind.Skill, CancellationToken.None);
+            var skill = Assert.Single(bundle.GetAgentAssetDefinitions());
 
             Assert.Equal(CommonAgentApplicators.AspireSkillName, skill.Name);
             Assert.Equal(AspireSkillDescription, skill.Description);
             Assert.True(skill.IsDefault);
-            Assert.Equal(SkillSourceKind.AspireSkillsBundle, skill.SourceKind);
+            Assert.Equal(AgentAssetSourceKind.AspireSkillsBundle, skill.SourceKind);
             Assert.Equal(["evals"], skill.InstallExcludedRelativePaths);
             Assert.Empty(skill.ApplicableLanguages);
         }
@@ -91,7 +94,7 @@ public class AspireSkillsBundleTests
                 ["SKILL.md"] = CreateSkillFileContent()
             }, hashOverride: "0000000000000000000000000000000000000000000000000000000000000000");
 
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), AgentAssetKind.Skill, CancellationToken.None));
 
             Assert.Contains("failed SHA-256 verification", exception.Message);
         }
@@ -113,7 +116,7 @@ public class AspireSkillsBundleTests
                 ["SKILL.md"] = CreateSkillFileContent(description: new string('a', 1025))
             });
 
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), AgentAssetKind.Skill, CancellationToken.None));
 
             Assert.Contains("description", exception.Message, StringComparison.OrdinalIgnoreCase);
             Assert.Contains("1024", exception.Message, StringComparison.Ordinal);
@@ -138,7 +141,7 @@ public class AspireSkillsBundleTests
             {
                 Version = AspireSkillsInstaller.Version,
                 Supports = CreateSupports(),
-                Skills =
+                Assets =
                 [
                     CreateManifestSkill(bundleDirectory, CommonAgentApplicators.AspireSkillName, AspireSkillDescription),
                     CreateManifestSkill(bundleDirectory, "Aspire", AspireSkillDescription)
@@ -147,9 +150,9 @@ public class AspireSkillsBundleTests
 
             await WriteManifestAsync(bundleDirectory, manifest);
 
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), AgentAssetKind.Skill, CancellationToken.None));
 
-            Assert.Contains("duplicate skill", exception.Message, StringComparison.OrdinalIgnoreCase);
+            Assert.Contains("duplicate asset", exception.Message, StringComparison.OrdinalIgnoreCase);
         }
         finally
         {
@@ -170,9 +173,9 @@ public class AspireSkillsBundleTests
             {
                 Version = AspireSkillsInstaller.Version,
                 Supports = CreateSupports(),
-                Skills =
+                Assets =
                 [
-                    new SkillBundleSkill
+                    new SkillBundleAsset
                     {
                         Name = CommonAgentApplicators.AspireSkillName,
                         Description = AspireSkillDescription,
@@ -190,7 +193,7 @@ public class AspireSkillsBundleTests
 
             await WriteManifestAsync(bundleDirectory, manifest);
 
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), AgentAssetKind.Skill, CancellationToken.None));
 
             Assert.Contains("is not safe", exception.Message);
         }
@@ -201,7 +204,7 @@ public class AspireSkillsBundleTests
     }
 
     [Fact]
-    public async Task GetSkillFilesAsync_TreatsMissingOptionalPathArraysAsEmpty()
+    public async Task GetAgentAssetFilesAsync_TreatsNullOptionalArraysAsEmpty()
     {
         var bundleDirectory = CreateTempDirectory();
         var skillDirectory = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireifySkillName);
@@ -224,6 +227,8 @@ public class AspireSkillsBundleTests
                     {
                       "name": "{{CommonAgentApplicators.AspireifySkillName}}",
                       "description": "{{AspireifySkillDescription}}",
+                      "applicableLanguages": null,
+                      "installExcludedRelativePaths": null,
                       "files": [
                         { "relativePath": "SKILL.md", "sha256": "{{ComputeSha256(skillPath)}}" }
                       ]
@@ -233,8 +238,8 @@ public class AspireSkillsBundleTests
                 """;
             await File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
 
-            var bundle = await AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None);
-            var files = await bundle.GetSkillFilesAsync(AspireifySkillDefinition, CancellationToken.None);
+            var bundle = await s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), AgentAssetKind.Skill, CancellationToken.None);
+            var files = await bundle.GetAgentAssetFilesAsync(AspireifyAgentAssetDefinition, CancellationToken.None);
 
             var skillFile = Assert.Single(files);
             Assert.Equal("SKILL.md", skillFile.RelativePath);
@@ -260,9 +265,9 @@ public class AspireSkillsBundleTests
             var manifest = new SkillBundleManifest
             {
                 Version = AspireSkillsInstaller.Version,
-                Skills =
+                Assets =
                 [
-                    new SkillBundleSkill
+                    new SkillBundleAsset
                     {
                         Name = CommonAgentApplicators.AspireSkillName,
                         Description = AspireSkillDescription,
@@ -280,7 +285,7 @@ public class AspireSkillsBundleTests
 
             await WriteManifestAsync(bundleDirectory, manifest);
 
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(new DirectoryInfo(bundleDirectory), CancellationToken.None));
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => s_bundleProvider.LoadAsync(new DirectoryInfo(bundleDirectory), AgentAssetKind.Skill, CancellationToken.None));
 
             Assert.Contains("supported Aspire versions", exception.Message);
         }
@@ -302,8 +307,9 @@ public class AspireSkillsBundleTests
                 new Dictionary<string, string> { ["SKILL.md"] = CreateSkillFileContent() },
                 supports: new SkillBundleSupports { AspireCli = ">=99.0.0 <100.0.0" });
 
-            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(
+            var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => s_bundleProvider.LoadAsync(
                 new DirectoryInfo(bundleDirectory),
+                AgentAssetKind.Skill,
                 currentCliVersion: "13.4.0",
                 currentSdkVersion: "13.4.0",
                 CancellationToken.None));
@@ -328,8 +334,9 @@ public class AspireSkillsBundleTests
                 new Dictionary<string, string> { ["SKILL.md"] = CreateSkillFileContent() },
                 supports: new SkillBundleSupports { AspireCli = ">=13.4.0 <13.5.0" });
 
-            var bundle = await AspireSkillsBundle.LoadAsync(
+            var bundle = await s_bundleProvider.LoadAsync(
                 new DirectoryInfo(bundleDirectory),
+                AgentAssetKind.Skill,
                 currentCliVersion: "13.4.0-pr.17323.gf2228d9b",
                 currentSdkVersion: "13.4.0",
                 CancellationToken.None);
@@ -354,8 +361,9 @@ public class AspireSkillsBundleTests
                 new Dictionary<string, string> { ["SKILL.md"] = CreateSkillFileContent() },
                 supports: new SkillBundleSupports { AspireCli = ">=13.4.0 <13.5.0" });
 
-            var bundle = await AspireSkillsBundle.LoadAsync(
+            var bundle = await s_bundleProvider.LoadAsync(
                 new DirectoryInfo(bundleDirectory),
+                AgentAssetKind.Skill,
                 currentCliVersion: "13.5.0-pr.17553.gca8e5ace",
                 currentSdkVersion: "13.5.0",
                 skipCompatibilityCheck: true,
@@ -385,8 +393,9 @@ public class AspireSkillsBundleTests
             var skillPath = Path.Combine(bundleDirectory, "skills", CommonAgentApplicators.AspireSkillName, "SKILL.md");
             await File.WriteAllTextAsync(skillPath, "tampered");
 
-            await Assert.ThrowsAsync<InvalidOperationException>(() => AspireSkillsBundle.LoadAsync(
+            await Assert.ThrowsAsync<InvalidOperationException>(() => s_bundleProvider.LoadAsync(
                 new DirectoryInfo(bundleDirectory),
+                AgentAssetKind.Skill,
                 currentCliVersion: "13.5.0",
                 currentSdkVersion: "13.5.0",
                 skipCompatibilityCheck: true,
@@ -409,7 +418,7 @@ public class AspireSkillsBundleTests
 
         foreach (var (relativePath, content) in files)
         {
-            var fullPath = Path.Combine(skillDirectory, AspireSkillsBundle.NormalizeRelativePath(relativePath));
+            var fullPath = Path.Combine(skillDirectory, AspireSkillsBundleProvider.NormalizeRelativePath(relativePath));
             Directory.CreateDirectory(Path.GetDirectoryName(fullPath)!);
             await File.WriteAllTextAsync(fullPath, content);
         }
@@ -418,9 +427,9 @@ public class AspireSkillsBundleTests
         {
             Version = AspireSkillsInstaller.Version,
             Supports = supports ?? CreateSupports(),
-            Skills =
+            Assets =
             [
-                new SkillBundleSkill
+                new SkillBundleAsset
                 {
                     Name = CommonAgentApplicators.AspireSkillName,
                     Description = AspireSkillDescription,
@@ -429,7 +438,7 @@ public class AspireSkillsBundleTests
                         .Select(file => new SkillBundleFile
                         {
                             RelativePath = file.Key,
-                            Sha256 = hashOverride ?? ComputeSha256(Path.Combine(skillDirectory, AspireSkillsBundle.NormalizeRelativePath(file.Key)))
+                            Sha256 = hashOverride ?? ComputeSha256(Path.Combine(skillDirectory, AspireSkillsBundleProvider.NormalizeRelativePath(file.Key)))
                         })
                         .ToArray()
                 }
@@ -455,9 +464,9 @@ public class AspireSkillsBundleTests
         await File.WriteAllTextAsync(Path.Combine(skillDirectory, "SKILL.md"), content);
     }
 
-    private static SkillBundleSkill CreateManifestSkill(string bundleDirectory, string skillName, string description)
+    private static SkillBundleAsset CreateManifestSkill(string bundleDirectory, string skillName, string description)
     {
-        return new SkillBundleSkill
+        return new SkillBundleAsset
         {
             Name = skillName,
             Description = description,
@@ -474,7 +483,13 @@ public class AspireSkillsBundleTests
 
     private static Task WriteManifestAsync(string bundleDirectory, SkillBundleManifest manifest)
     {
-        var manifestJson = JsonSerializer.Serialize(manifest, AspireSkillsJsonSerializerContext.Default.SkillBundleManifest);
+        var manifestJson = JsonSerializer.Serialize(new SkillBundleManifestJson
+        {
+            Version = manifest.Version,
+            Supports = manifest.Supports,
+            Skills = manifest.Assets
+        }, AspireSkillsJsonSerializerContext.Default.SkillBundleManifestJson);
+
         return File.WriteAllTextAsync(Path.Combine(bundleDirectory, "skill-manifest.json"), manifestJson);
     }
 

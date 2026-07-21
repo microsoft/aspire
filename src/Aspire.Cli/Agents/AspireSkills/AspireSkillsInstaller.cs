@@ -24,6 +24,7 @@ internal sealed class AspireSkillsInstaller(
     IGitHubArtifactAttestationVerifier githubArtifactAttestationVerifier,
     IHttpClientFactory httpClientFactory,
     IEmbeddedAspireSkillsBundleProvider embeddedBundleProvider,
+    IAspireSkillsBundleProvider bundleProvider,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
     IConfiguration configuration,
@@ -44,16 +45,16 @@ internal sealed class AspireSkillsInstaller(
 
     private static readonly TimeSpan s_defaultMaxCacheAge = TimeSpan.FromDays(7);
 
-    public Task<AspireSkillsInstallResult> InstallAsync(CancellationToken cancellationToken)
+    public Task<AspireSkillsInstallResult> InstallAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
     {
         return interactionService.ShowStatusAsync(
             AgentCommandStrings.AspireSkillsInstaller_InstallingStatus,
-            () => InstallCoreAsync(cancellationToken));
+            () => InstallCoreAsync(assetKind, cancellationToken));
     }
-    private async Task<AspireSkillsInstallResult> InstallCoreAsync(CancellationToken cancellationToken)
+
+    private async Task<AspireSkillsInstallResult> InstallCoreAsync(AgentAssetKind assetKind, CancellationToken cancellationToken)
     {
         using var activity = telemetry.StartReportedActivity("AspireSkillsInstaller.Install");
-
         var effectiveVersion = configuration[VersionOverrideKey];
         if (string.IsNullOrWhiteSpace(effectiveVersion))
         {
@@ -61,11 +62,12 @@ internal sealed class AspireSkillsInstaller(
         }
 
         activity?.SetTag("aspire.skills.version", effectiveVersion);
+        activity?.SetTag("aspire.skills.asset_type", assetKind.ToString());
 
-        var cacheRoot = GetCacheRoot();
+        var cacheRoot = GetCacheRoot(assetKind);
         Directory.CreateDirectory(cacheRoot);
 
-        var cachedBundle = await TryLoadCachedBundleAsync(cacheRoot, effectiveVersion, activity, cancellationToken).ConfigureAwait(false);
+        var cachedBundle = await TryLoadCachedBundleAsync(cacheRoot, assetKind, effectiveVersion, activity, cancellationToken).ConfigureAwait(false);
         if (cachedBundle is not null)
         {
             CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
@@ -86,7 +88,7 @@ internal sealed class AspireSkillsInstaller(
         AcquisitionResult? githubResult = null;
         if (remoteFetchEnabled)
         {
-            githubResult = await InstallFromGitHubAsync(cacheRoot, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
+            githubResult = await InstallFromGitHubAsync(cacheRoot, assetKind, effectiveVersion, validationDisabled, activity, cancellationToken).ConfigureAwait(false);
             if (githubResult.Status == AcquisitionStatus.Installed)
             {
                 CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
@@ -103,7 +105,7 @@ internal sealed class AspireSkillsInstaller(
             logger.LogDebug("Aspire skills remote fetch feature '{Feature}' is disabled; using the embedded snapshot.", KnownFeatures.AspireSkillsRemoteFetchEnabled);
         }
 
-        var embeddedResult = await InstallFromEmbeddedAsync(cacheRoot, effectiveVersion, activity, cancellationToken).ConfigureAwait(false);
+        var embeddedResult = await InstallFromEmbeddedAsync(cacheRoot, assetKind, effectiveVersion, activity, cancellationToken).ConfigureAwait(false);
         if (embeddedResult.Status == AcquisitionStatus.Installed)
         {
             CleanupStaleCacheEntries(cacheRoot, effectiveVersion);
@@ -122,6 +124,7 @@ internal sealed class AspireSkillsInstaller(
 
     private async Task<AcquisitionResult> InstallFromGitHubAsync(
         string cacheRoot,
+        AgentAssetKind assetKind,
         string version,
         bool validationDisabled,
         Activity? activity,
@@ -147,7 +150,7 @@ internal sealed class AspireSkillsInstaller(
                 return AcquisitionResult.Unavailable();
             }
 
-            var archivePath = Path.Combine(tempDir, GetSafeFileName(asset.Name));
+            var archivePath = Path.Combine(tempDir, GetSafeFileName(asset.Name, assetKind));
             if (!await TryDownloadGitHubAssetAsync(httpClient, asset.DownloadUrl, archivePath, cancellationToken).ConfigureAwait(false))
             {
                 logger.LogDebug("Aspire skills GitHub release asset {AssetName} was unavailable for version {Version}.", asset.Name, version);
@@ -177,7 +180,7 @@ internal sealed class AspireSkillsInstaller(
 
             try
             {
-                var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, skipCompatibilityCheck: false, cancellationToken).ConfigureAwait(false);
+                var bundle = await CacheArchiveAsync(cacheRoot, assetKind, archivePath, version, skipCompatibilityCheck: false, cancellationToken).ConfigureAwait(false);
                 activity?.SetTag("aspire.skills.source", "github");
                 activity?.SetTag("aspire.skills.cache_hit", false);
                 return AcquisitionResult.Installed(bundle);
@@ -202,11 +205,12 @@ internal sealed class AspireSkillsInstaller(
 
     private async Task<AcquisitionResult> InstallFromEmbeddedAsync(
         string cacheRoot,
+        AgentAssetKind assetKind,
         string version,
         Activity? activity,
         CancellationToken cancellationToken)
     {
-        var metadata = embeddedBundleProvider.Metadata;
+        var metadata = embeddedBundleProvider.GetMetadata(assetKind);
         if (metadata is null)
         {
             logger.LogDebug("No embedded Aspire skills bundle metadata is available.");
@@ -235,8 +239,8 @@ internal sealed class AspireSkillsInstaller(
 
         try
         {
-            var archivePath = Path.Combine(tempDir, GetSafeFileName(metadata.AssetName!));
-            var archiveStream = embeddedBundleProvider.OpenArchive();
+            var archivePath = Path.Combine(tempDir, GetSafeFileName(metadata.AssetName!, assetKind));
+            var archiveStream = embeddedBundleProvider.OpenArchive(assetKind);
             if (archiveStream is null)
             {
                 logger.LogDebug("Embedded Aspire skills archive is unavailable for version {Version}.", version);
@@ -259,7 +263,7 @@ internal sealed class AspireSkillsInstaller(
                 // and would otherwise reject a perfectly usable local copy. Skip the bundle's
                 // CLI/SDK compatibility check here so the embedded skills are always offered when
                 // the network path is unavailable.
-                var bundle = await CacheArchiveAsync(cacheRoot, archivePath, version, skipCompatibilityCheck: true, cancellationToken).ConfigureAwait(false);
+                var bundle = await CacheArchiveAsync(cacheRoot, assetKind, archivePath, version, skipCompatibilityCheck: true, cancellationToken).ConfigureAwait(false);
                 activity?.SetTag("aspire.skills.source", "embedded");
                 activity?.SetTag("aspire.skills.cache_hit", false);
                 return AcquisitionResult.Installed(bundle);
@@ -317,7 +321,7 @@ internal sealed class AspireSkillsInstaller(
 
     private static void ValidateArchiveSha256(string archivePath, string expectedSha256)
     {
-        var expectedHash = AspireSkillsBundle.NormalizeSha256(expectedSha256);
+        var expectedHash = AspireSkillsBundleProvider.NormalizeSha256(expectedSha256);
         string actualHash;
         using (var stream = File.OpenRead(archivePath))
         {
@@ -456,7 +460,7 @@ internal sealed class AspireSkillsInstaller(
         return request;
     }
 
-    private async Task<AspireSkillsBundle?> TryLoadCachedBundleAsync(string cacheRoot, string version, Activity? activity, CancellationToken cancellationToken)
+    private async Task<AspireSkillsBundle?> TryLoadCachedBundleAsync(string cacheRoot, AgentAssetKind assetKind, string version, Activity? activity, CancellationToken cancellationToken)
     {
         var cacheDirectory = GetVersionCacheDirectory(cacheRoot, version);
         if (!Directory.Exists(cacheDirectory))
@@ -472,7 +476,7 @@ internal sealed class AspireSkillsInstaller(
             // signal, so skip the `supports` range check here — a previously-embedded snapshot
             // whose range no longer covers the current CLI is still the local artifact we
             // chose to use and should not be re-evicted on every invocation.
-            var bundle = await LoadCachedBundleAsync(cacheDirectory, cancellationToken).ConfigureAwait(false);
+            var bundle = await LoadCachedBundleAsync(cacheDirectory, assetKind, cancellationToken).ConfigureAwait(false);
             ValidateBundleVersion(bundle, version);
             TouchLastUsed(cacheDirectory);
             activity?.SetTag("aspire.skills.cache_hit", true);
@@ -486,10 +490,11 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
-    private Task<AspireSkillsBundle> LoadCachedBundleAsync(string cacheDirectory, CancellationToken cancellationToken)
+    private Task<AspireSkillsBundle> LoadCachedBundleAsync(string cacheDirectory, AgentAssetKind assetKind, CancellationToken cancellationToken)
     {
-        return AspireSkillsBundle.LoadAsync(
+        return bundleProvider.LoadAsync(
             new DirectoryInfo(cacheDirectory),
+            assetKind,
             executionContext.IdentitySdkVersion,
             executionContext.IdentitySdkVersion,
             skipCompatibilityCheck: true,
@@ -498,6 +503,7 @@ internal sealed class AspireSkillsInstaller(
 
     private async Task<AspireSkillsBundle> CacheArchiveAsync(
         string cacheRoot,
+        AgentAssetKind assetKind,
         string archivePath,
         string version,
         bool skipCompatibilityCheck,
@@ -511,19 +517,20 @@ internal sealed class AspireSkillsInstaller(
         {
             ExtractArchive(archivePath, extractDir);
 
-            var bundleRoot = FindBundleRoot(extractDir);
+            var manifestFileName = bundleProvider.GetManifestFileName(assetKind);
+            var bundleRoot = FindBundleRoot(extractDir, manifestFileName);
             CopyDirectory(bundleRoot.FullName, stageDir);
 
-            var stagedBundle = await LoadStagedBundleAsync(stageDir, skipCompatibilityCheck, cancellationToken).ConfigureAwait(false);
+            var stagedBundle = await LoadStagedBundleAsync(stageDir, assetKind, skipCompatibilityCheck, cancellationToken).ConfigureAwait(false);
             ValidateBundleVersion(stagedBundle, version);
 
-            await using var cacheLock = await AcquireCacheLockAsync(cacheRoot, version, cancellationToken).ConfigureAwait(false);
+            await using var cacheLock = await AcquireCacheLockAsync(cacheRoot, assetKind, version, cancellationToken).ConfigureAwait(false);
             var targetDir = GetVersionCacheDirectory(cacheRoot, version);
             if (Directory.Exists(targetDir))
             {
                 try
                 {
-                    var existingBundle = await LoadCachedBundleAsync(targetDir, cancellationToken).ConfigureAwait(false);
+                    var existingBundle = await LoadCachedBundleAsync(targetDir, assetKind, cancellationToken).ConfigureAwait(false);
                     ValidateBundleVersion(existingBundle, version);
                     TouchLastUsed(targetDir);
                     return existingBundle;
@@ -542,7 +549,7 @@ internal sealed class AspireSkillsInstaller(
             Directory.Move(stageDir, targetDir);
             TouchLastUsed(targetDir);
 
-            var installedBundle = await LoadCachedBundleAsync(targetDir, cancellationToken).ConfigureAwait(false);
+            var installedBundle = await LoadCachedBundleAsync(targetDir, assetKind, cancellationToken).ConfigureAwait(false);
             ValidateBundleVersion(installedBundle, version);
 
             return installedBundle;
@@ -554,19 +561,20 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
-    private Task<AspireSkillsBundle> LoadStagedBundleAsync(string stageDir, bool skipCompatibilityCheck, CancellationToken cancellationToken)
+    private Task<AspireSkillsBundle> LoadStagedBundleAsync(string stageDir, AgentAssetKind assetKind, bool skipCompatibilityCheck, CancellationToken cancellationToken)
     {
-        return AspireSkillsBundle.LoadAsync(
+        return bundleProvider.LoadAsync(
             new DirectoryInfo(stageDir),
+            assetKind,
             executionContext.IdentitySdkVersion,
             executionContext.IdentitySdkVersion,
             skipCompatibilityCheck,
             cancellationToken);
     }
 
-    private static async Task<FileStream> AcquireCacheLockAsync(string cacheRoot, string version, CancellationToken cancellationToken)
+    private static async Task<FileStream> AcquireCacheLockAsync(string cacheRoot, AgentAssetKind assetKind, string version, CancellationToken cancellationToken)
     {
-        var lockPath = Path.Combine(cacheRoot, $".{GetSafeFileName(version)}.lock");
+        var lockPath = Path.Combine(cacheRoot, $".{GetSafeFileName(version, assetKind)}.lock");
         while (true)
         {
             try
@@ -598,9 +606,9 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
-    private string GetCacheRoot()
+    private string GetCacheRoot(AgentAssetKind assetKind)
     {
-        return Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills");
+        return Path.Combine(executionContext.CacheDirectory.FullName, "aspire-skills", assetKind.ToString().ToLowerInvariant());
     }
 
     private static string GetVersionCacheDirectory(string cacheRoot, string version)
@@ -782,16 +790,16 @@ internal sealed class AspireSkillsInstaller(
         return destinationPath;
     }
 
-    private static DirectoryInfo FindBundleRoot(string extractionDirectory)
+    private static DirectoryInfo FindBundleRoot(string extractionDirectory, string manifestFileName)
     {
-        var rootManifestPath = Path.Combine(extractionDirectory, "skill-manifest.json");
+        var rootManifestPath = Path.Combine(extractionDirectory, manifestFileName);
         if (File.Exists(rootManifestPath))
         {
             return new DirectoryInfo(extractionDirectory);
         }
 
         var packageDirectory = Path.Combine(extractionDirectory, "package");
-        var packageManifestPath = Path.Combine(packageDirectory, "skill-manifest.json");
+        var packageManifestPath = Path.Combine(packageDirectory, manifestFileName);
         if (File.Exists(packageManifestPath))
         {
             return new DirectoryInfo(packageDirectory);
@@ -799,7 +807,7 @@ internal sealed class AspireSkillsInstaller(
 
         var topLevelBundleDirectories = Directory
             .EnumerateDirectories(extractionDirectory)
-            .Where(directory => File.Exists(Path.Combine(directory, "skill-manifest.json")))
+            .Where(directory => File.Exists(Path.Combine(directory, manifestFileName)))
             .ToArray();
 
         if (topLevelBundleDirectories.Length == 1)
@@ -809,10 +817,10 @@ internal sealed class AspireSkillsInstaller(
 
         if (topLevelBundleDirectories.Length > 1)
         {
-            throw new InvalidOperationException("Downloaded Aspire skills package contains multiple skill-manifest.json files.");
+            throw new InvalidOperationException($"Downloaded Aspire skills package contains multiple {manifestFileName} files.");
         }
 
-        throw new InvalidOperationException("Downloaded Aspire skills package does not contain skill-manifest.json.");
+        throw new InvalidOperationException($"Downloaded Aspire skills package does not contain {manifestFileName}.");
     }
 
     private static void CopyDirectory(string sourceDirectory, string targetDirectory)
@@ -833,7 +841,7 @@ internal sealed class AspireSkillsInstaller(
         }
     }
 
-    private static string GetSafeFileName(string fileName)
+    private static string GetSafeFileName(string fileName, AgentAssetKind assetKind)
     {
         var safeName = Path.GetFileName(fileName);
         foreach (var invalidCharacter in Path.GetInvalidFileNameChars())
@@ -841,7 +849,7 @@ internal sealed class AspireSkillsInstaller(
             safeName = safeName.Replace(invalidCharacter, '_');
         }
 
-        return string.IsNullOrWhiteSpace(safeName) ? $"aspire-skills-{Guid.NewGuid():N}.archive" : safeName;
+        return string.IsNullOrWhiteSpace(safeName) ? $"aspire-{assetKind.ToString().ToLowerInvariant()}-{Guid.NewGuid():N}.archive" : safeName;
     }
 
     private enum AcquisitionStatus

@@ -9,8 +9,8 @@ namespace Aspire.Cli.Agents;
 internal sealed class AgentEnvironmentScanContext
 {
     private readonly List<AgentEnvironmentApplicator> _applicators = [];
-    private readonly HashSet<string> _skillBaseDirectories = new(StringComparer.OrdinalIgnoreCase);
-    private readonly HashSet<AgentClientKind> _detectedClients = [];
+    private readonly Dictionary<AgentAssetKind, HashSet<string>> _assetBaseDirectories = new();
+    private readonly HashSet<AgentClient> _detectedClients = [];
 
     /// <summary>
     /// Gets the working directory being scanned.
@@ -46,19 +46,25 @@ internal sealed class AgentEnvironmentScanContext
     public IReadOnlyList<AgentEnvironmentApplicator> Applicators => _applicators;
 
     /// <summary>
-    /// Registers a skill base directory for an agent environment (e.g., ".claude/skills", ".github/skills").
-    /// These directories are used to mirror skill files across all detected agent environments.
+    /// Registers an agent asset base directory for an agent environment (e.g., ".claude/skills", ".github/skills").
+    /// These directories are used to mirror agent asset files across all detected agent environments.
     /// </summary>
-    /// <param name="relativeSkillBaseDir">The relative path to the skill base directory from the repository root.</param>
-    public void AddSkillBaseDirectory(string relativeSkillBaseDir)
+    /// <param name="assetType">The type of agent asset (e.g., skill, extension).</param>
+    /// <param name="relativeAssetBaseDir">The relative path to the asset base directory from the repository root.</param>
+    public void AddAssetBaseDirectory(AgentAssetKind assetType, string relativeAssetBaseDir)
     {
-        _skillBaseDirectories.Add(relativeSkillBaseDir);
+        if (!_assetBaseDirectories.TryGetValue(assetType, out var dirs))
+        {
+            dirs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            _assetBaseDirectories[assetType] = dirs;
+        }
+        dirs.Add(relativeAssetBaseDir);
     }
 
     /// <summary>
-    /// Gets the registered skill base directories for all detected agent environments.
+    /// Gets the registered asset base directories for all detected agent environments.
     /// </summary>
-    public IReadOnlyCollection<string> SkillBaseDirectories => _skillBaseDirectories;
+    public IReadOnlySet<string> AgentAssetBaseDirectories(AgentAssetKind assetType) => _assetBaseDirectories.TryGetValue(assetType, out var dirs) ? dirs : new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
     /// Records that an agent client was detected as present in the environment. Used to scope
@@ -66,7 +72,7 @@ internal sealed class AgentEnvironmentScanContext
     /// Aspire MCP server still needs configuring.
     /// </summary>
     /// <param name="client">The detected agent client.</param>
-    public void AddDetectedClient(AgentClientKind client)
+    public void AddDetectedClient(AgentClient client)
     {
         _detectedClients.Add(client);
     }
@@ -74,5 +80,10 @@ internal sealed class AgentEnvironmentScanContext
     /// <summary>
     /// Gets the set of agent clients detected as present in the environment.
     /// </summary>
-    public IReadOnlyCollection<AgentClientKind> DetectedClients => _detectedClients;
+    public IReadOnlyCollection<AgentClient> DetectedClients => _detectedClients;
+
+    /// <summary>
+    /// Gets the set of agent asset types supported by the detected agent clients.
+    /// </summary>
+    public IReadOnlyCollection<AgentAssetKind> SupportedAssetTypes => _detectedClients.SelectMany(c => c.SupportedAssetKinds).Distinct().ToList();
 }

@@ -316,6 +316,12 @@
     <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-skills.metadata.json" LogicalName="aspire-skills.metadata.json">
       <WithCulture>false</WithCulture>
     </EmbeddedResource>
+    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-extensions-v0.0.1.tgz" LogicalName="aspire-extensions.bundle.tgz">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
+    <EmbeddedResource Include="Agents\AspireSkills\Embedded\aspire-extensions.metadata.json" LogicalName="aspire-extensions.metadata.json">
+      <WithCulture>false</WithCulture>
+    </EmbeddedResource>
     <!-- Agent PostToolUse telemetry hook scripts. Materialized to ~/.aspire/hooks/ by
          TelemetryHookInstaller and registered into each detected agent client's user-level
          config during `aspire agent init`. -->

@@ -44,7 +44,7 @@ internal static class CommonAgentApplicators
         string skillBaseDirectory)
     {
         // Register the skill base directory so skill files can be mirrored to all environments
-        context.AddSkillBaseDirectory(skillBaseDirectory);
+        context.AddAssetBaseDirectory(AgentAssetKind.Skill, skillBaseDirectory);
 
         // Only add the Playwright applicator prompt once across all environments
         if (context.PlaywrightApplicatorAdded)
@@ -55,7 +55,7 @@ internal static class CommonAgentApplicators
         context.PlaywrightApplicatorAdded = true;
         context.AddApplicator(new AgentEnvironmentApplicator(
             "Install Playwright CLI (Recommended for browser automation)",
-            ct => installer.InstallAsync(context.RepositoryRoot.FullName, context.SkillBaseDirectories.ToHashSet(StringComparer.OrdinalIgnoreCase), ct),
+            ct => installer.InstallAsync(context.RepositoryRoot.FullName, context.AgentAssetBaseDirectories(AgentAssetKind.Skill), ct),
             promptGroup: McpInitPromptGroup.Tools,
             priority: 1));
     }
