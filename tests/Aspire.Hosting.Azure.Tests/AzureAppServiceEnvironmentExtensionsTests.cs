@@ -175,4 +175,38 @@ public class AzureAppServiceEnvironmentExtensionsTests
         Assert.Same(identity.Resource, Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "env-mi"));
         Assert.Null(model.Resources.OfType<AzureRoleAssignmentResource>().SingleOrDefault(resource => resource.Name.StartsWith("env-mi-roles-", StringComparison.Ordinal)));
     }
+
+    [Fact]
+    public async Task MultipleEnvironments_SharingCrossScopeRegistry_EachGetDistinctStandaloneAcrPullIdentity()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // A single existing registry in another resource group, shared by two environments in the same app host.
+        var registry = builder.AddAzureContainerRegistry("registry")
+            .PublishAsExisting("myacr", "my-existing-resource-group");
+
+        builder.AddAzureAppServiceEnvironment("env1")
+            .WithAzureContainerRegistry(registry)
+            .WithDashboard(false);
+        builder.AddAzureAppServiceEnvironment("env2")
+            .WithAzureContainerRegistry(registry)
+            .WithDashboard(false);
+
+        using var app = builder.Build();
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+        await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Each environment promotes its own standalone identity, disambiguated by the environment's (model-unique) name.
+        var identity1 = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "env1-mi");
+        var identity2 = Assert.Single(model.Resources.OfType<AzureUserAssignedIdentityResource>(), resource => resource.Name == "env2-mi");
+        Assert.NotSame(identity1, identity2);
+
+        // Each environment gets its own AcrPull role module scoped to the shared registry, so the two grants never collide.
+        var roles1 = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), resource => resource.Name == "env1-mi-roles-registry");
+        var roles2 = Assert.Single(model.Resources.OfType<AzureRoleAssignmentResource>(), resource => resource.Name == "env2-mi-roles-registry");
+        Assert.Same(registry.Resource, roles1.TargetAzureResource);
+        Assert.Same(registry.Resource, roles2.TargetAzureResource);
+    }
 }
