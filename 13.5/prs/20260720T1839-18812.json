@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Automated security dependency remediation; routine dependency bump with no user-facing change",
+  "mergedAt": "2026-07-20T18:39:04Z",
+  "number": 18812,
+  "runDate": "2026-07-21T00:21:06Z",
+  "status": "excluded",
+  "title": "[auto-sec] Consolidate aspire dependency security remediations"
+}

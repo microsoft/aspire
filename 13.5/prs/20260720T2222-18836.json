@@ -1,0 +1,9 @@
+{
+  "author": "app/dotnet-maestro",
+  "comment": "Bot-authored dependency update from microsoft/dcp; excluded per bot-authored PR rule",
+  "mergedAt": "2026-07-20T22:22:59Z",
+  "number": 18836,
+  "runDate": "2026-07-21T00:21:06Z",
+  "status": "excluded",
+  "title": "[main] Update dependencies from microsoft/dcp"
+}

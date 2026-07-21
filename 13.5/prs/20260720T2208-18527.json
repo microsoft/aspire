@@ -1,0 +1,9 @@
+{
+  "author": "ellahathaway",
+  "comment": "Significant VS Code extension improvement: unified AppHost runtime tracking with aspire ps as single source of truth",
+  "mergedAt": "2026-07-20T22:08:39Z",
+  "number": 18527,
+  "runDate": "2026-07-21T00:21:06Z",
+  "status": "included",
+  "title": "Unify workspace/global AppHost describe --follow streaming"
+}

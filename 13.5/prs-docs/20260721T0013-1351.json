@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Replaces agentic workflow with deterministic scripts in docs repo; docs site automation, not milestone feature documentation",
+  "mergedAt": "2026-07-21T00:13:49Z",
+  "number": 1351,
+  "runDate": "2026-07-21T00:21:06Z",
+  "status": "excluded",
+  "title": "Replace Integration Data Updater agentic workflow with deterministic scripts"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "Fixes rendering in the internal Aspire Team App GitHub Copilot canvas (.github/extensions/aspire-team-app/); not a shipped Aspire product feature",
+  "mergedAt": "2026-07-20T23:39:29Z",
+  "number": 18835,
+  "runDate": "2026-07-21T00:21:06Z",
+  "status": "excluded",
+  "title": "Fix Aspire Team App light mode rendering"
+}
