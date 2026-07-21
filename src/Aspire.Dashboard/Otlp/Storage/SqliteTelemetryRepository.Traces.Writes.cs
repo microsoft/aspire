@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Data;
+using System.Data.Common;
 using System.Globalization;
 using System.Text;
 using Aspire.Dashboard.Model;
@@ -16,8 +17,10 @@ namespace Aspire.Dashboard.Otlp.Storage;
 public sealed partial class SqliteTelemetryRepository
 {
     private const int MaxTraceBatchSize = 100;
-    private const int MaxSpanBatchSize = 50;
-    private const int MaxSpanDetailBatchSize = 100;
+    // Microsoft.Data.Sqlite resolves every named parameter when binding. Reusing prepared commands avoids
+    // repeated preparation, while these batch sizes keep each binding pass small enough to avoid nonlinear cost.
+    private const int MaxSpanBatchSize = 25;
+    private const int MaxSpanDetailBatchSize = 50;
 
     private List<OtlpSpan> AddTracesToDatabase(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
     {
@@ -467,41 +470,81 @@ public sealed partial class SqliteTelemetryRepository
 
     private static void InsertSpans(SqliteConnection connection, IDbTransaction transaction, List<PendingSpan> spans)
     {
-        foreach (var batch in spans.Chunk(MaxSpanBatchSize))
+        DbCommand? command = null;
+        try
         {
-            var sql = new StringBuilder("""
+            foreach (var batch in spans.Chunk(MaxSpanBatchSize))
+            {
+                if (command is null || command.Parameters.Count != batch.Length * 13)
+                {
+                    command?.Dispose();
+                    command = CreateInsertSpansCommand(connection, transaction, batch.Length);
+                }
+
+                for (var index = 0; index < batch.Length; index++)
+                {
+                    var parameterIndex = index * 13;
+                    var pendingSpan = batch[index];
+                    var span = pendingSpan.Span;
+                    command.Parameters[parameterIndex++].Value = span.TraceId;
+                    command.Parameters[parameterIndex++].Value = span.SpanId;
+                    command.Parameters[parameterIndex++].Value = span.ParentSpanId ?? (object)DBNull.Value;
+                    command.Parameters[parameterIndex++].Value = pendingSpan.ResourceId;
+                    command.Parameters[parameterIndex++].Value = pendingSpan.ResourceViewId;
+                    command.Parameters[parameterIndex++].Value = pendingSpan.ScopeId;
+                    command.Parameters[parameterIndex++].Value = span.Name;
+                    command.Parameters[parameterIndex++].Value = (int)span.Kind;
+                    command.Parameters[parameterIndex++].Value = span.StartTime.Ticks;
+                    command.Parameters[parameterIndex++].Value = span.EndTime.Ticks;
+                    command.Parameters[parameterIndex++].Value = (int)span.Status;
+                    command.Parameters[parameterIndex++].Value = span.StatusMessage ?? (object)DBNull.Value;
+                    command.Parameters[parameterIndex].Value = span.State ?? (object)DBNull.Value;
+                }
+
+                command.ExecuteNonQuery();
+            }
+        }
+        finally
+        {
+            command?.Dispose();
+        }
+    }
+
+    private static DbCommand CreateInsertSpansCommand(SqliteConnection connection, IDbTransaction transaction, int batchSize)
+    {
+        var command = ((DbConnection)connection).CreateCommand();
+        command.Transaction = (DbTransaction)transaction;
+        var sql = new StringBuilder("""
                 INSERT INTO telemetry_spans (
                     trace_id, span_id, parent_span_id, resource_id, resource_view_id, scope_id, name, kind,
                     start_time_ticks, end_time_ticks, status, status_message, trace_state, resource_order_ticks)
                 VALUES
                 """);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
+        for (var index = 0; index < batchSize; index++)
+        {
+            if (index > 0)
             {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                var pendingSpan = batch[index];
-                var span = pendingSpan.Span;
-                sql.Append(CultureInfo.InvariantCulture, $"    (@TraceId{index}, @SpanId{index}, @ParentSpanId{index}, @ResourceId{index}, @ResourceViewId{index}, @ScopeId{index}, @Name{index}, @Kind{index}, @StartTimeTicks{index}, @EndTimeTicks{index}, @Status{index}, @StatusMessage{index}, @State{index}, @StartTimeTicks{index})");
-                parameters.Add($"TraceId{index}", span.TraceId);
-                parameters.Add($"SpanId{index}", span.SpanId);
-                parameters.Add($"ParentSpanId{index}", span.ParentSpanId);
-                parameters.Add($"ResourceId{index}", pendingSpan.ResourceId);
-                parameters.Add($"ResourceViewId{index}", pendingSpan.ResourceViewId);
-                parameters.Add($"ScopeId{index}", pendingSpan.ScopeId);
-                parameters.Add($"Name{index}", span.Name);
-                parameters.Add($"Kind{index}", (int)span.Kind);
-                parameters.Add($"StartTimeTicks{index}", span.StartTime.Ticks);
-                parameters.Add($"EndTimeTicks{index}", span.EndTime.Ticks);
-                parameters.Add($"Status{index}", (int)span.Status);
-                parameters.Add($"StatusMessage{index}", span.StatusMessage);
-                parameters.Add($"State{index}", span.State);
+                sql.AppendLine(",");
             }
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
+            sql.Append(CultureInfo.InvariantCulture, $"    (@TraceId{index}, @SpanId{index}, @ParentSpanId{index}, @ResourceId{index}, @ResourceViewId{index}, @ScopeId{index}, @Name{index}, @Kind{index}, @StartTimeTicks{index}, @EndTimeTicks{index}, @Status{index}, @StatusMessage{index}, @State{index}, @StartTimeTicks{index})");
+            AddParameter(command, $"@TraceId{index}");
+            AddParameter(command, $"@SpanId{index}");
+            AddParameter(command, $"@ParentSpanId{index}");
+            AddParameter(command, $"@ResourceId{index}");
+            AddParameter(command, $"@ResourceViewId{index}");
+            AddParameter(command, $"@ScopeId{index}");
+            AddParameter(command, $"@Name{index}");
+            AddParameter(command, $"@Kind{index}");
+            AddParameter(command, $"@StartTimeTicks{index}");
+            AddParameter(command, $"@EndTimeTicks{index}");
+            AddParameter(command, $"@Status{index}");
+            AddParameter(command, $"@StatusMessage{index}");
+            AddParameter(command, $"@State{index}");
         }
+        sql.Append(';');
+        command.CommandText = sql.ToString();
+        command.Prepare();
+        return command;
     }
 
     private static void MarkResourcesHaveTraces(SqliteConnection connection, IDbTransaction transaction, HashSet<CachedResource> resources)
@@ -526,17 +569,23 @@ public sealed partial class SqliteTelemetryRepository
         IEnumerable<OtlpTrace> traces,
         TraceIngestionState ingestionState)
     {
+        var traceList = traces.ToList();
+        var incomingParentReferences = traceList
+            .SelectMany(trace => trace.Spans)
+            .Where(span => span.ParentSpanId is not null)
+            .Select(span => (span.TraceId, ParentSpanId: span.ParentSpanId!))
+            .ToHashSet();
         var peerResourceIds = new HashSet<long>();
         var spanUpdates = new List<PeerSpanUpdateRecord>();
         var peerChangedTraceIds = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var trace in traces)
+        foreach (var trace in traceList)
         {
             foreach (var span in trace.Spans)
             {
                 OtlpResource? peer = null;
                 long? peerResourceId = null;
                 var hasPeerAddress = OtlpHelpers.GetPeerAddress(span.Attributes) is not null;
-                var hasChildren = span.GetChildSpans().Any() ||
+                var hasChildren = incomingParentReferences.Contains((span.TraceId, span.SpanId)) ||
                     ingestionState.ExistingParentReferences.Contains((span.TraceId, span.SpanId));
                 if (hasPeerAddress && span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer && !hasChildren)
                 {
@@ -847,29 +896,69 @@ public sealed partial class SqliteTelemetryRepository
                 attribute.Value
             }))
             .ToArray();
-        foreach (var batch in attributes.Chunk(MaxSpanDetailBatchSize))
+        DbCommand? command = null;
+        try
         {
-            var sql = new StringBuilder("""
+            foreach (var batch in attributes.Chunk(MaxSpanDetailBatchSize))
+            {
+                if (command is null || command.Parameters.Count != batch.Length * 5)
+                {
+                    command?.Dispose();
+                    command = CreateInsertSpanAttributesCommand(connection, transaction, batch.Length);
+                }
+
+                for (var index = 0; index < batch.Length; index++)
+                {
+                    var parameterIndex = index * 5;
+                    command.Parameters[parameterIndex++].Value = batch[index].TraceId;
+                    command.Parameters[parameterIndex++].Value = batch[index].SpanId;
+                    command.Parameters[parameterIndex++].Value = batch[index].Ordinal;
+                    command.Parameters[parameterIndex++].Value = batch[index].Key;
+                    command.Parameters[parameterIndex].Value = batch[index].Value;
+                }
+
+                command.ExecuteNonQuery();
+            }
+        }
+        finally
+        {
+            command?.Dispose();
+        }
+    }
+
+    private static DbCommand CreateInsertSpanAttributesCommand(SqliteConnection connection, IDbTransaction transaction, int batchSize)
+    {
+        var command = ((DbConnection)connection).CreateCommand();
+        command.Transaction = (DbTransaction)transaction;
+        var sql = new StringBuilder("""
                 INSERT INTO telemetry_span_attributes (trace_id, span_id, ordinal, attribute_key, attribute_value)
                 VALUES
                 """);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
+        for (var index = 0; index < batchSize; index++)
+        {
+            if (index > 0)
             {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@TraceId{index}, @SpanId{index}, @Ordinal{index}, @Key{index}, @Value{index})");
-                parameters.Add($"TraceId{index}", batch[index].TraceId);
-                parameters.Add($"SpanId{index}", batch[index].SpanId);
-                parameters.Add($"Ordinal{index}", batch[index].Ordinal);
-                parameters.Add($"Key{index}", batch[index].Key);
-                parameters.Add($"Value{index}", batch[index].Value);
+                sql.AppendLine(",");
             }
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
+            sql.Append(CultureInfo.InvariantCulture, $"    (@TraceId{index}, @SpanId{index}, @Ordinal{index}, @Key{index}, @Value{index})");
+            AddParameter(command, $"@TraceId{index}");
+            AddParameter(command, $"@SpanId{index}");
+            AddParameter(command, $"@Ordinal{index}");
+            AddParameter(command, $"@Key{index}");
+            AddParameter(command, $"@Value{index}");
         }
+        sql.Append(';');
+        command.CommandText = sql.ToString();
+        command.Prepare();
+        return command;
+    }
+
+    private static void AddParameter(DbCommand command, string name)
+    {
+        var parameter = command.CreateParameter();
+        parameter.ParameterName = name;
+        parameter.Value = DBNull.Value;
+        command.Parameters.Add(parameter);
     }
 
     private static void InsertSpanEvents(SqliteConnection connection, IDbTransaction transaction, PendingSpanEvent[] events)
