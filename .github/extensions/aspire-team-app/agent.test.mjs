@@ -7,6 +7,7 @@ import {
   buildAgentActionPrompt,
   isValidActionPr,
   normalizeActionPr,
+  resolveActionTarget,
 } from "./agent.mjs";
 
 const validPr = {
@@ -187,4 +188,22 @@ test("buildAgentActionLog breadcrumb reflects the effective session for a GHES n
   const ghesPr = { ...validPr, url: "https://ghe.example.com:8443/microsoft/aspire/pull/123" };
   assert.match(buildAgentActionLog("test", ghesPr), / in this session$/);
   assert.match(buildAgentActionLog("test", validPr), / in a new session$/);
+});
+
+test("resolveActionTarget reports the target actually used, mirroring the prompt routing", () => {
+  const ghesPr = { ...validPr, url: "https://ghe.example.com:8443/microsoft/aspire/pull/123" };
+  // github.com new-session stays new-session; current-session is always honored as requested.
+  assert.equal(resolveActionTarget(validPr, "new-session"), "new-session");
+  assert.equal(resolveActionTarget(validPr, "current-session"), "current-session");
+  // A GHES new-session degrades to current-session (the effective target the server ran), so the
+  // /api/agent/action response reflects where the work really goes instead of parroting the request.
+  assert.equal(resolveActionTarget(ghesPr, "new-session"), "current-session");
+  assert.equal(resolveActionTarget(ghesPr, "current-session"), "current-session");
+  // A bare/missing target defaults to new-session before the same routing is applied.
+  assert.equal(resolveActionTarget(validPr), "new-session");
+  assert.equal(resolveActionTarget(ghesPr), "current-session");
+  // An unknown target or invalid PR is echoed unchanged — buildAgentActionPrompt rejects those
+  // with a 400, so the client never reaches the reflected value.
+  assert.equal(resolveActionTarget(validPr, "sideways"), "sideways");
+  assert.equal(resolveActionTarget({ repository: "", number: 0 }, "new-session"), "new-session");
 });

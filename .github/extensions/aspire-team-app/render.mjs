@@ -748,6 +748,18 @@ const draftReposByAcct = {}; // account id -> working copy of that account's wat
 const editingByAcct = {};    // account id -> index of the repo row being inline-edited, or -1
 const repoSaveSeqByAcct = {}; // account id -> latest repository save request number
 
+// Card actions whose POST to /api/agent/action is still in flight, keyed by (action kind, PR)
+// so a split can be tracked independently of its owning card's DOM node. The in-DOM busy state
+// on the button is not enough on its own: a streamed 'state' event re-renders the card and hands
+// back a fresh, enabled button mid-request, which a second click would use to re-queue the same
+// agent action. cardActionBtn consults this set so the replacement split re-renders already
+// disabled, and onCardAction clears the key once the request settles (matching the existing
+// design where a later SSE refresh restores the default label).
+const inflightActions = new Set();
+function actionKey(kind, prUrl, prRepo, prNumber) {
+  return String(kind) + "@" + (prUrl || (String(prRepo) + "#" + String(prNumber)));
+}
+
 const RANK = { queue: 0, notifications: 1, accounts: 1, settings: 1, filters: 1 };
 
 const ICONS = {
@@ -963,6 +975,11 @@ async function onCardAction(split, target) {
   if (mainBtn.classList.contains("busy") || mainBtn.classList.contains("done")) return;
   const d = split.dataset;
   const t = target || "new-session";
+  // Guard across re-renders too: if a streamed 'state' event replaced this card while an
+  // earlier click's POST was still pending, the fresh button carries no .busy class, but the
+  // pending key still does — so refuse to double-queue the same action (see inflightActions).
+  const key = actionKey(d.kind, d.prUrl, d.prRepo, d.prNumber);
+  if (inflightActions.has(key)) return;
   const body = {
     kind: d.kind,
     target: t,
@@ -978,6 +995,7 @@ async function onCardAction(split, target) {
   mainBtn.classList.add("busy");
   mainBtn.disabled = true;
   if (caret) caret.disabled = true;
+  inflightActions.add(key);
   try {
     const res = await postJSON("api/agent/action", body);
     mainBtn.classList.remove("busy");
@@ -985,10 +1003,13 @@ async function onCardAction(split, target) {
     if (caret) caret.classList.add("done");
     // Label truthfully: if the agent was mid-task the prompt is queued behind it, so
     // don't claim it already started. Otherwise reflect where it's headed — a new
-    // session in the PR's repo, or this very session.
+    // session in the PR's repo, or this very session. Use the server's EFFECTIVE target
+    // (res.target), not the requested one: a GHES card degrades new-session to
+    // current-session server-side, so the requested 't' can overstate what actually ran.
+    const effTarget = (res && res.target) || t;
     const label = res && res.queued
       ? "Queued \u2014 starts after current task"
-      : (t === "current-session" ? "Running in this session" : (d.doneLabel || "Requested"));
+      : (effTarget === "current-session" ? "Running in this session" : (d.doneLabel || "Requested"));
     mainBtn.innerHTML = '<span class="cb-ico">' + ICONS.check + '</span><span class="cb-label">' + esc(label) + "</span>";
   } catch (e) {
     mainBtn.classList.remove("busy");
@@ -998,6 +1019,10 @@ async function onCardAction(split, target) {
     mainBtn.innerHTML = '<span class="cb-ico">' + ICONS.x + '</span><span class="cb-label">' + esc(String((e && e.message) || "Failed")) + "</span>";
     // Restore the original label after a beat so the user can retry.
     setTimeout(() => { mainBtn.classList.remove("failed"); mainBtn.innerHTML = original; }, 3200);
+  } finally {
+    // Clear the pending key once the request settles. The button keeps its own done/failed
+    // state; a subsequent SSE re-render restores the default (now re-enabled) button.
+    inflightActions.delete(key);
   }
 }
 
@@ -1167,11 +1192,16 @@ function cardActionBtn(pr, a) {
     ' data-pr-title="' + esc(pr.title || "") + '"' +
     ' data-pr-author="' + esc(pr.author || "") + '"';
   const icon = a.icon ? '<span class="cb-ico">' + a.icon + "</span>" : "";
+  // If a click's POST is still in flight when this card re-renders (e.g. from a streamed
+  // 'state' event), keep the replacement split disabled so it can't re-queue the same action.
+  const inflight = inflightActions.has(actionKey(a.kind, pr.url || "", pr.repository || "", pr.number));
+  const busyCls = inflight ? " busy" : "";
+  const disabledAttr = inflight ? " disabled" : "";
   return '<div class="cb-split"' + data + '>' +
-    '<button type="button" class="card-btn cb-main" data-target="new-session">' +
+    '<button type="button" class="card-btn cb-main' + busyCls + '" data-target="new-session"' + disabledAttr + '>' +
       icon + '<span class="cb-label">' + esc(a.label) + "</span></button>" +
     '<button type="button" class="card-btn cb-caret" aria-haspopup="true" aria-expanded="false"' +
-      ' title="Choose where to run" aria-label="Choose where to run ' + esc(a.label) + '">' +
+      ' title="Choose where to run" aria-label="Choose where to run ' + esc(a.label) + '"' + disabledAttr + '>' +
       ICONS.chev + "</button>" +
     '<div class="cb-menu" role="menu" hidden>' +
       cbMenuItem("new-session", ICONS.layers, "Open in new session", "In the PR\u2019s repo") +
@@ -1360,7 +1390,11 @@ function collapsibleSect(opts) {
 function queuePanel(opts) {
   const items = opts.items || [];
   const n = items.length;
-  const capped = typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
+  // exactCount: the shown items are not a prefix of the source list (e.g. the focus lane keeps
+  // review-debt cards that spill past the cap), so "top N of total" would be false — higher-ranked
+  // cards were skipped. Report the honest shown count instead; the uncapped total still shows in
+  // the header summary badge.
+  const capped = !opts.exactCount && typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
   const metric = capped ? "top " + n + " of " + opts.cappedTotal : n + " shown";
   const cardActions = typeof opts.cardActions === "function" ? opts.cardActions : null;
   const body = n
@@ -1400,7 +1434,7 @@ function reviewBoardHtml() {
   html += queuePanel({
     id: "needs-attention", title: "Needs attention", tone: "danger", icon: ICONS.alertSm,
     subtitle: "One actionable row per PR with fresh activity, waiting on a review or a merge.",
-    items: att.focus || [], cappedTotal: att.focusTotal,
+    items: att.focus || [], cappedTotal: att.focusTotal, exactCount: !!att.focusMixed,
     cardActions: focusCardActions,
     emptyText: "Nothing is waiting on a reviewer right now \u00b7 anything blocked sits in the breakdown below.",
   });

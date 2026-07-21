@@ -11,7 +11,7 @@ import { createServer } from "node:http";
 import { HTML, STYLES, APP_JS } from "./render.mjs";
 import { loadDashboard } from "./github.mjs";
 import { resolveAccounts } from "./accounts.mjs";
-import { buildAgentActionPrompt, buildAgentActionLog } from "./agent.mjs";
+import { buildAgentActionPrompt, buildAgentActionLog, resolveActionTarget } from "./agent.mjs";
 import {
   loadPrefs,
   savePrefs,
@@ -543,7 +543,11 @@ async function handle(req, res, log, instanceId) {
       // Tolerate a bare messageId string in case an older bridge is wired.
       const messageId = typeof result === "string" ? result : (result && result.messageId) ?? null;
       const queued = typeof result === "object" && result ? !!result.queued : false;
-      return send(res, 200, { ok: true, kind, target: target || "new-session", messageId, queued });
+      // Report the target actually used, not the one requested: buildAgentActionPrompt degrades
+      // new-session to current-session for non-github.com (GHES) PRs, so echoing the raw request
+      // would tell the client "Opened in a new session" when the work is really running in place.
+      const effectiveTarget = resolveActionTarget(resolvedPr, target);
+      return send(res, 200, { ok: true, kind, target: effectiveTarget, messageId, queued });
     }
     if (req.method === "POST" && path === "/api/notifications/dismiss") {
       const { id } = await readBody(req);

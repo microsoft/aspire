@@ -95,6 +95,44 @@ test("forYouCardActions maps review-requested picks to a Review action", () => {
   assert.equal(api.forYouCardActions(null), null);
 });
 
+test("queuePanel reports an honest 'N shown' metric for a mixed (non-prefix) selection", () => {
+  const { api } = createRendererHarness();
+  const items = [1, 2, 3, 4].map((n) => ({ pr: { url: "", title: "t" + n, author: "a", repository: "o/r", number: n } }));
+
+  // A genuine prefix (top N of a larger sorted list) keeps the "top N of total" claim.
+  assert.match(api.queuePanel({ id: "q", title: "Q", items, cappedTotal: 9 }), /top 4 of 9/);
+
+  // A mixed selection (review-debt cards spilled past the cap, so `items` is not a prefix of the
+  // sorted list) must NOT claim "top N of total" — non-debt cards between retained debt cards were
+  // skipped, so that would be false. It reports the honest shown count instead.
+  const mixed = api.queuePanel({ id: "q", title: "Q", items, cappedTotal: 9, exactCount: true });
+  assert.doesNotMatch(mixed, /top 4 of 9/);
+  assert.match(mixed, /4 shown/);
+});
+
+test("cardActionBtn re-renders a disabled button while its action's POST is still in flight", () => {
+  const { api } = createRendererHarness();
+  const pr = { url: "https://github.com/o/r/pull/1", number: 1, repository: "o/r", title: "t", author: "a" };
+  const action = { kind: "review", label: "Review", done: "Review requested", icon: "" };
+
+  // Default render: the split button is enabled so the user can click it.
+  const enabled = api.cardActionBtn(pr, action);
+  assert.match(enabled, /data-target="new-session"/);
+  assert.doesNotMatch(enabled, /disabled/);
+
+  // Mark this exact (kind, PR) action as in flight, then re-render the card the way a streamed
+  // 'state' event would. The replacement main button and caret must come back disabled so a click
+  // can't re-queue the same agent action mid-request.
+  api.inflightActions.add(api.actionKey(action.kind, pr.url, pr.repository, pr.number));
+  const busy = api.cardActionBtn(pr, action);
+  assert.match(busy, /class="card-btn cb-main busy" data-target="new-session" disabled/);
+  assert.match(busy, /class="card-btn cb-caret"[^>]*disabled/);
+
+  // A different action on the same PR is unaffected — only the in-flight split is locked.
+  const other = api.cardActionBtn(pr, { kind: "test", label: "Test", done: "Testing requested", icon: "" });
+  assert.doesNotMatch(other, /disabled/);
+});
+
 function createRendererHarness(overrides = {}) {
   const app = {
     innerHTML: "",
@@ -120,7 +158,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  setState(value) { state = value; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setState(value) { state = value; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }

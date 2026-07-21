@@ -768,6 +768,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
         c.reviewDebt = (c.signals || []).some((s) => s.label === reviewDebtSignalLabel);
         return c;
       });
+      const focus = capFocusKeepingDebt(focusCards, reviewLimit);
       attention = {
         forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
           // Personal pick leads with its own call-to-action; the engine's action pill is
@@ -783,9 +784,14 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           c.action = f.action;
           return c;
         }),
-        focus: capFocusKeepingDebt(focusCards, reviewLimit),
+        focus,
         focusTotal: focusAll.length,
         focusLimit: reviewLimit,
+        // True when capFocusKeepingDebt appended review-debt cards from past the cap, so `focus`
+        // is no longer a prefix of the sorted list: non-debt cards between retained debt cards are
+        // skipped. A "top N of total" label would then be false, so the canvas shows an honest
+        // "N shown" metric for this mixed selection instead.
+        focusMixed: focus.length > reviewLimit,
         focusExclusions: focusExclusions.map((e) => ({
           pr: e.pullRequest,
           reason: e.reason.detail,

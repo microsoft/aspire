@@ -113,6 +113,25 @@ function effectiveActionTarget(requestedTarget, url) {
   return requestedTarget === "new-session" && !isGitHubComUrl(url) ? "current-session" : requestedTarget;
 }
 
+// Resolve the effective session target for a card action from the same inputs the prompt
+// builder consumes, so callers (e.g. the /api/agent/action response) can report where the work
+// actually runs instead of parroting the requested target. Mirrors buildAgentActionPrompt's
+// routing exactly: an unknown/invalid target or PR is echoed back unchanged (the prompt builder
+// rejects those with a 400, so the client never reaches the reflected value), while a valid
+// new-session action against a non-github.com URL degrades to current-session (see
+// effectiveActionTarget).
+export function resolveActionTarget(rawPr, target = "new-session") {
+  const requested = normalizeActionTarget(target);
+  if (!AGENT_ACTION_TARGETS.includes(requested)) {
+    return requested;
+  }
+  const pr = normalizeActionPr(rawPr);
+  if (!isValidActionPr(pr)) {
+    return requested;
+  }
+  return effectiveActionTarget(requested, safePrUrl(pr));
+}
+
 // Collapse a possibly multi-line, attacker-controlled display string (a PR title) to a
 // single trimmed line so it can appear in the human timeline breadcrumb without smuggling
 // extra lines. Display only — titles/authors are deliberately never interpolated into the
