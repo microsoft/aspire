@@ -1,0 +1,38 @@
+{
+  "run_id": 29787895542,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29787895542",
+  "analyzed_at": "2026-07-21T00:33:28Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18835,
+    "title": "Fix Aspire Team App light mode rendering",
+    "author": "DamianEdwards",
+    "state": "closed",
+    "head_branch": "damianedwards-fix-team-app-theme",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18835"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.RemoteHost / Hosting.RemoteHost (windows-latest)",
+      "id": 88503618103,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29787895542/job/88503618103",
+      "classification": "flaky-test",
+      "reason": "The test JsonRpcAuthenticationTests.FailedAuthentication_ClosesConnection_AndPreventsFurtherCalls timed out connecting to a named pipe RPC server. This is a timing/intermittent failure unrelated to the PR, which only modifies .github/extensions/aspire-team-app/render.mjs and render.test.mjs.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.FailedAuthentication_ClosesConnection_AndPreventsFurtherCalls",
+      "job": "Tests / Hosting.RemoteHost / Hosting.RemoteHost (windows-latest)",
+      "error": "System.TimeoutException : Timed out connecting to test RPC server 'aspire-remotehost-test-dcb757163e5449dabe61e8e763448a88'.\n---- System.OperationCanceledException : The operation was canceled.",
+      "stack_trace": "at Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.RemoteHostTestServer.ConnectToServerAsync(String socketPath, CancellationToken cancellationToken) in /_/tests/Aspire.Hosting.RemoteHost.Tests/JsonRpcAuthenticationTests.cs:line 220\n   at Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.RemoteHostTestServer.ConnectAsync() in /_/tests/Aspire.Hosting.RemoteHost.Tests/JsonRpcAuthenticationTests.cs:line 129\n   at Aspire.Hosting.RemoteHost.Tests.JsonRpcAuthenticationTests.FailedAuthentication_ClosesConnection_AndPreventsFurtherCalls() in /_/tests/Aspire.Hosting.RemoteHost.Tests/JsonRpcAuthenticationTests.cs:line 58",
+      "classification": "flaky",
+      "reason": "Timeout connecting to a named pipe RPC server is an intermittent timing issue under CI load. The PR changes are only in .github/extensions/aspire-team-app/ and have no relation to RemoteHost RPC authentication tests."
+    }
+  ],
+  "causes": ["remotehost-jsonrpc-auth-timeout"]
+}
