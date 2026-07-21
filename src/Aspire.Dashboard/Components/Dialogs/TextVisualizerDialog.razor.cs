@@ -194,12 +194,13 @@ public partial class TextVisualizerDialog : ComponentBase
                     OnClick = () => ChangeFormatAsync(option.Id),
                     // Show a checkmark only for the selected option; reserve the icon column
                     // for unselected options so all label text aligns at the same position.
+                    // Do NOT set role="menuitemradio" — that activates FAST's native indicator
+                    // zone which adds extra left padding before slot="start", breaking alignment.
                     Icon = isSelected ? new Icons.Regular.Size16.Checkmark() : null,
                     ReserveIconSpace = !isSelected,
                     IsDisabled = !EnabledOptions.Contains(option.Id),
                     AdditionalAttributes = new Dictionary<string, object>
                     {
-                        ["role"] = "menuitemradio",
                         ["aria-checked"] = isSelected ? "true" : "false"
                     }
                 });
@@ -208,6 +209,7 @@ public partial class TextVisualizerDialog : ComponentBase
             _menuItems.Add(new()
             {
                 Text = Loc[nameof(Resources.Dialogs.TextVisualizerSelectFormatType)],
+                Icon = new Icons.Regular.Size16.TextBulletListSquare(),
                 NestedMenuItems = formatItems
             });
         }
@@ -218,9 +220,10 @@ public partial class TextVisualizerDialog : ComponentBase
             {
                 OnClick = ToggleWrapLinesAsync,
                 Text = ConsoleLogsLoc[nameof(ConsoleLogs.ConsoleLogsWrapLogs)],
-                // Use explicit checkbox icons instead of role="menuitemcheckbox" to avoid the
+                // Use explicit wrap icons instead of role="menuitemcheckbox" to avoid the
                 // native FAST indicator zone that would add extra left padding before the icon.
-                Icon = _noWrap ? new Icons.Regular.Size16.CheckboxUnchecked() : new Icons.Regular.Size16.CheckboxChecked(),
+                // Match the icon style used on the console logs page.
+                Icon = _noWrap ? new Icons.Regular.Size16.TextWrapOff() : new Icons.Regular.Size16.TextWrap(),
                 AdditionalAttributes = new Dictionary<string, object>
                 {
                     ["aria-checked"] = _noWrap ? "false" : "true"

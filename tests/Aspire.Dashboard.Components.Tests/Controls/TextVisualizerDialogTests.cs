@@ -93,13 +93,16 @@ public class TextVisualizerDialogTests : DashboardTestContext
         var menuButton = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
         var formatMenu = Assert.Single(menuButton.Instance.Items, i => i.NestedMenuItems is not null);
         Assert.Equal(Aspire.Dashboard.Resources.Dialogs.TextVisualizerSelectFormatType, formatMenu.Text);
+        Assert.NotNull(formatMenu.Icon);
         Assert.True(menuButton.Instance.RestoreFocusOnItemClick);
 
         var formatOptions = formatMenu.NestedMenuItems ?? throw new InvalidOperationException("Expected nested format options.");
         Assert.All(formatOptions, option =>
         {
             Assert.NotNull(option.AdditionalAttributes);
-            Assert.Equal("menuitemradio", option.AdditionalAttributes!["role"]);
+            // Do NOT assert role="menuitemradio" here — that role activates the FAST indicator zone
+            // which adds extra left padding. We rely on aria-checked alone.
+            Assert.False(option.AdditionalAttributes!.ContainsKey("role"), "Format items should not set role= to avoid native indicator padding.");
             Assert.True(option.AdditionalAttributes.ContainsKey("aria-checked"));
         });
         Assert.Single(formatOptions, option => string.Equals(option.AdditionalAttributes!["aria-checked"]?.ToString(), "true", StringComparison.Ordinal));
