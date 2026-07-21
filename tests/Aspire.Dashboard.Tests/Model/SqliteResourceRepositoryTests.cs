@@ -542,6 +542,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
                 'dashboard_schema',
                 'dashboard_resources',
                 'telemetry_logs',
+                'telemetry_trace_resources',
                 'telemetry_traces',
                 'telemetry_metric_instruments')
             ORDER BY name;
@@ -560,8 +561,44 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
             "dashboard_schema",
             "telemetry_logs",
             "telemetry_metric_instruments",
+            "telemetry_trace_resources",
             "telemetry_traces"
         ], tableNames);
+    }
+
+    [Fact]
+    public void Schema_TraceSummaryIndexesExist()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        using (CreateRepository(workspace.Path))
+        {
+        }
+
+        using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT name
+            FROM sqlite_schema
+            WHERE type = 'index' AND name IN (
+                'ix_telemetry_spans_parent',
+                'ix_telemetry_trace_resources_order')
+            ORDER BY name;
+            """;
+
+        using var reader = command.ExecuteReader();
+        var indexNames = new List<string>();
+        while (reader.Read())
+        {
+            indexNames.Add(reader.GetString(0));
+        }
+
+        Assert.Equal(
+        [
+            "ix_telemetry_spans_parent",
+            "ix_telemetry_trace_resources_order"
+        ], indexNames);
     }
 
     [Fact]

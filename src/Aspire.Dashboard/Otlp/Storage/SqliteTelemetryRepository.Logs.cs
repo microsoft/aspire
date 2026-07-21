@@ -764,35 +764,6 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private void DeleteTelemetryResourceFromDatabase(ResourceKey resourceKey)
-    {
-        lock (_writeLock)
-        {
-            using var connection = _database.OpenConnection();
-            using var transaction = connection.BeginTransaction();
-            var sql = new StringBuilder("""
-                DELETE FROM telemetry_resources
-                WHERE resource_name = @ResourceName COLLATE NOCASE
-                """);
-            var parameters = new DynamicParameters();
-            parameters.Add("ResourceName", resourceKey.Name);
-            if (resourceKey.InstanceId is not null)
-            {
-                sql.Append(" AND instance_id = @InstanceId COLLATE NOCASE");
-                parameters.Add("InstanceId", resourceKey.InstanceId);
-            }
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
-            connection.Execute("""
-                DELETE FROM telemetry_traces
-                WHERE NOT EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.trace_id = telemetry_traces.trace_id);
-                """, transaction: transaction);
-            DeleteOrphanedScopes(connection, transaction);
-            transaction.Commit();
-            ClearIngestionCaches();
-        }
-    }
-
     private void ClearStructuredLogsFromDatabase(ResourceKey? resourceKey)
     {
         lock (_writeLock)
@@ -830,48 +801,6 @@ public sealed partial class SqliteTelemetryRepository
             DeleteOrphanedScopes(connection, transaction);
             transaction.Commit();
             ClearMetadataCache();
-        }
-    }
-
-    private static void DeleteOrphanedScopes(SqliteConnection connection, IDbTransaction transaction)
-    {
-        connection.Execute("""
-            DELETE FROM telemetry_scopes
-            WHERE NOT EXISTS (SELECT 1 FROM telemetry_logs WHERE telemetry_logs.scope_id = telemetry_scopes.scope_id)
-              AND NOT EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.scope_id = telemetry_scopes.scope_id)
-              AND NOT EXISTS (SELECT 1 FROM telemetry_metric_instruments WHERE telemetry_metric_instruments.scope_id = telemetry_scopes.scope_id);
-            """, transaction: transaction);
-    }
-
-    private List<OtlpResource> GetTelemetryResources(bool includeUninstrumentedPeers, string? name)
-    {
-        EnsureCachePopulated();
-        lock (_cacheLock)
-        {
-            return _cachedResourcesByKey.Values
-                .Select(resource => resource.Resource)
-                .Where(resource => includeUninstrumentedPeers || !resource.UninstrumentedPeer)
-                .Where(resource => name is null || string.Equals(resource.ResourceName, name, StringComparisons.ResourceName))
-                .OrderBy(resource => resource.ResourceKey)
-                .ToList();
-        }
-    }
-
-    private sealed class ResourceViewPropertiesComparer : IEqualityComparer<KeyValuePair<string, string>[]>
-    {
-        public static readonly ResourceViewPropertiesComparer Instance = new();
-
-        public bool Equals(KeyValuePair<string, string>[]? left, KeyValuePair<string, string>[]? right) =>
-            ReferenceEquals(left, right) || left is not null && right is not null && left.SequenceEqual(right);
-
-        public int GetHashCode(KeyValuePair<string, string>[] properties)
-        {
-            var hash = new HashCode();
-            foreach (var property in properties)
-            {
-                hash.Add(property);
-            }
-            return hash.ToHashCode();
         }
     }
 
@@ -945,12 +874,6 @@ public sealed partial class SqliteTelemetryRepository
     {
         public string? FieldValue { get; init; }
         public required int ValueCount { get; init; }
-    }
-
-    private class TelemetryResourceRecord
-    {
-        public required string ResourceName { get; init; }
-        public string? InstanceId { get; init; }
     }
 
 }

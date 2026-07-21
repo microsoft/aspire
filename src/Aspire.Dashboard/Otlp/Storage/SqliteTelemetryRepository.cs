@@ -85,16 +85,6 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
 
     }
 
-    public List<OtlpResource> GetResources(bool includeUninstrumentedPeers = false) => GetTelemetryResources(includeUninstrumentedPeers, name: null);
-    public List<OtlpResource> GetResourcesByName(string name, bool includeUninstrumentedPeers = false) => GetTelemetryResources(includeUninstrumentedPeers, name);
-    public OtlpResource? GetResourceByCompositeName(string compositeName) => GetResources(includeUninstrumentedPeers: true).SingleOrDefault(resource => resource.ResourceKey.EqualsCompositeName(compositeName));
-    public OtlpResource? GetResource(ResourceKey key) => GetResources(includeUninstrumentedPeers: true).SingleOrDefault(resource => resource.ResourceKey == key);
-    public List<OtlpResource> GetResources(ResourceKey key, bool includeUninstrumentedPeers = false)
-    {
-        return key.InstanceId is null
-            ? GetResourcesByName(key.Name, includeUninstrumentedPeers)
-            : GetResources(includeUninstrumentedPeers).Where(resource => resource.ResourceKey == key).ToList();
-    }
     public void AddLogs(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
     {
         if (_pauseManager.AreStructuredLogsPaused(out _))

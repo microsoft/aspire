@@ -283,11 +283,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Data from the server.
         builder.Services.TryAddSingleton<DashboardActivitySource>();
         builder.Services.TryAddSingleton<DashboardClient>();
-        builder.Services.AddScoped(services => new DashboardDataSource(
-            services.GetRequiredService<IDashboardRunStore>(),
-            services.GetRequiredService<ITelemetryRepository>(),
-            services.GetRequiredService<IResourceRepository>(),
-            services.GetRequiredService<IRepositoryFactory>()));
+        builder.Services.AddScoped<DashboardDataSource>();
         builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
         builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();
 

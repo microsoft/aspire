@@ -10,10 +10,27 @@ using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.ServiceClient;
 
-internal interface IDashboardRunStore
+/// <summary>
+/// Provides the dashboard runs available for selection.
+/// </summary>
+public interface IDashboardRunStore
 {
+    /// <summary>
+    /// Gets a value indicating whether historical dashboard runs can be selected.
+    /// </summary>
     bool SupportsRunSelection { get; }
+
+    /// <summary>
+    /// Gets the current and historical dashboard runs available for selection.
+    /// </summary>
+    /// <returns>The available dashboard runs.</returns>
     IReadOnlyList<DashboardRunDescriptor> GetRuns();
+
+    /// <summary>
+    /// Attempts to acquire a lease that keeps the specified dashboard run available while it is selected.
+    /// </summary>
+    /// <param name="run">The dashboard run to lease.</param>
+    /// <returns>A lease for the dashboard run, or <see langword="null"/> when the run is no longer available.</returns>
     IDisposable? TryAcquireRunLease(DashboardRunDescriptor run);
 }
 
@@ -395,7 +412,18 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
     }
 }
 
-internal sealed record DashboardRunDescriptor(
+/// <summary>
+/// Describes a dashboard run available for selection.
+/// </summary>
+/// <param name="RunId">The unique identifier for the dashboard run.</param>
+/// <param name="SchemaVersion">The dashboard database schema version used by the run.</param>
+/// <param name="StartedAtUtc">The time at which the run started.</param>
+/// <param name="EndedAtUtc">The time at which the run ended, or <see langword="null"/> when it has not ended.</param>
+/// <param name="CleanShutdown">A value indicating whether the run shut down cleanly.</param>
+/// <param name="ApplicationName">The application name associated with the run.</param>
+/// <param name="DatabasePath">The path to the dashboard database for the run.</param>
+/// <param name="IsCurrent">A value indicating whether this is the current dashboard run.</param>
+public sealed record DashboardRunDescriptor(
     string RunId,
     int SchemaVersion,
     DateTimeOffset StartedAtUtc,

@@ -5,6 +5,7 @@ using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -216,6 +217,150 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public void GetTraceSummaries_LateParent_PreservesResourceOrder()
+    {
+        var repository = CreateRepository();
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "z-child"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                parentSpanId: "1-1",
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(10))
+                        }
+                    }
+                }
+            }
+        ]);
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "a-parent"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime.AddMinutes(5),
+                                endTime: s_testTime.AddMinutes(10))
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).PagedResult.Items);
+        var trace = Assert.IsType<OtlpTrace>(repository.GetTrace(summary.TraceId));
+
+        Assert.Equal(
+            TraceHelpers.GetOrderedResources(trace).Select(resource => resource.Resource.ResourceKey),
+            summary.Resources.Select(resource => resource.Resource.ResourceKey));
+        Assert.Collection(summary.Resources,
+            resource => Assert.Equal("a-parent", resource.Resource.ResourceName),
+            resource => Assert.Equal("z-child", resource.Resource.ResourceName));
+    }
+
+    [Fact]
+    public void GetTraceSummaries_IncrementalAppend_UpdatesSummaryValues()
+    {
+        var repository = CreateRepository();
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "frontend"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        ]);
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "backend"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                parentSpanId: "1-1",
+                                startTime: s_testTime.AddSeconds(1),
+                                endTime: s_testTime.AddMinutes(2),
+                                attributes: [KeyValuePair.Create("gen_ai.provider.name", "test")],
+                                status: new Status { Code = Status.Types.StatusCode.Error })
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).PagedResult.Items);
+
+        Assert.True(summary.HasError);
+        Assert.True(summary.HasGenAI);
+        Assert.Collection(summary.Resources,
+            resource =>
+            {
+                Assert.Equal("frontend", resource.Resource.ResourceName);
+                Assert.Equal(1, resource.TotalSpans);
+                Assert.Equal(0, resource.ErroredSpans);
+            },
+            resource =>
+            {
+                Assert.Equal("backend", resource.Resource.ResourceName);
+                Assert.Equal(1, resource.TotalSpans);
+                Assert.Equal(1, resource.ErroredSpans);
+            });
+    }
+
+    [Fact]
     public void AddTraces_SelfParent_Reject()
     {
         // Arrange
@@ -322,6 +467,63 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             {
                 Assert.Equal(2, trace.Spans.Count);
             });
+    }
+
+    [Fact]
+    public void AddTraces_CircularReferenceAcrossIngestionCalls_Reject()
+    {
+        var repository = CreateRepository();
+        repository.AsWriter().AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3), parentSpanId: "1-1"),
+                            CreateSpan(traceId: "1", spanId: "1-3", startTime: s_testTime.AddMinutes(3), endTime: s_testTime.AddMinutes(4), parentSpanId: "1-2")
+                        }
+                    }
+                }
+            }
+        });
+
+        var context = new AddContext();
+        repository.AsWriter().AddTraces(context, new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: s_testTime.AddMinutes(1), endTime: s_testTime.AddMinutes(5), parentSpanId: "1-3")
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(1, context.FailureCount);
+        var trace = Assert.Single(repository.GetTraces(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).PagedResult.Items);
+        Assert.Collection(trace.Spans,
+            span => AssertId("1-2", span.SpanId),
+            span => AssertId("1-3", span.SpanId));
     }
 
     [Fact]
@@ -3680,6 +3882,205 @@ public sealed class SqliteTraceTests : TraceTests
     protected override bool UseSqlite => true;
 
     [Fact]
+    public void GetTraceSummaries_EqualStartTime_MatchesMaterializedTrace()
+    {
+        var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var repository = CreateRepository();
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "first"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-1", startTime: testTime, endTime: testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        ]);
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "second"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "1-2", startTime: testTime, endTime: testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var trace = Assert.IsType<OtlpTrace>(repository.GetTrace(GetHexId("1")));
+        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).PagedResult.Items);
+
+        Assert.Equal(trace.FullName, summary.FullName);
+        Assert.Equal(trace.RootOrFirstSpan.Source.Resource.ResourceKey, summary.RootResource.ResourceKey);
+    }
+
+    [Fact]
+    public void AddTraces_LargeAppend_DoesNotExceedSqliteParameterLimit()
+    {
+        const int appendedSpanCount = 8_192;
+        var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var repository = CreateRepository();
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(traceId: "1", spanId: "root", startTime: testTime, endTime: testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        ]);
+        var resourceSpans = new ResourceSpans
+        {
+            Resource = CreateResource(),
+            ScopeSpans =
+            {
+                new ScopeSpans
+                {
+                    Scope = CreateScope()
+                }
+            }
+        };
+        for (var index = 0; index < appendedSpanCount; index++)
+        {
+            resourceSpans.ScopeSpans[0].Spans.Add(CreateSpan(
+                traceId: "1",
+                spanId: $"child-{index}",
+                parentSpanId: $"missing-parent-{index}",
+                startTime: testTime.AddSeconds(1),
+                endTime: testTime.AddMinutes(1)));
+        }
+
+        var context = new AddContext();
+        repository.AsWriter().AddTraces(context, [resourceSpans]);
+
+        Assert.Equal(appendedSpanCount, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).PagedResult.Items);
+        Assert.Collection(summary.Resources, resource => Assert.Equal(appendedSpanCount + 1, resource.TotalSpans));
+    }
+
+    [Fact]
+    public void GetTraceSummaries_AfterResourceDeletion_DeletesAffectedTraces()
+    {
+        var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var repository = CreateRepository();
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "frontend"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: testTime,
+                                endTime: testTime.AddMinutes(5),
+                                attributes: [KeyValuePair.Create("gen_ai.system", "test")],
+                                status: new Status { Code = Status.Types.StatusCode.Error })
+                        }
+                    }
+                }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "backend"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                parentSpanId: "1-1",
+                                startTime: testTime.AddMinutes(1),
+                                endTime: testTime.AddMinutes(2)),
+                            CreateSpan(
+                                traceId: "2",
+                                spanId: "2-1",
+                                startTime: testTime.AddMinutes(3),
+                                endTime: testTime.AddMinutes(4))
+                        }
+                    }
+                }
+            }
+        ]);
+
+        repository.AsWriter().ClearSelectedSignals(new Dictionary<string, HashSet<AspireDataType>>
+        {
+            [new ResourceKey("frontend", "TestId").GetCompositeName()] = [AspireDataType.Resource]
+        });
+
+        Assert.Null(repository.GetTrace(GetHexId("1")));
+        Assert.NotNull(repository.GetTrace(GetHexId("2")));
+
+        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).PagedResult.Items);
+        AssertId("2", summary.TraceId);
+        Assert.Equal("backend: Test span. Id: 2-1", summary.FullName);
+        Assert.Equal(testTime.AddMinutes(3), summary.StartTime);
+        Assert.Equal(TimeSpan.FromMinutes(1), summary.Duration);
+        Assert.False(summary.HasError);
+        Assert.False(summary.HasGenAI);
+        Assert.Collection(summary.Resources, resource =>
+        {
+            Assert.Equal("backend", resource.Resource.ResourceName);
+            Assert.Equal(1, resource.TotalSpans);
+            Assert.Equal(0, resource.ErroredSpans);
+        });
+    }
+
+    [Fact]
     public void AddTraces_BatchesSpansAndDetailsAcrossResources()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
@@ -3710,10 +4111,19 @@ public sealed class SqliteTraceTests : TraceTests
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_links", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_span_link_attributes", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("WITH peer_updates", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("WITH span_orders", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.StartsWith("WITH new_spans", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.StartsWith("DELETE FROM telemetry_trace_resources", StringComparison.Ordinal));
         Assert.Single(queries, query =>
             query.StartsWith("SELECT", StringComparison.Ordinal) &&
-            query.Contains("s.trace_id AS TraceId", StringComparison.Ordinal) &&
-            query.Contains("FROM telemetry_span_attributes", StringComparison.Ordinal));
+            query.Contains("t.first_span_timestamp_ticks AS FirstSpanTimestampTicks", StringComparison.Ordinal));
+        Assert.Single(queries, query =>
+            query.StartsWith("SELECT", StringComparison.Ordinal) &&
+            query.Contains("s.resource_order_ticks AS ResourceOrderTicks", StringComparison.Ordinal));
+        Assert.Single(queries, query =>
+            query.StartsWith("SELECT", StringComparison.Ordinal) &&
+            query.Contains("s.parent_span_id AS ParentSpanId", StringComparison.Ordinal));
+        Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_span_attributes", StringComparison.Ordinal));
         Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_span_events", StringComparison.Ordinal));
         Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_span_links", StringComparison.Ordinal));
         Assert.DoesNotContain(queries, query => query.StartsWith("UPDATE telemetry_resources SET has_traces", StringComparison.Ordinal));
@@ -3762,5 +4172,54 @@ public sealed class SqliteTraceTests : TraceTests
                 }
             };
         }
+    }
+
+    [Fact]
+    public void GetTraceSummaries_UsesPersistedResourceSummaries()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: testTime,
+                                endTime: testTime.AddMinutes(1))
+                        }
+                    }
+                }
+            }
+        ]);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("trace summary query test").Start();
+
+        repository.GetTraceSummaries(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        });
+
+        var query = Assert.Single(activities, activity =>
+            activity.ParentSpanId == parent.SpanId &&
+            activity.GetTagItem("db.query.text") is string text &&
+            text.Contains("FROM telemetry_trace_resources", StringComparison.Ordinal));
+        var queryText = Assert.IsType<string>(query.GetTagItem("db.query.text"));
+        Assert.Contains("FROM telemetry_trace_resources", queryText, StringComparison.Ordinal);
+        Assert.DoesNotContain("RECURSIVE", queryText, StringComparison.Ordinal);
+        Assert.DoesNotContain("span_tree", queryText, StringComparison.Ordinal);
     }
 }

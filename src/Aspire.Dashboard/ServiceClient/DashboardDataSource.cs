@@ -20,22 +20,33 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
     private readonly ITelemetryRepository _currentTelemetryRepository;
     private readonly IResourceRepository _currentResourceRepository;
     private readonly IRepositoryFactory _repositoryFactory;
+    private readonly ILogger<DashboardDataSource> _logger;
 
     private ITelemetryRepository? _historicalTelemetryRepository;
     private IResourceRepository? _historicalResourceRepository;
     private DashboardSqliteDatabase? _historicalDatabase;
     private IDisposable? _historicalRunLease;
 
-    internal DashboardDataSource(
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DashboardDataSource"/> class.
+    /// </summary>
+    /// <param name="runStore">The store that provides available dashboard runs.</param>
+    /// <param name="currentTelemetryRepository">The telemetry repository for the current dashboard run.</param>
+    /// <param name="currentResourceRepository">The resource repository for the current dashboard run.</param>
+    /// <param name="repositoryFactory">The factory used to create repositories for historical dashboard runs.</param>
+    /// <param name="logger">The logger used to record dashboard run selection.</param>
+    public DashboardDataSource(
         IDashboardRunStore runStore,
         ITelemetryRepository currentTelemetryRepository,
         IResourceRepository currentResourceRepository,
-        IRepositoryFactory repositoryFactory)
+        IRepositoryFactory repositoryFactory,
+        ILogger<DashboardDataSource> logger)
     {
         _runStore = runStore;
         _currentTelemetryRepository = currentTelemetryRepository;
         _currentResourceRepository = currentResourceRepository;
         _repositoryFactory = repositoryFactory;
+        _logger = logger;
 
         SelectRun(runId: null);
     }
@@ -61,13 +72,24 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
     internal void SelectRun(string? runId)
     {
         var runs = _runStore.GetRuns();
-        var selectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal))
-            ?? runs.Single(run => run.IsCurrent);
+        var currentRun = runs.Single(run => run.IsCurrent);
+        var selectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal));
+        if (selectedRun is null)
+        {
+            if (!string.IsNullOrEmpty(runId))
+            {
+                _logger.LogWarning("Failed to switch to dashboard run '{RunId}' because it is no longer available.", runId);
+            }
+
+            selectedRun = currentRun;
+        }
+
         if (SelectedRun?.RunId == selectedRun.RunId)
         {
             return;
         }
 
+        var previousRun = SelectedRun;
         DisposeHistoricalRepositories();
         _historicalTelemetryRepository = null;
         _historicalResourceRepository = null;
@@ -77,13 +99,16 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
             var historicalRunLease = _runStore.TryAcquireRunLease(selectedRun);
             if (historicalRunLease is null)
             {
-                SelectCurrentRun(runs.Single(run => run.IsCurrent));
+                _logger.LogWarning("Failed to switch to dashboard run '{RunId}' because it is no longer available.", selectedRun.RunId);
+                SelectCurrentRun(currentRun);
+                LogRunSwitch(previousRun, currentRun);
                 return;
             }
 
-            var historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
+            DashboardSqliteDatabase? historicalDatabase = null;
             try
             {
+                historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
                 if (!historicalDatabase.ValidateSchemaVersion(selectedRun.SchemaVersion))
                 {
                     throw new InvalidOperationException(
@@ -94,10 +119,11 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
                 _historicalDatabase = historicalDatabase;
                 _historicalRunLease = historicalRunLease;
             }
-            catch
+            catch (Exception exception)
             {
-                historicalDatabase.Dispose();
+                historicalDatabase?.Dispose();
                 historicalRunLease.Dispose();
+                _logger.LogWarning(exception, "Failed to switch to dashboard run '{RunId}'.", selectedRun.RunId);
                 throw;
             }
             TelemetryRepository = _historicalTelemetryRepository;
@@ -110,6 +136,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
         }
 
         SelectedRun = selectedRun;
+        LogRunSwitch(previousRun, selectedRun);
     }
 
     public void Dispose()
@@ -133,5 +160,16 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
         ResourceRepository = _currentResourceRepository;
         IsReadOnly = false;
         SelectedRun = currentRun;
+    }
+
+    private void LogRunSwitch(DashboardRunDescriptor? previousRun, DashboardRunDescriptor selectedRun)
+    {
+        if (previousRun is not null && !string.Equals(previousRun.RunId, selectedRun.RunId, StringComparison.Ordinal))
+        {
+            _logger.LogDebug(
+                "Switched dashboard run from '{PreviousRunId}' to '{RunId}'.",
+                previousRun.RunId,
+                selectedRun.RunId);
+        }
     }
 }

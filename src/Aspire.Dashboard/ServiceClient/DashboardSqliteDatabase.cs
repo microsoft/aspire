@@ -11,11 +11,11 @@ namespace Aspire.Dashboard.ServiceClient;
 /// <summary>
 /// Creates consistently configured connections to a dashboard run database.
 /// </summary>
-internal sealed class DashboardSqliteDatabase : IDisposable
+public sealed class DashboardSqliteDatabase : IDisposable
 {
     private const string SchemaResourcePrefix = "Aspire.Dashboard.ServiceClient.DatabaseSchema.";
 
-    internal const int SchemaVersion = 10;
+    internal const int SchemaVersion = 11;
 
     private static readonly Lazy<IReadOnlyList<string>> s_schemaScripts = new(LoadSchemaScripts);
 
@@ -24,6 +24,12 @@ internal sealed class DashboardSqliteDatabase : IDisposable
     private readonly object _schemaLock = new();
     private bool _schemaInitialized;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="DashboardSqliteDatabase"/> class.
+    /// </summary>
+    /// <param name="databasePath">The path to the dashboard database.</param>
+    /// <param name="readOnly">A value indicating whether the database is opened for read-only access.</param>
+    /// <param name="pooling">A value indicating whether SQLite connection pooling is enabled.</param>
     public DashboardSqliteDatabase(string databasePath, bool readOnly = false, bool pooling = true)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(databasePath);
@@ -45,12 +51,23 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         }.ToString();
     }
 
+    /// <summary>
+    /// Gets the full path to the dashboard database.
+    /// </summary>
     public string DatabasePath { get; }
 
+    /// <summary>
+    /// Gets a value indicating whether the database is opened for read-only access.
+    /// </summary>
     public bool IsReadOnly { get; }
 
     internal ActivitySource ActivitySource => _activitySource;
 
+    /// <summary>
+    /// Determines whether a dashboard database uses the current schema version.
+    /// </summary>
+    /// <param name="databasePath">The path to the dashboard database.</param>
+    /// <returns><see langword="true"/> when the database is compatible; otherwise, <see langword="false"/>.</returns>
     public static bool IsCompatible(string databasePath)
     {
         if (!File.Exists(databasePath))
@@ -70,7 +87,7 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         }
     }
 
-    public TracingSqliteConnection OpenConnection()
+    internal TracingSqliteConnection OpenConnection()
     {
         var connection = new TracingSqliteConnection(_connectionString, DatabasePath, _activitySource);
         connection.Open();
@@ -85,6 +102,9 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         return ValidateSchemaVersion(connection, transaction: null, metadataSchemaVersion);
     }
 
+    /// <summary>
+    /// Clears pooled SQLite connections associated with this database.
+    /// </summary>
     public void ClearPool()
     {
         using var connection = new SqliteConnection(_connectionString);
@@ -93,6 +113,9 @@ internal sealed class DashboardSqliteDatabase : IDisposable
 
     public void Dispose() => _activitySource.Dispose();
 
+    /// <summary>
+    /// Initializes the dashboard database schema when it has not already been initialized.
+    /// </summary>
     public void InitializeSchema()
     {
         EnsureWritable("Historical dashboard data is read-only.");
@@ -132,6 +155,11 @@ internal sealed class DashboardSqliteDatabase : IDisposable
         }
     }
 
+    /// <summary>
+    /// Throws an exception with the specified message when the database is read-only.
+    /// </summary>
+    /// <param name="message">The exception message used when the database is read-only.</param>
+    /// <exception cref="InvalidOperationException">The database is read-only.</exception>
     public void EnsureWritable(string message)
     {
         if (IsReadOnly)

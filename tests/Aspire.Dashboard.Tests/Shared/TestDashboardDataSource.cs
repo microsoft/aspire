@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.ServiceClient;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Dashboard.Tests.Shared;
 
@@ -16,7 +17,8 @@ internal static class TestDashboardDataSource
             new TestDashboardRunStore(),
             telemetryRepository,
             resourceRepository,
-            new TestRepositoryFactory(telemetryRepository, resourceRepository));
+            new TestRepositoryFactory(telemetryRepository, resourceRepository),
+            NullLogger<DashboardDataSource>.Instance);
     }
 
     private sealed class TestRepositoryFactory(

@@ -9,6 +9,7 @@ internal static class Program
 {
     private static void Main(string[] args)
     {
+        SQLitePCL.Batteries_V2.Init();
         BenchmarkSwitcher.FromAssembly(typeof(Program).Assembly).Run(args);
     }
 }
