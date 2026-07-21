@@ -160,16 +160,16 @@ public partial class TextVisualizerDialog : ComponentBase
         }
     }
 
-    private Task ChangeFormatAsync(string? newFormat)
+    private async Task ChangeFormatAsync(string? newFormat)
     {
         ChangeFormat(newFormat);
-        return Task.CompletedTask;
+        await InvokeAsync(StateHasChanged);
     }
 
-    private Task ToggleWrapLinesAsync()
+    private async Task ToggleWrapLinesAsync()
     {
         ToggleWrapLines();
-        return Task.CompletedTask;
+        await InvokeAsync(StateHasChanged);
     }
 
     internal void ToggleWrapLines()

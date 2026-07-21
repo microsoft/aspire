@@ -196,17 +196,15 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.NotNull(wrapMenuItem.AdditionalAttributes);
         Assert.Equal("menuitemcheckbox", wrapMenuItem.AdditionalAttributes!["role"]);
         Assert.Equal("true", wrapMenuItem.AdditionalAttributes["aria-checked"]);
-        var dialog = cut.FindComponent<TextVisualizerDialog>();
         Assert.Empty(cut.FindAll(".wrap-log-container"));
 
-        dialog.Instance.ToggleWrapLines();
-        dialog.Render();
+        await wrapMenuItem.OnClick!.Invoke();
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".wrap-log-container")));
         Assert.Equal("false", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
             .Instance.Items.Single(i => i.Text == wrapLinesLabel).AdditionalAttributes!["aria-checked"]);
 
-        dialog.Instance.ToggleWrapLines();
-        dialog.Render();
+        await Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+            .Instance.Items.Single(i => i.Text == wrapLinesLabel).OnClick!.Invoke();
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".wrap-log-container")));
         Assert.Equal("true", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
             .Instance.Items.Single(i => i.Text == wrapLinesLabel).AdditionalAttributes!["aria-checked"]);

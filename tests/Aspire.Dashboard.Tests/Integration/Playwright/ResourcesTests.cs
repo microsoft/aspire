@@ -132,7 +132,7 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
             var optionsButton = page.Locator("fluent-button.text-visualizer-options-menu-button");
             await optionsButton.ClickAsync();
-            await page.GetByRole(AriaRole.Menuitem, new() { Name = ControlsStrings.GridValueWrapLines, Exact = true }).ClickAsync();
+            await page.GetByRole(AriaRole.Menuitemcheckbox, new() { Name = ControlsStrings.GridValueWrapLines, Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator(".text-visualizer-container .wrap-log-container")).ToHaveCountAsync(1);
 
             var metricsJson = await page.EvaluateAsync<string>(@"() => {
