@@ -187,16 +187,20 @@ public partial class TextVisualizerDialog : ComponentBase
             var formatItems = new List<MenuButtonItem>(_options.Count);
             foreach (var option in _options)
             {
+                var isSelected = _selectedFormat.Id == option.Id;
                 formatItems.Add(new()
                 {
                     Text = option.Name,
                     OnClick = () => ChangeFormatAsync(option.Id),
-                    Icon = _selectedFormat.Id == option.Id ? new Icons.Regular.Size16.Checkmark() : null,
+                    // Show a checkmark only for the selected option; reserve the icon column
+                    // for unselected options so all label text aligns at the same position.
+                    Icon = isSelected ? new Icons.Regular.Size16.Checkmark() : null,
+                    ReserveIconSpace = !isSelected,
                     IsDisabled = !EnabledOptions.Contains(option.Id),
                     AdditionalAttributes = new Dictionary<string, object>
                     {
                         ["role"] = "menuitemradio",
-                        ["aria-checked"] = _selectedFormat.Id == option.Id ? "true" : "false"
+                        ["aria-checked"] = isSelected ? "true" : "false"
                     }
                 });
             }
@@ -214,10 +218,11 @@ public partial class TextVisualizerDialog : ComponentBase
             {
                 OnClick = ToggleWrapLinesAsync,
                 Text = ConsoleLogsLoc[nameof(ConsoleLogs.ConsoleLogsWrapLogs)],
+                // Use explicit checkbox icons instead of role="menuitemcheckbox" to avoid the
+                // native FAST indicator zone that would add extra left padding before the icon.
                 Icon = _noWrap ? new Icons.Regular.Size16.CheckboxUnchecked() : new Icons.Regular.Size16.CheckboxChecked(),
                 AdditionalAttributes = new Dictionary<string, object>
                 {
-                    ["role"] = "menuitemcheckbox",
                     ["aria-checked"] = _noWrap ? "false" : "true"
                 }
             });

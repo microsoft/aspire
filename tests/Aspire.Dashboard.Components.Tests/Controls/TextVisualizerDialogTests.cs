@@ -103,8 +103,9 @@ public class TextVisualizerDialogTests : DashboardTestContext
             Assert.True(option.AdditionalAttributes.ContainsKey("aria-checked"));
         });
         Assert.Single(formatOptions, option => string.Equals(option.AdditionalAttributes!["aria-checked"]?.ToString(), "true", StringComparison.Ordinal));
+        // Only the selected option has an icon; unselected options reserve icon space for text alignment.
         Assert.Single(formatOptions, option => option.Icon is not null);
-        Assert.Equal(formatOptions.Count - 1, formatOptions.Count(option => option.Icon is null));
+        Assert.Equal(formatOptions.Count - 1, formatOptions.Count(option => option.Icon is null && option.ReserveIconSpace));
 
         var plaintextOption = formatOptions.Single(i => i.Text == Aspire.Dashboard.Resources.Dialogs.TextVisualizerDialogPlaintextFormat);
         await plaintextOption.OnClick!.Invoke();
@@ -120,7 +121,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
                 .Instance.Items.Single(i => i.NestedMenuItems is not null).NestedMenuItems!;
             Assert.Single(selectedOptions, option => string.Equals(option.AdditionalAttributes!["aria-checked"]?.ToString(), "true", StringComparison.Ordinal));
             Assert.Single(selectedOptions, option => option.Icon is not null);
-            Assert.Equal(selectedOptions.Count - 1, selectedOptions.Count(option => option.Icon is null));
+            Assert.Equal(selectedOptions.Count - 1, selectedOptions.Count(option => option.Icon is null && option.ReserveIconSpace));
         });
 
         cut.FindComponent<TextVisualizerDialog>().SetParametersAndRender(parameters => parameters.Add(p => p.Content, content));
@@ -198,7 +199,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
         var menuButton = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
         var wrapMenuItem = Assert.Single(menuButton.Instance.Items, i => i.Text == wrapLinesLabel);
         Assert.NotNull(wrapMenuItem.AdditionalAttributes);
-        Assert.Equal("menuitemcheckbox", wrapMenuItem.AdditionalAttributes!["role"]);
+        Assert.False(wrapMenuItem.AdditionalAttributes!.ContainsKey("role"), "Wrap item should not set role= to avoid native indicator padding.");
         Assert.Equal("true", wrapMenuItem.AdditionalAttributes["aria-checked"]);
         Assert.Empty(cut.FindAll(".wrap-log-container"));
 

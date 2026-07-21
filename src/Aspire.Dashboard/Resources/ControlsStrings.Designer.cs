@@ -520,15 +520,6 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Wrap lines.
-        /// </summary>
-        public static string GridValueWrapLines {
-            get {
-                return ResourceManager.GetString("GridValueWrapLines", resourceCulture);
-            }
-        }
-        
-        /// <summary>
         ///   Looks up a localized string similar to Hide hidden resources.
         /// </summary>
         public static string HideHiddenResources {

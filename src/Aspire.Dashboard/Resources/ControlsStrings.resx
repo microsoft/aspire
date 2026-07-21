@@ -168,9 +168,6 @@
   <data name="GridValueCopyToClipboard" xml:space="preserve">
     <value>Copy to clipboard</value>
   </data>
-  <data name="GridValueWrapLines" xml:space="preserve">
-    <value>Wrap lines</value>
-  </data>
   <data name="ExceptionDetailsTitle" xml:space="preserve">
     <value>Exception details</value>
   </data>

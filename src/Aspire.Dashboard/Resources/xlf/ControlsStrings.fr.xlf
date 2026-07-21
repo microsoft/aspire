@@ -152,11 +152,6 @@
         <target state="translated">Exporter le fichier .env</target>
         <note />
       </trans-unit>
-      <trans-unit id="GridValueWrapLines">
-        <source>Wrap lines</source>
-        <target state="new">Wrap lines</target>
-        <note />
-      </trans-unit>
       <trans-unit id="ResourcesContainerGraphAccessibleLabel">
         <source>Graph. For an accessible view please navigate to the Resources tab</source>
         <target state="new">Graph. For an accessible view please navigate to the Resources tab</target>
