@@ -432,8 +432,21 @@ async function handle(req, res, log, instanceId) {
   const path = url.pathname;
 
   try {
-    // Every mutating route on this API is a POST, so gate POSTs on the origin guard
-    // before dispatching to any handler that reads the body or writes preferences.
+    // Pin EVERY request to this server's own loopback origin before serving anything — not just
+    // mutating POSTs. The iframe this server rendered at http://127.0.0.1:<our port>/ always calls
+    // back with that loopback Host, so a request whose Host isn't our loopback origin isn't from
+    // our iframe. This must gate reads too: the /events stream and /api/state response carry
+    // private PR metadata and watched-repo preferences, so a DNS-rebinding page (evil.example
+    // rebound to 127.0.0.1, "same-origin" with its own hostname) could otherwise READ that data
+    // even though it can't POST. isLoopbackHost anchors on the accepted socket's localPort, which
+    // request headers can't spoof. See https://en.wikipedia.org/wiki/DNS_rebinding.
+    if (!isLoopbackHost(req.headers.host, req.socket?.localPort)) {
+      return send(res, 403, { error: "forbidden" });
+    }
+
+    // Every mutating route on this API is a POST, so additionally gate POSTs on the CSRF origin
+    // guard (Origin / Sec-Fetch-Site) before dispatching to any handler that reads the body or
+    // writes preferences.
     if (req.method === "POST" && !isAllowedPostRequest(req)) {
       return send(res, 403, { error: "forbidden" });
     }
@@ -591,7 +604,15 @@ async function handle(req, res, log, instanceId) {
     }
     return send(res, 404, { error: "not found" });
   } catch (e) {
-    log?.(`request error ${path}: ${e.message}`);
+    // The error path's logger is the async session log, which can itself reject when the session
+    // has disconnected — often the same failure that landed us here (e.g. a rejected agentSend).
+    // Firing it without observing that rejection would surface as an unhandled rejection and can
+    // terminate the extension host, so swallow the logger's own failure — sync via try, async via
+    // .catch — exactly as backgroundRefresh does.
+    try {
+      const logged = log?.(`request error ${path}: ${e.message}`);
+      logged?.catch?.(() => {});
+    } catch { /* logger unavailable */ }
     return send(res, 500, { error: e.message });
   }
 }

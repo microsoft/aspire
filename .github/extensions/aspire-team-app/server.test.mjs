@@ -1,5 +1,6 @@
 import assert from "node:assert/strict";
 import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
+import http from "node:http";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import test from "node:test";
@@ -67,6 +68,63 @@ test("isAllowedPostRequest pins the Host header to this server's loopback origin
   assert.equal(isAllowedPostRequest(req("127.0.0.1")), false);
   // Missing Host header.
   assert.equal(isAllowedPostRequest({ headers: {}, socket: { localPort: port } }), false);
+});
+
+test("GET reads are also pinned to the loopback origin (DNS rebinding can't read private state)", async (t) => {
+  await resetTestHome();
+  delete process.env.GH_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+
+  const server = await import(`./server.mjs?test=readguard-${Date.now()}`);
+  const entry = await server.startInstance("read-guard-test", () => {});
+  t.after(() => server.stopInstance("read-guard-test"));
+
+  const port = new URL(entry.url).port;
+  // A DNS-rebinding page keeps the real (loopback) port but presents its own public hostname as
+  // Host. The /events stream and /api/state response carry private PR metadata + watched-repo
+  // prefs, so both must be rejected before any handler runs — not only mutating POSTs.
+  const rebindHost = `malicious.example:${port}`;
+  assert.equal((await rawRequest(entry.url, "/events", { host: rebindHost })).status, 403);
+  assert.equal((await rawRequest(entry.url, "/api/state", { host: rebindHost })).status, 403);
+
+  // Control: a request carrying this server's own loopback Host (Node sets it from the url) is not
+  // rejected by the guard, so the legitimate iframe still loads.
+  assert.notEqual((await rawRequest(entry.url, "/app.js")).status, 403);
+});
+
+test("a rejecting request-error logger does not become an unhandled rejection", async (t) => {
+  await resetTestHome();
+  delete process.env.GH_TOKEN;
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+
+  const rejections = [];
+  const onUnhandled = (reason) => rejections.push(reason);
+  process.on("unhandledRejection", onUnhandled);
+  t.after(() => process.off("unhandledRejection", onUnhandled));
+
+  const server = await import(`./server.mjs?test=logreject-${Date.now()}`);
+  // A disconnected session makes BOTH the bridge and the error logger reject: agentSend rejects
+  // into the outer request catch, whose logger (the async session log) then rejects too. The
+  // logger's rejection must be swallowed, not left dangling to crash the extension host.
+  server.setAgentSend(() => Promise.reject(new Error("session disconnected")));
+  const entry = await server.startInstance("log-reject-test", () => Promise.reject(new Error("log disconnected")));
+  t.after(() => {
+    server.setAgentSend(null);
+    return server.stopInstance("log-reject-test");
+  });
+
+  const response = await postAction(entry.url, {
+    kind: "test",
+    target: "current-session",
+    pr: { repository: "microsoft/aspire", number: 1, url: "https://github.com/microsoft/aspire/pull/1" },
+  });
+  assert.equal(response.status, 500);
+
+  // Give any dangling logger promise a couple of turns to settle; with the fix it's swallowed.
+  await new Promise((r) => setTimeout(r, 30));
+  assert.deepEqual(rejections, []);
 });
 
 test("dashboard load retries after an inflight account probe rejection", async (t) => {
@@ -313,6 +371,27 @@ async function postAction(baseUrl, payload) {
     method: "POST",
     headers: { "content-type": "application/json" },
     body: JSON.stringify(payload),
+  });
+}
+
+// Issue a raw HTTP request to the loopback server with a caller-chosen Host header. fetch/undici
+// forbid overriding the (forbidden) Host header, so we drop to node:http to simulate a
+// DNS-rebinding client whose Host is a public name that resolves (rebinds) to 127.0.0.1. Resolves
+// as soon as response headers arrive (so it doesn't hang on the open-ended /events stream) and
+// destroys the socket to avoid leaking a connection.
+function rawRequest(baseUrl, path, { host, method = "GET" } = {}) {
+  const { hostname, port } = new URL(baseUrl);
+  return new Promise((resolve, reject) => {
+    const req = http.request(
+      { hostname, port, path, method, headers: host ? { host } : {} },
+      (res) => {
+        const status = res.statusCode;
+        res.destroy();
+        resolve({ status });
+      },
+    );
+    req.on("error", reject);
+    req.end();
   });
 }
 async function resetTestHome(prefs = {}) {
