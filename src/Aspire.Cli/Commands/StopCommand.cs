@@ -30,6 +30,7 @@ internal sealed class StopCommand : BaseCommand
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IProjectLocator _projectLocator;
     private readonly IAppHostInfoResolver _appHostInfoResolver;
+    private readonly ILanguageDiscovery _languageDiscovery;
     private readonly DcpWorkloadCleanupService _dcpCleanupService;
 
     private const int MinimumHostingMajorVersionForPersistentResourceCleanup = 13;
@@ -55,6 +56,7 @@ internal sealed class StopCommand : BaseCommand
         ProcessTreeGracefulShutdownService processShutdownService,
         IProjectLocator projectLocator,
         IAppHostInfoResolver appHostInfoResolver,
+        ILanguageDiscovery languageDiscovery,
         DcpWorkloadCleanupService dcpCleanupService,
         OrphanedAppHostCollector collector,
         ILogger<StopCommand> logger,
@@ -68,6 +70,7 @@ internal sealed class StopCommand : BaseCommand
         _processShutdownService = processShutdownService;
         _projectLocator = projectLocator;
         _appHostInfoResolver = appHostInfoResolver;
+        _languageDiscovery = languageDiscovery;
         _dcpCleanupService = dcpCleanupService;
         _collector = collector;
         _logger = logger;
@@ -370,6 +373,11 @@ internal sealed class StopCommand : BaseCommand
 
     private async Task WarnIfPersistentResourceCleanupMayBeUnsupportedAsync(FileInfo appHostFile, CancellationToken cancellationToken)
     {
+        if (!IsDotNetAppHost(appHostFile))
+        {
+            return;
+        }
+
         AppHostProjectInfo appHostInfo;
         try
         {
@@ -414,6 +422,12 @@ internal sealed class StopCommand : BaseCommand
         return version.Major > MinimumHostingMajorVersionForPersistentResourceCleanup ||
             (version.Major == MinimumHostingMajorVersionForPersistentResourceCleanup &&
              version.Minor >= MinimumHostingMinorVersionForPersistentResourceCleanup);
+    }
+
+    private bool IsDotNetAppHost(FileInfo appHostFile)
+    {
+        var language = _languageDiscovery.GetLanguageByFile(appHostFile);
+        return language?.LanguageId.Value.Equals(KnownLanguageId.CSharp, StringComparison.OrdinalIgnoreCase) == true;
     }
 
     /// <summary>

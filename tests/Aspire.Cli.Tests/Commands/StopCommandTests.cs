@@ -778,6 +778,52 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_ForceSkipsCompatibilityWarningForGuestAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "apphost.ts"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "");
+        var processFactory = new TestProcessExecutionFactory();
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+        var appHostInfoInspected = false;
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) =>
+                {
+                    appHostInfoInspected = true;
+                    return (1, null);
+                }
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+        Assert.False(appHostInfoInspected);
+        var displayedMessage = Assert.Single(interactionService.DisplayedMessages);
+        Assert.Equal(
+            string.Format(SharedCommandStrings.AppHostNotRunningAtPath, Path.Combine("AppHost", "apphost.ts")),
+            displayedMessage.Message);
+    }
+
+    [Fact]
     public async Task StopCommand_ForceAllowsUnsupportedVersionWhenAppHostUsesCliBundle()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
