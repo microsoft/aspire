@@ -6,8 +6,10 @@
   "changeType": "Improvements",
   "communityContributors": [],
   "description": "Refactored AppHost runtime tracking in the VS Code extension so `aspire ps` is the single source of running AppHosts. Each running AppHost now gets its own `aspire describe --follow` stream, allowing resources to populate before workspace discovery completes.",
-  "docsPrs": [],
-  "docsRequired": false,
+  "docsPrs": [
+    1382
+  ],
+  "docsRequired": true,
   "emoji": "🔄",
   "firstMergedAt": "2026-07-20T22:08:39Z",
   "lastMergedAt": "2026-07-20T22:08:39Z",

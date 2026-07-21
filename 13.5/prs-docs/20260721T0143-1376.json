@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Documentation restructuring (split Dapr/DAB/LavinMQ pages); no direct matching changelog entry",
+  "mergedAt": "2026-07-21T01:43:44Z",
+  "number": 1376,
+  "runDate": "2026-07-21T06:49:09Z",
+  "status": "excluded",
+  "title": "Split Dapr, DAB, and LavinMQ integration docs"
+}

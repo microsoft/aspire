@@ -1,0 +1,9 @@
+{
+  "author": "karolz-ms",
+  "comment": "Adds debugging support for the experimental DotnetProjectResource via SupportsDebuggingAnnotation and VS Code extension wiring",
+  "mergedAt": "2026-07-21T01:05:15Z",
+  "number": 18729,
+  "runDate": "2026-07-21T06:49:09Z",
+  "status": "included",
+  "title": "Enable basic debugging scenarios with the new DotnetProjectResource"
+}

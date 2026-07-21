@@ -1,0 +1,19 @@
+{
+  "area": "AppHost",
+  "areaEmoji": "🏠",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Improvements",
+  "communityContributors": [],
+  "description": "Applications using the experimental DotnetProjectResource can now be debugged. A new SupportsDebuggingAnnotation is introduced in Aspire.Hosting so resource types can declare debugging support, and the VS Code extension wires this up to enable attaching a debugger to DotnetProjectResource workloads.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🐞",
+  "firstMergedAt": "2026-07-21T01:05:15Z",
+  "lastMergedAt": "2026-07-21T01:05:15Z",
+  "name": "Debugging support for DotnetProjectResource",
+  "owner": "karolz-ms",
+  "prs": [
+    18729
+  ]
+}

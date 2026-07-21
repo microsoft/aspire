@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Docs site UI fix (brand icons in Open dropdown); not related to any product PR in this milestone",
+  "mergedAt": "2026-07-21T01:40:42Z",
+  "number": 1368,
+  "runDate": "2026-07-21T06:49:09Z",
+  "status": "excluded",
+  "title": "Fix Open dropdown to show brand icons instead of generic sparkle"
+}
