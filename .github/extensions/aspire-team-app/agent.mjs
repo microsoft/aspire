@@ -89,6 +89,30 @@ function safePrUrl(pr) {
   return canonical;
 }
 
+// Whether a resolved PR URL points at public github.com (as opposed to a GitHub Enterprise
+// Server host). Used to decide routing, not trust — the URL is already verified by safePrUrl.
+function isGitHubComUrl(url) {
+  try {
+    return new URL(url).hostname === "github.com";
+  } catch {
+    return false;
+  }
+}
+
+// Resolve the session target actually used. new-session routing dispatches through the
+// open_pr_session agent tool, whose arguments are only owner/repo + PR number with no host
+// component. A GitHub Enterprise (GHES) card and a github.com card that share the same
+// owner/repo/number therefore produce identical open_pr_session calls, so a GHES action would
+// silently open — and let the agent modify — the *dotcom* repo of the same name. safePrUrl has
+// already resolved the verified, host-qualified URL, so when that URL isn't on github.com we
+// degrade new-session to current-session: the work then runs in place against the full
+// host-qualified URL instead of spawning a sub-session against the wrong repository. Both the
+// prompt builder and the timeline breadcrumb route through here so they never disagree about
+// where the work actually runs.
+function effectiveActionTarget(requestedTarget, url) {
+  return requestedTarget === "new-session" && !isGitHubComUrl(url) ? "current-session" : requestedTarget;
+}
+
 // Collapse a possibly multi-line, attacker-controlled display string (a PR title) to a
 // single trimmed line so it can appear in the human timeline breadcrumb without smuggling
 // extra lines. Display only — titles/authors are deliberately never interpolated into the
@@ -108,21 +132,26 @@ export function buildAgentActionPrompt(kind, rawPr, target = "new-session") {
   if (!AGENT_ACTION_KINDS.includes(kind)) {
     throw new Error(`Unknown card action: ${kind}`);
   }
-  const where = normalizeActionTarget(target);
-  if (!AGENT_ACTION_TARGETS.includes(where)) {
-    throw new Error(`Unknown card action target: ${where}`);
+  const requestedTarget = normalizeActionTarget(target);
+  if (!AGENT_ACTION_TARGETS.includes(requestedTarget)) {
+    throw new Error(`Unknown card action target: ${requestedTarget}`);
   }
   const pr = normalizeActionPr(rawPr);
   if (!isValidActionPr(pr)) {
     throw new Error("A valid pull request (owner/repo and number) is required.");
   }
 
+  const url = safePrUrl(pr);
   const ctx = {
     pr,
     ref: `${pr.repository}#${pr.number}`,
-    url: safePrUrl(pr),
+    url,
   };
 
+  // Degrade new-session to current-session for non-github.com PRs (see effectiveActionTarget):
+  // open_pr_session can only address github.com, so a GHES PR must run in place against its
+  // host-qualified URL rather than open the same-named dotcom repo.
+  const where = effectiveActionTarget(requestedTarget, url);
   if (where === "current-session") {
     return currentSessionPrompt(kind, ctx);
   }
@@ -140,7 +169,9 @@ export function buildAgentActionLog(kind, rawPr, target = "new-session") {
   // an attacker-controlled multi-line title from spilling into the log. It is never used in
   // the operational prompt handed to the agent.
   const title = pr.title ? ` \u2014 "${sanitizeLine(pr.title)}"` : "";
-  const where = normalizeActionTarget(target) === "current-session" ? "this session" : "a new session";
+  // Mirror the prompt's routing decision so the breadcrumb never claims "a new session" for a
+  // non-github.com PR that actually runs in this session (see effectiveActionTarget).
+  const where = effectiveActionTarget(normalizeActionTarget(target), safePrUrl(pr)) === "current-session" ? "this session" : "a new session";
   let action;
   switch (kind) {
     case "test": action = `Test PR ${ref}${title}`; break;

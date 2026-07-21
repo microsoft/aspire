@@ -158,3 +158,33 @@ test("buildAgentActionLog degrades gracefully for an invalid PR descriptor", () 
   assert.equal(buildAgentActionLog("test", { repository: "", number: "x" }), "Test PR the pull request in a new session");
   assert.equal(buildAgentActionLog("review", { repository: "aspire", number: 0 }), "Review PR aspire in a new session");
 });
+
+test("new-session routing degrades to current-session for a non-github.com (GHES) PR", () => {
+  // open_pr_session takes only owner/repo + number (no host), so a GHES card and a github.com
+  // card that share the same owner/repo/number produce identical calls and would open the
+  // *dotcom* repo. A GHES PR must therefore run in the current session against its host-qualified
+  // URL rather than spawn a sub-session against the wrong repository.
+  const ghesPr = { ...validPr, url: "https://ghe.example.com:8443/microsoft/aspire/pull/123" };
+  for (const kind of AGENT_ACTION_KINDS) {
+    const prompt = buildAgentActionPrompt(kind, ghesPr); // default target: new-session
+    assert.doesNotMatch(prompt, /open_pr_session/);
+    assert.match(prompt, /do not open a separate sub-session/i);
+    assert.match(prompt, /https:\/\/ghe\.example\.com:8443\/microsoft\/aspire\/pull\/123/);
+    assert.doesNotMatch(prompt, /github\.com/);
+  }
+});
+
+test("new-session routing is unchanged for a github.com PR", () => {
+  // Guard: the GHES fallback must not alter routing for the common github.com case.
+  for (const kind of AGENT_ACTION_KINDS) {
+    assert.match(buildAgentActionPrompt(kind, validPr), /open_pr_session/);
+  }
+});
+
+test("buildAgentActionLog breadcrumb reflects the effective session for a GHES new-session action", () => {
+  // The breadcrumb must agree with the prompt: a GHES new-session action actually runs in this
+  // session, so it must not claim "a new session".
+  const ghesPr = { ...validPr, url: "https://ghe.example.com:8443/microsoft/aspire/pull/123" };
+  assert.match(buildAgentActionLog("test", ghesPr), / in this session$/);
+  assert.match(buildAgentActionLog("test", validPr), / in a new session$/);
+});
