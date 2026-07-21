@@ -191,6 +191,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
             Assert.Single(repository.GetResources());
             AssertSelectionCheckboxCount(cut, 2);
             AssertSelectionCheckbox(cut, "orphan", "true");
+            Assert.Single(cut.FindAll(".empty-data"));
         });
 
         await cut.InvokeAsync(() => GetResourceRows(cut).Single().Click());

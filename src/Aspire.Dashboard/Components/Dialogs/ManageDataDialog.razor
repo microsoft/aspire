@@ -101,14 +101,21 @@
                 @if (context.IsResourceRow && context.ResourceRow is not null)
                 {
                     <span @onclick:stopPropagation="true">
-                        @foreach (var dataRow in context.ResourceRow.TelemetryData)
+                        @if (context.ResourceRow.TelemetryData.Count == 0)
                         {
-                            <FluentButton Appearance="Appearance.Lightweight"
-                                          IconEnd="@dataRow.Icon"
-                                          OnClick="@(() => NavigateToDataPage(dataRow))"
-                                          Title="@GetDataTypeDisplayName(dataRow.DataType)"
-                                          aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
-                                          Style="margin-right: 4px;" />
+                            <span class="empty-data"></span>
+                        }
+                        else
+                        {
+                            @foreach (var dataRow in context.ResourceRow.TelemetryData)
+                            {
+                                <FluentButton Appearance="Appearance.Lightweight"
+                                              IconEnd="@dataRow.Icon"
+                                              OnClick="@(() => NavigateToDataPage(dataRow))"
+                                              Title="@GetDataTypeDisplayName(dataRow.DataType)"
+                                              aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
+                                              Style="margin-right: 4px;" />
+                            }
                         }
                     </span>
                 }
