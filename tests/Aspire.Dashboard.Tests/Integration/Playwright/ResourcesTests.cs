@@ -84,8 +84,8 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             // Tab from the last popup item closes the popup and forwards focus to the next
             // real tabbable element after the anchor in document order. In the resources page
             // that is the data-view-kind tab strip (the "Resources" table tab is the next
-            // element with tabindex >= 0; tabindex=-1 elements are correctly skipped by
-            // isAspireFocusableElement now that the Fluent-element short-circuit is removed).
+            // element with tabindex >= 0; isAspireFocusableElement skips tabindex=-1 elements,
+            // so those are never treated as focusable stops).
             await AssertActiveElementIsAsync(page, "fluent-tab#tab-Table");
 
             await OpenResourceFilterAsync(resourceFilter, popup);
@@ -101,6 +101,42 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
             await Assertions.Expect(popup).ToBeHiddenAsync();
             await AssertActiveElementIsAsync(page, "#resourceFilterButton");
+        });
+    }
+
+    [Fact]
+    [OuterloopTest("Resource-intensive Playwright browser test")]
+    public async Task ResourceFilterPopup_MiddleTabKeysStayWithinPopup()
+    {
+        await RunTestAsync(async page =>
+        {
+            await PlaywrightFixture.GoToHomeAndWaitForDataGridLoad(page).DefaultTimeout();
+
+            var resourceFilter = page.Locator("#resourceFilterButton");
+            var popup = page.Locator(".resources-filter-popup");
+            var popupCheckboxes = popup.Locator("fluent-checkbox");
+
+            // Unlike the boundary cases above, Tab/Shift+Tab between two middle popup controls
+            // isn't intercepted by our document keydown listener at all - it only acts on the
+            // first/last popup element (see ResourceFilterPopup_BoundaryTabKeysAndEscapeClosePopup)
+            // and otherwise lets the event through untouched. This is the exact path the popup
+            // navigation replacement targets: a fluent-checkbox is a shadow-DOM control, so if
+            // anything ever started intercepting here too, a miscalculated activeIndex could fall
+            // through to Fluent UI's own (broken) keyboard helper and jump focus out of the popup.
+            var firstCheckbox = popupCheckboxes.Nth(0);
+            var secondCheckbox = popupCheckboxes.Nth(1);
+
+            await OpenResourceFilterAsync(resourceFilter, popup);
+            await firstCheckbox.FocusAsync();
+            await page.Keyboard.PressAsync("Tab");
+
+            await Assertions.Expect(popup).ToBeVisibleAsync();
+            await Assertions.Expect(secondCheckbox).ToBeFocusedAsync();
+
+            await page.Keyboard.PressAsync("Shift+Tab");
+
+            await Assertions.Expect(popup).ToBeVisibleAsync();
+            await Assertions.Expect(firstCheckbox).ToBeFocusedAsync();
         });
     }
 

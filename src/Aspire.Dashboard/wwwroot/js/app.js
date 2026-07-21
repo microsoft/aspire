@@ -474,6 +474,8 @@ window.initializeAspirePopupKeyboardNavigation = function (anchorId, popupId, do
     // elements are not in document order, so Tab can wrap to the first focusable control
     // on the page. Capture Tab at the document before Fluent UI's listener and calculate
     // from the stable host elements instead.
+    // Workaround for https://github.com/microsoft/fluentui-blazor/issues/5027. Remove this
+    // capture-phase listener once Fluent UI computes Tab navigation from host elements.
     document.addEventListener("keydown", documentKeydownListener, true);
 
     aspirePopupKeyboardNavigationState.set(key, {
@@ -587,9 +589,9 @@ function focusNextElementAfterAnchor(anchorElement, popupElement) {
     const focusableSelector = "input, select, textarea, button, object, a[href], area[href], iframe, summary, [tabindex], [contenteditable='true']";
 
     // Walk the document in source order and stop at the first focusable element that
-    // comes after the anchor. Building the full focusable list (the previous approach)
-    // is wasteful when the page has many controls and the answer is usually a sibling
-    // of the anchor a few nodes away. Elements inside the popup are skipped because Tab
+    // comes after the anchor. Building the full focusable list up front is wasteful
+    // when the page has many controls, since the answer is usually a sibling of the
+    // anchor a few nodes away. Elements inside the popup are skipped because Tab
     // is supposed to land *after* the popup, not back inside it.
     let foundAnchor = false;
     for (const element of root.querySelectorAll("*")) {

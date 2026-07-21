@@ -132,15 +132,22 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 
     private async Task HandleItemClicked(MenuButtonItem item)
     {
-        if (item.OnClick is {} onClick)
-        {
-            await onClick();
-        }
+        // Close the menu and restore trigger focus BEFORE invoking the item callback. Some
+        // callbacks (for example "View JSON") open their own focus-trapped modal dialog and
+        // return once it has opened; if we restored trigger focus afterward, that focusElement
+        // call would run after the dialog already moved focus into itself and would yank focus
+        // back out from behind it. Restoring focus first means any focus-owning UI the callback
+        // opens is always the last thing to grab focus, so it keeps it.
         await SetOpenAsync(false);
 
         if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
         {
             await JS.InvokeVoidAsync("focusElement", Anchor);
+        }
+
+        if (item.OnClick is {} onClick)
+        {
+            await onClick();
         }
     }
 

@@ -13,7 +13,7 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuTests : DashboardTestContext
 {
     [Fact]
-    public void ClickItem_ButtonAnchoredMenu_FocusesAnchorAfterCallback()
+    public void ClickItem_ButtonAnchoredMenu_FocusesAnchorBeforeCallback()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -23,19 +23,22 @@ public class AspireMenuTests : DashboardTestContext
 
         var anchor = "view-options-button";
         var itemClicked = false;
-        var focusElementInvocationHandler = JSInterop.SetupVoid("focusElement", anchor);
+        // SetVoidResult completes the planned invocation immediately: without it, the returned
+        // Task never resolves and HandleItemClicked would never reach the item callback below.
+        var focusElementInvocationHandler = JSInterop.SetupVoid("focusElement", anchor).SetVoidResult();
         var focusElementInvocationsDuringOnClick = -1;
         var items = new List<MenuButtonItem>
         {
             new()
             {
-                Text = "Show hidden resources",
+                // "View JSON" stands in for a callback that opens its own focus-owning UI (a
+                // modal dialog in production). The anchor must already be focused by the time
+                // this callback runs, otherwise a focusElement call issued after the callback
+                // returns could steal focus back from whatever the callback opened.
+                Text = "View JSON",
                 OnClick = () =>
                 {
                     focusElementInvocationsDuringOnClick = focusElementInvocationHandler.Invocations.Count;
-                    Assert.True(
-                        focusElementInvocationsDuringOnClick == 0,
-                        $"Focus should not be restored until item OnClick completes. Actual focusElement invocations during OnClick: {focusElementInvocationsDuringOnClick}.");
                     itemClicked = true;
 
                     return Task.CompletedTask;
@@ -59,8 +62,8 @@ public class AspireMenuTests : DashboardTestContext
 
         Assert.True(itemClicked);
         Assert.True(
-            focusElementInvocationsDuringOnClick == 0,
-            $"Expected zero focusElement invocations during item OnClick, but captured {focusElementInvocationsDuringOnClick}.");
+            focusElementInvocationsDuringOnClick == 1,
+            $"Expected the anchor to already be focused before the item callback runs, but captured {focusElementInvocationsDuringOnClick} focusElement invocations during OnClick.");
         var invocation = Assert.Single(focusElementInvocationHandler.Invocations);
         Assert.Collection(invocation.Arguments,
             argument => Assert.Equal(anchor, Assert.IsType<string>(argument)));
@@ -77,7 +80,7 @@ public class AspireMenuTests : DashboardTestContext
 
         var anchor = "view-options-button";
         var itemClicked = false;
-        var focusElementInvocationHandler = JSInterop.SetupVoid("focusElement", anchor);
+        var focusElementInvocationHandler = JSInterop.SetupVoid("focusElement", anchor).SetVoidResult();
         var items = new List<MenuButtonItem>
         {
             new()

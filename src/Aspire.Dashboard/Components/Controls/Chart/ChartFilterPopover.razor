@@ -6,9 +6,9 @@
 
 @{
     // Use a stable per-instance id (computed once in OnInitialized) so the FluentPopover anchor
-    // doesn't change between renders. The old Guid.NewGuid() call here re-rendered the anchor id
-    // every render, which in turn caused AspirePopupFocusNavigation to dispose and re-register the
-    // popup-keyboard handler on every parent state change.
+    // doesn't change between renders. AspirePopupFocusNavigation keys its popup-keyboard handler
+    // registration off this id, so a changing id would dispose and re-register the handler on
+    // every parent state change.
     var id = _anchorId;
 }
 <FluentButton id="@id"
