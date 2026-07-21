@@ -6,10 +6,12 @@ using System.Diagnostics;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Tests;
 using Aspire.Tests.Shared.DashboardModel;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Xunit;
 using Value = Google.Protobuf.WellKnownTypes.Value;
 
@@ -130,19 +132,20 @@ public class ResourceOutgoingPeerResolverTests
     public async Task OnPeerChanges_DataUpdates_EventRaised()
     {
         // Arrange
+        Assert.Equal(TimeSpan.FromMilliseconds(500), CallbackThrottler.DefaultMinExecuteInterval);
+
         var tcs = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
         var sourceChannel = Channel.CreateUnbounded<ResourceViewModelChange>();
-        var resultChannel = Channel.CreateUnbounded<int>();
+        var resultChannel = Channel.CreateUnbounded<(int ChangeCount, long Timestamp)>();
         var dashboardClient = new MockDashboardClient(tcs.Task);
         var resolver = CreateResolver(dashboardClient);
         var changeCount = 0;
         resolver.OnPeerChanges(async () =>
         {
-            await resultChannel.Writer.WriteAsync(++changeCount);
+            await resultChannel.Writer.WriteAsync((++changeCount, Stopwatch.GetTimestamp()));
         });
 
-        var readValue = 0;
-        Assert.False(resultChannel.Reader.TryRead(out readValue));
+        Assert.False(resultChannel.Reader.TryRead(out _));
 
         // Act 1
         // Initial resource causes change.
@@ -151,8 +154,9 @@ public class ResourceOutgoingPeerResolverTests
             GetChanges()));
 
         // Assert 1
-        readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(1, readValue);
+        var readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(1, readValue.ChangeCount);
+        var previousTimestamp = readValue.Timestamp;
 
         // Act 2
         // New resource causes change.
@@ -160,7 +164,9 @@ public class ResourceOutgoingPeerResolverTests
 
         // Assert 2
         readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(2, readValue);
+        Assert.Equal(2, readValue.ChangeCount);
+        AssertMinimumExecuteInterval(previousTimestamp, readValue.Timestamp);
+        previousTimestamp = readValue.Timestamp;
 
         // Act 3
         // URL change causes change.
@@ -168,7 +174,8 @@ public class ResourceOutgoingPeerResolverTests
 
         // Assert 3
         readValue = await resultChannel.Reader.ReadAsync().DefaultTimeout();
-        Assert.Equal(3, readValue);
+        Assert.Equal(3, readValue.ChangeCount);
+        AssertMinimumExecuteInterval(previousTimestamp, readValue.Timestamp);
 
         // Act 4
         // Resource update doesn't cause change.
@@ -189,6 +196,12 @@ public class ResourceOutgoingPeerResolverTests
                 yield return [item];
             }
         }
+
+        static void AssertMinimumExecuteInterval(long startTimestamp, long endTimestamp)
+        {
+            var elapsed = Stopwatch.GetElapsedTime(startTimestamp, endTimestamp);
+            Assert.True(elapsed >= CallbackThrottler.DefaultMinExecuteInterval - TimeSpan.FromMilliseconds(50), $"Callbacks executed too quickly: {elapsed}.");
+        }
     }
 
     [Fact]
@@ -204,6 +217,31 @@ public class ResourceOutgoingPeerResolverTests
         var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
         sourceChannel.Writer.Complete();
         subscribeResult.SetResult(new ResourceViewModelSubscription([], sourceChannel.Reader.ReadAllAsync()));
+        await resolver.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
+    public async Task OnPeerChanges_AmbientExecutionContext_DoesNotFlowToCallback()
+    {
+        var subscribeResult = new TaskCompletionSource<ResourceViewModelSubscription>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var resolver = CreateResolver(new MockDashboardClient(subscribeResult.Task));
+        var ambientValue = new AsyncLocal<string?> { Value = "request" };
+        var callbackValue = new TaskCompletionSource<string?>(TaskCreationOptions.RunContinuationsAsynchronously);
+        resolver.OnPeerChanges(() =>
+        {
+            callbackValue.SetResult(ambientValue.Value);
+            return Task.CompletedTask;
+        });
+
+        var sourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        subscribeResult.SetResult(new ResourceViewModelSubscription(
+            [CreateResource("test", serviceAddress: "localhost", servicePort: 8080)],
+            sourceChannel.Reader.ReadAllAsync()));
+
+        Assert.Null(await callbackValue.Task.DefaultTimeout());
+
+        ambientValue.Value = null;
+        sourceChannel.Writer.Complete();
         await resolver.DisposeAsync().DefaultTimeout();
     }
 
@@ -284,7 +322,10 @@ public class ResourceOutgoingPeerResolverTests
 
     private static ResourceOutgoingPeerResolver CreateResolver(IResourceRepository resourceRepository, DashboardActivitySource? activitySource = null)
     {
-        return new ResourceOutgoingPeerResolver(resourceRepository, activitySource ?? new DashboardActivitySource());
+        return new ResourceOutgoingPeerResolver(
+            resourceRepository,
+            activitySource ?? new DashboardActivitySource(),
+            NullLogger<ResourceOutgoingPeerResolver>.Instance);
     }
 
     [Fact]

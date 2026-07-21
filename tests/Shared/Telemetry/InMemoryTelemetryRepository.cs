@@ -40,7 +40,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
     private bool _isReadOnly;
 
     private readonly object _lock = new();
-    internal TimeSpan _subscriptionMinExecuteInterval = TimeSpan.FromMilliseconds(100);
+    internal TimeSpan _subscriptionMinExecuteInterval = CallbackThrottler.DefaultMinExecuteInterval;
 
     private readonly List<Subscription> _resourceSubscriptions = new();
     private readonly List<Subscription> _logSubscriptions = new();

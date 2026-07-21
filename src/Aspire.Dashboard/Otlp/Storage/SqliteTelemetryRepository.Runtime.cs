@@ -5,6 +5,7 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Utils;
 using Microsoft.FluentUI.AspNetCore.Components;
 
 namespace Aspire.Dashboard.Otlp.Storage;
@@ -19,7 +20,7 @@ public sealed partial class SqliteTelemetryRepository
     private readonly List<Subscription> _metricsSubscriptions = [];
     private readonly List<Subscription> _tracesSubscriptions = [];
     private readonly Dictionary<ResourceKey, int> _resourceUnviewedErrorLogs = [];
-    private TimeSpan _subscriptionMinExecuteInterval = TimeSpan.FromMilliseconds(100);
+    private TimeSpan _subscriptionMinExecuteInterval = CallbackThrottler.DefaultMinExecuteInterval;
 
     private readonly object _watchersLock = new();
     private List<SpanWatcher>? _spanWatchers;

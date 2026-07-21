@@ -22,7 +22,7 @@ public class TelemetryApiServiceTests
     [Fact]
     public async Task FollowSpansAsync_StreamsAllSpans()
     {
-        var repository = CreateRepository();
+        var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
         AddSpans(repository, count: 5);
 
         var service = CreateService(repository);
@@ -43,7 +43,7 @@ public class TelemetryApiServiceTests
     [Fact]
     public async Task FollowLogsAsync_StreamsAllLogs()
     {
-        var repository = CreateRepository();
+        var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
         AddLogs(repository, ["log1", "log2", "log3", "log4", "log5"]);
 
         var service = CreateService(repository);
@@ -799,7 +799,7 @@ public class TelemetryApiServiceTests
     [Fact]
     public async Task FollowSpansAsync_WaitsForResourceToAppear_ThenStreams()
     {
-        var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
+        var repository = CreateRepository();
         var service = CreateService(repository);
 
         // Start enumerating - MoveNextAsync will block until data arrives.
@@ -821,7 +821,7 @@ public class TelemetryApiServiceTests
     [Fact]
     public async Task FollowLogsAsync_WaitsForResourceToAppear_ThenStreams()
     {
-        var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
+        var repository = CreateRepository();
         var service = CreateService(repository);
 
         // Start enumerating - MoveNextAsync will block until data arrives.
