@@ -720,6 +720,11 @@ let keysBound = false;
 let cbMenuBound = false;
 let prevRank = 0;
 let refreshing = false;
+// Count of overlapping withRefresh() calls in flight. The refresh button stays clickable and
+// mode/account mutations also route through withRefresh, so several can run at once over one
+// shared refreshing flag and one progress bar. We wind the shared UI down only when the LAST
+// one settles (count returns to 0), never when whichever finishes first does.
+let refreshInFlight = 0;
 let rescanning = false;
 let loadError = null;
 // A dashboard pushed over SSE while the user is on a form-bearing view (accounts editor,
@@ -845,6 +850,7 @@ async function load() {
 }
 
 async function withRefresh(fn) {
+  refreshInFlight++;
   refreshing = true; setLoading(true); beginProgress();
   try {
     const data = await fn();
@@ -855,12 +861,16 @@ async function withRefresh(fn) {
   } catch (e) {
     loadError = String((e && e.message) || e);
   } finally {
-    // Always complete the progress bar here. The SSE 'progress' stream is the normal driver
-    // (setProgress -> endProgress at done>=total), but it may never deliver a terminal event:
-    // SSE can be disconnected, or this refresh can join a background compute started with
-    // progress:false that emits no progress events. Without this backstop the bar would stay
-    // active at its last width forever, so end it whenever the awaited operation settles.
-    refreshing = false; endProgress(); render();
+    refreshInFlight--;
+    // Only the last overlapping refresh winds down the shared UI. If an earlier one finished
+    // this while a later forced load is still running, we must NOT clear refreshing or fade
+    // the bar out from under it — just re-render to show whatever data this call applied.
+    // The SSE 'progress' stream is the normal bar driver (setProgress -> endProgress at
+    // done>=total); ending here is the backstop for when it never delivers a terminal event
+    // (SSE disconnected, or this refresh joined a background compute started with
+    // progress:false, which emits no progress events).
+    if (refreshInFlight === 0) { refreshing = false; endProgress(); }
+    render();
   }
 }
 
