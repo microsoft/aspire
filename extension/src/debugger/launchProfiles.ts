@@ -123,8 +123,29 @@ export async function readLaunchSettings(projectPath: string): Promise<LaunchSet
         let launchSettingsPath: string;
 
         if (isFileBasedApp(projectPath)) {
+            // Mirror the .NET SDK's launch-settings discovery for `dotnet run` / `dotnet run-api`
+            // (LaunchSettings.TryFindLaunchSettingsFile): for a file-based app the SDK looks next to the
+            // entry-point `.cs` file and prefers `Properties/launchSettings.json`, only falling back to
+            // `<app>.run.json` when the former is absent. If both exist, `<app>.run.json` is ignored.
+            // The extension MUST resolve the same file the SDK does: createProjectDebuggerExtension uses
+            // determineDefaultLaunchProfile to decide whether `dotnet run-api`'s reported program can be
+            // trusted, so reading a different (or no) file would make that guard disagree with the profile
+            // run-api actually applied and launch the file-based app with the wrong program.
+            // https://github.com/dotnet/sdk/blob/main/src/Microsoft.DotNet.ProjectTools/LaunchSettings/LaunchSettings.cs
+            const dir = path.dirname(projectPath);
+            const propertiesLaunchSettingsPath = path.join(dir, 'Properties', 'launchSettings.json');
             const fileNameWithoutExt = path.basename(projectPath, path.extname(projectPath));
-            launchSettingsPath = path.join(path.dirname(projectPath), `${fileNameWithoutExt}.run.json`);
+            const runJsonPath = path.join(dir, `${fileNameWithoutExt}.run.json`);
+
+            if (fs.existsSync(propertiesLaunchSettingsPath)) {
+                if (fs.existsSync(runJsonPath)) {
+                    extensionLogOutputChannel.warn(`Both '${propertiesLaunchSettingsPath}' and '${runJsonPath}' exist; using '${propertiesLaunchSettingsPath}' to match 'dotnet run'. '${runJsonPath}' is ignored.`);
+                }
+
+                launchSettingsPath = propertiesLaunchSettingsPath;
+            } else {
+                launchSettingsPath = runJsonPath;
+            }
         } else {
             const projectDir = path.dirname(projectPath);
             launchSettingsPath = path.join(projectDir, 'Properties', 'launchSettings.json');

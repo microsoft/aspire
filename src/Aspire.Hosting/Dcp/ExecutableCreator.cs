@@ -281,7 +281,15 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 if (!persistent && !forceProcessExecution && project.SupportsDebugging(_configuration, out supportsDebuggingAnnotation))
                 {
                     exe.Spec.ExecutionType = ExecutionType.IDE;
-                    exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
+
+                    // A Process fallback runs the DCP Executable Spec's command and args "as is". When the debug
+                    // support rewrites the resource's arguments for debugging (an argsCallback on an
+                    // IResourceWithArgs, supplied via the generic WithDebugSupport), those args are valid only for
+                    // IDE launch, so a Process fallback would run a broken command. Skip the fallback in that case.
+                    if (!supportsDebuggingAnnotation.RewritesArgumentsForDebugging)
+                    {
+                        exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
+                    }
 
                     if (supportsDebuggingAnnotation.LaunchConfigurationType is "project")
                     {

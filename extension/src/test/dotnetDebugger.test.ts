@@ -809,6 +809,72 @@ suite('Dotnet Debugger Extension Tests', () => {
         }
     });
 
+    test('file-based .cs reads Properties/launchSettings.json (not just <app>.run.json) to detect an Executable default profile', async () => {
+        // Regression test for the launch-settings search order. For a file-based app the .NET SDK prefers
+        // Properties/launchSettings.json over <app>.run.json when locating launch settings, so `dotnet run-api`
+        // applies the default profile from THAT file. The extension previously read only <app>.run.json for
+        // file-based apps, so it missed an Executable default profile living in Properties/launchSettings.json
+        // and wrongly trusted run-api's external command. It must now read the same file the SDK does, detect
+        // the Executable default, and launch the .cs app itself via `dotnet run --file ... --no-launch-profile`.
+        const fs = require('fs');
+        const path = require('path');
+
+        const tempRoot = path.join(process.cwd(), '.test-temp', `dotnet-runapi-exec-props-${process.pid}-${Date.now()}`);
+        fs.mkdirSync(path.join(tempRoot, 'Properties'), { recursive: true });
+
+        try {
+            const projectPath = path.join(tempRoot, 'app.cs');
+            fs.writeFileSync(projectPath, '// file-based app');
+            // The Executable default profile lives ONLY in Properties/launchSettings.json (there is no
+            // <app>.run.json). run-api applies it and reports the external command below.
+            fs.writeFileSync(path.join(tempRoot, 'Properties', 'launchSettings.json'), JSON.stringify({
+                profiles: {
+                    runExe: {
+                        commandName: 'Executable',
+                        executablePath: 'some-external-tool',
+                        commandLineArgs: '--version'
+                    }
+                }
+            }));
+
+            const { extension, dotNetService } = createDebuggerExtension('unused-build-output', null, true, true);
+            dotNetService.runApiOutput = JSON.stringify({
+                $type: 'RunCommand',
+                Version: 1,
+                ExecutablePath: 'some-external-tool',
+                CommandLineArguments: '--version',
+                WorkingDirectory: '',
+                EnvironmentVariables: {}
+            });
+
+            const launchConfig: ProjectLaunchConfiguration = {
+                type: 'project',
+                project_path: projectPath,
+                disable_launch_profile: true
+            };
+
+            const debugConfig: AspireResourceExtendedDebugConfiguration = {
+                runId: '1',
+                debugSessionId: '1',
+                type: 'coreclr',
+                name: 'Test Debug Config',
+                request: 'launch'
+            };
+
+            const fakeAspireDebugSession = sinon.createStubInstance(AspireDebugSession);
+
+            await extension.createDebugSessionConfigurationCallback!(launchConfig, [], [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+
+            // The extension launches the .cs app itself instead of the Executable profile's external command.
+            assert.strictEqual(debugConfig.program, 'dotnet');
+            assert.deepStrictEqual(debugConfig.args, ['run', '--file', projectPath, '--no-cache', '--no-launch-profile']);
+            assert.strictEqual(debugConfig.noDebug, true);
+            assert.strictEqual(debugConfig.cwd, tempRoot);
+        } finally {
+            fs.rmSync(tempRoot, { recursive: true, force: true });
+        }
+    });
+
     test('file-based .cs falls back to dotnet run applying the selected Project profile when the default profile is Executable', async () => {
         // The default (first) profile is an 'Executable' profile that `dotnet run-api` would apply, but the user
         // explicitly selected a later 'Project' profile. run-api still reports the Executable profile's external

@@ -3224,6 +3224,82 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ProjectResource_WithArgumentRewritingDebugSupport_DoesNotOfferProcessFallback_InDebugSession()
+    {
+        // A ProjectResource can, via the generic WithDebugSupport(argsCallback: ...), rewrite its arguments
+        // for debugging (ProjectResource implements IResourceWithArgs). Those args are valid only for IDE
+        // launch, so DCP must NOT advertise a Process fallback that would later run a broken command. This
+        // mirrors the guard already applied to plain executables in PreparePlainExecutables.
+        var builder = DistributedApplication.CreateBuilder();
+        var projectBuilder = builder.AddProject<TestProject>("proj", launchProfileName: null);
+
+        // Replace the default "project" debug support with a custom launch type that also rewrites arguments.
+        var defaultAnnotation = projectBuilder.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().FirstOrDefault();
+        if (defaultAnnotation is not null)
+        {
+            projectBuilder.Resource.Annotations.Remove(defaultAnnotation);
+        }
+
+        projectBuilder.WithDebugSupport(
+            mode => new ExecutableLaunchConfiguration("test") { Mode = mode },
+            "test",
+            argsCallback: _ => { /* rewrites arguments for debugging */ });
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var configBuilder = new ConfigurationBuilder();
+        configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [DcpExecutor.DebugSessionPortVar] = "12345",
+            [KnownConfigNames.DebugSessionInfo] = JsonSerializer.Serialize(new RunSessionInfo { ProtocolsSupported = ["test"], SupportedLaunchConfigurations = ["test"] })
+        });
+        var configuration = configBuilder.Build();
+
+        var executor = CreateAppExecutor(model, configuration: configuration, kubernetesService: kubernetes);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.Null(exe.Spec.FallbackExecutionTypes);
+    }
+
+    [Fact]
+    public async Task ProjectResource_WithoutArgumentRewriting_OffersProcessFallback_InDebugSession()
+    {
+        // The common case: a default AddProject ("project" launch type, no argument rewriting) keeps the
+        // Process fallback so an IDE launch rejection can still start the project. Guards against the
+        // RewritesArgumentsForDebugging guard accidentally dropping the fallback for ordinary projects.
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddProject<Projects.ServiceA>("proj", launchProfileName: null);
+
+        using var app = builder.Build();
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var kubernetes = new TestKubernetesService();
+        var configBuilder = new ConfigurationBuilder();
+        configBuilder.AddInMemoryCollection(new Dictionary<string, string?>
+        {
+            [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost",
+            ["AppHost:BrowserToken"] = "token",
+            ["AppHost:OtlpApiKey"] = "otlp-key",
+            [DcpExecutor.DebugSessionPortVar] = "12345"
+        });
+        var configuration = configBuilder.Build();
+
+        var executor = CreateAppExecutor(model, configuration: configuration, kubernetesService: kubernetes);
+
+        await executor.RunApplicationAsync();
+
+        var exe = GetCreatedExecutableForResource(kubernetes, "proj");
+        Assert.Equal(ExecutionType.IDE, exe.Spec.ExecutionType);
+        Assert.NotNull(exe.Spec.FallbackExecutionTypes);
+        Assert.Equal(ExecutionType.Process, Assert.Single(exe.Spec.FallbackExecutionTypes));
+    }
+
+    [Fact]
     public async Task PersistentDcpResourcesDoNotIncludeMonitorProcessByDefault()
     {
         var builder = DistributedApplication.CreateBuilder();

@@ -967,6 +967,71 @@ suite('Launch Profile Tests', () => {
             assert.strictEqual(defaultProfile.profileName, '10');
             assert.strictEqual(defaultProfile.profile?.commandName, 'Executable');
         });
+
+        test('prefers Properties/launchSettings.json over <app>.run.json for file-based app (matches dotnet run)', async () => {
+            // The .NET SDK resolves launch settings for a file-based app by preferring
+            // Properties/launchSettings.json over <app>.run.json (LaunchSettings.TryFindLaunchSettingsFile).
+            // The extension must read the same file, otherwise determineDefaultLaunchProfile disagrees with
+            // the profile `dotnet run-api` actually applied and createProjectDebuggerExtension can launch the
+            // file-based app with the wrong (Executable-profile) program.
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            // Properties/launchSettings.json: the default profile is an Executable profile — exactly the
+            // case the run-api trust guard depends on detecting.
+            fs.writeFileSync(launchSettingsPath, JSON.stringify({
+                profiles: {
+                    fromProperties: {
+                        commandName: 'Executable',
+                        executablePath: 'some-external-tool',
+                        commandLineArgs: '--version'
+                    }
+                }
+            }, null, 2));
+
+            // <app>.run.json exists too, but must be ignored because launchSettings.json wins.
+            const runJsonPath = path.join(tempDir, 'TestProject', 'apphost.run.json');
+            fs.writeFileSync(runJsonPath, JSON.stringify({
+                profiles: {
+                    fromRunJson: {
+                        commandName: 'Project',
+                        applicationUrl: 'https://localhost:7000'
+                    }
+                }
+            }, null, 2));
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            assert.deepStrictEqual(Object.keys(result!.profiles), ['fromProperties']);
+
+            const defaultProfile = determineDefaultLaunchProfile(result);
+            assert.strictEqual(defaultProfile.profileName, 'fromProperties');
+            assert.strictEqual(defaultProfile.profile?.commandName, 'Executable');
+        });
+
+        test('falls back to <app>.run.json when Properties/launchSettings.json is absent for file-based app', async () => {
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            // No Properties/launchSettings.json is written, so the SDK (and the extension) fall back to
+            // <app>.run.json.
+            const runJsonPath = path.join(tempDir, 'TestProject', 'apphost.run.json');
+            fs.writeFileSync(runJsonPath, JSON.stringify({
+                profiles: {
+                    fromRunJson: {
+                        commandName: 'Project',
+                        applicationUrl: 'https://localhost:7000'
+                    }
+                }
+            }, null, 2));
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            assert.deepStrictEqual(Object.keys(result!.profiles), ['fromRunJson']);
+            assert.strictEqual(result!.profiles['fromRunJson'].applicationUrl, 'https://localhost:7000');
+        });
     });
 
     suite('expandEnvironmentVariables', () => {
