@@ -268,8 +268,8 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             getContextGenAISpans: () => []
             );
 
-        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>()
-            [nameof(ControlsStrings.GridValueWrapLines)].Value;
+        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.ConsoleLogs>>()
+            [nameof(Aspire.Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)].Value;
         var wrapCheckbox = cut.FindComponent<FluentCheckbox>();
 
         Assert.Equal(wrapLinesLabel, wrapCheckbox.Instance.Label);

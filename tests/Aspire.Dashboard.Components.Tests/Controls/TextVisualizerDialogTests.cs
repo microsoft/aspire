@@ -103,6 +103,8 @@ public class TextVisualizerDialogTests : DashboardTestContext
             Assert.True(option.AdditionalAttributes.ContainsKey("aria-checked"));
         });
         Assert.Single(formatOptions, option => string.Equals(option.AdditionalAttributes!["aria-checked"]?.ToString(), "true", StringComparison.Ordinal));
+        Assert.Single(formatOptions, option => option.Icon is not null);
+        Assert.Equal(formatOptions.Count - 1, formatOptions.Count(option => option.Icon is null));
 
         var plaintextOption = formatOptions.Single(i => i.Text == Aspire.Dashboard.Resources.Dialogs.TextVisualizerDialogPlaintextFormat);
         await plaintextOption.OnClick!.Invoke();
@@ -117,6 +119,8 @@ public class TextVisualizerDialogTests : DashboardTestContext
             var selectedOptions = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
                 .Instance.Items.Single(i => i.NestedMenuItems is not null).NestedMenuItems!;
             Assert.Single(selectedOptions, option => string.Equals(option.AdditionalAttributes!["aria-checked"]?.ToString(), "true", StringComparison.Ordinal));
+            Assert.Single(selectedOptions, option => option.Icon is not null);
+            Assert.Equal(selectedOptions.Count - 1, selectedOptions.Count(option => option.Icon is null));
         });
 
         cut.FindComponent<TextVisualizerDialog>().SetParametersAndRender(parameters => parameters.Add(p => p.Content, content));
@@ -189,8 +193,8 @@ public class TextVisualizerDialogTests : DashboardTestContext
         await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
-        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>()
-            [nameof(ControlsStrings.GridValueWrapLines)].Value;
+        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.ConsoleLogs>>()
+            [nameof(Aspire.Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)].Value;
         var menuButton = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
         var wrapMenuItem = Assert.Single(menuButton.Instance.Items, i => i.Text == wrapLinesLabel);
         Assert.NotNull(wrapMenuItem.AdditionalAttributes);
@@ -223,8 +227,8 @@ public class TextVisualizerDialogTests : DashboardTestContext
         dialog.Instance.ChangeFormat(DashboardUIHelpers.MarkdownFormat);
         dialog.Render();
 
-        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>()
-            [nameof(ControlsStrings.GridValueWrapLines)].Value;
+        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.ConsoleLogs>>()
+            [nameof(Aspire.Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)].Value;
 
         cut.WaitForAssertion(() =>
         {

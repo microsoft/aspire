@@ -191,7 +191,7 @@ public partial class TextVisualizerDialog : ComponentBase
                 {
                     Text = option.Name,
                     OnClick = () => ChangeFormatAsync(option.Id),
-                    Icon = _selectedFormat.Id == option.Id ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
+                    Icon = _selectedFormat.Id == option.Id ? new Icons.Regular.Size16.Checkmark() : null,
                     IsDisabled = !EnabledOptions.Contains(option.Id),
                     AdditionalAttributes = new Dictionary<string, object>
                     {
@@ -213,7 +213,7 @@ public partial class TextVisualizerDialog : ComponentBase
             _menuItems.Add(new()
             {
                 OnClick = ToggleWrapLinesAsync,
-                Text = ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)],
+                Text = ConsoleLogsLoc[nameof(ConsoleLogs.ConsoleLogsWrapLogs)],
                 Icon = _noWrap ? new Icons.Regular.Size16.CheckboxUnchecked() : new Icons.Regular.Size16.CheckboxChecked(),
                 AdditionalAttributes = new Dictionary<string, object>
                 {
