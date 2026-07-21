@@ -626,6 +626,18 @@ export function buildNotifications(prs, prefs, dismissed = []) {
   return items;
 }
 
+// The focused queue headline is capped to `limit` actionable cards, but review-debt cards sort
+// last (they carry the oldest activity timestamp) and would be sliced away whenever `limit`
+// fresher PRs exist — leaving their "Address review" button unreachable even though focusTotal
+// still counts them. Keep the freshest `limit` cards plus any review-debt cards that spill past
+// the cap, so the debt action stays reachable. The two slices are disjoint, so no card is
+// duplicated, and focusTotal continues to report the true (uncapped) count.
+export function capFocusKeepingDebt(cards, limit) {
+  const head = cards.slice(0, limit);
+  const spilloverDebt = cards.slice(limit).filter((c) => c && c.reviewDebt);
+  return head.concat(spilloverDebt);
+}
+
 // ---------------------------------------------------------------------------
 // Top-level loader
 // ---------------------------------------------------------------------------
@@ -749,6 +761,13 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       const focusExclusions = computeFocusExclusionItems(allPrs, buckets, focusAll, login);
       const card = (pr, reason, extra) =>
         Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || "") }, extra || {});
+      const focusCards = focusAll.map((f) => {
+        const c = card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
+        // Flag review-debt cards (aged past the focus limit without a review) so the canvas can
+        // offer an "Address review" button instead of Test/Review.
+        c.reviewDebt = (c.signals || []).some((s) => s.label === reviewDebtSignalLabel);
+        return c;
+      });
       attention = {
         forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
           // Personal pick leads with its own call-to-action; the engine's action pill is
@@ -764,13 +783,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           c.action = f.action;
           return c;
         }),
-        focus: focusAll.slice(0, reviewLimit).map((f) => {
-          const c = card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
-          // Flag review-debt cards (aged past the focus limit without a review) so the
-          // canvas can offer an "Address review" button instead of Test/Review.
-          c.reviewDebt = (c.signals || []).some((s) => s.label === reviewDebtSignalLabel);
-          return c;
-        }),
+        focus: capFocusKeepingDebt(focusCards, reviewLimit),
         focusTotal: focusAll.length,
         focusLimit: reviewLimit,
         focusExclusions: focusExclusions.map((e) => ({

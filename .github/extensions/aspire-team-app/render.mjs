@@ -1204,10 +1204,16 @@ function focusCardActions(item) {
   return null;
 }
 
-// "For you" resolve-conflicts picks get an interactive "Resolve conflicts" button.
+// "For you" picks that carry an actionable label get an interactive split button. Resolve-conflicts
+// picks send the resolve-conflicts agent action; review-requested picks ("Review this") send the
+// same review action the focus lane offers, so a PR that wants the viewer's review is actionable
+// from the "For you" lane too (matches personalPickActions.reviewThis in constants.mjs).
 function forYouCardActions(item) {
   if (item && item.action === "Resolve conflicts") {
     return [{ kind: "resolve-conflicts", label: "Resolve conflicts", done: "Sent to agent", icon: ICONS.merge }];
+  }
+  if (item && item.action === "Review this") {
+    return [{ kind: "review", label: "Review", done: "Review requested", icon: ICONS.eye }];
   }
   return null;
 }

@@ -79,6 +79,22 @@ test("failed repo saves show the API error and revert the optimistic draft", asy
   assert.equal(errEl.classList.has("show"), true);
 });
 
+test("forYouCardActions maps review-requested picks to a Review action", () => {
+  const { api } = createRendererHarness();
+
+  const resolve = api.forYouCardActions({ action: "Resolve conflicts" });
+  assert.equal(resolve.length, 1);
+  assert.equal(resolve[0].kind, "resolve-conflicts");
+
+  const review = api.forYouCardActions({ action: "Review this" });
+  assert.equal(review.length, 1);
+  assert.equal(review[0].kind, "review");
+  assert.equal(review[0].label, "Review");
+
+  assert.equal(api.forYouCardActions({ action: "Respond here" }), null);
+  assert.equal(api.forYouCardActions(null), null);
+});
+
 function createRendererHarness(overrides = {}) {
   const app = {
     innerHTML: "",
@@ -104,7 +120,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  setState(value) { state = value; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  setState(value) { state = value; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }

@@ -529,7 +529,9 @@ function checksAttentionSignal(pullRequest) {
 
 function oldFirstSignal(pullRequest) {
   const activityAge = ageMs(pullRequestAgingReferenceAt(pullRequest));
-  if (activityAge >= focusAgeLimitMs) {
+  // Route through isReviewDebt so the emitted signal and the focus-retention predicate share one
+  // definition (notably its approved-PR exclusion) and cannot drift.
+  if (isReviewDebt(pullRequest)) {
     return { label: reviewDebtSignalLabel, tone: "danger" };
   }
   if (activityAge >= 7 * dayMs) {
@@ -714,12 +716,13 @@ function pullRequestFocusActivityAt(pr, bucketLabel) {
 function isWithinFocusAgeLimit(pr, bucketLabel) {
   return ageMs(pullRequestFocusActivityAt(pr, bucketLabel)) <= focusAgeLimitMs;
 }
-// A PR is in "review debt" once it has aged past the focus limit on the same reference
-// timestamp oldFirstSignal() uses to emit the review-debt signal. Kept in lockstep with
-// oldFirstSignal (both key off pullRequestAgingReferenceAt >= focusAgeLimitMs) so a PR the
-// signal flags as review debt is exactly a PR this predicate reports, and vice versa.
+// A PR is in "review debt" once it has aged past the focus limit without yet earning an
+// approving review. oldFirstSignal() calls this directly so the "review debt" signal and this
+// retention predicate can never drift. Approved PRs are excluded: they have already been
+// reviewed and carry a merge-oriented lane ("Approved but aging" -> "land approval"), so
+// flagging them "review debt" / "Address review" would mislabel the action.
 function isReviewDebt(pr) {
-  return ageMs(pullRequestAgingReferenceAt(pr)) >= focusAgeLimitMs;
+  return pr.review.state !== "approved" && ageMs(pullRequestAgingReferenceAt(pr)) >= focusAgeLimitMs;
 }
 
 const excludedFocusBucketLabels = new Set(["Stalled", "Draft", "My draft PRs", "Docs", "Community Toolkit", "Bots / automation", "Community", "Aged out community", "Unresolved feedback", "Merge conflicts", "CI failing", "Author response"]);

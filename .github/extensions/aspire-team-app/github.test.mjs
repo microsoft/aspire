@@ -1,12 +1,36 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { loadDashboard } from "./github.mjs";
+import { capFocusKeepingDebt, loadDashboard } from "./github.mjs";
 
 const originalFetch = globalThis.fetch;
 
 test.afterEach(() => {
   globalThis.fetch = originalFetch;
+});
+
+test("capFocusKeepingDebt keeps the head cap plus review-debt cards that spill past it", () => {
+  const cards = [
+    { pr: { number: 1 }, reviewDebt: false },
+    { pr: { number: 2 }, reviewDebt: false },
+    { pr: { number: 3 }, reviewDebt: false },
+    { pr: { number: 4 }, reviewDebt: true },
+    { pr: { number: 5 }, reviewDebt: false },
+    { pr: { number: 6 }, reviewDebt: true },
+  ];
+
+  const kept = capFocusKeepingDebt(cards, 2);
+
+  // First 2 (the actionable headline) plus the two review-debt cards beyond the cap; the
+  // non-debt spillover (#3, #5) is dropped, and no card is duplicated.
+  assert.deepEqual(kept.map((c) => c.pr.number), [1, 2, 4, 6]);
+
+  // A debt card already inside the cap is not re-added.
+  const debtInHead = capFocusKeepingDebt([{ pr: { number: 1 }, reviewDebt: true }, { pr: { number: 2 }, reviewDebt: false }], 2);
+  assert.deepEqual(debtInHead.map((c) => c.pr.number), [1, 2]);
+
+  // No spillover at all when everything fits under the cap.
+  assert.deepEqual(capFocusKeepingDebt(cards.slice(0, 2), 5).map((c) => c.pr.number), [1, 2]);
 });
 
 test("loadDashboard paginates open pull requests for each watched repo", async () => {

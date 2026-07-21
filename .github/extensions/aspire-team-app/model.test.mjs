@@ -167,12 +167,25 @@ test("computeFocusItems retains review-debt PRs through the full createAttention
     review: { state: "reviewed", reviewerCount: 1, commentedReviewCount: 1, lastReviewedAt: isoAgo(10 * dayMs) },
   });
 
-  const buckets = createAttentionBuckets([fresh, needsReviewDebt, stalledDebt, stalledFresh]);
+  // Approved but untouched for 20 days: it lands in "Approved but aging" (a focus-eligible lane),
+  // but an approving review already exists, so it is NOT review debt. It must drop out of focus
+  // past the 14d window rather than being mislabeled "review debt" / offered "Address review"
+  // instead of its land-approval action.
+  const approvedAging = makePr({
+    number: 44,
+    updatedAt: isoAgo(20 * dayMs),
+    lastCommitAt: isoAgo(21 * dayMs),
+    review: { state: "approved", approvalCount: 1, reviewerCount: 1, lastApprovedAt: isoAgo(20 * dayMs), lastReviewedAt: isoAgo(20 * dayMs) },
+  });
+
+  const buckets = createAttentionBuckets([fresh, needsReviewDebt, stalledDebt, stalledFresh, approvedAging]);
   const focus = computeFocusItems(buckets);
 
   assert.deepEqual(focus.map((i) => i.pullRequest.number).sort((a, b) => a - b), [40, 41, 42]);
   // The Stalled-only debt PR is surfaced on its sole lane.
   assert.equal(focus.find((i) => i.pullRequest.number === 42).bucketLabel, "Stalled");
+  // The approved-but-aging PR is excluded: it is aged past the window and no longer review debt.
+  assert.equal(focus.find((i) => i.pullRequest.number === 44), undefined);
 });
 
 test("computeCommunityItems includes active external contributors and excludes team, bots, and aged-out PRs", () => {

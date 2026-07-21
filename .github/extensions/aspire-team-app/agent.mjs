@@ -50,20 +50,41 @@ export function normalizeActionTarget(target) {
 }
 
 // Accept the descriptor's own URL only when it verifiably points at THIS pull request:
-// https://<host>/<owner>/<repo>/pull/<number> for the already-validated owner/repo and
-// number. The loopback server replaces this field with its own cached, server-computed URL
-// before building the prompt (see server.mjs /api/agent/action resolveActionPr), so a
-// matching URL preserves a legitimate enterprise (GHES) host while a tampered, cross-repo,
-// or off-path URL is rejected. Anything that fails the check falls back to the canonical
-// github.com URL reconstructed from the validated owner/repo and number, so a hostile
-// descriptor can never inject an arbitrary link (or a different host/path) into the prompt.
+// https://<host>[:<port>]/<owner>/<repo>/pull/<number> for the already-validated owner/repo
+// and number. The loopback server replaces this field with its own cached, server-computed URL
+// before building the prompt (see server.mjs /api/agent/action resolveActionPr), so a matching
+// URL preserves a legitimate enterprise (GHES) host — including one served on an explicit port
+// such as :8443 — while a tampered, cross-repo, or off-path URL is rejected. Anything that fails
+// the check falls back to the canonical github.com URL reconstructed from the validated
+// owner/repo and number, so a hostile descriptor can never inject an arbitrary link (or a
+// different host/path) into the prompt.
 function safePrUrl(pr) {
   const canonical = `https://github.com/${pr.repository}/pull/${pr.number}`;
-  // Host must be a bare hostname (letters/digits/dot/hyphen) — no userinfo, port, credential,
-  // or path trick — and the path must be exactly the PR's own owner/repo/pull/number.
-  const m = /^https:\/\/[a-z0-9.-]+\/([^/\s]+\/[^/\s]+)\/pull\/(\d+)$/i.exec(pr.url);
+  let parsed;
+  try {
+    parsed = new URL(pr.url);
+  } catch {
+    // Not a parseable absolute URL at all.
+    return canonical;
+  }
+  // Require a plain https origin with nothing that could smuggle extra content or a credential:
+  // exact https scheme, no embedded userinfo (user:pass@host), and no query/fragment. A port is
+  // deliberately allowed here (unlike the old hostname-only regex) because GHES hosts legitimately
+  // serve on non-default ports; it is preserved via parsed.origin below.
+  if (parsed.protocol !== "https:" ||
+      parsed.username || parsed.password ||
+      parsed.search || parsed.hash ||
+      !parsed.hostname) {
+    return canonical;
+  }
+  // Path must be exactly this PR's own /owner/repo/pull/<number>. new URL() has already
+  // normalized any "." / ".." segments and leaves %2F encoded (it is not a real "/"), so a match
+  // here cannot traverse to a different repo or path.
+  const m = /^\/([^/\s]+\/[^/\s]+)\/pull\/(\d+)$/.exec(parsed.pathname);
   if (m && m[1].toLowerCase() === pr.repository.toLowerCase() && Number(m[2]) === pr.number) {
-    return pr.url;
+    // Rebuild from validated pieces (verified origin + the canonical validated path) rather than
+    // echoing pr.url, so nothing outside the parts we checked can ride along.
+    return `${parsed.origin}/${pr.repository}/pull/${pr.number}`;
   }
   return canonical;
 }

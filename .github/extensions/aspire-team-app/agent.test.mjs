@@ -95,6 +95,23 @@ test("buildAgentActionPrompt rejects a url whose path does not name the specifie
   assert.doesNotMatch(wrongNumber, /pull\/999/);
 });
 
+test("buildAgentActionPrompt preserves an enterprise (GHES) host, including an explicit port", () => {
+  // GHES instances legitimately serve on a non-default port (e.g. :8443). The url still names
+  // THIS PR's own owner/repo/pull/number, so it must be preserved rather than rewritten to
+  // github.com — the old hostname-only regex rejected the port and dispatched to the wrong host.
+  const ghes = buildAgentActionPrompt("test", { ...validPr, url: "https://ghe.example.com:8443/microsoft/aspire/pull/123" });
+  assert.match(ghes, /https:\/\/ghe\.example\.com:8443\/microsoft\/aspire\/pull\/123/);
+  assert.doesNotMatch(ghes, /github\.com/);
+});
+
+test("buildAgentActionPrompt rejects a url carrying embedded credentials even when the path matches", () => {
+  // Embedded userinfo (user@host) smuggles a credential into the link; drop it and fall back to
+  // the canonical github.com url for the validated owner/repo and number.
+  const creds = buildAgentActionPrompt("test", { ...validPr, url: "https://ghost@github.com/microsoft/aspire/pull/123" });
+  assert.match(creds, /https:\/\/github\.com\/microsoft\/aspire\/pull\/123/);
+  assert.doesNotMatch(creds, /ghost@/);
+});
+
 test("buildAgentActionPrompt never interpolates the descriptor title or author into the operational prompt", () => {
   // PR titles/authors are attacker-controlled; keep them out of the prompt entirely so a
   // multi-line title can't smuggle instructions into a tool-enabled agent session. The PR is
