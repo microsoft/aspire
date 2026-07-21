@@ -10,9 +10,9 @@
 // Each action has two targets, chosen from the button's dropdown:
 //   - "new-session" (default): open a NEW sub-session in the context of the PR's repo
 //     via open_pr_session, so the work runs against the right repository even when the
-//     canvas is hosted from an unrelated repo. Test/Review self-detect a matching skill
-//     (/pr-testing or /code-review) and fall back to a thorough manual pass; conflict and
-//     review-debt actions run interactively in that sub-session.
+//     canvas is hosted from an unrelated repo. Test, Review, and Review-debt self-detect a
+//     matching skill (/pr-testing or /code-review) and fall back to a thorough manual pass;
+//     the conflict action runs in that sub-session.
 //   - "current-session": do the work right here, in the session that owns the canvas,
 //     without spawning a sub-session. Useful when the canvas is already open on the PR's
 //     own repo and the user wants to stay in this conversation.
@@ -292,7 +292,12 @@ function reviewDebtKickoff({ ref, url }) {
 
 ${UNTRUSTED}
 
-Read the full diff and assess correctness, security, error handling, edge cases, test coverage, and the repo's own conventions. Post concrete, high-signal, actionable review feedback and report what should change before this can merge.`;
+First choose how to proceed, based on THIS repository's own skills:
+1. List the skills available in this session and look for a code-review skill. Also check the repo for a matching skill directory (for example .agents/skills/code-review/SKILL.md).
+2. If a suitable code-review skill exists, run it against this PR by invoking it as \`/{skill-name} ${url}\` (for this repo that is \`/code-review ${url}\`) and follow it end to end.
+3. If this repo has no code-review skill, do NOT force one \u2014 do a thorough manual review instead: read the full diff and assess correctness, security, error handling, edge cases, test coverage, and the repo's own conventions.
+
+Post concrete, high-signal, actionable review feedback and report what should change before this can merge.`;
 }
 
 // ---- current-session prompts: do the work here, no sub-session ----
@@ -320,7 +325,7 @@ ${UNTRUSTED}`;
     case "review-debt":
       return `Let's clear the review debt on pull request ${ref}: ${url}
 
-Work interactively in this session (do not open a separate sub-session). Review the changes and give concrete, high-signal feedback on what should change before this can merge.
+Work interactively in this session (do not open a separate sub-session). Prefer a code-review skill if one is available here \u2014 invoke it as \`/code-review ${url}\` and follow it end to end. If there is no such skill, review the full diff and assess correctness, security, error handling, edge cases, test coverage, and the repo's own conventions. Give concrete, high-signal feedback on what should change before this can merge.
 
 ${UNTRUSTED}`;
     default:

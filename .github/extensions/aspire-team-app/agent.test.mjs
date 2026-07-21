@@ -65,6 +65,12 @@ test("new-session resolve-conflicts and review-debt open a sub-session in the PR
   const debt = buildAgentActionPrompt("review-debt", validPr);
   assert.match(debt, /open_pr_session/);
   assert.match(debt, /review debt/i);
+  // Review-debt is a review operation, so it self-routes to the repo's code-review skill (with a
+  // thorough manual review fallback) exactly like the Review action.
+  assert.match(debt, /List the skills available in this session/);
+  assert.match(debt, /\.agents\/skills\/code-review\/SKILL\.md/);
+  assert.match(debt, /thorough manual review/i);
+  assert.match(debt, /`\/code-review https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
 });
 
 test("current-session target runs every action here without a sub-session", () => {
@@ -75,6 +81,7 @@ test("current-session target runs every action here without a sub-session", () =
   }
   assert.match(buildAgentActionPrompt("test", validPr, "current-session"), /`\/pr-testing https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
   assert.match(buildAgentActionPrompt("review", validPr, "current-session"), /`\/code-review https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
+  assert.match(buildAgentActionPrompt("review-debt", validPr, "current-session"), /`\/code-review https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
 });
 
 test("buildAgentActionPrompt reconstructs a github.com url when the descriptor url is untrustworthy", () => {
