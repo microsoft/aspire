@@ -13,6 +13,31 @@ CREATE TABLE IF NOT EXISTS telemetry_traces (
     has_gen_ai INTEGER NOT NULL CHECK (has_gen_ai IN (0, 1))
 ) STRICT;
 
+CREATE TABLE IF NOT EXISTS telemetry_span_kinds (
+    kind INTEGER PRIMARY KEY,
+    kind_name TEXT NOT NULL UNIQUE
+) STRICT;
+
+INSERT OR IGNORE INTO telemetry_span_kinds (kind, kind_name)
+VALUES
+    (0, 'Unspecified'),
+    (1, 'Internal'),
+    (2, 'Server'),
+    (3, 'Client'),
+    (4, 'Producer'),
+    (5, 'Consumer');
+
+CREATE TABLE IF NOT EXISTS telemetry_span_statuses (
+    status INTEGER PRIMARY KEY,
+    status_name TEXT NOT NULL UNIQUE
+) STRICT;
+
+INSERT OR IGNORE INTO telemetry_span_statuses (status, status_name)
+VALUES
+    (0, 'Unset'),
+    (1, 'Ok'),
+    (2, 'Error');
+
 CREATE TABLE IF NOT EXISTS telemetry_spans (
     trace_id TEXT NOT NULL REFERENCES telemetry_traces(trace_id) ON DELETE CASCADE,
     span_id TEXT NOT NULL,
@@ -21,10 +46,10 @@ CREATE TABLE IF NOT EXISTS telemetry_spans (
     resource_view_id INTEGER NOT NULL REFERENCES telemetry_resource_views(resource_view_id) ON DELETE CASCADE,
     scope_id INTEGER NOT NULL REFERENCES telemetry_scopes(scope_id),
     name TEXT NOT NULL,
-    kind INTEGER NOT NULL,
+    kind INTEGER NOT NULL REFERENCES telemetry_span_kinds(kind),
     start_time_ticks INTEGER NOT NULL,
     end_time_ticks INTEGER NOT NULL,
-    status INTEGER NOT NULL,
+    status INTEGER NOT NULL REFERENCES telemetry_span_statuses(status),
     status_message TEXT NULL,
     trace_state TEXT NULL,
     uninstrumented_peer_resource_id INTEGER NULL REFERENCES telemetry_resources(resource_id) ON DELETE SET NULL,

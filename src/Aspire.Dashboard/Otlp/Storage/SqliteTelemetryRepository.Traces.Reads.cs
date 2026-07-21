@@ -209,7 +209,7 @@ public sealed partial class SqliteTelemetryRepository
 
             if (fieldFilter.Condition is FilterCondition.NotEqual or FilterCondition.NotContains)
             {
-                sql.Append(" AND NOT EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id WHERE s.trace_id = t.trace_id AND ");
+                sql.Append(" AND NOT EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id JOIN telemetry_span_kinds sk ON sk.kind = s.kind JOIN telemetry_span_statuses ss ON ss.status = s.status LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id WHERE s.trace_id = t.trace_id AND ");
                 sql.Append(BuildSpanFieldPredicate(fieldFilter, parameters, filterIndex++, invertNegative: true));
                 sql.Append(')');
             }
@@ -220,7 +220,7 @@ public sealed partial class SqliteTelemetryRepository
         }
         if (positivePredicates.Count > 0)
         {
-            sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id WHERE s.trace_id = t.trace_id AND ");
+            sql.Append(" AND EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id JOIN telemetry_span_kinds sk ON sk.kind = s.kind JOIN telemetry_span_statuses ss ON ss.status = s.status LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id WHERE s.trace_id = t.trace_id AND ");
             sql.AppendJoin(" AND ", positivePredicates);
             sql.Append(')');
         }
@@ -241,8 +241,8 @@ public sealed partial class SqliteTelemetryRepository
                         s.trace_id LIKE @{parameterName} ESCAPE '!' OR
                         sc.scope_name LIKE @{parameterName} ESCAPE '!' OR
                         r.resource_name LIKE @{parameterName} ESCAPE '!' OR
-                        CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END LIKE @{parameterName} ESCAPE '!' OR
-                        CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END LIKE @{parameterName} ESCAPE '!' OR
+                        ss.status_name LIKE @{parameterName} ESCAPE '!' OR
+                        sk.kind_name LIKE @{parameterName} ESCAPE '!' OR
                         COALESCE(s.status_message, '') LIKE @{parameterName} ESCAPE '!' OR
                         EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND (a.attribute_key LIKE @{parameterName} ESCAPE '!' OR a.attribute_value LIKE @{parameterName} ESCAPE '!')) OR
                         EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND e.event_name LIKE @{parameterName} ESCAPE '!')
@@ -251,7 +251,7 @@ public sealed partial class SqliteTelemetryRepository
             }
             sql.Append(" AND ((");
             sql.AppendJoin(" AND ", fullNamePredicates);
-            sql.Append(") OR EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id WHERE s.trace_id = t.trace_id AND ");
+            sql.Append(") OR EXISTS (SELECT 1 FROM telemetry_spans s JOIN telemetry_resources r ON r.resource_id = s.resource_id JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id JOIN telemetry_span_kinds sk ON sk.kind = s.kind JOIN telemetry_span_statuses ss ON ss.status = s.status WHERE s.trace_id = t.trace_id AND ");
             sql.AppendJoin(" AND ", spanPredicates);
             sql.Append("))");
         }
@@ -297,8 +297,8 @@ public sealed partial class SqliteTelemetryRepository
             KnownTraceFields.TraceIdField => "s.trace_id",
             KnownTraceFields.SpanIdField => "s.span_id",
             KnownTraceFields.NameField => "s.name",
-            KnownTraceFields.KindField => "CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END",
-            KnownTraceFields.StatusField => "CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END",
+            KnownTraceFields.KindField => "sk.kind_name",
+            KnownTraceFields.StatusField => "ss.status_name",
             KnownSourceFields.NameField => "sc.scope_name",
             KnownTraceFields.TimestampField => "s.start_time_ticks / 10000",
             _ => null
@@ -361,6 +361,8 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_traces t ON t.trace_id = s.trace_id
             JOIN telemetry_resources r ON r.resource_id = s.resource_id
             JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id
+            JOIN telemetry_span_kinds sk ON sk.kind = s.kind
+            JOIN telemetry_span_statuses ss ON ss.status = s.status
             LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id
             WHERE 1 = 1
             """);
@@ -456,8 +458,8 @@ public sealed partial class SqliteTelemetryRepository
                         s.trace_id LIKE @{parameterName} ESCAPE '!' OR
                         sc.scope_name LIKE @{parameterName} ESCAPE '!' OR
                         r.resource_name LIKE @{parameterName} ESCAPE '!' OR
-                        CASE s.status WHEN 0 THEN 'Unset' WHEN 1 THEN 'Ok' WHEN 2 THEN 'Error' END LIKE @{parameterName} ESCAPE '!' OR
-                        CASE s.kind WHEN 0 THEN 'Unspecified' WHEN 1 THEN 'Internal' WHEN 2 THEN 'Server' WHEN 3 THEN 'Client' WHEN 4 THEN 'Producer' WHEN 5 THEN 'Consumer' END LIKE @{parameterName} ESCAPE '!' OR
+                        ss.status_name LIKE @{parameterName} ESCAPE '!' OR
+                        sk.kind_name LIKE @{parameterName} ESCAPE '!' OR
                         COALESCE(s.status_message, '') LIKE @{parameterName} ESCAPE '!' OR
                         EXISTS (SELECT 1 FROM telemetry_span_attributes a WHERE a.trace_id = s.trace_id AND a.span_id = s.span_id AND (a.attribute_key LIKE @{parameterName} ESCAPE '!' OR a.attribute_value LIKE @{parameterName} ESCAPE '!')) OR
                         EXISTS (SELECT 1 FROM telemetry_span_events e WHERE e.trace_id = s.trace_id AND e.span_id = s.span_id AND e.event_name LIKE @{parameterName} ESCAPE '!')
@@ -519,31 +521,16 @@ public sealed partial class SqliteTelemetryRepository
             KnownTraceFields.TraceIdField => QueryFieldValues("trace_id", "telemetry_spans"),
             KnownTraceFields.SpanIdField => QueryFieldValues("span_id", "telemetry_spans"),
             KnownTraceFields.KindField => connection.Query<FieldValueRecord>("""
-                SELECT
-                    CASE kind
-                        WHEN 0 THEN 'Unspecified'
-                        WHEN 1 THEN 'Internal'
-                        WHEN 2 THEN 'Server'
-                        WHEN 3 THEN 'Client'
-                        WHEN 4 THEN 'Producer'
-                        WHEN 5 THEN 'Consumer'
-                        ELSE CAST(kind AS TEXT)
-                    END AS FieldValue,
-                    COUNT(*) AS ValueCount
-                FROM telemetry_spans
-                GROUP BY kind;
+                SELECT sk.kind_name AS FieldValue, COUNT(*) AS ValueCount
+                FROM telemetry_spans s
+                JOIN telemetry_span_kinds sk ON sk.kind = s.kind
+                GROUP BY sk.kind, sk.kind_name;
                 """),
             KnownTraceFields.StatusField => connection.Query<FieldValueRecord>("""
-                SELECT
-                    CASE status
-                        WHEN 0 THEN 'Unset'
-                        WHEN 1 THEN 'Ok'
-                        WHEN 2 THEN 'Error'
-                        ELSE CAST(status AS TEXT)
-                    END AS FieldValue,
-                    COUNT(*) AS ValueCount
-                FROM telemetry_spans
-                GROUP BY status;
+                SELECT ss.status_name AS FieldValue, COUNT(*) AS ValueCount
+                FROM telemetry_spans s
+                JOIN telemetry_span_statuses ss ON ss.status = s.status
+                GROUP BY ss.status, ss.status_name;
                 """),
             KnownSourceFields.NameField => connection.Query<FieldValueRecord>("""
                 SELECT sc.scope_name AS FieldValue, COUNT(*) AS ValueCount
