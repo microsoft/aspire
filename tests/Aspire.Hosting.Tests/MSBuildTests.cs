@@ -320,7 +320,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CliBundleDefaultResolvesExplicitBundlePath()
+    public async Task CliBundleOptInResolvesExplicitBundlePath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -342,7 +342,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CliBundleDefaultResolvesNewestVersionedBundlePath()
+    public async Task CliBundleOptInResolvesNewestVersionedBundlePath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -366,7 +366,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CliBundleDefaultIgnoresTemporaryVersionedBundleDirectories()
+    public async Task CliBundleOptInIgnoresTemporaryVersionedBundleDirectories()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -390,26 +390,29 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public void CliBundleOptOutEmitsWarning()
+    public void CliBundleDefaultEmitsWarning()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
-            """
-              <AspireUseCliBundle>false</AspireUseCliBundle>
-            """);
+        var appHostDirectory = CreateSdkBundleAppHostProject(
+            workspace.WorkspaceRoot.FullName,
+            repoRoot,
+            additionalProperties: "",
+            optIntoCliBundle: false);
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 
         var output = BuildProject(appHostDirectory);
 
         Assert.Contains("warning ASPIRE010", output);
-        Assert.Contains("Some Aspire features may not work when the Aspire CLI bundle is not being used", output);
+        Assert.Contains("Some Aspire features require the Aspire CLI bundle", output);
+        Assert.Contains("Set AspireUseCliBundle=true", output);
+        Assert.Contains("suppress ASPIRE010", output);
     }
 
     [Fact]
-    public async Task CliBundleDefaultResolvesAspireHomeBundleForSidecarlessCli()
+    public async Task CliBundleOptInResolvesAspireHomeBundleForSidecarlessCli()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -433,7 +436,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CliBundleDefaultResolvesAspireHomeBundleWithoutCliOnPath()
+    public async Task CliBundleOptInResolvesAspireHomeBundleWithoutCliOnPath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -456,7 +459,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CliBundleDefaultResolvesDotNetToolStoreBundleFromShimPath()
+    public async Task CliBundleOptInResolvesDotNetToolStoreBundleFromShimPath()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -529,6 +532,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         var missingBundlePath = Path.Combine(workspace.WorkspaceRoot.FullName, "missing-bundle");
         var appHostDirectory = CreateSdkBundleAppHostProject(workspace.WorkspaceRoot.FullName, repoRoot,
             $"""
+              <AspireCliInvocationMode>Dnx</AspireCliInvocationMode>
               <AspireCliBundlePath>{missingBundlePath}</AspireCliBundlePath>
             """);
 
@@ -544,6 +548,43 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         Assert.Contains("New features require the Aspire CLI to be installed.", output);
         Assert.Contains("https://get.aspire.dev", output);
         Assert.DoesNotContain("DCP path could not be resolved", output);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Dnx")]
+    public void CliBundleDnxInvocationAllowsMissingBuildTimeBundle(string? invocationMode)
+    {
+        var repoRoot = MSBuildUtils.GetRepoRoot();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var additionalProperties = invocationMode is null
+            ? ""
+            : $"""
+              <AspireCliInvocationMode>{invocationMode}</AspireCliInvocationMode>
+            """;
+        var appHostDirectory = CreateSdkBundleAppHostProject(
+            workspace.WorkspaceRoot.FullName,
+            repoRoot,
+            additionalProperties);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "fake-cli"));
+        File.WriteAllText(Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "dnx.exe" : "dnx"), "");
+
+        CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
+
+        BuildProject(appHostDirectory, new Dictionary<string, string>
+        {
+            ["ASPIRE_HOME"] = Path.Combine(workspace.WorkspaceRoot.FullName, "empty-aspire-home"),
+            ["PATH"] = $"{fakeCliDirectory.FullName}{Path.PathSeparator}{GetDotNetOnlyPath()}"
+        });
+
+        var appHostIdentityMetadata = File.ReadAllLines(Path.Combine(appHostDirectory, "obj", "apphost-identity-metadata.txt"));
+        Assert.Equal(
+            [
+                $"apphostprojectpath={appHostDirectory}",
+                "apphostprojectname=AppHost.csproj"
+            ],
+            appHostIdentityMetadata);
     }
 
     [Fact]
@@ -569,7 +610,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task CliBundleDefaultAppliesToNonCSharpAppHostProject()
+    public async Task CliBundleDefaultsToFalseForNonCSharpAppHostProject()
     {
         var repoRoot = MSBuildUtils.GetRepoRoot();
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -598,7 +639,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(0, result.ExitCode);
         var property = await File.ReadAllTextAsync(Path.Combine(appHostDirectory, "obj", "aspire-use-cli-bundle.txt"));
-        Assert.Equal("Value=true", property.Trim());
+        Assert.Equal("Value=false", property.Trim());
     }
 
     [Fact]
@@ -627,7 +668,12 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
         Assert.Contains("class App : global::Aspire.Hosting.IProjectMetadata", appMetadata);
     }
 
-    private static string CreateSdkBundleAppHostProject(string basePath, string repoRoot, string additionalProperties, string additionalProjectReferences = "")
+    private static string CreateSdkBundleAppHostProject(
+        string basePath,
+        string repoRoot,
+        string additionalProperties,
+        string additionalProjectReferences = "",
+        bool optIntoCliBundle = true)
     {
         var appHostDirectory = Path.Combine(basePath, "AppHost");
         Directory.CreateDirectory(appHostDirectory);
@@ -645,6 +691,7 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
                 <AspireHostingSDKVersion>9.0.0</AspireHostingSDKVersion>
                 <SkipAddAspireDefaultReferences>true</SkipAddAspireDefaultReferences>
                 <_AspireUseTaskHostFactory>true</_AspireUseTaskHostFactory>
+                {(optIntoCliBundle ? "<AspireUseCliBundle>true</AspireUseCliBundle>" : "")}
             {additionalProperties}
               </PropertyGroup>
 
@@ -654,8 +701,15 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
               </ItemGroup>
 
               <Target Name="WriteResolvedAspirePaths" AfterTargets="GetAssemblyAttributes">
+                <ItemGroup>
+                  <_AppHostIdentityMetadata Include="@(AssemblyAttribute)"
+                                            Condition="'%(AssemblyAttribute._Parameter1)' == 'apphostprojectpath' or '%(AssemblyAttribute._Parameter1)' == 'apphostprojectname'" />
+                </ItemGroup>
                 <WriteLinesToFile File="$(BaseIntermediateOutputPath)resolved-aspire-paths.txt"
                                   Lines="$(DcpDir);$(AspireDashboardDir);$(AspireDashboardPath)"
+                                  Overwrite="true" />
+                <WriteLinesToFile File="$(BaseIntermediateOutputPath)apphost-identity-metadata.txt"
+                                  Lines="@(_AppHostIdentityMetadata->'%(_Parameter1)=%(_Parameter2)')"
                                   Overwrite="true" />
               </Target>
 
