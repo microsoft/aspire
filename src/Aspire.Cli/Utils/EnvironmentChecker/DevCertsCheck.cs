@@ -214,14 +214,14 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             return;
         }
 
-        var currentCertificate = GetCurrentDevCertificate(certInfos);
-        if (currentCertificate?.Thumbprint is null)
+        var currentCertificates = GetCurrentDevCertificates(certInfos).ToList();
+        if (currentCertificates.Count == 0)
         {
             return;
         }
 
         var trustPath = CertificateHelpers.GetDevCertsTrustPath(environment);
-        var cacheStatus = EvaluateOpenSslCertificateCache(trustPath, currentCertificate.Thumbprint);
+        var cacheStatus = EvaluateOpenSslCertificateCache(trustPath, currentCertificates);
         if (cacheStatus is null)
         {
             return;
@@ -239,7 +239,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         });
     }
 
-    private static DevCertInfo? GetCurrentDevCertificate(IReadOnlyList<DevCertInfo> certInfos)
+    private static IEnumerable<DevCertInfo> GetCurrentDevCertificates(IReadOnlyList<DevCertInfo> certInfos)
     {
         var now = DateTimeOffset.Now;
         return certInfos
@@ -249,52 +249,53 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
                 !string.IsNullOrEmpty(c.Thumbprint))
             .OrderByDescending(c => c.Version)
             .ThenByDescending(c => c.ValidityNotAfter)
-            .FirstOrDefault();
+            .ThenBy(c => c.Thumbprint, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static OpenSslCertificateCacheStatus? EvaluateOpenSslCertificateCache(string trustPath, string currentCertificateThumbprint)
+    private static OpenSslCertificateCacheStatus? EvaluateOpenSslCertificateCache(string trustPath, IReadOnlyList<DevCertInfo> currentCertificates)
     {
         if (!Directory.Exists(trustPath))
         {
+            var trustedThumbprints = GetTrustedThumbprints(currentCertificates);
+            if (trustedThumbprints.Count == 0)
+            {
+                return null;
+            }
+
             return new(
                 DoctorCommandStrings.DevCertsOpenSslCacheMissingCurrentCertificateMessage,
-                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, currentCertificateThumbprint));
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, string.Join(", ", trustedThumbprints)));
         }
 
-        string[] certificateFiles;
-        try
-        {
-            // The Linux dev-certs OpenSSL cache stores certificate files such as:
-            //   aspnetcore-localhost-<thumbprint>.pem
-            // OpenSSL/c_rehash can also create hash symlinks like <hash>.0 in the same directory,
-            // but only .pem/.crt/.cer files are certificate inputs that should be parsed here.
-            certificateFiles = Directory.GetFiles(trustPath)
-                .Where(IsOpenSslCertificateFile)
-                .ToArray();
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
-        {
-            return new(
-                DoctorCommandStrings.DevCertsOpenSslCacheUnreadableMessage,
-                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheUnreadableDetailsFormat, trustPath, ex.Message));
-        }
-
-        var cachedThumbprints = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         var unreadableFiles = new List<string>();
+        var mismatchedThumbprints = new List<string>();
+        var missingTrustedThumbprints = new List<string>();
 
-        foreach (var certificateFile in certificateFiles)
+        foreach (var certificate in currentCertificates)
         {
+            var certificateFileName = GetOpenSslCertificateFileName(certificate.Thumbprint!);
+            var certificateFile = Path.Combine(trustPath, certificateFileName);
+            if (!File.Exists(certificateFile))
+            {
+                if (certificate.TrustLevel != CertificateManager.TrustLevel.None)
+                {
+                    missingTrustedThumbprints.Add(certificate.Thumbprint!);
+                }
+
+                continue;
+            }
+
             try
             {
                 using var cachedCertificate = X509CertificateLoader.LoadCertificateFromFile(certificateFile);
-                if (cachedCertificate.Thumbprint is not null)
+                if (!string.Equals(certificate.Thumbprint, cachedCertificate.Thumbprint, StringComparison.OrdinalIgnoreCase))
                 {
-                    cachedThumbprints.Add(cachedCertificate.Thumbprint);
+                    mismatchedThumbprints.Add(certificate.Thumbprint!);
                 }
             }
             catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException)
             {
-                unreadableFiles.Add(Path.GetFileName(certificateFile));
+                unreadableFiles.Add(certificateFileName);
             }
         }
 
@@ -305,23 +306,33 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
                 string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheUnreadableFilesDetailsFormat, trustPath, string.Join(", ", unreadableFiles)));
         }
 
-        if (!cachedThumbprints.Contains(currentCertificateThumbprint))
+        if (mismatchedThumbprints.Count > 0)
         {
             return new(
                 DoctorCommandStrings.DevCertsOpenSslCacheMissingCurrentCertificateMessage,
-                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, currentCertificateThumbprint));
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, string.Join(", ", mismatchedThumbprints)));
+        }
+
+        if (missingTrustedThumbprints.Count > 0)
+        {
+            return new(
+                DoctorCommandStrings.DevCertsOpenSslCacheMissingCurrentCertificateMessage,
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, string.Join(", ", missingTrustedThumbprints)));
         }
 
         return null;
     }
 
-    private static bool IsOpenSslCertificateFile(string path)
+    private static List<string> GetTrustedThumbprints(IReadOnlyList<DevCertInfo> currentCertificates)
     {
-        var extension = Path.GetExtension(path);
-        return extension.Equals(".pem", StringComparison.OrdinalIgnoreCase) ||
-            extension.Equals(".crt", StringComparison.OrdinalIgnoreCase) ||
-            extension.Equals(".cer", StringComparison.OrdinalIgnoreCase);
+        return currentCertificates
+            .Where(c => c.TrustLevel != CertificateManager.TrustLevel.None)
+            .Select(c => c.Thumbprint!)
+            .ToList();
     }
+
+    private static string GetOpenSslCertificateFileName(string certificateThumbprint) =>
+        $"aspnetcore-localhost-{certificateThumbprint}.pem";
 
     private static void AddLinuxCertificateToolWarnings(List<EnvironmentCheckResult> results, IEnvironment environment)
     {
