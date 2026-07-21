@@ -329,6 +329,21 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   break-inside: avoid; -webkit-column-break-inside: avoid; margin-bottom: 12px;
 }
 .card:hover { border-color: var(--border-strong); background: var(--card-hover); }
+.card-main { display: flex; flex-direction: column; gap: 8px; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.card-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1;
+  padding: 5px 10px; border-radius: 7px; cursor: pointer;
+  color: var(--fg); background: var(--surface-3); border: 1px solid var(--border);
+  transition: border-color .15s, background .15s, opacity .15s;
+}
+.card-btn:hover { border-color: var(--border-strong); background: var(--card-hover); }
+.card-btn:disabled, .card-btn.busy { opacity: .6; cursor: default; }
+.card-btn.done { color: var(--success); border-color: color-mix(in srgb, var(--success) 48%, transparent); background: color-mix(in srgb, var(--success) 12%, transparent); }
+.card-btn.failed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 48%, transparent); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.card-btn .cb-ico { display: inline-flex; }
+.card-btn .cb-ico svg { width: 13px; height: 13px; }
 .card-top { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .card-title { font-weight: 600; font-size: 13px; line-height: 1.35; color: var(--fg); min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .card-title:hover { color: var(--blue); }
@@ -806,6 +821,47 @@ const refresh = () => withRefresh(() => postJSON("api/refresh"));
 const setMode = (mode) => { if (state && state.mode === mode) return; goView("queue", false); return withRefresh(() => postJSON("api/mode", { mode })); };
 const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/account/toggle", { id, active }));
 
+// Card action button (Test / Review / Resolve conflicts / Address review). Posts the
+// PR descriptor to the loopback server, which hands a prompt to the main session. We
+// give inline feedback on the button itself and deliberately do NOT re-render — the
+// action changes the conversation, not the dashboard, and a re-render would drop the
+// confirmation. A later SSE refresh naturally restores the default label.
+async function onCardAction(btn) {
+  if (btn.classList.contains("busy") || btn.classList.contains("done")) return;
+  const d = btn.dataset;
+  const body = {
+    kind: d.kind,
+    pr: {
+      url: d.prUrl,
+      number: Number(d.prNumber),
+      repository: d.prRepo,
+      title: d.prTitle,
+      author: d.prAuthor,
+    },
+  };
+  const original = btn.innerHTML;
+  btn.classList.add("busy");
+  btn.disabled = true;
+  try {
+    const res = await postJSON("api/agent/action", body);
+    btn.classList.remove("busy");
+    btn.classList.add("done");
+    // Label truthfully: if the agent was mid-task the prompt is queued behind it, so
+    // don't claim it already started. Otherwise fall back to the per-action done label.
+    const label = res && res.queued
+      ? "Queued \u2014 starts after current task"
+      : (d.doneLabel || "Sent to agent");
+    btn.innerHTML = '<span class="cb-ico">' + ICONS.check + '</span><span class="cb-label">' + esc(label) + "</span>";
+  } catch (e) {
+    btn.classList.remove("busy");
+    btn.classList.add("failed");
+    btn.disabled = false;
+    btn.innerHTML = '<span class="cb-ico">' + ICONS.x + '</span><span class="cb-label">' + esc(String((e && e.message) || "Failed")) + "</span>";
+    // Restore the original label after a beat so the user can retry.
+    setTimeout(() => { btn.classList.remove("failed"); btn.innerHTML = original; }, 3200);
+  }
+}
+
 // Persist one account's repos without a full refresh/broadcast (the editor owns
 // the DOM and a re-render would interrupt typing). The editor is optimistic, so a
 // failed save reverts to the previous draft and shows the API error beside the row.
@@ -877,9 +933,57 @@ function goView(next, forward) {
 
 function pill(s) { return '<span class="pill ' + (s.tone || "muted") + '">' + esc(s.label) + "</span>"; }
 
-function prCard(item) {
+// Encode the PR descriptor onto the button as data-* attributes so the click handler
+// can post it back to /api/agent/action without another lookup. The whole card body is
+// a link, so buttons live in a sibling row (not nested in the <a>, which is invalid).
+function cardActionBtn(pr, a) {
+  const data =
+    ' data-kind="' + esc(a.kind) + '"' +
+    ' data-done-label="' + esc(a.done || "Sent to agent") + '"' +
+    ' data-pr-url="' + esc(pr.url || "") + '"' +
+    ' data-pr-number="' + esc(pr.number) + '"' +
+    ' data-pr-repo="' + esc(pr.repository || "") + '"' +
+    ' data-pr-title="' + esc(pr.title || "") + '"' +
+    ' data-pr-author="' + esc(pr.author || "") + '"';
+  return '<button type="button" class="card-btn"' + data + '>' +
+    (a.icon ? '<span class="cb-ico">' + a.icon + "</span>" : "") +
+    '<span class="cb-label">' + esc(a.label) + "</span></button>";
+}
+
+// Which action buttons a "Needs attention" card gets: a review-debt card offers only
+// the interactive "Address review" button; otherwise someone else's PR offers Test +
+// Review (each opens a sub-session). Your own non-debt cards get no buttons.
+function focusCardActions(item) {
+  const pr = (item && item.pr) || {};
+  if (isReviewDebtItem(item)) {
+    return [{ kind: "review-debt", label: "Address review", done: "Sent to agent", icon: ICONS.eye }];
+  }
+  if (!pr.isMine) {
+    return [
+      { kind: "test", label: "Test", done: "Testing requested", icon: ICONS.check },
+      { kind: "review", label: "Review", done: "Review requested", icon: ICONS.eye },
+    ];
+  }
+  return null;
+}
+
+// "For you" resolve-conflicts picks get an interactive "Resolve conflicts" button.
+function forYouCardActions(item) {
+  if (item && item.action === "Resolve conflicts") {
+    return [{ kind: "resolve-conflicts", label: "Resolve conflicts", done: "Sent to agent", icon: ICONS.merge }];
+  }
+  return null;
+}
+
+function isReviewDebtItem(item) {
+  if (!item) return false;
+  if (item.reviewDebt) return true;
+  return (item.signals || []).some((s) => s && s.label === "review debt");
+}
+
+function prCard(item, actions) {
   const pr = item.pr;
-  return '<a class="card" href="' + esc(pr.url) + '" target="_blank" rel="noreferrer">' +
+  const main = '<a class="card-main" href="' + esc(pr.url) + '" target="_blank" rel="noreferrer">' +
     '<div class="card-top"><div class="card-title">' + esc(pr.title) + "</div></div>" +
     '<div class="card-sub">' +
       avatarTag(pr.authorAvatarUrl, pr.author, "avatar", 36) +
@@ -889,6 +993,10 @@ function prCard(item) {
     (item.reason ? '<div class="reason">' + esc(item.reason) + "</div>" : "") +
     ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
+  const acts = (actions && actions.length)
+    ? '<div class="card-actions">' + actions.map((a) => cardActionBtn(pr, a)).join("") + "</div>"
+    : "";
+  return '<div class="card">' + main + acts + "</div>";
 }
 
 function issueCard(item) {
@@ -1011,8 +1119,9 @@ function queuePanel(opts) {
   const n = items.length;
   const capped = typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
   const metric = capped ? "top " + n + " of " + opts.cappedTotal : n + " shown";
+  const cardActions = typeof opts.cardActions === "function" ? opts.cardActions : null;
   const body = n
-    ? '<div class="grid">' + items.map((it) => (it.pr ? prCard(it) : issueCard(it))).join("") + "</div>"
+    ? '<div class="grid">' + items.map((it) => (it.pr ? prCard(it, cardActions ? cardActions(it) : null) : issueCard(it))).join("") + "</div>"
     : '<div class="lane-empty">' + esc(opts.emptyText || "Nothing here right now.") + "</div>";
   const collapsed = collapsedLanes.has(opts.id);
   return '<section class="qpanel collapsible' + (collapsed ? " collapsed" : "") + '" data-q="' + esc(opts.id) + '">' +
@@ -1040,6 +1149,7 @@ function reviewBoardHtml() {
       id: "for-you", title: "For you", tone: "accent", icon: ICONS.sparkle,
       subtitle: "Your highest-leverage actions across every repo, pulled to the top of the queue.",
       items: att.forMe.slice(0, 6), cappedTotal: att.forMe.length,
+      cardActions: forYouCardActions,
     });
   }
 
@@ -1048,6 +1158,7 @@ function reviewBoardHtml() {
     id: "needs-attention", title: "Needs attention", tone: "danger", icon: ICONS.alertSm,
     subtitle: "One actionable row per PR with fresh activity, waiting on a review or a merge.",
     items: att.focus || [], cappedTotal: att.focusTotal,
+    cardActions: focusCardActions,
     emptyText: "Nothing is waiting on a reviewer right now \u00b7 anything blocked sits in the breakdown below.",
   });
 
@@ -1748,6 +1859,11 @@ function wire() {
 
   document.querySelectorAll(".dismiss").forEach((b) =>
     b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); dismissNotif(b.dataset.dismiss, b.closest(".notif-card")); }));
+
+  // Card action buttons live in a sibling row of the card link, so stop the click
+  // from bubbling to any surrounding handler and never navigate.
+  document.querySelectorAll(".card-btn[data-kind]").forEach((b) =>
+    b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); onCardAction(b); }));
   const da = document.getElementById("dismiss-all"); if (da) da.addEventListener("click", dismissAll);
   const r1 = document.getElementById("restore-notifs"); if (r1) r1.addEventListener("click", restoreNotifs);
   const r2 = document.getElementById("restore-notifs2"); if (r2) r2.addEventListener("click", restoreNotifs);

@@ -11,6 +11,7 @@ import { createServer } from "node:http";
 import { HTML, STYLES, APP_JS } from "./render.mjs";
 import { loadDashboard } from "./github.mjs";
 import { resolveAccounts } from "./accounts.mjs";
+import { buildAgentActionPrompt, buildAgentActionLog } from "./agent.mjs";
 import {
   loadPrefs,
   savePrefs,
@@ -25,6 +26,20 @@ const servers = new Map(); // instanceId -> { server, url }
 const sseClients = new Set();
 let cache = null;
 let inflight = null;
+
+// Bridge to the main Copilot session, injected once from extension.mjs after
+// joinSession resolves (server.mjs can't import the SDK session itself). Card action
+// buttons post a prompt through here so the agent — not this server — opens PR
+// sub-sessions or does interactive work. Null until wired, so a click that races
+// startup fails cleanly instead of throwing an undefined-call.
+let agentSend = null;
+
+// Called from extension.mjs. The injected fn receives { prompt, log } and returns
+// { messageId, queued } — queued is true when the agent was already mid-turn, so the
+// prompt waits behind the current task rather than starting immediately.
+export function setAgentSend(fn) {
+  agentSend = typeof fn === "function" ? fn : null;
+}
 
 // Account resolution probes every candidate credential against its account's
 // watched repos, so we cache the result and only re-probe when the cache is stale
@@ -247,12 +262,38 @@ async function handle(req, res, log) {
       const { id, repos } = await readBody(req);
       if (typeof id === "string" && id) {
         const prefs = await loadPrefs();
-        setAccountRepos(prefs, id, parseRepos(repos));
+        // Pass an empty fallback so a cleared submission resets to the account's own
+        // default (public vs EMU) inside setAccountRepos, rather than parseRepos
+        // pre-filling the public default here.
+        setAccountRepos(prefs, id, parseRepos(repos, []));
         await savePrefs(prefs);
         invalidateAuth();
       }
       const next = await getDashboard(true);
       return send(res, 200, next);
+    }
+    if (req.method === "POST" && path === "/api/agent/action") {
+      // A card action button (Test / Review / Resolve conflicts / Address review)
+      // posts { kind, pr }. We build the prompt and hand it to the main session via
+      // the injected bridge; the agent then opens a sub-session or works the PR. This
+      // route does not touch the dashboard cache, so it neither refreshes nor
+      // broadcasts.
+      const { kind, pr } = await readBody(req);
+      if (!agentSend) {
+        return send(res, 503, { error: "The Copilot session is not ready yet. Try again in a moment." });
+      }
+      let prompt;
+      try {
+        prompt = buildAgentActionPrompt(kind, pr);
+      } catch (e) {
+        return send(res, 400, { error: e.message });
+      }
+      const log = buildAgentActionLog(kind, pr);
+      const result = await agentSend({ prompt, log });
+      // Tolerate a bare messageId string in case an older bridge is wired.
+      const messageId = typeof result === "string" ? result : (result && result.messageId) ?? null;
+      const queued = typeof result === "object" && result ? !!result.queued : false;
+      return send(res, 200, { ok: true, kind, messageId, queued });
     }
     if (req.method === "POST" && path === "/api/notifications/dismiss") {
       const { id } = await readBody(req);
@@ -357,7 +398,9 @@ export async function toggleAccount(id, active) {
 
 export async function setReposFor(id, repos) {
   const prefs = await loadPrefs();
-  setAccountRepos(prefs, id, parseRepos(repos));
+  // Empty fallback: a cleared list resets to the account's own default in
+  // setAccountRepos (public vs EMU) instead of parseRepos forcing the public one.
+  setAccountRepos(prefs, id, parseRepos(repos, []));
   await savePrefs(prefs);
   invalidateAuth();
   const next = await getDashboard(true);

@@ -22,7 +22,10 @@ entry in the Canvas Marketplace.
   account watches **its own** repositories, editable inline.
 - **Enterprise aware** — accounts on a GitHub Enterprise Server host are badged and
   their API calls are routed to that host's GraphQL/REST endpoints.
-- **Editable watched repos** — per account; defaults to the Aspire team set.
+- **Editable watched repos** — per account; defaults to the public Aspire team set,
+  except Enterprise Managed User (EMU) accounts (e.g. `dapine_microsoft`), which
+  default to the first-party `devdiv-microsoft/aspire-1p` repo. Defaults only fill
+  in accounts you haven't configured — they never overwrite an explicit repo list.
 
 ## How it works
 

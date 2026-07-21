@@ -20,7 +20,7 @@ import {
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
-import { currentRelease } from "./constants.mjs";
+import { currentRelease, reviewDebtSignalLabel } from "./constants.mjs";
 
 // The current milestone has a single source of truth in constants.mjs
 // (`currentRelease`). Re-export it here under the name the run-mode lane logic
@@ -35,6 +35,14 @@ export const DEFAULT_REPOS = [
   "microsoft/aspire-skills",
   "microsoft/dcp",
   "CommunityToolkit/Aspire",
+];
+
+// Enterprise Managed User (EMU) accounts (e.g. "dapine_microsoft") work against
+// the private first-party mirror rather than the public Aspire repos, so they get
+// a different default watch set. See accounts.isEmuAccountId for how an account is
+// classified and state.defaultReposForId for how this default is applied.
+export const DEFAULT_EMU_REPOS = [
+  "devdiv-microsoft/aspire-1p",
 ];
 
 const GRAPHQL = "https://api.github.com/graphql";
@@ -724,10 +732,19 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           { label: f.action, tone: f.tone || "accent" },
           ...signalsFor(f.pullRequest, f.reason, { includeAction: false, limit: 3 }),
         ]);
+        // Preserve the raw action label (e.g. "Resolve conflicts") as a field so the
+        // canvas can offer a matching action button; the label is otherwise only
+        // reachable folded into signals[0].
+        c.action = f.action;
         return c;
       }),
-      focus: focusAll.slice(0, reviewLimit).map((f) =>
-        card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone })),
+      focus: focusAll.slice(0, reviewLimit).map((f) => {
+        const c = card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
+        // Flag review-debt cards (aged past the focus limit without a review) so the
+        // canvas can offer an "Address review" button instead of Test/Review.
+        c.reviewDebt = (c.signals || []).some((s) => s.label === reviewDebtSignalLabel);
+        return c;
+      }),
       focusTotal: focusAll.length,
       focusLimit: reviewLimit,
       focusExclusions: focusExclusions.map((e) => ({

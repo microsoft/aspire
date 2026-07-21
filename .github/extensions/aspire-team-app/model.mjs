@@ -16,6 +16,7 @@ import {
   nonBlockingCheckFailureRules,
   personalPickActions,
   releaseBlockingLabelMarker,
+  reviewDebtSignalLabel,
 } from "./constants.mjs";
 
 const approvedAgingMs = 2 * dayMs;
@@ -529,7 +530,7 @@ function checksAttentionSignal(pullRequest) {
 function oldFirstSignal(pullRequest) {
   const activityAge = ageMs(pullRequestAgingReferenceAt(pullRequest));
   if (activityAge >= focusAgeLimitMs) {
-    return { label: "review debt", tone: "danger" };
+    return { label: reviewDebtSignalLabel, tone: "danger" };
   }
   if (activityAge >= 7 * dayMs) {
     return { label: "old first", tone: "warning" };

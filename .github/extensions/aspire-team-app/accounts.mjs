@@ -11,6 +11,8 @@ import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { createHash } from "node:crypto";
 
+import { coreTeamMemberAliasSuffixes } from "./constants.mjs";
+
 const execFileAsync = promisify(execFile);
 
 const API = "https://api.github.com";
@@ -232,6 +234,33 @@ export function accountId(login, host) {
   const key = loginKey(login);
   const h = normalizeHost(host);
   return `acct:${h}/${key}`;
+}
+
+// Extract the login portion from an account id. Handles both the current
+// "acct:<host>/<login>" shape and the legacy github.com-only "acct:<login>" shape.
+function loginFromAccountId(id) {
+  const raw = String(id ?? "");
+  const withoutPrefix = raw.startsWith("acct:") ? raw.slice("acct:".length) : raw;
+  const slash = withoutPrefix.lastIndexOf("/");
+  return slash === -1 ? withoutPrefix : withoutPrefix.slice(slash + 1);
+}
+
+// Enterprise Managed User (EMU) accounts live on github.com like any other user,
+// but their login carries an org alias suffix (e.g. "dapine_microsoft"). Those
+// accounts see the private first-party repos rather than the public defaults, so
+// repo defaults are keyed off this classification. The suffix list is the same one
+// used for core-team author attribution (constants.coreTeamMemberAliasSuffixes),
+// keeping a single source of truth for what an alias looks like.
+export function isEmuLogin(login) {
+  const normalized = String(login ?? "").trim().toLowerCase();
+  return coreTeamMemberAliasSuffixes.some((suffix) => {
+    const s = String(suffix).toLowerCase();
+    return s.length > 0 && normalized.endsWith(s) && normalized.length > s.length;
+  });
+}
+
+export function isEmuAccountId(id) {
+  return isEmuLogin(loginFromAccountId(id));
 }
 
 function score(probe) {

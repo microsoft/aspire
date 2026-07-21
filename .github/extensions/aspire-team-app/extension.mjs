@@ -7,7 +7,7 @@
 // github.mjs; durable preferences in state.mjs.
 
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
-import { startInstance, stopInstance, forceRefresh, getDashboard, rescanAccounts, toggleAccount, setReposFor } from "./server.mjs";
+import { startInstance, stopInstance, forceRefresh, getDashboard, rescanAccounts, toggleAccount, setReposFor, setAgentSend } from "./server.mjs";
 import { loadPrefs, savePrefs } from "./state.mjs";
 import { accountId } from "./accounts.mjs";
 
@@ -160,4 +160,31 @@ const session = await joinSession({
       },
     }),
   ],
+});
+
+// Bridge card action buttons (Test / Review / Resolve conflicts / Address review) to
+// the main session.
+//
+// Track whether the main session is mid-turn so a click can tell the user, truthfully,
+// whether their request starts now or queues behind the current task. The agent goes
+// busy at the start of an assistant turn and idle when the session settles. This is the
+// only honest signal available: an extension cannot spawn an independent sub-session
+// (that is an agent tool), so a queued prompt genuinely waits for the current turn.
+let agentBusy = false;
+session.on("assistant.turn_start", () => { agentBusy = true; });
+session.on("session.idle", () => { agentBusy = false; });
+
+// The loopback server builds the prompt plus a short log line and calls this to
+// (1) drop a visible breadcrumb on the session timeline and (2) post the prompt as a
+// user turn, so the agent opens the PR sub-session or does the interactive work. We
+// snapshot the busy flag *before* sending — session.send queues behind an in-flight
+// turn rather than interrupting it — and return it so the button labels itself
+// "Queued …" vs "Sent" instead of always claiming success.
+setAgentSend(async ({ prompt, log }) => {
+  const queued = agentBusy;
+  if (log) {
+    await session.log(`Aspire Team App \u2014 ${log} (${queued ? "queued; starts after the current task" : "starting now"})`);
+  }
+  const messageId = await session.send({ prompt });
+  return { messageId, queued };
 });

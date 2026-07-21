@@ -109,6 +109,53 @@ test("dashboard load retries after an inflight account probe rejection", async (
   assert.equal(payload.dashboard.authenticated, true);
 });
 
+test("card action route bridges { prompt, log } to the session and echoes the queued flag", async (t) => {
+  await resetTestHome();
+
+  const server = await import(`./server.mjs?test=agent-${Date.now()}`);
+  const entry = await server.startInstance("agent-action-test", () => {});
+  t.after(() => {
+    server.setAgentSend(null);
+    return server.stopInstance("agent-action-test");
+  });
+
+  const pr = { url: "https://github.com/microsoft/aspire/pull/123", number: 123, repository: "microsoft/aspire", title: "Add widget", author: "octocat" };
+
+  // Not wired yet: a click that races startup fails cleanly rather than throwing.
+  const early = await postAction(entry.url, { kind: "test", pr });
+  assert.equal(early.status, 503);
+
+  let received = null;
+  server.setAgentSend(async (payload) => {
+    received = payload;
+    return { messageId: "m-1", queued: true };
+  });
+
+  const ok = await postAction(entry.url, { kind: "test", pr });
+  assert.equal(ok.status, 200);
+  const body = await ok.json();
+  assert.equal(body.ok, true);
+  assert.equal(body.kind, "test");
+  assert.equal(body.messageId, "m-1");
+  assert.equal(body.queued, true);
+  assert.match(received.prompt, /\/pr-testing/);
+  assert.equal(received.log, 'Test PR microsoft/aspire#123 \u2014 "Add widget"');
+
+  // An unknown kind is rejected before the bridge is ever called.
+  received = null;
+  const bad = await postAction(entry.url, { kind: "nope", pr });
+  assert.equal(bad.status, 400);
+  assert.equal(received, null);
+});
+
+async function postAction(baseUrl, payload) {
+  return fetch(new URL("api/agent/action", baseUrl), {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+}
+
 async function resetTestHome(prefs = {}) {
   await rm(artifactsRoot, { recursive: true, force: true });
   await mkdir(dirname(preferencesPath), { recursive: true });
