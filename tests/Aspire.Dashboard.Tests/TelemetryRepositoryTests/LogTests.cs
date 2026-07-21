@@ -7,6 +7,7 @@ using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Integration;
+using Aspire.Dashboard.Utils;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
@@ -910,7 +911,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task Subscription_MultipleUpdates_MinExecuteIntervalApplied()
     {
         // Arrange
-        var minExecuteInterval = TimeSpan.FromMilliseconds(500);
+        var minExecuteInterval = CallbackThrottler.DefaultMinExecuteInterval;
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
         var logger = loggerFactory.CreateLogger(nameof(LogTests));
         var repository = CreateRepository(subscriptionMinExecuteInterval: minExecuteInterval, loggerFactory: loggerFactory);

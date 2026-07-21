@@ -20,15 +20,20 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
 
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
     private readonly ActivitySource _activitySource;
+    private readonly ILogger<ResourceOutgoingPeerResolver> _logger;
     private readonly CancellationTokenSource _watchContainersTokenSource;
     private readonly CancellationToken _watchContainersToken;
-    private readonly List<ModelSubscription> _subscriptions = [];
+    private readonly List<PeerChangesSubscription> _subscriptions = [];
     private readonly object _lock = new();
     private readonly Task? _watchTask;
 
-    public ResourceOutgoingPeerResolver(IResourceRepository resourceRepository, DashboardActivitySource activitySource)
+    public ResourceOutgoingPeerResolver(
+        IResourceRepository resourceRepository,
+        DashboardActivitySource activitySource,
+        ILogger<ResourceOutgoingPeerResolver> logger)
     {
         _activitySource = activitySource.ActivitySource;
+        _logger = logger;
         _watchContainersTokenSource = new();
         _watchContainersToken = _watchContainersTokenSource.Token;
 
@@ -266,13 +271,13 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     {
         lock (_lock)
         {
-            var subscription = new ModelSubscription(callback, RemoveSubscription);
+            var subscription = new PeerChangesSubscription(callback, RemoveSubscription, _logger);
             _subscriptions.Add(subscription);
             return subscription;
         }
     }
 
-    private void RemoveSubscription(ModelSubscription subscription)
+    private void RemoveSubscription(PeerChangesSubscription subscription)
     {
         lock (_lock)
         {
@@ -282,12 +287,12 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
 
     private async Task RaisePeerChangesAsync()
     {
-        if (_subscriptions.Count == 0 || _watchContainersTokenSource.IsCancellationRequested)
+        if (_watchContainersTokenSource.IsCancellationRequested)
         {
             return;
         }
 
-        ModelSubscription[] subscriptions;
+        PeerChangesSubscription[] subscriptions;
         lock (_lock)
         {
             subscriptions = _subscriptions.ToArray();
@@ -302,8 +307,56 @@ public sealed partial class ResourceOutgoingPeerResolver : IOutgoingPeerResolver
     public async ValueTask DisposeAsync()
     {
         _watchContainersTokenSource.Cancel();
+
+        PeerChangesSubscription[] subscriptions;
+        lock (_lock)
+        {
+            subscriptions = _subscriptions.ToArray();
+        }
+        foreach (var subscription in subscriptions)
+        {
+            subscription.Dispose();
+        }
+
         _watchContainersTokenSource.Dispose();
 
         await TaskHelpers.WaitIgnoreCancelAsync(_watchTask).ConfigureAwait(false);
+    }
+
+    private sealed class PeerChangesSubscription : IDisposable
+    {
+        private const int StateNone = 0;
+        private const int StateDisposed = 1;
+
+        private readonly CallbackThrottler _callbackThrottler;
+        private readonly Action<PeerChangesSubscription> _onDispose;
+        private int _disposed;
+
+        public PeerChangesSubscription(
+            Func<Task> callback,
+            Action<PeerChangesSubscription> onDispose,
+            ILogger logger)
+        {
+            _callbackThrottler = new CallbackThrottler(
+                nameof(OnPeerChanges),
+                logger,
+                CallbackThrottler.DefaultMinExecuteInterval,
+                callback,
+                executionContext: null);
+            _onDispose = onDispose;
+        }
+
+        public Task ExecuteAsync() => _callbackThrottler.ExecuteAsync();
+
+        public void Dispose()
+        {
+            if (Interlocked.CompareExchange(ref _disposed, StateDisposed, StateNone) == StateDisposed)
+            {
+                return;
+            }
+
+            _onDispose(this);
+            _callbackThrottler.Dispose();
+        }
     }
 }
