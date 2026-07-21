@@ -725,6 +725,12 @@ let refreshing = false;
 // shared refreshing flag and one progress bar. We wind the shared UI down only when the LAST
 // one settles (count returns to 0), never when whichever finishes first does.
 let refreshInFlight = 0;
+// Monotonic id assigned to each withRefresh() call in start order. Overlapping refreshes can
+// reject out of order, and unlike the success path (gated by the server-assigned seq) a rejection
+// carries no seq to order it. The catch gates on this so only the latest-started refresh may
+// publish its failure: an older refresh that rejects after a newer one started must not paint a
+// failure banner over the newer valid state (or over the newer refresh still settling).
+let refreshGen = 0;
 let rescanning = false;
 let loadError = null;
 // A dashboard pushed over SSE while the user is on a form-bearing view (accounts editor,
@@ -869,6 +875,7 @@ async function load() {
 }
 
 async function withRefresh(fn) {
+  const myGen = ++refreshGen;
   refreshInFlight++;
   refreshing = true; setLoading(true); beginProgress();
   try {
@@ -885,7 +892,12 @@ async function withRefresh(fn) {
       }
     }
   } catch (e) {
-    loadError = String((e && e.message) || e);
+    // Publish this failure only if no newer refresh has started since. A late rejection from an
+    // older overlapping refresh must not clobber the newer operation's state/banner — the success
+    // path is seq-gated for the same reason, but rejections carry no seq, so gate on refreshGen.
+    if (myGen === refreshGen) {
+      loadError = String((e && e.message) || e);
+    }
   } finally {
     refreshInFlight--;
     // Only the last overlapping refresh winds down the shared UI. If an earlier one finished

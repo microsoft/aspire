@@ -160,6 +160,35 @@ test("withRefresh ignores a late older response so overlapping refreshes can't r
   assert.equal(api.getState().marker, "legacy");
 });
 
+test("withRefresh suppresses a stale older failure so it can't clobber newer valid state", async () => {
+  // The module-init load() calls fetch("api/state"); a never-resolving fetch keeps it pending so it
+  // can't clobber `state` mid-test. withRefresh takes its data from the fn argument, not fetch.
+  const { api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  api.setLoadError(null);
+
+  // Two overlapping refreshes. The older one (started first) rejects; the newer one succeeds first.
+  // A rejection carries no seq, so without a generation gate the older catch would set loadError and
+  // paint a failure banner over the newer valid state.
+  let rejectOld;
+  const oldRefresh = api.withRefresh(() => new Promise((_, reject) => { rejectOld = reject; }));
+  const newRefresh = api.withRefresh(async () => ({ dashboard: { seq: 9, marker: "fresh", authenticated: false, accounts: [], message: "" }, prefs: {} }));
+  await newRefresh;
+  assert.equal(api.getState().marker, "fresh");
+  assert.equal(api.getLoadError(), null);
+
+  // The older refresh rejects late. Its failure must be suppressed because a newer refresh started
+  // after it, leaving the newer valid state and a null error banner intact.
+  rejectOld(new Error("stale network blip"));
+  await oldRefresh;
+  assert.equal(api.getLoadError(), null);
+  assert.equal(api.getState().marker, "fresh");
+
+  // A rejection from the latest-started refresh still surfaces (the gate only drops superseded ones).
+  await api.withRefresh(async () => { throw new Error("current failure"); });
+  assert.equal(api.getLoadError(), "current failure");
+});
+
+
 test("load ignores a stale GET /api/state response so it can't rewind lastAppliedSeq", async () => {
   // GET /api/state may be served stale-while-revalidate: the cached payload (seq 3) can settle after
   // the background stream already delivered a newer snapshot (seq 5). fetch always returns the stale

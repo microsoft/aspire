@@ -773,7 +773,7 @@ export function computeFocusItems(buckets) {
   }
   return [...byPr.values()]
     // Retain PRs within the focus window, plus review-debt PRs that have aged PAST the limit
-    // without a review. Those are exactly the cards the "review debt" signal / "Address review"
+    // without an approving review. Those are exactly the cards the "review debt" signal / "Address review"
     // action target (constants.mjs reviewDebtSignalLabel). Dropping them here previously made
     // that action unreachable: the signal only fires at/after the same age boundary this filter
     // cut them off at, so the two overlapped only at the exact 14-day instant. Keeping them
