@@ -55,14 +55,25 @@ test("buildAgentActionPrompt tells the sub-session to self-route to a repo skill
   assert.match(reviewPrompt, /`\/code-review https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
 });
 
-test("buildAgentActionPrompt keeps resolve-conflicts and review-debt in the current session", () => {
+test("new-session resolve-conflicts and review-debt open a sub-session in the PR's repo", () => {
   const conflicts = buildAgentActionPrompt("resolve-conflicts", validPr);
+  assert.match(conflicts, /open_pr_session/);
   assert.match(conflicts, /resolve the merge conflicts/i);
-  assert.match(conflicts, /do not open a separate sub-session/i);
+  assert.match(conflicts, /pr_number: 123/);
 
   const debt = buildAgentActionPrompt("review-debt", validPr);
+  assert.match(debt, /open_pr_session/);
   assert.match(debt, /review debt/i);
-  assert.match(debt, /do not open a separate sub-session/i);
+});
+
+test("current-session target runs every action here without a sub-session", () => {
+  for (const kind of AGENT_ACTION_KINDS) {
+    const p = buildAgentActionPrompt(kind, validPr, "current-session");
+    assert.doesNotMatch(p, /open_pr_session/);
+    assert.match(p, /do not open a separate sub-session/i);
+  }
+  assert.match(buildAgentActionPrompt("test", validPr, "current-session"), /`\/pr-testing https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
+  assert.match(buildAgentActionPrompt("review", validPr, "current-session"), /`\/code-review https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
 });
 
 test("buildAgentActionPrompt reconstructs a github.com url when the descriptor url is untrustworthy", () => {
@@ -71,26 +82,28 @@ test("buildAgentActionPrompt reconstructs a github.com url when the descriptor u
   assert.doesNotMatch(tampered, /javascript:/);
 });
 
-test("buildAgentActionPrompt throws on an unknown kind or an invalid PR", () => {
+test("buildAgentActionPrompt throws on an unknown kind, target, or an invalid PR", () => {
   assert.throws(() => buildAgentActionPrompt("nope", validPr), /Unknown card action/);
+  assert.throws(() => buildAgentActionPrompt("test", validPr, "sideways"), /Unknown card action target/);
   assert.throws(() => buildAgentActionPrompt("test", { repository: "aspire", number: 1 }), /valid pull request/);
 });
 
-test("buildAgentActionLog produces a concise per-kind breadcrumb", () => {
-  assert.equal(buildAgentActionLog("test", validPr), 'Test PR microsoft/aspire#123 \u2014 "Add widget"');
-  assert.equal(buildAgentActionLog("review", validPr), 'Review PR microsoft/aspire#123 \u2014 "Add widget"');
-  assert.equal(buildAgentActionLog("resolve-conflicts", validPr), 'Resolve merge conflicts on PR microsoft/aspire#123 \u2014 "Add widget"');
-  assert.equal(buildAgentActionLog("review-debt", validPr), 'Address review on PR microsoft/aspire#123 \u2014 "Add widget"');
+test("buildAgentActionLog produces a concise per-kind breadcrumb with the routing target", () => {
+  assert.equal(buildAgentActionLog("test", validPr), 'Test PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
+  assert.equal(buildAgentActionLog("review", validPr), 'Review PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
+  assert.equal(buildAgentActionLog("resolve-conflicts", validPr), 'Resolve merge conflicts on PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
+  assert.equal(buildAgentActionLog("review-debt", validPr), 'Address review on PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
+  assert.equal(buildAgentActionLog("test", validPr, "current-session"), 'Test PR microsoft/aspire#123 \u2014 "Add widget" in this session');
 });
 
 test("buildAgentActionLog omits the title when absent and stays valid for every known kind", () => {
-  assert.equal(buildAgentActionLog("test", { ...validPr, title: "" }), "Test PR microsoft/aspire#123");
+  assert.equal(buildAgentActionLog("test", { ...validPr, title: "" }), "Test PR microsoft/aspire#123 in a new session");
   for (const kind of AGENT_ACTION_KINDS) {
     assert.ok(buildAgentActionLog(kind, validPr).includes("microsoft/aspire#123"));
   }
 });
 
 test("buildAgentActionLog degrades gracefully for an invalid PR descriptor", () => {
-  assert.equal(buildAgentActionLog("test", { repository: "", number: "x" }), "Test PR the pull request");
-  assert.equal(buildAgentActionLog("review", { repository: "aspire", number: 0 }), "Review PR aspire");
+  assert.equal(buildAgentActionLog("test", { repository: "", number: "x" }), "Test PR the pull request in a new session");
+  assert.equal(buildAgentActionLog("review", { repository: "aspire", number: 0 }), "Review PR aspire in a new session");
 });

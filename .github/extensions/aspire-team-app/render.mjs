@@ -17,6 +17,7 @@ export const HTML = `<!doctype html>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="loadbar" class="loadbar" aria-hidden="true"></div>
     <div id="app" class="app" aria-busy="true">
       <div class="topbar">
         <span class="brand"><span class="mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M3.5 30C1.57 30 0 28.43 0 26.5C0 25.871 0.166 25.259 0.48 24.729L8.818 10.287L8.852 10.236L12.968 3.099C13.593 2.019 14.754 1.349 16 1.349C17.246 1.349 18.407 2.019 19.031 3.098L31.531 24.749C31.833 25.258 31.999 25.87 31.999 26.499C31.999 28.429 30.429 29.999 28.499 29.999L3.5 30Z" fill="#512BD4"/><path d="M25.33 18H16.99L16 16.28L13.13 11.31C13 11.09 12.82 10.9 12.58 10.77C11.87 10.35 10.95 10.6 10.53 11.32L14.7 4.10001C14.96 3.65001 15.44 3.35001 16 3.35001C16.56 3.35001 17.04 3.65001 17.3 4.10001L21.45 11.29L21.46 11.31L21.48 11.34L25.33 18Z" fill="#7455DD"/><path d="M30 26.5C30 27.33 29.33 28 28.5 28H20.17C21 28 21.67 27.33 21.67 26.5C21.67 26.23 21.59 25.97 21.47 25.75L17.3 18.53L16.99 18H25.33L29.8 25.75C29.93 25.97 30 26.23 30 26.5Z" fill="#9780E5"/><path d="M21.67 26.5C21.67 27.33 21 28 20.17 28H11.83C12.66 28 13.33 27.33 13.33 26.5C13.33 26.23 13.26 25.97 13.13 25.75C13.13 25.74 13.12 25.73 13.11 25.72L11.79 23.57L8.82004 18.72C8.55004 18.28 8.07004 18 7.54004 18H16.99L17.3 18.53L17.427 18.75L21.47 25.75C21.59 25.97 21.67 26.23 21.67 26.5Z" fill="#B9AAEE"/><path d="M13.33 26.5C13.33 27.33 12.66 28 11.83 28H3.5C2.67 28 2 27.33 2 26.5C2 26.23 2.07 25.97 2.2 25.75L6.24 18.75C6.51 18.29 7.01 18 7.54 18C8.07 18 8.55 18.28 8.82 18.72L11.79 23.57L13.11 25.72C13.12 25.73 13.13 25.74 13.13 25.75C13.26 25.97 13.33 26.23 13.33 26.5Z" fill="#DCD5F6"/><path d="M16.99 18H7.53999C7.00999 18 6.50999 18.29 6.23999 18.75L6.66999 18L10.49 11.39L10.53 11.33V11.32C10.95 10.6 11.87 10.35 12.58 10.77C12.82 10.9 13 11.09 13.13 11.31L16 16.28L16.99 18Z" fill="#9780E5"/></svg></span>Aspire Team App</span>
@@ -50,23 +51,26 @@ export const HTML = `<!doctype html>
 export const STYLES = `
 :root {
   color-scheme: light dark;
-  --bg: var(--background-color-default, #ffffff);
+  /* Primer primitive first, then the canvas host's older vars, then a hex floor.
+     https://primer.style/foundations/primitives/color */
+  --bg: var(--bgColor-default, var(--background-color-default, #ffffff));
   --surface: color-mix(in srgb, var(--bg), var(--fg) 5%);
   --surface-2: color-mix(in srgb, var(--bg), var(--fg) 7%);
   --surface-3: color-mix(in srgb, var(--bg), var(--fg) 10%);
   --card: color-mix(in srgb, var(--bg), var(--fg) 4%);
   --card-hover: color-mix(in srgb, var(--bg), var(--fg) 8%);
   --head-hover: color-mix(in srgb, var(--fg) 8%, transparent);
-  --fg: var(--text-color-default, #1f2328);
-  --muted: var(--text-color-muted, #656d76);
-  --border: var(--border-color-default, #d0d7de);
+  --fg: var(--fgColor-default, var(--text-color-default, #1f2328));
+  --muted: var(--fgColor-muted, var(--text-color-muted, #656d76));
+  --border: var(--borderColor-default, var(--border-color-default, #d0d7de));
   --border-soft: color-mix(in srgb, var(--border), transparent 35%);
   --border-strong: color-mix(in srgb, var(--border), var(--fg) 22%);
-  --focus: var(--color-focus-outline, #0969da);
-  --white: var(--color-white, #fff);
+  --focus: var(--focus-outlineColor, var(--color-focus-outline, #0969da));
+  --white: var(--fgColor-onEmphasis, var(--color-white, #fff));
 
-  /* Brand purple - reserved for the brand mark, PR identity, and the loading accent */
-  --accent: var(--true-color-purple, #8250df);
+  /* Brand purple - reserved for the brand mark, PR identity, and the loading accent.
+     Maps to Primer's "done" (purple) role. */
+  --accent: var(--fgColor-done, var(--true-color-purple, #8250df));
   --accent-strong: color-mix(in srgb, var(--accent), var(--fg) 18%);
   --accent-2: color-mix(in srgb, var(--accent), var(--blue) 22%);
   --purple: var(--accent);
@@ -78,11 +82,17 @@ export const STYLES = `
   --green-fg: #ffffff;
 
   /* Informational blue - links, identifiers, toggles, focus */
-  --blue: var(--true-color-blue, #0969da);
+  --blue: var(--fgColor-accent, var(--true-color-blue, #0969da));
 
-  --success: var(--true-color-green, #1a7f37);
-  --warning: var(--true-color-yellow, #9a6700);
-  --danger: var(--true-color-red, #cf222e);
+  --success: var(--fgColor-success, var(--true-color-green, #1a7f37));
+  --warning: var(--fgColor-attention, var(--true-color-yellow, #9a6700));
+  --danger: var(--fgColor-danger, var(--true-color-red, #cf222e));
+
+  /* Primer floating-overlay shadow for popovers/menus; neutral (not a colored glow).
+     https://primer.style/foundations/primitives/box-shadow */
+  --shadow-floating: var(--shadow-floating-small,
+    0 0 0 1px color-mix(in srgb, var(--border) 55%, transparent),
+    0 8px 24px color-mix(in srgb, var(--fg) 16%, transparent));
 
   --font: var(--font-sans, "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif);
   --mono: var(--font-mono, "Cascadia Code", "SFMono-Regular", Consolas, monospace);
@@ -108,21 +118,17 @@ button { font-family: inherit; cursor: pointer; }
 
 .app { display: flex; flex-direction: column; min-height: 100%; position: relative; }
 
-/* Top loading bar shown during refreshes (skeleton handles first load).
-   A deliberate left-to-right paint-stroke fill, not a rushed shimmer. */
-.app.loading::after {
-  content: ""; position: fixed; left: 0; top: 0; height: 2px; width: 100%; z-index: 50;
-  transform-origin: left center; transform: scaleX(0);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-2) 65%, transparent), var(--accent) 72%, var(--accent-2));
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
-  animation: paintfill 2.6s cubic-bezier(.62, .03, .2, 1) infinite;
+/* Deterministic top load bar: its width tracks fetch progress (done/total) driven by the
+   SSE 'progress' events, so it advances and completes instead of looping forever. It lives
+   OUTSIDE #app so it survives full re-renders; the skeleton still covers the very first
+   load. https://primer.style/foundations/primitives/color for the accent tokens. */
+.loadbar {
+  position: fixed; left: 0; top: 0; height: 2px; width: 0; z-index: 60;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  opacity: 0; pointer-events: none;
+  transition: width .18s ease, opacity .25s ease;
 }
-@keyframes paintfill {
-  0%   { transform: scaleX(0);   opacity: .9; }
-  70%  { transform: scaleX(.92); opacity: 1; }
-  88%  { transform: scaleX(1);   opacity: 1; }
-  100% { transform: scaleX(1);   opacity: 0; }
-}
+.loadbar.active { opacity: 1; }
 
 /* Header */
 .topbar {
@@ -344,6 +350,31 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 .card-btn.failed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 48%, transparent); background: color-mix(in srgb, var(--danger) 12%, transparent); }
 .card-btn .cb-ico { display: inline-flex; }
 .card-btn .cb-ico svg { width: 13px; height: 13px; }
+/* Split button: main action + caret that opens a "where to run" menu. */
+.cb-split { position: relative; display: inline-flex; align-items: stretch; }
+.cb-split .cb-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+.cb-split .cb-caret { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; padding: 5px 5px; }
+.cb-split .cb-caret svg { width: 12px; height: 12px; transition: transform .18s ease; }
+.cb-split .cb-caret[aria-expanded="true"] { background: var(--card-hover); border-color: var(--border-strong); }
+.cb-split .cb-caret[aria-expanded="true"] svg { transform: rotate(180deg); }
+.cb-menu {
+  position: fixed; top: 0; left: 0; z-index: 1000; min-width: 214px;
+  display: flex; flex-direction: column; gap: 2px; padding: 5px;
+  background: var(--bg); border: 1px solid var(--border-strong); border-radius: 9px;
+  box-shadow: var(--shadow-floating);
+}
+.cb-menu[hidden] { display: none; }
+.cb-menu-item {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  font: inherit; padding: 7px 9px; border-radius: 6px; border: none; cursor: pointer;
+  color: var(--fg); background: transparent;
+}
+.cb-menu-item:hover { background: var(--card-hover); }
+.cb-menu-item .cb-mi-ico { display: inline-flex; color: var(--muted); flex: none; }
+.cb-menu-item .cb-mi-ico svg { width: 14px; height: 14px; }
+.cb-mi-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cb-mi-label { font-size: 12px; font-weight: 600; line-height: 1.2; }
+.cb-mi-sub { font-size: 10.5px; font-weight: 400; color: var(--muted); line-height: 1.25; }
 .card-top { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .card-title { font-weight: 600; font-size: 13px; line-height: 1.35; color: var(--fg); min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .card-title:hover { color: var(--blue); }
@@ -652,7 +683,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 
 @media (prefers-reduced-motion: reduce) {
   .view, .view.back { animation: none; }
-  .app.loading::after { animation: none; transform: scaleX(1); opacity: .55; }
+  .loadbar { transition: opacity .25s ease; }
   .sk::after { animation: none; }
   .iconbtn.spin svg, .rescan-btn.spin svg { animation: none; }
   .caret, .acct-detail, .notif-card, .card, .lane-body, .lane-caret, .repo-row, .repo-acts, .repo-err, .repo-ico { transition: none; }
@@ -680,14 +711,24 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 
 export const APP_JS = String.raw`
 const app = document.getElementById("app");
+// Deterministic top progress bar element (lives outside #app so re-renders don't drop it).
+const loadbar = document.getElementById("loadbar");
 let state = null;
 let prefs = null;
 let view = "queue";       // queue | settings | accounts | notifications
 let keysBound = false;
+let cbMenuBound = false;
 let prevRank = 0;
 let refreshing = false;
 let rescanning = false;
 let loadError = null;
+// A dashboard pushed over SSE while the user is on a form-bearing view (accounts editor,
+// settings, etc.) is stashed here and applied when they return to the queue, so a
+// background refresh never clobbers an in-progress edit.
+let pendingState = null;
+// fetchedAt of the snapshot currently rendered. Used to drop duplicate SSE 'state' pushes
+// (the server re-broadcasts the final snapshot that the triggering request also applied).
+let lastAppliedAt = null;
 const expanded = new Set(); // account ids whose detail (sources + repos) is expanded
 const collapsedLanes = new Set(); // lane ids the user collapsed (survives re-render + SSE)
 const draftReposByAcct = {}; // account id -> working copy of that account's watched repos
@@ -788,6 +829,7 @@ async function load() {
     const res = await fetch("api/state");
     const data = await readJson(res);
     state = data.dashboard; prefs = data.prefs; loadError = null;
+    lastAppliedAt = (state && state.fetchedAt) || lastAppliedAt;
   } catch (e) {
     loadError = String((e && e.message) || e);
   }
@@ -795,10 +837,13 @@ async function load() {
 }
 
 async function withRefresh(fn) {
-  refreshing = true; setLoading(true);
+  refreshing = true; setLoading(true); beginProgress();
   try {
     const data = await fn();
-    if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; loadError = null; }
+    if (data && data.dashboard) {
+      state = data.dashboard; prefs = data.prefs; loadError = null;
+      lastAppliedAt = (state && state.fetchedAt) || lastAppliedAt;
+    }
   } catch (e) {
     loadError = String((e && e.message) || e);
   } finally {
@@ -807,9 +852,64 @@ async function withRefresh(fn) {
 }
 
 function setLoading(on) {
-  app.classList.toggle("loading", on);
   const rb = document.getElementById("refresh-btn");
   if (rb) rb.classList.toggle("spin", on);
+}
+
+/* ---- deterministic progress bar ----
+   Driven by SSE 'progress' events ({ done, total }). beginProgress shows a small sliver
+   for instant feedback; setProgress advances the fill; endProgress completes to 100% then
+   fades. All are no-ops when #loadbar is absent (e.g. the render test harness). */
+let progFadeTimer = null;
+let progResetTimer = null;
+function beginProgress() {
+  if (!loadbar) return;
+  if (progFadeTimer) { clearTimeout(progFadeTimer); progFadeTimer = null; }
+  if (progResetTimer) { clearTimeout(progResetTimer); progResetTimer = null; }
+  loadbar.classList.add("active");
+  const w = parseFloat(loadbar.style.width) || 0;
+  // Start (or restart from a faded-out state) with a visible sliver.
+  if (w <= 0 || w >= 100) loadbar.style.width = "8%";
+}
+function setProgress(done, total) {
+  if (!loadbar) return;
+  beginProgress();
+  const pct = total > 0 ? Math.max(8, Math.min(100, Math.round((done / total) * 100))) : 8;
+  loadbar.style.width = pct + "%";
+  if (total > 0 && done >= total) endProgress();
+}
+function endProgress() {
+  if (!loadbar) return;
+  loadbar.style.width = "100%";
+  // Fill to 100%, hold briefly, fade out, then reset width so the next cycle grows from
+  // the left again rather than snapping back visibly.
+  progFadeTimer = setTimeout(() => {
+    loadbar.classList.remove("active");
+    progResetTimer = setTimeout(() => { loadbar.style.width = "0"; }, 260);
+  }, 220);
+}
+
+// Apply a dashboard pushed over SSE. Guarded so background updates never disrupt an active
+// edit: while off the queue we stash it (applied on return); duplicate final snapshots are
+// dropped; and scroll position is preserved across the re-render.
+function applyPushedState(payload) {
+  if (!payload || !payload.dashboard) return;
+  if (view !== "queue") { pendingState = payload; return; }
+  const incoming = payload.dashboard.fetchedAt;
+  if (incoming && lastAppliedAt && incoming === lastAppliedAt) {
+    // Same snapshot we already show — keep refs current but skip a needless re-render.
+    state = payload.dashboard; prefs = payload.prefs;
+    return;
+  }
+  applyState(payload);
+}
+function applyState(payload) {
+  const scroller = document.scrollingElement;
+  const top = scroller ? scroller.scrollTop : 0;
+  state = payload.dashboard; prefs = payload.prefs; loadError = null;
+  lastAppliedAt = (state && state.fetchedAt) || lastAppliedAt;
+  render();
+  if (top && scroller) scroller.scrollTop = top;
 }
 
 async function postJSON(path, body) {
@@ -821,16 +921,22 @@ const refresh = () => withRefresh(() => postJSON("api/refresh"));
 const setMode = (mode) => { if (state && state.mode === mode) return; goView("queue", false); return withRefresh(() => postJSON("api/mode", { mode })); };
 const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/account/toggle", { id, active }));
 
-// Card action button (Test / Review / Resolve conflicts / Address review). Posts the
-// PR descriptor to the loopback server, which hands a prompt to the main session. We
-// give inline feedback on the button itself and deliberately do NOT re-render — the
-// action changes the conversation, not the dashboard, and a re-render would drop the
-// confirmation. A later SSE refresh naturally restores the default label.
-async function onCardAction(btn) {
-  if (btn.classList.contains("busy") || btn.classList.contains("done")) return;
-  const d = btn.dataset;
+// Card action split button (Test / Review / Resolve conflicts / Address review). Posts
+// the PR descriptor plus a routing target to the loopback server, which hands a prompt
+// to the main session. 'split' is the .cb-split container (which carries the data-*);
+// 'target' is "new-session" (default) or "current-session". We give inline feedback on
+// the main button and deliberately do NOT re-render — the action changes the
+// conversation, not the dashboard, and a re-render would drop the confirmation. A later
+// SSE refresh naturally restores the default label.
+async function onCardAction(split, target) {
+  const mainBtn = split.querySelector(".cb-main") || split;
+  const caret = split.querySelector(".cb-caret");
+  if (mainBtn.classList.contains("busy") || mainBtn.classList.contains("done")) return;
+  const d = split.dataset;
+  const t = target || "new-session";
   const body = {
     kind: d.kind,
+    target: t,
     pr: {
       url: d.prUrl,
       number: Number(d.prNumber),
@@ -839,27 +945,88 @@ async function onCardAction(btn) {
       author: d.prAuthor,
     },
   };
-  const original = btn.innerHTML;
-  btn.classList.add("busy");
-  btn.disabled = true;
+  const original = mainBtn.innerHTML;
+  mainBtn.classList.add("busy");
+  mainBtn.disabled = true;
+  if (caret) caret.disabled = true;
   try {
     const res = await postJSON("api/agent/action", body);
-    btn.classList.remove("busy");
-    btn.classList.add("done");
+    mainBtn.classList.remove("busy");
+    mainBtn.classList.add("done");
+    if (caret) caret.classList.add("done");
     // Label truthfully: if the agent was mid-task the prompt is queued behind it, so
-    // don't claim it already started. Otherwise fall back to the per-action done label.
+    // don't claim it already started. Otherwise reflect where it's headed — a new
+    // session in the PR's repo, or this very session.
     const label = res && res.queued
       ? "Queued \u2014 starts after current task"
-      : (d.doneLabel || "Sent to agent");
-    btn.innerHTML = '<span class="cb-ico">' + ICONS.check + '</span><span class="cb-label">' + esc(label) + "</span>";
+      : (t === "current-session" ? "Running in this session" : (d.doneLabel || "Requested"));
+    mainBtn.innerHTML = '<span class="cb-ico">' + ICONS.check + '</span><span class="cb-label">' + esc(label) + "</span>";
   } catch (e) {
-    btn.classList.remove("busy");
-    btn.classList.add("failed");
-    btn.disabled = false;
-    btn.innerHTML = '<span class="cb-ico">' + ICONS.x + '</span><span class="cb-label">' + esc(String((e && e.message) || "Failed")) + "</span>";
+    mainBtn.classList.remove("busy");
+    mainBtn.classList.add("failed");
+    mainBtn.disabled = false;
+    if (caret) caret.disabled = false;
+    mainBtn.innerHTML = '<span class="cb-ico">' + ICONS.x + '</span><span class="cb-label">' + esc(String((e && e.message) || "Failed")) + "</span>";
     // Restore the original label after a beat so the user can retry.
-    setTimeout(() => { btn.classList.remove("failed"); btn.innerHTML = original; }, 3200);
+    setTimeout(() => { mainBtn.classList.remove("failed"); mainBtn.innerHTML = original; }, 3200);
   }
+}
+
+// Close any open card-action dropdown and reset its caret. Called on outside click, Esc,
+// scroll, resize, and whenever an action fires.
+function closeCbMenus() {
+  document.querySelectorAll(".cb-menu").forEach((m) => {
+    // Menus are portaled to <body> while open (see openCbMenu). Return the menu to its
+    // owning split so it is torn down with the card on the next re-render instead of
+    // leaking as a detached <body> orphan; drop it outright if the split is already gone.
+    if (m.parentElement === document.body) {
+      const owner = m.__ownerSplit;
+      if (owner && owner.isConnected) owner.appendChild(m);
+      else m.remove();
+    }
+    m.hidden = true;
+  });
+  document.querySelectorAll('.cb-caret[aria-expanded="true"]').forEach((c) => c.setAttribute("aria-expanded", "false"));
+}
+
+// Open a split-button dropdown as a viewport-fixed overlay. The menu is portaled to <body>
+// before positioning: the .view element runs a forward-filling keyframe animation
+// (animation-fill-mode: both) whose frames include a transform, and a filling transform
+// animation establishes a containing block for position:fixed descendants in Blink/WebKit.
+// Left inside .view, the menu's fixed coordinates resolve against .view (which starts below
+// the sticky topbar) rather than the viewport, dropping the menu ~1 topbar-height below the
+// button. Anchoring it to <body> (which has no transformed ancestor) restores viewport-
+// relative fixed positioning. We measure the caret and menu, left-align the menu under the
+// split, then flip up/right when it would spill past the viewport.
+function openCbMenu(split, caret, menu) {
+  const splitRect = split.getBoundingClientRect();
+  const caretRect = caret.getBoundingClientRect();
+  // Portal to <body> so no transformed/filtered ancestor governs the fixed menu. Remember
+  // the owning split so closeCbMenus can restore it.
+  menu.__ownerSplit = split;
+  document.body.appendChild(menu);
+  // Reveal off-paint so offsetWidth/Height are measurable before we place it.
+  menu.hidden = false;
+  menu.style.visibility = "hidden";
+  const mw = menu.offsetWidth;
+  const mh = menu.offsetHeight;
+  const pad = 8;
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+
+  let left = splitRect.left;
+  if (left + mw > vw - pad) left = vw - mw - pad;
+  if (left < pad) left = pad;
+
+  // Prefer below the caret; flip above when it would overflow the bottom and there is
+  // more room up top.
+  let top = caretRect.bottom + 5;
+  if (top + mh > vh - pad && caretRect.top - mh - 5 > pad) top = caretRect.top - mh - 5;
+
+  menu.style.left = Math.round(left) + "px";
+  menu.style.top = Math.round(top) + "px";
+  menu.style.visibility = "";
+  caret.setAttribute("aria-expanded", "true");
 }
 
 // Persist one account's repos without a full refresh/broadcast (the editor owns
@@ -926,6 +1093,13 @@ function goView(next, forward) {
   if (view === "accounts" && next !== "accounts") { for (const k in editingByAcct) editingByAcct[k] = -1; }
   prevRank = RANK[view] || 0;
   view = next;
+  // Returning to the queue is the moment to fold in any dashboard that streamed in while
+  // the user was editing a form on another view.
+  if (next === "queue" && pendingState) {
+    const payload = pendingState; pendingState = null;
+    state = payload.dashboard; prefs = payload.prefs;
+    lastAppliedAt = (state && state.fetchedAt) || lastAppliedAt;
+  }
   render(forward === undefined ? undefined : forward);
 }
 
@@ -933,21 +1107,39 @@ function goView(next, forward) {
 
 function pill(s) { return '<span class="pill ' + (s.tone || "muted") + '">' + esc(s.label) + "</span>"; }
 
-// Encode the PR descriptor onto the button as data-* attributes so the click handler
-// can post it back to /api/agent/action without another lookup. The whole card body is
-// a link, so buttons live in a sibling row (not nested in the <a>, which is invalid).
+// Encode the PR descriptor onto the split container as data-* attributes so the click
+// handler can post it back to /api/agent/action without another lookup. The whole card
+// body is a link, so buttons live in a sibling row (not nested in the <a>, which is
+// invalid). The main button opens a new session in the PR's repo; the caret opens a menu
+// to run the same action in the current session instead.
 function cardActionBtn(pr, a) {
   const data =
     ' data-kind="' + esc(a.kind) + '"' +
-    ' data-done-label="' + esc(a.done || "Sent to agent") + '"' +
+    ' data-done-label="' + esc(a.done || "Requested") + '"' +
     ' data-pr-url="' + esc(pr.url || "") + '"' +
     ' data-pr-number="' + esc(pr.number) + '"' +
     ' data-pr-repo="' + esc(pr.repository || "") + '"' +
     ' data-pr-title="' + esc(pr.title || "") + '"' +
     ' data-pr-author="' + esc(pr.author || "") + '"';
-  return '<button type="button" class="card-btn"' + data + '>' +
-    (a.icon ? '<span class="cb-ico">' + a.icon + "</span>" : "") +
-    '<span class="cb-label">' + esc(a.label) + "</span></button>";
+  const icon = a.icon ? '<span class="cb-ico">' + a.icon + "</span>" : "";
+  return '<div class="cb-split"' + data + '>' +
+    '<button type="button" class="card-btn cb-main" data-target="new-session">' +
+      icon + '<span class="cb-label">' + esc(a.label) + "</span></button>" +
+    '<button type="button" class="card-btn cb-caret" aria-haspopup="true" aria-expanded="false"' +
+      ' title="Choose where to run" aria-label="Choose where to run ' + esc(a.label) + '">' +
+      ICONS.chev + "</button>" +
+    '<div class="cb-menu" role="menu" hidden>' +
+      cbMenuItem("new-session", ICONS.layers, "Open in new session", "In the PR\u2019s repo") +
+      cbMenuItem("current-session", ICONS.chat, "Run in current session", "Here, in this conversation") +
+    "</div>" +
+  "</div>";
+}
+
+function cbMenuItem(target, icon, label, sub) {
+  return '<button type="button" class="cb-menu-item" role="menuitem" data-target="' + esc(target) + '">' +
+    '<span class="cb-mi-ico">' + icon + "</span>" +
+    '<span class="cb-mi-text"><span class="cb-mi-label">' + esc(label) + "</span>" +
+    '<span class="cb-mi-sub">' + esc(sub) + "</span></span></button>";
 }
 
 // Which action buttons a "Needs attention" card gets: a review-debt card offers only
@@ -1533,7 +1725,9 @@ function authPicker() {
 
 function render(forward) {
   app.removeAttribute("aria-busy");
-
+  // Drop any split-button menu we portaled to <body> before rebuilding the subtree, so an
+  // open menu never survives a re-render as a detached orphan carrying stale click handlers.
+  document.querySelectorAll("body > .cb-menu").forEach((m) => m.remove());
   if (loadError && !state) {
     app.innerHTML = topbarShell() +
       '<div class="state"><div class="ico">' + ICONS.alert + '</div><h2>Could not load</h2><p>' + esc(loadError) +
@@ -1561,7 +1755,6 @@ function render(forward) {
       '<button class="errbar-x" id="load-errbar-dismiss" type="button" title="Dismiss" aria-label="Dismiss">' + ICONS.x + "</button></div>"
     : "";
   app.innerHTML = topbarHtml() + banner + '<div class="viewport"><div class="view ' + dir + '">' + inner + "</div></div>";
-  app.classList.toggle("loading", refreshing);
   if (banner) {
     const bx = document.getElementById("load-errbar-dismiss");
     if (bx) bx.addEventListener("click", function () { loadError = null; render(); });
@@ -1860,10 +2053,46 @@ function wire() {
   document.querySelectorAll(".dismiss").forEach((b) =>
     b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); dismissNotif(b.dataset.dismiss, b.closest(".notif-card")); }));
 
-  // Card action buttons live in a sibling row of the card link, so stop the click
-  // from bubbling to any surrounding handler and never navigate.
-  document.querySelectorAll(".card-btn[data-kind]").forEach((b) =>
-    b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); onCardAction(b); }));
+  // Card action split buttons live in a sibling row of the card link, so stop the click
+  // from bubbling to any surrounding handler and never navigate. The main button runs
+  // the action in a new session; the caret toggles a menu to pick new vs current session.
+  document.querySelectorAll(".cb-split").forEach((split) => {
+    const main = split.querySelector(".cb-main");
+    const caret = split.querySelector(".cb-caret");
+    const menu = split.querySelector(".cb-menu");
+    if (main) main.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      closeCbMenus();
+      onCardAction(split, "new-session");
+    });
+    if (caret && menu) caret.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const wasOpen = !menu.hidden;
+      closeCbMenus();
+      if (!wasOpen) openCbMenu(split, caret, menu);
+    });
+    split.querySelectorAll(".cb-menu-item").forEach((mi) =>
+      mi.addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        closeCbMenus();
+        onCardAction(split, mi.dataset.target);
+      }));
+  });
+  // Dismiss any open action menu on an outside click or Escape. Bound once so re-renders
+  // don't stack handlers; the caret/main/menu handlers stopPropagation, so this only
+  // fires for clicks elsewhere.
+  if (!cbMenuBound) {
+    cbMenuBound = true;
+    document.addEventListener("click", () => closeCbMenus());
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCbMenus(); });
+    // A fixed menu doesn't track the caret once the page scrolls or the window resizes,
+    // so dismiss rather than let it drift away from its button. Capture-phase scroll on
+    // the document catches scrolling inside any nested container, not just the window.
+    document.addEventListener("scroll", () => closeCbMenus(), true);
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("resize", () => closeCbMenus());
+    }
+  }
   const da = document.getElementById("dismiss-all"); if (da) da.addEventListener("click", dismissAll);
   const r1 = document.getElementById("restore-notifs"); if (r1) r1.addEventListener("click", restoreNotifs);
   const r2 = document.getElementById("restore-notifs2"); if (r2) r2.addEventListener("click", restoreNotifs);
@@ -1902,8 +2131,18 @@ function wireAccounts() {
   });
 }
 
+// Live updates over Server-Sent Events. 'progress' drives the deterministic top bar as
+// repos are fetched; 'state' streams partial and final dashboards (applied straight into
+// the UI, guarded against clobbering an active edit); 'refresh' is a legacy nudge kept for
+// back-compat that just re-pulls /api/state.
 try {
   const es = new EventSource("events");
+  es.addEventListener("progress", (e) => {
+    try { const p = JSON.parse(e.data); setProgress(p.done, p.total); } catch {}
+  });
+  es.addEventListener("state", (e) => {
+    try { applyPushedState(JSON.parse(e.data)); } catch {}
+  });
   es.addEventListener("refresh", () => load());
 } catch {}
 

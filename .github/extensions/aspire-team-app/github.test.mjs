@@ -66,6 +66,39 @@ test("loadDashboard paginates open issues for each watched repo", async () => {
   assert.deepEqual(dashboard.lanes.flatMap((lane) => lane.items.map((item) => item.issue.number)).sort((a, b) => a - b), [1, 2]);
 });
 
+test("loadDashboard reports fetch progress and streams a partial snapshot", async () => {
+  globalThis.fetch = async (_url, options = {}) => {
+    const body = JSON.parse(options.body);
+    return jsonResponse({ data: { repository: { isPrivate: false, pullRequests: {
+      nodes: [prNode(1, "2026-07-01T10:00:00Z")],
+      pageInfo: { hasNextPage: false, endCursor: null },
+    } } } });
+  };
+
+  const progress = [];
+  const partials = [];
+  const dashboard = await loadDashboard({
+    accounts: [{ token: "token", login: "octo", repos: ["microsoft/aspire", "microsoft/aspire.dev"] }],
+    mode: "ship",
+    release: "9.5",
+    prefs: {},
+    dismissed: [],
+    showDrafts: true,
+    onProgress: (p) => progress.push(p),
+    onPartial: (snap) => partials.push(snap),
+  });
+
+  // Two (account, repo) jobs → total of 2, ending with an authoritative done tick.
+  assert.equal(progress.at(-1).total, 2);
+  assert.equal(progress.at(-1).done, 2);
+  assert.equal(progress.at(-1).phase, "done");
+  assert.ok(progress.some((p) => p.phase === "fetch"), "expected at least one fetch-phase tick");
+  // The first partial is never throttled (lastPartialAt starts at 0), so we always get one.
+  assert.ok(partials.length >= 1, "expected at least one partial snapshot");
+  assert.equal(partials[0].authenticated, true);
+  assert.equal(dashboard.counts.total, 1);
+});
+
 function page(after, firstNode, secondNode) {
   if (after == null) {
     return { nodes: [firstNode], pageInfo: { hasNextPage: true, endCursor: "cursor-1" } };

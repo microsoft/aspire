@@ -5,13 +5,19 @@ import test from "node:test";
 import { APP_JS, STYLES } from "./render.mjs";
 
 test("renderer theme styles follow canvas tokens with accessible light fallbacks", () => {
-  assert.match(STYLES, /--bg: var\(--background-color-default, #ffffff\)/);
-  assert.match(STYLES, /--fg: var\(--text-color-default, #1f2328\)/);
+  assert.match(STYLES, /--bg: var\(--bgColor-default, var\(--background-color-default, #ffffff\)\)/);
+  assert.match(STYLES, /--fg: var\(--fgColor-default, var\(--text-color-default, #1f2328\)\)/);
   assert.match(STYLES, /--surface: color-mix\(in srgb, var\(--bg\), var\(--fg\) 5%\)/);
   assert.match(STYLES, /data-color-mode="light".*color-scheme: light/);
   assert.match(STYLES, /data-color-mode="dark".*color-scheme: dark/);
   assert.match(STYLES, /color: color-mix\(in srgb, var\(--pill-tone\), var\(--fg\) 25%\)/);
   assert.match(STYLES, /\.ent-badge \{[\s\S]*?color: color-mix\(in srgb, var\(--blue\), var\(--fg\) 25%\)/);
+  assert.match(STYLES, /--shadow-floating: var\(--shadow-floating-small,/);
+  assert.match(STYLES, /\.cb-menu \{[\s\S]*?box-shadow: var\(--shadow-floating\)/);
+  // Deterministic load bar replaced the looping indeterminate one (no glow, no paintfill).
+  assert.match(STYLES, /\.loadbar \{[\s\S]*?transition: width/);
+  assert.doesNotMatch(STYLES, /animation: paintfill/);
+  assert.doesNotMatch(STYLES, /box-shadow: 0 0 8px/);
   assert.doesNotMatch(STYLES, /var\(--n-/);
 });
 

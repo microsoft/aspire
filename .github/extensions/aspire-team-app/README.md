@@ -5,6 +5,19 @@ A GitHub Copilot App **canvas extension** that recreates the
 review queue for the **logged-in GitHub user**. This is published as the first
 entry in the Canvas Marketplace.
 
+## Screenshots
+
+The cross-repo review queue — signal pills, a "For you" focus lane, and per-repo
+lanes for everything waiting on you:
+
+![Aspire Team App review queue](media/review-queue.png)
+
+Per-card action buttons (Test / Review / Resolve conflicts) with a split-button
+dropdown to run the matching skill in a new sub-session (the PR's own repo) or in
+the current conversation:
+
+![Card action split buttons](media/card-actions.png)
+
 ## What it does
 
 - **Review mode** — buckets every open PR across your watched repos into lanes:

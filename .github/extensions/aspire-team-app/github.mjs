@@ -630,7 +630,7 @@ export function buildNotifications(prs, prefs, dismissed = []) {
 // Top-level loader
 // ---------------------------------------------------------------------------
 
-export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, reviewLimit = REVIEW_LIMIT }) {
+export async function loadDashboard({ accounts, mode, release, prefs, dismissed, showDrafts = false, reviewLimit = REVIEW_LIMIT, onProgress, onPartial }) {
   const usable = (accounts ?? []).filter((a) => a && a.token && a.login);
   if (usable.length === 0) {
     return { authenticated: false, message: "No active GitHub account. Enable an account in the Accounts tab so the canvas can read your review queue." };
@@ -646,6 +646,28 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   const issueById = new Map();
   const okRepos = new Set();  // repos that succeeded under at least one account
   const errorsRaw = [];       // { repo, message }
+
+  // Streaming progress + incremental snapshots. Each (account, repo) fetch reports when it
+  // settles so the caller can drive a deterministic progress bar (onProgress) and receive
+  // partial dashboards as data arrives (onPartial). Partials are throttled so a burst of
+  // fast repos doesn't reshape on every single completion.
+  let total = 0;
+  let done = 0;
+  let lastPartialAt = 0;
+  const PARTIAL_MIN_MS = 250;
+  const maybePartial = (force) => {
+    if (typeof onPartial !== "function") return;
+    const now = Date.now();
+    if (!force && now - lastPartialAt < PARTIAL_MIN_MS) return;
+    lastPartialAt = now;
+    // A failed partial push must never abort the underlying load.
+    try { onPartial(snapshot()); } catch { /* ignore */ }
+  };
+  const reportDone = () => {
+    done++;
+    if (typeof onProgress === "function") onProgress({ done, total, phase: "fetch" });
+    maybePartial(false);
+  };
 
   // Fetch each (account, repo) pair with that account's own token.
   const jobs = [];
@@ -689,109 +711,120 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
           } catch (e) {
             errorsRaw.push({ repo, message: `${repo}: ${e.message}` });
           }
-        })(),
+        })().then(reportDone),
       );
     }
   }
-  await Promise.all(jobs);
+  total = jobs.length;
 
-  const allPrs = [...prById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
-  const allIssues = [...issueById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+  // Reshape the accumulated PRs/issues into the dashboard shape the renderer consumes.
+  // A hoisted function declaration so the streaming callbacks above can snapshot partial
+  // results as repos arrive; also called once more below for the final, complete result.
+  function snapshot() {
+    const allPrs = [...prById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
+    const allIssues = [...issueById.values()].sort((a, b) => new Date(b.updatedAt) - new Date(a.updatedAt));
 
-  // Drafts are filtered out of the shared view by default (prototypes, not review work).
-  const visiblePrs = showDrafts ? allPrs : allPrs.filter((p) => !p.draft);
-  const draftCount = allPrs.filter((p) => p.draft).length;
+    // Drafts are filtered out of the shared view by default (prototypes, not review work).
+    const visiblePrs = showDrafts ? allPrs : allPrs.filter((p) => !p.draft);
+    const draftCount = allPrs.filter((p) => p.draft).length;
 
-  // Drop per-account errors for repos another active account could read.
-  const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(e.repo)).map((e) => e.message))];
+    // Drop per-account errors for repos another active account could read.
+    const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(e.repo)).map((e) => e.message))];
 
-  let lanes;
-  if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
-  else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
-  else lanes = bucketReview(allPrs, { showDrafts, limit: reviewLimit });
+    let lanes;
+    if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
+    else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
+    else lanes = bucketReview(allPrs, { showDrafts, limit: reviewLimit });
 
-  // Full pr-dashboard attention engine (review mode only). The focused "Needs attention"
-  // queue is the capped headline; attention buckets, the community list, the personal
-  // "For you" picks and core-team developer counts sit beneath it. Items are reshaped into
-  // the card shape the renderer consumes ({ pr, reason, signals }).
-  let attention = null;
-  if (mode === "review") {
-    const login = usable[0].login;
-    const viewerLogins = usable.map((a) => a.login);
-    const buckets = createAttentionBuckets(allPrs, login);
-    const focusAll = computeFocusItems(buckets);
-    const focusExclusions = computeFocusExclusionItems(allPrs, buckets, focusAll, login);
-    const card = (pr, reason, extra) =>
-      Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || "") }, extra || {});
-    attention = {
-      forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
-        // Personal pick leads with its own call-to-action; the engine's action pill is
-        // dropped (includeAction:false) so we don't double up, then state signals follow.
-        const c = card(f.pullRequest, f.reason);
-        c.signals = dedupeSignals([
-          { label: f.action, tone: f.tone || "accent" },
-          ...signalsFor(f.pullRequest, f.reason, { includeAction: false, limit: 3 }),
-        ]);
-        // Preserve the raw action label (e.g. "Resolve conflicts") as a field so the
-        // canvas can offer a matching action button; the label is otherwise only
-        // reachable folded into signals[0].
-        c.action = f.action;
-        return c;
-      }),
-      focus: focusAll.slice(0, reviewLimit).map((f) => {
-        const c = card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
-        // Flag review-debt cards (aged past the focus limit without a review) so the
-        // canvas can offer an "Address review" button instead of Test/Review.
-        c.reviewDebt = (c.signals || []).some((s) => s.label === reviewDebtSignalLabel);
-        return c;
-      }),
-      focusTotal: focusAll.length,
-      focusLimit: reviewLimit,
-      focusExclusions: focusExclusions.map((e) => ({
-        pr: e.pullRequest,
-        reason: e.reason.detail,
-        signals: dedupeSignals([
-          { label: e.reason.label, tone: e.reason.tone },
-          ...signalsFor(e.pullRequest, e.reason.label, { includeAction: false, limit: 4 }),
-        ]),
-      })),
-      buckets: buckets.map((b) => ({
-        label: b.label,
-        tone: b.tone,
-        items: b.items.map((i) => card(i.pullRequest, i.reason)),
-      })),
-      community: computeCommunityItems(allPrs).map((c) => card(c.pullRequest, "Community")),
-      developerCounts: createDeveloperPullRequestCounts(allPrs),
+    // Full pr-dashboard attention engine (review mode only). The focused "Needs attention"
+    // queue is the capped headline; attention buckets, the community list, the personal
+    // "For you" picks and core-team developer counts sit beneath it. Items are reshaped into
+    // the card shape the renderer consumes ({ pr, reason, signals }).
+    let attention = null;
+    if (mode === "review") {
+      const login = usable[0].login;
+      const viewerLogins = usable.map((a) => a.login);
+      const buckets = createAttentionBuckets(allPrs, login);
+      const focusAll = computeFocusItems(buckets);
+      const focusExclusions = computeFocusExclusionItems(allPrs, buckets, focusAll, login);
+      const card = (pr, reason, extra) =>
+        Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || "") }, extra || {});
+      attention = {
+        forMe: createForMeItems(allPrs, viewerLogins).map((f) => {
+          // Personal pick leads with its own call-to-action; the engine's action pill is
+          // dropped (includeAction:false) so we don't double up, then state signals follow.
+          const c = card(f.pullRequest, f.reason);
+          c.signals = dedupeSignals([
+            { label: f.action, tone: f.tone || "accent" },
+            ...signalsFor(f.pullRequest, f.reason, { includeAction: false, limit: 3 }),
+          ]);
+          // Preserve the raw action label (e.g. "Resolve conflicts") as a field so the
+          // canvas can offer a matching action button; the label is otherwise only
+          // reachable folded into signals[0].
+          c.action = f.action;
+          return c;
+        }),
+        focus: focusAll.slice(0, reviewLimit).map((f) => {
+          const c = card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
+          // Flag review-debt cards (aged past the focus limit without a review) so the
+          // canvas can offer an "Address review" button instead of Test/Review.
+          c.reviewDebt = (c.signals || []).some((s) => s.label === reviewDebtSignalLabel);
+          return c;
+        }),
+        focusTotal: focusAll.length,
+        focusLimit: reviewLimit,
+        focusExclusions: focusExclusions.map((e) => ({
+          pr: e.pullRequest,
+          reason: e.reason.detail,
+          signals: dedupeSignals([
+            { label: e.reason.label, tone: e.reason.tone },
+            ...signalsFor(e.pullRequest, e.reason.label, { includeAction: false, limit: 4 }),
+          ]),
+        })),
+        buckets: buckets.map((b) => ({
+          label: b.label,
+          tone: b.tone,
+          items: b.items.map((i) => card(i.pullRequest, i.reason)),
+        })),
+        community: computeCommunityItems(allPrs).map((c) => card(c.pullRequest, "Community")),
+        developerCounts: createDeveloperPullRequestCounts(allPrs),
+      };
+    }
+
+    const notifications = buildNotifications(allPrs, prefs ?? {}, dismissed ?? []);
+
+    const counts = {
+      prs: visiblePrs.length,
+      total: allPrs.length,
+      drafts: draftCount,
+      issues: allIssues.length,
+      mine: allPrs.filter((p) => p.isMine).length,
+      needsReview: allPrs.filter(awaitingReview).length,
+      readyToMerge: allPrs.filter(isReadyToMerge).length,
+      ciFailing: visiblePrs.filter((p) => p.checksState === "failure").length,
+    };
+
+    return {
+      authenticated: true,
+      viewer: usable[0].login,
+      viewers: usable.map((a) => a.login),
+      mode,
+      release: release ?? CURRENT_RELEASE,
+      repos,
+      lanes,
+      attention,
+      notifications,
+      counts,
+      showDrafts,
+      reviewLimit,
+      errors,
+      fetchedAt: new Date().toISOString(),
     };
   }
 
-  const notifications = buildNotifications(allPrs, prefs ?? {}, dismissed ?? []);
-
-  const counts = {
-    prs: visiblePrs.length,
-    total: allPrs.length,
-    drafts: draftCount,
-    issues: allIssues.length,
-    mine: allPrs.filter((p) => p.isMine).length,
-    needsReview: allPrs.filter(awaitingReview).length,
-    readyToMerge: allPrs.filter(isReadyToMerge).length,
-    ciFailing: visiblePrs.filter((p) => p.checksState === "failure").length,
-  };
-
-  return {
-    authenticated: true,
-    viewer: usable[0].login,
-    viewers: usable.map((a) => a.login),
-    mode,
-    release: release ?? CURRENT_RELEASE,
-    repos,
-    lanes,
-    attention,
-    notifications,
-    counts,
-    showDrafts,
-    reviewLimit,
-    errors,
-    fetchedAt: new Date().toISOString(),
-  };
+  await Promise.all(jobs);
+  // Final, authoritative progress tick so a deterministic bar can complete even if the
+  // last throttled partial was skipped.
+  if (typeof onProgress === "function") onProgress({ done: total, total, phase: "done" });
+  return snapshot();
 }

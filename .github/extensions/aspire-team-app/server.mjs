@@ -24,8 +24,16 @@ import {
 
 const servers = new Map(); // instanceId -> { server, url }
 const sseClients = new Set();
-let cache = null;
+let cache = null;    // { dashboard, prefs, at }
 let inflight = null;
+let bgTimer = null;
+
+// Stale-while-revalidate window: /api/state serves the cached dashboard instantly and
+// only kicks a background refresh once the cache is older than this.
+const STATE_TTL = 45 * 1000;
+// Background monitor cadence. While at least one iframe is connected we silently
+// re-fetch on this interval so open canvases pick up new PRs without a manual refresh.
+const POLL_INTERVAL = 90 * 1000;
 
 // Bridge to the main Copilot session, injected once from extension.mjs after
 // joinSession resolves (server.mjs can't import the SDK session itself). Card action
@@ -81,68 +89,133 @@ function invalidateAuth() {
   authCache = null;
 }
 
-async function getDashboard(force = false) {
-  if (!force && cache) return cache;
-  if (inflight) return inflight;
-  inflight = (async () => {
-    const prefs = await loadPrefs();
-    const auth = await resolveAuth(prefs);
-    const active = auth.accounts.filter((a) => a.active && a.status !== "failed");
-    const accountsForLoad = active
-      .map((a) => ({ token: auth.tokenById.get(a.id), login: a.login, repos: a.repos, graphql: a.graphql }))
-      .filter((a) => a.token && a.login);
+// Decorate a loaded dashboard with the account context the canvas actions in extension.mjs
+// read back off an active account: set_repos reads `repos`, summary reads
+// `sourceKinds`/`status`/`repos`. Omitting them made set_repos return an empty repo list
+// and summary report undefined sources/status for active accounts.
+function decorateDashboard(dashboard, auth, active, prefs) {
+  if (!dashboard || dashboard.authenticated === false) return;
+  dashboard.accounts = auth.accounts;
+  dashboard.activeAccounts = active.map((a) => ({ id: a.id, login: a.login, avatarUrl: a.avatarUrl, enterprise: a.enterprise, host: a.host, repos: a.repos, status: a.status, sourceKinds: a.sourceKinds }));
+  dashboard.dismissedCount = (prefs.dismissedNotifications || []).length;
+}
 
-    let dashboard;
-    if (accountsForLoad.length === 0) {
-      const anyDetected = auth.accounts.length > 0;
-      const anyActive = auth.accounts.some((a) => a.active);
-      dashboard = {
-        authenticated: false,
-        message: !anyDetected
-          ? "No GitHub credentials detected. Run `gh auth login` so the canvas can read your review queue."
-          : anyActive
-            ? "The active GitHub account can't read its watched repositories. Adjust its repos or enable another account below."
-            : "No account is active. Enable an account in the Accounts tab to load your review queue.",
-        accounts: auth.accounts,
-        activeAccounts: [],
-      };
-    } else {
-      dashboard = await loadDashboard({
-        accounts: accountsForLoad,
-        mode: prefs.mode,
-        release: prefs.release,
-        prefs: prefs.notifications,
-        dismissed: prefs.dismissedNotifications,
-        showDrafts: prefs.showDrafts,
-      });
-      dashboard.accounts = auth.accounts;
-      // Carry the fields the canvas actions in extension.mjs read back off an active
-      // account: set_repos reads `repos`, and summary reads `sourceKinds`/`status`/`repos`.
-      // Omitting them made set_repos return an empty repo list and summary report
-      // undefined sources/status for active accounts.
-      dashboard.activeAccounts = active.map((a) => ({ id: a.id, login: a.login, avatarUrl: a.avatarUrl, enterprise: a.enterprise, host: a.host, repos: a.repos, status: a.status, sourceKinds: a.sourceKinds }));
-      dashboard.dismissedCount = (prefs.dismissedNotifications || []).length;
-    }
-    cache = { dashboard, prefs };
-    return cache;
-  })().finally(() => {
-    // Clear the in-flight marker whether the load resolved OR threw. If a rejected
-    // promise were left cached here, the `if (inflight) return inflight` guard above
-    // would replay that same failure to every later /api/state and /api/refresh request
-    // until the extension process restarted. Resetting it lets the next request retry.
+// Compute a fresh dashboard. When at least one iframe is connected we stream results:
+// `progress` ticks drive the deterministic client bar, and throttled `partial` snapshots
+// let cards fill in as each repo's PRs arrive, ending with a final authoritative `state`
+// push. Background polls pass progress:false so the bar doesn't flash every cycle while
+// the silent partial/final state pushes still refresh the UI.
+async function computeDashboard({ progress = true } = {}) {
+  const stream = sseClients.size > 0;
+  const prefs = await loadPrefs();
+  const auth = await resolveAuth(prefs);
+  const active = auth.accounts.filter((a) => a.active && a.status !== "failed");
+  const accountsForLoad = active
+    .map((a) => ({ token: auth.tokenById.get(a.id), login: a.login, repos: a.repos, graphql: a.graphql }))
+    .filter((a) => a.token && a.login);
+
+  let dashboard;
+  if (accountsForLoad.length === 0) {
+    const anyDetected = auth.accounts.length > 0;
+    const anyActive = auth.accounts.some((a) => a.active);
+    dashboard = {
+      authenticated: false,
+      message: !anyDetected
+        ? "No GitHub credentials detected. Run `gh auth login` so the canvas can read your review queue."
+        : anyActive
+          ? "The active GitHub account can't read its watched repositories. Adjust its repos or enable another account below."
+          : "No account is active. Enable an account in the Accounts tab to load your review queue.",
+      accounts: auth.accounts,
+      activeAccounts: [],
+    };
+  } else {
+    dashboard = await loadDashboard({
+      accounts: accountsForLoad,
+      mode: prefs.mode,
+      release: prefs.release,
+      prefs: prefs.notifications,
+      dismissed: prefs.dismissedNotifications,
+      showDrafts: prefs.showDrafts,
+      onProgress: stream && progress ? broadcastProgress : undefined,
+      onPartial: stream
+        ? (partial) => {
+            decorateDashboard(partial, auth, active, prefs);
+            // Publish the partial as the current cache so a canvas opening mid-load gets
+            // the freshest data-so-far, and push it to already-open iframes.
+            cache = { dashboard: partial, prefs, at: Date.now() };
+            broadcastState(partial, prefs);
+          }
+        : undefined,
+    });
+    decorateDashboard(dashboard, auth, active, prefs);
+  }
+  cache = { dashboard, prefs, at: Date.now() };
+  if (stream) broadcastState(dashboard, prefs);
+  return cache;
+}
+
+// Single-flight guard so a user refresh and the background poller share one in-flight
+// load instead of fanning out duplicate GitHub requests.
+function startCompute(opts) {
+  if (inflight) return inflight;
+  inflight = computeDashboard(opts).finally(() => {
+    // Clear the in-flight marker whether the load resolved OR threw. If a rejected promise
+    // were left here, the guard would replay that same failure to every later request until
+    // the process restarted; resetting it lets the next request retry.
     inflight = null;
   });
   return inflight;
 }
 
-function broadcastRefresh() {
+async function getDashboard(force = false) {
+  if (!force && cache) {
+    // Stale-while-revalidate: hand back the cached dashboard immediately so (re)opening the
+    // canvas is instant, and kick a silent background refresh once it's aged past the TTL.
+    // progress:false so this passive revalidation doesn't flash the top bar — only the very
+    // first load and explicit user refreshes drive it. New data still streams via `state`.
+    if (Date.now() - (cache.at || 0) > STATE_TTL) startCompute({ progress: false });
+    return cache;
+  }
+  return startCompute();
+}
+
+// Background monitor: while iframes are connected, silently revalidate on an interval so
+// open canvases surface new/updated PRs without a manual refresh. Unref'd + gated on client
+// count so it never keeps the process alive or works when nobody is watching.
+function ensurePoller() {
+  if (bgTimer) return;
+  bgTimer = setInterval(() => {
+    if (sseClients.size === 0) return;
+    startCompute({ progress: false });
+  }, POLL_INTERVAL);
+  if (typeof bgTimer.unref === "function") bgTimer.unref();
+}
+
+function writeSse(event, data) {
   for (const res of sseClients) {
     try {
-      res.write("event: refresh\ndata: 1\n\n");
+      res.write(`event: ${event}\ndata: ${data}\n\n`);
     } catch {
       sseClients.delete(res);
     }
   }
+}
+
+// SSE data lines must be single-line; JSON.stringify escapes any newlines inside strings,
+// so the whole dashboard/prefs payload is safe to emit as one `data:` line.
+function broadcastState(dashboard, prefs) {
+  writeSse("state", JSON.stringify({ dashboard, prefs }));
+}
+
+function broadcastProgress(p) {
+  writeSse("progress", JSON.stringify(p));
+}
+
+// Legacy nudge kept for resilience: tells clients to re-pull /api/state. The streaming
+// `state` push above is the primary path; this is a harmless fallback for any client that
+// only listens for `refresh`.
+function broadcastRefresh() {
+  writeSse("refresh", "1");
 }
 
 function send(res, status, body, type = "application/json") {
@@ -274,26 +347,27 @@ async function handle(req, res, log) {
     }
     if (req.method === "POST" && path === "/api/agent/action") {
       // A card action button (Test / Review / Resolve conflicts / Address review)
-      // posts { kind, pr }. We build the prompt and hand it to the main session via
-      // the injected bridge; the agent then opens a sub-session or works the PR. This
-      // route does not touch the dashboard cache, so it neither refreshes nor
-      // broadcasts.
-      const { kind, pr } = await readBody(req);
+      // posts { kind, target, pr }. target is "new-session" (open a sub-session in the
+      // PR's repo) or "current-session" (work here). We build the prompt and hand it to
+      // the main session via the injected bridge; the agent then opens a sub-session or
+      // works the PR. This route does not touch the dashboard cache, so it neither
+      // refreshes nor broadcasts.
+      const { kind, target, pr } = await readBody(req);
       if (!agentSend) {
         return send(res, 503, { error: "The Copilot session is not ready yet. Try again in a moment." });
       }
       let prompt;
       try {
-        prompt = buildAgentActionPrompt(kind, pr);
+        prompt = buildAgentActionPrompt(kind, pr, target);
       } catch (e) {
         return send(res, 400, { error: e.message });
       }
-      const log = buildAgentActionLog(kind, pr);
+      const log = buildAgentActionLog(kind, pr, target);
       const result = await agentSend({ prompt, log });
       // Tolerate a bare messageId string in case an older bridge is wired.
       const messageId = typeof result === "string" ? result : (result && result.messageId) ?? null;
       const queued = typeof result === "object" && result ? !!result.queued : false;
-      return send(res, 200, { ok: true, kind, messageId, queued });
+      return send(res, 200, { ok: true, kind, target: target || "new-session", messageId, queued });
     }
     if (req.method === "POST" && path === "/api/notifications/dismiss") {
       const { id } = await readBody(req);
@@ -344,6 +418,9 @@ async function handle(req, res, log) {
       });
       res.write(": connected\n\n");
       sseClients.add(res);
+      // A canvas is now watching — make sure the background monitor is running so its
+      // queue keeps refreshing without a manual reload.
+      ensurePoller();
       req.on("close", () => sseClients.delete(res));
       return;
     }
@@ -369,7 +446,18 @@ export async function stopInstance(instanceId) {
   const entry = servers.get(instanceId);
   if (!entry) return;
   servers.delete(instanceId);
-  await new Promise((resolve) => entry.server.close(() => resolve()));
+  // SSE responses are long-lived, so server.close() would hang forever waiting for them
+  // to drain. End the open event streams first, then force any lingering sockets closed so
+  // shutdown completes promptly (e.g. when the canvas iframe is still connected).
+  for (const res of [...sseClients]) {
+    try { res.end(); } catch { /* already torn down */ }
+    sseClients.delete(res);
+  }
+  const closed = new Promise((resolve) => entry.server.close(() => resolve()));
+  if (typeof entry.server.closeAllConnections === "function") {
+    entry.server.closeAllConnections();
+  }
+  await closed;
 }
 
 export async function forceRefresh() {
