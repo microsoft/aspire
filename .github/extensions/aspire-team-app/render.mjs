@@ -1163,7 +1163,14 @@ function persistAccountRepos(id, previousRepos) {
   repoSaveSeqByAcct[id] = seq;
   return postJSON("api/account/repos", { id, repos }).then((data) => {
     if (repoSaveSeqByAcct[id] !== seq) return data;
-    if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; adoptAppliedRev(); }
+    // Gate the adoption on seq like every other response path (load/withRefresh/SSE/goView): a save
+    // that resolves after a newer refresh or pushed snapshot already applied must not roll state
+    // (and lastAppliedSeq via adoptAppliedRev) backward. The repoSaveSeqByAcct guard above only
+    // orders saves for this account against each other, not against those lastAppliedSeq-keyed paths.
+    if (data && data.dashboard) {
+      const dseq = data.dashboard.seq;
+      if (typeof dseq !== "number" || dseq > lastAppliedSeq) { state = data.dashboard; prefs = data.prefs; adoptAppliedRev(); }
+    }
     repoErr(id, "");
     return data;
   }).catch((e) => {
@@ -1198,10 +1205,15 @@ async function rescanAccounts() {
   try {
     const res = await fetch("api/accounts");
     const data = await readJson(res);
-    state = data.dashboard; prefs = data.prefs; loadError = null;
-    // Advance the applied revision so a delayed lower-seq SSE partial from an earlier recompute
-    // can't be accepted after this newer /api/accounts response and roll the queue back.
-    adoptAppliedRev();
+    // Gate on seq like every other response path: if a newer refresh/SSE snapshot applied while this
+    // rescan was in flight, adopting it would roll state (and lastAppliedSeq) backward. When it is the
+    // newest, adoptAppliedRev() also advances the revision so a delayed lower-seq SSE partial from an
+    // earlier recompute can't be accepted after this /api/accounts response and roll the queue back.
+    const dseq = data.dashboard && data.dashboard.seq;
+    if (typeof dseq !== "number" || dseq > lastAppliedSeq) {
+      state = data.dashboard; prefs = data.prefs; loadError = null;
+      adoptAppliedRev();
+    }
   } catch (e) {
     loadError = String((e && e.message) || e);
   } finally { rescanning = false; render(); }

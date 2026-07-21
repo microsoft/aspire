@@ -231,6 +231,43 @@ test("load suppresses its failure when a newer revision was applied while the GE
   assert.equal(api.getState().marker, "fresh");
 });
 
+test("persistAccountRepos ignores a stale save response so it can't roll lastAppliedSeq back", async () => {
+  // The save response's dashboard must be seq-gated like every adoption path: a save that resolves
+  // after a newer refresh/SSE snapshot already applied must not roll state/lastAppliedSeq backward.
+  const staleSave = { dashboard: { seq: 4, marker: "stale-save", authenticated: false, accounts: [], message: "" }, prefs: {} };
+  const { api } = createRendererHarness({
+    fetch: async (url) => String(url) === "api/account/repos" ? jsonResponse(staleSave) : new Promise(() => {}),
+  });
+
+  // Establish a newer applied revision (seq 9). withRefresh takes its data from fn, not fetch.
+  await api.withRefresh(async () => ({ dashboard: { seq: 9, marker: "fresh", authenticated: false, accounts: [], message: "" }, prefs: {} }));
+  assert.equal(api.getAppliedSeq(), 9);
+
+  // A repo save whose response carries an older seq (4) must be gated out — no rollback.
+  api.draftReposByAcct["acct1"] = ["owner/repo"];
+  await api.persistAccountRepos("acct1", []);
+  assert.equal(api.getState().marker, "fresh");
+  assert.equal(api.getAppliedSeq(), 9);
+});
+
+test("rescanAccounts ignores a stale /api/accounts response so it can't roll lastAppliedSeq back", async () => {
+  // The rescan response must be seq-gated too: if a newer refresh/SSE snapshot applied while the
+  // rescan was in flight, adopting its older dashboard would roll state/lastAppliedSeq backward.
+  const staleRescan = { dashboard: { seq: 4, marker: "stale-rescan", authenticated: false, accounts: [], message: "" }, prefs: {} };
+  const { api } = createRendererHarness({
+    fetch: async (url) => String(url) === "api/accounts" ? jsonResponse(staleRescan) : new Promise(() => {}),
+  });
+
+  // Establish a newer applied revision (seq 9).
+  await api.withRefresh(async () => ({ dashboard: { seq: 9, marker: "fresh", authenticated: false, accounts: [], message: "" }, prefs: {} }));
+  assert.equal(api.getAppliedSeq(), 9);
+
+  // A rescan whose response carries an older seq (4) must be gated out — no rollback.
+  await api.rescanAccounts();
+  assert.equal(api.getState().marker, "fresh");
+  assert.equal(api.getAppliedSeq(), 9);
+});
+
 test("onCardAction re-renders when an SSE refresh detached the card mid-request so the visible button isn't stuck disabled", async () => {
   // The action POST resolves; api/state stays pending so the module-init load() can't render mid-test
   // and pollute the assertions below.
@@ -383,7 +420,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  onCardAction,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }
