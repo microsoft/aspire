@@ -141,6 +141,18 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string DcpCleanupCompatibilityCheckFailed {
+            get {
+                return ResourceManager.GetString("DcpCleanupCompatibilityCheckFailed", resourceCulture);
+            }
+        }
+
+        public static string DcpCleanupUnsupportedAppHostVersion {
+            get {
+                return ResourceManager.GetString("DcpCleanupUnsupportedAppHostVersion", resourceCulture);
+            }
+        }
+
         public static string DcpCleanupFailed {
             get {
                 return ResourceManager.GetString("DcpCleanupFailed", resourceCulture);
@@ -162,6 +174,12 @@ namespace Aspire.Cli.Resources {
         public static string AllAndProjectMutuallyExclusive {
             get {
                 return ResourceManager.GetString("AllAndProjectMutuallyExclusive", resourceCulture);
+            }
+        }
+
+        public static string UnknownAspireHostingVersion {
+            get {
+                return ResourceManager.GetString("UnknownAspireHostingVersion", resourceCulture);
             }
         }
 

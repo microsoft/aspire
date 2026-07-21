@@ -27,6 +27,11 @@
         <target state="new">Could not determine the AppHost project path.</target>
         <note />
       </trans-unit>
+      <trans-unit id="DcpCleanupCompatibilityCheckFailed">
+        <source>Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</source>
+        <target state="new">Could not inspect the AppHost project to verify persistent resource cleanup compatibility. Persistent resource cleanup will still be attempted.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DcpCleanupExitCode">
         <source>DCP cleanup exited with code {0}.</source>
         <target state="new">DCP cleanup exited with code {0}.</target>
@@ -40,6 +45,11 @@
       <trans-unit id="DcpCleanupUnavailable">
         <source>Could not find the DCP executable needed to clean up persistent resources.</source>
         <target state="new">Could not find the DCP executable needed to clean up persistent resources.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DcpCleanupUnsupportedAppHostVersion">
+        <source>This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</source>
+        <target state="new">This AppHost uses Aspire.Hosting {0}, which might not support persistent resource cleanup. Persistent resource cleanup requires Aspire.Hosting {1} or later, or an AppHost configured to use the Aspire CLI bundle. Persistent resource cleanup will still be attempted.</target>
         <note />
       </trans-unit>
       <trans-unit id="Description">
@@ -100,6 +110,11 @@
       <trans-unit id="AllAndProjectMutuallyExclusive">
         <source>The {0} and {1} options cannot be used together.</source>
         <target state="translated">Las opciones {0} y {1} no se pueden usar juntas.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="UnknownAspireHostingVersion">
+        <source>an unknown version</source>
+        <target state="new">an unknown version</target>
         <note />
       </trans-unit>
     </body>

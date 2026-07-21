@@ -479,7 +479,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
         using var cliBundleLeaseScope = cliBundleLease;
         ConfigureCliBundleEnvironment(env, cliBundleLease, injectDcpAndDashboard: false);
-        ConfigureCliBundleDcpPublisherEnvironment(env, cliBundleLease);
 
         var watch = !isSingleFileAppHost && _features.IsFeatureEnabled(KnownFeatures.DefaultWatchEnabled, defaultValue: false);
         var preparationExitCode = await PrepareAppHostAsync(
@@ -1546,17 +1545,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
 
         layoutLease?.AddEnvironment(env);
-    }
-
-    private static void ConfigureCliBundleDcpPublisherEnvironment(Dictionary<string, string> env, BundleLayoutLease? layoutLease)
-    {
-        if (!env.ContainsKey(KnownConfigNames.DcpPublisherCliPath) && layoutLease?.Layout.GetDcpPath() is { } dcpPath)
-        {
-            // DcpPublisher__CliPath is the long-standing Hosting configuration hook for the
-            // DCP executable, so prefer it over the newer bundle-specific ASPIRE_DCP_PATH
-            // when the CLI needs all AppHosts to run against its bundled DCP.
-            env[KnownConfigNames.DcpPublisherCliPath] = BundleDiscovery.GetDcpExecutablePath(dcpPath);
-        }
     }
 
     /// <summary>

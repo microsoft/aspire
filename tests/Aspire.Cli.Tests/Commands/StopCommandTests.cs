@@ -4,8 +4,10 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Globalization;
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
+using Aspire.Cli.Interaction;
 using Aspire.Cli.Layout;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -543,6 +545,162 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_ForceWarnsAndCleansUpForUnsupportedNonBundleAppHost()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var processFactory = new TestProcessExecutionFactory();
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) =>
+                    (0, CreateAppHostInfoJson(aspireHostingVersion: "13.4.0", isUsingCliBundle: false))
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+        Assert.Contains(interactionService.DisplayedMessages, message =>
+            message.Emoji.Equals(KnownEmojis.Warning) &&
+            message.Message.Contains("might not support persistent resource cleanup", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StopCommand_ForceWarnsAndCleansUpWhenAppHostVersionCannotBeDetermined()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var processFactory = new TestProcessExecutionFactory();
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) =>
+                    (0, CreateAppHostInfoJson(aspireHostingVersion: null, isUsingCliBundle: false))
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+        Assert.Contains(interactionService.DisplayedMessages, message =>
+            message.Emoji.Equals(KnownEmojis.Warning) &&
+            message.Message.Contains("an unknown version", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StopCommand_ForceWarnsAndCleansUpWhenAppHostInfoCannotBeInspected()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var processFactory = new TestProcessExecutionFactory();
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) => (1, null)
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+        Assert.Contains(interactionService.DisplayedMessages, message =>
+            message.Emoji.Equals(KnownEmojis.Warning) &&
+            message.Message.Contains("Could not inspect the AppHost project", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public async Task StopCommand_ForceAllowsUnsupportedVersionWhenAppHostUsesCliBundle()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var processFactory = new TestProcessExecutionFactory();
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner
+            {
+                GetProjectItemsAndPropertiesAsyncCallbackWithTargets = (_, _, _, _, _, _) =>
+                    (0, CreateAppHostInfoJson(aspireHostingVersion: "13.4.0", isUsingCliBundle: true))
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+    }
+
+    [Fact]
     public async Task StopCommand_ForceReturnsCleanupFailureWhenDcpCannotStart()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -814,6 +972,7 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
         {
             options.InteractionServiceFactory = _ => interactionService;
             options.DotNetCliExecutionFactoryFactory = _ => processFactory;
+            options.DotNetCliRunnerFactory = _ => new TestDotNetCliRunner();
             if (useBundleLayout)
             {
                 options.BundleServiceFactory = _ => new TestBundleService(isBundle: true) { Layout = layout };
@@ -835,6 +994,22 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
             execution.Arguments[1] == expectedWorkloadId);
 
         Assert.EndsWith(BundleDiscovery.GetDcpExecutableName(), execution.FileName, StringComparison.Ordinal);
+    }
+
+    private static JsonDocument CreateAppHostInfoJson(string? aspireHostingVersion, bool isUsingCliBundle)
+    {
+        var aspireHostingVersionJson = aspireHostingVersion is null ? "null" : $"\"{aspireHostingVersion}\"";
+
+        return JsonDocument.Parse($$"""
+            {
+              "Properties": {
+                "IsAspireHost": "true",
+                "AspireHostingSDKVersion": {{aspireHostingVersionJson}},
+                "AspireUseCliBundle": "{{(isUsingCliBundle ? "true" : "false")}}"
+              },
+              "Items": {}
+            }
+            """);
     }
 
     private static TestAppHostAuxiliaryBackchannel CreateConnection(string appHostPath, int processId, bool isInScope = true)

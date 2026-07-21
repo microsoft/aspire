@@ -11,6 +11,7 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
+using Semver;
 
 namespace Aspire.Cli.Commands;
 
@@ -28,7 +29,12 @@ internal sealed class StopCommand : BaseCommand
     private readonly OrphanedAppHostCollector _collector;
     private readonly ProfilingTelemetry _profilingTelemetry;
     private readonly IProjectLocator _projectLocator;
+    private readonly IAppHostInfoResolver _appHostInfoResolver;
     private readonly DcpWorkloadCleanupService _dcpCleanupService;
+
+    private const int MinimumHostingMajorVersionForPersistentResourceCleanup = 13;
+    private const int MinimumHostingMinorVersionForPersistentResourceCleanup = 5;
+    private const string MinimumHostingVersionForPersistentResourceCleanupDisplay = "13.5.0";
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", StopCommandStrings.ProjectArgumentDescription);
 
@@ -48,6 +54,7 @@ internal sealed class StopCommand : BaseCommand
         IEnvironment environment,
         ProcessTreeGracefulShutdownService processShutdownService,
         IProjectLocator projectLocator,
+        IAppHostInfoResolver appHostInfoResolver,
         DcpWorkloadCleanupService dcpCleanupService,
         OrphanedAppHostCollector collector,
         ILogger<StopCommand> logger,
@@ -60,6 +67,7 @@ internal sealed class StopCommand : BaseCommand
         _environment = environment;
         _processShutdownService = processShutdownService;
         _projectLocator = projectLocator;
+        _appHostInfoResolver = appHostInfoResolver;
         _dcpCleanupService = dcpCleanupService;
         _collector = collector;
         _logger = logger;
@@ -257,6 +265,8 @@ internal sealed class StopCommand : BaseCommand
 
     private async Task<int> CleanupPersistentResourcesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
     {
+        await WarnIfPersistentResourceCleanupMayBeUnsupportedAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+
         var appHostPath = appHostFile.FullName;
         var appHostDisplayPath = FileSystemHelper.ShortenPaths([appHostPath], _environment)[appHostPath];
         var workloadId = AppHostWorkloadId.Create(appHostFile);
@@ -282,6 +292,54 @@ internal sealed class StopCommand : BaseCommand
 
         InteractionService.DisplaySuccess(string.Format(CultureInfo.CurrentCulture, StopCommandStrings.PersistentResourcesCleaned, appHostDisplayPath));
         return CliExitCodes.Success;
+    }
+
+    private async Task WarnIfPersistentResourceCleanupMayBeUnsupportedAsync(FileInfo appHostFile, CancellationToken cancellationToken)
+    {
+        AppHostProjectInfo appHostInfo;
+        try
+        {
+            appHostInfo = await _appHostInfoResolver.GetAppHostInfoAsync(appHostFile, cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is not OperationCanceledException)
+        {
+            _logger.LogDebug(ex, "Failed to inspect AppHost project for persistent resource cleanup compatibility.");
+            InteractionService.DisplayMessage(KnownEmojis.Warning, StopCommandStrings.DcpCleanupCompatibilityCheckFailed);
+            return;
+        }
+
+        if (appHostInfo.ExitCode != 0 || !appHostInfo.IsAspireHost)
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Warning, StopCommandStrings.DcpCleanupCompatibilityCheckFailed);
+            return;
+        }
+
+        if (appHostInfo.IsUsingCliBundle || SupportsPersistentResourceCleanup(appHostInfo.AspireHostingVersion))
+        {
+            return;
+        }
+
+        var appHostVersion = string.IsNullOrWhiteSpace(appHostInfo.AspireHostingVersion)
+            ? StopCommandStrings.UnknownAspireHostingVersion
+            : appHostInfo.AspireHostingVersion;
+        InteractionService.DisplayMessage(KnownEmojis.Warning, string.Format(
+            CultureInfo.CurrentCulture,
+            StopCommandStrings.DcpCleanupUnsupportedAppHostVersion,
+            appHostVersion,
+            MinimumHostingVersionForPersistentResourceCleanupDisplay));
+    }
+
+    private static bool SupportsPersistentResourceCleanup(string? aspireHostingVersion)
+    {
+        if (string.IsNullOrWhiteSpace(aspireHostingVersion) ||
+            !SemVersion.TryParse(aspireHostingVersion, SemVersionStyles.Any, out var version))
+        {
+            return false;
+        }
+
+        return version.Major > MinimumHostingMajorVersionForPersistentResourceCleanup ||
+            (version.Major == MinimumHostingMajorVersionForPersistentResourceCleanup &&
+             version.Minor >= MinimumHostingMinorVersionForPersistentResourceCleanup);
     }
 
     /// <summary>
