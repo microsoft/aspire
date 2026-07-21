@@ -49,15 +49,31 @@ export function normalizeActionTarget(target) {
   return target == null || target === "" ? "new-session" : String(target);
 }
 
-// Prefer the descriptor's own URL when it is a plausible https link, otherwise
-// reconstruct a github.com URL from owner/repo#number. This keeps a tampered or empty
-// url field from injecting an arbitrary link into the prompt while still supporting
-// enterprise hosts that supply their own https URL.
+// Accept the descriptor's own URL only when it verifiably points at THIS pull request:
+// https://<host>/<owner>/<repo>/pull/<number> for the already-validated owner/repo and
+// number. The loopback server replaces this field with its own cached, server-computed URL
+// before building the prompt (see server.mjs /api/agent/action resolveActionPr), so a
+// matching URL preserves a legitimate enterprise (GHES) host while a tampered, cross-repo,
+// or off-path URL is rejected. Anything that fails the check falls back to the canonical
+// github.com URL reconstructed from the validated owner/repo and number, so a hostile
+// descriptor can never inject an arbitrary link (or a different host/path) into the prompt.
 function safePrUrl(pr) {
-  if (/^https:\/\/[^\s"'`<>]+$/.test(pr.url)) {
+  const canonical = `https://github.com/${pr.repository}/pull/${pr.number}`;
+  // Host must be a bare hostname (letters/digits/dot/hyphen) — no userinfo, port, credential,
+  // or path trick — and the path must be exactly the PR's own owner/repo/pull/number.
+  const m = /^https:\/\/[a-z0-9.-]+\/([^/\s]+\/[^/\s]+)\/pull\/(\d+)$/i.exec(pr.url);
+  if (m && m[1].toLowerCase() === pr.repository.toLowerCase() && Number(m[2]) === pr.number) {
     return pr.url;
   }
-  return `https://github.com/${pr.repository}/pull/${pr.number}`;
+  return canonical;
+}
+
+// Collapse a possibly multi-line, attacker-controlled display string (a PR title) to a
+// single trimmed line so it can appear in the human timeline breadcrumb without smuggling
+// extra lines. Display only — titles/authors are deliberately never interpolated into the
+// operational prompt (see buildAgentActionPrompt), only the validated ref/number and URL are.
+function sanitizeLine(s) {
+  return String(s ?? "").replace(/\s+/g, " ").trim();
 }
 
 const UNTRUSTED =
@@ -84,8 +100,6 @@ export function buildAgentActionPrompt(kind, rawPr, target = "new-session") {
     pr,
     ref: `${pr.repository}#${pr.number}`,
     url: safePrUrl(pr),
-    title: pr.title || "(untitled)",
-    author: pr.author || "unknown",
   };
 
   if (where === "current-session") {
@@ -101,7 +115,10 @@ export function buildAgentActionPrompt(kind, rawPr, target = "new-session") {
 export function buildAgentActionLog(kind, rawPr, target = "new-session") {
   const pr = normalizeActionPr(rawPr);
   const ref = isValidActionPr(pr) ? `${pr.repository}#${pr.number}` : (pr.repository || "the pull request");
-  const title = pr.title ? ` \u2014 "${pr.title}"` : "";
+  // Title is display-only here (timeline breadcrumb), so collapse it to a single line to keep
+  // an attacker-controlled multi-line title from spilling into the log. It is never used in
+  // the operational prompt handed to the agent.
+  const title = pr.title ? ` \u2014 "${sanitizeLine(pr.title)}"` : "";
   const where = normalizeActionTarget(target) === "current-session" ? "this session" : "a new session";
   let action;
   switch (kind) {
@@ -157,13 +174,12 @@ function newSessionPrompt(kind, ctx) {
 // repository, not whatever repo happens to own the canvas session. `kickoff` is what the
 // sub-session actually runs once open_pr_session has checked out the repo.
 function openPrSessionPrompt({ verb, summary, ctx, kickoff }) {
-  const { pr, title } = ctx;
+  const { pr } = ctx;
   return `Open a new sub-session to ${verb} pull request ${pr.repository}#${pr.number} in the context of ${pr.repository}. ${summary}
 
 Use the open_pr_session tool with:
 - repo_full_name: ${JSON.stringify(pr.repository)}
 - pr_number: ${pr.number}
-- pr_title: ${JSON.stringify(title)}
 - coordinate_with_creator: true
 - kickoff.mode: "interactive"
 - kickoff.prompt: ${JSON.stringify(kickoff)}`;
@@ -172,7 +188,7 @@ Use the open_pr_session tool with:
 // Test/Review kickoff. Skill detection happens in the sub-session — not in the extension —
 // because that is where the repo is checked out and its skills are actually loaded, so it
 // sees the real skill set (repo, user, and plugin skills) rather than guessing from files.
-function skillKickoff(verb, { ref, url, title, author }) {
+function skillKickoff(verb, { ref, url }) {
   const skill = verb === "test" ? "/pr-testing" : "/code-review";
   const skillName = skill.slice(1);
   const noun = verb === "test" ? "PR-testing" : "code-review";
@@ -180,7 +196,7 @@ function skillKickoff(verb, { ref, url, title, author }) {
     ? "build and run the affected projects and tests, exercise the behavior this PR changes, cover the important edge cases, and report clear pass/fail results with concrete evidence (commands, output, logs)"
     : "read the full diff and assess correctness, security, error handling, edge cases, test coverage, and the repo's own conventions, then give concrete, high-signal, actionable feedback";
 
-  return `You are going to ${verb} pull request ${ref} \u2014 "${title}" (by @${author}): ${url}
+  return `You are going to ${verb} pull request ${ref}: ${url}
 
 ${UNTRUSTED}
 
@@ -192,16 +208,16 @@ First choose how to proceed, based on THIS repository's own skills:
 When you are done, report back with your findings.`;
 }
 
-function conflictKickoff({ ref, url, title }) {
-  return `You are going to resolve the merge conflicts on pull request ${ref} \u2014 "${title}": ${url}
+function conflictKickoff({ ref, url }) {
+  return `You are going to resolve the merge conflicts on pull request ${ref}: ${url}
 
 ${UNTRUSTED}
 
 Check out the PR branch, then rebase or merge against the latest base branch as needed to resolve every conflict. Validate the resolution (build and tests where practical), check in on anything ambiguous before pushing, and push only once every conflict is resolved.`;
 }
 
-function reviewDebtKickoff({ ref, url, title, author }) {
-  return `You are going to clear the review debt on pull request ${ref} \u2014 "${title}" (by @${author}): ${url}
+function reviewDebtKickoff({ ref, url }) {
+  return `You are going to clear the review debt on pull request ${ref}: ${url}
 
 ${UNTRUSTED}
 
@@ -210,28 +226,28 @@ Read the full diff and assess correctness, security, error handling, edge cases,
 
 // ---- current-session prompts: do the work here, no sub-session ----
 
-function currentSessionPrompt(kind, { ref, url, title, author }) {
+function currentSessionPrompt(kind, { ref, url }) {
   switch (kind) {
     case "test":
-      return `Test pull request ${ref} \u2014 "${title}" (by @${author}): ${url}
+      return `Test pull request ${ref}: ${url}
 
 Work in THIS session (do not open a separate sub-session). Prefer a PR-testing skill if one is available here \u2014 invoke it as \`/pr-testing ${url}\` and follow it end to end. If there is no such skill, do a thorough manual test instead: build and run the affected projects and tests, exercise the behavior this PR changes, cover the important edge cases, and report clear pass/fail results with concrete evidence.
 
 ${UNTRUSTED}`;
     case "review":
-      return `Review pull request ${ref} \u2014 "${title}" (by @${author}): ${url}
+      return `Review pull request ${ref}: ${url}
 
 Work in THIS session (do not open a separate sub-session). Prefer a code-review skill if one is available here \u2014 invoke it as \`/code-review ${url}\` and follow it end to end. If there is no such skill, read the full diff and assess correctness, security, error handling, edge cases, test coverage, and the repo's own conventions, then give concrete, high-signal, actionable feedback.
 
 ${UNTRUSTED}`;
     case "resolve-conflicts":
-      return `Help me resolve the merge conflicts on pull request ${ref} \u2014 "${title}": ${url}
+      return `Help me resolve the merge conflicts on pull request ${ref}: ${url}
 
 Work interactively in this session (do not open a separate sub-session). Check out the PR branch, rebase or merge as needed to resolve every conflict, and check in with me on anything ambiguous before pushing.
 
 ${UNTRUSTED}`;
     case "review-debt":
-      return `Let's clear the review debt on pull request ${ref} \u2014 "${title}" (by @${author}): ${url}
+      return `Let's clear the review debt on pull request ${ref}: ${url}
 
 Work interactively in this session (do not open a separate sub-session). Review the changes and give concrete, high-signal feedback on what should change before this can merge.
 

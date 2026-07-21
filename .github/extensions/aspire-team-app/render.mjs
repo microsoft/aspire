@@ -1027,6 +1027,13 @@ function openCbMenu(split, caret, menu) {
   menu.style.top = Math.round(top) + "px";
   menu.style.visibility = "";
   caret.setAttribute("aria-expanded", "true");
+  // Move focus into the menu so keyboard users land on the choices (the menu was portaled to
+  // the end of <body>, so a bare Tab would otherwise skip past it in document order). Remember
+  // the caret so Escape/Tab can restore focus to it when the menu closes (see the keydown
+  // handler wired in render()).
+  menu.__ownerCaret = caret;
+  const firstItem = menu.querySelector(".cb-menu-item");
+  if (firstItem && typeof firstItem.focus === "function") firstItem.focus();
 }
 
 // Persist one account's repos without a full refresh/broadcast (the editor owns
@@ -1136,7 +1143,7 @@ function cardActionBtn(pr, a) {
 }
 
 function cbMenuItem(target, icon, label, sub) {
-  return '<button type="button" class="cb-menu-item" role="menuitem" data-target="' + esc(target) + '">' +
+  return '<button type="button" class="cb-menu-item" role="menuitem" tabindex="-1" data-target="' + esc(target) + '">' +
     '<span class="cb-mi-ico">' + icon + "</span>" +
     '<span class="cb-mi-text"><span class="cb-mi-label">' + esc(label) + "</span>" +
     '<span class="cb-mi-sub">' + esc(sub) + "</span></span></button>";
@@ -2070,6 +2077,20 @@ function wire() {
       const wasOpen = !menu.hidden;
       closeCbMenus();
       if (!wasOpen) openCbMenu(split, caret, menu);
+    });
+    // Menu keyboard model (ARIA menu pattern): the items use roving tabindex (-1) and are
+    // driven from here. Arrow keys move between choices, Home/End jump to the ends, and both
+    // Escape and Tab close the menu and return focus to the caret so focus never escapes into
+    // <body> (the menu is portaled there while open). Enter/Space activate natively (buttons).
+    if (caret && menu) menu.addEventListener("keydown", (e) => {
+      const items = Array.prototype.slice.call(menu.querySelectorAll(".cb-menu-item"));
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement);
+      if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1 + items.length) % items.length].focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
+      else if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
+      else if (e.key === "Escape" || e.key === "Tab") { e.preventDefault(); closeCbMenus(); caret.focus(); }
     });
     split.querySelectorAll(".cb-menu-item").forEach((mi) =>
       mi.addEventListener("click", (e) => {

@@ -24,9 +24,17 @@ import {
 
 const servers = new Map(); // instanceId -> { server, url }
 const sseClients = new Set();
+// Maps each open SSE response to the instanceId whose server accepted it. sseClients is a
+// module-global shared across every canvas instance (broadcasts fan out to all open
+// iframes), but shutdown must be per-instance: closing one canvas must not end another
+// still-open canvas's stream. A WeakMap avoids leaking entries once a response is GC'd.
+const clientInstance = new WeakMap();
 let cache = null;    // { dashboard, prefs, at }
 let inflight = null;
 let bgTimer = null;
+// Logger captured from the most recent startInstance so background (non-request) work —
+// the poller and stale-while-revalidate refreshes — has somewhere to report failures.
+let bgLog = null;
 
 // Stale-while-revalidate window: /api/state serves the cached dashboard instantly and
 // only kicks a background refresh once the cache is older than this.
@@ -154,17 +162,36 @@ async function computeDashboard({ progress = true } = {}) {
   return cache;
 }
 
-// Single-flight guard so a user refresh and the background poller share one in-flight
-// load instead of fanning out duplicate GitHub requests.
-function startCompute(opts) {
-  if (inflight) return inflight;
-  inflight = computeDashboard(opts).finally(() => {
-    // Clear the in-flight marker whether the load resolved OR threw. If a rejected promise
-    // were left here, the guard would replay that same failure to every later request until
-    // the process restarted; resetting it lets the next request retry.
-    inflight = null;
-  });
+// Single-flight guard so a user refresh and the background poller share one in-flight load
+// instead of fanning out duplicate GitHub requests. A forced refresh (force:true) must
+// reflect state saved *after* an in-flight load began — e.g. a /api/mode, /api/prefs, or
+// account mutation that just wrote prefs — so it never reuses the current computation.
+// Instead it queues a fresh generation after any in-flight one settles (avoiding duplicate
+// concurrent fan-out) and becomes the new in-flight, so the mutation response and streamed
+// state reflect the latest prefs rather than the pre-change ones.
+function startCompute(opts, force = false) {
+  if (inflight && !force) return inflight;
+  const prior = inflight;
+  const run = (prior ? prior.catch(() => {}) : Promise.resolve())
+    .then(() => computeDashboard(opts))
+    .finally(() => {
+      // Clear the in-flight marker whether the load resolved OR threw, but only if a newer
+      // forced generation hasn't already superseded it. A rejected promise left here would
+      // otherwise replay the same failure to every later request until the process restarted.
+      if (inflight === run) inflight = null;
+    });
+  inflight = run;
   return inflight;
+}
+
+// Fire-and-forget background revalidation. startCompute() rejects on a transient
+// credential/GitHub failure; without a handler that rejection would surface as an
+// unhandledRejection and could terminate the extension host instead of merely leaving the
+// stale cache in place. Swallow + log it so the next tick (poller or TTL) can retry safely.
+function backgroundRefresh(opts) {
+  Promise.resolve()
+    .then(() => startCompute(opts))
+    .catch((e) => bgLog?.(`background refresh failed: ${e?.message || e}`));
 }
 
 async function getDashboard(force = false) {
@@ -173,10 +200,10 @@ async function getDashboard(force = false) {
     // canvas is instant, and kick a silent background refresh once it's aged past the TTL.
     // progress:false so this passive revalidation doesn't flash the top bar — only the very
     // first load and explicit user refreshes drive it. New data still streams via `state`.
-    if (Date.now() - (cache.at || 0) > STATE_TTL) startCompute({ progress: false });
+    if (Date.now() - (cache.at || 0) > STATE_TTL) backgroundRefresh({ progress: false });
     return cache;
   }
-  return startCompute();
+  return startCompute(undefined, force);
 }
 
 // Background monitor: while iframes are connected, silently revalidate on an interval so
@@ -186,7 +213,9 @@ function ensurePoller() {
   if (bgTimer) return;
   bgTimer = setInterval(() => {
     if (sseClients.size === 0) return;
-    startCompute({ progress: false });
+    // Route through backgroundRefresh so a rejected poll can't become an unhandled rejection
+    // on the timer path (which has no caller to await it) and crash the extension.
+    backgroundRefresh({ progress: false });
   }, POLL_INTERVAL);
   if (typeof bgTimer.unref === "function") bgTimer.unref();
 }
@@ -216,6 +245,58 @@ function broadcastProgress(p) {
 // only listens for `refresh`.
 function broadcastRefresh() {
   writeSse("refresh", "1");
+}
+
+// Resolve a client-supplied card-action PR descriptor against the server's own cached
+// dashboard so a tampered url/title/author (ultimately sourced from attacker-controllable
+// PR metadata) can't reach the agent prompt. Every card the user can click was computed by
+// this server and lives in the current cache, keyed by "<owner/repo>#<number>". On GitHub a
+// number is unique per repo across issues and PRs, so that key is unambiguous. When the PR
+// is found we return the server's own canonical url/title/author; when it isn't (e.g. the
+// cache aged out the PR) we return only the structural owner/repo/number and clear the url,
+// letting agent.mjs reconstruct a canonical github.com link rather than trust the client.
+function resolveActionPr(pr) {
+  const repository = String(pr?.repository ?? "").trim();
+  const number = Number.parseInt(pr?.number, 10);
+  const canonical = Number.isInteger(number)
+    ? findCachedPr(repository, number)
+    : undefined;
+  if (canonical) {
+    return { repository: canonical.repository, number: canonical.number, url: canonical.url, title: canonical.title, author: canonical.author };
+  }
+  return { repository, number, url: "", title: "", author: "" };
+}
+
+// Walk the cached dashboard for a PR/issue node matching owner/repo#number. The dashboard is
+// a small bounded object (lanes, attention, notifications, each holding these nodes), so a
+// recursive scan is cheap and stays correct if the exact shape changes. A node qualifies
+// when it carries a string repository, an integer number, and a non-empty url.
+function findCachedPr(repository, number) {
+  const dashboard = cache?.dashboard;
+  if (!dashboard || !repository) return undefined;
+  const target = `${repository}#${number}`.toLowerCase();
+  let found;
+  const visit = (node) => {
+    if (found || !node || typeof node !== "object") return;
+    if (Array.isArray(node)) {
+      for (const v of node) visit(v);
+      return;
+    }
+    if (typeof node.repository === "string" && Number.isInteger(node.number) && typeof node.url === "string" && node.url
+      && `${node.repository}#${node.number}`.toLowerCase() === target) {
+      found = {
+        repository: node.repository,
+        number: node.number,
+        url: node.url,
+        title: typeof node.title === "string" ? node.title : "",
+        author: typeof node.author === "string" ? node.author : "",
+      };
+      return;
+    }
+    for (const v of Object.values(node)) visit(v);
+  };
+  visit(dashboard);
+  return found;
 }
 
 function send(res, status, body, type = "application/json") {
@@ -268,7 +349,7 @@ function isSameOrigin(origin, expectedOrigin) {
   }
 }
 
-async function handle(req, res, log) {
+async function handle(req, res, log, instanceId) {
   const url = new URL(req.url, "http://127.0.0.1");
   const path = url.pathname;
 
@@ -356,13 +437,17 @@ async function handle(req, res, log) {
       if (!agentSend) {
         return send(res, 503, { error: "The Copilot session is not ready yet. Try again in a moment." });
       }
+      // Resolve the PR from server-side cache before building any prompt, so the operational
+      // instruction handed to the agent uses this server's own canonical url and never a
+      // client-tampered url/host/path (see resolveActionPr / agent.mjs safePrUrl).
+      const resolvedPr = resolveActionPr(pr);
       let prompt;
       try {
-        prompt = buildAgentActionPrompt(kind, pr, target);
+        prompt = buildAgentActionPrompt(kind, resolvedPr, target);
       } catch (e) {
         return send(res, 400, { error: e.message });
       }
-      const log = buildAgentActionLog(kind, pr, target);
+      const log = buildAgentActionLog(kind, resolvedPr, target);
       const result = await agentSend({ prompt, log });
       // Tolerate a bare messageId string in case an older bridge is wired.
       const messageId = typeof result === "string" ? result : (result && result.messageId) ?? null;
@@ -418,10 +503,12 @@ async function handle(req, res, log) {
       });
       res.write(": connected\n\n");
       sseClients.add(res);
+      // Remember which instance owns this stream so stopInstance ends only its own clients.
+      clientInstance.set(res, instanceId);
       // A canvas is now watching — make sure the background monitor is running so its
       // queue keeps refreshing without a manual reload.
       ensurePoller();
-      req.on("close", () => sseClients.delete(res));
+      req.on("close", () => { sseClients.delete(res); clientInstance.delete(res); });
       return;
     }
     return send(res, 404, { error: "not found" });
@@ -434,7 +521,8 @@ async function handle(req, res, log) {
 export async function startInstance(instanceId, log) {
   let entry = servers.get(instanceId);
   if (entry) return entry;
-  const server = createServer((req, res) => handle(req, res, log));
+  if (log) bgLog = log;
+  const server = createServer((req, res) => handle(req, res, log, instanceId));
   await new Promise((resolve) => server.listen(0, "127.0.0.1", resolve));
   const port = server.address().port;
   entry = { server, url: `http://127.0.0.1:${port}/` };
@@ -448,10 +536,14 @@ export async function stopInstance(instanceId) {
   servers.delete(instanceId);
   // SSE responses are long-lived, so server.close() would hang forever waiting for them
   // to drain. End the open event streams first, then force any lingering sockets closed so
-  // shutdown completes promptly (e.g. when the canvas iframe is still connected).
+  // shutdown completes promptly (e.g. when the canvas iframe is still connected). sseClients
+  // is shared across all instances, so end ONLY the streams this instance accepted —
+  // otherwise closing one canvas would disconnect every other still-open canvas.
   for (const res of [...sseClients]) {
+    if (clientInstance.get(res) !== instanceId) continue;
     try { res.end(); } catch { /* already torn down */ }
     sseClients.delete(res);
+    clientInstance.delete(res);
   }
   const closed = new Promise((resolve) => entry.server.close(() => resolve()));
   if (typeof entry.server.closeAllConnections === "function") {
