@@ -225,7 +225,9 @@ public partial class TextVisualizerDialog : ComponentBase
                 // Use explicit wrap icons instead of role="menuitemcheckbox" to avoid the
                 // native FAST indicator zone that would add extra left padding before the icon.
                 // Match the icon style used on the console logs page.
-                Icon = _noWrap ? new Icons.Regular.Size16.TextWrapOff() : new Icons.Regular.Size16.TextWrap(),
+                // The icon represents the action label shown to the user.
+                // "Wrap lines" -> TextWrap, "Don't wrap lines" -> TextWrapOff.
+                Icon = _noWrap ? new Icons.Regular.Size16.TextWrap() : new Icons.Regular.Size16.TextWrapOff(),
                 AdditionalAttributes = new Dictionary<string, object>
                 {
                     ["aria-checked"] = _noWrap ? "false" : "true"

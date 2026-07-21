@@ -205,12 +205,15 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.NotNull(wrapMenuItem.AdditionalAttributes);
         Assert.False(wrapMenuItem.AdditionalAttributes!.ContainsKey("role"), "Wrap item should not set role= to avoid native indicator padding.");
         Assert.Equal("true", wrapMenuItem.AdditionalAttributes["aria-checked"]);
+        Assert.Equal("TextWrapOff", wrapMenuItem.Icon?.GetType().Name);
         Assert.Empty(cut.FindAll(".wrap-log-container"));
 
         await wrapMenuItem.OnClick!.Invoke();
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".wrap-log-container")));
         Assert.Equal("false", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
             .Instance.Items.Single(i => i.Text == wrapLinesLabel).AdditionalAttributes!["aria-checked"]);
+        Assert.Equal("TextWrap", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+            .Instance.Items.Single(i => i.Text == wrapLinesLabel).Icon?.GetType().Name);
 
         await Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
             .Instance.Items.Single(i => i.Text == wrapLinesLabel).OnClick!.Invoke();
