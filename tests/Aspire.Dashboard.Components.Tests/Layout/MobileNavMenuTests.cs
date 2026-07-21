@@ -8,7 +8,6 @@ using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Xunit;
 
@@ -17,20 +16,6 @@ namespace Aspire.Dashboard.Components.Tests.Layout;
 [UseCulture("en-US")]
 public class MobileNavMenuTests : DashboardTestContext
 {
-    [Fact]
-    public async Task DisposeAsync_RemovesFluentMenuFromMenuService()
-    {
-        var cut = RenderMobileNavMenu(DashboardUrls.ResourcesUrl(), isNavMenuOpen: false);
-        var menuService = Services.GetRequiredService<IMenuService>();
-        var menu = cut.FindComponent<FluentMenu>().Instance;
-        menuService.Add(menu);
-        Assert.Contains(menu, menuService.Menus);
-
-        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
-
-        Assert.Empty(menuService.Menus);
-    }
-
     [Fact]
     public void Render_OpenMenu_CurrentPageHasSemanticAndVisualSelectedState()
     {

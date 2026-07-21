@@ -6,7 +6,6 @@ using Aspire.Dashboard.Components.CustomIcons;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
-using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
 using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
@@ -16,7 +15,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 {
     internal const string MobileNavMenuId = "dashboard-mobile-nav-menu";
 
-    private FluentMenu? _menu;
     private IJSObjectReference? _keyboardNavigation;
     private DotNetObjectReference<MobileNavMenu>? _mobileNavMenuReference;
     private bool _keyboardNavigationInitializing;
@@ -33,9 +31,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
 
     [Inject]
     public required IJSRuntime JS { get; init; }
-
-    [Inject]
-    public required IServiceProvider ServiceProvider { get; init; }
 
     private Task NavigateToAsync(string url)
     {
@@ -75,14 +70,6 @@ public partial class MobileNavMenu : ComponentBase, IAsyncDisposable
     public async ValueTask DisposeAsync()
     {
         _disposed = true;
-
-        if (_menu is { } menu)
-        {
-            // Remove this workaround once FluentMenu unregisters itself: https://github.com/microsoft/aspire/issues/18852
-            ServiceProvider.GetService<IMenuService>()?.Remove(menu);
-            _menu = null;
-        }
-
         await DisposeKeyboardNavigationAsync();
         _mobileNavMenuReference?.Dispose();
     }

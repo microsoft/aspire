@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
+using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
@@ -13,7 +14,7 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 public class AspireMenuTests : DashboardTestContext
 {
     [Fact]
-    public async Task DisposeAsync_RemovesFluentMenuFromMenuService()
+    public async Task DisposeAsync_RemovesFluentMenuFromMenuProvider()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -21,17 +22,31 @@ public class AspireMenuTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
 
         var menuService = Services.GetRequiredService<IMenuService>();
-        var cut = RenderComponent<AspireMenu>(builder =>
+        var provider = RenderComponent<FluentMenuProvider>();
+        var menuHost = RenderComponent<CascadingValue<bool>>(builder =>
         {
-            builder.Add(p => p.Anchor, "menu-anchor");
-            builder.Add(p => p.Items, Array.Empty<MenuButtonItem>());
+            builder.Add(p => p.Value, false);
+            builder.AddChildContent<AspireMenu>(menuBuilder =>
+            {
+                menuBuilder.Add(p => p.Anchor, "menu-anchor");
+                menuBuilder.Add(p => p.Items, new[] { new MenuButtonItem { Text = "Item" } });
+            });
         });
-        var menu = cut.FindComponent<FluentMenu>().Instance;
+        var menu = menuHost.FindComponent<FluentMenu>().Instance;
         Assert.Contains(menu, menuService.Menus);
 
-        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
+        await menuHost.InvokeAsync(() => menuService.RefreshMenuAsync(menu.Id!, isOpen: true));
+
+        provider.WaitForAssertion(() => Assert.Single(provider.FindComponents<FluentMenu>()));
+
+        menuHost.SetParametersAndRender(builder =>
+        {
+            builder.Add(p => p.Value, false);
+            builder.Add(p => p.ChildContent, (RenderFragment)(_ => { }));
+        });
 
         Assert.Empty(menuService.Menus);
+        provider.WaitForAssertion(() => Assert.Empty(provider.FindComponents<FluentMenu>()));
     }
 
     [Fact]

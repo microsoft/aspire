@@ -146,7 +146,12 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
         if (_menu is { } menu)
         {
             // Remove this workaround once FluentMenu unregisters itself: https://github.com/microsoft/aspire/issues/18852
-            ServiceProvider.GetService<IMenuService>()?.Remove(menu);
+            if (ServiceProvider.GetService<IMenuService>() is { } menuService)
+            {
+                menuService.Remove(menu);
+                menuService.OnMenuUpdated();
+            }
+
             _menu = null;
         }
 
