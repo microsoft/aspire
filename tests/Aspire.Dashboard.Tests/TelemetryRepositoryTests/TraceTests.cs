@@ -4312,6 +4312,58 @@ public sealed class SqliteTraceTests : TraceTests
     }
 
     [Fact]
+    public void AddTraces_ReusesPreparedCommandsAcrossBatches()
+    {
+        const int spanCount = 101;
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        var resourceSpans = new ResourceSpans
+        {
+            Resource = CreateResource(),
+            ScopeSpans =
+            {
+                new ScopeSpans { Scope = CreateScope() }
+            }
+        };
+        var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        for (var index = 0; index < spanCount; index++)
+        {
+            resourceSpans.ScopeSpans[0].Spans.Add(CreateSpan(
+                traceId: "trace",
+                spanId: $"span-{index}",
+                startTime: testTime.AddTicks(index),
+                endTime: testTime.AddTicks(index + 1),
+                attributes: [KeyValuePair.Create("index", index.ToString(CultureInfo.InvariantCulture))]));
+        }
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+
+        var context = new AddContext();
+        repository.AsWriter().AddTraces(context, [resourceSpans]);
+
+        var spanInsertQueries = activities
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
+            .Where(query => query.StartsWith("INSERT INTO telemetry_spans", StringComparison.Ordinal))
+            .ToList();
+        Assert.Equal(5, spanInsertQueries.Count);
+        Assert.All(spanInsertQueries.Skip(1).Take(3), query => Assert.Same(spanInsertQueries[0], query));
+        Assert.NotSame(spanInsertQueries[0], spanInsertQueries[4]);
+
+        var attributeInsertQueries = activities
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!)
+            .Where(query => query.StartsWith("INSERT INTO telemetry_span_attributes", StringComparison.Ordinal))
+            .ToList();
+        Assert.Equal(3, attributeInsertQueries.Count);
+        Assert.Same(attributeInsertQueries[0], attributeInsertQueries[1]);
+        Assert.NotSame(attributeInsertQueries[0], attributeInsertQueries[2]);
+        Assert.Equal(spanCount, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+
+        var trace = Assert.IsType<OtlpTrace>(repository.GetTrace(GetHexId("trace")));
+        Assert.Equal(spanCount, trace.Spans.Count);
+        Assert.All(trace.Spans, span => Assert.Single(span.Attributes));
+    }
+
+    [Fact]
     public void GetTraceSummaries_UsesPersistedResourceSummaries()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
