@@ -69,8 +69,8 @@ function safePrUrl(pr) {
   }
   // Require a plain https origin with nothing that could smuggle extra content or a credential:
   // exact https scheme, no embedded userinfo (user:pass@host), and no query/fragment. A port is
-  // deliberately allowed here (unlike the old hostname-only regex) because GHES hosts legitimately
-  // serve on non-default ports; it is preserved via parsed.origin below.
+  // deliberately allowed because GHES hosts legitimately serve on non-default ports; it is
+  // preserved via parsed.origin below.
   if (parsed.protocol !== "https:" ||
       parsed.username || parsed.password ||
       parsed.search || parsed.hash ||
