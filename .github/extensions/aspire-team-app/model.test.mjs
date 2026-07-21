@@ -1,19 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayMs, personalPickActions } from "./constants.mjs";
+import { dayMs, personalPickActions, reviewDebtSignalLabel } from "./constants.mjs";
 import {
   actorIdentityKey,
   computeCommunityItems,
   computeFocusExclusionItems,
   computeFocusItems,
   createAttentionBuckets,
+  createAttentionSignals,
   createDeveloperPullRequestCounts,
   createFocusIssueBuckets,
   createForMeItems,
   createIssueSignals,
   filterCheckFailureRules,
   isChecksFailing,
+  isReviewDebt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
@@ -186,6 +188,43 @@ test("computeFocusItems retains review-debt PRs through the full createAttention
   assert.equal(focus.find((i) => i.pullRequest.number === 42).bucketLabel, "Stalled");
   // The approved-but-aging PR is excluded: it is aged past the window and no longer review debt.
   assert.equal(focus.find((i) => i.pullRequest.number === 44), undefined);
+});
+
+test("isReviewDebt survives display-signal truncation that a pill-derived flag would drop", () => {
+  // Regression guard for the review-debt derivation in github.mjs focusCards: the "review debt"
+  // pill is emitted last by createAttentionSignals, so a PR stacked with higher-priority danger
+  // pills (regression + merge conflicts + release base + CI failing + unresolved) pushes it past the
+  // 4-signal card cap. Deriving reviewDebt from those truncated display pills silently loses it and
+  // drops the PR from the review-debt spillover, hiding "Address review". The shared predicate does not.
+  const debtWithDangerPills = makePr({
+    number: 50,
+    updatedAt: isoAgo(20 * dayMs),
+    mergeableState: "dirty",
+    baseRef: "release/9.6",
+    labels: ["regression"],
+    checks: { state: "failure", failureCount: 2 },
+    review: { unresolvedThreadCount: 3 },
+  });
+
+  assert.equal(isReviewDebt(debtWithDangerPills), true);
+
+  // signalsFor() caps card pills via createAttentionSignals(...).slice(0, limit) (limit 4); mirror
+  // that truncation here to prove the review-debt pill is exactly what falls off the end.
+  const displayedPills = createAttentionSignals({ pullRequest: debtWithDangerPills })
+    .slice(0, 4)
+    .map((s) => s.label);
+  assert.ok(
+    !displayedPills.includes(reviewDebtSignalLabel),
+    `expected review-debt pill to be truncated out of ${JSON.stringify(displayedPills)}`,
+  );
+
+  // Approved + fresh PRs are never review debt, so the predicate cannot false-positive.
+  const approvedFresh = makePr({
+    number: 51,
+    updatedAt: isoAgo(dayMs),
+    review: { state: "approved", approvalCount: 1, lastApprovedAt: isoAgo(dayMs) },
+  });
+  assert.equal(isReviewDebt(approvedFresh), false);
 });
 
 test("computeCommunityItems includes active external contributors and excludes team, bots, and aged-out PRs", () => {

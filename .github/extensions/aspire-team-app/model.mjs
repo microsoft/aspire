@@ -721,7 +721,7 @@ function isWithinFocusAgeLimit(pr, bucketLabel) {
 // retention predicate can never drift. Approved PRs are excluded: they have already been
 // reviewed and carry a merge-oriented lane ("Approved but aging" -> "land approval"), so
 // flagging them "review debt" / "Address review" would mislabel the action.
-function isReviewDebt(pr) {
+export function isReviewDebt(pr) {
   return pr.review.state !== "approved" && ageMs(pullRequestAgingReferenceAt(pr)) >= focusAgeLimitMs;
 }
 

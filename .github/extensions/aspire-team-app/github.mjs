@@ -17,10 +17,11 @@ import {
   computeFocusExclusionItems,
   computeCommunityItems,
   isChecksFailing,
+  isReviewDebt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
-import { currentRelease, reviewDebtSignalLabel } from "./constants.mjs";
+import { currentRelease } from "./constants.mjs";
 
 // The current milestone has a single source of truth in constants.mjs
 // (`currentRelease`). Re-export it here under the name the run-mode lane logic
@@ -764,8 +765,13 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       const focusCards = focusAll.map((f) => {
         const c = card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
         // Flag review-debt cards (aged past the focus limit without a review) so the canvas can
-        // offer an "Address review" button instead of Test/Review.
-        c.reviewDebt = (c.signals || []).some((s) => s.label === reviewDebtSignalLabel);
+        // offer an "Address review" button instead of Test/Review. Derive this from the shared
+        // isReviewDebt predicate, NOT from c.signals: signalsFor truncates the display pills to a
+        // few highest-priority signals, so a debt PR that also carries release/regression pills
+        // would lose its "review debt" pill and be wrongly treated as non-debt — dropping it from
+        // capFocusKeepingDebt's spillover and hiding "Address review". The predicate is the same
+        // one createAttentionSignals and the focus-retention filter use, so they cannot drift.
+        c.reviewDebt = isReviewDebt(f.pullRequest);
         return c;
       });
       const focus = capFocusKeepingDebt(focusCards, reviewLimit);
