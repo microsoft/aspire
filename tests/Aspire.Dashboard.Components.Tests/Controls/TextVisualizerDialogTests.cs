@@ -93,9 +93,18 @@ public class TextVisualizerDialogTests : DashboardTestContext
         var menuButton = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
         var formatMenu = Assert.Single(menuButton.Instance.Items, i => i.NestedMenuItems is not null);
         Assert.Equal(Aspire.Dashboard.Resources.Dialogs.TextVisualizerSelectFormatType, formatMenu.Text);
+        Assert.True(menuButton.Instance.RestoreFocusOnItemClick);
 
-        var plaintextOption = (formatMenu.NestedMenuItems ?? throw new InvalidOperationException("Expected nested format options."))
-            .Single(i => i.Text == Aspire.Dashboard.Resources.Dialogs.TextVisualizerDialogPlaintextFormat);
+        var formatOptions = formatMenu.NestedMenuItems ?? throw new InvalidOperationException("Expected nested format options.");
+        Assert.All(formatOptions, option =>
+        {
+            Assert.NotNull(option.AdditionalAttributes);
+            Assert.Equal("menuitemradio", option.AdditionalAttributes!["role"]);
+            Assert.True(option.AdditionalAttributes.ContainsKey("aria-checked"));
+        });
+        Assert.Single(formatOptions, option => string.Equals(option.AdditionalAttributes!["aria-checked"]?.ToString(), "true", StringComparison.Ordinal));
+
+        var plaintextOption = formatOptions.Single(i => i.Text == Aspire.Dashboard.Resources.Dialogs.TextVisualizerDialogPlaintextFormat);
         await plaintextOption.OnClick!.Invoke();
 
         cut.WaitForAssertion(() =>
@@ -104,6 +113,10 @@ public class TextVisualizerDialogTests : DashboardTestContext
             Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
             Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
             Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
+
+            var selectedOptions = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+                .Instance.Items.Single(i => i.NestedMenuItems is not null).NestedMenuItems!;
+            Assert.Single(selectedOptions, option => string.Equals(option.AdditionalAttributes!["aria-checked"]?.ToString(), "true", StringComparison.Ordinal));
         });
 
         cut.FindComponent<TextVisualizerDialog>().SetParametersAndRender(parameters => parameters.Add(p => p.Content, content));
@@ -179,17 +192,24 @@ public class TextVisualizerDialogTests : DashboardTestContext
         var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>()
             [nameof(ControlsStrings.GridValueWrapLines)].Value;
         var menuButton = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
-        Assert.Contains(menuButton.Instance.Items, i => i.Text == wrapLinesLabel);
+        var wrapMenuItem = Assert.Single(menuButton.Instance.Items, i => i.Text == wrapLinesLabel);
+        Assert.NotNull(wrapMenuItem.AdditionalAttributes);
+        Assert.Equal("menuitemcheckbox", wrapMenuItem.AdditionalAttributes!["role"]);
+        Assert.Equal("true", wrapMenuItem.AdditionalAttributes["aria-checked"]);
         var dialog = cut.FindComponent<TextVisualizerDialog>();
         Assert.Empty(cut.FindAll(".wrap-log-container"));
 
         dialog.Instance.ToggleWrapLines();
         dialog.Render();
         cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".wrap-log-container")));
+        Assert.Equal("false", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+            .Instance.Items.Single(i => i.Text == wrapLinesLabel).AdditionalAttributes!["aria-checked"]);
 
         dialog.Instance.ToggleWrapLines();
         dialog.Render();
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".wrap-log-container")));
+        Assert.Equal("true", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+            .Instance.Items.Single(i => i.Text == wrapLinesLabel).AdditionalAttributes!["aria-checked"]);
     }
 
     [Fact]
@@ -225,9 +245,17 @@ public class TextVisualizerDialogTests : DashboardTestContext
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
         var controlsStrings = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
-        Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
-        Assert.Contains(cut.FindAll("fluent-button").Select(button => button.TextContent), text => text.Contains(controlsStrings[nameof(ControlsStrings.Download)].Value));
-        Assert.Contains(cut.FindAll("fluent-button").Select(button => button.TextContent), text => text.Contains(controlsStrings[nameof(ControlsStrings.GridValueCopyToClipboard)].Value));
+        Assert.True(cut.HasComponent<Aspire.Dashboard.Components.AspireMenuButton>());
+        var markup = cut.Markup;
+        var optionsButtonIndex = markup.IndexOf("text-visualizer-options-menu-button", StringComparison.Ordinal);
+        var downloadButtonIndex = markup.IndexOf(controlsStrings[nameof(ControlsStrings.Download)].Value, StringComparison.Ordinal);
+        var copyButtonIndex = markup.IndexOf(controlsStrings[nameof(ControlsStrings.GridValueCopyToClipboard)].Value, StringComparison.Ordinal);
+
+        Assert.True(optionsButtonIndex >= 0);
+        Assert.True(downloadButtonIndex >= 0);
+        Assert.True(copyButtonIndex >= 0);
+        Assert.True(optionsButtonIndex < downloadButtonIndex);
+        Assert.True(optionsButtonIndex < copyButtonIndex);
     }
 
     [Fact]

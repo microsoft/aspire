@@ -192,7 +192,12 @@ public partial class TextVisualizerDialog : ComponentBase
                     Text = option.Name,
                     OnClick = () => ChangeFormatAsync(option.Id),
                     Icon = _selectedFormat.Id == option.Id ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
-                    IsDisabled = !EnabledOptions.Contains(option.Id)
+                    IsDisabled = !EnabledOptions.Contains(option.Id),
+                    AdditionalAttributes = new Dictionary<string, object>
+                    {
+                        ["role"] = "menuitemradio",
+                        ["aria-checked"] = _selectedFormat.Id == option.Id ? "true" : "false"
+                    }
                 });
             }
 
@@ -209,7 +214,12 @@ public partial class TextVisualizerDialog : ComponentBase
             {
                 OnClick = ToggleWrapLinesAsync,
                 Text = ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)],
-                Icon = _noWrap ? new Icons.Regular.Size16.CheckboxUnchecked() : new Icons.Regular.Size16.CheckboxChecked()
+                Icon = _noWrap ? new Icons.Regular.Size16.CheckboxUnchecked() : new Icons.Regular.Size16.CheckboxChecked(),
+                AdditionalAttributes = new Dictionary<string, object>
+                {
+                    ["role"] = "menuitemcheckbox",
+                    ["aria-checked"] = _noWrap ? "false" : "true"
+                }
             });
         }
     }
