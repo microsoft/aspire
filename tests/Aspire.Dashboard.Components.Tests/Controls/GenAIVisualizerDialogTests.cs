@@ -268,15 +268,20 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             getContextGenAISpans: () => []
             );
 
-        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.ConsoleLogs>>()
-            [nameof(Aspire.Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)].Value;
+        var controlsStrings = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+        var wrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueWrapLines)].Value;
+        var noWrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueNoWrapLines)].Value;
         var wrapCheckbox = cut.FindComponent<FluentCheckbox>();
 
-        Assert.Equal(wrapLinesLabel, wrapCheckbox.Instance.Label);
+        Assert.Equal(noWrapLinesLabel, wrapCheckbox.Instance.Label);
         Assert.Empty(cut.FindAll(".wrap-log-container"));
 
         await wrapCheckbox.InvokeAsync(() => wrapCheckbox.Instance.ValueChanged.InvokeAsync(false));
-        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".wrap-log-container")));
+        cut.WaitForAssertion(() =>
+        {
+            Assert.NotEmpty(cut.FindAll(".wrap-log-container"));
+            Assert.Equal(wrapLinesLabel, cut.FindComponent<FluentCheckbox>().Instance.Label);
+        });
 
         cut.Find("fluent-button.back-button").Click();
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".wrap-log-container")));

@@ -197,10 +197,11 @@ public class TextVisualizerDialogTests : DashboardTestContext
         await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
-        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.ConsoleLogs>>()
-            [nameof(Aspire.Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)].Value;
+        var controlsStrings = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+        var wrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueWrapLines)].Value;
+        var noWrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueNoWrapLines)].Value;
         var menuButton = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
-        var wrapMenuItem = Assert.Single(menuButton.Instance.Items, i => i.Text == wrapLinesLabel);
+        var wrapMenuItem = Assert.Single(menuButton.Instance.Items, i => i.Text == noWrapLinesLabel);
         Assert.NotNull(wrapMenuItem.AdditionalAttributes);
         Assert.False(wrapMenuItem.AdditionalAttributes!.ContainsKey("role"), "Wrap item should not set role= to avoid native indicator padding.");
         Assert.Equal("true", wrapMenuItem.AdditionalAttributes["aria-checked"]);
@@ -215,7 +216,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
             .Instance.Items.Single(i => i.Text == wrapLinesLabel).OnClick!.Invoke();
         cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".wrap-log-container")));
         Assert.Equal("true", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
-            .Instance.Items.Single(i => i.Text == wrapLinesLabel).AdditionalAttributes!["aria-checked"]);
+            .Instance.Items.Single(i => i.Text == noWrapLinesLabel).AdditionalAttributes!["aria-checked"]);
     }
 
     [Fact]
@@ -231,13 +232,18 @@ public class TextVisualizerDialogTests : DashboardTestContext
         dialog.Instance.ChangeFormat(DashboardUIHelpers.MarkdownFormat);
         dialog.Render();
 
-        var wrapLinesLabel = Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.ConsoleLogs>>()
-            [nameof(Aspire.Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)].Value;
+        var controlsStrings = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+        var wrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueWrapLines)].Value;
+        var noWrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueNoWrapLines)].Value;
 
         cut.WaitForAssertion(() =>
         {
             var menuItems = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>()).Instance.Items;
-            Assert.All(menuItems, item => Assert.NotEqual(wrapLinesLabel, item.Text));
+            Assert.All(menuItems, item =>
+            {
+                Assert.NotEqual(wrapLinesLabel, item.Text);
+                Assert.NotEqual(noWrapLinesLabel, item.Text);
+            });
         });
     }
 

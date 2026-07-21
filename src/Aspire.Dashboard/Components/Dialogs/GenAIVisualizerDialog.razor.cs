@@ -57,9 +57,6 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Aspire.Dashboard.Resources.ConsoleLogs> ConsoleLogsLoc { get; init; }
-
-    [Inject]
     public required ILogger<GenAIVisualizerDialog> Logger { get; init; }
 
     [Inject]

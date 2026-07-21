@@ -219,7 +219,9 @@
                             </div>
                         }
                         var copyButtonLabel = ControlsStringsLoc[nameof(ControlsStrings.GridValueCopyToClipboard)];
-                        var wrapLinesLabel = ConsoleLogsLoc[nameof(Aspire.Dashboard.Resources.ConsoleLogs.ConsoleLogsWrapLogs)];
+                        var wrapLinesLabel = _noWrap
+                            ? ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)]
+                            : ControlsStringsLoc[nameof(ControlsStrings.GridValueNoWrapLines)];
                         var showWrapLinesToggle = CanToggleWrapLines(selectedItem, selectedView);
                         var copyButtonAttributes = FluentUIExtensions.GetClipboardCopyAdditionalAttributes(
                             string.Join(Environment.NewLine + Environment.NewLine, selectedItem.ItemParts.Select(p => p.TextVisualizerViewModel?.FormattedText ?? string.Empty)),

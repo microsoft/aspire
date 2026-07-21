@@ -219,7 +219,9 @@ public partial class TextVisualizerDialog : ComponentBase
             _menuItems.Add(new()
             {
                 OnClick = ToggleWrapLinesAsync,
-                Text = ConsoleLogsLoc[nameof(ConsoleLogs.ConsoleLogsWrapLogs)],
+                Text = _noWrap
+                    ? ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)]
+                    : ControlsStringsLoc[nameof(ControlsStrings.GridValueNoWrapLines)],
                 // Use explicit wrap icons instead of role="menuitemcheckbox" to avoid the
                 // native FAST indicator zone that would add extra left padding before the icon.
                 // Match the icon style used on the console logs page.
