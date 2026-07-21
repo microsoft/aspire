@@ -133,6 +133,33 @@ test("cardActionBtn re-renders a disabled button while its action's POST is stil
   assert.doesNotMatch(other, /disabled/);
 });
 
+test("withRefresh ignores a late older response so overlapping refreshes can't roll state back", async () => {
+  // The module-init load() calls fetch("api/state"); a never-resolving fetch keeps it pending so it
+  // can't clobber `state` mid-test. withRefresh takes its data from the fn argument, not fetch.
+  const { api } = createRendererHarness({ fetch: () => new Promise(() => {}) });
+  // authenticated:false keeps render() on the safe authPicker path; seq/marker are what we assert on.
+  const dash = (seq, marker) => ({ dashboard: { seq, marker, authenticated: false, accounts: [], message: "" }, prefs: {} });
+
+  // A newer refresh applies and advances lastAppliedSeq.
+  await api.withRefresh(async () => dash(5, "new"));
+  assert.equal(api.getState().seq, 5);
+  assert.equal(api.getState().marker, "new");
+
+  // An older forced load that resolves after the newer one must NOT overwrite the newer state:
+  // applying it would roll state and lastAppliedSeq backward and show stale data.
+  await api.withRefresh(async () => dash(3, "old"));
+  assert.equal(api.getState().seq, 5);
+  assert.equal(api.getState().marker, "new");
+
+  // A strictly newer refresh still applies.
+  await api.withRefresh(async () => dash(7, "newest"));
+  assert.equal(api.getState().seq, 7);
+
+  // Legacy payloads without a seq still apply (back-compat with pre-seq servers).
+  await api.withRefresh(async () => ({ dashboard: { marker: "legacy", authenticated: false, accounts: [], message: "" }, prefs: {} }));
+  assert.equal(api.getState().marker, "legacy");
+});
+
 function createRendererHarness(overrides = {}) {
   const app = {
     innerHTML: "",
@@ -158,7 +185,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setState(value) { state = value; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setState(value) { state = value; },\n  getState() { return state; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }

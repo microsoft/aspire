@@ -867,8 +867,15 @@ async function withRefresh(fn) {
   try {
     const data = await fn();
     if (data && data.dashboard) {
-      state = data.dashboard; prefs = data.prefs; loadError = null;
-      adoptAppliedRev();
+      // Overlapping refreshes can resolve out of order: an older forced load may finish client-side
+      // after a newer one. Apply this response only when it is legacy (no seq) or strictly newer than
+      // what we've already applied, so a late older response can't roll state/lastAppliedSeq backward
+      // (which would show stale data and corrupt later seq gates). Mirrors applyPushedState's gate.
+      const seq = data.dashboard.seq;
+      if (typeof seq !== "number" || seq > lastAppliedSeq) {
+        state = data.dashboard; prefs = data.prefs; loadError = null;
+        adoptAppliedRev();
+      }
     }
   } catch (e) {
     loadError = String((e && e.message) || e);
