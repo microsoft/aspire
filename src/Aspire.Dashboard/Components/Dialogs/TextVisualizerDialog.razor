@@ -13,21 +13,14 @@
             @Content.Description
         </FluentLabel>
 
-        @if (!HasFixedFormat)
+        @if (ShowOptionsMenu)
         {
             <div Style="grid-area: dialog-format;">
-                <FluentSelect TOption="SelectViewModel<string>"
-                              Id="@_selectFormatId"
-                              Items="@_options"
-                              Position="SelectPosition.Below"
-                              OptionText="@(option => option.Name)"
-                              OptionValue="@(option => option.Id)"
-                              OptionDisabled="@(option => !EnabledOptions.Contains(option.Id))"
-                              OptionTitle="@(option => option.Name)"
-                              @bind-SelectedOption="@_selectedFormat"
-                              @bind-SelectedOption:after="OnSelectedFormatChanged"
-                              AriaLabel="@Loc[nameof(Dialogs.TextVisualizerSelectFormatType)]"
-                              Style="min-width: 12rem; width: max-content; max-width: 100%;" />
+                <AspireMenuButton ButtonClass="text-visualizer-options-menu-button"
+                                  ButtonAppearance="Appearance.Lightweight"
+                                  Icon="@(new Icons.Regular.Size20.Options())"
+                                  Items="@_menuItems"
+                                  Title="@ControlsStringsLoc[nameof(ControlsStrings.ChartContainerOptionsHeader)]" />
             </div>
         }
     </div>
@@ -73,15 +66,6 @@
             }
 
             <div class="button-container-right">
-                @if (IsTextContentDisplayed && !IsMarkdownFormat)
-                {
-                    <FluentCheckbox Class="word-wrap-checkbox"
-                                    Value="@(!_noWrap)"
-                                    ValueChanged="SetWrapLines"
-                                    Label="@ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)]"
-                                    AriaLabel="@ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)]" />
-                }
-
                 @if (Content.DownloadFileName is not null)
                 {
                     <FluentButton OnClick="@DownloadAsync"

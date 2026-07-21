@@ -4,20 +4,22 @@
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Markdown;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
 public partial class TextVisualizerDialog : ComponentBase
 {
     private readonly string _copyButtonId = $"copy-{Guid.NewGuid():N}";
-    private readonly string _selectFormatId = $"select-format-{Guid.NewGuid():N}";
 
     private List<SelectViewModel<string>> _options = null!;
     private SelectViewModel<string> _selectedFormat = null!;
+    private readonly List<MenuButtonItem> _menuItems = [];
     private bool _isLoading = true;
     private bool _noWrap;
     private MarkdownProcessor? _markdownProcessor;
@@ -27,6 +29,7 @@ public partial class TextVisualizerDialog : ComponentBase
     public HashSet<string?> EnabledOptions { get; } = [];
     internal bool? ShowSecretsWarning { get; private set; }
     internal bool IsMarkdownFormat => TextVisualizerViewModel.FormatKind == DashboardUIHelpers.MarkdownFormat;
+    internal bool ShowOptionsMenu => _menuItems.Count > 0;
 
     /// <summary>
     /// Returns true if the dialog has a fixed format that cannot be changed by the user.
@@ -69,6 +72,7 @@ public partial class TextVisualizerDialog : ComponentBase
         if (_previousContent == Content)
         {
             _selectedFormat = GetSelectedFormatOption(TextVisualizerViewModel.FormatKind);
+            UpdateMenuItems();
             return;
         }
 
@@ -102,6 +106,7 @@ public partial class TextVisualizerDialog : ComponentBase
 
         _previousContent = Content;
         _selectedFormat = GetSelectedFormatOption(TextVisualizerViewModel.FormatKind);
+        UpdateMenuItems();
     }
 
     private bool IsTextContentDisplayed
@@ -117,12 +122,11 @@ public partial class TextVisualizerDialog : ComponentBase
         }
     }
 
-    private void OnSelectedFormatChanged() => ChangeFormat(_selectedFormat.Id);
-
     internal void ChangeFormat(string? newFormat)
     {
         _selectedFormat = GetSelectedFormatOption(newFormat);
         TextVisualizerViewModel.UpdateFormat(_selectedFormat.Id ?? DashboardUIHelpers.PlaintextFormat);
+        UpdateMenuItems();
     }
 
     private SelectViewModel<string> GetSelectedFormatOption(string? format) => _options.SingleOrDefault(o => o.Id == format) ?? _options[0];
@@ -156,10 +160,58 @@ public partial class TextVisualizerDialog : ComponentBase
         }
     }
 
-    private Task SetWrapLines(bool wrapLines)
+    private Task ChangeFormatAsync(string? newFormat)
     {
-        _noWrap = !wrapLines;
+        ChangeFormat(newFormat);
         return Task.CompletedTask;
+    }
+
+    private Task ToggleWrapLinesAsync()
+    {
+        ToggleWrapLines();
+        return Task.CompletedTask;
+    }
+
+    internal void ToggleWrapLines()
+    {
+        _noWrap = !_noWrap;
+        UpdateMenuItems();
+    }
+
+    private void UpdateMenuItems()
+    {
+        _menuItems.Clear();
+
+        if (!HasFixedFormat)
+        {
+            var formatItems = new List<MenuButtonItem>(_options.Count);
+            foreach (var option in _options)
+            {
+                formatItems.Add(new()
+                {
+                    Text = option.Name,
+                    OnClick = () => ChangeFormatAsync(option.Id),
+                    Icon = _selectedFormat.Id == option.Id ? new Icons.Regular.Size16.CheckboxChecked() : new Icons.Regular.Size16.CheckboxUnchecked(),
+                    IsDisabled = !EnabledOptions.Contains(option.Id)
+                });
+            }
+
+            _menuItems.Add(new()
+            {
+                Text = Loc[nameof(Resources.Dialogs.TextVisualizerSelectFormatType)],
+                NestedMenuItems = formatItems
+            });
+        }
+
+        if (!IsMarkdownFormat)
+        {
+            _menuItems.Add(new()
+            {
+                OnClick = ToggleWrapLinesAsync,
+                Text = ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)],
+                Icon = _noWrap ? new Icons.Regular.Size16.CheckboxUnchecked() : new Icons.Regular.Size16.CheckboxChecked()
+            });
+        }
     }
 
     internal sealed record TextVisualizerDialogSettings(bool SecretsWarningAcknowledged);

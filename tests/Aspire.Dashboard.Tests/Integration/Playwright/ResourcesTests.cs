@@ -130,9 +130,9 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
             await Assertions.Expect(openTextVisualizerButton).ToBeVisibleAsync();
             await openTextVisualizerButton.ClickAsync();
 
-            var wrapCheckbox = page.Locator("fluent-checkbox.word-wrap-checkbox");
-            await Assertions.Expect(wrapCheckbox).ToHaveAttributeAsync("current-checked", "true");
-            await wrapCheckbox.ClickAsync();
+            var optionsButton = page.Locator("fluent-button.text-visualizer-options-menu-button");
+            await optionsButton.ClickAsync();
+            await page.GetByRole(AriaRole.Menuitem, new() { Name = ControlsStrings.GridValueWrapLines, Exact = true }).ClickAsync();
             await Assertions.Expect(page.Locator(".text-visualizer-container .wrap-log-container")).ToHaveCountAsync(1);
 
             var metricsJson = await page.EvaluateAsync<string>(@"() => {
@@ -195,18 +195,14 @@ public class ResourcesTests : PlaywrightTestsBase<ResourcesTests.ResourcesDashbo
 
             await page.SetViewportSizeAsync(360, 900);
 
-            var wrapCheckbox = page.GetByRole(AriaRole.Checkbox, new PageGetByRoleOptions
-            {
-                Name = ControlsStrings.GridValueWrapLines,
-                Exact = true
-            });
+            var optionsButton = page.Locator("fluent-button.text-visualizer-options-menu-button");
             var copyButton = page.GetByRole(AriaRole.Button, new PageGetByRoleOptions
             {
                 Name = ControlsStrings.GridValueCopyToClipboard,
                 Exact = true
             });
 
-            await AssertElementWithinViewportAsync(wrapCheckbox, 360);
+            await AssertElementWithinViewportAsync(optionsButton, 360);
             await AssertElementWithinViewportAsync(copyButton, 360);
         });
     }
