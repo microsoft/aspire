@@ -9,6 +9,7 @@ using System.Text;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
+using Aspire.Dashboard.Utils;
 using Dapper;
 using Google.Protobuf.Collections;
 using Microsoft.Data.Sqlite;
@@ -419,27 +420,19 @@ public sealed partial class SqliteTelemetryRepository
             .Where(point => point.HistogramBucketCounts is { Length: > 0 })
             .SelectMany(point => point.HistogramBucketCounts!.Select((bucketCount, ordinal) => new PendingHistogramBucketCount(point.PointId, ordinal, bucketCount)))
             .ToArray();
-        foreach (var batch in bucketCounts.Chunk(MaxMetricPointBatchSize))
-        {
-            var sql = new StringBuilder("""
-                INSERT INTO telemetry_metric_histogram_bucket_counts (point_id, ordinal, bucket_count)
-                VALUES
-                """);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            bucketCounts,
+            MaxMetricPointBatchSize,
+            "telemetry_metric_histogram_bucket_counts",
+            ["point_id", "ordinal", "bucket_count"],
+            static (row, parameters) =>
             {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@PointId{index}, @Ordinal{index}, @BucketCount{index})");
-                parameters.Add($"PointId{index}", batch[index].PointId);
-                parameters.Add($"Ordinal{index}", batch[index].Ordinal);
-                parameters.Add($"BucketCount{index}", batch[index].BucketCount);
-            }
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
-        }
+                parameters[0].Value = row.PointId;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.BucketCount;
+            });
     }
 
     private static void InsertHistogramExplicitBounds(
@@ -451,27 +444,19 @@ public sealed partial class SqliteTelemetryRepository
             .Where(point => point.HistogramExplicitBounds is { Length: > 0 })
             .SelectMany(point => point.HistogramExplicitBounds!.Select((explicitBound, ordinal) => new PendingHistogramExplicitBound(point.PointId, ordinal, explicitBound)))
             .ToArray();
-        foreach (var batch in explicitBounds.Chunk(MaxMetricPointBatchSize))
-        {
-            var sql = new StringBuilder("""
-                INSERT INTO telemetry_metric_histogram_explicit_bounds (point_id, ordinal, explicit_bound)
-                VALUES
-                """);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            explicitBounds,
+            MaxMetricPointBatchSize,
+            "telemetry_metric_histogram_explicit_bounds",
+            ["point_id", "ordinal", "explicit_bound"],
+            static (row, parameters) =>
             {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@PointId{index}, @Ordinal{index}, @ExplicitBound{index})");
-                parameters.Add($"PointId{index}", batch[index].PointId);
-                parameters.Add($"Ordinal{index}", batch[index].Ordinal);
-                parameters.Add($"ExplicitBound{index}", batch[index].ExplicitBound);
-            }
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
-        }
+                parameters[0].Value = row.PointId;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.ExplicitBound;
+            });
     }
 
     private MetricDimensionState GetOrAddMetricDimension(
@@ -634,28 +619,20 @@ public sealed partial class SqliteTelemetryRepository
         IDbTransaction transaction,
         List<PendingMetricDimensionAttribute> attributes)
     {
-        foreach (var batch in attributes.Chunk(MaxMetricPointBatchSize))
-        {
-            var sql = new StringBuilder("""
-                INSERT INTO telemetry_metric_dimension_attributes (dimension_id, ordinal, attribute_key, attribute_value)
-                VALUES
-                """);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            attributes,
+            MaxMetricPointBatchSize,
+            "telemetry_metric_dimension_attributes",
+            ["dimension_id", "ordinal", "attribute_key", "attribute_value"],
+            static (row, parameters) =>
             {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@DimensionId{index}, @Ordinal{index}, @Key{index}, @Value{index})");
-                parameters.Add($"DimensionId{index}", batch[index].Dimension.DimensionId);
-                parameters.Add($"Ordinal{index}", batch[index].Ordinal);
-                parameters.Add($"Key{index}", batch[index].Key);
-                parameters.Add($"Value{index}", batch[index].Value);
-            }
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
-        }
+                parameters[0].Value = row.Dimension.DimensionId;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.Key;
+                parameters[3].Value = row.Value;
+            });
     }
 
     private static long GetMetricDimensionAttributeHash(ReadOnlySpan<KeyValuePair<string, string>> attributes)
@@ -750,28 +727,20 @@ public sealed partial class SqliteTelemetryRepository
                 attribute.Key,
                 attribute.Value)))
             .ToArray();
-        foreach (var batch in attributes.Chunk(MaxMetricPointBatchSize))
-        {
-            var sql = new StringBuilder("""
-                INSERT INTO telemetry_metric_exemplar_attributes (exemplar_id, ordinal, attribute_key, attribute_value)
-                VALUES
-                """);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
+        SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            attributes,
+            MaxMetricPointBatchSize,
+            "telemetry_metric_exemplar_attributes",
+            ["exemplar_id", "ordinal", "attribute_key", "attribute_value"],
+            static (row, parameters) =>
             {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@ExemplarId{index}, @Ordinal{index}, @Key{index}, @Value{index})");
-                parameters.Add($"ExemplarId{index}", batch[index].ExemplarId);
-                parameters.Add($"Ordinal{index}", batch[index].Ordinal);
-                parameters.Add($"Key{index}", batch[index].Key);
-                parameters.Add($"Value{index}", batch[index].Value);
-            }
-            sql.Append(';');
-            connection.Execute(sql.ToString(), parameters, transaction);
-        }
+                parameters[0].Value = row.ExemplarId;
+                parameters[1].Value = row.Ordinal;
+                parameters[2].Value = row.Key;
+                parameters[3].Value = row.Value;
+            });
     }
 
     private void TrimMetricDimensions(SqliteConnection connection, IDbTransaction transaction, IEnumerable<MetricDimensionState> dimensions)

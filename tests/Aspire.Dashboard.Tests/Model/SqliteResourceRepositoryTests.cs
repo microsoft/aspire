@@ -96,13 +96,10 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         using (var repository = CreateRepository(workspace.Path))
         {
             var writer = (IResourceRepositoryWriter)repository;
-            var insertQueries = CaptureSqlQueries(() => writer.AddConsoleLogs("api", [
+            writer.AddConsoleLogs("api", [
                 new ConsoleLogLine { LineNumber = 2, Text = "second", IsStdErr = true },
                 new ConsoleLogLine { LineNumber = 1, Text = "first" }
-            ]));
-            var insertQuery = Assert.Single(insertQueries, query => query.TrimStart().StartsWith("INSERT INTO console_logs ", StringComparison.Ordinal));
-            Assert.Contains("(@ResourceName, @LineNumber0, @Content0, @IsStdErr0),", insertQuery, StringComparison.Ordinal);
-            Assert.Contains("(@ResourceName, @LineNumber1, @Content1, @IsStdErr1)", insertQuery, StringComparison.Ordinal);
+            ]);
             writer.AddConsoleLogs("api", [
                 new ConsoleLogLine { LineNumber = 2, Text = "second-updated", IsStdErr = true },
                 new ConsoleLogLine { LineNumber = 3, Text = "third" }
@@ -131,26 +128,50 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
-    public async Task ConsoleLogs_InsertsAreBatched()
+    public async Task ConsoleLogs_LargeBatchRoundTrips()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
-        var writer = (IResourceRepositoryWriter)repository;
-        var logLines = Enumerable.Range(1, 101)
+        var logLines = Enumerable.Range(1, 201)
             .Select(lineNumber => new ConsoleLogLine { LineNumber = lineNumber, Text = $"Line {lineNumber}" })
             .ToArray();
 
-        var queries = CaptureSqlQueries(() => writer.AddConsoleLogs("api", logLines));
+        using (var repository = CreateRepository(workspace.Path))
+        {
+            ((IResourceRepositoryWriter)repository).AddConsoleLogs("api", logLines);
+        }
 
-        Assert.Equal(2, queries.Count(query => query.TrimStart().StartsWith("INSERT INTO console_logs ", StringComparison.Ordinal)));
+        using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
         var batches = new List<IReadOnlyList<global::Aspire.Dashboard.Model.ResourceLogLine>>();
-        await foreach (var batch in repository.GetConsoleLogs("api", CancellationToken.None))
+        await foreach (var batch in historicalRepository.GetConsoleLogs("api", CancellationToken.None))
         {
             batches.Add(batch);
         }
         var persistedLines = Assert.Single(batches);
-        Assert.Equal(Enumerable.Range(1, 101), persistedLines.Select(line => line.LineNumber));
+        Assert.Equal(Enumerable.Range(1, 201), persistedLines.Select(line => line.LineNumber));
         Assert.Equal(logLines.Select(line => line.Text), persistedLines.Select(line => line.Content));
+    }
+
+    [Fact]
+    public void Resources_LargeBatchRoundTrips()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var resources = Enumerable.Range(1, 201)
+            .Select(index => CreateResource($"resource-{index}", $"Resource {index}"))
+            .ToArray();
+
+        using (var repository = CreateRepository(workspace.Path))
+        {
+            ((IResourceRepositoryWriter)repository).ReplaceResources(resources);
+        }
+
+        using var historicalRepository = CreateRepository(workspace.Path, readOnly: true);
+        var expected = resources
+            .OrderBy(resource => resource.Name)
+            .Select(resource => (resource.Name, resource.DisplayName));
+        var actual = historicalRepository.GetResources()
+            .OrderBy(resource => resource.Name)
+            .Select(resource => (resource.Name, resource.DisplayName));
+        Assert.Equal(expected, actual);
     }
 
     [Fact]
