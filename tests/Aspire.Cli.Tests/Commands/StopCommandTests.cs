@@ -909,6 +909,44 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_ForceReturnsCleanupFailureWhenDcpCleanupThrowsUnexpectedException()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var processFactory = new TestProcessExecutionFactory();
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.BundleServiceFactory = _ => new TestBundleService(isBundle: true)
+            {
+                EnsureExtractedException = new PlatformNotSupportedException("Platform denied cleanup.")
+            };
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, exitCode);
+        Assert.Empty(processFactory.CreatedExecutions);
+        var error = Assert.Single(interactionService.DisplayedErrors);
+        Assert.Contains("Failed to clean up persistent resources", error, StringComparison.Ordinal);
+        Assert.Contains("Platform denied cleanup.", error, StringComparison.Ordinal);
+    }
+
+    [Fact]
     public async Task StopCommand_ForceReturnsFailureWhenDcpIsUnavailable()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

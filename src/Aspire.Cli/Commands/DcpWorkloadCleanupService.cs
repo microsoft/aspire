@@ -1,7 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.ComponentModel;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Layout;
 using Aspire.Shared;
@@ -62,7 +61,7 @@ internal sealed class DcpWorkloadCleanupService(
 
             return new DcpWorkloadCleanupResult(exitCode, output, error, DcpFound: true);
         }
-        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception or IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is not OperationCanceledException)
         {
             logger.LogWarning(ex, "Failed to run DCP cleanup.");
             return new DcpWorkloadCleanupResult(CliExitCodes.FailedToDotnetRunAppHost, string.Empty, ex.Message, DcpFound: true);
