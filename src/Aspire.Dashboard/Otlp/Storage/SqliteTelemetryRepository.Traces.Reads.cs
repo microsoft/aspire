@@ -628,13 +628,12 @@ public sealed partial class SqliteTelemetryRepository
             return null;
         }
 
-        var spanIds = records.Select(record => record.SpanId).ToArray();
         var spanAttributes = connection.Query<TraceOwnedAttributeRecord>("""
             SELECT span_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
             FROM telemetry_span_attributes
-            WHERE trace_id = @TraceId AND span_id IN @SpanIds
+            WHERE trace_id = @TraceId
             ORDER BY span_id, ordinal;
-            """, new { TraceId = traceId, SpanIds = spanIds }, transaction).ToLookup(record => record.OwnerId);
+            """, new { TraceId = traceId }, transaction).ToLookup(record => record.OwnerId);
         var eventRecords = connection.Query<SpanEventRecord>("""
             SELECT event_id AS EventId, span_id AS SpanId, event_name AS EventName, event_time_ticks AS EventTimeTicks
             FROM telemetry_span_events
