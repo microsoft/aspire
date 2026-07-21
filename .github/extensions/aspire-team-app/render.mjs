@@ -1074,7 +1074,7 @@ function persistAccountRepos(id, previousRepos) {
   repoSaveSeqByAcct[id] = seq;
   return postJSON("api/account/repos", { id, repos }).then((data) => {
     if (repoSaveSeqByAcct[id] !== seq) return data;
-    if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; }
+    if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; adoptAppliedRev(); }
     repoErr(id, "");
     return data;
   }).catch((e) => {
@@ -1110,6 +1110,9 @@ async function rescanAccounts() {
     const res = await fetch("api/accounts");
     const data = await readJson(res);
     state = data.dashboard; prefs = data.prefs; loadError = null;
+    // Advance the applied revision so a delayed lower-seq SSE partial from an earlier recompute
+    // can't be accepted after this newer /api/accounts response and roll the queue back.
+    adoptAppliedRev();
   } catch (e) {
     loadError = String((e && e.message) || e);
   } finally { rescanning = false; render(); }
@@ -1133,8 +1136,14 @@ function goView(next, forward) {
   // the user was editing a form on another view.
   if (next === "queue" && pendingState) {
     const payload = pendingState; pendingState = null;
-    state = payload.dashboard; prefs = payload.prefs;
-    adoptAppliedRev();
+    // The stash can be older than a POST response (repo save, prefs) that advanced lastAppliedSeq
+    // while the user was on the form: fold it in only when it is strictly newer than what we
+    // already show, mirroring applyPushedState's gate. (No seq → legacy payload, apply as before.)
+    const seq = payload.dashboard && payload.dashboard.seq;
+    if (typeof seq !== "number" || seq > lastAppliedSeq) {
+      state = payload.dashboard; prefs = payload.prefs;
+      adoptAppliedRev();
+    }
   }
   render(forward === undefined ? undefined : forward);
 }

@@ -201,7 +201,16 @@ function startCompute(opts, force = false) {
 function backgroundRefresh(opts) {
   Promise.resolve()
     .then(() => startCompute(opts))
-    .catch((e) => bgLog?.(`background refresh failed: ${e?.message || e}`));
+    .catch((e) => {
+      // bgLog wraps the async session logger (session.log). If the session has disconnected the
+      // log call itself can reject, and returning that rejected promise from this handler would
+      // recreate the very unhandled-rejection path this wrapper exists to prevent. Swallow the
+      // logger's own failure (async via .catch, sync via try) so the chain always settles.
+      try {
+        const logged = bgLog?.(`background refresh failed: ${e?.message || e}`);
+        logged?.catch?.(() => {});
+      } catch { /* logger unavailable */ }
+    });
 }
 
 async function getDashboard(force = false) {
