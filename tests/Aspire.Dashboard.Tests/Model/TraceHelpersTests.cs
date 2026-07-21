@@ -153,6 +153,27 @@ public sealed class TraceHelpersTests
     }
 
     [Fact]
+    public void GetOrderedResources_SameStartTime_UninstrumentedPeerAfterInstrumentedResources()
+    {
+        var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
+        var app1 = new OtlpResource("app1", "instance", uninstrumentedPeer: false, context);
+        var app2 = new OtlpResource("app2", "instance", uninstrumentedPeer: false, context);
+        var peer = new OtlpResource("peer", instanceId: null, uninstrumentedPeer: true, context);
+        var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
+        var scope = TelemetryTestHelpers.CreateOtlpScope(context);
+        var startTime = new DateTime(2001, 1, 1, 1, 1, 1, DateTimeKind.Utc);
+        trace.AddSpan(TelemetryTestHelpers.CreateOtlpSpan(app1, trace, scope, spanId: "1", parentSpanId: null, startDate: startTime, uninstrumentedPeer: peer));
+        trace.AddSpan(TelemetryTestHelpers.CreateOtlpSpan(app2, trace, scope, spanId: "2", parentSpanId: null, startDate: startTime));
+
+        var results = TraceHelpers.GetOrderedResources(trace);
+
+        Assert.Collection(results,
+            resource => Assert.False(resource.Resource.UninstrumentedPeer),
+            resource => Assert.False(resource.Resource.UninstrumentedPeer),
+            resource => Assert.Same(peer, resource.Resource));
+    }
+
+    [Fact]
     public void GetOrderedResources_DifferentResourceInstancesWithSameKey_GroupedResult()
     {
         var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };

@@ -83,6 +83,7 @@ public static class TraceHelpers
 
         return resourceFirstTimes.Select(kvp => kvp.Value)
             .OrderBy(s => s.FirstDateTime)
+            .ThenBy(s => s.Resource.UninstrumentedPeer)
             .ThenBy(s => s.Index);
     }
 

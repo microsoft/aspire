@@ -119,7 +119,7 @@ public sealed partial class SqliteTelemetryRepository
             FROM trace_aggregate a
             LEFT JOIN trace_summaries ts ON 1 = 1
             LEFT JOIN resource_summaries rs ON rs.trace_id = ts.trace_id
-            ORDER BY ts.trace_order_ticks, ts.trace_id, rs.resource_order_ticks, rs.resource_name, rs.instance_id;
+            ORDER BY ts.trace_order_ticks, ts.trace_id, rs.resource_order_ticks, rs.uninstrumented_peer, rs.resource_name, rs.instance_id;
             """, query.Parameters).AsList();
 
         var firstRecord = records[0];

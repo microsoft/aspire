@@ -284,6 +284,57 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
+    public void GetTraceSummaries_SameOrderTime_UninstrumentedPeerAfterInstrumentedResource()
+    {
+        var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: _ => ("dashboard.db", null));
+        var repository = CreateRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "unknown_service:Aspire.Dashboard"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1),
+                                attributes: [KeyValuePair.Create(OtlpSpan.PeerServiceAttributeKey, "dashboard.db")],
+                                kind: Span.Types.SpanKind.Client)
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).PagedResult.Items);
+
+        Assert.Collection(summary.Resources,
+            resource =>
+            {
+                Assert.Equal("unknown_service:Aspire.Dashboard", resource.Resource.ResourceName);
+                Assert.False(resource.Resource.UninstrumentedPeer);
+            },
+            resource =>
+            {
+                Assert.Equal("dashboard.db", resource.Resource.ResourceName);
+                Assert.True(resource.Resource.UninstrumentedPeer);
+            });
+    }
+
+    [Fact]
     public void GetTraceSummaries_IncrementalAppend_UpdatesSummaryValues()
     {
         var repository = CreateRepository();
