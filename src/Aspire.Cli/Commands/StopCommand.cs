@@ -123,7 +123,7 @@ internal sealed class StopCommand : BaseCommand
             : null;
 
         var stopResult = appHostFile is not null
-            ? await ExecuteInteractiveWithResultAsync(appHostFile, cancellationToken).ConfigureAwait(false)
+            ? await StopRunningAppHostsForResolvedFileAsync(appHostFile, displayNotRunningMessage: true, cancellationToken).ConfigureAwait(false)
             : _hostEnvironment.SupportsInteractiveInput
                 ? await ExecuteInteractiveWithResultAsync(passedAppHostProjectFile, cancellationToken).ConfigureAwait(false)
                 : await ExecuteNonInteractiveWithResultAsync(passedAppHostProjectFile, cancellationToken, treatNotRunningAsSuccess: true).ConfigureAwait(false);
@@ -141,14 +141,26 @@ internal sealed class StopCommand : BaseCommand
             return CliExitCodes.FailedToFindProject;
         }
 
+        if (!stopResult.StoppedAllMatchingAppHosts)
+        {
+            var remainingStopResult = await StopRunningAppHostsForResolvedFileAsync(appHostFile, displayNotRunningMessage: false, cancellationToken, stopResult.StoppedAppHostProcessId).ConfigureAwait(false);
+            if (remainingStopResult.ExitCode != CliExitCodes.Success)
+            {
+                return remainingStopResult.ExitCode;
+            }
+        }
+
         return await CleanupPersistentResourcesAsync(appHostFile, cancellationToken).ConfigureAwait(false);
     }
 
-    private async Task<FileInfo?> TryResolveAppHostFileAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
+    private async Task<FileInfo?> TryResolveAppHostFileAsync(
+        FileInfo? passedAppHostProjectFile,
+        CancellationToken cancellationToken,
+        MultipleAppHostProjectsFoundBehavior? multipleAppHostBehaviorOverride = null)
     {
-        var multipleAppHostBehavior = _hostEnvironment.SupportsInteractiveInput
+        var multipleAppHostBehavior = multipleAppHostBehaviorOverride ?? (_hostEnvironment.SupportsInteractiveInput
             ? MultipleAppHostProjectsFoundBehavior.Prompt
-            : MultipleAppHostProjectsFoundBehavior.Throw;
+            : MultipleAppHostProjectsFoundBehavior.Throw);
 
         try
         {
@@ -205,7 +217,7 @@ internal sealed class StopCommand : BaseCommand
             if (treatNotRunningAsSuccess)
             {
                 InteractionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
-                return new StopAppHostResult(CliExitCodes.Success, null);
+                return new StopAppHostResult(CliExitCodes.Success, null, StoppedAllMatchingAppHosts: true);
             }
 
             InteractionService.DisplayError(SharedCommandStrings.AppHostNotRunning);
@@ -218,7 +230,7 @@ internal sealed class StopCommand : BaseCommand
         if (inScopeConnections.Length == 0 && treatNotRunningAsSuccess)
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, SharedCommandStrings.AppHostNotRunning);
-            return new StopAppHostResult(CliExitCodes.Success, null);
+            return new StopAppHostResult(CliExitCodes.Success, null, StoppedAllMatchingAppHosts: true);
         }
 
         // Single in-scope AppHost: auto-select it
@@ -227,7 +239,7 @@ internal sealed class StopCommand : BaseCommand
             var connection = inScopeConnections[0].Connection!;
             _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
             var exitCode = await StopAppHostAsync(connection, GetSingleAppHostDisplayPath(connection), cancellationToken).ConfigureAwait(false);
-            return new StopAppHostResult(exitCode, GetAppHostFile(connection));
+            return new StopAppHostResult(exitCode, GetAppHostFile(connection), StoppedAppHostProcessId: GetAppHostProcessId(connection));
         }
 
         // Multiple in-scope AppHosts or none in scope: error with guidance
@@ -246,6 +258,20 @@ internal sealed class StopCommand : BaseCommand
 
     private async Task<StopAppHostResult> ExecuteInteractiveWithResultAsync(FileInfo? passedAppHostProjectFile, CancellationToken cancellationToken)
     {
+        if (passedAppHostProjectFile is not null)
+        {
+            var appHostFile = await TryResolveAppHostFileAsync(
+                passedAppHostProjectFile,
+                cancellationToken,
+                MultipleAppHostProjectsFoundBehavior.Throw).ConfigureAwait(false);
+            if (appHostFile is null)
+            {
+                return new StopAppHostResult(CliExitCodes.FailedToFindProject, null);
+            }
+
+            return await StopRunningAppHostsForResolvedFileAsync(appHostFile, displayNotRunningMessage: true, cancellationToken).ConfigureAwait(false);
+        }
+
         var result = await _connectionResolver.ResolveConnectionAsync(
             passedAppHostProjectFile,
             SharedCommandStrings.ScanningForRunningAppHosts,
@@ -260,7 +286,55 @@ internal sealed class StopCommand : BaseCommand
 
         _profilingTelemetry.CurrentActivity.SetAppHostStopCount(1);
         var exitCode = await StopAppHostAsync(result.Connection!, GetSingleAppHostDisplayPath(result.Connection!), cancellationToken).ConfigureAwait(false);
-        return new StopAppHostResult(exitCode, GetAppHostFile(result.Connection!));
+        return new StopAppHostResult(exitCode, GetAppHostFile(result.Connection!), StoppedAppHostProcessId: GetAppHostProcessId(result.Connection!));
+    }
+
+    private async Task<StopAppHostResult> StopRunningAppHostsForResolvedFileAsync(FileInfo appHostFile, bool displayNotRunningMessage, CancellationToken cancellationToken, int? stoppedAppHostProcessId = null)
+    {
+        var targetWorkloadId = AppHostWorkloadId.Create(appHostFile);
+        var allConnections = await _connectionResolver.ResolveAllConnectionsAsync(
+            SharedCommandStrings.ScanningForRunningAppHosts,
+            cancellationToken).ConfigureAwait(false);
+
+        var matchingConnections = allConnections
+            .Where(result => result.Success && result.Connection is not null && AppHostInfoMatchesWorkloadId(result.Connection.AppHostInfo, targetWorkloadId))
+            .Select(result => result.Connection!)
+            .Where(connection => stoppedAppHostProcessId is null || GetAppHostProcessId(connection) != stoppedAppHostProcessId.Value)
+            .ToArray();
+
+        if (matchingConnections.Length == 0)
+        {
+            if (displayNotRunningMessage)
+            {
+                var displayPath = Path.GetRelativePath(ExecutionContext.WorkingDirectory.FullName, appHostFile.FullName);
+                InteractionService.DisplayMessage(KnownEmojis.Information, string.Format(CultureInfo.CurrentCulture, SharedCommandStrings.AppHostNotRunningAtPath, displayPath));
+            }
+
+            return new StopAppHostResult(CliExitCodes.Success, null, StoppedAllMatchingAppHosts: true);
+        }
+
+        _profilingTelemetry.CurrentActivity.SetAppHostStopCount(matchingConnections.Length);
+        var appHostPaths = matchingConnections.Select(GetAppHostPath).ToArray();
+        var displayPaths = FileSystemHelper.ShortenPaths(appHostPaths, _environment);
+        var includeProcessId = matchingConnections.Length > 1;
+        var stopTasks = matchingConnections.Select(connection =>
+        {
+            var appHostPath = GetAppHostPath(connection);
+            var displayPath = displayPaths[appHostPath];
+            var appHostIdentifier = GetAppHostIdentifier(connection, displayPath, includeProcessId);
+            return StopAppHostAsync(connection, appHostIdentifier, cancellationToken);
+        }).ToArray();
+
+        var results = await Task.WhenAll(stopTasks).ConfigureAwait(false);
+        var allStopped = results.All(exitCode => exitCode == CliExitCodes.Success);
+
+        return new StopAppHostResult(allStopped ? CliExitCodes.Success : CliExitCodes.FailedToDotnetRunAppHost, appHostFile, StoppedAllMatchingAppHosts: true);
+    }
+
+    private static bool AppHostInfoMatchesWorkloadId(AppHostInformation? appHostInfo, string targetWorkloadId)
+    {
+        return !string.IsNullOrEmpty(appHostInfo?.AppHostPath) &&
+            string.Equals(AppHostWorkloadId.Create(appHostInfo.AppHostPath), targetWorkloadId, StringComparison.Ordinal);
     }
 
     private async Task<int> CleanupPersistentResourcesAsync(FileInfo appHostFile, CancellationToken cancellationToken)
@@ -473,6 +547,11 @@ internal sealed class StopCommand : BaseCommand
             : new FileInfo(connection.AppHostInfo.AppHostPath);
     }
 
+    private static int? GetAppHostProcessId(IAppHostAuxiliaryBackchannel connection)
+    {
+        return connection.AppHostInfo?.ProcessId;
+    }
+
     private static string GetDcpCleanupErrorDetails(DcpWorkloadCleanupResult cleanupResult)
     {
         var details = !string.IsNullOrWhiteSpace(cleanupResult.Error)
@@ -498,5 +577,5 @@ internal sealed class StopCommand : BaseCommand
             : displayPath;
     }
 
-    private sealed record StopAppHostResult(int ExitCode, FileInfo? AppHostFile);
+    private sealed record StopAppHostResult(int ExitCode, FileInfo? AppHostFile, bool StoppedAllMatchingAppHosts = false, int? StoppedAppHostProcessId = null);
 }

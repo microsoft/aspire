@@ -215,6 +215,58 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task StopCommand_WithExplicitAppHostStopsAllRunningInstancesForThatAppHost()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var otherAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Other.AppHost.csproj"));
+        await File.WriteAllTextAsync(otherAppHostFile.FullName, "<Project />");
+
+        var firstProcessId = int.MaxValue - 13;
+        var secondProcessId = int.MaxValue - 14;
+        var firstConnection = CreateConnection(appHostFile.FullName, firstProcessId);
+        var secondConnection = CreateConnection(appHostFile.FullName, secondProcessId);
+        var otherConnection = CreateConnection(otherAppHostFile.FullName, int.MaxValue - 15);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", firstConnection);
+        monitor.AddConnection("hash2", "socket.hash2", secondConnection);
+        monitor.AddConnection("hash3", "socket.hash3", otherConnection);
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.InteractionServiceFactory = _ => interactionService;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+            options.ProjectLocatorFactory = _ => projectLocator;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        var expectedIdentifier1 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, appHostFile.Name, firstProcessId);
+        var expectedIdentifier2 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, appHostFile.Name, secondProcessId);
+        Assert.Equal(
+            new[]
+            {
+                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier1),
+                string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier2)
+            }.OrderBy(message => message, StringComparer.Ordinal).ToArray(),
+            interactionService.DisplayedSuccess.OrderBy(message => message, StringComparer.Ordinal).ToArray());
+    }
+
+    [Fact]
     public async Task StopCommand_SingleOutOfScopeAppHostUsesFullPathInMessages()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -431,6 +483,68 @@ public class StopCommandTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(CliExitCodes.Success, exitCode);
         Assert.False(projectLocatorInvoked);
+        AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
+        var expectedStoppedMessage = string.Format(
+            CultureInfo.CurrentCulture,
+            StopCommandStrings.AppHostStoppedSuccessfully,
+            Path.Combine("RunningAppHost", "Running.AppHost.csproj"));
+        Assert.Equal(1, interactionService.DisplayedSuccess.Count(message => message == expectedStoppedMessage));
+    }
+
+    [Fact]
+    public async Task StopCommand_ForceWithExplicitAppHostStopsAllRunningInstancesBeforeCleanup()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var interactionService = new TestInteractionService();
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var otherAppHostFile = new FileInfo(Path.Combine(workspace.WorkspaceRoot.FullName, "Other.AppHost.csproj"));
+        await File.WriteAllTextAsync(otherAppHostFile.FullName, "<Project />");
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+
+        var firstProcessId = int.MaxValue - 16;
+        var secondProcessId = int.MaxValue - 17;
+        var firstConnection = CreateConnection(appHostFile.FullName, firstProcessId);
+        var secondConnection = CreateConnection(appHostFile.FullName, secondProcessId);
+        var otherConnection = CreateConnection(otherAppHostFile.FullName, int.MaxValue - 18);
+        var monitor = new TestAuxiliaryBackchannelMonitor();
+        monitor.AddConnection("hash1", "socket.hash1", firstConnection);
+        monitor.AddConnection("hash2", "socket.hash2", secondConnection);
+        monitor.AddConnection("hash3", "socket.hash3", otherConnection);
+
+        var expectedIdentifier1 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, appHostFile.Name, firstProcessId);
+        var expectedIdentifier2 = string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostIdentifierWithProcessId, appHostFile.Name, secondProcessId);
+        var processFactory = new TestProcessExecutionFactory
+        {
+            AssertionCallback = (_, _, _, _) =>
+            {
+                Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier1));
+                Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier2));
+            }
+        };
+
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+
+        var services = CreateStopForceServices(workspace, interactionService, processFactory, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AuxiliaryBackchannelMonitorFactory = _ => monitor;
+        });
+
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var result = command.Parse($"stop --force --apphost \"{appHostFile.FullName}\"");
+
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier1));
+        Assert.Contains(interactionService.DisplayedSuccess, message => message == string.Format(CultureInfo.CurrentCulture, StopCommandStrings.AppHostStoppedSuccessfully, expectedIdentifier2));
         AssertDcpCleanupInvocation(processFactory, expectedWorkloadId);
     }
 
