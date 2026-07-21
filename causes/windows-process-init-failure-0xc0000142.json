@@ -17,6 +17,13 @@
       "job": "Tests / Hosting.Dotnet / Hosting.Dotnet (windows-latest)",
       "pr_number": 18813,
       "observed_at": "2026-07-18T00:34:43Z"
+    },
+    {
+      "run_id": 29828970048,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29828970048",
+      "job": "Tests / Azure.Search.Documents / Azure.Search.Documents (windows-latest)",
+      "pr_number": 18816,
+      "observed_at": "2026-07-21T13:15:50Z"
     }
   ],
   "issue_url": "https://github.com/microsoft/aspire/issues/18720"

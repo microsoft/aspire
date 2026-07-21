@@ -1,0 +1,29 @@
+{
+  "run_id": 29828970048,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29828970048",
+  "analyzed_at": "2026-07-21T13:15:50Z",
+  "verdict": "transient-infra",
+  "pr": {
+    "number": 18816,
+    "title": "Add accessible name to Markdown copy button",
+    "author": "adamint",
+    "state": "closed",
+    "head_branch": "adamint/fix-17467-markdown-copy-name",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18816"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Azure.Search.Documents / Azure.Search.Documents (windows-latest)",
+      "id": 88629255885,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29828970048/job/88629255885",
+      "classification": "transient-infra",
+      "reason": "All 117 tests passed (0 failures). The job failed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED) only in post-test steps (Check for hang dump files, Upload logs, Copy CLI E2E recordings). This is a known Windows runner infrastructure issue unrelated to PR changes.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    }
+  ],
+  "failed_tests": [],
+  "causes": ["windows-process-init-failure-0xc0000142"]
+}
