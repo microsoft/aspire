@@ -8,7 +8,7 @@
 // at run time, so the shape mirrors what each PM expects on the CLI:
 //
 //   npm  : npm run <script> --workspace=<name> [-- <args...>]
-//          https://docs.npmjs.com/cli/v10/using-npm/workspaces
+//          https://docs.npmjs.com/cli/v12/using-npm/workspaces
 //   yarn : yarn workspace <name> run <script> [args...]
 //          https://yarnpkg.com/cli/workspace
 //   pnpm : pnpm --filter <name> run <script> [args...]
