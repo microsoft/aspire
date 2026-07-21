@@ -234,18 +234,17 @@ public sealed partial class SqliteTelemetryRepository
                 .Chunk(MaxSpanDetailBatchSize))
             {
                 ancestors.AddRange(connection.Query<IngestionAncestorRecord>("""
-                    WITH RECURSIVE ancestors(trace_id, origin_span_id, span_id, parent_span_id) AS (
-                        SELECT s.trace_id, s.span_id, s.span_id, s.parent_span_id
+                    WITH RECURSIVE ancestors(trace_id, span_id, parent_span_id) AS (
+                        SELECT s.trace_id, s.span_id, s.parent_span_id
                         FROM telemetry_spans s
                         WHERE s.trace_id IN @TraceIds AND s.span_id IN @ParentSpanIds
-                        UNION ALL
-                        SELECT parent.trace_id, child.origin_span_id, parent.span_id, parent.parent_span_id
+                        UNION
+                        SELECT parent.trace_id, parent.span_id, parent.parent_span_id
                         FROM ancestors child
                         JOIN telemetry_spans parent ON parent.trace_id = child.trace_id AND parent.span_id = child.parent_span_id
                     )
                     SELECT
                         trace_id AS TraceId,
-                        origin_span_id AS OriginSpanId,
                         span_id AS SpanId,
                         parent_span_id AS ParentSpanId
                     FROM ancestors;
@@ -253,14 +252,35 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
 
-        var ancestorParentReferences = ancestors
-            .Where(ancestor => ancestor.ParentSpanId is not null)
-            .Select(ancestor => (ancestor.TraceId, ancestor.OriginSpanId, ParentSpanId: ancestor.ParentSpanId!))
-            .ToHashSet();
-        circularSpanIds.UnionWith(incomingSpansForExistingTraces
-            .Where(span => span.ParentSpanId is not null)
-            .Where(span => ancestorParentReferences.Contains((span.TraceId, span.ParentSpanId!, span.SpanId)))
-            .Select(span => (span.TraceId, span.SpanId)));
+        var parentSpanIds = new Dictionary<(string TraceId, string SpanId), string?>();
+        foreach (var ancestor in ancestors)
+        {
+            parentSpanIds.TryAdd((ancestor.TraceId, ancestor.SpanId), ancestor.ParentSpanId);
+        }
+        foreach (var span in incomingSpansForExistingTraces)
+        {
+            var identity = (span.TraceId, span.SpanId);
+            if (span.ParentSpanId is null || existingSpans.ContainsKey(identity) || !parentSpanIds.TryAdd(identity, span.ParentSpanId))
+            {
+                continue;
+            }
+
+            // Persisted and incoming edges can jointly complete a cycle. Add incoming edges in ingestion order so
+            // only the edge that closes the cycle is rejected, matching OtlpTrace.AddSpan's partial-batch behavior.
+            var visitedSpanIds = new HashSet<string>(StringComparer.Ordinal);
+            var parentSpanId = span.ParentSpanId;
+            while (parentSpanId is not null && visitedSpanIds.Add(parentSpanId))
+            {
+                if (string.Equals(parentSpanId, span.SpanId, StringComparison.Ordinal))
+                {
+                    circularSpanIds.Add(identity);
+                    parentSpanIds.Remove(identity);
+                    break;
+                }
+
+                parentSpanIds.TryGetValue((span.TraceId, parentSpanId), out parentSpanId);
+            }
+        }
 
         return new TraceIngestionState
         {
@@ -1321,7 +1341,6 @@ public sealed partial class SqliteTelemetryRepository
     private sealed class IngestionAncestorRecord
     {
         public required string TraceId { get; init; }
-        public required string OriginSpanId { get; init; }
         public required string SpanId { get; init; }
         public string? ParentSpanId { get; init; }
     }

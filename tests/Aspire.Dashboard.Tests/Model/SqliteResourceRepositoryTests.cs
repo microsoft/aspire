@@ -602,6 +602,72 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     }
 
     [Fact]
+    public void Schema_SpanKindAndStatusLookupsExist()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        using (CreateRepository(workspace.Path))
+        {
+        }
+
+        using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT kind || ':' || kind_name
+            FROM telemetry_span_kinds
+            ORDER BY kind;
+            """;
+        using (var reader = command.ExecuteReader())
+        {
+            Assert.Equal(
+            [
+                "0:Unspecified",
+                "1:Internal",
+                "2:Server",
+                "3:Client",
+                "4:Producer",
+                "5:Consumer"
+            ], ReadValues(reader));
+        }
+
+        command.CommandText = """
+            SELECT status || ':' || status_name
+            FROM telemetry_span_statuses
+            ORDER BY status;
+            """;
+        using (var reader = command.ExecuteReader())
+        {
+            Assert.Equal(["0:Unset", "1:Ok", "2:Error"], ReadValues(reader));
+        }
+
+        command.CommandText = """
+            SELECT "table" || ':' || "from" || ':' || "to"
+            FROM pragma_foreign_key_list('telemetry_spans')
+            WHERE "from" IN ('kind', 'status')
+            ORDER BY "from";
+            """;
+        using (var reader = command.ExecuteReader())
+        {
+            Assert.Equal(
+            [
+                "telemetry_span_kinds:kind:kind",
+                "telemetry_span_statuses:status:status"
+            ], ReadValues(reader));
+        }
+
+        static List<string> ReadValues(SqliteDataReader reader)
+        {
+            var values = new List<string>();
+            while (reader.Read())
+            {
+                values.Add(reader.GetString(0));
+            }
+            return values;
+        }
+    }
+
+    [Fact]
     public void Schema_TelemetryResourceInstanceIdUniquenessPreservesNullAndEmpty()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);

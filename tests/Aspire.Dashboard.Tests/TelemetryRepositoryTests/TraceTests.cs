@@ -3148,6 +3148,75 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         AssertId("1-1", result.PagedResult.Items[0].SpanId);
     }
 
+    [Theory]
+    [InlineData(KnownTraceFields.KindField, "Client")]
+    [InlineData(KnownTraceFields.StatusField, "Error")]
+    public void GetSpans_FilterByKindOrStatusText_ReturnsMatchingSpans(string field, string value)
+    {
+        var repository = CreateRepository();
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                startTime: s_testTime.AddMinutes(1),
+                                endTime: s_testTime.AddMinutes(2),
+                                kind: Span.Types.SpanKind.Client,
+                                status: new Status { Code = Status.Types.StatusCode.Error }),
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                parentSpanId: "1-1",
+                                startTime: s_testTime.AddMinutes(2),
+                                endTime: s_testTime.AddMinutes(3),
+                                kind: Span.Types.SpanKind.Server,
+                                status: new Status { Code = Status.Types.StatusCode.Ok })
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var fieldResult = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = field,
+                    Condition = FilterCondition.Equals,
+                    Value = value
+                }
+            ]
+        });
+        var textResult = repository.GetSpans(new GetSpansRequest
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [],
+            TextFragments = [value]
+        });
+
+        Assert.Equal(1, fieldResult.PagedResult.TotalItemCount);
+        AssertId("1-1", Assert.Single(fieldResult.PagedResult.Items).SpanId);
+        Assert.Equal(1, textResult.PagedResult.TotalItemCount);
+        AssertId("1-1", Assert.Single(textResult.PagedResult.Items).SpanId);
+    }
+
     [Fact]
     public void GetSpans_Pagination_ReturnsCorrectPage()
     {
@@ -3880,6 +3949,74 @@ public sealed class InMemoryTraceTests : TraceTests
 public sealed class SqliteTraceTests : TraceTests
 {
     protected override bool UseSqlite => true;
+
+    [Fact]
+    public void AddTraces_CircularReferenceAcrossPersistedAndIncomingSpans_Reject()
+    {
+        var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var repository = CreateRepository();
+        repository.AsWriter().AddTraces(new AddContext(),
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-1",
+                                parentSpanId: "1-2",
+                                startTime: testTime.AddMinutes(1),
+                                endTime: testTime.AddMinutes(2))
+                        }
+                    }
+                }
+            }
+        ]);
+
+        var context = new AddContext();
+        repository.AsWriter().AddTraces(context,
+        [
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-2",
+                                parentSpanId: "1-3",
+                                startTime: testTime.AddMinutes(2),
+                                endTime: testTime.AddMinutes(3)),
+                            CreateSpan(
+                                traceId: "1",
+                                spanId: "1-3",
+                                parentSpanId: "1-1",
+                                startTime: testTime.AddMinutes(3),
+                                endTime: testTime.AddMinutes(4))
+                        }
+                    }
+                }
+            }
+        ]);
+
+        Assert.Equal(1, context.SuccessCount);
+        Assert.Equal(1, context.FailureCount);
+        var trace = Assert.IsType<OtlpTrace>(repository.GetTrace(GetHexId("1")));
+        Assert.Collection(trace.Spans,
+            span => AssertId("1-1", span.SpanId),
+            span => AssertId("1-2", span.SpanId));
+    }
 
     [Fact]
     public void GetTraceSummaries_EqualStartTime_MatchesMaterializedTrace()
