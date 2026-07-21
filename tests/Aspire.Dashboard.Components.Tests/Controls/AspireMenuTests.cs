@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
 using Bunit;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -11,6 +12,28 @@ namespace Aspire.Dashboard.Components.Tests.Controls;
 
 public class AspireMenuTests : DashboardTestContext
 {
+    [Fact]
+    public async Task DisposeAsync_RemovesFluentMenuFromMenuService()
+    {
+        FluentUISetupHelpers.AddCommonDashboardServices(this);
+        FluentUISetupHelpers.SetupFluentUIComponents(this);
+        FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
+
+        var menuService = Services.GetRequiredService<IMenuService>();
+        var cut = RenderComponent<AspireMenu>(builder =>
+        {
+            builder.Add(p => p.Anchor, "menu-anchor");
+            builder.Add(p => p.Items, Array.Empty<MenuButtonItem>());
+        });
+        var menu = cut.FindComponent<FluentMenu>().Instance;
+        Assert.Contains(menu, menuService.Menus);
+
+        await cut.InvokeAsync(() => cut.Instance.DisposeAsync().AsTask());
+
+        Assert.Empty(menuService.Menus);
+    }
+
     [Fact]
     public void ClickItem_RestoreFocusOnItemClickTrue_FocusesAnchor()
     {

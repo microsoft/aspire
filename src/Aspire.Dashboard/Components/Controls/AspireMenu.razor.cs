@@ -9,7 +9,7 @@ using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenu : FluentComponentBase
+public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 {
     private FluentMenu? _menu;
 
@@ -46,6 +46,9 @@ public partial class AspireMenu : FluentComponentBase
 
     [Inject]
     public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required IServiceProvider ServiceProvider { get; init; }
 
     // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
     private const int EstimatedItemHeight = 32;
@@ -136,5 +139,17 @@ public partial class AspireMenu : FluentComponentBase
         {
             await OpenChanged.InvokeAsync(open);
         }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (_menu is { } menu)
+        {
+            // FluentMenu doesn't unregister itself when disposed: https://github.com/microsoft/fluentui-blazor/issues/5032
+            ServiceProvider.GetService<IMenuService>()?.Remove(menu);
+            _menu = null;
+        }
+
+        return ValueTask.CompletedTask;
     }
 }
