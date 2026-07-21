@@ -414,6 +414,146 @@ test("computeDashboard streams the final snapshot to an SSE client that connects
   assert.equal(JSON.parse(dataLine).dashboard.authenticated, true);
 });
 
+test("a card action resolves against the last complete snapshot, not a mid-stream partial (no host misroute)", async (t) => {
+  // Regression for the streaming-cache host-confusion bug: while a refresh streams partials, `cache`
+  // is transiently overwritten with a snapshot that omits repos still loading. A GHES/EMU card that
+  // is still visible in that window would miss in the partial, and resolveActionPr would drop its
+  // host so agent.mjs safePrUrl reconstructs a github.com URL — misrouting the action to a same-slug
+  // repo on dotcom (target flips new-session -> current-session only when the URL is off-dotcom). The
+  // fix resolves actions against the last COMPLETE dashboard, so the enterprise host survives the
+  // whole refresh. One account watches two repos; the enterprise PR's repo is gated on the second
+  // compute so a partial without it lands in `cache` before we click.
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/fast", "microsoft/xrepo"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+
+  const ghesUrl = "https://ghe.example.com:8443/microsoft/xrepo/pull/5";
+  const xrepoPr = {
+    number: 5,
+    title: "Enterprise PR",
+    url: ghesUrl,
+    isDraft: false,
+    state: "OPEN",
+    createdAt: "2026-07-01T09:00:00Z",
+    updatedAt: "2026-07-01T10:00:00Z",
+    author: { __typename: "User", login: "octo", avatarUrl: null },
+    baseRefName: "main",
+    mergeable: "MERGEABLE",
+    reviewDecision: null,
+    additions: 1,
+    deletions: 0,
+    changedFiles: 1,
+    milestone: null,
+    labels: { nodes: [] },
+    assignees: { nodes: [] },
+    reviewRequests: { nodes: [] },
+    reviews: { nodes: [] },
+    reviewThreads: { nodes: [] },
+    commits: { totalCount: 1, nodes: [{ commit: { committedDate: "2026-07-01T10:00:00Z", statusCheckRollup: { state: "SUCCESS" } } }] },
+    closingIssuesReferences: { nodes: [] },
+  };
+
+  // xrepo's PR fetch is gated only on the SECOND compute so the first completes with the PR present
+  // (seeding the resolution snapshot), then the second stalls after emitting a partial without it.
+  let gateArmed = false;
+  let releaseXrepo;
+  let signalPartialWindow;
+  const xrepoGate = new Promise((resolve) => { releaseXrepo = resolve; });
+  const partialWindow = new Promise((resolve) => { signalPartialWindow = resolve; });
+  // Always release the gated fetch on teardown so an assertion failure mid-test can't leave the
+  // second compute stalled (which would surface as post-test async activity).
+  t.after(() => releaseXrepo());
+  globalThis.fetch = async (url, options = {}) => {
+    const requestUrl = String(url);
+    if (requestUrl.startsWith("http://127.0.0.1:")) return originalFetch(url, options);
+    const body = options.body ? JSON.parse(options.body) : {};
+    const query = body.query ?? "";
+    if (requestUrl === "https://api.github.com/") {
+      return jsonResponse({}, { headers: { "x-oauth-scopes": "read:org" } });
+    }
+    if (query.includes("viewer { login")) {
+      return jsonResponse({ data: { viewer: { login: "octo", avatarUrl: null } } });
+    }
+    if (query.includes("r0: repository")) {
+      return jsonResponse({ data: { r0: { nameWithOwner: "microsoft/fast" }, r1: { nameWithOwner: "microsoft/xrepo" } } });
+    }
+    if (query.includes("pullRequests")) {
+      const name = body.variables?.name;
+      if (name === "xrepo") {
+        if (gateArmed) { signalPartialWindow(); await xrepoGate; }
+        return jsonResponse({ data: { repository: { isPrivate: false, pullRequests: { nodes: [xrepoPr] } } } });
+      }
+      // microsoft/fast: no PRs, returns immediately so its completion fires the partial.
+      return jsonResponse({ data: { repository: { isPrivate: false, pullRequests: { nodes: [] } } } });
+    }
+    throw new Error(`Unexpected fetch: ${requestUrl} ${query}`);
+  };
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=resolvesnap-${Date.now()}`);
+  const entry = await server.startInstance("resolve-snapshot-test", () => {});
+  t.after(() => {
+    server.setAgentSend(null);
+    return server.stopInstance("resolve-snapshot-test");
+  });
+
+  let received = null;
+  server.setAgentSend(async (payload) => { received = payload; return { messageId: "m-1", queued: true }; });
+
+  // First compute (no SSE client -> no partials): completes with the enterprise PR present, so the
+  // action-resolution snapshot now carries its host-qualified URL.
+  const first = await fetch(new URL("api/state", entry.url));
+  await first.json();
+
+  // Arm the gate and connect an SSE client so the next compute streams a partial we can await.
+  gateArmed = true;
+  const ac = new AbortController();
+  t.after(() => ac.abort());
+  const evRes = await fetch(new URL("events", entry.url), { signal: ac.signal });
+  const reader = evRes.body.getReader();
+  const decoder = new TextDecoder();
+  const sawPartialState = (async () => {
+    let buf = "";
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) return;
+      buf += decoder.decode(value, { stream: true });
+      let idx;
+      while ((idx = buf.indexOf("\n\n")) !== -1) {
+        const record = buf.slice(0, idx);
+        buf = buf.slice(idx + 2);
+        if (record.startsWith("event: state")) return;
+      }
+    }
+  })();
+
+  // Trigger the second compute; don't await — it stalls in xrepo's gated fetch after fast's
+  // completion has already published a partial (without the enterprise PR) as the current cache.
+  const refreshPromise = fetch(new URL("api/refresh", entry.url), { method: "POST" });
+  await partialWindow;   // xrepo fetch reached and is now blocked
+  await sawPartialState; // the partial (without xrepo's PR) has been broadcast + cached
+
+  // Click the still-visible enterprise card while `cache` holds the partial that omits it.
+  const acted = await postAction(entry.url, { kind: "test", target: "new-session", pr: {
+    repository: "microsoft/xrepo", number: 5, url: ghesUrl, title: "Enterprise PR", author: "octo",
+  } });
+  assert.equal(acted.status, 200);
+  const actedBody = await acted.json();
+
+  // With the fix, resolution finds the PR in the last complete snapshot and keeps its enterprise
+  // host: the prompt targets the GHES URL and new-session degrades to current-session. Without it,
+  // the partial miss reconstructs a github.com URL and the action stays new-session (misrouted).
+  assert.equal(actedBody.target, "current-session");
+  assert.match(received.prompt, /ghe\.example\.com:8443\/microsoft\/xrepo\/pull\/5/);
+  assert.doesNotMatch(received.prompt, /github\.com\/microsoft\/xrepo/);
+
+  releaseXrepo();
+  await refreshPromise;
+});
+
 // Minimal GitHub GraphQL mock: scope probe, viewer, repo existence probe, and an empty
 // pull-request page. Loopback (127.0.0.1) requests fall through to the real fetch so the
 // test can drive the extension's own HTTP server.

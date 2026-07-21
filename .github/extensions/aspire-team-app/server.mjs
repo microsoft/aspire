@@ -29,7 +29,15 @@ const sseClients = new Set();
 // iframes), but shutdown must be per-instance: closing one canvas must not end another
 // still-open canvas's stream. A WeakMap avoids leaking entries once a response is GC'd.
 const clientInstance = new WeakMap();
-let cache = null;    // { dashboard, prefs, at }
+let cache = null;    // { dashboard, prefs, at } — freshest snapshot; may be a partial mid-stream
+// The last COMPLETE dashboard, used ONLY to resolve card-action PRs (resolveActionPr/findCachedPr).
+// During SSE streaming `cache` is transiently overwritten with partials (see computeDashboard's
+// onPartial) that omit PRs whose repos haven't finished loading this compute. A stale-but-still-
+// visible card clicked in that window would miss in the partial; resolveActionPr would then drop
+// the PR's host and let agent.mjs safePrUrl reconstruct a github.com URL — silently misrouting a
+// GHES/EMU action to a same-slug repo on dotcom. Resolving actions against the last complete
+// snapshot keeps every watched PR's host-qualified URL available for the whole refresh.
+let resolveSnapshot = null;
 let inflight = null;
 let bgTimer = null;
 // Monotonic snapshot revision stamped on every dashboard we cache/broadcast (partial and
@@ -156,7 +164,9 @@ async function computeDashboard({ progress = true } = {}) {
             // Stamp a strictly increasing revision so the client can order/ignore snapshots.
             partial.seq = ++stateSeq;
             // Publish the partial as the current cache so a canvas opening mid-load gets
-            // the freshest data-so-far, and push it to already-open iframes.
+            // the freshest data-so-far, and push it to already-open iframes. Deliberately does
+            // NOT touch resolveSnapshot: a partial omits not-yet-loaded PRs, so using it to
+            // resolve a card action could strip a watched PR's host (see resolveSnapshot above).
             cache = { dashboard: partial, prefs, at: Date.now() };
             broadcastState(partial, prefs);
           }
@@ -168,6 +178,9 @@ async function computeDashboard({ progress = true } = {}) {
   // highest seq of this compute; the POST response returns this same cached object.
   dashboard.seq = ++stateSeq;
   cache = { dashboard, prefs, at: Date.now() };
+  // Only a COMPLETE compute advances the action-resolution snapshot; partials (above) never do,
+  // so mid-stream cache churn can't drop a watched PR's host and misroute its card action.
+  resolveSnapshot = dashboard;
   // Re-check the live SSE client set here instead of reusing the `stream` snapshot captured at the
   // top of this compute. The browser constructs its EventSource and immediately GETs /api/state, and
   // a stale-cache revalidation can begin before that stream registers — so `stream` may be false even
@@ -313,7 +326,10 @@ function hostOf(url) {
 // multiple hosts collide we require the hint's host to select exactly one and otherwise reject
 // (undefined) rather than silently targeting whichever host the scan reached first.
 function findCachedPr(repository, number, urlHint) {
-  const dashboard = cache?.dashboard;
+  // Resolve against the last COMPLETE dashboard, not `cache`, which can hold a partial mid-stream
+  // that omits not-yet-loaded PRs (see resolveSnapshot). Fall back to `cache` only before the first
+  // complete compute, when there are no prior host-qualified cards to misroute anyway.
+  const dashboard = resolveSnapshot ?? cache?.dashboard;
   if (!dashboard || !repository) return undefined;
   const target = `${repository}#${number}`.toLowerCase();
   const byUrl = new Map();
