@@ -7,10 +7,16 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Cli.Projects;
 
+/// <summary>
+/// Creates stable DCP workload identifiers for AppHost paths.
+/// </summary>
 internal static class AppHostWorkloadId
 {
     private const string Prefix = "apphost-";
 
+    /// <summary>
+    /// Creates the workload identifier for an AppHost file.
+    /// </summary>
     public static string Create(FileInfo appHostFile)
     {
         ArgumentNullException.ThrowIfNull(appHostFile);
@@ -18,6 +24,9 @@ internal static class AppHostWorkloadId
         return Create(appHostFile.FullName);
     }
 
+    /// <summary>
+    /// Creates the workload identifier for an AppHost path after applying path normalization.
+    /// </summary>
     internal static string Create(string appHostPath)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(appHostPath);
