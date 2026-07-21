@@ -41,6 +41,20 @@ test("buildAgentActionPrompt opens a sub-session with the right skill for test a
   assert.match(reviewPrompt, /\/code-review/);
 });
 
+test("buildAgentActionPrompt tells the sub-session to self-route to a repo skill or fall back to a manual pass", () => {
+  const testPrompt = buildAgentActionPrompt("test", validPr);
+  assert.match(testPrompt, /List the skills available in this session/);
+  assert.match(testPrompt, /\.agents\/skills\/pr-testing\/SKILL\.md/);
+  assert.match(testPrompt, /If this repo has no PR-testing skill/);
+  assert.match(testPrompt, /thorough manual test/i);
+  assert.match(testPrompt, /`\/pr-testing https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
+
+  const reviewPrompt = buildAgentActionPrompt("review", validPr);
+  assert.match(reviewPrompt, /\.agents\/skills\/code-review\/SKILL\.md/);
+  assert.match(reviewPrompt, /thorough manual review/i);
+  assert.match(reviewPrompt, /`\/code-review https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
+});
+
 test("buildAgentActionPrompt keeps resolve-conflicts and review-debt in the current session", () => {
   const conflicts = buildAgentActionPrompt("resolve-conflicts", validPr);
   assert.match(conflicts, /resolve the merge conflicts/i);

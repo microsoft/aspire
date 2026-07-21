@@ -6,8 +6,10 @@
 // extension — is what actually calls open_pr_session or does the interactive work.
 //
 // Two behaviors, selected purely by prompt content:
-//   - "test" / "review": open a NEW sub-session for someone else's PR and run a skill
-//     (/pr-testing or /code-review) against it.
+//   - "test" / "review": open a NEW sub-session in the context of the PR's repo. That
+//     session self-detects whether the repo ships a matching skill and either runs it
+//     as `/{skill} {url}` (commonly /pr-testing or /code-review) or falls back to a
+//     thorough manual pass — skills are per-repo, so not every repo has them.
 //   - "resolve-conflicts" / "review-debt": stay in the CURRENT session and work the PR
 //     interactively.
 //
@@ -112,8 +114,31 @@ export function buildAgentActionLog(kind, rawPr) {
 }
 
 function skillSessionPrompt({ ref, url, title, author, pr, skill, verb, untrusted }) {
-  const Verb = verb.charAt(0).toUpperCase() + verb.slice(1);
-  return `Open a new sub-session to ${verb} pull request ${ref} using the ${skill} skill.
+  // The skill name without its leading slash, used to point at the on-disk skill dir.
+  const skillName = skill.replace(/^\//, "");
+  const noun = verb === "test" ? "PR-testing" : "code-review";
+  // What the sub-session does when the repo ships no matching skill.
+  const manualFallback = verb === "test"
+    ? "build and run the affected projects and tests, exercise the behavior this PR changes, cover the important edge cases, and report clear pass/fail results with concrete evidence (commands, output, logs)"
+    : "read the full diff and assess correctness, security, error handling, edge cases, test coverage, and the repo's own conventions, then give concrete, high-signal, actionable feedback";
+
+  // Kickoff prompt the SUB-session runs once open_pr_session has cloned the repo. It
+  // routes itself: prefer the repo's own skill (invoked as `/{skill} {url}`), otherwise
+  // do a thorough manual pass. Detection happens here — not in the extension — because
+  // this is where the repo is checked out and its skills are actually loaded, so it sees
+  // the real skill set (repo, user, and plugin skills) rather than guessing from files.
+  const kickoff = `You are going to ${verb} pull request ${ref} \u2014 "${title}" (by @${author}): ${url}
+
+${untrusted}
+
+First choose how to proceed, based on THIS repository's own skills:
+1. List the skills available in this session and look for a ${noun} skill. Also check the repo for a matching skill directory (for example .agents/skills/${skillName}/SKILL.md).
+2. If a suitable ${noun} skill exists, run it against this PR by invoking it as \`/{skill-name} ${url}\` (for this repo that is \`${skill} ${url}\`) and follow it end to end.
+3. If this repo has no ${noun} skill, do NOT force one \u2014 do a thorough manual ${verb} instead: ${manualFallback}.
+
+When you are done, report back with your findings.`;
+
+  return `Open a new sub-session to ${verb} pull request ${ref} in the context of ${pr.repository}. The sub-session picks the repo's matching skill or falls back to a thorough manual ${verb}.
 
 Use the open_pr_session tool with:
 - repo_full_name: ${JSON.stringify(pr.repository)}
@@ -121,7 +146,5 @@ Use the open_pr_session tool with:
 - pr_title: ${JSON.stringify(title)}
 - coordinate_with_creator: true
 - kickoff.mode: "interactive"
-- kickoff.prompt: ${JSON.stringify(`${skill} ${Verb} pull request ${ref} \u2014 ${title} (by @${author}): ${url}. Follow the skill end to end and report back.`)}
-
-${untrusted}`;
+- kickoff.prompt: ${JSON.stringify(kickoff)}`;
 }
