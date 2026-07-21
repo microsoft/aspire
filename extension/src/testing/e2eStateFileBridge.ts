@@ -1266,12 +1266,12 @@ function getResourceElement(appHostTreeProvider: AspireAppHostTreeProvider, reso
 
 function getEndpointElement(
   appHostTreeProvider: AspireAppHostTreeProvider,
-  command: Extract<AspireExtensionE2EControlCommand, { name: 'copyEndpointUrl' | 'openInIntegratedBrowser' | 'assertClipboardMatchesEndpointUrl' }>
+  command: Extract<AspireExtensionE2EControlCommand, { name: 'copyEndpointUrl' | 'openInIntegratedBrowser' }>
 ): { element: unknown; url: string } {
   const element = appHostTreeProvider.findEndpointElement({
     appHostPath: command.appHostPath,
     resourceName: command.resourceName,
-    url: 'url' in command ? command.url : undefined,
+    url: command.url,
   });
   if (!element) {
     throw new Error('Aspire extension E2E endpoint command could not find a matching endpoint.');

@@ -16,6 +16,9 @@
     <trans-unit id="extension.debug.args">
       <source xml:lang="en">Additional arguments to pass to the Aspire CLI command</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostPathCopiedToClipboard">
+      <source xml:lang="en">AppHost path copied to clipboard.</source>
+    </trans-unit>
     <trans-unit id="views.appHosts.name">
       <source xml:lang="en">AppHosts</source>
     </trans-unit>
@@ -156,6 +159,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.logFilePathInvalid">
       <source xml:lang="en">Could not determine the AppHost log file to open.</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.appHostPathInvalid">
+      <source xml:lang="en">Could not determine the AppHost path to copy.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.appHostSourceNotFound">
       <source xml:lang="en">Could not determine the AppHost source file to open.</source>
@@ -676,11 +682,11 @@
     <trans-unit id="views.appHosts.errorWelcome">
       <source xml:lang="en">The Aspire panel workspace view requires Aspire CLI 13.2.0 or newer and an AppHost that references Aspire.Hosting 13.2.0 or newer. Install or update the Aspire CLI and update your AppHost package to get started.&#10;[Update Aspire CLI](command:aspire-vscode.updateSelf)&#10;[Refresh](command:aspire-vscode.globalRefreshAppHosts)</source>
     </trans-unit>
-    <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
-      <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
-    </trans-unit>
     <trans-unit id="aspire-vscode.strings.resourceCommandOutputOpenFailed">
       <source xml:lang="en">The command completed, but its output could not be opened: {0}</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
+      <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.aspireCliExecutablePath">
       <source xml:lang="en">The path to the Aspire CLI executable. If not set, the extension will attempt to use &apos;aspire&apos; from the system PATH.</source>
