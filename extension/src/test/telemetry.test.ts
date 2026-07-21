@@ -5,7 +5,7 @@ import * as path from 'path';
 import type { TelemetryReporter } from '@vscode/extension-telemetry';
 import * as sinon from 'sinon';
 import * as vscode from 'vscode';
-import { __resetCommonPropertiesForTests, __resetTelemetryReporterFactoryForTests, __setReporterForTests, __setTelemetryReporterFactoryForTests, classifyError, initializeTelemetry, isCommandCancellation, sendTelemetryErrorEvent, sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties, withCommandTelemetry } from '../utils/telemetry';
+import { __resetCommonPropertiesForTests, __resetTelemetryClientVersionProviderForTests, __resetTelemetryReporterFactoryForTests, __setReporterForTests, __setTelemetryClientVersionProviderForTests, __setTelemetryReporterFactoryForTests, classifyError, initializeTelemetry, isCommandCancellation, sendTelemetryErrorEvent, sendTelemetryEvent, setCommandInvocationListener, setCommonTelemetryProperties, withCommandTelemetry } from '../utils/telemetry';
 
 interface RecordedEvent {
     name: string;
@@ -75,6 +75,7 @@ suite('telemetry utilities', () => {
         setCommandInvocationListener(undefined);
         restore();
         __resetTelemetryReporterFactoryForTests();
+        __resetTelemetryClientVersionProviderForTests();
         __resetCommonPropertiesForTests();
     });
 
@@ -463,6 +464,33 @@ suite('telemetry utilities', () => {
             assert.strictEqual(fake.events[0].properties?.['common.telemetryclientversion'], getExtensionTelemetryPackageVersion());
         }
         finally {
+            restoreFactory();
+        }
+    });
+
+    test('common.telemetryclientversion flows through from the injected provider instead of a hard-coded literal', () => {
+        restore();
+        const restoreFactory = __setTelemetryReporterFactoryForTests(() => fake as unknown as TelemetryReporter);
+        const restoreVersionProvider = __setTelemetryClientVersionProviderForTests(() => '9.9.9-injected');
+
+        try {
+            initializeTelemetry({
+                extension: {
+                    id: 'microsoft-aspire.aspire-vscode',
+                    packageJSON: {
+                        aiKey: 'test-key',
+                        version: '1.2.3'
+                    }
+                },
+                subscriptions: []
+            } as unknown as vscode.ExtensionContext);
+
+            sendTelemetryEvent('aspire/vscode/command/invoked', { command: 'cmd.version' });
+
+            assert.strictEqual(fake.events[0].properties?.['common.telemetryclientversion'], '9.9.9-injected');
+        }
+        finally {
+            restoreVersionProvider();
             restoreFactory();
         }
     });

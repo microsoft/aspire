@@ -575,10 +575,9 @@ export default class AspireDcpServer {
                 const durationMs = Date.now() - entry.startTimeMs;
                 const exitCode = sessionTerminated.exit_code;
                 const exitBucket = exitCode === 0 ? 'success' : exitCode === -1 ? 'canceled' : 'nonzero';
-                // Route non-zero exits through the error-event channel so they get the
-                // reporter's stricter scrubbing pass and are surfaced as errors in the
-                // telemetry pipeline (consistent with the synchronous launch-failure path
-                // above and the dashboard fault path in DashboardTelemetryPassthrough).
+                // Route non-zero exits through `sendTelemetryErrorEvent` so App Insights tags
+                // them as errors, consistent with the synchronous launch-failure path above and
+                // the dashboard fault path in DashboardTelemetryPassthrough.
                 const emitEnd = exitBucket === 'nonzero' ? sendTelemetryErrorEvent : sendTelemetryEvent;
                 emitEnd('aspire/vscode/debug/runsession/end', {
                     resource_type: entry.resourceType,

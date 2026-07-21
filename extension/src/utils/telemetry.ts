@@ -49,6 +49,16 @@ const defaultTelemetryReporterFactory = (aiKey: string): TelemetryReporter => ne
 let telemetryReporterFactory = defaultTelemetryReporterFactory;
 let reporterCommonProperties: Record<string, string> = {};
 
+// `common.telemetryclientversion` is supposed to mirror what `@vscode/extension-telemetry` would
+// have stamped automatically had we gone through its normal (non-"dangerous") send path. Reading
+// the version straight from the dependency's own `package.json` — instead of hand-copying the
+// pinned version from our `package.json` into a literal here — means a dependency bump can never
+// leave this drifting: `require`d JSON is resolved at bundle time by webpack, so this stays correct
+// in both the dev build and the packaged VSIX.
+const defaultTelemetryClientVersionProvider = (): string =>
+    (require('@vscode/extension-telemetry/package.json') as { version: string }).version;
+let telemetryClientVersionProvider = defaultTelemetryClientVersionProvider;
+
 // Aspire-specific common properties merged into every event we emit (e.g.
 // detected AppHost language, run mode). Keep this key set intentionally tiny
 // and registered in `telemetryRegistry.ts` because each common property
@@ -162,7 +172,7 @@ function getReporterCommonProperties(context: vscode.ExtensionContext): Record<s
         'common.uikind': getUiKind(),
         'common.remotename': vscode.env.remoteName ?? 'none',
         'common.isnewappinstall': String(vscode.env.isNewAppInstall),
-        'common.telemetryclientversion': '1.5.1',
+        'common.telemetryclientversion': telemetryClientVersionProvider(),
     };
 
     const commit = getVsCodeCommitHash();
@@ -526,6 +536,18 @@ export function __setTelemetryReporterFactoryForTests(factory: (aiKey: string) =
 /** Test seam: reset TelemetryReporter construction so tests don't bleed into each other. */
 export function __resetTelemetryReporterFactoryForTests(): void {
     telemetryReporterFactory = defaultTelemetryReporterFactory;
+}
+
+/** Test seam: override how `common.telemetryclientversion` is resolved without touching `node_modules`. */
+export function __setTelemetryClientVersionProviderForTests(provider: () => string): () => void {
+    const previous = telemetryClientVersionProvider;
+    telemetryClientVersionProvider = provider;
+    return () => { telemetryClientVersionProvider = previous; };
+}
+
+/** Test seam: reset the telemetry client version provider so tests don't bleed into each other. */
+export function __resetTelemetryClientVersionProviderForTests(): void {
+    telemetryClientVersionProvider = defaultTelemetryClientVersionProvider;
 }
 
 /** Test seam: clear common properties so tests don't bleed into each other. */
