@@ -74,6 +74,14 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
         var appHostProject = File.ReadAllText(appHostProjectPath);
         Assert.Contains("<Nullable>enable</Nullable>", appHostProject);
         Assert.DoesNotContain("AspireUseCliBundle", appHostProject);
+        appHostProject = appHostProject.Replace(
+            "<Nullable>enable</Nullable>",
+            """
+            <Nullable>enable</Nullable>
+                <AspireUseCliBundle>true</AspireUseCliBundle>
+            """,
+            StringComparison.Ordinal);
+        File.WriteAllText(appHostProjectPath, appHostProject);
 
         File.WriteAllText(
             appHostSourcePath,
@@ -135,6 +143,13 @@ public sealed class BundleSmokeTests(ITestOutputHelper output)
         Assert.Contains("#:sdk Aspire.AppHost.Sdk", appHostSource);
         Assert.Contains("var builder = DistributedApplication.CreateBuilder(args);", appHostSource);
         Assert.DoesNotContain("AspireUseCliBundle", appHostSource);
+        appHostSource = appHostSource.Replace(
+            "#:sdk Aspire.AppHost.Sdk",
+            """
+            #:sdk Aspire.AppHost.Sdk
+            #:property AspireUseCliBundle=true
+            """,
+            StringComparison.Ordinal);
 
         File.WriteAllText(
             appHostSourcePath,

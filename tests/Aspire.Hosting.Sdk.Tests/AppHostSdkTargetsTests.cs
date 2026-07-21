@@ -632,14 +632,14 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, """
+        await File.WriteAllTextAsync(aspirePath, ("""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 echo "13.5.0"
                 exit 0
             fi
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
         return aspirePath;
@@ -662,14 +662,14 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 shift
                 goto loop
                 """
-            : """
+            : ("""
                 #!/bin/sh
                 if [ "$1" = "aspire.cli" ] && [ "$2" = "--" ] && [ "$3" = "--version" ]; then
                     echo "13.5.0"
                     exit 0
                 fi
                 printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
-                """);
+                """).ReplaceLineEndings("\n"));
 
         if (!OperatingSystem.IsWindows())
         {
@@ -699,14 +699,14 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, $$"""
+        await File.WriteAllTextAsync(aspirePath, ($$"""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 echo "{{version}}"
                 exit 0
             fi
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
@@ -728,7 +728,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, $$"""
+        await File.WriteAllTextAsync(aspirePath, ($$"""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 i=0
@@ -740,7 +740,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 exit 0
             fi
             exit 0
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
@@ -762,7 +762,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, """
+        await File.WriteAllTextAsync(aspirePath, ("""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 while true; do
@@ -770,7 +770,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 done
             fi
             exit 0
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
@@ -795,13 +795,13 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, """
+        await File.WriteAllTextAsync(aspirePath, ("""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 exit 1
             fi
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
