@@ -9,6 +9,7 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
@@ -51,11 +52,13 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ChartContainer_UnchangedDimensionFilters_PreservesFilterParameters()
+    public void ChartContainer_AllDimensionsSelected_IncludesNewDimensionInFirstFetch()
     {
+        JSInterop.Mode = JSRuntimeMode.Loose;
         MetricsSetupHelpers.SetupMetricsPage(this);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var metricTime = DateTime.UtcNow.AddMinutes(-1);
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
@@ -70,14 +73,14 @@ public partial class MetricsTests : DashboardTestContext
                         {
                             CreateSumMetric(
                                 metricName: "test-instrument",
-                                startTime: s_testTime.AddMinutes(1),
+                                startTime: metricTime,
                                 attributes: [new KeyValuePair<string, string>("http.method", "GET")])
                         }
                     }
                 }
             }
         });
-        telemetryRepository.MakeReadOnly();
+
         var resource = telemetryRepository.GetResources().Single();
 
         var cut = RenderComponent<ChartContainer>(builder =>
@@ -93,11 +96,42 @@ public partial class MetricsTests : DashboardTestContext
         });
         var dimensionFilters = cut.Instance.DimensionFilters;
         var dimensionFilter = Assert.Single(dimensionFilters);
+        Assert.Equal("GET", Assert.Single(dimensionFilter.SelectedValues).Value);
+
+        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(
+                                metricName: "test-instrument",
+                                startTime: metricTime,
+                                attributes: [new KeyValuePair<string, string>("http.method", "POST")])
+                        }
+                    }
+                }
+            }
+        });
 
         cut.SetParametersAndRender(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(5)));
 
-        Assert.Same(dimensionFilters, cut.Instance.DimensionFilters);
-        Assert.Same(dimensionFilter, Assert.Single(cut.Instance.DimensionFilters));
+        var updatedFilter = Assert.Single(cut.Instance.DimensionFilters);
+        Assert.NotSame(dimensionFilters, cut.Instance.DimensionFilters);
+        Assert.Collection(
+            updatedFilter.SelectedValues.Select(value => value.Value).Order(),
+            value => Assert.Equal("GET", value),
+            value => Assert.Equal("POST", value));
+
+        var chart = cut.FindComponent<PlotlyChart>();
+        var dimension = Assert.Single(chart.Instance.InstrumentViewModel.MatchedDimensions!);
+        Assert.Equal(2, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value);
     }
 
     [Fact]
@@ -115,7 +149,7 @@ public partial class MetricsTests : DashboardTestContext
             return ValueTask.CompletedTask;
         });
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
@@ -184,7 +218,7 @@ public partial class MetricsTests : DashboardTestContext
             loadRedirect = new Uri(a.Location);
         };
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
@@ -242,7 +276,7 @@ public partial class MetricsTests : DashboardTestContext
         // Arrange
         MetricsSetupHelpers.SetupMetricsPage(this);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
@@ -337,8 +371,7 @@ public partial class MetricsTests : DashboardTestContext
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        FluentUISetupHelpers.ConfigureTelemetryRepository(this, readOnly: true, telemetryRepository => telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -356,8 +389,7 @@ public partial class MetricsTests : DashboardTestContext
                     }
                 }
             }
-        });
-        telemetryRepository.MakeReadOnly();
+        }));
         Services.GetRequiredService<PauseManager>().SetMetricsPaused(true);
         Services.GetRequiredService<NavigationManager>().NavigateTo(
             DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: "test-instrument", duration: 5, view: MetricViewKind.Graph.ToString()));
@@ -386,7 +418,7 @@ public partial class MetricsTests : DashboardTestContext
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: app1InstrumentName, duration: 720, view: MetricViewKind.Table.ToString()));
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics

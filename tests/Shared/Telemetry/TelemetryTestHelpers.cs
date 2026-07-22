@@ -6,13 +6,19 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using Aspire.Dashboard.Configuration;
+#if !ASPIRE_DASHBOARD_COMPONENT_TESTS
 using Aspire.Dashboard.Model;
+#endif
 using Aspire.Dashboard.Otlp.Model;
+#if !ASPIRE_DASHBOARD_COMPONENT_TESTS
 using Aspire.Dashboard.Otlp.Storage;
+#endif
 using Google.Protobuf;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+#if !ASPIRE_DASHBOARD_COMPONENT_TESTS
 using Microsoft.Extensions.Options;
+#endif
 using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -231,6 +237,7 @@ internal static class TelemetryTestHelpers
         return resource;
     }
 
+#if !ASPIRE_DASHBOARD_COMPONENT_TESTS
     public static InMemoryTelemetryRepository CreateRepository(
         int? maxMetricsCount = null,
         int? maxAttributeCount = null,
@@ -285,6 +292,7 @@ internal static class TelemetryTestHelpers
         }
         return repository;
     }
+#endif
 
     public static ulong DateTimeToUnixNanoseconds(DateTime dateTime)
     {

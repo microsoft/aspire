@@ -7,7 +7,6 @@ using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Dashboard.Otlp.Storage;
 using Bunit;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.DependencyInjection;
@@ -76,8 +75,7 @@ public class TracesTests : DashboardTestContext
         }));
 
         var timestamp = DateTime.UnixEpoch;
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
-        telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -91,11 +89,7 @@ public class TracesTests : DashboardTestContext
                     }
                 }
             }
-        });
-        if (isReadOnly)
-        {
-            telemetryRepository.MakeReadOnly();
-        }
+        }));
 
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);

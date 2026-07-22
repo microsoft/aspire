@@ -36,7 +36,7 @@ public partial class StructuredLogsTests : DashboardTestContext
         // Arrange
         SetupStructureLogsServices();
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
@@ -274,8 +274,7 @@ public partial class StructuredLogsTests : DashboardTestContext
             TelemetryLimits = { MaxLogCount = 1 }
         }));
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
-        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -289,11 +288,7 @@ public partial class StructuredLogsTests : DashboardTestContext
                     }
                 }
             }
-        });
-        if (isReadOnly)
-        {
-            telemetryRepository.MakeReadOnly();
-        }
+        }));
 
         var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
         Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);

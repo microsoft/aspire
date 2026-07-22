@@ -11,8 +11,10 @@ using Aspire.Dashboard.ServiceClient;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
+using Aspire.Tests.Utils;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 
@@ -145,6 +147,14 @@ internal static class FluentUISetupHelpers
         comboboxModule.SetupVoid("setControlAttribute", _ => true);
     }
 
+    public static void ConfigureTelemetryRepository(
+        TestContext context,
+        bool readOnly,
+        Action<ITelemetryRepositoryWriter> seed)
+    {
+        context.Services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly, seed));
+    }
+
     public static void AddCommonDashboardServices(
         TestContext context,
         ILocalStorage? localStorage = null,
@@ -156,9 +166,33 @@ internal static class FluentUISetupHelpers
     {
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
-        context.Services.AddSingleton<InMemoryTelemetryRepository>();
-        context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<InMemoryTelemetryRepository>());
-        context.Services.AddSingleton<ITelemetryRepositoryWriter>(services => services.GetRequiredService<InMemoryTelemetryRepository>());
+        context.Services.AddSingleton(_ => TemporaryWorkspace.Create(
+            global::Xunit.TestContext.Current.TestOutputHelper ?? throw new InvalidOperationException("An active test output helper is required.")));
+        context.Services.AddSingleton<SqliteTelemetryRepository>(services =>
+        {
+            var databasePath = Path.Combine(services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
+            var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+            var options = services.GetRequiredService<IOptions<DashboardOptions>>();
+            var pauseManager = services.GetRequiredService<PauseManager>();
+            var outgoingPeerResolvers = services.GetServices<IOutgoingPeerResolver>();
+            var configuration = services.GetService<TelemetryRepositoryConfiguration>();
+
+            if (configuration is not null)
+            {
+                using var writer = new SqliteTelemetryRepository(databasePath, loggerFactory, options, new PauseManager(), outgoingPeerResolvers);
+                configuration.Seed(writer);
+            }
+
+            return new SqliteTelemetryRepository(
+                databasePath,
+                loggerFactory,
+                options,
+                pauseManager,
+                outgoingPeerResolvers,
+                readOnly: configuration?.ReadOnly == true);
+        });
+        context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<SqliteTelemetryRepository>());
+        context.Services.AddSingleton<ITelemetryRepositoryWriter>(services => services.GetRequiredService<SqliteTelemetryRepository>());
         context.Services.AddSingleton<PauseManager>();
         context.Services.AddSingleton<IDialogService, DialogService>();
         context.Services.AddSingleton<ILocalStorage>(localStorage ?? new TestLocalStorage());
@@ -271,4 +305,6 @@ internal static class FluentUISetupHelpers
             builder.CloseComponent();
         });
     }
+
+    private sealed record TelemetryRepositoryConfiguration(bool ReadOnly, Action<ITelemetryRepositoryWriter> Seed);
 }

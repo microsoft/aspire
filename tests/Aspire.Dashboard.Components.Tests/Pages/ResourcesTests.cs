@@ -519,7 +519,7 @@ public partial class ResourcesTests : DashboardTestContext
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentAnchor(this);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         AddErrorLog(telemetryRepository, resourceName: "Resource1");
         var unviewedErrorCounts = telemetryRepository.GetResourceUnviewedErrorLogsCount();
         var resourceKey = Assert.Single(unviewedErrorCounts.Keys);
@@ -571,7 +571,7 @@ public partial class ResourcesTests : DashboardTestContext
         };
     }
 
-    private static void AddErrorLog(InMemoryTelemetryRepository repository, string resourceName)
+    private static void AddErrorLog(SqliteTelemetryRepository repository, string resourceName)
     {
         var addContext = new AddContext();
         var logs = new RepeatedField<ResourceLogs>();
