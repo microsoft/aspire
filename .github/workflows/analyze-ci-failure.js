@@ -2,6 +2,13 @@
 
 const fs = require('node:fs');
 
+const redactedFieldLimits = {
+    error: 1000,
+    stack_trace: 2000,
+    standard_output: 4000,
+    standard_error: 4000,
+};
+
 function escapeHtml(value) {
     return String(value ?? '')
         .replaceAll('&', '&amp;')
@@ -24,17 +31,21 @@ function redactSensitiveData(value) {
         .replace(/\b((?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key))\s*=\s*([^;\r\n]+)/gi, '$1=[REDACTED]');
 }
 
-function redactJson(value) {
+function redactJson(value, propertyName) {
     if (typeof value === 'string') {
-        return redactSensitiveData(value);
+        const redacted = redactSensitiveData(value);
+        const limit = redactedFieldLimits[propertyName];
+
+        // Redact before truncating so credentials that cross a field boundary are still recognized.
+        return limit ? redacted.slice(0, limit) : redacted;
     }
 
     if (Array.isArray(value)) {
-        return value.map(redactJson);
+        return value.map(item => redactJson(item, propertyName));
     }
 
     if (value && typeof value === 'object') {
-        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactJson(item)]));
+        return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, redactJson(item, key)]));
     }
 
     return value;
@@ -100,9 +111,7 @@ function getFailureInformation(analysis, cause) {
         };
     }
 
-    const failedJob = analysis.failed_jobs?.find(job => job.name === jobName)
-        || analysis.failed_jobs?.find(job => job.classification === 'transient-infra')
-        || {};
+    const failedJob = analysis.failed_jobs?.find(job => job.name === jobName) || {};
 
     return {
         classificationAnalysis: failedJob.reason || cause.analysis || '',

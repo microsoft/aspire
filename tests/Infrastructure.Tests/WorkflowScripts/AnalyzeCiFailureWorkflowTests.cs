@@ -183,11 +183,36 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
     [Fact]
     [RequiresTools(["node"])]
+    public async Task BuildInfrastructureIssueBodyUsesCauseAnalysisWhenJobDoesNotMatch()
+    {
+        var analysis = CreateAnalysis();
+        var cause = new
+        {
+            id = "unknown-job-failure",
+            type = "infra-failure",
+            title = "Unknown job failure",
+            job_name = "Tests / Missing",
+            analysis = "Cause-specific analysis",
+            failure_details = "Failure details"
+        };
+
+        var body = await InvokeScriptAsync(
+            "issue-body",
+            analysis,
+            cause,
+            "<!-- ci-failure-cause:unknown-job-failure -->");
+
+        Assert.Contains("<pre>\nCause-specific analysis\n</pre>", body);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
     public async Task RedactOperationRemovesSensitiveValuesAndPreservesDiagnostics()
     {
+        var privateKeyAcrossTruncationBoundary = $"{new string('x', 3950)}-----BEGIN PRIVATE KEY-----\n{new string('k', 200)}\n-----END PRIVATE KEY-----\nExpected 42 but got 41";
         var input = new
         {
-            standard_output = "Authorization: Bearer token-value\nAPI_KEY=key-value\nExpected 42 but got 41",
+            standard_output = privateKeyAcrossTruncationBoundary,
             standard_error = "Host=db;Password=secret-value;Timeout=30\nhttps://user:pass@example.com/path",
             nested = new[] { "eyJ1234567890.abcdefghijk.ABCDEFGHIJK" }
         };
@@ -202,7 +227,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         Assert.Equal(0, result.ExitCode);
         var redacted = JsonSerializer.Deserialize<JsonElement>(result.Output, s_jsonOptions);
         Assert.Equal(
-            "Authorization: Bearer [REDACTED]\nAPI_KEY=[REDACTED]\nExpected 42 but got 41",
+            $"{new string('x', 3950)}[REDACTED]\nExpected 42 but got 41",
             redacted.GetProperty("standard_output").GetString());
         Assert.Equal(
             "Host=db;Password=[REDACTED];Timeout=30\nhttps://[REDACTED]:[REDACTED]@example.com/path",
