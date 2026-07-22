@@ -533,6 +533,7 @@ test("stopInstance ends its own live SSE stream promptly and leaves other instan
   // streams must not touch another instance's still-open client.
   const server = await import(`./server.mjs?test=sseshutdown-${Date.now()}`);
   const entryA = await server.startInstance("sse-shutdown-a", () => {});
+  t.after(() => server.stopInstance("sse-shutdown-a"));
   const entryB = await server.startInstance("sse-shutdown-b", () => {});
   t.after(() => server.stopInstance("sse-shutdown-b"));
 

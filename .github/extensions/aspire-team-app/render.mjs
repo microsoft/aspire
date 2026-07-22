@@ -1380,7 +1380,11 @@ function mergeActions() {
 // ownership: the user asked that a labelled card always carry its action, and a self-review of your
 // own aged PR before others weigh in is still useful.
 function signalActions(item) {
-  var sigs = (item && item.signals) || [];
+  // Only app-computed semantic signals authorize actions. Skip raw GitHub label pills (kind
+  // "repo-label", set in model.mjs): a repo can define a label literally named "merge conflicts",
+  // "re-review", or "3 unresolved", and matching that presentation text would expose a destructive
+  // action the PR's structured state does not actually warrant.
+  var sigs = ((item && item.signals) || []).filter(function (s) { return s && s.kind !== "repo-label"; });
   function hasSig(re) { return sigs.some(function (s) { return s && re.test(s.label || ""); }); }
   var out = [];
   if (hasSig(/conflict/i)) out.push(CARD_ACTIONS.resolveConflicts);
@@ -1469,7 +1473,9 @@ function laneCardActions(lane, item) {
 function isReviewDebtItem(item) {
   if (!item) return false;
   if (item.reviewDebt) return true;
-  return (item.signals || []).some((s) => s && s.label === "review debt");
+  // Fall back to the pill only for an app-computed signal, never a raw GitHub label named "review
+  // debt" (kind "repo-label"), so a label can't spoof the Address review / Discuss review actions.
+  return (item.signals || []).some((s) => s && s.kind !== "repo-label" && s.label === "review debt");
 }
 
 // Your own PR is "author response" when a reviewer requested changes (pr.review.state), or when the

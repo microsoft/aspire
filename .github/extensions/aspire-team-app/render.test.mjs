@@ -618,6 +618,26 @@ test("signalActions detects review debt from the serialized flag when the pill i
   assert.equal(api.signalActions({ pr: { isMine: false }, signals: [{ label: "released" }] }).length, 0);
 });
 
+test("signalActions ignores raw GitHub label pills so a repo label can't spoof a destructive action", () => {
+  const { api } = createRendererHarness();
+
+  // A repo label literally named like an action signal (kind "repo-label", set in model.mjs) must NOT
+  // authorize the action; only app-computed semantic signals do.
+  assert.equal(api.signalActions({ signals: [{ label: "merge conflicts", kind: "repo-label" }] }).length, 0);
+  assert.equal(api.signalActions({ signals: [{ label: "CI failing", kind: "repo-label" }] }).length, 0);
+  assert.equal(api.signalActions({ signals: [{ label: "3 unresolved", kind: "repo-label" }] }).length, 0);
+  assert.equal(api.signalActions({ pr: { isMine: false }, signals: [{ label: "re-review", kind: "repo-label" }] }).length, 0);
+  // A "review debt" label pill must not spoof Address review / Discuss review through isReviewDebtItem.
+  assert.equal(api.signalActions({ pr: { isMine: false }, signals: [{ label: "review debt", kind: "repo-label" }] }).length, 0);
+  assert.equal(
+    api.focusCardActions({ pr: { isMine: false }, signals: [{ label: "review debt", kind: "repo-label" }] }).map((a) => a.kind).join(","),
+    "test,review",
+  );
+
+  // The same labels as app-computed signals (no kind) still authorize their actions.
+  assert.equal(api.signalActions({ signals: [{ label: "merge conflicts" }] }).map((a) => a.kind).join(","), "resolve-conflicts");
+});
+
 function createRendererHarness(overrides = {}) {
   const app = {
     innerHTML: "",

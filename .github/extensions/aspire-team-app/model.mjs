@@ -487,7 +487,11 @@ export function createAttentionSignals(item) {
     : pullRequest.labels;
 
   for (const label of computedLabels.slice(0, 2)) {
-    signals.push({ label, tone: "accent" });
+    // Tag raw GitHub labels with a kind so downstream action derivation (render.mjs signalActions /
+    // isReviewDebtItem) can tell user-controlled label text apart from app-computed semantic signals.
+    // Without this a repo label literally named "merge conflicts", "re-review", or "3 unresolved"
+    // would match those action regexes and expose a destructive action the PR's real state lacks.
+    signals.push({ label, tone: "accent", kind: "repo-label" });
   }
 
   if (isBotAuthor(pullRequest.author, pullRequest.authorType)) {
