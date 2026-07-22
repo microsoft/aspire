@@ -1,0 +1,19 @@
+{
+  "area": "Dashboard",
+  "areaEmoji": "📊",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Resolves a memory leak where FluentMenu components were not unregistered on disposal, causing dashboard memory usage to grow as users navigate through telemetry views.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-07-22T01:53:03Z",
+  "lastMergedAt": "2026-07-22T01:53:03Z",
+  "name": "Fix dashboard memory leak from retained menus",
+  "owner": "JamesNK",
+  "prs": [
+    18853
+  ]
+}

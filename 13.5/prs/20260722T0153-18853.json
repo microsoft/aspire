@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: resolves memory leak where FluentMenu components were not unregistered on disposal in the dashboard",
+  "mergedAt": "2026-07-22T01:53:03Z",
+  "number": 18853,
+  "runDate": "2026-07-22T06:49:32Z",
+  "status": "included",
+  "title": "Prevent disposed dashboard menus from leaking"
+}
