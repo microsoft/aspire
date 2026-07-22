@@ -285,6 +285,129 @@ jobs:
           az account show --query "{subscriptionId:id, tenantId:tenantId, user:user.name}" -o table
           echo "✅ Azure authentication successful"
 
+      # Ensure the target subscription has every Azure resource provider the deployment test
+      # suite relies on. This is per-subscription setup, not a test concern: registration is a
+      # subscription-level, eventually-consistent operation, so doing it here means pointing the
+      # workflow at a fresh subscription (by swapping the deployment-testing environment secrets)
+      # self-heals instead of failing tests with "not registered for the Microsoft.X resource
+      # provider" / MissingSubscriptionRegistration. Already-registered providers are skipped, so
+      # on a warm subscription this is a fast no-op. It is intentionally best-effort and never
+      # fails the job: a test that genuinely needs a provider surfaces its own clear error.
+      - name: Register Azure resource providers
+        run: |
+          # Providers span the Aspire.Hosting.Azure.* integrations these tests exercise plus
+          # infrastructure every deployment emits (managed identity, role-assignment deployment
+          # scripts that run in ACI, Log Analytics, etc.):
+          #   Microsoft.Resources            ARM deployments + deployment scripts
+          #   Microsoft.Authorization        role assignments
+          #   Microsoft.ManagedIdentity      user-assigned managed identities
+          #   Microsoft.ContainerInstance    Azure deployment scripts execute in ACI
+          #   Microsoft.OperationalInsights  Log Analytics (Container Apps env, App Insights)
+          #   Microsoft.Insights             Application Insights / monitoring
+          #   Microsoft.App                  Azure Container Apps
+          #   Microsoft.ContainerRegistry    ACR (registry + Container Apps images)
+          #   Microsoft.ContainerService     AKS
+          #   Microsoft.Web                  App Service + Functions
+          #   Microsoft.Network              virtual networks, private endpoints, NSP
+          #   Microsoft.NetworkFunction      AKS Gateway API (Application Gateway for Containers)
+          #   Microsoft.ServiceNetworking    AKS Gateway API (Application Gateway for Containers)
+          #   Microsoft.Cdn                  Azure Front Door (Standard/Premium)
+          #   Microsoft.AppConfiguration     App Configuration
+          #   Microsoft.CognitiveServices    Cognitive Services / OpenAI / Foundry
+          #   Microsoft.DocumentDB           Cosmos DB
+          #   Microsoft.EventHub             Event Hubs
+          #   Microsoft.KeyVault             Key Vault
+          #   Microsoft.Kusto                Azure Data Explorer (Kusto)
+          #   Microsoft.DBforPostgreSQL      Azure Database for PostgreSQL
+          #   Microsoft.Cache                Azure Cache for Redis / Managed Redis
+          #   Microsoft.Search               Azure AI Search
+          #   Microsoft.ServiceBus           Service Bus
+          #   Microsoft.SignalRService       SignalR + Web PubSub
+          #   Microsoft.Sql                  Azure SQL
+          #   Microsoft.Storage              Storage
+          providers=(
+            Microsoft.Resources
+            Microsoft.Authorization
+            Microsoft.ManagedIdentity
+            Microsoft.ContainerInstance
+            Microsoft.OperationalInsights
+            Microsoft.Insights
+            Microsoft.App
+            Microsoft.ContainerRegistry
+            Microsoft.ContainerService
+            Microsoft.Web
+            Microsoft.Network
+            Microsoft.NetworkFunction
+            Microsoft.ServiceNetworking
+            Microsoft.Cdn
+            Microsoft.AppConfiguration
+            Microsoft.CognitiveServices
+            Microsoft.DocumentDB
+            Microsoft.EventHub
+            Microsoft.KeyVault
+            Microsoft.Kusto
+            Microsoft.DBforPostgreSQL
+            Microsoft.Cache
+            Microsoft.Search
+            Microsoft.ServiceBus
+            Microsoft.SignalRService
+            Microsoft.Sql
+            Microsoft.Storage
+          )
+
+          # Snapshot already-registered providers in one call so the warm-subscription path
+          # does no per-provider work.
+          registered="$(az provider list --query "[?registrationState=='Registered'].namespace" -o tsv 2>/dev/null || true)"
+          is_registered() { grep -qxF "$1" <<<"$registered"; }
+
+          pending=()
+          for p in "${providers[@]}"; do
+            if is_registered "$p"; then
+              echo "✓ $p already registered"
+            else
+              echo "→ registering $p"
+              # Non-fatal: a transient failure or missing permission on one provider must not
+              # block the whole run; the test that needs it will surface a clear error.
+              if az provider register --namespace "$p" --only-show-errors >/dev/null 2>&1; then
+                pending+=("$p")
+              else
+                echo "⚠ could not start registration for $p (continuing)"
+              fi
+            fi
+          done
+
+          if [ ${#pending[@]} -eq 0 ]; then
+            echo "✅ All required resource providers already registered."
+            exit 0
+          fi
+
+          # Registration is eventually consistent and can take a few minutes on a cold
+          # subscription. Wait (bounded) so the deploy steps below don't have to block on it
+          # themselves — e.g. the SQL admin SequencerJob deployment script waits on RP
+          # registration and can otherwise time out. Never fail the job on timeout.
+          echo "Waiting for ${#pending[@]} provider(s) to finish registering: ${pending[*]}"
+          deadline=$(( SECONDS + 600 ))
+          while [ ${#pending[@]} -gt 0 ] && [ "$SECONDS" -lt "$deadline" ]; do
+            sleep 15
+            still=()
+            for p in "${pending[@]}"; do
+              state="$(az provider show --namespace "$p" --query registrationState -o tsv --only-show-errors 2>/dev/null || echo Unknown)"
+              if [ "$state" = "Registered" ]; then
+                echo "✓ $p registered"
+              else
+                still+=("$p")
+              fi
+            done
+            pending=("${still[@]}")
+          done
+
+          if [ ${#pending[@]} -gt 0 ]; then
+            echo "⚠ Providers still not registered after timeout: ${pending[*]}"
+            echo "  Continuing; a test needing one of these may fail until registration completes."
+          else
+            echo "✅ All required resource providers registered."
+          fi
+
       - name: Verify Docker is running
         run: |
           echo "Verifying Docker daemon..."
