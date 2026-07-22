@@ -59,7 +59,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             [
                 new
                 {
-                    name = "Tests.SampleTheory(value: 1)",
+                    name = "Tests.SampleTheory(`value`)\n@maintainers",
                     job = "Tests / Windows",
                     error = "Wrong job",
                     stack_trace = "",
@@ -69,7 +69,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
                 },
                 new
                 {
-                    name = "Tests.SampleTheory(value: 1)",
+                    name = "Tests.SampleTheory(`value`)\n@maintainers",
                     job = "Tests / Linux",
                     error = "Expected <actual> & stable",
                     stack_trace = "at <frame>",
@@ -83,7 +83,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             id = "sample-theory-flake",
             type = "flaky-test",
             title = "Sample theory is flaky",
-            test_name = "Tests.SampleTheory(value: 1)",
+            test_name = "Tests.SampleTheory(`value`)\n@maintainers",
             job_name = "Tests / Linux",
             error_pattern = "Expected actual"
         };
@@ -98,7 +98,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             ## Build Information
 
             Build: https://github.com/microsoft/aspire/actions/runs/987654
-            Build error leg or test failing: Tests / Linux / `Tests.SampleTheory(value: 1)`
+            Build error leg or test failing: Tests / Linux / ``Tests.SampleTheory(`value`) @maintainers``
             Pull request: #18763
 
             ## Classification Analysis

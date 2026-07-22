@@ -11,6 +11,17 @@ function escapeHtml(value) {
         .replaceAll("'", '&#39;');
 }
 
+// TRX display names can contain backticks and line breaks. Collapse line breaks
+// and use a fence longer than any backtick run so the name cannot inject Markdown.
+function toInlineCode(value) {
+    const normalized = String(value).replace(/\r?\n/g, ' ');
+    const longestRun = (normalized.match(/`+/g) ?? []).reduce((max, run) => Math.max(max, run.length), 0);
+    const fence = '`'.repeat(longestRun + 1);
+    const pad = normalized.startsWith('`') || normalized.endsWith('`') ? ' ' : '';
+
+    return `${fence}${pad}${normalized}${pad}${fence}`;
+}
+
 function getCauseJobName(analysis, cause) {
     return cause.job_name || analysis.failed_jobs?.[0]?.name || 'unknown';
 }
@@ -76,7 +87,7 @@ function buildIssueBody(analysis, cause, marker) {
     const testName = cause.test_name || '';
     const outputSummary = cause.type === 'flaky-test' ? 'Test output' : 'Job output snippet';
     const buildError = testName
-        ? `Build error leg or test failing: ${jobName} / \`${testName}\``
+        ? `Build error leg or test failing: ${jobName} / ${toInlineCode(testName)}`
         : `Build error leg: ${jobName}`;
 
     return `${marker}
@@ -154,4 +165,5 @@ module.exports = {
     buildOccurrenceRow,
     escapeHtml,
     getCauseJobName,
+    toInlineCode,
 };
