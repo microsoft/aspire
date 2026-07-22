@@ -19,9 +19,11 @@ shows are driven by its lane and its signal pills:
 - **Test** / **Review** — someone else's PR that's waiting on you. Each self-routes
   to the repo's matching skill (`/pr-testing`, `/code-review`), falling back to a
   thorough manual pass.
-- **Address review** / **Discuss review** — a review-debt card (aged without a
-  review). Address review runs a fresh review; Discuss review talks through the
-  existing feedback and lays out response options without rewriting anything.
+- **Address review** / **Discuss review** — a review-debt card (aged without an
+  approving review; a PR that was only commented on or had changes requested still
+  counts until it's approved). Address review runs a fresh review; Discuss review
+  talks through the existing feedback and lays out response options without rewriting
+  anything.
 - **Resolve conflicts** — any card carrying a "merge conflicts" signal; runs a
   direct git conflict-resolution flow.
 - **Evaluate CI failures** — any card carrying a "CI failing" signal; self-routes to

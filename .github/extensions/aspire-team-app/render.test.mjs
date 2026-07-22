@@ -168,10 +168,22 @@ test("laneCardActions keys breakdown-lane actions off the lane label", () => {
   // Test/Review are withheld on your own PRs.
   assert.equal(api.laneCardActions({ label: "Needs review" }, mine), null);
 
-  // Conflict/CI lanes carry the matching signal, so the button comes from signalActions.
+  // Conflict lane carries the hoisted "merge conflicts" pill, so the button comes from signalActions.
   assert.equal(
     api.laneCardActions({ label: "Merge conflicts" }, { pr: { isMine: false }, signals: [{ label: "merge conflicts" }] }).map((a) => a.kind).join(","),
     "resolve-conflicts",
+  );
+
+  // The CI-failing pill is not hoisted and can be truncated off a stacked PR's card, so the CI lane
+  // is mapped explicitly: it offers "Evaluate CI failures" even when no "CI failing" signal survives.
+  assert.equal(
+    api.laneCardActions({ label: "CI failing" }, { pr: { isMine: false }, signals: [{ label: "release 9.0" }, { label: "regression" }] }).map((a) => a.kind).join(","),
+    "fix-ci",
+  );
+  // Fixing CI is the author's job, so the CI lane offers the action on your own PR too.
+  assert.equal(
+    api.laneCardActions({ label: "CI failing" }, { pr: { isMine: true }, signals: [] }).map((a) => a.kind).join(","),
+    "fix-ci",
   );
 
   // Unresolved-feedback lane card that also carries the "N unresolved" pill stays a single

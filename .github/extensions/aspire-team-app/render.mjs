@@ -1396,8 +1396,12 @@ function forYouCardActions(item) {
 
 // Which action buttons a breakdown-lane card gets, keyed on the lane's signal bucket. Review/Test
 // only make sense for a PR the viewer would review, so they are withheld on the viewer's own PRs.
-// The "Merge conflicts" and "CI failing" lanes are covered by signalActions (their cards carry the
-// matching pill), so they need no explicit mapping here.
+// The "Merge conflicts" lane is covered by signalActions alone: createAttentionSignals hoists that
+// pill right after the action signal so it always survives signalsFor's top-4 cap. The "CI failing"
+// pill is NOT hoisted, so on a stacked PR (release + regression + base) it can be pushed past the
+// top 4 and dropped, leaving signalActions with no CI pill to key off. So the CI lane is mapped
+// explicitly here (like "Unresolved feedback"); fixing CI is the author's job, so it is offered on
+// your own PRs too rather than gated on !isMine.
 function laneCardActions(lane, item) {
   var pr = (item && item.pr) || {};
   var label = lane && lane.label;
@@ -1408,6 +1412,8 @@ function laneCardActions(lane, item) {
     ctx = pr.isMine ? [] : [CARD_ACTIONS.review];
   } else if (label === "Unresolved feedback") {
     ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+  } else if (label === "CI failing") {
+    ctx = [CARD_ACTIONS.fixCi];
   }
   return mergeActions(ctx, signalActions(item));
 }
