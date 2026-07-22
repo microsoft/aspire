@@ -28,7 +28,7 @@ function redactSensitiveData(value) {
         .replace(/\b(gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|AKIA[A-Z0-9]{16}|(?:npm|pypi)-[A-Za-z0-9_-]{20,})\b/g, '[REDACTED]')
         .replace(/([?&](?:sig|signature|token|access_token|api[_-]?key|password|secret|client_secret)=)[^&\s]+/gi, '$1[REDACTED]')
         .replace(/(["'](?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|connection[_-]?string)["']\s*:\s*["'])[^"'\r\n]*(["'])/gi, '$1[REDACTED]$2')
-        .replace(/\b((?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key))\s*=\s*([^;\r\n]+)/gi, '$1=[REDACTED]');
+        .replace(/\b((?:[A-Za-z][A-Za-z0-9_.-]*[_-])?(?:password|passwd|pwd|token|api[_-]?key|access[_-]?key|account[_-]?key|secret|client[_-]?secret|sharedaccesskey|sharedaccesssignature|signature|private[_-]?key))(\s*[:=]\s*)([^;\r\n]+)/gi, '$1$2[REDACTED]');
 }
 
 function redactJson(value, propertyName) {
@@ -77,10 +77,10 @@ function buildOccurrence(analysis, cause) {
 }
 
 function addOccurrence(analysis, cause) {
-    return {
+    return redactJson({
         ...cause,
         occurrences: [buildOccurrence(analysis, cause)],
-    };
+    });
 }
 
 function buildOccurrenceRow(analysis, cause) {
