@@ -2202,51 +2202,10 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         return new OtlpInstrumentData
         {
             Summary = instruments[0].Summary,
-            Dimensions = [AggregateDimensions(matchingDimensions)],
+            Dimensions = matchingDimensions,
             KnownAttributeValues = allKnownAttributes,
             HasOverflow = hasOverflow
         };
-    }
-
-    private DimensionScope AggregateDimensions(IEnumerable<DimensionScope> dimensions)
-    {
-        var dimensionsList = dimensions.ToList();
-        var result = new DimensionScope(_otlpContext.Options.MaxMetricsCount, []);
-        foreach (var startTime in dimensionsList.SelectMany(dimension => dimension.Values).Select(value => value.Start).Distinct().Order())
-        {
-            var effectiveValues = dimensionsList
-                .Select(dimension => dimension.Values.LastOrDefault(value => value.Start == startTime))
-                .OfType<MetricValueBase>()
-                .ToList();
-            var first = effectiveValues[0];
-            MetricValueBase aggregate = first switch
-            {
-                MetricValue<long> => new MetricValue<long>(effectiveValues.Cast<MetricValue<long>>().Sum(value => value.Value), startTime, effectiveValues.Max(value => value.End)),
-                MetricValue<double> => new MetricValue<double>(effectiveValues.Cast<MetricValue<double>>().Sum(value => value.Value), startTime, effectiveValues.Max(value => value.End)),
-                HistogramValue histogram => new HistogramValue(
-                    effectiveValues.Cast<HistogramValue>().Select(value => value.Values).Aggregate(
-                        new ulong[histogram.Values.Length],
-                        (totals, values) =>
-                        {
-                            for (var index = 0; index < totals.Length; index++)
-                            {
-                                totals[index] += values[index];
-                            }
-                            return totals;
-                        }),
-                    effectiveValues.Cast<HistogramValue>().Sum(value => value.Sum),
-                    effectiveValues.Cast<HistogramValue>().Aggregate(0ul, (count, value) => count + value.Count),
-                    startTime,
-                    effectiveValues.Max(value => value.End),
-                    histogram.ExplicitBounds),
-                _ => throw new InvalidOperationException($"Unknown metric value type '{first.GetType()}'.")
-            };
-
-            aggregate.Count = effectiveValues.Max(value => value.Count);
-            aggregate.Exemplars.AddRange(dimensionsList.SelectMany(dimension => dimension.Values).Where(value => value.Start == startTime).SelectMany(value => value.Exemplars).Distinct());
-            result.Values.Add(aggregate);
-        }
-        return result;
     }
 
     private static bool MatchesDimensionFilters(

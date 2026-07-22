@@ -130,8 +130,9 @@ public partial class MetricsTests : DashboardTestContext
             value => Assert.Equal("POST", value));
 
         var chart = cut.FindComponent<PlotlyChart>();
-        var dimension = Assert.Single(chart.Instance.InstrumentViewModel.MatchedDimensions!);
-        Assert.Equal(2, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value);
+        var dimensions = chart.Instance.InstrumentViewModel.MatchedDimensions!;
+        Assert.Equal(2, dimensions.Count);
+        Assert.All(dimensions, dimension => Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value));
     }
 
     [Fact]

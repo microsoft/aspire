@@ -2,9 +2,11 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Controls.Chart;
+using Aspire.Dashboard.Components;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
+using Aspire.Dashboard.Otlp.Storage;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Proto.Metrics.V1;
 using Xunit;
@@ -167,6 +169,40 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
+    public void TryCalculatePoint_StaggeredDimensionChanges_SumsCurrentValues()
+    {
+        var context = CreateContext();
+        var stableDimension = new DimensionScope(capacity: 100, []);
+        var changingDimension = new DimensionScope(capacity: 100, []);
+        var start = new DateTimeOffset(2025, 6, 15, 12, 0, 0, TimeSpan.Zero);
+
+        for (var minute = 1; minute <= 3; minute++)
+        {
+            stableDimension.AddPointValue(new NumberDataPoint
+            {
+                AsInt = 10,
+                StartTimeUnixNano = ToNanos(start),
+                TimeUnixNano = ToNanos(start.AddMinutes(minute))
+            }, context);
+            changingDimension.AddPointValue(new NumberDataPoint
+            {
+                AsInt = 15 + (minute * 5),
+                StartTimeUnixNano = ToNanos(start),
+                TimeUnixNano = ToNanos(start.AddMinutes(minute))
+            }, context);
+        }
+
+        var result = ChartDataCalculator.TryCalculatePoint(
+            [stableDimension, changingDimension],
+            start.AddMinutes(3).AddSeconds(-1),
+            start.AddMinutes(3),
+            out var pointValue);
+
+        Assert.True(result);
+        Assert.Equal(40, pointValue);
+    }
+
+    [Fact]
     public void TryCalculatePoint_MultipleMetricsInDimension_TakesMax()
     {
         var context = CreateContext();
@@ -298,6 +334,60 @@ public class ChartDataCalculatorTests
     }
 
     [Fact]
+    public void TryCalculateHistogramPoints_StaggeredDimensionChanges_CombinesObservationDeltas()
+    {
+        var context = CreateContext();
+        var stableDimension = new DimensionScope(capacity: 100, []);
+        var changingDimension = new DimensionScope(capacity: 100, []);
+        var start = new DateTimeOffset(2025, 6, 15, 12, 0, 0, TimeSpan.Zero);
+
+        for (var minute = 1; minute <= 3; minute++)
+        {
+            stableDimension.AddHistogramValue(CreateHistogramPoint(start, minute, 10, [10, 0, 0]), context);
+            changingDimension.AddHistogramValue(CreateHistogramPoint(start, minute, checked((ulong)(15 + (minute * 5))), [0, 0, checked((ulong)(15 + (minute * 5)))]), context);
+        }
+
+        var traces = new Dictionary<int, ChartTrace>
+        {
+            [25] = new ChartTrace { Name = "P25", Percentile = 25 }
+        };
+        var exemplars = new List<ChartExemplar>();
+
+        var firstResult = ChartDataCalculator.TryCalculateHistogramPoints(
+            [stableDimension, changingDimension],
+            start,
+            start,
+            traces,
+            exemplars,
+            ToLocal);
+        var secondResult = ChartDataCalculator.TryCalculateHistogramPoints(
+            [stableDimension, changingDimension],
+            start.AddMinutes(1),
+            start.AddMinutes(1),
+            traces,
+            exemplars,
+            ToLocal);
+
+        Assert.True(firstResult);
+        Assert.True(secondResult);
+        Assert.Equal([10, 100], traces[25].Values);
+
+        static HistogramDataPoint CreateHistogramPoint(DateTimeOffset start, int minute, ulong count, ulong[] bucketCounts)
+        {
+            var point = new HistogramDataPoint
+            {
+                StartTimeUnixNano = ToNanos(start),
+                TimeUnixNano = ToNanos(start.AddMinutes(minute)),
+                Count = count,
+                Sum = count
+            };
+            point.ExplicitBounds.AddRange([10, 100]);
+            point.BucketCounts.AddRange(bucketCounts);
+            return point;
+        }
+    }
+
+    [Fact]
     public void CalculateHistogramValues_XValuesInChronologicalOrder()
     {
         var context = CreateContext();
@@ -345,6 +435,99 @@ public class ChartDataCalculatorTests
         var data = calculator.CalculateChartValues([dimension], s_startTime, toLocalWithOffset, "Count");
 
         Assert.All(data.XValues, x => Assert.Equal(offset, x.Offset));
+    }
+
+    [Fact]
+    public void MetricInstrumentDataCache_Merge_ReplacesTailAndAddsDimension()
+    {
+        var start = s_startTime.UtcDateTime;
+        KeyValuePair<string, string>[] firstAttributes = [KeyValuePair.Create("dimension", "first")];
+        KeyValuePair<string, string>[] secondAttributes = [KeyValuePair.Create("dimension", "second")];
+        var cachedDimension = new DimensionScope(capacity: 100, firstAttributes);
+        cachedDimension.Values.Add(new MetricValue<long>(1, start, start.AddSeconds(1)));
+        cachedDimension.Values.Add(new MetricValue<long>(2, start.AddSeconds(1), start.AddSeconds(2)));
+
+        var refreshedDimension = new DimensionScope(capacity: 100, firstAttributes);
+        refreshedDimension.Values.Add(new MetricValue<long>(1, start, start.AddSeconds(1)));
+        refreshedDimension.Values.Add(new MetricValue<long>(2, start.AddSeconds(1), start.AddSeconds(3)));
+        refreshedDimension.Values.Add(new MetricValue<long>(3, start.AddSeconds(3), start.AddSeconds(4)));
+        var newDimension = new DimensionScope(capacity: 100, secondAttributes);
+        newDimension.Values.Add(new MetricValue<long>(4, start.AddSeconds(3), start.AddSeconds(4)));
+
+        var cached = CreateInstrumentData([cachedDimension]);
+        var refreshed = CreateInstrumentData([refreshedDimension, newDimension]);
+        var cursors = new List<MetricDimensionCursor>
+        {
+            new() { Attributes = firstAttributes, StartTime = start.AddSeconds(1) }
+        };
+
+        var merged = MetricInstrumentDataCache.Merge(cached, refreshed, cursors, start);
+
+        Assert.Collection(
+            merged.Dimensions[0].Values.Cast<MetricValue<long>>(),
+            value => Assert.Equal((1L, start.AddSeconds(1)), (value.Value, value.End)),
+            value => Assert.Equal((2L, start.AddSeconds(3)), (value.Value, value.End)),
+            value => Assert.Equal((3L, start.AddSeconds(4)), (value.Value, value.End)));
+        Assert.Equal(4, Assert.IsType<MetricValue<long>>(Assert.Single(merged.Dimensions[1].Values)).Value);
+    }
+
+    [Fact]
+    public void MetricInstrumentDataCache_Merge_ReplacesLateArrivingValue()
+    {
+        var start = s_startTime.UtcDateTime;
+        KeyValuePair<string, string>[] attributes = [KeyValuePair.Create("dimension", "first")];
+        var cachedDimension = new DimensionScope(capacity: 100, attributes);
+        cachedDimension.Values.Add(new MetricValue<long>(1, start, start.AddSeconds(5)));
+        cachedDimension.Values.Add(new MetricValue<long>(2, start.AddSeconds(14), start.AddSeconds(15)));
+        cachedDimension.Values.Add(new MetricValue<long>(3, start.AddSeconds(29), start.AddSeconds(30)));
+
+        var refreshedDimension = new DimensionScope(capacity: 100, attributes);
+        refreshedDimension.Values.Add(new MetricValue<long>(20, start.AddSeconds(14), start.AddSeconds(15)));
+        refreshedDimension.Values.Add(new MetricValue<long>(3, start.AddSeconds(29), start.AddSeconds(30)));
+
+        var cached = CreateInstrumentData([cachedDimension]);
+        var refreshed = CreateInstrumentData([refreshedDimension]);
+        var cursors = MetricInstrumentDataCache.CreateCursors(cached, TimeSpan.FromSeconds(20), TimeSpan.FromSeconds(1));
+
+        Assert.Equal(start.AddSeconds(10), Assert.Single(cursors).StartTime);
+
+        var merged = MetricInstrumentDataCache.Merge(cached, refreshed, cursors, start);
+
+        Assert.Collection(
+            Assert.Single(merged.Dimensions).Values.Cast<MetricValue<long>>(),
+            value => Assert.Equal((1L, start.AddSeconds(5)), (value.Value, value.End)),
+            value => Assert.Equal((20L, start.AddSeconds(15)), (value.Value, value.End)),
+            value => Assert.Equal((3L, start.AddSeconds(30)), (value.Value, value.End)));
+    }
+
+    [Theory]
+    [InlineData(1, 1)]
+    [InlineData(5, 1)]
+    [InlineData(15, 1)]
+    [InlineData(30, 60)]
+    [InlineData(720, 60)]
+    public void GetDataPointInterval_ReturnsDurationResolution(int durationMinutes, int expectedSeconds)
+    {
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), ChartContainer.GetDataPointInterval(TimeSpan.FromMinutes(durationMinutes)));
+    }
+
+    private static OtlpInstrumentData CreateInstrumentData(List<DimensionScope> dimensions)
+    {
+        return new OtlpInstrumentData
+        {
+            Summary = new OtlpInstrumentSummary
+            {
+                Name = "test",
+                Description = "test",
+                Unit = "items",
+                Type = OtlpInstrumentType.Gauge,
+                AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+                Parent = OtlpScope.Empty
+            },
+            Dimensions = dimensions,
+            KnownAttributeValues = [],
+            HasOverflow = false
+        };
     }
 
     private static ulong ToNanos(DateTimeOffset dt) => (ulong)(dt.ToUnixTimeMilliseconds() * 1_000_000);

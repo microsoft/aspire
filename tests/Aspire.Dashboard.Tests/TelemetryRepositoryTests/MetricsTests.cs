@@ -4,6 +4,7 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using System.Text;
+using Aspire.Dashboard.Components;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
@@ -187,7 +188,12 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             });
 
         var dimensionAttributes = instrument.Dimensions.Single().Attributes;
-        Assert.Empty(dimensionAttributes);
+        Assert.Collection(dimensionAttributes,
+            p => Assert.Equal(KeyValuePair.Create("Meter_Key0", "01234"), p),
+            p => Assert.Equal(KeyValuePair.Create("Meter_Key1", "0123456789"), p),
+            p => Assert.Equal(KeyValuePair.Create("Meter_Key2", "012345678901234"), p),
+            p => Assert.Equal(KeyValuePair.Create("Meter_Key3", "0123456789012345"), p),
+            p => Assert.Equal(KeyValuePair.Create("Meter_Key4", "0123456789012345"), p));
         Assert.Equal(5, instrument.KnownAttributeValues.Count);
     }
 
@@ -258,7 +264,12 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             });
 
         var dimensionAttributes = instrument.Dimensions.Single().Attributes;
-        Assert.Empty(dimensionAttributes);
+        Assert.Collection(dimensionAttributes,
+            p => Assert.Equal(KeyValuePair.Create("Meter_Key0", "01234"), p),
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key0", "01234"), p),
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key1", "0123456789"), p),
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key2", "012345678901234"), p),
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key3", "0123456789012345"), p));
         Assert.Equal(5, instrument.KnownAttributeValues.Count);
     }
 
@@ -341,10 +352,10 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
                 Assert.Equal(new[] { null, "value1", "" }, e.Value);
             });
 
-        var dimension = Assert.Single(instrumentData.Dimensions);
-        Assert.Empty(dimension.Attributes);
-        Assert.Equal(5, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value);
-        var exemplar = Assert.Single(dimension.Values.SelectMany(value => value.Exemplars));
+        Assert.Equal(5, instrumentData.Dimensions.Count);
+        Assert.All(instrumentData.Dimensions, dimension => Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value));
+        var dimensionWithoutAttributes = Assert.Single(instrumentData.Dimensions, dimension => dimension.Attributes.Length == 0);
+        var exemplar = Assert.Single(dimensionWithoutAttributes.Values.SelectMany(value => value.Exemplars));
 
         Assert.Equal("key1", exemplar.Attributes[0].Key);
         Assert.Equal("value1", exemplar.Attributes[0].Value);
@@ -363,16 +374,18 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         });
 
         Assert.NotNull(filteredInstrumentData);
-        var filteredDimension = Assert.Single(filteredInstrumentData.Dimensions);
-        Assert.Empty(filteredDimension.Attributes);
-        var filteredValue = Assert.IsType<MetricValue<long>>(Assert.Single(filteredDimension.Values));
-        Assert.Equal(3, filteredValue.Value);
+        Assert.Equal(3, filteredInstrumentData.Dimensions.Count);
+        Assert.All(filteredInstrumentData.Dimensions, dimension =>
+        {
+            Assert.Contains(KeyValuePair.Create("key1", "value1"), dimension.Attributes);
+            Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value);
+        });
         Assert.Equal(instrumentData.KnownAttributeValues, filteredInstrumentData.KnownAttributeValues);
 
     }
 
     [Fact]
-    public void GetInstrument_StaggeredDimensionChanges_AggregatesCurrentValues()
+    public void GetInstrument_StaggeredDimensionChanges_ReturnsCurrentValues()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
@@ -424,8 +437,9 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         });
 
         Assert.NotNull(instrument);
-        var values = Assert.Single(instrument.Dimensions).Values.Cast<MetricValue<long>>().ToArray();
-        Assert.Equal(35, Assert.Single(values).Value);
+        var dimensions = instrument.Dimensions.ToDictionary(dimension => Assert.Single(dimension.Attributes).Value);
+        Assert.Equal(10, Assert.IsType<MetricValue<long>>(Assert.Single(dimensions["stable"].Values)).Value);
+        Assert.Equal(25, Assert.IsType<MetricValue<long>>(dimensions["changing"].Values[^1]).Value);
     }
 
     [Fact]
@@ -650,9 +664,11 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.NotNull(instrument);
         Assert.Equal("test1", instrument.Summary.Name);
 
-        var dimension = Assert.Single(instrument.Dimensions);
-        Assert.Empty(dimension.Attributes);
-        Assert.Equal(6, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value);
+        Assert.Collection(
+            instrument.Dimensions.OrderBy(dimension => Assert.Single(dimension.Attributes).Value),
+            dimension => Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value),
+            dimension => Assert.Equal(2, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value),
+            dimension => Assert.Equal(3, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value));
 
         var knownValues = Assert.Single(instrument.KnownAttributeValues);
         Assert.Equal("key-1", knownValues.Key);
@@ -825,7 +841,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.Equal("test1", resource1Test1Instrument.Summary.Name);
 
         var resource1Test1Dimensions = Assert.Single(resource1Test1Instrument.Dimensions);
-        Assert.Equal(2, Assert.IsType<MetricValue<long>>(Assert.Single(resource1Test1Dimensions.Values)).Value);
+        Assert.Equal(2, Assert.IsType<MetricValue<long>>(resource1Test1Dimensions.Values[^1]).Value);
 
         var resource1Test2Instrument = repository.GetInstrument(new GetInstrumentRequest
         {
@@ -1285,7 +1301,7 @@ public sealed class SqliteMetricsTests : MetricsTests
     protected override bool UseSqlite => true;
 
     [Fact]
-    public void GetInstrument_StaggeredDimensionChanges_SumsCurrentValuesAtEachChange()
+    public void GetInstrument_StaggeredDimensionChanges_ReturnsDimensionTimelines()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
@@ -1325,15 +1341,17 @@ public sealed class SqliteMetricsTests : MetricsTests
         });
 
         Assert.NotNull(instrument);
-        var values = Assert.Single(instrument.Dimensions).Values.Cast<MetricValue<long>>().ToArray();
+        var dimensions = instrument.Dimensions.ToDictionary(dimension => Assert.Single(dimension.Attributes).Value);
+        var stableValue = Assert.IsType<MetricValue<long>>(Assert.Single(dimensions["stable"].Values));
+        Assert.Equal(10, stableValue.Value);
         Assert.Collection(
-            values,
-            value => Assert.Equal(35, value.Value),
-            value => Assert.Equal(40, value.Value));
+            dimensions["changing"].Values.Cast<MetricValue<long>>(),
+            value => Assert.Equal(25, value.Value),
+            value => Assert.Equal(30, value.Value));
     }
 
     [Fact]
-    public void GetHistogram_StaggeredDimensionChanges_SumsCurrentValuesAtEachChange()
+    public void GetHistogram_StaggeredDimensionChanges_ReturnsDimensionTimelines()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
@@ -1373,23 +1391,26 @@ public sealed class SqliteMetricsTests : MetricsTests
         });
 
         Assert.NotNull(instrument);
-        var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
+        var dimensions = instrument.Dimensions.ToDictionary(dimension => Assert.Single(dimension.Attributes).Value);
+        var stableValue = Assert.IsType<HistogramValue>(Assert.Single(dimensions["stable"].Values));
+        Assert.Equal(10ul, stableValue.Count);
+        Assert.Equal(10ul, stableValue.Values[0]);
         Assert.Collection(
-            values,
+            dimensions["changing"].Values.Cast<HistogramValue>(),
+            value =>
+            {
+                Assert.Equal(20ul, value.Count);
+                Assert.Equal(20ul, value.Values[0]);
+            },
+            value =>
+            {
+                Assert.Equal(25ul, value.Count);
+                Assert.Equal(25ul, value.Values[0]);
+            },
             value =>
             {
                 Assert.Equal(30ul, value.Count);
                 Assert.Equal(30ul, value.Values[0]);
-            },
-            value =>
-            {
-                Assert.Equal(35ul, value.Count);
-                Assert.Equal(35ul, value.Values[0]);
-            },
-            value =>
-            {
-                Assert.Equal(40ul, value.Count);
-                Assert.Equal(40ul, value.Values[0]);
             });
 
         static Metric CreateTestHistogramMetric(DateTime startTime, int value, string dimension)
@@ -1407,6 +1428,266 @@ public sealed class SqliteMetricsTests : MetricsTests
             });
             return metric;
         }
+    }
+
+    [Fact]
+    public void GetInstrument_DimensionCursor_ReturnsExtendedLatestPoint()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(
+                                metricName: "test",
+                                startTime: s_queryTestTime.AddMinutes(1),
+                                value: 10,
+                                attributes: [KeyValuePair.Create("dimension", "one")],
+                                exemplars: [CreateExemplar(s_queryTestTime.AddMinutes(1), 10)])
+                        }
+                    }
+                }
+            }
+        });
+
+        var resource = Assert.Single(repository.GetResources());
+        var initialInstrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime,
+            EndTime = s_queryTestTime.AddMinutes(1)
+        });
+        var initialDimension = Assert.Single(initialInstrument!.Dimensions);
+        var initialValue = Assert.IsType<MetricValue<long>>(Assert.Single(initialDimension.Values));
+
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(
+                                metricName: "test",
+                                startTime: s_queryTestTime.AddMinutes(2),
+                                value: 10,
+                                attributes: [KeyValuePair.Create("dimension", "one")],
+                                exemplars: [CreateExemplar(s_queryTestTime.AddMinutes(2), 20)])
+                        }
+                    }
+                }
+            }
+        });
+
+        var refreshedInstrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime,
+            EndTime = s_queryTestTime.AddMinutes(2),
+            DimensionCursors =
+            [
+                new MetricDimensionCursor
+                {
+                    Attributes = initialDimension.Attributes,
+                    StartTime = s_queryTestTime.AddMinutes(1.5)
+                }
+            ]
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+        var refreshedValue = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(refreshedInstrument!.Dimensions).Values));
+        Assert.Equal(initialValue.Start, refreshedValue.Start);
+        Assert.Equal(s_queryTestTime.AddMinutes(2), refreshedValue.End);
+        Assert.Equal(2ul, refreshedValue.Count);
+        Assert.Equal(20, Assert.Single(refreshedValue.Exemplars).Value);
+    }
+
+    [Fact]
+    public void GetInstrument_DataPointInterval_RollsUpNumericValuesAndExemplars()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(
+                                metricName: "test",
+                                startTime: s_queryTestTime.AddMilliseconds(100),
+                                value: 3,
+                                exemplars: [CreateExemplar(s_queryTestTime.AddMilliseconds(100), 3)]),
+                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMilliseconds(200), value: 2),
+                            CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMilliseconds(800), value: 1)
+                        }
+                    }
+                }
+            }
+        });
+
+        var resource = Assert.Single(repository.GetResources());
+        var instrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime,
+            EndTime = s_queryTestTime.AddSeconds(1),
+            DataPointInterval = TimeSpan.FromSeconds(1)
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+        var value = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(instrument!.Dimensions).Values));
+        Assert.Equal(2, value.Value);
+        Assert.Equal(s_queryTestTime, value.Start);
+        var exemplar = Assert.Single(value.Exemplars);
+        Assert.Equal(3, exemplar.Value);
+    }
+
+    [Fact]
+    public void GetInstrument_IncrementalRollup_RecomputesCompleteLatestBucket()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        AddMetric(s_queryTestTime.AddSeconds(1), 5);
+        AddMetric(s_queryTestTime.AddSeconds(5), 5);
+        AddMetric(s_queryTestTime.AddSeconds(10), 3);
+        AddMetric(s_queryTestTime.AddMinutes(2), 3);
+
+        var resource = Assert.Single(repository.GetResources());
+        var initialInstrument = GetInstrument([]);
+        var initialValue = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(initialInstrument.Dimensions).Values));
+        var cursors = MetricInstrumentDataCache.CreateCursors(initialInstrument, TimeSpan.FromMinutes(1), TimeSpan.FromMinutes(1));
+        var cursor = Assert.Single(cursors);
+
+        Assert.Equal(0, addContext.FailureCount);
+        Assert.Equal(5, initialValue.Value);
+        Assert.Equal(s_queryTestTime, cursor.StartTime);
+
+        var refreshedInstrument = GetInstrument(cursors);
+        var refreshedValue = Assert.IsType<MetricValue<long>>(Assert.Single(Assert.Single(refreshedInstrument.Dimensions).Values));
+        Assert.Equal(initialValue.Value, refreshedValue.Value);
+        Assert.Equal(initialValue.Count, refreshedValue.Count);
+        Assert.Equal(initialValue.Start, refreshedValue.Start);
+        Assert.Equal(initialValue.End, refreshedValue.End);
+
+        void AddMetric(DateTime startTime, int value)
+        {
+            repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+            {
+                new ResourceMetrics
+                {
+                    Resource = CreateResource(),
+                    ScopeMetrics =
+                    {
+                        new ScopeMetrics
+                        {
+                            Scope = CreateScope(name: "test-meter"),
+                            Metrics = { CreateSumMetric(metricName: "test", startTime: startTime, value: value) }
+                        }
+                    }
+                }
+            });
+        }
+
+        OtlpInstrumentData GetInstrument(IReadOnlyList<MetricDimensionCursor> dimensionCursors)
+        {
+            return repository.GetInstrument(new GetInstrumentRequest
+            {
+                ResourceKey = resource.ResourceKey,
+                MeterName = "test-meter",
+                InstrumentName = "test",
+                StartTime = s_queryTestTime,
+                EndTime = s_queryTestTime.AddMinutes(2),
+                DataPointInterval = TimeSpan.FromMinutes(1),
+                DimensionCursors = dimensionCursors
+            })!;
+        }
+    }
+
+    [Fact]
+    public void GetHistogram_DataPointInterval_ReturnsLatestCoherentSnapshot()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        var metrics = new List<Metric>();
+        for (var pointIndex = 1; pointIndex <= 3; pointIndex++)
+        {
+            var metric = CreateHistogramMetric("test", s_queryTestTime.AddMilliseconds(pointIndex * 100));
+            var point = Assert.Single(metric.Histogram.DataPoints);
+            point.Count = checked((ulong)pointIndex);
+            point.Sum = pointIndex * 10;
+            point.BucketCounts.Clear();
+            point.BucketCounts.AddRange(pointIndex switch
+            {
+                1 => [1, 0, 0, 0],
+                2 => [1, 1, 0, 0],
+                _ => [1, 1, 1, 0]
+            });
+            if (pointIndex == 2)
+            {
+                point.Exemplars.Add(CreateExemplar(s_queryTestTime.AddMilliseconds(200), 20));
+            }
+            metrics.Add(metric);
+        }
+        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { metrics }
+                    }
+                }
+            }
+        });
+
+        var resource = Assert.Single(repository.GetResources());
+        var instrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime,
+            EndTime = s_queryTestTime.AddMinutes(1),
+            DataPointInterval = TimeSpan.FromMinutes(1)
+        });
+
+        Assert.Equal(0, addContext.FailureCount);
+        var value = Assert.IsType<HistogramValue>(Assert.Single(Assert.Single(instrument!.Dimensions).Values));
+        Assert.Equal(3ul, value.Count);
+        Assert.Equal(30, value.Sum);
+        Assert.Equal([1ul, 1ul, 1ul, 0ul], value.Values);
+        Assert.Equal(20, Assert.Single(value.Exemplars).Value);
     }
 
     [Fact]
@@ -1518,9 +1799,18 @@ public sealed class SqliteMetricsTests : MetricsTests
             StartTime = DateTime.MinValue,
             EndTime = DateTime.MaxValue
         });
-        var sumDimension = Assert.Single(sumInstrument!.Dimensions);
-        Assert.Empty(sumDimension.Attributes);
-        Assert.Equal(2, Assert.IsType<MetricValue<long>>(Assert.Single(sumDimension.Values)).Value);
+        Assert.Collection(
+            sumInstrument!.Dimensions,
+            dimension =>
+            {
+                Assert.Equal(firstDimensionAttributes.OrderBy(attribute => attribute.Key), dimension.Attributes);
+                Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value);
+            },
+            dimension =>
+            {
+                Assert.Equal(secondDimensionAttributes.OrderBy(attribute => attribute.Key), dimension.Attributes);
+                Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value);
+            });
     }
 
     [Fact]

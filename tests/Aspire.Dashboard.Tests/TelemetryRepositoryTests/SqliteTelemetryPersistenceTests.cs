@@ -275,7 +275,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                 EndTime = startTime.AddMinutes(1)
             });
             var dimension = Assert.Single(instrument!.Dimensions);
-            Assert.Empty(dimension.Attributes);
+            Assert.Equal(KeyValuePair.Create("route", "/api"), Assert.Single(dimension.Attributes));
             var routeValues = Assert.Single(instrument.KnownAttributeValues);
             Assert.Equal("route", routeValues.Key);
             Assert.Equal("/api", Assert.Single(routeValues.Value));
