@@ -1,0 +1,21 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "The new `aspire stop --force` command cleans up persistent DCP resources for an AppHost without relaunching it, letting developers fully tear down all persistent container resources in a single step.",
+  "docsPrs": [
+    1387
+  ],
+  "docsRequired": true,
+  "emoji": "🧹",
+  "firstMergedAt": "2026-07-21T18:25:56Z",
+  "lastMergedAt": "2026-07-21T18:25:56Z",
+  "name": "aspire stop --force cleans up persistent resources",
+  "owner": "danegsta",
+  "prs": [
+    18718
+  ]
+}

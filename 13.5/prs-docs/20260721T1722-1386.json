@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "Follow-up docs quality fixes for community integration PRs 1372-1378; those were excluded (no matching changelog entries)",
+  "mergedAt": "2026-07-21T17:22:47Z",
+  "number": 1386,
+  "runDate": "2026-07-22T00:20:05Z",
+  "status": "excluded",
+  "title": "Fast-follow: address non-blocking maintainer feedback from #1372-#1378"
+}

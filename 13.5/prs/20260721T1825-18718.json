@@ -1,0 +1,10 @@
+{
+  "author": "davidfowl",
+  "comment": "Bug fix for cross-scope ACR pull identity role assignment failures (BCP139)",
+  "mergedAt": "2026-07-21T23:52:17Z",
+  "number": 18742,
+  "runDate": "2026-07-22T00:20:05Z",
+  "status": "included",
+  "title": "Fix cross-scope ACR pull identities"
+}
+

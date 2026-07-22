@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Documents aspire stop --force command (product PR #18718)",
+  "mergedAt": "2026-07-21T21:03:18Z",
+  "number": 1387,
+  "runDate": "2026-07-22T00:20:05Z",
+  "status": "included",
+  "title": "Document aspire stop --force resource cleanup"
+}

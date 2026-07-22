@@ -1,0 +1,19 @@
+{
+  "area": "Integrations",
+  "areaEmoji": "🔌",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Fixes a deployment failure when using an existing Azure Container Registry in a different resource group or subscription. ACA and App Service now correctly handle ACR pull identity role assignments for cross-scope registries, resolving the Bicep BCP139 validation error.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🔑",
+  "firstMergedAt": "2026-07-21T23:52:17Z",
+  "lastMergedAt": "2026-07-21T23:52:17Z",
+  "name": "Fix cross-scope ACR pull identity role assignment",
+  "owner": "davidfowl",
+  "prs": [
+    18742
+  ]
+}
