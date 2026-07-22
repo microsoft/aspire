@@ -1089,7 +1089,12 @@ async function onCardAction(split, target) {
     // still pending. Re-render so it reflects the just-cleared inflight state instead of staying stuck
     // disabled until the next SSE refresh. When the split is still connected we keep the deliberate
     // no-re-render behavior above so the inline confirmation survives.
-    if (!split.isConnected) { render(); }
+    //
+    // Only recover while the queue is showing. A split also goes disconnected when the user opens
+    // Accounts/Settings/Filters mid-request; those views have no replacement action button to unlock,
+    // and an unconditional render() there would rebuild the open form and discard text the user has
+    // not committed yet. goView() re-renders the queue when they navigate back, so nothing stays stuck.
+    if (!split.isConnected && view === "queue") { render(); }
   }
 }
 

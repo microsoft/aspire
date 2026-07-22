@@ -419,7 +419,7 @@ test("rescanAccounts ignores a stale /api/accounts response so it can't roll las
   assert.equal(api.getAppliedSeq(), 9);
 });
 
-test("onCardAction re-renders when an SSE refresh detached the card mid-request so the visible button isn't stuck disabled", async () => {
+test("onCardAction recovers a detached card by re-rendering, but only while the queue is showing", async () => {
   // The action POST resolves; api/state stays pending so the module-init load() can't render mid-test
   // and pollute the assertions below.
   const fetchMock = async (path) =>
@@ -427,9 +427,23 @@ test("onCardAction re-renders when an SSE refresh detached the card mid-request 
       ? jsonResponse({ queued: false, target: "new-session" })
       : new Promise(() => {});
   const { app, api } = createRendererHarness({ fetch: fetchMock });
-  // A non-null state so render() produces output (render() early-returns when state is null).
-  api.setState({ authenticated: true, accounts: [], activeAccounts: [], notifications: [] });
-  api.setView("accounts");
+  // A queue-renderable state so render() produces output (render() early-returns when state is null).
+  // Empty lanes/counts render the "All clear" queue, which is enough for a non-empty innerHTML.
+  const queueState = () => ({
+    authenticated: true,
+    viewer: "octo",
+    mode: "review",
+    attention: null,
+    lanes: [],
+    accounts: [],
+    activeAccounts: [],
+    notifications: [],
+    repos: [],
+    counts: { prs: 0, drafts: 0, needsReview: 0, readyToMerge: 0, ciFailing: 0 },
+    fetchedAt: Date.now(),
+    showDrafts: true,
+    errors: [],
+  });
 
   const makeBtn = () => {
     const cls = new Set();
@@ -449,13 +463,28 @@ test("onCardAction re-renders when an SSE refresh detached the card mid-request 
     };
   };
 
-  // Detached split: a streamed 'state' event replaced the card while the POST was pending, so the
-  // visible replacement was rendered disabled. Settling must re-render so it reflects the cleared key.
+  // Detached split while the queue is showing: a streamed 'state' event replaced the card while the
+  // POST was pending, so the visible replacement was rendered disabled. Settling must re-render the
+  // queue so the button reflects the cleared inflight key instead of staying stuck disabled.
+  api.setState(queueState());
+  api.setView("queue");
   app.innerHTML = "";
   await api.onCardAction(makeSplit(false), "new-session");
   assert.notEqual(app.innerHTML, "");
 
-  // Still-connected split: keep the deliberate no-re-render behavior so the inline confirmation stays.
+  // Detached split while a non-queue form is open (Accounts/Settings/Filters): the recovery render is
+  // suppressed so it can't rebuild the open form and discard text the user hasn't committed yet.
+  // goView() re-renders the queue when they navigate back, so the card is never left stuck.
+  api.setState(queueState());
+  api.setView("accounts");
+  app.innerHTML = "";
+  await api.onCardAction(makeSplit(false), "new-session");
+  assert.equal(app.innerHTML, "");
+
+  // Still-connected split in the queue: keep the deliberate no-re-render behavior so the inline
+  // confirmation stays.
+  api.setState(queueState());
+  api.setView("queue");
   app.innerHTML = "";
   await api.onCardAction(makeSplit(true), "new-session");
   assert.equal(app.innerHTML, "");
