@@ -193,7 +193,15 @@ setAgentSend(async ({ prompt, log }) => {
   sendsInFlight++;
   try {
     if (log) {
-      await session.log(`Aspire Team App \u2014 ${log} (${queued ? "queued; starts after the current task" : "starting now"})`);
+      // The breadcrumb is best-effort: a session.log() failure must NOT block session.send(),
+      // which carries the user's actual request. We still await it (so the breadcrumb, when it
+      // succeeds, lands before the queued/started prompt) but swallow any error and fall through
+      // to the send rather than rejecting the whole bridge and 500ing without queueing anything.
+      try {
+        await session.log(`Aspire Team App \u2014 ${log} (${queued ? "queued; starts after the current task" : "starting now"})`);
+      } catch {
+        // ignore — the timeline breadcrumb is cosmetic; the send below is what matters.
+      }
     }
     const messageId = await session.send({ prompt });
     return { messageId, queued };

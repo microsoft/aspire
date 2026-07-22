@@ -317,7 +317,7 @@ function hostOf(url) {
   }
 }
 
-// Walk the cached dashboard for PR/issue nodes matching owner/repo#number. repository#number
+// Walk the cached dashboard for PR nodes matching owner/repo#number. repository#number
 // is NOT globally unique across the GitHub hosts this app can watch at once (github.com plus a
 // GHES/EMU instance): two active accounts on different hosts can each hold a distinct PR with
 // the identical slug and number. So we collect EVERY match (deduped by canonical url, since one
@@ -327,6 +327,12 @@ function hostOf(url) {
 // tampered hint can at worst fail to select a candidate. A single match resolves outright; when
 // multiple hosts collide we require the hint's host to select exactly one and otherwise reject
 // (undefined) rather than silently targeting whichever host the scan reached first.
+//
+// We match PR records ONLY. Normalized PRs carry a `review` object (normalizePr in github.mjs);
+// issues and PRs' linkedIssues share repository/number/url but have no `review`. Without that
+// discriminator a tampered descriptor could resolve a cached ISSUE, and since an issue url is
+// /issues/N (never /pull/N) safePrUrl would fail its host/path check and fall back to rewriting
+// it as a github.com /pull/N target — retargeting a tool-enabled action at an unrelated PR.
 function findCachedPr(repository, number, urlHint) {
   // Resolve against the last COMPLETE dashboard, not `cache`, which can hold a partial mid-stream
   // that omits not-yet-loaded PRs (see resolveSnapshot). Fall back to `cache` only before the first
@@ -342,6 +348,7 @@ function findCachedPr(repository, number, urlHint) {
       return;
     }
     if (typeof node.repository === "string" && Number.isInteger(node.number) && typeof node.url === "string" && node.url
+      && node.review && typeof node.review === "object" && !Array.isArray(node.review)
       && `${node.repository}#${node.number}`.toLowerCase() === target) {
       if (!byUrl.has(node.url)) {
         byUrl.set(node.url, {

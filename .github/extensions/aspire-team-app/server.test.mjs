@@ -304,6 +304,60 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   assert.equal(received, null);
 });
 
+test("a cached linked ISSUE sharing repository#number is not resolvable as a PR", async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+
+  // Seed PR #123 with a linked issue at the same repo, number 4242. Normalized issues (and a PR's
+  // linkedIssues) carry repository/number/url just like PRs but have no `review` object, so before
+  // the PR-only guard a tampered descriptor for #4242 would resolve to this cached ISSUE node. Its
+  // url is /issues/4242 (not /pull/4242), which safePrUrl rejects and rewrites to a github.com
+  // /pull/4242 target — retargeting a tool-enabled action at an unrelated PR. The guard must reject.
+  globalThis.fetch = makeGitHubMock([makePrNode({
+    number: 123,
+    url: "https://github.com/microsoft/aspire/pull/123",
+    closingIssuesReferences: { nodes: [{
+      number: 4242,
+      title: "Linked issue",
+      url: "https://github.com/microsoft/aspire/issues/4242",
+    }] },
+  })]);
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  const server = await import(`./server.mjs?test=issue-collide-${Date.now()}`);
+  const entry = await server.startInstance("issue-collide-test", () => {});
+  t.after(() => {
+    server.setAgentSend(null);
+    return server.stopInstance("issue-collide-test");
+  });
+
+  // Complete one compute so the resolution snapshot carries PR #123 and its linked issue #4242.
+  await (await fetch(new URL("api/state", entry.url))).json();
+
+  let received = null;
+  server.setAgentSend(async (payload) => { received = payload; return { messageId: "m", queued: false }; });
+
+  // A control click on the real PR #123 still resolves and bridges.
+  const okPr = await postAction(entry.url, {
+    kind: "test",
+    pr: { repository: "microsoft/aspire", number: 123, url: "https://github.com/microsoft/aspire/pull/123" },
+  });
+  assert.equal(okPr.status, 200);
+
+  // The linked issue #4242 must NOT resolve as a PR — the action is rejected before the bridge runs.
+  received = null;
+  const issueClick = await postAction(entry.url, {
+    kind: "test",
+    pr: { repository: "microsoft/aspire", number: 4242, url: "https://github.com/microsoft/aspire/issues/4242" },
+  });
+  assert.equal(issueClick.status, 400);
+  assert.equal(received, null);
+});
+
 test("api/state serves cache instantly on the second call (stale-while-revalidate)", async (t) => {
   await resetTestHome({
     accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
