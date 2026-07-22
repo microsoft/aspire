@@ -425,8 +425,13 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         try
         {
             process = Process.Start(processInfo);
-            var stdout = process!.StandardOutput.ReadToEnd();
+            // Read both redirected streams concurrently to avoid deadlock if openssl fills a pipe
+            // while the process is still running.
+            var stdoutTask = process!.StandardOutput.ReadToEndAsync();
+            var stderrTask = process.StandardError.ReadToEndAsync();
             process.WaitForExit();
+            var stdout = stdoutTask.GetAwaiter().GetResult();
+            _ = stderrTask.GetAwaiter().GetResult();
 
             if (process.ExitCode != 0)
             {
