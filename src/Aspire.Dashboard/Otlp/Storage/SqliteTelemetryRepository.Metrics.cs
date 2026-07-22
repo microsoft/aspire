@@ -50,6 +50,32 @@ public sealed partial class SqliteTelemetryRepository
         )
         """;
 
+    // Metric rows are value intervals for one dimension. A dimension that changes creates a new
+    // interval while unchanged dimensions extend their existing interval, so grouping only by the
+    // interval start omits unchanged dimensions. Convert each dimension's values into deltas; the
+    // query can then sum changes at each boundary and cumulatively reconstruct aggregate snapshots.
+    private const string MetricPointChangesCteSql = $"""
+        {EffectiveMetricPointsCteSql},
+        metric_point_changes AS (
+            SELECT
+                p.*,
+                p.integer_value - LAG(p.integer_value, 1, 0) OVER (
+                    PARTITION BY p.dimension_id, p.point_type
+                    ORDER BY p.start_time_ticks, p.point_id) AS integer_delta,
+                p.double_value - LAG(p.double_value, 1, 0) OVER (
+                    PARTITION BY p.dimension_id, p.point_type
+                    ORDER BY p.start_time_ticks, p.point_id) AS double_delta,
+                p.histogram_sum - LAG(p.histogram_sum, 1, 0) OVER (
+                    PARTITION BY p.dimension_id, p.point_type
+                    ORDER BY p.start_time_ticks, p.point_id) AS histogram_sum_delta,
+                p.histogram_count - LAG(p.histogram_count, 1, 0) OVER (
+                    PARTITION BY p.dimension_id, p.point_type
+                    ORDER BY p.start_time_ticks, p.point_id) AS histogram_count_delta,
+                MAX(p.end_time_ticks) OVER () AS latest_end_time_ticks
+            FROM effective_metric_points p
+        )
+        """;
+
     private readonly MetricIngestionState _metricIngestionState = new();
 
     private void AddMetricsToDatabase(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
@@ -898,20 +924,48 @@ public sealed partial class SqliteTelemetryRepository
         queryParameters.Add("StartTicks", startTime?.Ticks ?? 0);
         queryParameters.Add("EndTicks", endTime?.Ticks ?? 0);
         var points = connection.Query<MetricPointDataRecord>($"""
-            WITH {EffectiveMetricPointsCteSql},
-            aggregated_metric_points AS (
+            WITH {MetricPointChangesCteSql},
+            aggregated_metric_point_changes AS (
                 SELECT
                     p.start_time_ticks AS PointId,
                     p.point_type AS PointType,
                     p.start_time_ticks AS StartTimeTicks,
-                    MAX(p.end_time_ticks) AS EndTimeTicks,
+                    LEAD(p.start_time_ticks) OVER (
+                        PARTITION BY p.point_type
+                        ORDER BY p.start_time_ticks) AS NextStartTimeTicks,
+                    MAX(p.latest_end_time_ticks) AS LatestEndTimeTicks,
                     MAX(p.repeat_count) AS RepeatCount,
-                    SUM(p.integer_value) AS IntegerValue,
-                    SUM(p.double_value) AS DoubleValue,
-                    SUM(p.histogram_sum) AS HistogramSum,
-                    SUM(p.histogram_count) AS HistogramCount
-                FROM effective_metric_points p
+                    SUM(p.integer_delta) AS IntegerDelta,
+                    SUM(p.double_delta) AS DoubleDelta,
+                    SUM(p.histogram_sum_delta) AS HistogramSumDelta,
+                    SUM(p.histogram_count_delta) AS HistogramCountDelta
+                FROM metric_point_changes p
                 GROUP BY p.point_type, p.start_time_ticks
+            ),
+            aggregated_metric_points AS (
+                SELECT
+                    p.PointId,
+                    p.PointType,
+                    p.StartTimeTicks,
+                    COALESCE(p.NextStartTimeTicks, p.LatestEndTimeTicks) AS EndTimeTicks,
+                    p.RepeatCount,
+                    SUM(p.IntegerDelta) OVER (
+                        PARTITION BY p.PointType
+                        ORDER BY p.StartTimeTicks
+                        ROWS UNBOUNDED PRECEDING) AS IntegerValue,
+                    SUM(p.DoubleDelta) OVER (
+                        PARTITION BY p.PointType
+                        ORDER BY p.StartTimeTicks
+                        ROWS UNBOUNDED PRECEDING) AS DoubleValue,
+                    SUM(p.HistogramSumDelta) OVER (
+                        PARTITION BY p.PointType
+                        ORDER BY p.StartTimeTicks
+                        ROWS UNBOUNDED PRECEDING) AS HistogramSum,
+                    SUM(p.HistogramCountDelta) OVER (
+                        PARTITION BY p.PointType
+                        ORDER BY p.StartTimeTicks
+                        ROWS UNBOUNDED PRECEDING) AS HistogramCount
+                FROM aggregated_metric_point_changes p
             )
             SELECT
                 p.PointId,
@@ -1008,14 +1062,33 @@ public sealed partial class SqliteTelemetryRepository
         DynamicParameters queryParameters)
     {
         var bucketCounts = connection.Query<MetricHistogramBucketRecord>($"""
-            WITH {EffectiveMetricPointsCteSql}
+            WITH {EffectiveMetricPointsCteSql},
+            metric_histogram_bucket_changes AS (
+                SELECT
+                    p.start_time_ticks AS PointId,
+                    b.ordinal AS Ordinal,
+                    b.bucket_count - LAG(b.bucket_count, 1, 0) OVER (
+                        PARTITION BY p.dimension_id, b.ordinal
+                        ORDER BY p.start_time_ticks, p.point_id) AS BucketDelta
+                FROM telemetry_metric_histogram_bucket_counts b
+                JOIN effective_metric_points p ON p.point_id = b.point_id
+            ),
+            aggregated_metric_histogram_bucket_changes AS (
+                SELECT
+                    p.PointId,
+                    p.Ordinal,
+                    SUM(p.BucketDelta) AS BucketDelta
+                FROM metric_histogram_bucket_changes p
+                GROUP BY p.PointId, p.Ordinal
+            )
             SELECT
-                p.start_time_ticks AS PointId,
-                SUM(b.bucket_count) AS BucketCount
-            FROM telemetry_metric_histogram_bucket_counts b
-            JOIN effective_metric_points p ON p.point_id = b.point_id
-            GROUP BY p.start_time_ticks, b.ordinal
-            ORDER BY p.start_time_ticks, b.ordinal;
+                p.PointId,
+                SUM(p.BucketDelta) OVER (
+                    PARTITION BY p.Ordinal
+                    ORDER BY p.PointId
+                    ROWS UNBOUNDED PRECEDING) AS BucketCount
+            FROM aggregated_metric_histogram_bucket_changes p
+            ORDER BY p.PointId, p.Ordinal;
             """, queryParameters).ToLookup(record => record.PointId);
         var explicitBounds = connection.Query<MetricHistogramBoundRecord>($"""
             WITH {EffectiveMetricPointsCteSql}
