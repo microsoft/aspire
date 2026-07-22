@@ -1285,6 +1285,131 @@ public sealed class SqliteMetricsTests : MetricsTests
     protected override bool UseSqlite => true;
 
     [Fact]
+    public void GetInstrument_StaggeredDimensionChanges_SumsCurrentValuesAtEachChange()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+
+        for (var minute = 1; minute <= 3; minute++)
+        {
+            repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+            {
+                new ResourceMetrics
+                {
+                    Resource = CreateResource(),
+                    ScopeMetrics =
+                    {
+                        new ScopeMetrics
+                        {
+                            Scope = CreateScope(name: "test-meter"),
+                            Metrics =
+                            {
+                                CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(minute), value: 10, attributes: [KeyValuePair.Create("dimension", "stable")]),
+                                CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(minute), value: 15 + (minute * 5), attributes: [KeyValuePair.Create("dimension", "changing")])
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        Assert.Equal(0, addContext.FailureCount);
+        var resource = Assert.Single(repository.GetResources());
+        var instrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime,
+            EndTime = s_queryTestTime.AddMinutes(4)
+        });
+
+        Assert.NotNull(instrument);
+        var values = Assert.Single(instrument.Dimensions).Values.Cast<MetricValue<long>>().ToArray();
+        Assert.Collection(
+            values,
+            value => Assert.Equal(35, value.Value),
+            value => Assert.Equal(40, value.Value));
+    }
+
+    [Fact]
+    public void GetHistogram_StaggeredDimensionChanges_SumsCurrentValuesAtEachChange()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+
+        for (var minute = 1; minute <= 3; minute++)
+        {
+            repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+            {
+                new ResourceMetrics
+                {
+                    Resource = CreateResource(),
+                    ScopeMetrics =
+                    {
+                        new ScopeMetrics
+                        {
+                            Scope = CreateScope(name: "test-meter"),
+                            Metrics =
+                            {
+                                CreateTestHistogramMetric(startTime: s_queryTestTime.AddMinutes(minute), value: 10, dimension: "stable"),
+                                CreateTestHistogramMetric(startTime: s_queryTestTime.AddMinutes(minute), value: 15 + (minute * 5), dimension: "changing")
+                            }
+                        }
+                    }
+                }
+            });
+        }
+
+        Assert.Equal(0, addContext.FailureCount);
+        var resource = Assert.Single(repository.GetResources());
+        var instrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = s_queryTestTime,
+            EndTime = s_queryTestTime.AddMinutes(4)
+        });
+
+        Assert.NotNull(instrument);
+        var values = Assert.Single(instrument.Dimensions).Values.Cast<HistogramValue>().ToArray();
+        Assert.Collection(
+            values,
+            value =>
+            {
+                Assert.Equal(30ul, value.Count);
+                Assert.Equal(30ul, value.Values[0]);
+            },
+            value =>
+            {
+                Assert.Equal(35ul, value.Count);
+                Assert.Equal(35ul, value.Values[0]);
+            },
+            value =>
+            {
+                Assert.Equal(40ul, value.Count);
+                Assert.Equal(40ul, value.Values[0]);
+            });
+
+        static Metric CreateTestHistogramMetric(DateTime startTime, int value, string dimension)
+        {
+            var metric = CreateHistogramMetric("test", startTime);
+            var point = Assert.Single(metric.Histogram.DataPoints);
+            point.Count = checked((ulong)value);
+            point.Sum = value;
+            point.BucketCounts.Clear();
+            point.BucketCounts.AddRange([checked((ulong)value), 0, 0, 0]);
+            point.Attributes.Add(new KeyValue
+            {
+                Key = "dimension",
+                Value = new AnyValue { StringValue = dimension }
+            });
+            return metric;
+        }
+    }
+
+    [Fact]
     public void AddMetrics_ReusesInstrumentAndDimensionLookupsWithinBatch()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
