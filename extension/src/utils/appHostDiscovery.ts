@@ -106,6 +106,10 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             const candidateCallbacks = new Set<(candidate: CandidateAppHostDisplayInfo) => void>();
             const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
             const publishCandidate = (candidate: CandidateAppHostDisplayInfo) => {
+                if (isExcludedDiscoveryCandidate(workspaceFolder, vscode.Uri.file(candidate.path))) {
+                    return;
+                }
+
                 streamedCandidates.push(candidate);
                 for (const callback of candidateCallbacks) {
                     try {

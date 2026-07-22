@@ -603,6 +603,11 @@ suite('AppHost discovery', () => {
                 language: 'csharp',
                 status: 'buildable',
             };
+            const excludedCandidate = {
+                path: buildPath('workspace', '.agents', 'skills', 'demo', 'snippets', 'apphost.ts'),
+                language: 'typescript/nodejs',
+                status: 'buildable',
+            };
 
             try {
                 const firstDiscovery = service.discover(workspaceFolder);
@@ -610,6 +615,7 @@ suite('AppHost discovery', () => {
                 assert.ok(options);
 
                 options.lineCallback?.(JSON.stringify(firstCandidate));
+                options.lineCallback?.(JSON.stringify(excludedCandidate));
 
                 const observedCandidates: CandidateAppHostDisplayInfo[] = [];
                 const secondDiscovery = service.discover(workspaceFolder, false, undefined, candidate => observedCandidates.push(candidate));
