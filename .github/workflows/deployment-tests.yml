@@ -295,36 +295,6 @@ jobs:
       # fails the job: a test that genuinely needs a provider surfaces its own clear error.
       - name: Register Azure resource providers
         run: |
-          # Providers span the Aspire.Hosting.Azure.* integrations these tests exercise plus
-          # infrastructure every deployment emits (managed identity, role-assignment deployment
-          # scripts that run in ACI, Log Analytics, etc.):
-          #   Microsoft.Resources            ARM deployments + deployment scripts
-          #   Microsoft.Authorization        role assignments
-          #   Microsoft.ManagedIdentity      user-assigned managed identities
-          #   Microsoft.ContainerInstance    Azure deployment scripts execute in ACI
-          #   Microsoft.OperationalInsights  Log Analytics (Container Apps env, App Insights)
-          #   Microsoft.Insights             Application Insights / monitoring
-          #   Microsoft.App                  Azure Container Apps
-          #   Microsoft.ContainerRegistry    ACR (registry + Container Apps images)
-          #   Microsoft.ContainerService     AKS
-          #   Microsoft.Web                  App Service + Functions
-          #   Microsoft.Network              virtual networks, private endpoints, NSP
-          #   Microsoft.NetworkFunction      AKS Gateway API (Application Gateway for Containers)
-          #   Microsoft.ServiceNetworking    AKS Gateway API (Application Gateway for Containers)
-          #   Microsoft.Cdn                  Azure Front Door (Standard/Premium)
-          #   Microsoft.AppConfiguration     App Configuration
-          #   Microsoft.CognitiveServices    Cognitive Services / OpenAI / Foundry
-          #   Microsoft.DocumentDB           Cosmos DB
-          #   Microsoft.EventHub             Event Hubs
-          #   Microsoft.KeyVault             Key Vault
-          #   Microsoft.Kusto                Azure Data Explorer (Kusto)
-          #   Microsoft.DBforPostgreSQL      Azure Database for PostgreSQL
-          #   Microsoft.Cache                Azure Cache for Redis / Managed Redis
-          #   Microsoft.Search               Azure AI Search
-          #   Microsoft.ServiceBus           Service Bus
-          #   Microsoft.SignalRService       SignalR + Web PubSub
-          #   Microsoft.Sql                  Azure SQL
-          #   Microsoft.Storage              Storage
           providers=(
             Microsoft.Resources
             Microsoft.Authorization
