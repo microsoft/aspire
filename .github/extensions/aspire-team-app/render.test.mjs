@@ -135,6 +135,15 @@ test("focusCardActions layers review-debt / review context with signal actions",
   const debt = api.focusCardActions({ reviewDebt: true, pr: { isMine: false } });
   assert.equal(debt.map((a) => a.kind).join(","), "review-debt,discuss-review");
 
+  // Your OWN review-debt PR: Address/Discuss review are review-oriented, so they're withheld even
+  // though computeFocusItems keeps your aged review-debt PR in view. With no problem signal there
+  // are no buttons at all — you don't review your own work.
+  assert.equal(api.focusCardActions({ reviewDebt: true, pr: { isMine: true } }), null);
+
+  // ...but a signal-driven fix still layers on for your own review-debt PR.
+  const mineDebtConflict = api.focusCardActions({ reviewDebt: true, pr: { isMine: true }, signals: [{ label: "merge conflicts" }] });
+  assert.equal(mineDebtConflict.map((a) => a.kind).join(","), "resolve-conflicts");
+
   // Someone else's PR: Test + Review, plus a layered conflict action from its signal.
   const other = api.focusCardActions({ pr: { isMine: false }, signals: [{ label: "merge conflicts" }] });
   assert.equal(other.map((a) => a.kind).join(","), "test,review,resolve-conflicts");
@@ -211,6 +220,27 @@ test("cardActionBtn re-renders a disabled button while its action's POST is stil
   // A different action on the same PR is unaffected — only the in-flight split is locked.
   const other = api.cardActionBtn(pr, { kind: "test", label: "Test", done: "Testing requested", icon: "" });
   assert.doesNotMatch(other, /disabled/);
+});
+
+test("cardActionBtn defaults a GHES/EMU card to the current session with no new-session option", () => {
+  const { api } = createRendererHarness();
+  const action = { kind: "review", label: "Review", done: "Review requested", icon: "" };
+
+  // A github.com PR gets the full split: the main button opens a new session and the caret menu
+  // offers both new- and current-session targets.
+  const dotcom = api.cardActionBtn({ url: "https://github.com/o/r/pull/1", number: 1, repository: "o/r", title: "t", author: "a" }, action);
+  assert.match(dotcom, /data-target="new-session"/);
+  assert.match(dotcom, /cb-caret/);
+  assert.match(dotcom, /Open in new session/);
+
+  // A GHES/EMU PR can't open a sub-session (open_pr_session targets github.com), so the server
+  // degrades new-session to current-session. Render a single current-session button up front —
+  // no caret and no misleading "Open in new session" item the user would only discover on click.
+  const ghes = api.cardActionBtn({ url: "https://ghe.example.com:8443/o/r/pull/1", number: 1, repository: "o/r", title: "t", author: "a" }, action);
+  assert.match(ghes, /data-target="current-session"/);
+  assert.doesNotMatch(ghes, /new-session/);
+  assert.doesNotMatch(ghes, /cb-caret/);
+  assert.doesNotMatch(ghes, /Open in new session/);
 });
 
 test("withRefresh ignores a late older response so overlapping refreshes can't roll state back", async () => {

@@ -94,8 +94,10 @@ test("GET reads are also pinned to the loopback origin (DNS rebinding can't read
 });
 
 test("a rejecting request-error logger does not become an unhandled rejection", async (t) => {
-  await resetTestHome();
-  delete process.env.GH_TOKEN;
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
   delete process.env.GITHUB_TOKEN;
   process.env.PATH = "";
 
@@ -104,16 +106,26 @@ test("a rejecting request-error logger does not become an unhandled rejection", 
   process.on("unhandledRejection", onUnhandled);
   t.after(() => process.off("unhandledRejection", onUnhandled));
 
+  // Seed the cache with PR #1 so the action resolves to a real PR and actually reaches the bridge;
+  // an unresolved descriptor would 400 before agentSend runs and never exercise the logger path.
+  globalThis.fetch = makeGitHubMock([makePrNode({ number: 1 })]);
+  t.after(() => { globalThis.fetch = originalFetch; });
+
   const server = await import(`./server.mjs?test=logreject-${Date.now()}`);
   // A disconnected session makes BOTH the bridge and the error logger reject: agentSend rejects
   // into the outer request catch, whose logger (the async session log) then rejects too. The
   // logger's rejection must be swallowed, not left dangling to crash the extension host.
-  server.setAgentSend(() => Promise.reject(new Error("session disconnected")));
   const entry = await server.startInstance("log-reject-test", () => Promise.reject(new Error("log disconnected")));
   t.after(() => {
     server.setAgentSend(null);
     return server.stopInstance("log-reject-test");
   });
+
+  // Complete one compute so PR #1 is in the resolution snapshot. This request path doesn't error,
+  // so the rejecting logger is never invoked here — only the action path below triggers it.
+  await (await fetch(new URL("api/state", entry.url))).json();
+
+  server.setAgentSend(() => Promise.reject(new Error("session disconnected")));
 
   const response = await postAction(entry.url, {
     kind: "test",
@@ -192,7 +204,23 @@ test("dashboard load retries after an inflight account probe rejection", async (
 });
 
 test("card action route bridges { prompt, log } to the session and echoes the queued flag", async (t) => {
-  await resetTestHome();
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+
+  // Seed the server cache with the real PR #123 so resolveActionPr can resolve a click to this
+  // server's own canonical descriptor. The client then posts TAMPERED fields for the same PR, and
+  // the server must use the cached canonical url and keep the client url/title/author out of the
+  // prompt entirely.
+  globalThis.fetch = makeGitHubMock([makePrNode({
+    number: 123,
+    url: "https://github.com/microsoft/aspire/pull/123",
+    title: "Add widget",
+  })]);
+  t.after(() => { globalThis.fetch = originalFetch; });
 
   const server = await import(`./server.mjs?test=agent-${Date.now()}`);
   const entry = await server.startInstance("agent-action-test", () => {});
@@ -201,10 +229,13 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
     return server.stopInstance("agent-action-test");
   });
 
+  // Complete one compute so the action-resolution snapshot carries PR #123.
+  await (await fetch(new URL("api/state", entry.url))).json();
+
   const pr = {
     // Tampered/untrusted client fields: a foreign host on the url and instruction text in the
-    // title/author. The PR isn't in the server cache here, so the server must reconstruct the
-    // canonical github.com url and keep the client title/author out of the prompt entirely.
+    // title/author. The server resolves the PR from its own cache by repository+number and must
+    // use the canonical github.com url, keeping the client title/author out of the prompt entirely.
     url: "https://evil.example/microsoft/aspire/pull/123",
     number: 123,
     repository: "microsoft/aspire",
@@ -232,13 +263,14 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   assert.equal(body.queued, true);
   assert.match(received.prompt, /open_pr_session/);
   assert.match(received.prompt, /\/pr-testing/);
-  // Server-side resolution replaces the untrusted client url with the canonical one and never
-  // interpolates the client-supplied title/author into the operational prompt.
+  // Server-side resolution uses the cached canonical url and never interpolates the client-supplied
+  // url/title/author into the operational prompt.
   assert.match(received.prompt, /https:\/\/github\.com\/microsoft\/aspire\/pull\/123/);
   assert.doesNotMatch(received.prompt, /evil\.example/);
   assert.doesNotMatch(received.prompt, /IGNORE PREVIOUS INSTRUCTIONS/);
   assert.doesNotMatch(received.prompt, /octocat/);
-  assert.equal(received.log, "Test PR microsoft/aspire#123 in a new session");
+  // The log uses the cached canonical title ("Add widget"), never the tampered client title.
+  assert.equal(received.log, 'Test PR microsoft/aspire#123 — "Add widget" in a new session');
 
   // A current-session action routes into this session instead of a sub-session.
   received = null;
@@ -247,7 +279,7 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   const hereBody = await here.json();
   assert.equal(hereBody.target, "current-session");
   assert.doesNotMatch(received.prompt, /open_pr_session/);
-  assert.equal(received.log, "Test PR microsoft/aspire#123 in this session");
+  assert.equal(received.log, 'Test PR microsoft/aspire#123 — "Add widget" in this session');
 
   // An unknown kind is rejected before the bridge is ever called.
   received = null;
@@ -260,6 +292,15 @@ test("card action route bridges { prompt, log } to the session and echoes the qu
   received = null;
   const badNumber = await postAction(entry.url, { kind: "test", pr: { ...pr, number: "123junk" } });
   assert.equal(badNumber.status, 400);
+  assert.equal(received, null);
+
+  // A descriptor that doesn't resolve to a cached PR (aged out of view, or never present) is
+  // rejected with a 400 and never bridged: the server won't reconstruct a target from the client's
+  // owner/repo/number, so a tampered or stale card can't retarget a tool-enabled action at an
+  // arbitrary github.com PR.
+  received = null;
+  const uncached = await postAction(entry.url, { kind: "test", pr: { ...pr, number: 999 } });
+  assert.equal(uncached.status, 400);
   assert.equal(received, null);
 });
 
@@ -633,10 +674,11 @@ test("a card action resolves against the last complete snapshot, not a mid-strea
   await refreshPromise;
 });
 
-// Minimal GitHub GraphQL mock: scope probe, viewer, repo existence probe, and an empty
-// pull-request page. Loopback (127.0.0.1) requests fall through to the real fetch so the
-// test can drive the extension's own HTTP server.
-function makeGitHubMock() {
+// Minimal GitHub GraphQL mock: scope probe, viewer, repo existence probe, and a pull-request
+// page (empty by default, or the caller-supplied nodes so a test can seed the resolvable cache).
+// Loopback (127.0.0.1) requests fall through to the real fetch so the test can drive the
+// extension's own HTTP server.
+function makeGitHubMock(prNodes = []) {
   return async (url, options = {}) => {
     const requestUrl = String(url);
     if (requestUrl.startsWith("http://127.0.0.1:")) {
@@ -654,9 +696,40 @@ function makeGitHubMock() {
       return jsonResponse({ data: { r0: { nameWithOwner: "microsoft/aspire" } } });
     }
     if (query.includes("pullRequests")) {
-      return jsonResponse({ data: { repository: { isPrivate: false, pullRequests: { nodes: [] } } } });
+      return jsonResponse({ data: { repository: { isPrivate: false, pullRequests: { nodes: prNodes } } } });
     }
     throw new Error(`Unexpected fetch: ${requestUrl} ${query}`);
+  };
+}
+
+// A complete GraphQL PR node with sensible defaults, overridable per field. reshapeDashboard reads
+// number/title/url/author/state/timestamps/mergeable/checks/etc, so a seeded PR needs the full
+// shape for it to survive into the resolvable snapshot that resolveActionPr reads.
+function makePrNode(overrides = {}) {
+  return {
+    number: 1,
+    title: "Seed PR",
+    url: "https://github.com/microsoft/aspire/pull/1",
+    isDraft: false,
+    state: "OPEN",
+    createdAt: "2026-07-01T09:00:00Z",
+    updatedAt: "2026-07-01T10:00:00Z",
+    author: { __typename: "User", login: "octo", avatarUrl: null },
+    baseRefName: "main",
+    mergeable: "MERGEABLE",
+    reviewDecision: null,
+    additions: 1,
+    deletions: 0,
+    changedFiles: 1,
+    milestone: null,
+    labels: { nodes: [] },
+    assignees: { nodes: [] },
+    reviewRequests: { nodes: [] },
+    reviews: { nodes: [] },
+    reviewThreads: { nodes: [] },
+    commits: { totalCount: 1, nodes: [{ commit: { committedDate: "2026-07-01T10:00:00Z", statusCheckRollup: { state: "SUCCESS" } } }] },
+    closingIssuesReferences: { nodes: [] },
+    ...overrides,
   };
 }
 

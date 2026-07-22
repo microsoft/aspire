@@ -33,10 +33,10 @@ let cache = null;    // { dashboard, prefs, at } — freshest snapshot; may be a
 // The last COMPLETE dashboard, used ONLY to resolve card-action PRs (resolveActionPr/findCachedPr).
 // During SSE streaming `cache` is transiently overwritten with partials (see computeDashboard's
 // onPartial) that omit PRs whose repos haven't finished loading this compute. A stale-but-still-
-// visible card clicked in that window would miss in the partial; resolveActionPr would then drop
-// the PR's host and let agent.mjs safePrUrl reconstruct a github.com URL — silently misrouting a
-// GHES/EMU action to a same-slug repo on dotcom. Resolving actions against the last complete
-// snapshot keeps every watched PR's host-qualified URL available for the whole refresh.
+// visible card clicked in that window would miss in the partial, and a miss is now rejected
+// (resolveActionPr returns null, so the action route answers 400 rather than trusting the client's
+// descriptor). Resolving actions against the last complete snapshot keeps every watched PR findable
+// for the whole refresh, so a still-visible card isn't spuriously rejected mid-stream.
 let resolveSnapshot = null;
 let inflight = null;
 let bgTimer = null;
@@ -289,10 +289,12 @@ function broadcastRefresh() {
 // dashboard so a tampered url/title/author (ultimately sourced from attacker-controllable
 // PR metadata) can't reach the agent prompt. Every card the user can click was computed by
 // this server and lives in the current cache, keyed by "<owner/repo>#<number>". On GitHub a
-// number is unique per repo across issues and PRs, so that key is unambiguous. When the PR
-// is found we return the server's own canonical url/title/author; when it isn't (e.g. the
-// cache aged out the PR) we return only the structural owner/repo/number and clear the url,
-// letting agent.mjs reconstruct a canonical github.com link rather than trust the client.
+// number is unique per repo across issues and PRs, so that key is unambiguous. When the PR is
+// found we return the server's own canonical url/title/author. When it ISN'T (aged out, never
+// present, or a tampered repo/number) we return null so the caller rejects the action: falling
+// back to the client's owner/repo/number would let a tampered or stale descriptor retarget a
+// tool-enabled action at an arbitrary github.com PR, and would misroute a GHES/EMU card to the
+// same-slug repo on dotcom — exactly the cache trust boundary this resolution exists to enforce.
 function resolveActionPr(pr) {
   const repository = String(pr?.repository ?? "").trim();
   const number = toActionPrNumber(pr?.number);
@@ -302,7 +304,7 @@ function resolveActionPr(pr) {
   if (canonical) {
     return { repository: canonical.repository, number: canonical.number, url: canonical.url, title: canonical.title, author: canonical.author };
   }
-  return { repository, number, url: "", title: "", author: "" };
+  return null;
 }
 
 // Parse the host out of a canonical PR url, lower-cased for comparison. Returns "" on any
@@ -552,8 +554,14 @@ async function handle(req, res, log, instanceId) {
       }
       // Resolve the PR from server-side cache before building any prompt, so the operational
       // instruction handed to the agent uses this server's own canonical url and never a
-      // client-tampered url/host/path (see resolveActionPr / agent.mjs safePrUrl).
+      // client-tampered url/host/path (see resolveActionPr / agent.mjs safePrUrl). A descriptor
+      // that doesn't resolve to a unique cached PR is rejected outright: we never reconstruct a
+      // target from the client's owner/repo/number, so a tampered or aged-out card can't retarget
+      // a tool-enabled action at an arbitrary github.com PR (or a same-slug dotcom repo).
       const resolvedPr = resolveActionPr(pr);
+      if (!resolvedPr) {
+        return send(res, 400, { error: "This pull request is no longer in view. Refresh and try again." });
+      }
       let prompt;
       try {
         prompt = buildAgentActionPrompt(kind, resolvedPr, target);

@@ -353,6 +353,8 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 /* Split button: main action + caret that opens a "where to run" menu. */
 .cb-split { position: relative; display: inline-flex; align-items: stretch; }
 .cb-split .cb-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* A GHES/EMU card has a single target (no caret), so its lone main button keeps full radius. */
+.cb-split .cb-main:only-child { border-top-right-radius: 7px; border-bottom-right-radius: 7px; }
 .cb-split .cb-caret { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; padding: 5px 5px; }
 .cb-split .cb-caret svg { width: 12px; height: 12px; transition: transform .18s ease; }
 .cb-split .cb-caret[aria-expanded="true"] { background: var(--card-hover); border-color: var(--border-strong); }
@@ -1274,14 +1276,26 @@ function cardActionBtn(pr, a) {
   const inflight = inflightActions.has(actionKey(a.kind, pr.url || "", pr.repository || "", pr.number));
   const busyCls = inflight ? " busy" : "";
   const disabledAttr = inflight ? " disabled" : "";
+  // open_pr_session can only target github.com, so the server degrades a new-session action on a
+  // GHES/EMU (non-dotcom) PR to the current session. Detect that here from the server-resolved PR
+  // url and don't advertise "Open in new session" for those cards: render a single current-session
+  // button so enterprise users see the honest behavior up front instead of discovering it on click.
+  const isDotcom = /^https:\/\/github\.com\//i.test(pr.url || "");
+  const mainTarget = isDotcom ? "new-session" : "current-session";
   // aria-live="polite" turns the main button into a live region: onCardAction rewrites its label
   // in place to "Queued\u2026", "Running\u2026", or an error, but the button is disabled while the
   // request runs so focus may move away. Announcing politely surfaces that async result to screen
   // readers even after the button loses focus. A full re-render swaps in a fresh element with its
   // initial label, which does not announce, so only the in-place status updates are spoken.
+  const mainBtn = '<button type="button" class="card-btn cb-main' + busyCls + '" data-target="' + mainTarget + '" aria-live="polite"' + disabledAttr + '>' +
+    icon + '<span class="cb-label">' + esc(a.label) + "</span></button>";
+  // A GHES/EMU card has only the current-session target, so render the lone main button with no
+  // caret or menu — there is nothing to choose and no unsupported option to mislead with.
+  if (!isDotcom) {
+    return '<div class="cb-split"' + data + '>' + mainBtn + "</div>";
+  }
   return '<div class="cb-split"' + data + '>' +
-    '<button type="button" class="card-btn cb-main' + busyCls + '" data-target="new-session" aria-live="polite"' + disabledAttr + '>' +
-      icon + '<span class="cb-label">' + esc(a.label) + "</span></button>" +
+    mainBtn +
     '<button type="button" class="card-btn cb-caret" aria-haspopup="true" aria-expanded="false"' +
       ' title="Choose where to run" aria-label="Choose where to run ' + esc(a.label) + '"' + disabledAttr + '>' +
       ICONS.chev + "</button>" +
@@ -1349,15 +1363,19 @@ function signalActions(item) {
 
 // Which action buttons a "Needs attention" card gets: a review-debt card offers Address review
 // (a fresh review) plus Discuss review (talk through existing feedback); otherwise someone else's
-// PR offers Test + Review. Signal-driven actions (conflicts, CI, unresolved) are layered on for
-// every card. Test/Review are withheld on your own PRs (you don't review your own work).
+// PR offers Test + Review. All of these are review-oriented, so they are withheld on your own PRs
+// (you don't review your own work) — including your own aged review-debt PR, which computeFocusItems
+// deliberately retains. Signal-driven actions (conflicts, CI, unresolved) are layered on for every
+// card, including your own, since fixing those is the author's job.
 function focusCardActions(item) {
   var pr = (item && item.pr) || {};
   var ctx = [];
-  if (isReviewDebtItem(item)) {
-    ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
-  } else if (!pr.isMine) {
-    ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
+  if (!pr.isMine) {
+    if (isReviewDebtItem(item)) {
+      ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
+    } else {
+      ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
+    }
   }
   return mergeActions(ctx, signalActions(item));
 }
@@ -2286,8 +2304,10 @@ function wire() {
     b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); dismissNotif(b.dataset.dismiss, b.closest(".notif-card")); }));
 
   // Card action split buttons live in a sibling row of the card link, so stop the click
-  // from bubbling to any surrounding handler and never navigate. The main button runs
-  // the action in a new session; the caret toggles a menu to pick new vs current session.
+  // from bubbling to any surrounding handler and never navigate. The main button runs the
+  // action at its own data-target: "new-session" for a github.com PR, or "current-session"
+  // for a GHES/EMU PR that can't open a sub-session (see cardActionBtn). The caret, present
+  // only on github.com cards, toggles a menu to pick new vs current session.
   document.querySelectorAll(".cb-split").forEach((split) => {
     const main = split.querySelector(".cb-main");
     const caret = split.querySelector(".cb-caret");
@@ -2295,7 +2315,7 @@ function wire() {
     if (main) main.addEventListener("click", (e) => {
       e.preventDefault(); e.stopPropagation();
       closeCbMenus();
-      onCardAction(split, "new-session");
+      onCardAction(split, main.dataset.target || "new-session");
     });
     if (caret && menu) caret.addEventListener("click", (e) => {
       e.preventDefault(); e.stopPropagation();
