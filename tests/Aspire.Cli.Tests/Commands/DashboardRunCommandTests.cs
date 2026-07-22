@@ -337,8 +337,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var readyTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var stoppingMessageDisplayedTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var shutdownTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        var expectedMessage = $"[teal bold]{DashboardCommandStrings.StoppingDashboard}[/]";
-        testInteractionService.DisplayMessageCallback = (_, message, _) =>
+        var expectedMessage = DashboardCommandStrings.StoppingDashboard;
+        testInteractionService.DisplayCancellationMessageCallback = (message, _) =>
         {
             if (message == expectedMessage)
             {
@@ -397,9 +397,8 @@ public class DashboardRunCommandTests(ITestOutputHelper outputHelper)
         var exitCode = await pendingRun.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, exitCode);
-        Assert.Empty(testInteractionService.DisplayedCancellations);
-        var stoppingMessage = Assert.Single(testInteractionService.DisplayedMessages);
-        Assert.Equal(KnownEmojis.StopSign, stoppingMessage.Emoji);
+        Assert.Empty(testInteractionService.DisplayedMessages);
+        var stoppingMessage = Assert.Single(testInteractionService.DisplayedCancellations);
         Assert.Equal(expectedMessage, stoppingMessage.Message);
         Assert.Null(stoppingMessage.ConsoleOverride);
     }

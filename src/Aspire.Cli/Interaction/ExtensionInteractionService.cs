@@ -442,11 +442,11 @@ internal class ExtensionInteractionService : IExtensionInteractionService, IDisp
         // here would surface every line twice.
     }
 
-    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
+    public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null)
     {
         var result = _extensionTaskChannel.Writer.TryWrite(() => Backchannel.DisplayCancellationMessageAsync(_cancellationToken));
         Debug.Assert(result);
-        _consoleInteractionService.DisplayCancellationMessage(consoleOverride);
+        _consoleInteractionService.DisplayCancellationMessage(message, consoleOverride);
     }
 
     public void DisplayEmptyLine()

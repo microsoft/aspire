@@ -43,9 +43,11 @@ internal abstract class BaseCommand : Command
 
     protected AspireCliTelemetry Telemetry { get; }
 
-    protected virtual void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
+    protected virtual string? CancellationMessage => null;
+
+    private void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
     {
-        InteractionService.DisplayCancellationMessage(consoleOverride);
+        InteractionService.DisplayCancellationMessage(CancellationMessage, consoleOverride);
     }
 
     protected BaseCommand(string name, string description, CommonCommandServices services) : base(name, description)
