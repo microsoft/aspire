@@ -270,15 +270,16 @@ jobs:
                   .[] |
                   {
                     test: (.["+@testName"] // ""),
-                    error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:1000]),
-                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000]),
-                    standard_output: ((.Output.StdOut // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:4000]),
-                    standard_error: ((.Output.StdErr // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:4000])
+                    error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end),
+                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end),
+                    standard_output: ((.Output.StdOut // "") | if type == "object" then (.["+content"] // "") else tostring end),
+                    standard_error: ((.Output.StdErr // "") | if type == "object" then (.["+content"] // "") else tostring end)
                   }
                 ' >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
               done
               jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
               rm -f ci-failure-data/test-failures.jsonl
+              # Redact complete values before the script applies field limits so truncation cannot split credential patterns.
               node .github/workflows/analyze-ci-failure.js redact ci-failure-data/test-failures.json \
                 > ci-failure-data/test-failures-redacted.json
               mv ci-failure-data/test-failures-redacted.json ci-failure-data/test-failures.json
