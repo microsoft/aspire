@@ -158,7 +158,7 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: []);
         SetupManageDataDialogServices(dashboardClient);
 
-        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var repository = Services.GetRequiredService<InMemoryTelemetryRepository>();
         var resourceKey = new ResourceKey("orphan", "instance");
         repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
         {
