@@ -134,20 +134,23 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
         var logs = ViewModel.GetLogs();
 
-        if (logs.IsFull && !TelemetryRepository.HasDisplayedMaxLogLimitMessage)
+        if (!TelemetryRepository.IsReadOnly)
         {
-            TelemetryRepository.MaxLogLimitMessage = await DashboardUIHelpers.DisplayMaxLimitMessageAsync(
-                MessageService,
-                Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitTitle)],
-                string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitBody)], DashboardOptions.Value.TelemetryLimits.MaxLogCount),
-                () => TelemetryRepository.MaxLogLimitMessage = null);
+            if (logs.IsFull && !TelemetryRepository.HasDisplayedMaxLogLimitMessage)
+            {
+                TelemetryRepository.MaxLogLimitMessage = await DashboardUIHelpers.DisplayMaxLimitMessageAsync(
+                    MessageService,
+                    Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitTitle)],
+                    string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.StructuredLogs.MessageExceededLimitBody)], DashboardOptions.Value.TelemetryLimits.MaxLogCount),
+                    () => TelemetryRepository.MaxLogLimitMessage = null);
 
-            TelemetryRepository.HasDisplayedMaxLogLimitMessage = true;
-        }
-        else if (!logs.IsFull && TelemetryRepository.MaxLogLimitMessage is { } message)
-        {
-            // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
-            message.Close();
+                TelemetryRepository.HasDisplayedMaxLogLimitMessage = true;
+            }
+            else if (!logs.IsFull && TelemetryRepository.MaxLogLimitMessage is { } message)
+            {
+                // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
+                message.Close();
+            }
         }
 
         // Updating the total item count as a field doesn't work because it isn't updated with the grid.

@@ -31,6 +31,8 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
 
     private static string CreateStartsWithLikePattern(string value) => $"{EscapeLikePattern(value)}%";
 
+    public bool IsReadOnly => _database.IsReadOnly;
+
     private static string EscapeLikePattern(string value)
     {
         return value

@@ -11,6 +11,11 @@ namespace Aspire.Dashboard.Otlp.Storage;
 /// </summary>
 public interface ITelemetryRepository : IDisposable
 {
+    /// <summary>
+    /// Gets a value indicating whether the repository is read-only.
+    /// </summary>
+    bool IsReadOnly { get; }
+
     bool HasDisplayedMaxLogLimitMessage { get; set; }
     Message? MaxLogLimitMessage { get; set; }
     bool HasDisplayedMaxTraceLimitMessage { get; set; }

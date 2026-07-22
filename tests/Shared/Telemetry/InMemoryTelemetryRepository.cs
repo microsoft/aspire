@@ -74,6 +74,8 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
     private readonly List<IDisposable> _peerResolverSubscriptions = new();
     internal readonly OtlpContext _otlpContext;
 
+    public bool IsReadOnly => _isReadOnly;
+
     public bool HasDisplayedMaxLogLimitMessage { get; set; }
     public Message? MaxLogLimitMessage { get; set; }
 
