@@ -15,7 +15,7 @@ public sealed class DashboardSqliteDatabase : IDisposable
 {
     private const string SchemaResourcePrefix = "Aspire.Dashboard.ServiceClient.DatabaseSchema.";
 
-    internal const int SchemaVersion = 12;
+    internal const int SchemaVersion = 13;
 
     private static readonly Lazy<IReadOnlyList<string>> s_schemaScripts = new(LoadSchemaScripts);
 

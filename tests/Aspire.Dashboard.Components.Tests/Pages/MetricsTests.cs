@@ -51,6 +51,56 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
+    public void ChartContainer_UnchangedDimensionFilters_PreservesFilterParameters()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+
+        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(
+                                metricName: "test-instrument",
+                                startTime: s_testTime.AddMinutes(1),
+                                attributes: [new KeyValuePair<string, string>("http.method", "GET")])
+                        }
+                    }
+                }
+            }
+        });
+        telemetryRepository.MakeReadOnly();
+        var resource = telemetryRepository.GetResources().Single();
+
+        var cut = RenderComponent<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resource.ResourceKey);
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "test-instrument");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ActiveView, MetricViewKind.Graph);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.Resources, [resource]);
+            builder.Add(component => component.PauseText, null);
+        });
+        var dimensionFilters = cut.Instance.DimensionFilters;
+        var dimensionFilter = Assert.Single(dimensionFilters);
+
+        cut.SetParametersAndRender(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(5)));
+
+        Assert.Same(dimensionFilters, cut.Instance.DimensionFilters);
+        Assert.Same(dimensionFilter, Assert.Single(cut.Instance.DimensionFilters));
+    }
+
+    [Fact]
     public async Task InitialLoad_SingleResource_RedirectToResource()
     {
         // Arrange
@@ -286,7 +336,6 @@ public partial class MetricsTests : DashboardTestContext
     public void ReadOnly_ChartEndsAtLatestMetricTime()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
-        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isReadOnly: true));
 
         var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
@@ -308,6 +357,7 @@ public partial class MetricsTests : DashboardTestContext
                 }
             }
         });
+        telemetryRepository.MakeReadOnly();
         Services.GetRequiredService<PauseManager>().SetMetricsPaused(true);
         Services.GetRequiredService<NavigationManager>().NavigateTo(
             DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: "test-instrument", duration: 5, view: MetricViewKind.Graph.ToString()));

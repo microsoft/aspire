@@ -2181,52 +2181,86 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         {
             return null;
         }
-        else if (instruments.Count == 1)
+
+        var allKnownAttributes = new Dictionary<string, List<string?>>();
+        var matchingDimensions = new List<DimensionScope>();
+        var hasOverflow = false;
+        foreach (var instrument in instruments)
         {
-            var instrument = instruments[0];
-            return new OtlpInstrumentData
+            foreach (var knownAttributeValues in instrument.KnownAttributeValues)
             {
-                Summary = instrument.Summary,
-                KnownAttributeValues = instrument.KnownAttributeValues,
-                Dimensions = instrument.Dimensions.Values.ToList(),
-                HasOverflow = instrument.HasOverflow
-            };
-        }
-        else
-        {
-            var allDimensions = new List<DimensionScope>();
-            var allKnownAttributes = new Dictionary<string, List<string?>>();
-            var hasOverflow = false;
-
-            foreach (var instrument in instruments)
-            {
-                allDimensions.AddRange(instrument.Dimensions.Values);
-
-                foreach (var knownAttributeValues in instrument.KnownAttributeValues)
-                {
-                    ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(allKnownAttributes, knownAttributeValues.Key, out _);
-                    // Adds to dictionary if not present.
-                    if (values != null)
-                    {
-                        values = values.Union(knownAttributeValues.Value).ToList();
-                    }
-                    else
-                    {
-                        values = knownAttributeValues.Value.ToList();
-                    }
-                }
-
-                hasOverflow = hasOverflow || instrument.HasOverflow;
+                ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(allKnownAttributes, knownAttributeValues.Key, out _);
+                values = values is not null
+                    ? values.Union(knownAttributeValues.Value).ToList()
+                    : knownAttributeValues.Value.ToList();
             }
 
-            return new OtlpInstrumentData
-            {
-                Summary = instruments[0].Summary,
-                Dimensions = allDimensions,
-                KnownAttributeValues = allKnownAttributes,
-                HasOverflow = hasOverflow
-            };
+            matchingDimensions.AddRange(instrument.Dimensions.Values.Where(dimension => MatchesDimensionFilters(dimension.Attributes, request.DimensionFilters)));
+            hasOverflow = hasOverflow || instrument.HasOverflow;
         }
+
+        return new OtlpInstrumentData
+        {
+            Summary = instruments[0].Summary,
+            Dimensions = [AggregateDimensions(matchingDimensions)],
+            KnownAttributeValues = allKnownAttributes,
+            HasOverflow = hasOverflow
+        };
+    }
+
+    private DimensionScope AggregateDimensions(IEnumerable<DimensionScope> dimensions)
+    {
+        var dimensionsList = dimensions.ToList();
+        var result = new DimensionScope(_otlpContext.Options.MaxMetricsCount, []);
+        foreach (var startTime in dimensionsList.SelectMany(dimension => dimension.Values).Select(value => value.Start).Distinct().Order())
+        {
+            var effectiveValues = dimensionsList
+                .Select(dimension => dimension.Values.LastOrDefault(value => value.Start == startTime))
+                .OfType<MetricValueBase>()
+                .ToList();
+            var first = effectiveValues[0];
+            MetricValueBase aggregate = first switch
+            {
+                MetricValue<long> => new MetricValue<long>(effectiveValues.Cast<MetricValue<long>>().Sum(value => value.Value), startTime, effectiveValues.Max(value => value.End)),
+                MetricValue<double> => new MetricValue<double>(effectiveValues.Cast<MetricValue<double>>().Sum(value => value.Value), startTime, effectiveValues.Max(value => value.End)),
+                HistogramValue histogram => new HistogramValue(
+                    effectiveValues.Cast<HistogramValue>().Select(value => value.Values).Aggregate(
+                        new ulong[histogram.Values.Length],
+                        (totals, values) =>
+                        {
+                            for (var index = 0; index < totals.Length; index++)
+                            {
+                                totals[index] += values[index];
+                            }
+                            return totals;
+                        }),
+                    effectiveValues.Cast<HistogramValue>().Sum(value => value.Sum),
+                    effectiveValues.Cast<HistogramValue>().Aggregate(0ul, (count, value) => count + value.Count),
+                    startTime,
+                    effectiveValues.Max(value => value.End),
+                    histogram.ExplicitBounds),
+                _ => throw new InvalidOperationException($"Unknown metric value type '{first.GetType()}'.")
+            };
+
+            aggregate.Count = effectiveValues.Max(value => value.Count);
+            aggregate.Exemplars.AddRange(dimensionsList.SelectMany(dimension => dimension.Values).Where(value => value.Start == startTime).SelectMany(value => value.Exemplars).Distinct());
+            result.Values.Add(aggregate);
+        }
+        return result;
+    }
+
+    private static bool MatchesDimensionFilters(
+        KeyValuePair<string, string>[] attributes,
+        IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters)
+    {
+        foreach (var (key, values) in dimensionFilters)
+        {
+            if (!values.Contains(OtlpHelpers.GetValue(attributes, key)))
+            {
+                return false;
+            }
+        }
+        return true;
     }
 
     public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName)

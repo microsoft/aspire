@@ -17,6 +17,20 @@ public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHel
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
 
     [Fact]
+    public void InitializeSchema_HistogramCountsUseIntegerStorage()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        database.InitializeSchema();
+        using var connection = database.OpenConnection();
+
+        var histogramCountColumnType = connection.QuerySingle<string>("SELECT type FROM pragma_table_info('telemetry_metric_points') WHERE name = 'histogram_count';");
+        var bucketCountColumnType = connection.QuerySingle<string>("SELECT type FROM pragma_table_info('telemetry_metric_histogram_bucket_counts') WHERE name = 'bucket_count';");
+
+        Assert.Equal("INTEGER", histogramCountColumnType);
+        Assert.Equal("INTEGER", bucketCountColumnType);
+    }
+
+    [Fact]
     public async Task DapperQuery_CreatesActivityWithQueryInformation()
     {
         using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);

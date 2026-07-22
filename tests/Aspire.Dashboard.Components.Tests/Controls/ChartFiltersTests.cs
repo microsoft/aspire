@@ -138,12 +138,14 @@ public class ChartFiltersTests : DashboardTestContext
         Assert.Equal(["DELETE", "GET", "POST"], ordered);
     }
 
-    private IRenderedComponent<ChartFilters> RenderChartFilters(DimensionFilterViewModel dimensionFilter, Action<DimensionFilterViewModel>? onDimensionValuesChanged = null)
+    private IRenderedComponent<ChartFilters> RenderChartFilters(
+        DimensionFilterViewModel dimensionFilter,
+        Action<DimensionFilterViewModel>? onDimensionValuesChanged = null)
     {
         return RenderComponent<ChartFilters>(builder =>
         {
-            builder.Add(p => p.Instrument, CreateInstrument());
-            builder.Add(p => p.InstrumentViewModel, new InstrumentViewModel());
+            builder.Add(p => p.InstrumentType, OtlpInstrumentType.Sum);
+            builder.Add(p => p.ShowCount, false);
             builder.Add(p => p.DimensionFilters, [dimensionFilter]);
             if (onDimensionValuesChanged is not null)
             {
@@ -171,22 +173,4 @@ public class ChartFiltersTests : DashboardTestContext
         return dimensionFilter;
     }
 
-    private static OtlpInstrumentData CreateInstrument()
-    {
-        return new OtlpInstrumentData
-        {
-            Summary = new OtlpInstrumentSummary
-            {
-                Name = "request-duration",
-                Description = string.Empty,
-                Unit = "ms",
-                Type = OtlpInstrumentType.Sum,
-                AggregationTemporality = OtlpAggregationTemporality.Cumulative,
-                Parent = new OtlpScope("meter", string.Empty, [])
-            },
-            Dimensions = [],
-            KnownAttributeValues = [],
-            HasOverflow = false
-        };
-    }
 }
