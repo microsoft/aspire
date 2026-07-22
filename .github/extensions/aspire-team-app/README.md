@@ -12,8 +12,10 @@ lanes for everything waiting on you:
 
 ![Aspire Team App review queue](media/review-queue.png)
 
-Per-card action buttons with a split-button dropdown to run each action in a new
-sub-session (the PR's own repo) or in the current conversation. The buttons a card
+Per-card action buttons. On github.com PRs each button is a split-button dropdown to
+run the action in a new sub-session (the PR's own repo) or in the current conversation.
+Enterprise (GHES/EMU) cards can't open a sub-session, so they render a single button
+with no dropdown that runs the action in the current conversation. The buttons a card
 shows are driven by its lane and its signal pills:
 
 - **Test** / **Review** — someone else's PR that's waiting on you. Each self-routes
