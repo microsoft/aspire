@@ -105,7 +105,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         {
             if (lastDataFetchTimestamp is null || Stopwatch.GetElapsedTime(lastDataFetchTimestamp.Value) >= s_dataFetchInterval)
             {
-                _instrument = GetInstrument();
+                _instrument = GetInstrument(useIncrementalCache: true);
                 lastDataFetchTimestamp = Stopwatch.GetTimestamp();
 
                 if (_instrument is not null && HaveDimensionFilterValuesChanged(_instrument))
@@ -129,7 +129,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     public async Task DimensionValuesChangedAsync(DimensionFilterViewModel dimensionViewModel)
     {
-        _instrument = GetInstrument();
+        _instrument = GetInstrument(useIncrementalCache: false);
         if (_instrument is null)
         {
             return;
@@ -160,7 +160,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     protected override async Task OnParametersSetAsync()
     {
-        _instrument = GetInstrument();
+        _instrument = GetInstrument(useIncrementalCache: false);
 
         if (_instrument == null)
         {
@@ -176,7 +176,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         await UpdateInstrumentDataAsync(_instrument);
     }
 
-    private OtlpInstrumentData? GetInstrument()
+    private OtlpInstrumentData? GetInstrument(bool useIncrementalCache)
     {
         DateTime endDate;
         if (TelemetryRepository.IsReadOnly)
@@ -191,17 +191,24 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
             endDate = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : DateTime.UtcNow;
         }
 
-        // Get more data than is being displayed. Histogram graph uses some historical data to calculate bucket counts.
-        // It's ok to get more data than is needed here. An additional date filter is applied when building chart values.
-        var startDate = endDate.Subtract(Duration + TimeSpan.FromSeconds(30));
+        var dataPointInterval = GetDataPointInterval(Duration);
 
-        var instrument = TelemetryRepository.GetInstrument(new GetInstrumentRequest
+        // Histogram graphs need one preceding rollup to calculate bucket count changes at the beginning of the chart.
+        var historyDuration = TimeSpan.FromTicks(Math.Max(TimeSpan.FromSeconds(30).Ticks, dataPointInterval.Ticks));
+        var startDate = endDate.Subtract(Duration + historyDuration);
+        var cursors = useIncrementalCache && _instrument is not null
+            ? MetricInstrumentDataCache.CreateCursors(_instrument, historyDuration, dataPointInterval)
+            : [];
+
+        var refreshedInstrument = TelemetryRepository.GetInstrument(new GetInstrumentRequest
         {
             ResourceKey = ResourceKey,
             MeterName = MeterName,
             InstrumentName = InstrumentName,
             StartTime = startDate,
             EndTime = endDate,
+            DataPointInterval = dataPointInterval,
+            DimensionCursors = cursors,
             DimensionFilters = DimensionFilters
                 .Where(filter => filter.AreAllValuesSelected is not true)
                 .ToDictionary(
@@ -209,7 +216,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                 filter => (IReadOnlyList<string?>)filter.SelectedValues.Select(value => value.Value).ToArray())
         });
 
-        if (instrument == null)
+        if (refreshedInstrument == null)
         {
             Logger.LogDebug(
                 "Unable to find instrument. ResourceKey: {ResourceKey}, MeterName: {MeterName}, InstrumentName: {InstrumentName}",
@@ -218,8 +225,13 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                 InstrumentName);
         }
 
-        return instrument;
+        return refreshedInstrument is not null && _instrument is not null && cursors.Count > 0
+            ? MetricInstrumentDataCache.Merge(_instrument, refreshedInstrument, cursors, startDate)
+            : refreshedInstrument;
     }
+
+    internal static TimeSpan GetDataPointInterval(TimeSpan duration)
+        => duration <= TimeSpan.FromMinutes(15) ? TimeSpan.FromSeconds(1) : TimeSpan.FromMinutes(1);
 
     private void EnsureDataEndTime()
     {
