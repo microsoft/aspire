@@ -624,6 +624,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         var logger = new TestLogger<DashboardDataSource>(new TestLoggerFactory(testSink, enabled: true));
         using var dataSource = CreateDataSource(currentRunStore, currentTelemetryRepository, currentResourceRepository, repositoryFactory, logger);
         Assert.Empty(dataSource.TelemetryRepository.GetResources());
+        Assert.False(dataSource.TelemetryRepository.IsReadOnly);
 
         dataSource.SelectRun(historicalRunId);
 
@@ -632,6 +633,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal($"Switched dashboard run from '{currentRunStore.RunId}' to '{historicalRunId}'.", switchLog.Message);
 
         Assert.True(dataSource.IsReadOnly);
+        Assert.True(dataSource.TelemetryRepository.IsReadOnly);
         Assert.Equal(historicalRunId, dataSource.SelectedRun.RunId);
         Assert.Equal("api", Assert.Single(dataSource.ResourceRepository.GetResources()).Name);
         Assert.Equal("TestService", Assert.Single(dataSource.TelemetryRepository.GetResources()).ResourceName);
@@ -669,6 +671,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
 
         Assert.Empty(dataSource.TelemetryRepository.GetResources());
         Assert.False(dataSource.IsReadOnly);
+    Assert.False(dataSource.TelemetryRepository.IsReadOnly);
 
         Action<DashboardConnectionState> handler = _ => connectionStateChangedCount++;
         selectedClient.ConnectionStateChanged += handler;

@@ -5,6 +5,7 @@ using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
@@ -18,6 +19,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Logs.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -250,6 +253,53 @@ public partial class StructuredLogsTests : DashboardTestContext
 
         Assert.True(Services.GetRequiredService<PauseManager>().AreStructuredLogsPaused(out _));
         Assert.Contains("Capture paused", cut.Markup);
+    }
+
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 0)]
+    public void Render_AtLogLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
+    {
+        var messageCount = 0;
+        var messageService = new TestMessageService(_ =>
+        {
+            messageCount++;
+            return Task.FromResult(new Message());
+        });
+
+        SetupStructureLogsServices();
+        Services.AddSingleton<IMessageService>(messageService);
+        Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions
+        {
+            TelemetryLimits = { MaxLogCount = 1 }
+        }));
+
+        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope(),
+                        LogRecords = { CreateLogRecord() }
+                    }
+                }
+            }
+        });
+        if (isReadOnly)
+        {
+            telemetryRepository.MakeReadOnly();
+        }
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        RenderComponent<StructuredLogs>(builder => builder.Add(p => p.ViewportInformation, viewport));
+
+        Assert.Equal(expectedMessageCount, messageCount);
     }
 
     private void SetupStructureLogsServices()
