@@ -575,6 +575,49 @@ test("setProgress doesn't fade the bar from a terminal SSE tick while another re
   assert.equal(loadbar.style.width, "0");
 });
 
+test("onSseRefresh only re-pulls state while the queue is showing, so an off-queue nudge can't clobber an open form", async () => {
+  // Every mutation streams the fresh dashboard over the 'state' event (stashed off-queue by
+  // applyPushedState) and then fires the legacy 'refresh' nudge. Acting on that nudge off the queue
+  // would call load() -> render() and rebuild an open Accounts/Settings/Filters form, discarding the
+  // user's uncommitted text. fetch hands back a strictly-increasing seq so each real load applies.
+  let seq = 0;
+  const fetchSeq = async () => {
+    seq += 1;
+    return jsonResponse({ dashboard: { seq, marker: "s" + seq, authenticated: false, accounts: [], message: "" }, prefs: {} });
+  };
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+  const { api } = createRendererHarness({ fetch: fetchSeq });
+  await flush();
+  assert.equal(api.getState().marker, "s1", "module-init load applies the first snapshot");
+
+  // Off the queue (a form view): the nudge is a no-op, so fetch isn't called and state is untouched.
+  api.setView("accounts");
+  api.onSseRefresh();
+  await flush();
+  assert.equal(seq, 1, "an off-queue refresh nudge must not re-pull /api/state");
+  assert.equal(api.getState().marker, "s1");
+
+  // On the queue: the nudge re-pulls /api/state and applies the newer snapshot.
+  api.setView("queue");
+  api.onSseRefresh();
+  await flush();
+  assert.equal(seq, 2, "a queue refresh nudge re-pulls /api/state");
+  assert.equal(api.getState().marker, "s2");
+});
+
+test("signalActions detects review debt from the serialized flag when the pill is truncated", () => {
+  const { api } = createRendererHarness();
+
+  // A stacked card whose "review debt" pill was dropped by signalsFor's 4-pill cap still carries the
+  // reviewDebt flag, so Address review + Discuss review must still surface (even on your own PRs).
+  assert.equal(
+    api.signalActions({ reviewDebt: true, pr: { isMine: true }, signals: [{ label: "released" }, { label: "regression" }] }).map((a) => a.kind).join(","),
+    "review-debt,discuss-review",
+  );
+  // No flag and no pill -> no review-debt actions.
+  assert.equal(api.signalActions({ pr: { isMine: false }, signals: [{ label: "released" }] }).length, 0);
+});
+
 function createRendererHarness(overrides = {}) {
   const app = {
     innerHTML: "",
@@ -600,7 +643,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  onSseRefresh,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }

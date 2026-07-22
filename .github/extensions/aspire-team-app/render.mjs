@@ -887,6 +887,16 @@ async function load() {
   render();
 }
 
+// Handle the SSE 'refresh' nudge. Every mutation streams the fresh dashboard over the 'state' event
+// (which applyPushedState stashes into pendingState while off the queue) and then fires this legacy
+// 'refresh'. Re-pulling here unconditionally would call load() -> render() even while a form-bearing
+// view (Accounts/Settings/Filters) is open, discarding the user's uncommitted text. Mirror
+// applyPushedState's guard and only act on the nudge while the queue is showing; the paired 'state'
+// push already stashed the latest snapshot, which goView() applies on return to the queue.
+function onSseRefresh() {
+  if (view === "queue") { load(); }
+}
+
 async function withRefresh(fn) {
   const myGen = ++refreshGen;
   refreshInFlight++;
@@ -1363,7 +1373,8 @@ function mergeActions() {
 //   * unresolved feedback  -> "{n} unresolved" (createAttentionSignals), "Unresolved feedback"
 //                             (the bucket / focus-exclusion reason label), "{n} unresolved thread"
 //                             (reviewSignal), or the "resolve feedback" action pill
-//   * review debt          -> "review debt" (constants.mjs reviewDebtSignalLabel)
+//   * review debt          -> the serialized reviewDebt flag (isReviewDebtItem), with the
+//                             "review debt" pill (constants.mjs reviewDebtSignalLabel) as fallback
 //   * re-review            -> "re-review" (actionSignal)
 // The review-oriented pills ("review debt" / "re-review") are surfaced on every card regardless of
 // ownership: the user asked that a labelled card always carry its action, and a self-review of your
@@ -1375,7 +1386,11 @@ function signalActions(item) {
   if (hasSig(/conflict/i)) out.push(CARD_ACTIONS.resolveConflicts);
   if (hasSig(/^CI failing/i)) out.push(CARD_ACTIONS.fixCi);
   if (hasSig(/unresolved|resolve feedback/i)) out.push(CARD_ACTIONS.resolveFeedback);
-  if (hasSig(/^review debt$/i)) { out.push(CARD_ACTIONS.reviewDebt); out.push(CARD_ACTIONS.discussReview); }
+  // Detect review debt via isReviewDebtItem (the serialized reviewDebt flag OR the pill), not the
+  // pill alone: signalsFor caps a card at four pills and oldFirstSignal() emits "review debt" last,
+  // so a stacked card (release + regression + CI + ...) can lose the visible pill yet still be debt.
+  // Keying off the flag keeps Address review + Discuss review on every review-debt card.
+  if (isReviewDebtItem(item)) { out.push(CARD_ACTIONS.reviewDebt); out.push(CARD_ACTIONS.discussReview); }
   if (hasSig(/^re-review$/i)) out.push(CARD_ACTIONS.review);
   return out;
 }
@@ -1393,9 +1408,15 @@ function signalActions(item) {
 function focusCardActions(item) {
   var pr = (item && item.pr) || {};
   var ctx = [];
+  var sig = signalActions(item);
   if (pr.isMine) {
     if (isAuthorResponseItem(item)) {
       ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+      // Changes requested takes precedence over review debt on your own PR: you respond, you don't
+      // start a review of your own aged PR. signalActions now layers review-debt off the serialized
+      // flag (an aged, non-approved PR is debt even with changes requested), so drop just that action
+      // here to keep the precedence. Conflict / CI / unresolved signals still layer normally.
+      sig = sig.filter(function (a) { return a.kind !== CARD_ACTIONS.reviewDebt.kind; });
     } else if (isReviewDebtItem(item)) {
       ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
     }
@@ -1404,7 +1425,7 @@ function focusCardActions(item) {
   } else {
     ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
   }
-  return mergeActions(ctx, signalActions(item));
+  return mergeActions(ctx, sig);
 }
 
 // "For you" picks that carry an actionable label get an interactive split button. The pick's
@@ -2445,7 +2466,8 @@ function wireAccounts() {
 // Live updates over Server-Sent Events. 'progress' drives the deterministic top bar as
 // repos are fetched; 'state' streams partial and final dashboards (applied straight into
 // the UI, guarded against clobbering an active edit); 'refresh' is a legacy nudge kept for
-// back-compat that just re-pulls /api/state.
+// back-compat that re-pulls /api/state, guarded (via onSseRefresh) to the queue view so it
+// can't rebuild an open form and discard uncommitted text.
 try {
   const es = new EventSource("events");
   es.addEventListener("progress", (e) => {
@@ -2454,7 +2476,7 @@ try {
   es.addEventListener("state", (e) => {
     try { applyPushedState(JSON.parse(e.data)); } catch {}
   });
-  es.addEventListener("refresh", () => load());
+  es.addEventListener("refresh", onSseRefresh);
 } catch {}
 
 load();

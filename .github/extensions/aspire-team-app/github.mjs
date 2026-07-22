@@ -768,19 +768,17 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
       const buckets = createAttentionBuckets(allPrs, login);
       const focusAll = computeFocusItems(buckets);
       const focusExclusions = computeFocusExclusionItems(allPrs, buckets, focusAll, login);
+      // Every review-mode card carries a reviewDebt flag (aged past the focus limit without an
+      // approving review) so the canvas can offer Address review / Discuss review even when the
+      // "review debt" pill is truncated off the displayed signals. Derive it from the shared
+      // isReviewDebt predicate, NOT from c.signals: signalsFor caps the display pills, so a debt PR
+      // that also carries release/regression pills would lose its "review debt" pill and be wrongly
+      // treated as non-debt. The predicate is the same one createAttentionSignals, the focus-retention
+      // filter and capFocusKeepingDebt use, so they cannot drift.
       const card = (pr, reason, extra) =>
-        Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || "") }, extra || {});
+        Object.assign({ pr, reason: reason || "", signals: signalsFor(pr, reason || ""), reviewDebt: isReviewDebt(pr) }, extra || {});
       const focusCards = focusAll.map((f) => {
-        const c = card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
-        // Flag review-debt cards (aged past the focus limit without an approving review) so the canvas can
-        // offer an "Address review" button instead of Test/Review. Derive this from the shared
-        // isReviewDebt predicate, NOT from c.signals: signalsFor truncates the display pills to a
-        // few highest-priority signals, so a debt PR that also carries release/regression pills
-        // would lose its "review debt" pill and be wrongly treated as non-debt — dropping it from
-        // capFocusKeepingDebt's spillover and hiding "Address review". The predicate is the same
-        // one createAttentionSignals and the focus-retention filter use, so they cannot drift.
-        c.reviewDebt = isReviewDebt(f.pullRequest);
-        return c;
+        return card(f.pullRequest, f.reason, { bucketLabel: f.bucketLabel, bucketTone: f.bucketTone });
       });
       const focus = capFocusKeepingDebt(focusCards, reviewLimit);
       attention = {
@@ -809,6 +807,9 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
         focusExclusions: focusExclusions.map((e) => ({
           pr: e.pullRequest,
           reason: e.reason.detail,
+          // Serialize the debt flag here too (this shape is built inline, not via card()) so a stacked
+          // "Your PRs outside" card keeps Address review / Discuss review when its pill is truncated.
+          reviewDebt: isReviewDebt(e.pullRequest),
           signals: dedupeSignals([
             { label: e.reason.label, tone: e.reason.tone },
             ...signalsFor(e.pullRequest, e.reason.label, { includeAction: false, limit: 4 }),
