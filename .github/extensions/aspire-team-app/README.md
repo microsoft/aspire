@@ -13,8 +13,10 @@ lanes for everything waiting on you:
 ![Aspire Team App review queue](media/review-queue.png)
 
 Per-card action buttons (Test / Review / Resolve conflicts) with a split-button
-dropdown to run the matching skill in a new sub-session (the PR's own repo) or in
-the current conversation:
+dropdown to run each action in a new sub-session (the PR's own repo) or in the
+current conversation. Test and Review self-route to the repo's matching skill
+(`/pr-testing`, `/code-review`), falling back to a thorough manual pass; Resolve
+conflicts runs a direct git conflict-resolution flow:
 
 ![Card action split buttons](media/card-actions.png)
 
