@@ -478,7 +478,13 @@ public static class ProjectResourceBuilderExtensions
             builder.WithEnvironment(KnownOtelConfigNames.DotnetExperimentalHttpClientDisableUrlQueryRedaction, "true");
         }
 
-        builder.WithOtlpExporter();
+        // The dashboard generates telemetry while processing received telemetry, so automatically exporting
+        // that telemetry back to the dashboard would create a loop. Dashboard telemetry export is opt-in.
+        if (!string.Equals(builder.Resource.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName))
+        {
+            builder.WithOtlpExporter();
+        }
+
         builder.ConfigureConsoleLogs();
 
         if (OperatingSystem.IsWindows())
