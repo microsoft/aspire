@@ -1348,49 +1348,56 @@ function mergeActions() {
 }
 
 // Signal-driven actions available on ANY card, keyed off the danger pills the model attaches.
-// Wherever a card shows one of these signals it now also offers the matching action, so e.g. every
-// card with a "merge conflicts" pill gets a Resolve conflicts button. Signal labels come from
-// model.mjs: "merge conflicts", "CI failing[ \u00b7 N checks]", "{n} unresolved", "review debt"
-// (constants.mjs reviewDebtSignalLabel), and "re-review" (actionSignal). The first three are
-// author-fixable, so they surface on every card including your own. "review debt" (aged without an
-// approving review) and "re-review" (author pushed after a review) are review actions, so — like
-// focusCardActions — they are withheld on your own PRs (you don't review your own work). Keying them
-// here surfaces them on breakdown and community cards too, not just the lanes mapped by label.
+// Wherever a card shows one of these signals it also offers the matching action, so e.g. every
+// card with a "merge conflicts" pill gets a Resolve conflicts button and every card with a
+// "review debt" pill gets Address review. This is layered onto every surface by mergeActions, so a
+// labelled card never renders without its button. Signal labels come from model.mjs and vary by
+// surface:
+//   * conflicts            -> "merge conflicts"
+//   * CI failing           -> "CI failing[ \u00b7 N checks]"
+//   * unresolved feedback  -> "{n} unresolved" (createAttentionSignals), "Unresolved feedback"
+//                             (the bucket / focus-exclusion reason label), "{n} unresolved thread"
+//                             (reviewSignal), or the "resolve feedback" action pill
+//   * review debt          -> "review debt" (constants.mjs reviewDebtSignalLabel)
+//   * re-review            -> "re-review" (actionSignal)
+// The review-oriented pills ("review debt" / "re-review") are surfaced on every card regardless of
+// ownership: the user asked that a labelled card always carry its action, and a self-review of your
+// own aged PR before others weigh in is still useful.
 function signalActions(item) {
   var sigs = (item && item.signals) || [];
-  var pr = (item && item.pr) || {};
   function hasSig(re) { return sigs.some(function (s) { return s && re.test(s.label || ""); }); }
   var out = [];
   if (hasSig(/conflict/i)) out.push(CARD_ACTIONS.resolveConflicts);
   if (hasSig(/^CI failing/i)) out.push(CARD_ACTIONS.fixCi);
-  if (hasSig(/^\d+\s+unresolved$/)) out.push(CARD_ACTIONS.resolveFeedback);
-  if (!pr.isMine) {
-    if (hasSig(/^review debt$/i)) { out.push(CARD_ACTIONS.reviewDebt); out.push(CARD_ACTIONS.discussReview); }
-    if (hasSig(/^re-review$/i)) out.push(CARD_ACTIONS.review);
-  }
+  if (hasSig(/unresolved|resolve feedback/i)) out.push(CARD_ACTIONS.resolveFeedback);
+  if (hasSig(/^review debt$/i)) { out.push(CARD_ACTIONS.reviewDebt); out.push(CARD_ACTIONS.discussReview); }
+  if (hasSig(/^re-review$/i)) out.push(CARD_ACTIONS.review);
   return out;
 }
 
-// Which action buttons a "Needs attention" or "Your PRs outside" card gets: a review-debt card
-// offers Address review (a fresh review) plus Discuss review (talk through existing feedback);
-// otherwise someone else's PR offers Test + Review. Those are review-oriented, so they are withheld
-// on your own PRs (you don't review your own work) — including your own aged review-debt PR, which
-// computeFocusItems deliberately retains. The one review action that IS yours is the author-response
-// case: when a reviewer requested changes the ball is in your court, so those cards offer Address
-// feedback + Discuss review (mirroring the "Respond here" For You pick) instead of rendering
-// actionless in the "Your PRs outside Needs attention" lane. Signal-driven actions (conflicts, CI,
-// unresolved) are layered on for every card, including your own, since fixing those is the author's job.
+// Which action buttons a "Needs attention" or "Your PRs outside" card gets. A review-debt card
+// (aged without an approving review) offers Address review (a fresh review) plus Discuss review
+// (talk through existing feedback) — on every card carrying the debt, including your own, so a
+// review-debt card is never actionless. Focus cards carry a reviewDebt flag (isReviewDebtItem)
+// because signalsFor truncates the displayed pills, so the debt is detected even when the "review
+// debt" pill is not among the visible signals. For your own PR, changes requested takes precedence:
+// the ball is in your court, so those cards offer Address feedback + Discuss review (mirroring the
+// "Respond here" For You pick). Someone else's non-debt PR offers Test + Review. Signal-driven
+// actions (conflicts, CI, unresolved) are layered on for every card, since fixing those is the
+// author's job.
 function focusCardActions(item) {
   var pr = (item && item.pr) || {};
   var ctx = [];
-  if (!pr.isMine) {
-    if (isReviewDebtItem(item)) {
+  if (pr.isMine) {
+    if (isAuthorResponseItem(item)) {
+      ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+    } else if (isReviewDebtItem(item)) {
       ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
-    } else {
-      ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
     }
-  } else if (isAuthorResponseItem(item)) {
-    ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+  } else if (isReviewDebtItem(item)) {
+    ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
+  } else {
+    ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
   }
   return mergeActions(ctx, signalActions(item));
 }

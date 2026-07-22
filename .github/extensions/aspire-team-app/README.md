@@ -21,12 +21,13 @@ shows are driven by its lane and its signal pills:
 - **Test** / **Review** — someone else's PR that's waiting on you, or any card carrying
   a "re-review" pill (the author pushed after a review). Each self-routes to the repo's
   matching skill (`/pr-testing`, `/code-review`), falling back to a thorough manual pass.
-- **Address review** / **Discuss review** — a review-debt card (aged without an
-  approving review; a PR that was only commented on or had changes requested still
-  counts until it's approved), keyed off the "review debt" pill so it shows in the
-  breakdown and community lanes too. Address review runs a fresh review; Discuss review
-  talks through the existing feedback and lays out response options without rewriting
-  anything.
+- **Address review** / **Discuss review** — any review-debt card (aged without an
+  approving review; a PR that was only commented on or had changes requested still counts
+  until it's approved), keyed off the "review debt" pill *and* the review-debt flag so it
+  shows everywhere the card appears — Needs attention, *Your PRs outside Needs attention*,
+  the breakdown lanes (e.g. Stalled), and Community — regardless of whether the PR is
+  yours. Address review runs a fresh review; Discuss review talks through the existing
+  feedback and lays out response options without rewriting anything.
 - **Address feedback** / **Discuss review** — your own PR with changes requested (the
   "Author response" case, including in *Your PRs outside Needs attention*, which would
   otherwise show no actions). Address feedback works the requested changes; Discuss
@@ -36,8 +37,9 @@ shows are driven by its lane and its signal pills:
 - **Evaluate CI failures** — any card carrying a "CI failing" signal; self-routes to
   the repo's CI-diagnosis skill (`/ci-test-failures`) or diagnoses manually, then
   reports the failing checks, likely root cause, and a suggested fix.
-- **Resolve** / **Address feedback** — a card with unresolved review threads (an
-  "N unresolved" signal or the Unresolved feedback lane); works each thread, makes
+- **Resolve** — any card with unresolved review threads, matched off every form of the
+  pill: the "N unresolved" attention signal, the "Unresolved feedback" bucket / *Your PRs
+  outside* reason label, and the "resolve feedback" action pill. Works each thread, makes
   the requested change, and resolves it.
 
 ![Card action split buttons](media/card-actions.png)

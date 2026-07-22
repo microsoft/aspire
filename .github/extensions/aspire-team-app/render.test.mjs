@@ -116,23 +116,26 @@ test("signalActions surfaces conflict / CI / unresolved actions from a card's si
   assert.equal(api.signalActions({ signals: [{ label: "merge conflicts" }] }).map((a) => a.kind).join(","), "resolve-conflicts");
   assert.equal(api.signalActions({ signals: [{ label: "CI failing \u00b7 2 checks" }] }).map((a) => a.kind).join(","), "fix-ci");
 
-  // The unresolved-threads pill is "{n} unresolved" (model.mjs formatCount). It maps to the
-  // address-feedback agent action, surfaced here as a "Resolve" button.
-  const resolve = api.signalActions({ signals: [{ label: "3 unresolved" }] });
-  assert.equal(resolve.length, 1);
-  assert.equal(resolve[0].kind, "address-feedback");
-  assert.equal(resolve[0].label, "Resolve");
+  // Every unresolved-feedback pill maps to the address-feedback agent action, surfaced as "Resolve".
+  // The pill text varies by surface: "{n} unresolved" (createAttentionSignals), the "Unresolved
+  // feedback" bucket / focus-exclusion reason label, "{n} unresolved thread" (reviewSignal), and
+  // the "resolve feedback" action pill all mean the same open-threads state.
+  for (const label of ["3 unresolved", "Unresolved feedback", "2 unresolved threads", "resolve feedback"]) {
+    const resolve = api.signalActions({ signals: [{ label }] });
+    assert.equal(resolve.length, 1, label);
+    assert.equal(resolve[0].kind, "address-feedback", label);
+    assert.equal(resolve[0].label, "Resolve", label);
+  }
 
   // A "review debt" pill (aged without an approving review) offers Address review + Discuss review,
-  // and a "re-review" pill (author pushed after a review) offers Review — on cards you'd review.
+  // and a "re-review" pill (author pushed after a review) offers Review. These surface wherever the
+  // pill appears — including your own PRs — so a labelled card never renders without its button.
   const debt = api.signalActions({ pr: { isMine: false }, signals: [{ label: "review debt" }] });
   assert.equal(debt.map((a) => a.kind).join(","), "review-debt,discuss-review");
   const reReview = api.signalActions({ pr: { isMine: false }, signals: [{ label: "re-review" }] });
   assert.equal(reReview.map((a) => a.kind).join(","), "review");
-
-  // Both are review actions, so they are withheld on your own PRs (you don't review your own work).
-  assert.equal(api.signalActions({ pr: { isMine: true }, signals: [{ label: "review debt" }] }).length, 0);
-  assert.equal(api.signalActions({ pr: { isMine: true }, signals: [{ label: "re-review" }] }).length, 0);
+  assert.equal(api.signalActions({ pr: { isMine: true }, signals: [{ label: "review debt" }] }).map((a) => a.kind).join(","), "review-debt,discuss-review");
+  assert.equal(api.signalActions({ pr: { isMine: true }, signals: [{ label: "re-review" }] }).map((a) => a.kind).join(","), "review");
   assert.equal(api.signalActions({}).length, 0);
 });
 
@@ -143,14 +146,20 @@ test("focusCardActions layers review-debt / review context with signal actions",
   const debt = api.focusCardActions({ reviewDebt: true, pr: { isMine: false } });
   assert.equal(debt.map((a) => a.kind).join(","), "review-debt,discuss-review");
 
-  // Your OWN review-debt PR: Address/Discuss review are review-oriented, so they're withheld even
-  // though computeFocusItems keeps your aged review-debt PR in view. With no problem signal there
-  // are no buttons at all — you don't review your own work.
-  assert.equal(api.focusCardActions({ reviewDebt: true, pr: { isMine: true } }), null);
+  // Your OWN review-debt PR now offers Address review + Discuss review too. Focus cards carry a
+  // reviewDebt flag (the "review debt" pill is often truncated off the displayed signals), and the
+  // user asked that a review-debt card always carry its action — a self-review before others weigh
+  // in is still useful.
+  const mineDebt = api.focusCardActions({ reviewDebt: true, pr: { isMine: true } });
+  assert.equal(mineDebt.map((a) => a.kind).join(","), "review-debt,discuss-review");
 
-  // ...but a signal-driven fix still layers on for your own review-debt PR.
+  // ...with a signal-driven fix layered on for your own review-debt PR.
   const mineDebtConflict = api.focusCardActions({ reviewDebt: true, pr: { isMine: true }, signals: [{ label: "merge conflicts" }] });
-  assert.equal(mineDebtConflict.map((a) => a.kind).join(","), "resolve-conflicts");
+  assert.equal(mineDebtConflict.map((a) => a.kind).join(","), "review-debt,discuss-review,resolve-conflicts");
+
+  // Changes requested takes precedence over review debt on your own PR: the ball is in your court.
+  const mineDebtChanges = api.focusCardActions({ reviewDebt: true, pr: { isMine: true, review: { state: "changes_requested" } } });
+  assert.equal(mineDebtChanges.map((a) => a.kind).join(","), "address-feedback,discuss-review");
 
   // Someone else's PR: Test + Review, plus a layered conflict action from its signal.
   const other = api.focusCardActions({ pr: { isMine: false }, signals: [{ label: "merge conflicts" }] });
