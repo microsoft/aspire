@@ -85,17 +85,6 @@ public sealed class PostConfigureDashboardOptions : IPostConfigureOptions<Dashbo
             options.Api.PrimaryApiKey = apiKey;
         }
 
-        // ASPIRE_DASHBOARD_AI_DISABLED takes precendence over ASPIRE__DASHBOARD__AI__DISABLED.
-        if (_configuration.GetBool(DashboardConfigNames.DashboardAIDisabledName.ConfigKey) is { } aiDisabled)
-        {
-            options.AI.Disabled = aiDisabled;
-        }
-        else
-        {
-            // If there is no explicit setting then default to disabled.
-            options.AI.Disabled = true;
-        }
-
         // DashboardAspireApiDisabledName takes precedence over DashboardAspireApiEnabledName.
         if (_configuration.GetBool(DashboardConfigNames.DashboardAspireApiDisabledName.ConfigKey) is { } apiDisabled)
         {

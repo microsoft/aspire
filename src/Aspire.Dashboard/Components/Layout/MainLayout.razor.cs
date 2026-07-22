@@ -6,7 +6,6 @@ using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.Extensions.Localization;
@@ -28,16 +27,12 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     private DotNetObjectReference<MainLayout>? _layoutReference;
     private IDialogReference? _openPageDialog;
     private string? _pendingReturnFocusElementId;
-    private string? _assistantReturnFocusElementId;
     private bool _suppressNextDialogFocusRestore;
-    private bool _assistantSidebarWasVisible;
-    private IDisposable? _aiDisplayChangedSubscription;
     private const string SettingsDialogId = "SettingsDialog";
     private const string HelpDialogId = "HelpDialog";
     private const string NotificationsDialogId = "NotificationsDialog";
     private const string AIAgentsDialogId = "AIAgentsDialog";
     internal const string HelpButtonId = "dashboard-help-button";
-    internal const string AssistantButtonId = "dashboard-assistant-button";
     internal const string SettingsButtonId = "dashboard-settings-button";
     internal const string NavigationButtonId = "dashboard-navigation-button";
 
@@ -55,9 +50,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     [Inject]
     public required IStringLocalizer<Resources.Layout> Loc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Resources.AIAssistant> AIAssistantLoc { get; init; }
 
     [Inject]
     public required DashboardDialogService DialogService { get; init; }
@@ -79,12 +71,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
 
     [Inject]
     public required ILocalStorage LocalStorage { get; init; }
-
-    [Inject]
-    public required IServiceProvider ServiceProvider { get; init; }
-
-    [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
 
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
@@ -131,29 +117,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
 
         await DisplayUnsecuredEndpointsMessageAsync();
-
-        _aiDisplayChangedSubscription = AIContextProvider.OnDisplayChanged(() => InvokeAsync(() =>
-        {
-            var assistantDisplayContext = ServiceProvider.GetRequiredService<IAssistantDisplayContext>();
-
-            if (!AIContextProvider.ShowAssistantSidebarDialog)
-            {
-                if (_assistantSidebarWasVisible && assistantDisplayContext.RestoreFocusOnAssistantSidebarHidden)
-                {
-                    _pendingReturnFocusElementId = _assistantReturnFocusElementId;
-                }
-
-                _assistantReturnFocusElementId = null;
-                _assistantSidebarWasVisible = false;
-            }
-            else
-            {
-                _assistantReturnFocusElementId = assistantDisplayContext.AssistantReturnFocusElementId;
-                _assistantSidebarWasVisible = true;
-            }
-
-            StateHasChanged();
-        }));
     }
 
     private async Task DisplayUnsecuredEndpointsMessageAsync()
@@ -411,38 +374,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         }
     }
 
-    public Task LaunchAssistantAsync() => LaunchAssistantAsync(GetDefaultReturnFocusElementId(AssistantButtonId));
-
-    private async Task LaunchAssistantAsync(string? returnFocusElementId)
-    {
-        var assistantDisplayContext = ServiceProvider.GetRequiredService<IAssistantDisplayContext>();
-
-        if (AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)
-        {
-            await assistantDisplayContext.HideAssistantSidebarAsync();
-        }
-        else
-        {
-            var viewModel = ServiceProvider.GetRequiredService<AssistantChatViewModel>();
-            var initializeTask = AIContextProvider.ChatState is { } state
-                ? viewModel.InitializeWithPreviousStateAsync(state)
-                : viewModel.InitializeAsync();
-
-            if (ViewportInformation.IsDesktop)
-            {
-                _assistantReturnFocusElementId = returnFocusElementId;
-                await assistantDisplayContext.LaunchAssistantSidebarAsync(viewModel, returnFocusElementId);
-            }
-            else
-            {
-                _assistantReturnFocusElementId = null;
-                await assistantDisplayContext.LaunchAssistantModelDialogAsync(viewModel, returnFocusElementId: returnFocusElementId);
-            }
-
-            await initializeTask;
-        }
-    }
-
     public IReadOnlySet<AspireKeyboardShortcut> SubscribedShortcuts { get; } = new HashSet<AspireKeyboardShortcut>
     {
         AspireKeyboardShortcut.Help,
@@ -495,7 +426,6 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
         _themeChangedSubscription?.Dispose();
         _locationChangingRegistration?.Dispose();
         ShortcutManager.RemoveGlobalKeydownListener(this);
-        _aiDisplayChangedSubscription?.Dispose();
 
         try
         {

@@ -377,6 +377,8 @@ public class InteractionsProvider : ComponentBase, IAsyncDisposable
 
     private async Task WatchInteractionsAsync()
     {
+        await DashboardClient.WhenConnected.WaitAsync(_cts.Token).ConfigureAwait(false);
+
         var interactions = DashboardClient.SubscribeInteractionsAsync(_cts.Token);
         await foreach (var item in interactions)
         {

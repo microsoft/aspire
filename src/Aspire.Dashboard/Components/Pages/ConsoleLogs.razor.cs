@@ -10,7 +10,6 @@ using Aspire.Dashboard.Components.Layout;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Shared.ConsoleLogs;
 using Aspire.Dashboard.Otlp.Storage;
@@ -94,12 +93,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required IStringLocalizer<Dashboard.Resources.Resources> ResourcesLoc { get; init; }
 
     [Inject]
-    public required IStringLocalizer<Dashboard.Resources.AIAssistant> AIAssistantLoc { get; init; }
-
-    [Inject]
-    public required IStringLocalizer<Dashboard.Resources.AIPrompts> AIPromptsLoc { get; init; }
-
-    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
 
     [Inject]
@@ -113,9 +106,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
-
-    [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
 
     [Inject]
     public required PauseManager PauseManager { get; init; }
@@ -160,7 +150,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private readonly object _updateLogsLock = new object();
     private CancellationTokenSource? _showNoLogsMessageCts;
     private Task? _showNoLogsMessageDelayTask;
-    private AIContext? _aiContext;
     private LogViewer? _logViewerRef;
     private Controls.TerminalView? _terminalViewRef;
     private bool _selectedResourceHasTerminal;
@@ -212,7 +201,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _logEntries = new(Options.Value.Frontend.MaxConsoleLogCount);
         _allResource = new() { Id = null, Name = ControlsStringsLoc[nameof(ControlsStrings.LabelAll)] };
         PageViewModel = new ConsoleLogsViewModel { SelectedResource = _allResource, Status = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsLoadingResources)] };
-        _aiContext = CreateAIContext();
         _logEntryChannelReaderTask = StartLogEntryChannelReaderTask();
 
         _consoleLogsFiltersChangedSubscription = ConsoleLogsManager.OnFiltersChanged(async () =>
@@ -492,7 +480,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName)
     {
         Logger.LogDebug("Subscription change needed. IsAllSelected: {IsAllSelected}, SelectedResource: {SelectedResource}", isAllSelected, selectedResourceName);
-        _aiContext?.ContextHasChanged();
 
         // Detect whether the selected resource has terminal support
         _selectedResourceHasTerminal = false;
@@ -1226,7 +1213,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
     public async ValueTask DisposeAsync()
     {
-        _aiContext?.Dispose();
         ResetNoLogsMessage();
         _showNoLogsMessageCts?.Cancel();
         await TaskHelpers.WaitIgnoreCancelAsync(_showNoLogsMessageDelayTask);
@@ -1292,24 +1278,6 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             ? GetResourceName(selectedResource)
             : null;
         return new ConsoleLogsPageState(selectedResourceName);
-    }
-
-    private AIContext CreateAIContext()
-    {
-        return AIContextProvider.AddNew(nameof(ConsoleLogs), c =>
-        {
-            c.BuildIceBreakers = (builder, context) =>
-            {
-                if (GetSelectedResource() is { } selectedResource)
-                {
-                    builder.ConsoleLogs(context, selectedResource);
-                }
-                else
-                {
-                    builder.ConsoleLogs(context);
-                }
-            };
-        });
     }
 
     // --- Terminal toolbar wiring -----------------------------------------

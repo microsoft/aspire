@@ -550,6 +550,16 @@ internal class InteractionService : IInteractionService
                                     context.AddValidationError(input, "Value must be a valid number.");
                                 }
                                 break;
+                            case InputType.File:
+                                // File input values contain serialized JSON file references (id + name).
+                                // The consumer reads files via InteractionFile.OpenRead() / ReadAllBytesAsync() on the Files collection.
+                                // Validate that required file inputs actually have resolved files, not just
+                                // a non-empty JSON string like "[]".
+                                if (input.Required && (input.Files is null || input.Files.Count == 0))
+                                {
+                                    context.AddValidationError(input, "Value is required.");
+                                }
+                                break;
                             default:
                                 break;
                         }

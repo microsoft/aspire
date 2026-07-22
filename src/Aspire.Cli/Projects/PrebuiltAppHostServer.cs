@@ -13,6 +13,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -932,8 +933,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         // The execution local is forward-referenced by the log callbacks so they can read the
         // child's pid per line (ProcessInvocationOptions.StandardOutputCallback is line-only). The
         // log level + prefix differ from the dotnet-based server (#16729); keeping them here keeps
-        // this server's per-line behavior in one place. Callbacks only fire after Start(), so
-        // `execution` is assigned and ProcessId is valid by then.
+        // this server's per-line behavior in one place. ProcessExecution publishes the child pid before
+        // it starts stdout/stderr pumps so immediate output can read ProcessId.
         IProcessExecution execution = null!;
 
         void OnStdout(string line)
@@ -963,6 +964,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
             StandardOutputCallback = OnStdout,
             StandardErrorCallback = OnStderr,
             IsolateConsole = runControl?.IsolateConsole ?? false,
+            KillOnParentExit = runControl?.KillOnParentExit ?? false,
             GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
             ShutdownService = runControl?.ShutdownService,
             KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
@@ -972,7 +974,7 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
         try
         {
-            execution.Start();
+            await execution.StartAsync(CancellationToken.None).ConfigureAwait(false);
         }
         catch
         {
@@ -1016,9 +1018,14 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
         // Configure environment
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliLogFilePath] = _executionContext.LogFilePath;
+
+        // Stamp the launching CLI (hostPid) as the parent under both the RemoteHost and generic CLI
+        // key pairs. Resolve the start time once and pair it with the PID so the RemoteHost orphan
+        // detector verifies both and does not keep the server alive against a recycled PID.
+        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(hostPid);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 
         if (_integrationLibsPath is not null)
         {

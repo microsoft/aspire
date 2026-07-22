@@ -5,7 +5,6 @@ using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
@@ -130,6 +129,15 @@ internal static class FluentUISetupHelpers
         buttonModule.SetupVoid("updateProxy", _ => true);
     }
 
+    public static void SetupFluentInputFile(TestContext context)
+    {
+        var inputFileModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/InputFile/FluentInputFile.razor.js"));
+        inputFileModule.SetupVoid("attachClickHandler", _ => true);
+        inputFileModule.SetupVoid("detachClickHandler", _ => true);
+        var dropZoneReference = inputFileModule.SetupModule("initializeFileDropZone", _ => true);
+        dropZoneReference.SetupVoid("dispose", _ => true);
+    }
+
     public static void SetupFluentCombobox(TestContext context)
     {
         var comboboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/List/FluentCombobox.razor.js"));
@@ -165,9 +173,6 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<DashboardTelemetryService>();
         context.Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         context.Services.AddSingleton<ComponentTelemetryContextProvider>();
-        context.Services.AddSingleton<TestAIContextProvider>();
-        context.Services.AddSingleton<IAIContextProvider>(serviceProvider => serviceProvider.GetRequiredService<TestAIContextProvider>());
-        context.Services.AddSingleton<IAssistantDisplayContext>(serviceProvider => serviceProvider.GetRequiredService<TestAIContextProvider>());
         context.Services.AddSingleton<ITelemetryErrorRecorder, TestTelemetryErrorRecorder>();
         context.Services.AddSingleton<ThemeManager>(themeManager ?? new ThemeManager(new TestThemeResolver()));
         context.Services.AddSingleton<GlobalState>();

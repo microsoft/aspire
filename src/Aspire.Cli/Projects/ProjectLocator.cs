@@ -93,6 +93,9 @@ internal interface IProjectLocator
             : throw new NotSupportedException();
     Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default);
 
+    Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
+        => UseOrFindAppHostProjectFileAsync(projectFile, multipleAppHostProjectsFoundBehavior, createSettingsFile, cancellationToken);
+
     Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken);
 
     /// <summary>
@@ -272,11 +275,6 @@ internal sealed class ProjectLocator(
         // AppHostDiscoveryScope so callers must choose git-aware/default filtering,
         // explicit-directory filtering, or the legacy all-files walk deliberately.
         return await FindAppHostProjectFilesAsync(new DirectoryInfo(searchDirectory), AppHostDiscoveryScope.AllFiles, cancellationToken);
-    }
-
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
-    {
-        return await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts, displayProgress: true, scope, maxDepth: null, cancellationToken: cancellationToken);
     }
 
     private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null, CancellationToken cancellationToken = default)
@@ -815,7 +813,12 @@ internal sealed class ProjectLocator(
         return true;
     }
 
-    public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default)
+    public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default)
+    {
+        return UseOrFindAppHostProjectFileAsync(projectFile, multipleAppHostProjectsFoundBehavior, createSettingsFile, displayProgress: true, cancellationToken);
+    }
+
+    public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
     {
         logger.LogDebug("Finding project file in {CurrentDirectory}", executionContext.WorkingDirectory);
 
@@ -833,11 +836,16 @@ internal sealed class ProjectLocator(
                 var searchResults = await FindAppHostProjectFilesAsync(
                     directory,
                     stopAfterMultipleBuildableAppHosts: multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Throw,
-                    AppHostDiscoveryScope.ExplicitDirectory,
-                    cancellationToken);
+                    displayProgress: displayProgress,
+                    scope: AppHostDiscoveryScope.ExplicitDirectory,
+                    maxDepth: null,
+                    cancellationToken: cancellationToken);
                 var appHostProjects = searchResults.BuildableAppHost.Select(c => c.AppHostFile).ToList();
 
-                interactionService.DisplayEmptyLine();
+                if (displayProgress)
+                {
+                    interactionService.DisplayEmptyLine();
+                }
 
                 if (appHostProjects.Count == 0)
                 {
@@ -927,8 +935,10 @@ internal sealed class ProjectLocator(
                 // If no handler matched, for .cs files check if we should search the parent directory
                 if (projectFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase) && projectFile.Directory is { } parentDirectory)
                 {
-                    // File exists but is not a valid single-file apphost. Search in the parent directory
-                    return await UseOrFindAppHostProjectFileAsync(new FileInfo(parentDirectory.FullName), multipleAppHostProjectsFoundBehavior, createSettingsFile, cancellationToken);
+                    // File exists but is not a valid single-file apphost. Search in the parent directory.
+                    // Propagate displayProgress so callers that opted out of progress UI (e.g. the hidden
+                    // `extension get-apphosts` flow) do not start emitting progress on this fallback path.
+                    return await UseOrFindAppHostProjectFileAsync(new FileInfo(parentDirectory.FullName), multipleAppHostProjectsFoundBehavior, createSettingsFile, displayProgress, cancellationToken);
                 }
 
                 // No handler can process this file
@@ -956,8 +966,10 @@ internal sealed class ProjectLocator(
         var results = await FindAppHostProjectFilesAsync(
             executionContext.WorkingDirectory,
             stopAfterMultipleBuildableAppHosts: multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Throw && settingsAppHost is null,
-            AppHostDiscoveryScope.DefaultFiltered,
-            cancellationToken);
+            displayProgress: displayProgress,
+            scope: AppHostDiscoveryScope.DefaultFiltered,
+            maxDepth: null,
+            cancellationToken: cancellationToken);
 
         logger.LogDebug("Found {ProjectFileCount} project files.", results.BuildableAppHost.Count);
 

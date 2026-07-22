@@ -19,7 +19,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -33,7 +33,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -52,7 +52,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [InlineData("JSON")]
     public async Task DescribeCommand_FormatOption_IsCaseInsensitive(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -70,7 +70,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [InlineData("TABLE")]
     public async Task DescribeCommand_FormatOption_AcceptsTable(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -85,7 +85,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_FormatOption_RejectsInvalidValue()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -100,7 +100,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_FollowOption_CanBeParsed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -115,7 +115,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_LegacyWatchOption_StillWorks()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -130,7 +130,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_LegacyResourcesAlias_StillWorks()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -145,7 +145,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_FollowAndFormat_CanBeCombined()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -160,7 +160,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_ResourceNameArgument_CanBeParsed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -175,7 +175,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_AllOptions_CanBeCombined()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -258,7 +258,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_JsonFormat_DeduplicatesIdenticalSnapshots()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -302,7 +302,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_TableFormat_DeduplicatesIdenticalSnapshots()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -336,7 +336,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_WhenBackchannelIsDisposed_ExitsSuccessfully()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
@@ -366,7 +366,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_WhenAppHostHasExited_WritesShutdownMessageToStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
@@ -390,7 +390,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_WhenCanceledAndBackchannelIsDisposed_DoesNotWriteStatusToStderr()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var errorWriter = new StringWriter();
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
@@ -419,7 +419,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_JsonFormat_StripsLoginPathFromDashboardUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -447,7 +447,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_JsonFormat_StripsLoginPathFromDashboardUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -478,7 +478,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_HiddenResources_AreExcludedByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -504,7 +504,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_IncludeHidden_ShowsHiddenResources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -532,7 +532,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_SpecificResource_IncludesHiddenWithoutFlag()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -557,7 +557,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_HiddenResources_AreExcludedByDefault()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },
@@ -585,7 +585,7 @@ public class DescribeCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DescribeCommand_Follow_IncludeHidden_ShowsHiddenResources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = CreateDescribeTestServices(workspace, outputWriter, [
             new ResourceSnapshot { Name = "redis", DisplayName = "redis", ResourceType = "Container", State = "Running" },

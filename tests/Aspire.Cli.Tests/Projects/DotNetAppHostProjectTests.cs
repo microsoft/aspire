@@ -17,7 +17,7 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDisposable
 {
-    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
+    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.CreateForCli(outputHelper);
     private readonly List<ServiceProvider> _serviceProviders = [];
 
     public DotNetAppHostProjectTests UseFakeRepoRoot()
@@ -270,6 +270,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
     public async Task RunAsync_SingleFileAppHostWithoutRunJsonPassesDevelopmentEnvironmentToRunner()
     {
         var appHostFile = CreateSingleFileAppHost();
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
         var runner = new TestDotNetCliRunner();
         var project = CreateDotNetAppHostProject(runner);
 
@@ -283,6 +284,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
             Assert.Equal("Development", env![KnownAspNetCoreConfigNames.DotNetEnvironment]);
             Assert.False(env.ContainsKey(KnownAspNetCoreConfigNames.Environment));
             Assert.Equal("https://localhost:17193;http://localhost:15069", env[KnownAspNetCoreConfigNames.Urls]);
+            Assert.Equal(expectedWorkloadId, env[KnownConfigNames.DcpWorkloadId]);
             return Task.FromResult(0);
         };
 
@@ -694,6 +696,60 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         }, CancellationToken.None);
 
         Assert.Equal(123, exitCode);
+    }
+
+    [Fact]
+    public async Task RunAsync_ProjectAppHostDirectLaunchSetsWorkloadIdAndPreservesLaunchProfileInputs()
+    {
+        var appHostFile = CreateProjectAppHost();
+        var appHostCommand = CreateBuiltAppHostCommand("AppHost");
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
+        Directory.CreateDirectory(Path.Combine(appHostFile.DirectoryName!, "Properties"));
+        File.WriteAllText(Path.Combine(appHostFile.DirectoryName!, "Properties", "launchSettings.json"), """
+            {
+              "profiles": {
+                "http": {
+                  "commandName": "Project",
+                  "commandLineArgs": "--from-profile profile-value",
+                  "environmentVariables": {
+                    "CUSTOM_ENV": "from-profile",
+                    "DCP_WORKLOAD_ID": "from-profile"
+                  }
+                }
+              }
+            }
+            """);
+
+        var runner = new TestDotNetCliRunner
+        {
+            BuildAsyncCallback = (_, _, _, _) => 0,
+            GetProjectItemsAndPropertiesAsyncCallback = (_, _, _, _, _) => (0, CreateAppHostInfoJson(runCommand: appHostCommand.FullName)),
+            RunAsyncCallback = (_, _, _, _, _, _, _, _, _) => throw new InvalidOperationException("dotnet run should not be used when the built target is known.")
+        };
+        var project = CreateDotNetAppHostProject(runner);
+
+        runner.RunAppHostCommandAsyncCallback = (_, command, _, args, env, _, options, _) =>
+        {
+            Assert.Equal(appHostCommand.FullName, command);
+            Assert.False(options.NoLaunchProfile);
+            Assert.Equal(["--from-profile", "profile-value"], args);
+            Assert.NotNull(env);
+            Assert.Equal("http", env["DOTNET_LAUNCH_PROFILE"]);
+            Assert.Equal("from-profile", env["CUSTOM_ENV"]);
+            Assert.Equal(expectedWorkloadId, env[KnownConfigNames.DcpWorkloadId]);
+            return Task.FromResult(124);
+        };
+
+        var exitCode = await project.RunAsync(new AppHostProjectContext
+        {
+            AppHostFile = appHostFile,
+            NoBuild = false,
+            NoRestore = false,
+            WorkingDirectory = _workspace.WorkspaceRoot,
+            EnvironmentVariables = new Dictionary<string, string>()
+        }, CancellationToken.None);
+
+        Assert.Equal(124, exitCode);
     }
 
     [Fact]
@@ -1804,6 +1860,7 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         Action<CliServiceCollectionTestOptions>? configureServices = null)
     {
         var appHostFile = CreateProjectAppHost();
+        var expectedWorkloadId = AppHostWorkloadId.Create(appHostFile);
         var runner = new TestDotNetCliRunner
         {
             BuildAsyncCallback = (_, _, _, _) => 0,
@@ -1812,13 +1869,15 @@ public class DotNetAppHostProjectTests(ITestOutputHelper outputHelper) : IDispos
         };
         var project = CreateDotNetAppHostProject(runner, configureServices: configureServices);
 
-        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, _, _, _, _) =>
+        runner.RunAsyncCallback = (projectFile, watch, noBuild, noRestore, args, env, _, _, _) =>
         {
             Assert.Equal(appHostFile.FullName, projectFile.FullName);
             Assert.Equal(expectedWatch, watch);
             Assert.Equal(!expectedWatch, noBuild);
             Assert.False(noRestore);
             Assert.Empty(args);
+            Assert.NotNull(env);
+            Assert.Equal(expectedWorkloadId, env[KnownConfigNames.DcpWorkloadId]);
             return Task.FromResult(77);
         };
 

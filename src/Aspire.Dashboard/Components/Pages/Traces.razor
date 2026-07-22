@@ -8,7 +8,6 @@
 @inject IStringLocalizer<Dashboard.Resources.Traces> Loc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
-@inject IStringLocalizer<AIPrompts> AIPromptsLoc
 @inject IStringLocalizer<Dialogs> DialogsLoc
 
 @implements IDisposable
@@ -38,7 +37,6 @@
                                   OnPausedChanged="@PauseManager.SetTracesPaused"
                                   SelectedResource="@PageViewModel.SelectedResource" />
 
-            <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@TracesViewModel.HasErrors()" />
             <FluentSearch @bind-Value="_filter"
                           @bind-Value:after="HandleAfterFilterBindAsync"
                           Name="traces-search"

@@ -48,10 +48,14 @@ public class AzureContainerAppEnvironmentResource :
             // BeforeStartEvent subscribers (and downstream code) can observe the deployment targets.
             var prepareStep = new PipelineStep
             {
-                Name = $"prepare-azure-container-apps-{name}",
+                Name = $"{AzureContainerAppExtensions.PrepareContainerAppsStepNamePrefix}{name}",
                 Description = $"Prepares Azure Container Apps deployment targets for {name}.",
                 Action = ctx => PrepareDeploymentTargetsAsync(ctx),
-                DependsOnSteps = [AzureEnvironmentResource.PrepareResourcesStepName, WellKnownPipelineSteps.ValidateComputeEnvironments],
+                DependsOnSteps =
+                [
+                    AzureEnvironmentResource.PrepareResourcesStepName,
+                    WellKnownPipelineSteps.ValidateComputeEnvironments
+                ],
                 RequiredBySteps = [WellKnownPipelineSteps.BeforeStart]
             };
 
@@ -227,6 +231,8 @@ public class AzureContainerAppEnvironmentResource :
     internal bool UseAzdNamingConvention { get; set; }
 
     internal bool UseCompactResourceNaming { get; set; }
+
+    internal bool UseUniqueResourceNaming { get; set; }
 
     /// <summary>
     /// Gets or sets a value indicating whether the Aspire dashboard should be included in the container app environment.

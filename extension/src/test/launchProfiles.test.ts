@@ -4,6 +4,7 @@ import * as fs from 'fs';
 import * as os from 'os';
 import {
     determineBaseLaunchProfile,
+    determineDefaultLaunchProfile,
     mergeEnvironmentVariables,
     determineArguments,
     determineWorkingDirectory,
@@ -138,6 +139,122 @@ suite('Launch Profile Tests', () => {
 
             assert.strictEqual(result.profileName, 'IISExpress');
             assert.strictEqual(result.profile?.commandName, 'IISExpress');
+        });
+    });
+
+    suite('determineDefaultLaunchProfile', () => {
+        test('returns null for null launch settings', () => {
+            const result = determineDefaultLaunchProfile(null);
+
+            assert.strictEqual(result.profile, null);
+            assert.strictEqual(result.profileName, null);
+        });
+
+        test('returns the first Project profile when it appears before other supported profiles', () => {
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    'Development': { commandName: 'Project' },
+                    'Run': { commandName: 'Executable' }
+                }
+            };
+
+            const result = determineDefaultLaunchProfile(launchSettings);
+
+            assert.strictEqual(result.profileName, 'Development');
+            assert.strictEqual(result.profile?.commandName, 'Project');
+        });
+
+        test('returns an earlier Executable profile instead of a later Project profile', () => {
+            // The SDK selects the first *supported* profile, and 'Executable' is supported alongside 'Project'.
+            // An 'Executable' profile that appears first must win over a later 'Project' profile, matching what
+            // `dotnet run-api` actually applies.
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    'RunExe': {
+                        commandName: 'Executable',
+                        environmentVariables: {
+                            DOTNET_ROOT: '/exec/dotnet'
+                        }
+                    },
+                    'Development': {
+                        commandName: 'Project',
+                        environmentVariables: {
+                            ASPNETCORE_ENVIRONMENT: 'Development'
+                        }
+                    }
+                }
+            };
+
+            const result = determineDefaultLaunchProfile(launchSettings);
+
+            assert.strictEqual(result.profileName, 'RunExe');
+            assert.strictEqual(result.profile?.commandName, 'Executable');
+            assert.strictEqual(result.profile?.environmentVariables?.DOTNET_ROOT, '/exec/dotnet');
+        });
+
+        test('skips unsupported command names and returns the first supported profile', () => {
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    'IISExpress': { commandName: 'IISExpress' },
+                    'RunExe': { commandName: 'Executable' },
+                    'Development': { commandName: 'Project' }
+                }
+            };
+
+            const result = determineDefaultLaunchProfile(launchSettings);
+
+            assert.strictEqual(result.profileName, 'RunExe');
+            assert.strictEqual(result.profile?.commandName, 'Executable');
+        });
+
+        test('matches command names case-sensitively (skips a lowercased "executable")', () => {
+            // The SDK's provider table (LaunchSettings.s_providers) is ordinal/case-sensitive, so
+            // `dotnet run-api` treats a profile whose commandName is "executable" (wrong casing) as
+            // unsupported and skips it when picking the default profile. The extension must match.
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    'Run': { commandName: 'executable' }
+                }
+            };
+
+            const result = determineDefaultLaunchProfile(launchSettings);
+
+            assert.strictEqual(result.profile, null);
+            assert.strictEqual(result.profileName, null);
+        });
+
+        test('returns null when no profile has a supported command name', () => {
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    'IISExpress': { commandName: 'IISExpress' }
+                }
+            };
+
+            const result = determineDefaultLaunchProfile(launchSettings);
+
+            assert.strictEqual(result.profile, null);
+            assert.strictEqual(result.profileName, null);
+        });
+
+        test('honors profileOrder for integer-like names instead of numeric key order', () => {
+            // The file lists the Executable profile "10" before the Project profile "2", so the SDK
+            // picks "10". JavaScript object key enumeration would instead reorder these integer-like
+            // keys to ["2", "10"] and pick "2"; profileOrder must override that to match the SDK.
+            const launchSettings: LaunchSettings = {
+                profiles: {
+                    '10': { commandName: 'Executable' },
+                    '2': { commandName: 'Project' }
+                },
+                profileOrder: ['10', '2']
+            };
+
+            // Sanity check: without profileOrder, key enumeration would visit "2" (Project) first.
+            assert.deepStrictEqual(Object.keys(launchSettings.profiles), ['2', '10']);
+
+            const result = determineDefaultLaunchProfile(launchSettings);
+
+            assert.strictEqual(result.profileName, '10');
+            assert.strictEqual(result.profile?.commandName, 'Executable');
         });
     });
 
@@ -815,6 +932,105 @@ suite('Launch Profile Tests', () => {
             assert.notStrictEqual(result, null);
             assert.strictEqual(result!.profiles['https'].applicationUrl, 'https://localhost:5001');
             assert.strictEqual(result!.profiles['https'].environmentVariables!.ASPNETCORE_ENVIRONMENT, 'Development');
+        });
+
+        test('preserves file order for integer-like profile names when selecting the default profile', async () => {
+            // The Executable profile "10" appears before the Project profile "2" in the file. The .NET
+            // SDK selects the first supported profile in file order ("10"), but JavaScript object key
+            // enumeration would reorder these integer-like keys to ["2", "10"] and pick "2".
+            // readLaunchSettings must capture the source order so the extension matches `dotnet run-api`.
+            const launchSettings = `{
+  "profiles": {
+    "10": {
+      "commandName": "Executable",
+      "environmentVariables": {
+        "DOTNET_ROOT": "/exec/dotnet"
+      }
+    },
+    "2": {
+      "commandName": "Project",
+      "environmentVariables": {
+        "ASPNETCORE_ENVIRONMENT": "Development"
+      }
+    }
+  }
+}`;
+
+            fs.writeFileSync(launchSettingsPath, launchSettings);
+
+            const result = await readLaunchSettings(projectPath);
+
+            assert.notStrictEqual(result, null);
+            assert.deepStrictEqual(result!.profileOrder, ['10', '2']);
+
+            const defaultProfile = determineDefaultLaunchProfile(result);
+            assert.strictEqual(defaultProfile.profileName, '10');
+            assert.strictEqual(defaultProfile.profile?.commandName, 'Executable');
+        });
+
+        test('prefers Properties/launchSettings.json over <app>.run.json for file-based app (matches dotnet run)', async () => {
+            // The .NET SDK resolves launch settings for a file-based app by preferring
+            // Properties/launchSettings.json over <app>.run.json (LaunchSettings.TryFindLaunchSettingsFile).
+            // The extension must read the same file, otherwise determineDefaultLaunchProfile disagrees with
+            // the profile `dotnet run-api` actually applied and createProjectDebuggerExtension can launch the
+            // file-based app with the wrong (Executable-profile) program.
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            // Properties/launchSettings.json: the default profile is an Executable profile — exactly the
+            // case the run-api trust guard depends on detecting.
+            fs.writeFileSync(launchSettingsPath, JSON.stringify({
+                profiles: {
+                    fromProperties: {
+                        commandName: 'Executable',
+                        executablePath: 'some-external-tool',
+                        commandLineArgs: '--version'
+                    }
+                }
+            }, null, 2));
+
+            // <app>.run.json exists too, but must be ignored because launchSettings.json wins.
+            const runJsonPath = path.join(tempDir, 'TestProject', 'apphost.run.json');
+            fs.writeFileSync(runJsonPath, JSON.stringify({
+                profiles: {
+                    fromRunJson: {
+                        commandName: 'Project',
+                        applicationUrl: 'https://localhost:7000'
+                    }
+                }
+            }, null, 2));
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            assert.deepStrictEqual(Object.keys(result!.profiles), ['fromProperties']);
+
+            const defaultProfile = determineDefaultLaunchProfile(result);
+            assert.strictEqual(defaultProfile.profileName, 'fromProperties');
+            assert.strictEqual(defaultProfile.profile?.commandName, 'Executable');
+        });
+
+        test('falls back to <app>.run.json when Properties/launchSettings.json is absent for file-based app', async () => {
+            const fileBasedAppPath = path.join(tempDir, 'TestProject', 'apphost.cs');
+            fs.writeFileSync(fileBasedAppPath, '// test file-based app');
+
+            // No Properties/launchSettings.json is written, so the SDK (and the extension) fall back to
+            // <app>.run.json.
+            const runJsonPath = path.join(tempDir, 'TestProject', 'apphost.run.json');
+            fs.writeFileSync(runJsonPath, JSON.stringify({
+                profiles: {
+                    fromRunJson: {
+                        commandName: 'Project',
+                        applicationUrl: 'https://localhost:7000'
+                    }
+                }
+            }, null, 2));
+
+            const result = await readLaunchSettings(fileBasedAppPath);
+
+            assert.notStrictEqual(result, null);
+            assert.deepStrictEqual(Object.keys(result!.profiles), ['fromRunJson']);
+            assert.strictEqual(result!.profiles['fromRunJson'].applicationUrl, 'https://localhost:7000');
         });
     });
 

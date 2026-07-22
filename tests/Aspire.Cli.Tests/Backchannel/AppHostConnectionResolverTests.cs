@@ -20,7 +20,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResolveConnectionAsync_WithExplicitProjectFile_PreservesFastPath()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
         var interactionService = new TestInteractionService();
@@ -60,7 +60,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResolveConnectionAsync_WithExplicitProjectFile_DeletesDeadPidSocketAndReturnsNotRunning()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var projectFile = CreateProjectFile(workspace.WorkspaceRoot, "TestAppHost", "TestAppHost.csproj");
         // Key the socket off the symlink-resolved path, matching how a running AppHost computes
@@ -107,7 +107,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResolveConnectionAsync_WithExplicitDirectoryAndMultipleAppHosts_ReturnsDirectorySpecificError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("Apps");
         var interactionService = new TestInteractionService();
@@ -141,7 +141,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResolveConnectionAsync_WithExplicitDirectoryAndNoAppHosts_ReturnsDirectorySpecificError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("Apps");
         var interactionService = new TestInteractionService();
@@ -175,7 +175,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResolveConnectionAsync_NonInteractiveWithOnlyOutOfScopeAppHosts_ReturnsNotFoundError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash1", "socket-other", new TestAppHostAuxiliaryBackchannel { IsInScope = false });
@@ -205,7 +205,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResolveConnectionAsync_NonInteractiveWithMultipleInScopeAppHosts_ReturnsActionableError()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
         var monitor = new TestAuxiliaryBackchannelMonitor();
         monitor.AddConnection("hash1", "socket-one", new TestAppHostAuxiliaryBackchannel { IsInScope = true });
@@ -246,7 +246,7 @@ public class AppHostConnectionResolverTests(ITestOutputHelper outputHelper)
         Assert.SkipUnless(OperatingSystem.IsLinux() || OperatingSystem.IsMacOS(),
             "Symlink resolution test only runs on Linux/macOS where unprivileged symlink creation is reliable.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var executionContext = CreateExecutionContext(workspace.WorkspaceRoot);
 
         // Real project file under a "real" directory.

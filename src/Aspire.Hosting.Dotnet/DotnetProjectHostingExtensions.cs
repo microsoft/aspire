@@ -126,13 +126,21 @@ public static class DotnetProjectHostingExtensions
                               .WithDebugSupport(mode => new ProjectLaunchConfiguration { ProjectPath = projectMetadata.ProjectPath, Mode = mode }, "project")
                               .WithProjectDefaults(options);
 
-        // Build the `dotnet run` command line. This mirrors the ExecutionType.Process path in
-        // Dcp/ExecutableCreator.PrepareProjectExecutables() so a non-debug launch of a DotnetProjectResource
-        // (now an ExecutableResource, not a ProjectResource) matches how AddProject launches today:
-        //   dotnet run --project <proj> [--no-build] [--configuration <cfg>] --no-launch-profile
+        // Build the `dotnet run` command line for a non-debug launch of a DotnetProjectResource:
+        //   dotnet run --project <proj> [--no-build] [--configuration <cfg>] --no-launch-profile OR
         //   dotnet run --file <app.cs> --no-cache [--no-build] [--configuration <cfg>] --no-launch-profile
         resource.WithArgs(ctx =>
         {
+            // Mirrors the fallback rule in Dcp/ExecutableCreator: 
+            // a Process fallback is offered for the plain executable UNLESS 
+            // the launch configuration is "project", OR the configuration rewrites the arguments for debugging. 
+            // For any other active annotation a fallback IS offered and we need to construct the args here.
+            if (ctx.Resource.SupportsDebugging(builder.Configuration, out var debugAnnotation)
+                && (debugAnnotation.LaunchConfigurationType is "project" || debugAnnotation.RewritesArgumentsForDebugging))
+            {
+                return;
+            }
+
             IProjectMetadata metadata = projectMetadata;
 
             ctx.Args.Add("run");

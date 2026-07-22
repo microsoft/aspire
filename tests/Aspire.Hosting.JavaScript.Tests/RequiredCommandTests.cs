@@ -18,15 +18,15 @@ namespace Aspire.Hosting.JavaScript.Tests;
 //
 // Required commands are materialized on BeforeStartEvent, so every test builds the app and publishes that
 // event (via GetRequiredCommandsAsync) before inspecting the resulting RequiredCommandAnnotations.
-public class RequiredCommandTests
+public class RequiredCommandTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddNodeApp_DefaultsToNode()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var app = builder.AddNodeApp("app", tempDir.Path, "server.js");
+        var app = builder.AddNodeApp("app", workspace.Path, "server.js");
 
         Assert.Equal(["node"], await GetRequiredCommandsAsync(builder, app.Resource));
     }
@@ -34,11 +34,11 @@ public class RequiredCommandTests
     [Fact]
     public async Task AddNodeApp_WithBun_RequiresNodeAndBun()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create();
 
         // WithBun selects Bun for install, but a Node direct-script app still launches as `node server.js`.
-        var app = builder.AddNodeApp("app", tempDir.Path, "server.js")
+        var app = builder.AddNodeApp("app", workspace.Path, "server.js")
             .WithBun();
 
         Assert.Equal(["bun", "node"], await GetRequiredCommandsAsync(builder, app.Resource));
@@ -47,10 +47,10 @@ public class RequiredCommandTests
     [Fact]
     public async Task AddNodeApp_WithNpm_RequiresNodeAndNpm()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var app = builder.AddNodeApp("app", tempDir.Path, "server.js")
+        var app = builder.AddNodeApp("app", workspace.Path, "server.js")
             .WithNpm();
 
         Assert.Equal(["node", "npm"], await GetRequiredCommandsAsync(builder, app.Resource));
@@ -59,11 +59,11 @@ public class RequiredCommandTests
     [Fact]
     public async Task AddNodeApp_WithRunScript_WithBun_RequiresOnlyBun()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create();
 
         // WithRunScript routes launch through the package manager, so Bun replaces the Node runtime.
-        var app = builder.AddNodeApp("app", tempDir.Path, "server.js")
+        var app = builder.AddNodeApp("app", workspace.Path, "server.js")
             .WithRunScript("start")
             .WithBun();
 
@@ -148,15 +148,15 @@ public class RequiredCommandTests
     [Fact]
     public async Task AddBunApp_WithPackageJson_RequiresOnlyBunWithoutDuplicates()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create();
 
         // A package.json in the app directory makes AddBunApp opt the resource into the Bun package
         // manager (via WithBun) in addition to the WithBunDefaults baseline. Since both resolve to "bun"
         // from the same package-manager annotation, the materialized set must still be a single "bun".
-        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), "{}");
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), "{}");
 
-        var app = builder.AddBunApp("app", tempDir.Path, "server.ts");
+        var app = builder.AddBunApp("app", workspace.Path, "server.ts");
 
         Assert.Equal(["bun"], await GetRequiredCommandsAsync(builder, app.Resource));
     }
@@ -164,10 +164,10 @@ public class RequiredCommandTests
     [Fact]
     public async Task AddBunApp_WithNpm_RequiresBunNodeAndNpm()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create();
 
-        var app = builder.AddBunApp("app", tempDir.Path, "server.ts")
+        var app = builder.AddBunApp("app", workspace.Path, "server.ts")
             .WithNpm();
 
         Assert.Equal(["bun", "node", "npm"], await GetRequiredCommandsAsync(builder, app.Resource));
