@@ -115,10 +115,6 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                         UpdateDimensionFilters(hasInstrumentChanged: false);
                         StateHasChanged();
                     });
-
-                    // The updated filters can automatically select newly discovered values.
-                    // Refetch so those values are included in the data displayed by this tick.
-                    _instrument = GetInstrument();
                 }
             }
 
@@ -206,7 +202,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
             InstrumentName = InstrumentName,
             StartTime = startDate,
             EndTime = endDate,
-            DimensionFilters = DimensionFilters.ToDictionary(
+            DimensionFilters = DimensionFilters
+                .Where(filter => filter.AreAllValuesSelected is not true)
+                .ToDictionary(
                 filter => filter.Name,
                 filter => (IReadOnlyList<string?>)filter.SelectedValues.Select(value => value.Value).ToArray())
         });

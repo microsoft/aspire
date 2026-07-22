@@ -31,6 +31,20 @@ public sealed partial class SqliteTelemetryRepository
         set => _subscriptionMinExecuteInterval = value;
     }
 
+    /// <summary>
+    /// Gets the number of active trace subscriptions.
+    /// </summary>
+    internal int TraceSubscriptionCount
+    {
+        get
+        {
+            lock (_subscriptionLock)
+            {
+                return _tracesSubscriptions.Count;
+            }
+        }
+    }
+
     public bool HasDisplayedMaxLogLimitMessage { get; set; }
     public Message? MaxLogLimitMessage { get; set; }
     public bool HasDisplayedMaxTraceLimitMessage { get; set; }

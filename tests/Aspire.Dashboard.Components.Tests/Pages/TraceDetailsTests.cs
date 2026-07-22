@@ -46,7 +46,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
@@ -76,14 +76,11 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         // Assert
-        Assert.Collection(telemetryRepository.TracesSubscriptions, t =>
-        {
-            Assert.Equal(nameof(InMemoryTelemetryRepository.OnNewTraces), t.Name);
-        });
+        Assert.Equal(1, telemetryRepository.TraceSubscriptionCount);
 
         DisposeComponents();
 
-        Assert.Empty(telemetryRepository.TracesSubscriptions);
+        Assert.Equal(0, telemetryRepository.TraceSubscriptionCount);
     }
 
     [Fact]
@@ -96,7 +93,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
@@ -154,7 +151,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
@@ -222,7 +219,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
@@ -304,7 +301,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
@@ -381,7 +378,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
@@ -449,7 +446,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
@@ -574,7 +571,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
@@ -657,7 +654,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
@@ -740,7 +737,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
@@ -815,7 +812,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         var dimensionManager = Services.GetRequiredService<DimensionManager>();
         dimensionManager.InvokeOnViewportInformationChanged(viewport);
 
-        var telemetryRepository = Services.GetRequiredService<InMemoryTelemetryRepository>();
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         telemetryRepository.AddTraces(new AddContext(),
             new RepeatedField<ResourceSpans>
             {
