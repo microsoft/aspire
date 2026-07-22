@@ -128,7 +128,8 @@ internal sealed partial class UnixCertificateManager : CertificateManager
                     }
                     catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException)
                     {
-                        Log.UnixNotTrustedByOpenSsl(OpenSslCertificateDirectoryVariableName);
+                        // Treat unreadable entries as a miss. A later SSL_CERT_DIR entry may still contain
+                        // the expected certificate, so only report OpenSSL as untrusted after the full search.
                     }
                 }
             }
