@@ -422,6 +422,75 @@ test("computeDashboard streams the final snapshot to an SSE client that connects
   assert.equal(JSON.parse(dataLine).dashboard.authenticated, true);
 });
 
+test("stopInstance ends its own live SSE stream promptly and leaves other instances' streams open", async (t) => {
+  await resetTestHome({
+    accounts: { "acct:octo": { repos: ["microsoft/aspire"], active: true } },
+  });
+  process.env.GH_TOKEN = "test-token";
+  delete process.env.GITHUB_TOKEN;
+  process.env.PATH = "";
+
+  globalThis.fetch = makeGitHubMock();
+  t.after(() => { globalThis.fetch = originalFetch; });
+
+  // One module import, two instances: they share the module-level sseClients/clientInstance maps,
+  // so this exercises the per-instance ownership guard in stopInstance — ending one instance's
+  // streams must not touch another instance's still-open client.
+  const server = await import(`./server.mjs?test=sseshutdown-${Date.now()}`);
+  const entryA = await server.startInstance("sse-shutdown-a", () => {});
+  const entryB = await server.startInstance("sse-shutdown-b", () => {});
+  t.after(() => server.stopInstance("sse-shutdown-b"));
+
+  // Keep both /events streams connected — no AbortController teardown. The point is to run
+  // stopInstance against a live long-lived response, the exact path that used to hang because
+  // server.close() waits forever for the open event stream to drain.
+  const evA = await fetch(new URL("events", entryA.url));
+  const evB = await fetch(new URL("events", entryB.url));
+  const readerA = evA.body.getReader();
+  const readerB = evB.body.getReader();
+  // Drain each ": connected" preamble so a later read only observes shutdown, not the greeting.
+  await readerA.read();
+  await readerB.read();
+
+  // Force-close path: stopInstance must resolve promptly even with A's stream still open.
+  await Promise.race([
+    server.stopInstance("sse-shutdown-a"),
+    new Promise((_, reject) => setTimeout(() => reject(new Error("stopInstance hung on an open SSE stream")), 5000)),
+  ]);
+
+  // A's own stream is ended — its reader drains to done (or the force-closed socket surfaces as a
+  // read error, which is equally "closed").
+  const aClosed = (async () => {
+    try {
+      while (true) { const { done } = await readerA.read(); if (done) { return "closed"; } }
+    } catch { return "closed"; }
+  })();
+  assert.equal(
+    await Promise.race([
+      aClosed,
+      new Promise((resolve) => setTimeout(() => resolve("open"), 5000)),
+    ]),
+    "closed",
+    "stopping an instance must end its own SSE stream",
+  );
+
+  // Ownership guard: stopping A must NOT close B's stream. Receiving unrelated poller data on B is
+  // fine (not a failure); only B reaching done/error means the guard let A's shutdown end it.
+  const bClosed = (async () => {
+    try {
+      while (true) { const { done } = await readerB.read(); if (done) { return "closed"; } }
+    } catch { return "closed"; }
+  })();
+  assert.equal(
+    await Promise.race([
+      bClosed,
+      new Promise((resolve) => setTimeout(() => resolve("open"), 500)),
+    ]),
+    "open",
+    "stopping one instance must not close another instance's SSE stream",
+  );
+});
+
 test("a card action resolves against the last complete snapshot, not a mid-stream partial (no host misroute)", async (t) => {
   // Regression for the streaming-cache host-confusion bug: while a refresh streams partials, `cache`
   // is transiently overwritten with a snapshot that omits repos still loading. A GHES/EMU card that
