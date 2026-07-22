@@ -12,10 +12,22 @@ namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed partial class SqliteTelemetryRepository
 {
-    private const string MetricPointRangeFilterSql = "(@ApplyRange = 0 OR (p.start_time_ticks <= @EndTicks AND p.end_time_ticks >= r.start_time_ticks))";
+    private const int MaxMetricReadBatchSize = 500;
+    private const string MetricPointRangeFilterSql = "p.start_time_ticks <= @EndTicks AND p.end_time_ticks >= r.start_time_ticks";
+    private const string MetricSourcePointRangeFilterSql = "source.start_time_ticks <= @EndTicks AND source.end_time_ticks >= r.start_time_ticks";
     private const string SelectedMetricPointsCteSql = $"""
         selected_metric_points AS (
-            SELECT p.*
+            SELECT
+                p.point_id,
+                p.dimension_id,
+                p.point_type,
+                p.start_time_ticks,
+                p.end_time_ticks,
+                p.repeat_count,
+                p.integer_value,
+                p.double_value,
+                p.histogram_sum,
+                p.histogram_count
             FROM telemetry_metric_points p
             JOIN metric_dimension_query_ranges r ON r.dimension_id = p.dimension_id
             WHERE {MetricPointRangeFilterSql}
@@ -42,10 +54,7 @@ public sealed partial class SqliteTelemetryRepository
         bucketed_metric_points AS (
             SELECT
                 p.*,
-                CASE
-                    WHEN @PointIntervalTicks = 0 THEN p.start_time_ticks
-                    ELSE (p.start_time_ticks / @PointIntervalTicks) * @PointIntervalTicks
-                END AS rollup_start_time_ticks
+                (p.start_time_ticks / @PointIntervalTicks) * @PointIntervalTicks AS rollup_start_time_ticks
             FROM effective_metric_points p
         ),
         ranked_rollup_metric_points AS (
@@ -75,8 +84,7 @@ public sealed partial class SqliteTelemetryRepository
                 p.integer_value,
                 p.double_value,
                 p.histogram_sum,
-                p.histogram_count,
-                p.flags
+                p.histogram_count
             FROM ranked_rollup_metric_points p
             WHERE p.rollup_rank = 1
         )
@@ -84,8 +92,18 @@ public sealed partial class SqliteTelemetryRepository
     private const string FullFidelityMetricPointsCteSql = $"""
         {EffectiveMetricPointsCteSql},
         rolled_up_metric_points AS (
-            SELECT *
-            FROM effective_metric_points
+            SELECT
+                p.point_id,
+                p.dimension_id,
+                p.point_type,
+                p.start_time_ticks,
+                p.end_time_ticks,
+                p.repeat_count,
+                p.integer_value,
+                p.double_value,
+                p.histogram_sum,
+                p.histogram_count
+            FROM effective_metric_points p
         )
         """;
 
@@ -108,6 +126,7 @@ public sealed partial class SqliteTelemetryRepository
             request.DimensionFilters,
             request.DimensionCursors,
             request.DataPointInterval,
+            request.PopulateExemplarAttributes,
             knownAttributeValues);
         return new OtlpInstrumentData
         {
@@ -182,6 +201,7 @@ public sealed partial class SqliteTelemetryRepository
         IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters,
         IReadOnlyList<MetricDimensionCursor> dimensionCursors,
         TimeSpan? dataPointInterval,
+        bool populateExemplarAttributes,
         Dictionary<string, List<string?>> knownAttributeValues)
     {
         if (dataPointInterval is { } interval && interval <= TimeSpan.Zero)
@@ -206,9 +226,18 @@ public sealed partial class SqliteTelemetryRepository
             return [];
         }
 
+        var results = selectedDimensionIds
+            .Select(dimensionId => new DimensionScope(
+                _otlpContext.Options.MaxMetricsCount,
+                attributes[dimensionId].Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray()))
+            .ToList();
+        if (startTime is null || endTime is null)
+        {
+            return results;
+        }
+
         var queryParameters = new DynamicParameters();
-        queryParameters.Add("ApplyRange", startTime is not null && endTime is not null);
-        queryParameters.Add("EndTicks", endTime?.Ticks ?? 0);
+        queryParameters.Add("EndTicks", endTime.Value.Ticks);
         queryParameters.Add("PointIntervalTicks", dataPointInterval?.Ticks ?? 0);
         var dimensionQueryRangesCteSql = CreateMetricDimensionQueryRangesCte(
             selectedDimensionIds,
@@ -217,7 +246,7 @@ public sealed partial class SqliteTelemetryRepository
             startTime,
             queryParameters);
         var metricPointsCteSql = dataPointInterval is null ? FullFidelityMetricPointsCteSql : s_rolledUpMetricPointsCteSql;
-        var points = connection.Query<MetricPointDataRecord>($"""
+        var pointRecords = connection.Query<MetricPointDataRecord>($"""
             WITH {dimensionQueryRangesCteSql},
             {metricPointsCteSql}
             SELECT
@@ -233,45 +262,46 @@ public sealed partial class SqliteTelemetryRepository
                 p.histogram_count AS HistogramCount
             FROM rolled_up_metric_points p
             ORDER BY p.dimension_id, p.start_time_ticks, p.point_id;
-            """, queryParameters).ToLookup(record => record.DimensionId);
+            """, queryParameters).AsList();
+        var points = pointRecords.ToLookup(record => record.DimensionId);
         var (bucketCounts, explicitBounds) = isHistogram
-            ? MaterializeMetricHistogramData(connection, dimensionQueryRangesCteSql, metricPointsCteSql, queryParameters)
+            ? MaterializeMetricHistogramData(connection, pointRecords.Select(point => point.PointId).ToArray())
             : (Array.Empty<MetricHistogramBucketRecord>().ToLookup(record => record.PointId),
                 Array.Empty<MetricHistogramBoundRecord>().ToLookup(record => record.PointId));
-        var exemplars = MaterializeMetricExemplars(connection, dimensionQueryRangesCteSql, metricPointsCteSql, queryParameters);
+        var exemplars = MaterializeMetricExemplars(
+            connection,
+            dimensionQueryRangesCteSql,
+            queryParameters,
+            dataPointInterval,
+            pointRecords,
+            populateExemplarAttributes);
 
-        var results = new List<DimensionScope>(selectedDimensionIds.Length);
-        foreach (var dimensionId in selectedDimensionIds)
+        for (var dimensionIndex = 0; dimensionIndex < selectedDimensionIds.Length; dimensionIndex++)
         {
-            var dimension = new DimensionScope(
-                _otlpContext.Options.MaxMetricsCount,
-                attributes[dimensionId].Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray());
-            if (startTime is not null && endTime is not null)
+            var dimensionId = selectedDimensionIds[dimensionIndex];
+            var dimension = results[dimensionIndex];
+            foreach (var point in points[dimensionId])
             {
-                foreach (var point in points[dimensionId])
+                MetricValueBase value = point.PointType switch
                 {
-                    MetricValueBase value = point.PointType switch
-                    {
-                        LongPointType => new MetricValue<long>(point.IntegerValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
-                        DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
-                        HistogramPointType => new HistogramValue(
-                            bucketCounts[point.PointId].Select(bucket => checked((ulong)bucket.BucketCount)).ToArray(),
-                            point.HistogramSum!.Value,
-                            checked((ulong)point.HistogramCount!.Value),
-                            new DateTime(point.StartTimeTicks, DateTimeKind.Utc),
-                            new DateTime(point.EndTimeTicks, DateTimeKind.Utc),
-                            explicitBounds[point.PointId].Select(bound => bound.ExplicitBound).ToArray()),
-                        _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
-                    };
-                    if (point.PointType != HistogramPointType)
-                    {
-                        value.Count = checked((ulong)point.RepeatCount);
-                    }
-                    value.Exemplars.AddRange(exemplars[point.PointId]);
-                    dimension.Values.Add(value);
+                    LongPointType => new MetricValue<long>(point.IntegerValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
+                    DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
+                    HistogramPointType => new HistogramValue(
+                        bucketCounts[point.PointId].Select(bucket => checked((ulong)bucket.BucketCount)).ToArray(),
+                        point.HistogramSum!.Value,
+                        checked((ulong)point.HistogramCount!.Value),
+                        new DateTime(point.StartTimeTicks, DateTimeKind.Utc),
+                        new DateTime(point.EndTimeTicks, DateTimeKind.Utc),
+                        explicitBounds[point.PointId].Select(bound => bound.ExplicitBound).ToArray()),
+                    _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
+                };
+                if (point.PointType != HistogramPointType)
+                {
+                    value.Count = checked((ulong)point.RepeatCount);
                 }
+                value.Exemplars.AddRange(exemplars[point.PointId]);
+                dimension.Values.Add(value);
             }
-            results.Add(dimension);
         }
         return results;
     }
@@ -347,89 +377,108 @@ public sealed partial class SqliteTelemetryRepository
 
     private static (ILookup<long, MetricHistogramBucketRecord> BucketCounts, ILookup<long, MetricHistogramBoundRecord> ExplicitBounds) MaterializeMetricHistogramData(
         SqliteConnection connection,
-        string dimensionQueryRangesCteSql,
-        string metricPointsCteSql,
-        DynamicParameters queryParameters)
+        IReadOnlyList<long> pointIds)
     {
-        var bucketCounts = connection.Query<MetricHistogramBucketRecord>($"""
-            WITH {dimensionQueryRangesCteSql},
-            {metricPointsCteSql}
-            SELECT
-                p.point_id AS PointId,
-                b.bucket_count AS BucketCount
-            FROM telemetry_metric_histogram_bucket_counts b
-            JOIN rolled_up_metric_points p ON p.point_id = b.point_id
-            ORDER BY p.point_id, b.ordinal;
-            """, queryParameters).ToLookup(record => record.PointId);
-        var explicitBounds = connection.Query<MetricHistogramBoundRecord>($"""
-            WITH {dimensionQueryRangesCteSql},
-            {metricPointsCteSql}
-            SELECT
-                p.point_id AS PointId,
-                b.explicit_bound AS ExplicitBound
-            FROM telemetry_metric_histogram_explicit_bounds b
-            JOIN rolled_up_metric_points p ON p.point_id = b.point_id
-            ORDER BY p.point_id, b.ordinal;
-            """, queryParameters).ToLookup(record => record.PointId);
+        var bucketCounts = new List<MetricHistogramBucketRecord>();
+        var explicitBounds = new List<MetricHistogramBoundRecord>();
+        foreach (var pointIdBatch in pointIds.Chunk(MaxMetricReadBatchSize))
+        {
+            using var reader = connection.QueryMultiple("""
+                SELECT point_id AS PointId, bucket_count AS BucketCount
+                FROM telemetry_metric_histogram_bucket_counts
+                WHERE point_id IN @PointIds
+                ORDER BY point_id, ordinal;
 
-        return (bucketCounts, explicitBounds);
+                SELECT point_id AS PointId, explicit_bound AS ExplicitBound
+                FROM telemetry_metric_histogram_explicit_bounds
+                WHERE point_id IN @PointIds
+                ORDER BY point_id, ordinal;
+                """, new { PointIds = pointIdBatch });
+            bucketCounts.AddRange(reader.Read<MetricHistogramBucketRecord>());
+            explicitBounds.AddRange(reader.Read<MetricHistogramBoundRecord>());
+        }
+
+        return (
+            bucketCounts.ToLookup(record => record.PointId),
+            explicitBounds.ToLookup(record => record.PointId));
     }
 
     private static ILookup<long, MetricsExemplar> MaterializeMetricExemplars(
         SqliteConnection connection,
         string dimensionQueryRangesCteSql,
-        string metricPointsCteSql,
-        DynamicParameters queryParameters)
+        DynamicParameters queryParameters,
+        TimeSpan? dataPointInterval,
+        IReadOnlyList<MetricPointDataRecord> points,
+        bool populateExemplarAttributes)
     {
         var records = connection.Query<MetricExemplarRecord>($"""
-            WITH {dimensionQueryRangesCteSql},
-            {metricPointsCteSql}
+            WITH {dimensionQueryRangesCteSql}
             SELECT
                 e.exemplar_id AS ExemplarId,
-                p.point_id AS PointId,
+                source.dimension_id AS DimensionId,
+                source.point_type AS PointType,
+                source.start_time_ticks AS SourceStartTimeTicks,
                 e.start_time_ticks AS StartTimeTicks,
                 e.exemplar_value AS ExemplarValue,
                 e.span_id AS SpanId,
                 e.trace_id AS TraceId
             FROM telemetry_metric_exemplars e
-            JOIN selected_metric_points source ON source.point_id = e.point_id
+            JOIN telemetry_metric_points source ON source.point_id = e.point_id
             JOIN metric_dimension_query_ranges r ON r.dimension_id = source.dimension_id
-            JOIN rolled_up_metric_points p ON
-                p.dimension_id = source.dimension_id AND
-                p.point_type = source.point_type AND
-                p.start_time_ticks = CASE
-                    WHEN @PointIntervalTicks = 0 THEN source.start_time_ticks
-                    ELSE (source.start_time_ticks / @PointIntervalTicks) * @PointIntervalTicks
-                END
-            WHERE @ApplyRange = 0 OR (e.start_time_ticks >= r.start_time_ticks AND e.start_time_ticks <= @EndTicks)
-            ORDER BY p.point_id, e.exemplar_id;
+            WHERE {MetricSourcePointRangeFilterSql}
+              AND e.start_time_ticks >= r.start_time_ticks
+              AND e.start_time_ticks <= @EndTicks
+            ORDER BY source.dimension_id, source.start_time_ticks, e.exemplar_id;
             """, queryParameters).AsList();
-        var attributes = connection.Query<OwnedAttributeRecord>($"""
-            WITH {dimensionQueryRangesCteSql},
-            {metricPointsCteSql}
-            SELECT a.exemplar_id AS OwnerId, a.attribute_key AS AttributeKey, a.attribute_value AS AttributeValue
-            FROM telemetry_metric_exemplar_attributes a
-            JOIN telemetry_metric_exemplars e ON e.exemplar_id = a.exemplar_id
-            JOIN selected_metric_points source ON source.point_id = e.point_id
-            JOIN metric_dimension_query_ranges r ON r.dimension_id = source.dimension_id
-            JOIN rolled_up_metric_points p ON
-                p.dimension_id = source.dimension_id AND
-                p.point_type = source.point_type AND
-                p.start_time_ticks = CASE
-                    WHEN @PointIntervalTicks = 0 THEN source.start_time_ticks
-                    ELSE (source.start_time_ticks / @PointIntervalTicks) * @PointIntervalTicks
-                END
-            WHERE @ApplyRange = 0 OR (e.start_time_ticks >= r.start_time_ticks AND e.start_time_ticks <= @EndTicks)
-            ORDER BY a.exemplar_id, a.ordinal;
-            """, queryParameters).ToLookup(record => record.OwnerId);
-        return records.Select(record => new KeyValuePair<long, MetricsExemplar>(record.PointId, new MetricsExemplar
+        var pointIds = points.ToDictionary(
+            point => new MetricPointKey(point.DimensionId, point.PointType, point.StartTimeTicks),
+            point => point.PointId);
+        var pointIntervalTicks = dataPointInterval?.Ticks;
+        var mappedRecords = new List<(long PointId, MetricExemplarRecord Record)>();
+        foreach (var record in records)
         {
-            Start = new DateTime(record.StartTimeTicks, DateTimeKind.Utc),
-            Value = record.ExemplarValue,
-            SpanId = record.SpanId,
-            TraceId = record.TraceId,
-            Attributes = attributes[record.ExemplarId].Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray()
-        })).ToLookup(pair => pair.Key, pair => pair.Value);
+            var rollupStartTimeTicks = pointIntervalTicks is { } intervalTicks
+                ? (record.SourceStartTimeTicks / intervalTicks) * intervalTicks
+                : record.SourceStartTimeTicks;
+            if (pointIds.TryGetValue(new MetricPointKey(record.DimensionId, record.PointType, rollupStartTimeTicks), out var pointId))
+            {
+                mappedRecords.Add((pointId, record));
+            }
+        }
+        var attributes = populateExemplarAttributes
+            ? MaterializeMetricExemplarAttributes(connection, mappedRecords.Select(item => item.Record.ExemplarId).Distinct().ToArray())
+            : Array.Empty<OwnedAttributeRecord>().ToLookup(record => record.OwnerId);
+        return mappedRecords
+            .OrderBy(item => item.PointId)
+            .ThenBy(item => item.Record.ExemplarId)
+            .Select(item => new KeyValuePair<long, MetricsExemplar>(
+                item.PointId,
+                new MetricsExemplar
+                {
+                    Start = new DateTime(item.Record.StartTimeTicks, DateTimeKind.Utc),
+                    Value = item.Record.ExemplarValue,
+                    SpanId = item.Record.SpanId,
+                    TraceId = item.Record.TraceId,
+                    Attributes = attributes[item.Record.ExemplarId].Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray()
+                }))
+            .ToLookup(pair => pair.Key, pair => pair.Value);
+    }
+
+    private static ILookup<long, OwnedAttributeRecord> MaterializeMetricExemplarAttributes(
+        SqliteConnection connection,
+        IReadOnlyList<long> exemplarIds)
+    {
+        var attributes = new List<OwnedAttributeRecord>();
+        foreach (var exemplarIdBatch in exemplarIds.Chunk(MaxMetricReadBatchSize))
+        {
+            attributes.AddRange(connection.Query<OwnedAttributeRecord>("""
+                SELECT exemplar_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+                FROM telemetry_metric_exemplar_attributes
+                WHERE exemplar_id IN @ExemplarIds
+                ORDER BY exemplar_id, ordinal;
+                """, new { ExemplarIds = exemplarIdBatch }));
+        }
+        return attributes.ToLookup(record => record.OwnerId);
     }
 
     private sealed class MetricPointDataRecord : MetricPointRecord
@@ -455,10 +504,14 @@ public sealed partial class SqliteTelemetryRepository
     private sealed class MetricExemplarRecord
     {
         public required long ExemplarId { get; init; }
-        public required long PointId { get; init; }
+        public required long DimensionId { get; init; }
+        public required int PointType { get; init; }
+        public required long SourceStartTimeTicks { get; init; }
         public required long StartTimeTicks { get; init; }
         public required double ExemplarValue { get; init; }
         public required string SpanId { get; init; }
         public required string TraceId { get; init; }
     }
+
+    private readonly record struct MetricPointKey(long DimensionId, int PointType, long StartTimeTicks);
 }

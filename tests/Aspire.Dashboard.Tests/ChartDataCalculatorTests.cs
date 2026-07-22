@@ -505,10 +505,12 @@ public class ChartDataCalculatorTests
     [InlineData(5, 1)]
     [InlineData(15, 1)]
     [InlineData(30, 60)]
-    [InlineData(720, 60)]
-    public void GetDataPointInterval_ReturnsDurationResolution(int durationMinutes, int expectedSeconds)
+    [InlineData(179, 60)]
+    [InlineData(180, 300)]
+    [InlineData(720, 300)]
+    public void MetricDataPointInterval_Get_ReturnsDurationResolution(int durationMinutes, int expectedSeconds)
     {
-        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), ChartContainer.GetDataPointInterval(TimeSpan.FromMinutes(durationMinutes)));
+        Assert.Equal(TimeSpan.FromSeconds(expectedSeconds), MetricDataPointInterval.Get(TimeSpan.FromMinutes(durationMinutes)));
     }
 
     private static OtlpInstrumentData CreateInstrumentData(List<DimensionScope> dimensions)

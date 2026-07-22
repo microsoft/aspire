@@ -191,7 +191,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
             endDate = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : DateTime.UtcNow;
         }
 
-        var dataPointInterval = GetDataPointInterval(Duration);
+        var dataPointInterval = MetricDataPointInterval.Get(Duration);
 
         // Histogram graphs need one preceding rollup to calculate bucket count changes at the beginning of the chart.
         var historyDuration = TimeSpan.FromTicks(Math.Max(TimeSpan.FromSeconds(30).Ticks, dataPointInterval.Ticks));
@@ -208,6 +208,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
             StartTime = startDate,
             EndTime = endDate,
             DataPointInterval = dataPointInterval,
+            PopulateExemplarAttributes = false,
             DimensionCursors = cursors,
             DimensionFilters = DimensionFilters
                 .Where(filter => filter.AreAllValuesSelected is not true)
@@ -229,9 +230,6 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
             ? MetricInstrumentDataCache.Merge(_instrument, refreshedInstrument, cursors, startDate)
             : refreshedInstrument;
     }
-
-    internal static TimeSpan GetDataPointInterval(TimeSpan duration)
-        => duration <= TimeSpan.FromMinutes(15) ? TimeSpan.FromSeconds(1) : TimeSpan.FromMinutes(1);
 
     private void EnsureDataEndTime()
     {
