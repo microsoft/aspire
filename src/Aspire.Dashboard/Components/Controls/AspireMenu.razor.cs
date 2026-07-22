@@ -114,15 +114,18 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 
     private async Task HandleItemClicked(MenuButtonItem item)
     {
-        if (item.OnClick is {} onClick)
-        {
-            await onClick();
-        }
         await SetOpenAsync(false);
 
         if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
         {
             await JS.InvokeVoidAsync("focusElement", Anchor);
+        }
+
+        // Item callbacks can move focus to a dialog or another control, so restore the
+        // menu trigger first to avoid stealing focus back after the callback completes.
+        if (item.OnClick is {} onClick)
+        {
+            await onClick();
         }
     }
 
