@@ -1361,12 +1361,15 @@ function signalActions(item) {
   return out;
 }
 
-// Which action buttons a "Needs attention" card gets: a review-debt card offers Address review
-// (a fresh review) plus Discuss review (talk through existing feedback); otherwise someone else's
-// PR offers Test + Review. All of these are review-oriented, so they are withheld on your own PRs
-// (you don't review your own work) — including your own aged review-debt PR, which computeFocusItems
-// deliberately retains. Signal-driven actions (conflicts, CI, unresolved) are layered on for every
-// card, including your own, since fixing those is the author's job.
+// Which action buttons a "Needs attention" or "Your PRs outside" card gets: a review-debt card
+// offers Address review (a fresh review) plus Discuss review (talk through existing feedback);
+// otherwise someone else's PR offers Test + Review. Those are review-oriented, so they are withheld
+// on your own PRs (you don't review your own work) — including your own aged review-debt PR, which
+// computeFocusItems deliberately retains. The one review action that IS yours is the author-response
+// case: when a reviewer requested changes the ball is in your court, so those cards offer Address
+// feedback + Discuss review (mirroring the "Respond here" For You pick) instead of rendering
+// actionless in the "Your PRs outside Needs attention" lane. Signal-driven actions (conflicts, CI,
+// unresolved) are layered on for every card, including your own, since fixing those is the author's job.
 function focusCardActions(item) {
   var pr = (item && item.pr) || {};
   var ctx = [];
@@ -1376,6 +1379,8 @@ function focusCardActions(item) {
     } else {
       ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
     }
+  } else if (isAuthorResponseItem(item)) {
+    ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
   }
   return mergeActions(ctx, signalActions(item));
 }
@@ -1422,6 +1427,15 @@ function isReviewDebtItem(item) {
   if (!item) return false;
   if (item.reviewDebt) return true;
   return (item.signals || []).some((s) => s && s.label === "review debt");
+}
+
+// Your own PR is "author response" when a reviewer requested changes (pr.review.state), or when the
+// "Your PRs outside Needs attention" lane tagged the card with the "Author response" exclusion pill.
+// Either way the ball is in your court, so focusCardActions offers Address feedback + Discuss review.
+function isAuthorResponseItem(item) {
+  var pr = (item && item.pr) || {};
+  if (pr.review && pr.review.state === "changes_requested") return true;
+  return ((item && item.signals) || []).some((s) => s && /^Author response$/i.test(s.label || ""));
 }
 
 function prCard(item, actions) {

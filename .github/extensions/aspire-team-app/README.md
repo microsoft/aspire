@@ -26,6 +26,10 @@ shows are driven by its lane and its signal pills:
   counts until it's approved). Address review runs a fresh review; Discuss review
   talks through the existing feedback and lays out response options without rewriting
   anything.
+- **Address feedback** / **Discuss review** — your own PR with changes requested (the
+  "Author response" case, including in *Your PRs outside Needs attention*, which would
+  otherwise show no actions). Address feedback works the requested changes; Discuss
+  review talks them through and lays out options without rewriting anything.
 - **Resolve conflicts** — any card carrying a "merge conflicts" signal; runs a
   direct git conflict-resolution flow.
 - **Evaluate CI failures** — any card carrying a "CI failing" signal; self-routes to

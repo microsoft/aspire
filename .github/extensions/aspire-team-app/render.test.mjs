@@ -148,12 +148,24 @@ test("focusCardActions layers review-debt / review context with signal actions",
   const other = api.focusCardActions({ pr: { isMine: false }, signals: [{ label: "merge conflicts" }] });
   assert.equal(other.map((a) => a.kind).join(","), "test,review,resolve-conflicts");
 
-  // Your own PR with no problem signal: no buttons (you don't review your own work).
+  // Your own PR with no problem signal and no requested changes: no buttons (you don't review your
+  // own work, and there's no feedback waiting on you).
   assert.equal(api.focusCardActions({ pr: { isMine: true } }), null);
 
   // Your own PR that is failing CI still offers the signal-driven fix action.
   const mineCi = api.focusCardActions({ pr: { isMine: true }, signals: [{ label: "CI failing" }] });
   assert.equal(mineCi.map((a) => a.kind).join(","), "fix-ci");
+
+  // Your own PR with changes requested is waiting on you to respond, so it offers Address feedback
+  // + Discuss review (mirroring the "Respond here" For You pick) instead of rendering actionless.
+  const mineChanges = api.focusCardActions({ pr: { isMine: true, review: { state: "changes_requested" } } });
+  assert.equal(mineChanges.map((a) => a.kind).join(","), "address-feedback,discuss-review");
+  assert.equal(mineChanges[0].label, "Address feedback");
+
+  // The "Your PRs outside Needs attention" lane tags the same case with an "Author response" pill,
+  // which also qualifies even without review state on the card.
+  const mineAuthorPill = api.focusCardActions({ pr: { isMine: true }, signals: [{ label: "Author response" }] });
+  assert.equal(mineAuthorPill.map((a) => a.kind).join(","), "address-feedback,discuss-review");
 });
 
 test("laneCardActions keys breakdown-lane actions off the lane label", () => {
