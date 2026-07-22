@@ -325,58 +325,134 @@ jobs:
             Microsoft.Storage
           )
 
-          # Snapshot already-registered providers in one call so the warm-subscription path
-          # does no per-provider work.
-          registered="$(az provider list --query "[?registrationState=='Registered'].namespace" -o tsv 2>/dev/null || true)"
-          is_registered() { grep -qxF "$1" <<<"$registered"; }
+          # Query the already-registered providers in a single call, then act only on the ones
+          # actually missing. Registration is per-subscription and idempotent, so on a warm
+          # subscription this step is a single API call with no register requests at all.
+          list_registered() {
+            az provider list --query "[?registrationState=='Registered'].namespace" -o tsv 2>/dev/null || true
+          }
+          missing_providers() {
+            # Emit the required providers not present in the registered set piped in on stdin.
+            local registered p
+            registered="$(cat)"
+            for p in "${providers[@]}"; do
+              grep -qxF "$p" <<<"$registered" || echo "$p"
+            done
+          }
 
-          pending=()
-          for p in "${providers[@]}"; do
-            if is_registered "$p"; then
-              echo "✓ $p already registered"
-            else
-              echo "→ registering $p"
-              # Non-fatal: a transient failure or missing permission on one provider must not
-              # block the whole run; the test that needs it will surface a clear error.
-              if az provider register --namespace "$p" --only-show-errors >/dev/null 2>&1; then
-                pending+=("$p")
-              else
-                echo "⚠ could not start registration for $p (continuing)"
-              fi
-            fi
-          done
+          # Recompute the 'missing' array from a single 'provider list' call.
+          collect_missing() {
+            missing=()
+            local line
+            while IFS= read -r line; do
+              [ -n "$line" ] && missing+=("$line")
+            done < <(list_registered | missing_providers)
+          }
 
-          if [ ${#pending[@]} -eq 0 ]; then
-            echo "✅ All required resource providers already registered."
+          collect_missing
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "✅ All ${#providers[@]} required resource providers already registered."
             exit 0
           fi
+
+          # az has no batch register, so this is one call per missing namespace (never more).
+          # Non-fatal: a transient failure or missing permission on one provider must not block
+          # the run; the test that needs it will surface a clear error.
+          echo "Registering ${#missing[@]} missing provider(s): ${missing[*]}"
+          for p in "${missing[@]}"; do
+            az provider register --namespace "$p" --only-show-errors >/dev/null 2>&1 \
+              || echo "⚠ could not start registration for $p (continuing)"
+          done
 
           # Registration is eventually consistent and can take a few minutes on a cold
           # subscription. Wait (bounded) so the deploy steps below don't have to block on it
           # themselves — e.g. the SQL admin SequencerJob deployment script waits on RP
-          # registration and can otherwise time out. Never fail the job on timeout.
-          echo "Waiting for ${#pending[@]} provider(s) to finish registering: ${pending[*]}"
+          # registration and can otherwise time out. Re-check the whole set with one
+          # 'provider list' call per iteration rather than one 'provider show' per provider.
+          # Never fail the job on timeout.
           deadline=$(( SECONDS + 600 ))
-          while [ ${#pending[@]} -gt 0 ] && [ "$SECONDS" -lt "$deadline" ]; do
+          while [ ${#missing[@]} -gt 0 ] && [ "$SECONDS" -lt "$deadline" ]; do
             sleep 15
-            still=()
-            for p in "${pending[@]}"; do
-              state="$(az provider show --namespace "$p" --query registrationState -o tsv --only-show-errors 2>/dev/null || echo Unknown)"
-              if [ "$state" = "Registered" ]; then
-                echo "✓ $p registered"
-              else
-                still+=("$p")
-              fi
-            done
-            pending=("${still[@]}")
+            collect_missing
           done
 
-          if [ ${#pending[@]} -gt 0 ]; then
-            echo "⚠ Providers still not registered after timeout: ${pending[*]}"
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "⚠ Providers still not registered after timeout: ${missing[*]}"
             echo "  Continuing; a test needing one of these may fail until registration completes."
           else
             echo "✅ All required resource providers registered."
           fi
+
+      # Ensure the target subscription has enough dedicated vCPU quota in the regions the
+      # deployment tests deploy into. Like provider registration above, this is per-subscription
+      # setup rather than a test concern: a fresh subscription starts with low compute quotas, so
+      # the AKS / Container Apps tests fail with QuotaExceeded (observed: standardDASv5Family in
+      # westus3 with a limit of 0). Read the current limit and only when it is below the target
+      # submit an increase request, so pointing the workflow at a new subscription self-heals.
+      # Best-effort and never fails the job: quota requests can route to manual review and are not
+      # guaranteed to be granted synchronously, so a still-short region surfaces its own
+      # QuotaExceeded error in the test that needs it.
+      - name: Ensure Azure compute quota
+        run: |
+          # family|location|min-cores of dedicated vCPUs. Extend as new regions/families are used;
+          # location must match the Azure__Location the tests deploy into.
+          quota_targets=(
+            "standardDASv5Family|westus3|250"
+          )
+
+          sub="$ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION"
+
+          # 'az vm list-usage' is core CLI (no extension) and reports the current limit per family.
+          # Shape (one array element per family):
+          #   { "currentValue": 0, "limit": 0,
+          #     "name": { "localizedValue": "Standard DASv5 Family vCPUs",
+          #               "value": "standardDASv5Family" }, "unit": "Count" }
+          read_limit() {
+            az vm list-usage --location "$2" \
+              --query "[?name.value=='$1'].limit | [0]" -o tsv 2>/dev/null || true
+          }
+
+          # 'az quota' lives in an extension and is only needed when a request is actually
+          # submitted, so install it lazily to keep a healthy subscription a pure read.
+          quota_ext_ready=""
+          ensure_quota_ext() {
+            [ -n "$quota_ext_ready" ] && return 0
+            az extension add --name quota --only-show-errors >/dev/null 2>&1 || true
+            quota_ext_ready=1
+          }
+
+          for entry in "${quota_targets[@]}"; do
+            IFS='|' read -r family location min <<<"$entry"
+
+            limit="$(read_limit "$family" "$location")"
+            if [ -z "$limit" ] || ! [[ "$limit" =~ ^[0-9]+$ ]]; then
+              echo "⚠ Could not read $family quota in $location (got '${limit:-}'); skipping."
+              continue
+            fi
+
+            if [ "$limit" -ge "$min" ]; then
+              echo "✅ $family in $location: limit $limit ≥ $min, no request needed."
+              continue
+            fi
+
+            echo "$family in $location: limit $limit < $min; requesting increase to $min."
+            ensure_quota_ext
+            scope="/subscriptions/$sub/providers/Microsoft.Compute/locations/$location"
+
+            # A dedicated-vCPU quota override may not exist yet (only a default limit does), so try
+            # create (new override) first and fall back to update (adjust an existing override).
+            # Both submit a request to Microsoft.Quota that may auto-approve or route to manual
+            # review; neither is allowed to fail the job.
+            if az quota create --resource-name "$family" --scope "$scope" \
+                 --resource-type dedicated --limit-object value="$min" --only-show-errors >/dev/null 2>&1 \
+               || az quota update --resource-name "$family" --scope "$scope" \
+                 --resource-type dedicated --limit-object value="$min" --only-show-errors >/dev/null 2>&1; then
+              new="$(read_limit "$family" "$location")"
+              echo "  Request submitted for $family in $location (limit now: ${new:-unknown})."
+            else
+              echo "⚠ Quota request for $family in $location was not accepted (may need manual approval); continuing."
+            fi
+          done
 
       - name: Verify Docker is running
         run: |
