@@ -25,7 +25,7 @@ On Windows, Linux, or Mac you can use VS Code with the DevContainers extension. 
 #### Install VS Code with DevContainers Extension
 
 * [VS Code](https://code.visualstudio.com/Download)
-* [DevContainers Extension](https://marketplace.visualstudio.com/items?itemName=ms-VSCode-remote.remote-containers)
+* [DevContainers Extension](http://web.archive.org/web/20260708185955/https://marketplace.visualstudio.com/items?itemName=ms-vscode-remote.remote-containers)
 
 Then choose "Open Folder In Container", choose the root of your cloned repo, then choose "Aspire - Contribute".
 
