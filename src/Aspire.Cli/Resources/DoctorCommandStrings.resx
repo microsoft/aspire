@@ -155,6 +155,10 @@
     <value>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</value>
     <comment>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</comment>
   </data>
+  <data name="DevCertsInstallOpenSslCleanAndTrustFixFormat" xml:space="preserve">
+    <value>Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</value>
+    <comment>{0} is the openssl command/package name, {1} is the aspire certs clean command, {2} is the aspire certs trust command (not localizable)</comment>
+  </data>
   <data name="DevCertsMultipleNoneTrustedMessageFormat" xml:space="preserve">
     <value>Multiple HTTPS development certificates found ({0} certificates), but none are trusted</value>
   </data>
@@ -213,6 +217,13 @@
   <data name="DevCertsOpenSslCacheUnreadableFilesDetailsFormat" xml:space="preserve">
     <value>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
     <comment>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</comment>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingHashLinkMessage" xml:space="preserve">
+    <value>OpenSSL HTTPS development certificate cache is missing subject-hash links</value>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingHashLinkDetailsFormat" xml:space="preserve">
+    <value>The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</comment>
   </data>
   <data name="DcpBundleNotFoundMessage" xml:space="preserve">
     <value>Developer Control Plane (DCP) bundle not found; skipping connection health checks</value>

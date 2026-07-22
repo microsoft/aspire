@@ -319,6 +319,15 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsCleanAndTrustFixFormat", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install {0}, run &apos;{1}&apos; to remove all certificates, then run &apos;{2}&apos; to create and trust a new one..
+        /// </summary>
+        public static string DevCertsInstallOpenSslCleanAndTrustFixFormat {
+            get {
+                return ResourceManager.GetString("DevCertsInstallOpenSslCleanAndTrustFixFormat", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Multiple HTTPS development certificates found ({0} certificates), but none are trusted.
@@ -488,6 +497,24 @@ namespace Aspire.Cli.Resources {
         public static string DevCertsOpenSslCacheUnreadableFilesDetailsFormat {
             get {
                 return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableFilesDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache is missing subject-hash links.
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingHashLinkMessage {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingHashLinkMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories..
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingHashLinkDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingHashLinkDetailsFormat", resourceCulture);
             }
         }
 

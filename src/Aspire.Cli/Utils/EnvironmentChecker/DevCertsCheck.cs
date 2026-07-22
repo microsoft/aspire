@@ -1,10 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text.Json.Nodes;
+using System.Text.RegularExpressions;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Resources;
 using Microsoft.AspNetCore.Certificates.Generation;
@@ -21,11 +25,15 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     internal const string VersionCheckName = "dev-certs-version";
     internal const string CertUtilCheckName = "dev-certs-certutil";
     internal const string OpenSslCertificateCacheCheckName = "dev-certs-openssl-cache";
+    private const string OpenSslCommand = "openssl";
+    private const int OpenSslHashCollisionSearchLimit = 10;
 
     public int Order => 35; // After SDK check (30), before container checks (40+)
 
     private static readonly string s_trustFixCommand = string.Format(CultureInfo.InvariantCulture, DoctorCommandStrings.DevCertsTrustFixFormat, "aspire certs trust");
     private static readonly string s_cleanAndTrustFixCommand = string.Format(CultureInfo.InvariantCulture, DoctorCommandStrings.DevCertsCleanAndTrustFixFormat, "aspire certs clean", "aspire certs trust");
+    private static readonly string s_installOpenSslCleanAndTrustFixCommand = string.Format(CultureInfo.InvariantCulture, DoctorCommandStrings.DevCertsInstallOpenSslCleanAndTrustFixFormat, "openssl", "aspire certs clean", "aspire certs trust");
+    private static readonly Regex s_openSslHashFileNameRegex = new("^[0-9a-fA-F]{8}\\.\\d+$", RegexOptions.CultureInvariant);
 
     public Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
@@ -221,7 +229,10 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         }
 
         var trustPath = CertificateHelpers.GetDevCertsTrustPath(environment);
-        var cacheStatus = EvaluateOpenSslCertificateCache(trustPath, currentCertificates);
+        var environmentVariables = GetEnvironmentVariables(environment);
+        PathLookupHelper.TryResolveExecutablePath(OpenSslCommand, out var openSslPath, environmentVariables);
+
+        var cacheStatus = EvaluateOpenSslCertificateCache(trustPath, currentCertificates, openSslPath);
         if (cacheStatus is null)
         {
             return;
@@ -234,7 +245,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             Status = EnvironmentCheckStatus.Warning,
             Message = cacheStatus.Message,
             Details = cacheStatus.Details,
-            Fix = s_cleanAndTrustFixCommand,
+            Fix = cacheStatus.Fix,
             Link = "https://aka.ms/aspire-prerequisites#dev-certs"
         });
     }
@@ -252,8 +263,10 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             .ThenBy(c => c.Thumbprint, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static OpenSslCertificateCacheStatus? EvaluateOpenSslCertificateCache(string trustPath, IReadOnlyList<DevCertInfo> currentCertificates)
+    private static OpenSslCertificateCacheStatus? EvaluateOpenSslCertificateCache(string trustPath, IReadOnlyList<DevCertInfo> currentCertificates, string? openSslPath)
     {
+        var fix = GetOpenSslCertificateCacheFix(openSslPath);
+
         if (!Directory.Exists(trustPath))
         {
             var trustedThumbprints = GetTrustedThumbprints(currentCertificates);
@@ -264,12 +277,14 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
 
             return new(
                 DoctorCommandStrings.DevCertsOpenSslCacheMissingCurrentCertificateMessage,
-                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, string.Join(", ", trustedThumbprints)));
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, string.Join(", ", trustedThumbprints)),
+                fix);
         }
 
         var unreadableFiles = new List<string>();
         var mismatchedThumbprints = new List<string>();
         var missingTrustedThumbprints = new List<string>();
+        var missingHashLinkThumbprints = new List<string>();
 
         foreach (var certificate in currentCertificates)
         {
@@ -292,6 +307,11 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
                 {
                     mismatchedThumbprints.Add(certificate.Thumbprint!);
                 }
+                else if (certificate.TrustLevel != CertificateManager.TrustLevel.None &&
+                    !HasOpenSslHashEntry(trustPath, certificateFile, cachedCertificate, openSslPath))
+                {
+                    missingHashLinkThumbprints.Add(certificate.Thumbprint!);
+                }
             }
             catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException)
             {
@@ -303,24 +323,127 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         {
             return new(
                 DoctorCommandStrings.DevCertsOpenSslCacheUnreadableMessage,
-                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheUnreadableFilesDetailsFormat, trustPath, string.Join(", ", unreadableFiles)));
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheUnreadableFilesDetailsFormat, trustPath, string.Join(", ", unreadableFiles)),
+                fix);
         }
 
         if (mismatchedThumbprints.Count > 0)
         {
             return new(
                 DoctorCommandStrings.DevCertsOpenSslCacheMissingCurrentCertificateMessage,
-                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, string.Join(", ", mismatchedThumbprints)));
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, string.Join(", ", mismatchedThumbprints)),
+                fix);
         }
 
         if (missingTrustedThumbprints.Count > 0)
         {
             return new(
                 DoctorCommandStrings.DevCertsOpenSslCacheMissingCurrentCertificateMessage,
-                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, string.Join(", ", missingTrustedThumbprints)));
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingDetailsFormat, trustPath, string.Join(", ", missingTrustedThumbprints)),
+                fix);
+        }
+
+        if (missingHashLinkThumbprints.Count > 0)
+        {
+            return new(
+                DoctorCommandStrings.DevCertsOpenSslCacheMissingHashLinkMessage,
+                string.Format(CultureInfo.CurrentCulture, DoctorCommandStrings.DevCertsOpenSslCacheMissingHashLinkDetailsFormat, trustPath, string.Join(", ", missingHashLinkThumbprints)),
+                fix);
         }
 
         return null;
+    }
+
+    private static string GetOpenSslCertificateCacheFix(string? openSslPath) =>
+        openSslPath is null ? s_installOpenSslCleanAndTrustFixCommand : s_cleanAndTrustFixCommand;
+
+    private static bool HasOpenSslHashEntry(string trustPath, string certificateFile, X509Certificate2 certificate, string? openSslPath)
+    {
+        if (openSslPath is not null)
+        {
+            return TryGetOpenSslHash(openSslPath, certificateFile, out var hash) &&
+                HasMatchingHashEntry(trustPath, hash, certificate);
+        }
+
+        // Without openssl we cannot compute the subject hash that OpenSSL requires. The
+        // absence of any hash-style entry for the certificate is still definitely broken,
+        // but a matching entry can only be treated as sufficient evidence to avoid warning.
+        return Directory.EnumerateFiles(trustPath)
+            .Where(path => s_openSslHashFileNameRegex.IsMatch(Path.GetFileName(path)))
+            .Any(path => CertificateFileMatches(path, certificate));
+    }
+
+    private static bool HasMatchingHashEntry(string trustPath, string hash, X509Certificate2 certificate)
+    {
+        for (var i = 0; i < OpenSslHashCollisionSearchLimit; i++)
+        {
+            var hashEntryPath = Path.Combine(trustPath, $"{hash}.{i}");
+            if (CertificateFileMatches(hashEntryPath, certificate))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool CertificateFileMatches(string certificateFile, X509Certificate2 certificate)
+    {
+        if (!File.Exists(certificateFile))
+        {
+            return false;
+        }
+
+        try
+        {
+            using var cachedCertificate = X509CertificateLoader.LoadCertificateFromFile(certificateFile);
+
+            return string.Equals(certificate.Thumbprint, cachedCertificate.Thumbprint, StringComparison.OrdinalIgnoreCase);
+        }
+        catch (Exception ex) when (ex is CryptographicException or IOException or UnauthorizedAccessException)
+        {
+            return false;
+        }
+    }
+
+    private static bool TryGetOpenSslHash(string openSslPath, string certificateFile, [NotNullWhen(true)] out string? hash)
+    {
+        hash = null;
+
+        var processInfo = new ProcessStartInfo(openSslPath)
+        {
+            RedirectStandardOutput = true,
+            RedirectStandardError = true
+        };
+        processInfo.ArgumentList.Add("x509");
+        processInfo.ArgumentList.Add("-hash");
+        processInfo.ArgumentList.Add("-noout");
+        processInfo.ArgumentList.Add("-in");
+        processInfo.ArgumentList.Add(certificateFile);
+
+        Process? process = null;
+        try
+        {
+            process = Process.Start(processInfo);
+            var stdout = process!.StandardOutput.ReadToEnd();
+            process.WaitForExit();
+
+            if (process.ExitCode != 0)
+            {
+                return false;
+            }
+
+            hash = stdout.Trim();
+            return hash.Length > 0;
+        }
+        catch (Exception ex) when (ex is Win32Exception or IOException or InvalidOperationException)
+        {
+            return false;
+        }
+        finally
+        {
+            process?.Dispose();
+        }
     }
 
     private static List<string> GetTrustedThumbprints(IReadOnlyList<DevCertInfo> currentCertificates)
@@ -341,9 +464,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             return;
         }
 
-        var environmentVariables = environment.GetEnvironmentVariables()
-            .Where(kv => kv.Value is not null)
-            .ToDictionary(kv => kv.Name, kv => kv.Value!);
+        var environmentVariables = GetEnvironmentVariables(environment);
 
         if (PathLookupHelper.TryResolveExecutablePath(CertificateHelpers.CertUtilCommand, out _, environmentVariables))
         {
@@ -361,6 +482,11 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             Link = "https://aka.ms/aspire-prerequisites#dev-certs"
         });
     }
+
+    private static Dictionary<string, string> GetEnvironmentVariables(IEnvironment environment) =>
+        environment.GetEnvironmentVariables()
+            .Where(kv => kv.Value is not null)
+            .ToDictionary(kv => kv.Name, kv => kv.Value!);
 
     /// <summary>
     /// Builds structured metadata from certificate information for JSON output.
@@ -420,5 +546,5 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         return $"export SSL_CERT_DIR=\"$SSL_CERT_DIR:{string.Join(':', systemCertDirs)}\"";
     }
 
-    private sealed record OpenSslCertificateCacheStatus(string Message, string Details);
+    private sealed record OpenSslCertificateCacheStatus(string Message, string Details, string Fix);
 }
