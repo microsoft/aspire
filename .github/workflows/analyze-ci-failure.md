@@ -473,6 +473,11 @@ safe-outputs:
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
+        - name: Checkout issue renderer
+          uses: actions/checkout@v4
+          with:
+            sparse-checkout: .github/workflows/analyze-ci-failure.js
+            sparse-checkout-cone-mode: false
         - name: Publish analysis data and comment on PR
           run: |
             set -euo pipefail
@@ -549,12 +554,6 @@ safe-outputs:
               if [ -d "$CAUSES_DIR" ]; then
                 mkdir -p "memory-repo/causes"
 
-                # Build the occurrence entry from the run summary JSON
-                ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-                PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-                # Find the first failed job name for context in the occurrence
-                FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
-
                 for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                   [ -f "$CAUSE_FILE" ] || continue
                   # Skip code-issue causes — only persist transient/flaky causes.
@@ -565,14 +564,9 @@ safe-outputs:
                   CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
 
-                  # Add an occurrences array with this run's entry to the agent's cause file
-                  CAUSE_WITH_OCC=$(jq --argjson run_id "$RUN_ID" \
-                    --arg run_url "$RUN_URL" \
-                    --arg job "$FIRST_JOB" \
-                    --argjson pr_number "$PR_NUMBER" \
-                    --arg observed_at "$ANALYZED_AT" \
-                    '. + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \
-                    "$CAUSE_FILE")
+                  # Add an occurrences array using the job associated with this cause.
+                  CAUSE_WITH_OCC=$(node .github/workflows/analyze-ci-failure.js \
+                    add-occurrence "$ANALYSIS_FILE" "$CAUSE_FILE")
 
                   if [ -f "$EXISTING" ]; then
                     # Merge: append new occurrence, deduplicate by run_id
@@ -596,15 +590,6 @@ safe-outputs:
 
             # ── 2. Create or update issues for each cause ──
             if [ -d "$CAUSES_DIR" ]; then
-              # Build occurrence info from the run summary for issue updates
-              ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-              PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-              FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
-
-              # Build the occurrence table row for this run
-              OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
-              NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${FIRST_JOB} | #${PR_NUMBER} |"
-
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
                 jq empty "$CAUSE_FILE" 2>/dev/null || continue
@@ -627,6 +612,8 @@ safe-outputs:
                   continue
                 fi
 
+                NEW_OCCURRENCE_ROW=$(node .github/workflows/analyze-ci-failure.js \
+                  occurrence-row "$ANALYSIS_FILE" "$CAUSE_FILE")
                 CAUSE_STORED="memory-repo/causes/${CAUSE_ID}.json"
                 MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
 
@@ -708,80 +695,8 @@ safe-outputs:
                 else
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
-                  TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
-                  JOB_NAME=$(jq -r '.job_name // empty' "$CAUSE_FILE")
-                  if [ -z "$JOB_NAME" ]; then
-                    JOB_NAME="$FIRST_JOB"
-                  fi
-
-                  if [ "$CAUSE_TYPE" = "flaky-test" ]; then
-                    CLASSIFICATION_ANALYSIS=$(jq -r --arg n "$TEST_NAME" --arg j "$JOB_NAME" \
-                      '(first(.failed_tests[]? | select(.name == $n and .job == $j)) // {}) | .reason // empty' \
-                      "$ANALYSIS_FILE")
-                    FAILURE_DETAILS_HTML=$(jq -r --arg n "$TEST_NAME" --arg j "$JOB_NAME" '
-                      (first(.failed_tests[]? | select(.name == $n and .job == $j)) // {}) |
-                      [["Error", .error // ""], ["Stack Trace", .stack_trace // ""],
-                       ["Standard Output", .standard_output // ""], ["Standard Error", .standard_error // ""]] |
-                      map(select(.[1] != "") | .[0] + ":\n" + .[1]) | join("\n\n") | @html
-                    ' "$ANALYSIS_FILE")
-                  else
-                    CLASSIFICATION_ANALYSIS=$(jq -r --arg job_name "$JOB_NAME" \
-                      '([.failed_jobs[]? | select(.name == $job_name)][0] // [.failed_jobs[]? | select(.classification == "transient-infra")][0] // {}) | .reason // empty' \
-                      "$ANALYSIS_FILE")
-                    FAILURE_DETAILS_HTML=$(jq -r '(.failure_details // .error_pattern) | @html' "$CAUSE_FILE")
-                  fi
-
-                  if [ -z "$CLASSIFICATION_ANALYSIS" ]; then
-                    CLASSIFICATION_ANALYSIS=$(jq -r '.analysis // empty' "$CAUSE_FILE")
-                  fi
-                  if [ -z "$FAILURE_DETAILS_HTML" ]; then
-                    FAILURE_DETAILS_HTML=$(jq -r '(.failure_details // .error_pattern) | @html' "$CAUSE_FILE")
-                  fi
-
-                  {
-                    echo "${MARKER}"
-                    echo ""
-                    echo "## Build Information"
-                    echo ""
-                    echo "Build: ${RUN_URL}"
-                    if [ -n "$TEST_NAME" ]; then
-                      echo "Build error leg or test failing: ${JOB_NAME} / \`${TEST_NAME}\`"
-                    else
-                      echo "Build error leg: ${JOB_NAME}"
-                    fi
-                    echo "Pull request: #${PR_NUMBER}"
-                    echo ""
-                    echo "## Classification Analysis"
-                    echo ""
-                    printf '%s\n' "$CLASSIFICATION_ANALYSIS"
-                    echo ""
-                    echo "## Failure Information"
-                    echo ""
-                    echo "<details>"
-                    if [ "$CAUSE_TYPE" = "flaky-test" ]; then
-                      echo "<summary>Test output</summary>"
-                    else
-                      echo "<summary>Job output snippet</summary>"
-                    fi
-                    echo ""
-                    echo "<pre>"
-                    printf '%s\n' "$FAILURE_DETAILS_HTML"
-                    echo "</pre>"
-                    echo ""
-                    echo "</details>"
-                    echo ""
-                    echo "## Description"
-                    echo ""
-                    jq -r '.title' "$CAUSE_FILE"
-                    echo ""
-                    echo "**Type**: ${CAUSE_TYPE}"
-                    echo ""
-                    echo "## Occurrences"
-                    echo ""
-                    echo "| Date | Build | Job | PR |"
-                    echo "|------|-------|-----|----|"
-                    echo "$NEW_OCCURRENCE_ROW"
-                  } > "$BODY_FILE"
+                  node .github/workflows/analyze-ci-failure.js \
+                    issue-body "$ANALYSIS_FILE" "$CAUSE_FILE" "$MARKER" > "$BODY_FILE"
 
                   LABELS="ci-failure-cause"
                   if [ "$CAUSE_TYPE" = "flaky-test" ]; then
