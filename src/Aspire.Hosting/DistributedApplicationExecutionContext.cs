@@ -51,10 +51,6 @@ public class DistributedApplicationExecutionContext
     {
         _options = options;
 #pragma warning disable ASPIREWATCH001 // RunSubMode is experimental; core populates it from the options.
-        // The run sub-mode only applies to Run mode. Normalize any other operation to Normal so a caller
-        // cannot construct, for example, a Publish context that reports Watch. That combination would
-        // contradict this type's contract (and the generated polyglot API docs, which state publish is
-        // always Normal) and could activate watch behavior during publish.
         RunSubMode = options.Operation == DistributedApplicationOperation.Run ? options.RunSubMode : RunSubMode.Normal;
 #pragma warning restore ASPIREWATCH001
     }
