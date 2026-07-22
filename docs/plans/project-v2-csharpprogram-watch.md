@@ -320,11 +320,11 @@ unit test that the config flag flips `ExecutionContext.IsWatch`; both run modes 
 `DistributedApplicationExecutionContext.RunSubMode` (plus an `init` `RunSubMode` on
 `DistributedApplicationExecutionContextOptions`), all marked
 `[Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]`. 
-**Shape decision: enum only — no `IsWatch` bool** (downstream reads `ExecutionContext.RunSubMode == RunSubMode.Watch). 
-DistributedApplicationBuilder.BuildExecutionContextOptions()` populates the sub-mode on both
-run-mode paths from the **`AppHost:RunSubMode`** configuration key (mirrors `AppHost:Operation`), parsed
-case-insensitively via `Enum.TryParse`; unknown/missing values fall back to `Normal`, and publish mode always
-reports `Normal`. Core contains **no** watch mechanics; the CLI `aspire run --watch` → `AppHost:RunSubMode`
+**Shape decision: enum only — no `IsWatch` bool** (downstream reads `ExecutionContext.RunSubMode == RunSubMode.Watch`).
+`DistributedApplicationBuilder.BuildExecutionContextOptions()` populates the sub-mode on both
+run-mode paths from the **`AppHost:RunSubMode`** configuration key (mirrors `AppHost:Operation`), matched
+case-insensitively against the declared `RunSubMode` names; numeric, compound, unknown, or missing values fall
+back to `Normal`, and publish mode always reports `Normal`. Core contains **no** watch mechanics; the CLI `aspire run --watch` → `AppHost:RunSubMode`
 bridge is layered on in Session 7. Added `OperationModesTests` cases (default `Normal`, `Watch` from config,
 case-insensitive, unknown→`Normal`, publish→`Normal`) and regenerated the five polyglot codegen snapshots
 (TS/Go/Python/Java/Rust — additive `RunSubMode` enum + `runSubMode()` getter only).

@@ -720,13 +720,12 @@ export enum ResourceCommandVisibility {
 }
 
 /**
- * Describes the sub-mode the AppHost is running under when `Operation` is `Run`.
+ * Describes the run sub-mode the AppHost is running under (when `Operation` is `Run`).
  *
  * The run sub-mode is populated from configuration by the AppHost builder and surfaced through
- * `RunSubMode`. It lets integrations vary how their
- * resources are launched without changing the core hosting behavior. In
- * `Publish` mode the sub-mode is always
- * `Normal`.
+ * `RunSubMode`.
+ * It lets integrations vary how their resources are launched without changing the core hosting behavior.
+ * In `Publish` mode the sub-mode is always `Normal`.
  */
 export enum RunSubMode {
     /** The AppHost is running normally. Resources are launched using their standard run behavior. */

@@ -163,8 +163,15 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
     private RunSubMode ParseRunSubMode()
     {
-        return Enum.TryParse<RunSubMode>(_innerBuilder.Configuration["AppHost:RunSubMode"], ignoreCase: true, out var runSubMode)
-            ? runSubMode
+        // Match only the declared enum names, case-insensitively. Enum.TryParse is intentionally avoided
+        // because it also succeeds for inputs that are not declared members, which would bypass the
+        // documented unknown-value -> Normal fallback and leak an unsupported sub-mode to integrations.
+        // For example, Enum.TryParse accepts:
+        //   - "42"          => (RunSubMode)42 (any numeric string parses to that raw value), and
+        //   - "Normal,Watch" => Watch (comma-separated names are OR'd, even though RunSubMode is not [Flags]).
+        // Watch is the only non-default sub-mode, so anything that is not "Watch" resolves to Normal.
+        return string.Equals(_innerBuilder.Configuration["AppHost:RunSubMode"], nameof(RunSubMode.Watch), StringComparison.OrdinalIgnoreCase)
+            ? RunSubMode.Watch
             : RunSubMode.Normal;
     }
 

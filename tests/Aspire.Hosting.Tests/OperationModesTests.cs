@@ -204,4 +204,49 @@ public class OperationModesTests(ITestOutputHelper outputHelper)
         Assert.True(builder.ExecutionContext.IsPublishMode);
         Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
     }
+
+    [Fact]
+    public void RunSubModeFallsBackToNormalForNumericValue()
+    {
+        // A numeric string is not a declared sub-mode name and must fall back to Normal. This guards against
+        // Enum.TryParse's behavior of accepting any numeric value (for example "42" => (RunSubMode)42).
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["AppHost:RunSubMode=42"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
+    }
+
+    [Fact]
+    public void RunSubModeFallsBackToNormalForCompoundValue()
+    {
+        // A comma-separated value is not a declared sub-mode name and must fall back to Normal. This guards
+        // against Enum.TryParse accepting "Normal,Watch" as Watch even though RunSubMode is not [Flags].
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["AppHost:RunSubMode=Normal,Watch"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
+    }
+
+    [Fact]
+    public void RunSubModeIsNormalWhenExecutionContextConstructedForPublish()
+    {
+        // The run sub-mode only applies to run mode. Even if a caller constructs options with a Watch
+        // sub-mode and a Publish operation, the execution context must report Normal (publish never watches).
+
+        var options = new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish)
+        {
+            RunSubMode = RunSubMode.Watch
+        };
+
+        var context = new DistributedApplicationExecutionContext(options);
+
+        Assert.True(context.IsPublishMode);
+        Assert.Equal(RunSubMode.Normal, context.RunSubMode);
+    }
 }
