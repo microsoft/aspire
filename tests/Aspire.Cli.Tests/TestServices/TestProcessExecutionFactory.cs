@@ -170,13 +170,28 @@ internal sealed class TestProcessExecution : IProcessExecution
 
     public bool Started => _started;
 
-    public bool HasExited => _hasExited;
+    public bool HasExited
+    {
+        get
+        {
+            if (ThrowOnHasExitedBeforeStart && !_started)
+            {
+                throw new InvalidOperationException("Process has not been started.");
+            }
+
+            return _hasExited;
+        }
+    }
 
     public int ExitCode => _exitCode;
 
     public int ProcessId { get; init; } = Environment.ProcessId;
 
+    public DateTimeOffset? StartTime { get; init; } = DateTimeOffset.UtcNow;
+
     public bool StartReturnValue { get; init; } = true;
+
+    public bool ThrowOnHasExitedBeforeStart { get; init; }
 
     public Func<ProcessInvocationOptions, CancellationToken, Task<int>>? WaitForExitAsyncCallback { get; init; }
 
@@ -190,15 +205,17 @@ internal sealed class TestProcessExecution : IProcessExecution
 
     public int DisposeCount { get; private set; }
 
-    public bool Start()
+    public Task<bool> StartAsync(CancellationToken cancellationToken)
     {
+        cancellationToken.ThrowIfCancellationRequested();
+
         if (!StartReturnValue)
         {
-            return false;
+            return Task.FromResult(false);
         }
 
         _started = true;
-        return true;
+        return Task.FromResult(true);
     }
 
     public async Task<int> WaitForExitAsync(CancellationToken cancellationToken)

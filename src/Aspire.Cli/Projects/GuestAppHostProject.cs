@@ -434,6 +434,7 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 launchProfileEnvironmentVariables,
                 defaultEnvironment: AppHostEnvironmentDefaults.DevelopmentEnvironmentName,
                 args: context.UnmatchedTokens);
+            launchSettingsEnvVars[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(appHostFile);
 
             // Apply certificate environment variables (e.g., SSL_CERT_DIR on Linux)
             foreach (var kvp in certEnvVars)
@@ -1268,8 +1269,8 @@ internal sealed class GuestAppHostProject : IAppHostProject, IGuestAppHostSdkGen
                 // The real error is in the AppHost output, not this connection-level detail.
                 _logger.LogDebug("AppHost server process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", exitCode, socketPath);
                 var message = exitCode == CliExitCodes.Success
-                    ? "AppHost server process has exited"
-                    : "AppHost server process has exited unexpectedly";
+                    ? "The AppHost server process exited"
+                    : $"The AppHost server process exited unexpectedly with exit code {exitCode}";
                 var backchannelException = new FailedToConnectBackchannelConnection(message, ex);
                 activity.SetError(backchannelException);
                 backchannelCompletionSource.TrySetException(backchannelException);

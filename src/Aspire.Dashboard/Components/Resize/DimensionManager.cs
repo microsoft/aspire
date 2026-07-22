@@ -7,21 +7,18 @@ public class DimensionManager
 {
     private ViewportInformation? _viewportInformation;
     private ViewportSize? _viewportSize;
-    private bool? _isAISidebarOpen;
 
     public event ViewportSizeChangedEventHandler? OnViewportSizeChanged;
     public event ViewportInformationChangedEventHandler? OnViewportInformationChanged;
 
     public ViewportInformation ViewportInformation => _viewportInformation ?? throw new ArgumentNullException(nameof(_viewportInformation));
     public ViewportSize ViewportSize => _viewportSize ?? throw new ArgumentNullException(nameof(_viewportSize));
-    public bool IsAISidebarOpen => _isAISidebarOpen ?? throw new ArgumentNullException(nameof(_isAISidebarOpen));
     public bool HasViewportSize => _viewportSize != null;
 
-    internal void InvokeOnViewportSizeChanged(ViewportSize newViewportSize, bool isAISidebarOpen)
+    internal void InvokeOnViewportSizeChanged(ViewportSize newViewportSize)
     {
         _viewportSize = newViewportSize;
-        _isAISidebarOpen = isAISidebarOpen;
-        OnViewportSizeChanged?.Invoke(this, new ViewportSizeChangedEventArgs(newViewportSize, isAISidebarOpen));
+        OnViewportSizeChanged?.Invoke(this, new ViewportSizeChangedEventArgs(newViewportSize));
     }
 
     internal void InvokeOnViewportInformationChanged(ViewportInformation newViewportInformation)
@@ -39,8 +36,7 @@ public class ViewportInformationChangedEventArgs(ViewportInformation viewportInf
     public ViewportInformation ViewportInformation { get; } = viewportInformation;
 }
 
-public class ViewportSizeChangedEventArgs(ViewportSize viewportSize, bool isAISidebarOpen) : EventArgs
+public class ViewportSizeChangedEventArgs(ViewportSize viewportSize) : EventArgs
 {
     public ViewportSize ViewportSize { get; } = viewportSize;
-    public bool IsAISidebarOpen { get; } = isAISidebarOpen;
 }

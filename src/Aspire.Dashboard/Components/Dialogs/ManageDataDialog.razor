@@ -100,17 +100,24 @@
             <TemplateColumn Title="@Loc[nameof(Dialogs.ManageDataSummaryColumnHeader)]">
                 @if (context.IsResourceRow && context.ResourceRow is not null)
                 {
-                    <span @onclick:stopPropagation="true">
-                        @foreach (var dataRow in context.ResourceRow.TelemetryData)
-                        {
-                            <FluentButton Appearance="Appearance.Lightweight"
-                                          IconEnd="@dataRow.Icon"
-                                          OnClick="@(() => NavigateToDataPage(dataRow))"
-                                          Title="@GetDataTypeDisplayName(dataRow.DataType)"
-                                          aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
-                                          Style="margin-right: 4px;" />
-                        }
-                    </span>
+                    @if (context.ResourceRow.TelemetryData.Count == 0)
+                    {
+                        <span class="empty-data" style="margin-left: 12px;"></span>
+                    }
+                    else
+                    {
+                        <span @onclick:stopPropagation="true">
+                            @foreach (var dataRow in context.ResourceRow.TelemetryData)
+                            {
+                                <FluentButton Appearance="Appearance.Lightweight"
+                                              IconEnd="@dataRow.Icon"
+                                              OnClick="@(() => NavigateToDataPage(dataRow))"
+                                              Title="@GetDataTypeDisplayName(dataRow.DataType)"
+                                              aria-label="@GetDataTypeDisplayName(dataRow.DataType)"
+                                              Style="margin-right: 4px;" />
+                            }
+                        </span>
+                    }
                 }
             </TemplateColumn>
         </ChildContent>
@@ -125,7 +132,7 @@
         <FluentButton IconStart="@(new Icons.Regular.Size16.ArrowDownload())"
                       OnClick="ExportSelectedAsync"
                       Loading="@_isExporting"
-                      Disabled="@AreNoneSelected()"
+                      Disabled="@AreNoneExportableSelected()"
                       Title="@Loc[nameof(Dialogs.ManageDataExportButtonText)]"
                       aria-label="@Loc[nameof(Dialogs.ManageDataExportButtonText)]">
             @Loc[nameof(Dialogs.ManageDataExportButtonText)]

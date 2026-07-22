@@ -205,6 +205,15 @@ internal static class InteractionExports
     }
 
     /// <summary>
+    /// Creates a file input.
+    /// </summary>
+    [AspireExport]
+    public static InteractionInputBuilder CreateFileInput(this IInteractionService interactionService, string name, CreateInteractionInputOptions? options = null)
+    {
+        return InteractionInputBuilder.Create(name, InputType.File, options);
+    }
+
+    /// <summary>
     /// Creates a choice input that selects from a list of options.
     /// </summary>
     /// <param name="interactionService">The interaction service.</param>
@@ -243,7 +252,7 @@ internal static class InteractionExports
     // are sent back to the polyglot caller. The caller only consumes data fields such as Name, Value and Options.
     internal static InteractionInput ToResultInput(InteractionInput input)
     {
-        return new InteractionInput
+        var result = new InteractionInput
         {
             Name = input.Name,
             Label = input.Label,
@@ -257,8 +266,18 @@ internal static class InteractionExports
             AllowCustomChoice = input.AllowCustomChoice,
             Disabled = input.Disabled,
             MaxLength = input.MaxLength,
+            MaxFileSize = input.MaxFileSize,
+            AllowMultipleFiles = input.AllowMultipleFiles,
+            FileFilter = input.FileFilter,
             // DynamicLoading is intentionally omitted: it holds the non-serializable LoadCallback delegate.
         };
+
+        if (input.Files is { Count: > 0 })
+        {
+            result.SetFiles(input.Files);
+        }
+
+        return result;
     }
 }
 
@@ -297,6 +316,9 @@ internal sealed class InteractionInputBuilder
             AllowCustomChoice = options?.AllowCustomChoice ?? false,
             Disabled = options?.Disabled ?? false,
             MaxLength = options?.MaxLength,
+            MaxFileSize = options?.MaxFileSize,
+            AllowMultipleFiles = options?.AllowMultipleFiles ?? false,
+            FileFilter = options?.FileFilter,
         };
 
         return new InteractionInputBuilder(input);
@@ -519,6 +541,21 @@ internal sealed class CreateInteractionInputOptions
     /// Gets or sets the maximum length for text inputs.
     /// </summary>
     public int? MaxLength { get; init; }
+
+    /// <summary>
+    /// Gets or sets the maximum file size in bytes for file inputs.
+    /// </summary>
+    public long? MaxFileSize { get; init; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs.
+    /// </summary>
+    public bool? AllowMultipleFiles { get; init; }
+
+    /// <summary>
+    /// Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute.
+    /// </summary>
+    public string? FileFilter { get; init; }
 }
 
 /// <summary>

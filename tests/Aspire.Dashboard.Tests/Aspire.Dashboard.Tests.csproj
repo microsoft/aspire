@@ -37,7 +37,6 @@
 
   <ItemGroup>
     <Compile Include="$(TestsSharedDir)TestDashboardTelemetrySender.cs" Link="shared/TestDashboardTelemetrySender.cs" />
-    <Compile Include="$(TestsSharedDir)TestAIContextProvider.cs" Link="shared/TestAIContextProvider.cs" />
     <Compile Include="$(TestsSharedDir)TestStringLocalizer.cs" Link="shared/TestStringLocalizer.cs" />
     <Compile Include="$(TestsSharedDir)TestDialogService.cs" Link="shared/TestDialogService.cs" />
     <Compile Include="$(TestsSharedDir)TestDashboardClient.cs" Link="shared/TestDashboardClient.cs" />

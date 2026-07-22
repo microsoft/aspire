@@ -172,6 +172,9 @@ internal sealed class ApplicationOrchestrator
         {
             case KnownResourceTypes.Project:
             case KnownResourceTypes.Executable:
+            // A Tool (e.g. DotnetToolResource) is realized as a DCP Executable and only differs from a plain
+            // executable in how the dashboard renders it, so it needs the same Starting-state transition and initial health reports.
+            case KnownResourceTypes.Tool:
                 await PublishUpdateAsync(_notificationService, context.Resource, context.DcpResourceName, s => s with
                 {
                     State = KnownResourceStates.Starting,

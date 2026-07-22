@@ -855,4 +855,197 @@ public class TelemetryApiServiceTests
         Assert.NotNull(hexSpanId);
         return Encoding.UTF8.GetString(Convert.FromHexString(hexSpanId));
     }
+
+    [Fact]
+    public void GetSpans_WithReplicatedResourceName_DoesNotThrow()
+    {
+        // When multiple replicas share the same base ResourceName, the resource resolver
+        // must not throw InvalidOperationException from SingleOrDefault. It should treat
+        // the ambiguous base name as unresolved and return no spans.
+        var repository = CreateRepository();
+
+        // Add two replicas of the same service with different instance IDs.
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "myapp", instanceId: "replica-1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "s1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
+            }
+        });
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "myapp", instanceId: "replica-2"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t2", spanId: "s2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3)) } } }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        // Querying by the base name "myapp" should not throw — it returns null (unresolved).
+        var result = service.GetSpans(resourceNames: ["myapp"], traceId: null, hasError: null, limit: null);
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetSpans_WithCompositeResourceKey_ResolvesReplica()
+    {
+        // When the caller uses the composite ResourceKey string (e.g. "myapp-replica-1"),
+        // the resolver should find the exact replica.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "myapp", instanceId: "replica-1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "s1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
+            }
+        });
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "myapp", instanceId: "replica-2"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t2", spanId: "s2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3)) } } }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        // The ResourceKey for the first replica. OtlpResource composes it as "name-instanceId".
+        var resources = repository.GetResources();
+        var replica1Key = resources.First(r => r.ResourceKey.InstanceId == "replica-1").ResourceKey.ToString();
+
+        var result = service.GetSpans(resourceNames: [replica1Key], traceId: null, hasError: null, limit: null);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithResourceNameMatchingCompositeResourceKey_ReturnsNull()
+    {
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api-1", instanceId: "standalone"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "standalone", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: "1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t2", spanId: "replica", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3)) } } }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: ["api-1"], traceId: null, hasError: null, limit: null);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetSpans_WithAmbiguousCompositeResourceKey_ReturnsNull()
+    {
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api-a", instanceId: "1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "first", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: "a-1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t2", spanId: "second", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3)) } } }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: ["api-a-1"], traceId: null, hasError: null, limit: null);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetSpans_WithBaseResourceNameAndMixedInstanceIds_ReturnsNull()
+    {
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: null),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "singleton", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
+            },
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "api", instanceId: "1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t2", spanId: "replica", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3)) } } }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: ["api"], traceId: null, hasError: null, limit: null);
+
+        Assert.Null(result);
+    }
+
+    [Fact]
+    public void GetSpans_WithUniqueResourceName_ResolvesDirectly()
+    {
+        // When only one resource matches the base name, it should resolve directly.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "unique-service", instanceId: "inst1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "s1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: ["unique-service"], traceId: null, hasError: null, limit: null);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ReturnedCount);
+    }
+
+    [Fact]
+    public void GetSpans_WithDifferentCaseResourceName_ResolvesCaseInsensitively()
+    {
+        // Resource names are case-insensitive throughout the dashboard.
+        var repository = CreateRepository();
+
+        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "myapp", instanceId: "inst1"),
+                ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "s1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
+            }
+        });
+
+        var service = CreateService(repository);
+
+        var result = service.GetSpans(resourceNames: ["MYAPP"], traceId: null, hasError: null, limit: null);
+
+        Assert.NotNull(result);
+        Assert.Equal(1, result.ReturnedCount);
+    }
 }

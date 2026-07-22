@@ -769,13 +769,13 @@ internal sealed partial class InternalMicrosoftDetector : IInternalMicrosoftDete
             _executionContext.WorkingDirectory,
             options);
 
-        if (!execution.Start())
-        {
-            return new ProcessResult(ExitCode: -1, stdout.ToString(), stderr.ToString());
-        }
-
         try
         {
+            if (!await execution.StartAsync(timeoutCts.Token).ConfigureAwait(false))
+            {
+                return new ProcessResult(ExitCode: -1, stdout.ToString(), stderr.ToString());
+            }
+
             var exitCode = await execution.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
             return new ProcessResult(exitCode, stdout.ToString(), stderr.ToString());
         }

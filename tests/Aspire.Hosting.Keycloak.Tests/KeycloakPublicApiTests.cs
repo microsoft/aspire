@@ -6,7 +6,7 @@ using Aspire.Hosting.Utils;
 
 namespace Aspire.Hosting.Keycloak.Tests;
 
-public class KeycloakPublicApiTests
+public class KeycloakPublicApiTests(ITestOutputHelper outputHelper)
 {
     [Theory]
     [InlineData(true)]
@@ -150,12 +150,12 @@ public class KeycloakPublicApiTests
     public async Task WithRealmImportDirectoryAddsContainerFilesAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var resourceName = "keycloak";
         var keycloak = builder.AddKeycloak(resourceName);
 
-        keycloak.WithRealmImport(tempDirectory.Path);
+        keycloak.WithRealmImport(workspace.Path);
 
         using var app = builder.Build();
         var keycloakResource = builder.Resources.Single(r => r.Name.Equals(resourceName, StringComparison.Ordinal));
@@ -171,10 +171,10 @@ public class KeycloakPublicApiTests
     public async Task WithRealmImportFileAddsContainerFilesAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var file = "realm.json";
-        var filePath = Path.Combine(tempDirectory.Path, file);
+        var filePath = Path.Combine(workspace.Path, file);
         File.WriteAllText(filePath, string.Empty);
 
         var resourceName = "keycloak";

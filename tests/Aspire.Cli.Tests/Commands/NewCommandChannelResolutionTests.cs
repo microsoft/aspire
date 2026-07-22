@@ -35,7 +35,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommand_DoesNotConsultGlobalConfigurationServiceForChannelKey()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var tripwireConfigService = new global::Aspire.Cli.Tests.TestServices.TestConfigurationService
         {
@@ -439,7 +439,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         TemplateRuntime runtime = TemplateRuntime.Cli,
         string? versionOptionArg = null)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var capturedInputs = new CapturedTemplateInputs();
 
