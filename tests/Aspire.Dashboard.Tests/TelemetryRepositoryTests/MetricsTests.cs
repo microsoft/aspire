@@ -1301,6 +1301,67 @@ public sealed class SqliteMetricsTests : MetricsTests
     protected override bool UseSqlite => true;
 
     [Fact]
+    public void GetInstrument_PopulateExemplarAttributesFalse_SkipsAttributes()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateResourceMetrics(CreateSumMetric(
+                metricName: "test",
+                startTime: s_queryTestTime.AddMinutes(1),
+                value: 1,
+                exemplars: [CreateExemplar(s_queryTestTime.AddMinutes(1), 2, [KeyValuePair.Create("key", "value")])]))
+        });
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("metric exemplar attributes test").Start();
+
+        var instrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue,
+            PopulateExemplarAttributes = false
+        });
+
+        var exemplar = Assert.Single(Assert.Single(Assert.Single(instrument!.Dimensions).Values).Exemplars);
+        Assert.Empty(exemplar.Attributes);
+        var queries = activities
+            .Where(activity => activity.ParentSpanId == parent.SpanId)
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!);
+        Assert.DoesNotContain(queries, query => query.Contains("telemetry_metric_exemplar_attributes", StringComparison.Ordinal));
+        Assert.Single(queries, query => query.Contains("ranked_metric_points", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void GetInstrument_WithoutTimeRange_SkipsMetricPointQueries()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            CreateResourceMetrics(CreateSumMetric("test", s_queryTestTime.AddMinutes(1)))
+        });
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+        using var parent = new Activity("metric metadata test").Start();
+
+        var instrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = CreateResource().GetResourceKey(),
+            MeterName = "test-meter",
+            InstrumentName = "test"
+        });
+
+        Assert.Empty(Assert.Single(instrument!.Dimensions).Values);
+        var queries = activities
+            .Where(activity => activity.ParentSpanId == parent.SpanId)
+            .Select(activity => (string)activity.GetTagItem("db.query.text")!);
+        Assert.DoesNotContain(queries, query => query.Contains("telemetry_metric_points", StringComparison.Ordinal));
+    }
+
+    [Fact]
     public void GetInstrument_StaggeredDimensionChanges_ReturnsDimensionTimelines()
     {
         var repository = CreateRepository();

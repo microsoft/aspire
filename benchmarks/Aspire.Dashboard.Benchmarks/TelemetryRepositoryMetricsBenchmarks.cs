@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using Aspire.Dashboard.Components;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
@@ -29,17 +30,19 @@ public class TelemetryRepositoryMetricsBenchmarks
     private const string MetricMeterName = "benchmark-meter";
     private const string MetricInstrumentName = "benchmark.metric";
     private const string HistogramMetricInstrumentName = "benchmark.histogram";
-    private static readonly TimeSpan s_metricDataDuration = TimeSpan.FromHours(12);
-    private static readonly TimeSpan s_metricDisplayDuration = TimeSpan.FromHours(12);
+    private static readonly TimeSpan s_metricDataDuration = TimeSpan.FromHours(6);
+    private static readonly TimeSpan s_metricDisplayDuration = TimeSpan.FromHours(6);
     private static readonly TimeSpan s_metricInterval = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan s_metricExemplarInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_metricDataPointInterval = MetricDataPointInterval.Get(s_metricDisplayDuration);
+    private static readonly TimeSpan s_metricHistoryDuration = TimeSpan.FromTicks(Math.Max(TimeSpan.FromSeconds(30).Ticks, s_metricDataPointInterval.Ticks));
     private static readonly ResourceKey s_metricResourceKey = new("benchmark-app", "benchmark-instance");
 
     private string _temporaryDirectory = null!;
     private SqliteTelemetryRepository _queryRepository = null!;
     private IReadOnlyList<MetricDimensionCursor> _incrementalCursors = null!;
 
-    [Params(1, 10)]
+    [Params(1, 5)]
     public int DimensionCount { get; set; }
 
     [GlobalSetup(Target = nameof(GetMetricsLongDuration))]
@@ -78,14 +81,14 @@ public class TelemetryRepositoryMetricsBenchmarks
     private void SetupIncremental(bool isHistogram, string instrumentName)
     {
         Setup(isHistogram);
-        var instrument = GetLongDurationInstrument(instrumentName, TimeSpan.FromMinutes(1));
+        var instrument = GetLongDurationInstrument(instrumentName, s_metricDataPointInterval);
         _incrementalCursors = instrument.Dimensions.Select(dimension =>
         {
             var latestValue = dimension.Values[^1];
             return new MetricDimensionCursor
             {
                 Attributes = dimension.Attributes,
-                StartTime = latestValue.End.Subtract(TimeSpan.FromMinutes(1))
+                StartTime = latestValue.End.Subtract(s_metricDataPointInterval)
             };
         }).ToArray();
     }
@@ -97,7 +100,7 @@ public class TelemetryRepositoryMetricsBenchmarks
         Directory.Delete(_temporaryDirectory, recursive: true);
     }
 
-    [Benchmark(Description = "TelemetryRepository: query 12h metrics display")]
+    [Benchmark(Description = "TelemetryRepository: query 6h metrics display")]
     public int GetMetricsLongDuration()
     {
         var instrument = GetLongDurationInstrument(MetricInstrumentName);
@@ -105,7 +108,7 @@ public class TelemetryRepositoryMetricsBenchmarks
         return instrument.Dimensions.Sum(dimension => dimension.Values.Count);
     }
 
-    [Benchmark(Description = "TelemetryRepository: query 12h histogram metrics display")]
+    [Benchmark(Description = "TelemetryRepository: query 6h histogram metrics display")]
     public int GetHistogramMetricsLongDuration()
     {
         var instrument = GetLongDurationInstrument(HistogramMetricInstrumentName);
@@ -114,35 +117,35 @@ public class TelemetryRepositoryMetricsBenchmarks
             dimension.Values.Count + dimension.Values.Sum(value => value.Exemplars.Count));
     }
 
-    [Benchmark(Description = "TelemetryRepository: query 12h metrics with 1m rollup")]
+    [Benchmark(Description = "TelemetryRepository: query 6h metrics with dashboard rollup")]
     public int GetMetricsLongDurationRollup()
     {
-        var instrument = GetLongDurationInstrument(MetricInstrumentName, TimeSpan.FromMinutes(1));
+        var instrument = GetLongDurationInstrument(MetricInstrumentName, s_metricDataPointInterval);
 
         return instrument.Dimensions.Sum(dimension => dimension.Values.Count);
     }
 
-    [Benchmark(Description = "TelemetryRepository: query 12h histogram metrics with 1m rollup")]
+    [Benchmark(Description = "TelemetryRepository: query 6h histogram metrics with dashboard rollup")]
     public int GetHistogramMetricsLongDurationRollup()
     {
-        var instrument = GetLongDurationInstrument(HistogramMetricInstrumentName, TimeSpan.FromMinutes(1));
+        var instrument = GetLongDurationInstrument(HistogramMetricInstrumentName, s_metricDataPointInterval);
 
         return instrument.Dimensions.Sum(dimension =>
             dimension.Values.Count + dimension.Values.Sum(value => value.Exemplars.Count));
     }
 
-    [Benchmark(Description = "TelemetryRepository: query incremental metrics with 1m rollup")]
+    [Benchmark(Description = "TelemetryRepository: query incremental metrics with dashboard rollup")]
     public int GetMetricsIncrementalRollup()
     {
-        var instrument = GetLongDurationInstrument(MetricInstrumentName, TimeSpan.FromMinutes(1), _incrementalCursors);
+        var instrument = GetLongDurationInstrument(MetricInstrumentName, s_metricDataPointInterval, _incrementalCursors);
 
         return instrument.Dimensions.Sum(dimension => dimension.Values.Count);
     }
 
-    [Benchmark(Description = "TelemetryRepository: query incremental histogram metrics with 1m rollup")]
+    [Benchmark(Description = "TelemetryRepository: query incremental histogram metrics with dashboard rollup")]
     public int GetHistogramMetricsIncrementalRollup()
     {
-        var instrument = GetLongDurationInstrument(HistogramMetricInstrumentName, TimeSpan.FromMinutes(1), _incrementalCursors);
+        var instrument = GetLongDurationInstrument(HistogramMetricInstrumentName, s_metricDataPointInterval, _incrementalCursors);
 
         return instrument.Dimensions.Sum(dimension =>
             dimension.Values.Count + dimension.Values.Sum(value => value.Exemplars.Count));
@@ -156,15 +159,16 @@ public class TelemetryRepositoryMetricsBenchmarks
         var endTime = _queryRepository.GetInstrumentLatestEndTime(s_metricResourceKey, MetricMeterName, instrumentName)
             ?? throw new InvalidOperationException($"Unable to find the benchmark metric '{instrumentName}' end time.");
 
-        // Match the dashboard metrics display query, which includes an extra 30 seconds for histogram calculations.
+        // Match the dashboard metrics display query, which includes one preceding rollup for histogram calculations.
         return _queryRepository.GetInstrument(new GetInstrumentRequest
         {
             ResourceKey = s_metricResourceKey,
             MeterName = MetricMeterName,
             InstrumentName = instrumentName,
-            StartTime = endTime.Subtract(s_metricDisplayDuration + TimeSpan.FromSeconds(30)),
+            StartTime = endTime.Subtract(s_metricDisplayDuration + s_metricHistoryDuration),
             EndTime = endTime,
             DataPointInterval = dataPointInterval,
+            PopulateExemplarAttributes = false,
             DimensionCursors = dimensionCursors ?? []
         }) ?? throw new InvalidOperationException($"Unable to find the benchmark metric '{instrumentName}'.");
     }
@@ -376,11 +380,7 @@ public class TelemetryRepositoryMetricsBenchmarks
     {
         public Config()
         {
-            AddJob(Job.Default
-                .WithWarmupCount(1)
-                .WithIterationCount(1)
-                .WithInvocationCount(1)
-                .WithUnrollFactor(1));
+            AddJob(Job.Dry);
 
             AddDiagnoser(MemoryDiagnoser.Default);
         }

@@ -47,6 +47,11 @@ public sealed class GetInstrumentRequest
     /// Gets the interval used to roll up data points within each dimension. A <see langword="null"/> value returns full-fidelity data.
     /// </summary>
     public TimeSpan? DataPointInterval { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether exemplar attributes should be populated.
+    /// </summary>
+    public bool PopulateExemplarAttributes { get; init; } = true;
 }
 
 /// <summary>
