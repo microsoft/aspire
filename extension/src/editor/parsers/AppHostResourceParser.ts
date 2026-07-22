@@ -72,7 +72,7 @@ export function getSupportedLanguageIds(): string[] {
     return [...ids];
 }
 
-function getFileExtension(filePath: string): string {
+export function getFileExtension(filePath: string): string {
     const lastDot = filePath.lastIndexOf('.');
     return lastDot >= 0 ? filePath.substring(lastDot).toLowerCase() : '';
 }

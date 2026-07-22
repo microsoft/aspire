@@ -78,9 +78,7 @@ fluent-toolbar::part(end) {
     --messagebar-warning-border-color: #f4bfab;
     --messagebar-info-background-color: #f5f5f5;
     --messagebar-info-border-color: #d1d1d1;
-    --chat-background-color: var(--neutral-layer-floating);
-    --chat-user-background-color: #f7f7f7;
-    --chat-codeblock-background-color: var(--neutral-fill-hover);
+    --codeblock-background-color: var(--neutral-fill-hover);
     --table-header-border-color: var(--neutral-stroke-rest);
     --table-body-border-color: #f2f2f2;
     --layout-toolbar-padding: calc(var(--design-unit) * 1.5px);
@@ -168,9 +166,7 @@ fluent-toolbar::part(end) {
     --messagebar-warning-border-color: #DA3B01;
     --messagebar-info-background-color: #141414;
     --messagebar-info-border-color: #666;
-    --chat-background-color: #212121;
-    --chat-user-background-color: #333;
-    --chat-codeblock-background-color: var(--neutral-layer-4);
+    --codeblock-background-color: var(--neutral-layer-4);
     --table-header-border-color: var(--neutral-stroke-rest);
     --table-body-border-color: #474747;
     /* overrides of default fluentui-blazor styling */
@@ -946,6 +942,10 @@ fluent-tooltip[anchor="dialog_close"] > div {
     text-overflow: ellipsis;
 }
 
+.aspire-menu-container.mobile-nav-menu fluent-menu-item {
+    scroll-margin-block: var(--mobile-nav-menu-focus-padding);
+}
+
 .aspire-menu-container fluent-menu-item.mobile-nav-menu-item-active {
     /* Mirror the desktop FluentAppBar selected treatment with an accent bar on
        the leading edge. position: relative anchors the ::before bar to the
@@ -981,13 +981,4 @@ fluent-tooltip[anchor="dialog_close"] > div {
 .filter-group > legend {
     font-size: var(--type-ramp-plus-2-font-size);
     font-weight: 500;
-}
-
-#chat-modal-dialog::part(control) {
-    background-color: var(--chat-background-color);
-    border: 1px solid var(--neutral-stroke-divider-rest);
-}
-
-fluent-dialog#chat-modal-dialog fluent-button[appearance=stealth]:not(:hover)::part(control) {
-    background: var(--chat-background-color);
 }

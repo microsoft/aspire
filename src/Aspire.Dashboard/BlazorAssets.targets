@@ -9,6 +9,32 @@
     NuGet package for each supported major runtime version.
   -->
 
+  <UsingTask
+    TaskName="RemoveUnsupportedBlazorEventProperties"
+    TaskFactory="RoslynCodeTaskFactory"
+    AssemblyFile="$(MSBuildToolsPath)\Microsoft.Build.Tasks.Core.dll">
+    <ParameterGroup>
+      <FilePaths ParameterType="Microsoft.Build.Framework.ITaskItem[]" Required="true" />
+    </ParameterGroup>
+    <Task>
+      <Using Namespace="System.IO" />
+      <Code Type="Fragment" Language="cs">
+<![CDATA[
+foreach (var filePath in FilePaths)
+{
+    var sourceText = File.ReadAllText(filePath.ItemSpec);
+    var updatedText = sourceText.Replace(",isComposing:t.isComposing", string.Empty);
+
+    if (updatedText != sourceText)
+    {
+        File.WriteAllText(filePath.ItemSpec, updatedText);
+    }
+}
+]]>
+      </Code>
+    </Task>
+  </UsingTask>
+
   <ItemGroup>
     <!--
       Download both asset packages to the NuGet global cache (no assembly reference added).
@@ -32,6 +58,11 @@
           DestinationFiles="$(MSBuildProjectDirectory)\wwwroot\framework\blazor.web.%(BlazorAssetPackage.Identity).js"
           SkipUnchangedFiles="true"
           OverwriteReadOnlyFiles="true" />
+
+        <!-- The dashboard is a net8.0 app that rolls forward to newer shared frameworks.
+          Some newer blazor.web.js assets include event fields that older compatible
+          runtimes reject as unknown JSON properties. -->
+        <RemoveUnsupportedBlazorEventProperties FilePaths="@(BlazorAssetPackage->'$(MSBuildProjectDirectory)\wwwroot\framework\blazor.web.%(Identity).js')" />
   </Target>
 
   <Target Name="CleanBlazorWebJs" AfterTargets="Clean">

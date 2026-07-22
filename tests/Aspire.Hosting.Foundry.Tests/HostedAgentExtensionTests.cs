@@ -3,7 +3,10 @@
 
 #pragma warning disable ASPIRECOMPUTE003 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
+using System.Net;
 using System.Runtime.CompilerServices;
+using System.Text;
+using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
 using Aspire.Hosting.Tests.Utils;
@@ -22,7 +25,7 @@ public class HostedAgentExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent();
+            .AsHostedAgent(HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
@@ -38,7 +41,7 @@ public class HostedAgentExtensionTests
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
             .WithHttpEndpoint(targetPort: 5000)
-            .AsHostedAgent();
+            .AsHostedAgent(HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
@@ -55,7 +58,7 @@ public class HostedAgentExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent();
+            .AsHostedAgent(HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
@@ -70,7 +73,7 @@ public class HostedAgentExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent();
+            .AsHostedAgent(HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
@@ -95,7 +98,7 @@ public class HostedAgentExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent();
+            .AsHostedAgent(HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
 
@@ -125,11 +128,7 @@ public class HostedAgentExtensionTests
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project, configuration =>
-            {
-                configuration.ContainerProtocolVersions.Clear();
-                configuration.ContainerProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"));
-            });
+            .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0");
 
         using var app = builder.Build();
 
@@ -156,16 +155,48 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void AsHostedAgent_InRunMode_WrapsConfigurationCallbackFailures()
+    public async Task AsHostedAgent_InRunMode_WithInvocationsProtocol_SendsJsonMessageRequestBody()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        var fakeHandler = new FakeHttpMessageHandler(HttpStatusCode.OK, "agent response", "text/plain");
+        builder.Services.AddHttpClient(string.Empty)
+            .ConfigurePrimaryHttpMessageHandler(() => fakeHandler);
+
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+        var agent = builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0");
+        var endpoint = Assert.Single(agent.Resource.Annotations.OfType<EndpointAnnotation>());
+        endpoint.AllocatedEndpoint = new AllocatedEndpoint(endpoint, "localhost", 1234);
+
+        using var app = builder.Build();
+        var arguments = new InteractionInputCollection(
+        [
+            new InteractionInput
+            {
+                Name = "message",
+                InputType = InputType.Text,
+                Value = "hello from dashboard"
+            }
+        ]);
+
+        var result = await app.ResourceCommands.ExecuteCommandAsync(agent.Resource, "send-message", arguments);
+
+        Assert.True(result.Success);
+        Assert.Equal("application/json", fakeHandler.RequestContentType);
+        Assert.Equal("hello from dashboard", JsonNode.Parse(fakeHandler.RequestContent!)?["message"]?.GetValue<string>());
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithWhitespaceProtocolVersion_Throws()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
 
-        var ex = Assert.Throws<InvalidOperationException>(() =>
+        var ex = Assert.Throws<ArgumentException>(() =>
             builder.AddPythonApp("agent", "./app.py", "main:app")
-                .AsHostedAgent(configuration => configuration.Cpu = 4.0m));
+                .AsHostedAgent(HostedAgentProtocol.Responses, "   "));
 
-        Assert.Contains("run mode", ex.Message);
-        Assert.IsType<ArgumentException>(ex.InnerException);
+        Assert.Equal("protocolVersion", ex.ParamName);
     }
 
     [Fact]
@@ -180,7 +211,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         Assert.NotNull(app);
     }
@@ -197,7 +228,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         Assert.NotNull(app);
     }
@@ -210,7 +241,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         Assert.NotNull(app);
     }
@@ -223,13 +254,101 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
         var hostedAgent = builder.Resources.OfType<AzureHostedAgentResource>().SingleOrDefault();
         Assert.NotNull(hostedAgent);
         Assert.Equal("agent-ha", hostedAgent.Name);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithProjectOnly_UsesDefaultResponsesProtocol()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project);
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal("2.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithProjectAndConfigure_UsesDefaultResponsesProtocolAndAppliesConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, options =>
+            {
+                options.Description = "configured agent";
+            });
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        Assert.Equal("configured agent", configuration.Description);
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal("2.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void AsHostedAgent_LegacyParameterlessOverload_UsesDefaultResponsesProtocol()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent();
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal("2.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void AsHostedAgent_LegacyConfigureOnlyOverload_UsesDefaultResponsesProtocolAndAppliesConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(options =>
+            {
+                options.Description = "configured agent";
+            });
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        Assert.Equal("configured agent", configuration.Description);
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal("2.0.0", protocol.Version);
     }
 
     [Fact]
@@ -240,7 +359,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         builder.AddProject<Project>("agent", launchProfileName: null)
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
@@ -273,7 +392,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         builder.AddProject<Project>("agent", launchProfileName: null)
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
@@ -294,7 +413,7 @@ public class HostedAgentExtensionTests
 
         builder.AddProject<Project>("agent", launchProfileName: null)
             .WithHttpEndpoint(targetPort: 9000, env: "DEFAULT_AD_PORT")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
@@ -328,19 +447,11 @@ public class HostedAgentExtensionTests
             Cpu = 1m,
             Memory = 2m,
             Metadata = { ["scenario"] = "unit-test" },
-            EnvironmentVariables = { ["MY_VAR"] = "my-value" },
-            Protocols =
-            {
-                new HostedAgentProtocolVersion
-                {
-                    Protocol = "invocations",
-                    Version = "1.0.0"
-                }
-            }
+            EnvironmentVariables = { ["MY_VAR"] = "my-value" }
         };
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgentForExport(project, options);
+            .AsHostedAgentForExport(project, HostedAgentProtocol.Invocations, "1.0.0", options);
 
         builder.Build();
 
@@ -354,7 +465,55 @@ public class HostedAgentExtensionTests
         Assert.Equal(2m, configuration.Memory);
         Assert.Equal("unit-test", configuration.Metadata["scenario"]);
         Assert.Equal("my-value", configuration.EnvironmentVariables["MY_VAR"]);
-        var protocol = Assert.Single(configuration.ContainerProtocolVersions);
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
+        Assert.Equal("1.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithConfigureCallback_EnsuresSelectedProtocolRemainsInConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0", configuration =>
+            {
+                configuration.ProtocolVersions.Clear();
+            });
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
+        Assert.Equal("1.0.0", protocol.Version);
+    }
+
+    [Fact]
+    public void AsHostedAgent_WithConfigureCallback_DoesNotDuplicateSelectedProtocol()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        var project = builder.AddFoundry("account")
+            .AddProject("my-project");
+
+        builder.AddPythonApp("agent", "./app.py", "main:app")
+            .AsHostedAgent(project, HostedAgentProtocol.Invocations, "1.0.0", configuration =>
+            {
+                configuration.ProtocolVersions.Add(new ProtocolVersionRecord(ProjectsAgentProtocol.Invocations, "1.0.0"));
+            });
+
+        builder.Build();
+
+        var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure!(configuration);
+
+        var protocol = Assert.Single(configuration.ProtocolVersions);
         Assert.Equal(ProjectsAgentProtocol.Invocations, protocol.Protocol);
         Assert.Equal("1.0.0", protocol.Version);
     }
@@ -386,27 +545,6 @@ public class HostedAgentExtensionTests
         Assert.Equal("my-value", envVars["MY_VAR"]);
     }
 
-    [Theory]
-    [InlineData("", "1.0.0", nameof(HostedAgentProtocolVersion.Protocol))]
-    [InlineData("invocations", "", nameof(HostedAgentProtocolVersion.Version))]
-    public void AsHostedAgent_WithInvalidProtocolOptions_ThrowsWithPropertyName(string protocol, string version, string expectedParamName)
-    {
-        var options = new HostedAgentOptions
-        {
-            Protocols =
-            {
-                new HostedAgentProtocolVersion
-                {
-                    Protocol = protocol,
-                    Version = version
-                }
-            }
-        };
-
-        var ex = Assert.Throws<ArgumentException>(() => options.ApplyTo(new HostedAgentConfiguration("test-image")));
-        Assert.Equal(expectedParamName, ex.ParamName);
-    }
-
     [Fact]
     public void GetAgentEndpointProtocols_MapsContainerProtocolsToEndpointProtocols()
     {
@@ -426,19 +564,24 @@ public class HostedAgentExtensionTests
     }
 
     [Fact]
-    public void AsHostedAgent_WithNullOptions_DoesNotSetConfigureCallback()
+    public void AsHostedAgent_WithNullOptions_StillSetsProtocolConfigureCallback()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var project = builder.AddFoundry("account")
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgentForExport(project, options: null);
+            .AsHostedAgentForExport(project, HostedAgentProtocol.Responses, "2.0.0", options: null);
 
         builder.Build();
 
         var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
-        Assert.Null(hostedAgent.Configure);
+        Assert.NotNull(hostedAgent.Configure);
+        var configuration = new HostedAgentConfiguration("test-image");
+        hostedAgent.Configure(configuration);
+        var protocol = Assert.Single(configuration.ProtocolVersions);
+        Assert.Equal(ProjectsAgentProtocol.Responses, protocol.Protocol);
+        Assert.Equal("2.0.0", protocol.Version);
     }
 
     [Fact]
@@ -447,7 +590,7 @@ public class HostedAgentExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
         var app = builder.AddPythonApp("agent", "./app.py", "main:app");
 
-        Assert.Throws<ArgumentNullException>(() => app.AsHostedAgentForExport(project: null!));
+        Assert.Throws<ArgumentNullException>(() => app.AsHostedAgentForExport(project: null!, HostedAgentProtocol.Responses, "2.0.0"));
     }
 
     [Fact]
@@ -456,7 +599,7 @@ public class HostedAgentExtensionTests
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent();
+            .AsHostedAgent(HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
@@ -472,7 +615,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         var app = builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
@@ -487,7 +630,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         builder.Build();
 
@@ -503,7 +646,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
 
@@ -548,7 +691,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
         var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
@@ -569,7 +712,7 @@ public class HostedAgentExtensionTests
             .AddProject("my-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         var hostedAgent = Assert.Single(builder.Resources.OfType<AzureHostedAgentResource>());
         var account = Assert.Single(builder.Resources.OfType<FoundryResource>());
@@ -602,9 +745,9 @@ public class HostedAgentExtensionTests
             .AddProject("other-project");
 
         builder.AddPythonApp("agent", "./app.py", "main:app")
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
         builder.AddPythonApp("agent2", "./app.py", "main:app")
-            .AsHostedAgent(otherProject);
+            .AsHostedAgent(otherProject, HostedAgentProtocol.Responses, "2.0.0");
 
         var hostedAgents = builder.Resources.OfType<AzureHostedAgentResource>().ToList();
         Assert.Equal(2, hostedAgents.Count);
@@ -620,6 +763,26 @@ public class HostedAgentExtensionTests
         Assert.Contains(account, targets);
         Assert.Contains(account2, targets);
 #pragma warning restore ASPIREAZURE003
+    }
+
+    private sealed class FakeHttpMessageHandler(HttpStatusCode statusCode, string responseBody, string mediaType) : HttpMessageHandler
+    {
+        public string? RequestContent { get; private set; }
+
+        public string? RequestContentType { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            RequestContent = request.Content is not null
+                ? await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false)
+                : null;
+            RequestContentType = request.Content?.Headers.ContentType?.MediaType;
+
+            return new HttpResponseMessage(statusCode)
+            {
+                Content = new StringContent(responseBody, Encoding.UTF8, mediaType)
+            };
+        }
     }
 
     private sealed class Project : IProjectMetadata

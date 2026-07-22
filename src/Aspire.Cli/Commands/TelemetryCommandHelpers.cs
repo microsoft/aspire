@@ -465,6 +465,11 @@ internal static class TelemetryCommandHelpers
         }
     }
 
+    /// <summary>
+    /// Resolves an OTLP resource name from the dashboard telemetry resources API into resource filters used by
+    /// CLI telemetry commands, telemetry export, and telemetry MCP tools. A unique composite name identifies one
+    /// replica, an ambiguous composite name is rejected, and a base resource name resolves all matching replicas.
+    /// </summary>
     public static bool TryResolveResourceNames(
         string? resourceName,
         IList<ResourceInfoJson> resources,
@@ -483,24 +488,12 @@ internal static class TelemetryCommandHelpers
             return false;
         }
 
-        // First, try exact match on display name (full instance name like "catalogservice-abc123")
-        var exactMatch = resources.FirstOrDefault(r =>
-            string.Equals(r.GetCompositeName(), resourceName, StringComparison.OrdinalIgnoreCase));
-        if (exactMatch is not null)
+        var matches = OtlpHelpers.ResolveResourceNameMatches(resourceName, ToOtlpResources(resources));
+        if (matches.Count > 0)
         {
-            resolvedResources = [exactMatch.GetCompositeName()];
-            return true;
-        }
-
-        // Then, try matching by base name to find all replicas
-        var matchingReplicas = resources
-            .Where(r => string.Equals(r.Name, resourceName, StringComparison.OrdinalIgnoreCase))
-            .Select(r => r.GetCompositeName())
-            .ToList();
-
-        if (matchingReplicas.Count > 0)
-        {
-            resolvedResources = matchingReplicas;
+            resolvedResources = matches
+                .Select(r => r.InstanceId is null ? r.ResourceName : $"{r.ResourceName}-{r.InstanceId}")
+                .ToList();
             return true;
         }
 
@@ -628,12 +621,12 @@ internal static class TelemetryCommandHelpers
     }
 
     /// <summary>
-    /// Converts an array of <see cref="ResourceInfoJson"/> to a list of <see cref="IOtlpResource"/> for use with <see cref="OtlpHelpers.GetResourceName"/>.
+    /// Converts resource information to a list of <see cref="IOtlpResource"/> values.
     /// </summary>
-    public static IReadOnlyList<IOtlpResource> ToOtlpResources(ResourceInfoJson[] resources)
+    public static IReadOnlyList<IOtlpResource> ToOtlpResources(IList<ResourceInfoJson> resources)
     {
-        var result = new IOtlpResource[resources.Length];
-        for (var i = 0; i < resources.Length; i++)
+        var result = new IOtlpResource[resources.Count];
+        for (var i = 0; i < resources.Count; i++)
         {
             result[i] = new SimpleOtlpResource(resources[i].Name, resources[i].InstanceId);
         }

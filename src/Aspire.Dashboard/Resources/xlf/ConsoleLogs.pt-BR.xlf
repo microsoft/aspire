@@ -32,6 +32,11 @@
         <target state="new">No logs found</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsNoLogsMatchFilter">
+        <source>No logs match the filter</source>
+        <target state="new">No logs match the filter</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsNoResourceSelected">
         <source>No resource selected</source>
         <target state="translated">Não há nenhum recurso selecionado</target>
@@ -67,6 +72,11 @@
         <target state="translated">Configurações</target>
         <note />
       </trans-unit>
+      <trans-unit id="ConsoleLogsTextFilter">
+        <source>Console logs filter</source>
+        <target state="new">Console logs filter</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ConsoleLogsTimestampHide">
         <source>Hide timestamps</source>
         <target state="translated">Ocultar carimbos de data/hora</target>
@@ -86,6 +96,16 @@
         <source>Unknown state</source>
         <target state="translated">Estado desconhecido</target>
         <note />
+      </trans-unit>
+      <trans-unit id="ConsoleLogsViewConsoleOption">
+        <source>Console logs</source>
+        <target state="new">Console logs</target>
+        <note>Option in the View dropdown that shows the resource's console logs.</note>
+      </trans-unit>
+      <trans-unit id="ConsoleLogsViewTerminalOption">
+        <source>Terminal</source>
+        <target state="new">Terminal</target>
+        <note>Option in the View dropdown that shows the resource's interactive terminal.</note>
       </trans-unit>
       <trans-unit id="ConsoleLogsWatchingLogs">
         <source>Watching logs...</source>
@@ -107,79 +127,24 @@
         <target state="translated">Status de log de serviço</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalHeader">
-        <source>Terminal</source>
-        <target state="new">Terminal</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalPageTitle">
-        <source>{0} terminal</source>
-        <target state="new">{0} terminal</target>
-        <note>{0} is an application name</note>
-      </trans-unit>
-      <trans-unit id="TerminalToolbarConnectingLabel">
-        <source>Connecting…</source>
-        <target state="new">Connecting…</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarConnectingTitle">
-        <source>Connecting to the terminal session…</source>
-        <target state="new">Connecting to the terminal session…</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarCurrentGrid">
-        <source>Current terminal grid</source>
-        <target state="new">Current terminal grid</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalToolbarDecreaseFontSize">
         <source>Decrease font size</source>
         <target state="new">Decrease font size</target>
         <note />
       </trans-unit>
-      <trans-unit id="TerminalToolbarFontSize">
-        <source>Terminal font size</source>
-        <target state="new">Terminal font size</target>
-        <note />
-      </trans-unit>
       <trans-unit id="TerminalToolbarGridSize">
-        <source>Terminal grid size</source>
-        <target state="new">Terminal grid size</target>
+        <source>Terminal dimensions</source>
+        <target state="new">Terminal dimensions</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarGridSizeAuto">
-        <source>Auto</source>
-        <target state="new">Auto</target>
+        <source>Fit</source>
+        <target state="new">Fit</target>
         <note />
       </trans-unit>
       <trans-unit id="TerminalToolbarIncreaseFontSize">
         <source>Increase font size</source>
         <target state="new">Increase font size</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarNoPrimaryTitle">
-        <source>No client currently owns primary input. Click to take it.</source>
-        <target state="new">No client currently owns primary input. Click to take it.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarPrimaryLabel">
-        <source>Primary</source>
-        <target state="new">Primary</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarPrimaryTitle">
-        <source>This tab owns primary input on the terminal session.</source>
-        <target state="new">This tab owns primary input on the terminal session.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarTakeControlLabel">
-        <source>Take control</source>
-        <target state="new">Take control</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="TerminalToolbarViewerTitle">
-        <source>Another client owns primary input. Click to take control.</source>
-        <target state="new">Another client owns primary input. Click to take control.</target>
         <note />
       </trans-unit>
     </body>

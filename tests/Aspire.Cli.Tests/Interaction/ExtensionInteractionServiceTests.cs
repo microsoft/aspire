@@ -30,7 +30,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         console.Profile.Capabilities.Links = true;
         console.Profile.Width = int.MaxValue;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [extension].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
         var consoleInteractionService = new ConsoleInteractionService(
@@ -72,7 +72,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
         });
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [extension].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
         var consoleInteractionService = new ConsoleInteractionService(

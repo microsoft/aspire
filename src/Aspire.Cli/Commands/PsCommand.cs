@@ -73,6 +73,7 @@ internal sealed partial class PsCommand : BaseCommand
     internal override HelpGroup HelpGroup => HelpGroup.AppCommands;
     private readonly IAuxiliaryBackchannelMonitor _backchannelMonitor;
     private readonly IEnvironment _environment;
+    private readonly OrphanedAppHostCollector _collector;
     private readonly ILogger<PsCommand> _logger;
     private static readonly Option<OutputFormat> s_formatOption = new("--format")
     {
@@ -87,12 +88,14 @@ internal sealed partial class PsCommand : BaseCommand
     public PsCommand(
         IAuxiliaryBackchannelMonitor backchannelMonitor,
         IEnvironment environment,
+        OrphanedAppHostCollector collector,
         ILogger<PsCommand> logger,
         CommonCommandServices services)
         : base("ps", PsCommandStrings.Description, services)
     {
         _backchannelMonitor = backchannelMonitor;
         _environment = environment;
+        _collector = collector;
         _logger = logger;
 
         Options.Add(s_formatOption);
@@ -109,6 +112,12 @@ internal sealed partial class PsCommand : BaseCommand
         {
             return await ExecuteFollowAsync(format, cancellationToken).ConfigureAwait(false);
         }
+
+        // Collect AppHosts whose launching CLI has died before listing, so the output reflects reality and
+        // leaked aspire-managed/AppHost processes are cleaned up. Best effort: CollectAsync swallows scan/stop
+        // failures (only cancellation propagates), so a collection hiccup never fails `aspire ps`. The listing
+        // scan below still surfaces its own failures.
+        await _collector.CollectAsync(cancellationToken).ConfigureAwait(false);
 
         // Scan for running AppHosts (same as ListAppHostsTool). JSON output must not go
         // through status rendering because non-interactive status text shares stdout.

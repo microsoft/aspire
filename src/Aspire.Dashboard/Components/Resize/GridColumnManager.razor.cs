@@ -9,8 +9,6 @@ namespace Aspire.Dashboard.Components.Resize;
 
 public partial class GridColumnManager : ComponentBase, IDisposable
 {
-    private const int AISidebarWidth = 480;
-
     private Dictionary<string, GridColumn> _columnById = null!;
     private float _availableFraction = 1;
     private ViewportInformation? _gridViewportInformation;
@@ -36,29 +34,25 @@ public partial class GridColumnManager : ComponentBase, IDisposable
         // To be safe, double check there is data available before accessing the properties.
         if (DimensionManager.HasViewportSize)
         {
-            SetViewportInformation(DimensionManager.ViewportSize, DimensionManager.IsAISidebarOpen);
+            SetViewportInformation(DimensionManager.ViewportSize);
         }
     }
 
     private void OnViewportSizeChanged(object sender, ViewportSizeChangedEventArgs e)
     {
-        SetViewportInformation(e.ViewportSize, e.IsAISidebarOpen);
+        SetViewportInformation(e.ViewportSize);
     }
 
-    private void SetViewportInformation(ViewportSize viewportSize, bool isAISidebarOpen)
+    private void SetViewportInformation(ViewportSize viewportSize)
     {
         ViewportInformation? newViewportInformation;
-        if (_availableFraction == 1 && !isAISidebarOpen)
+        if (_availableFraction == 1)
         {
             newViewportInformation = null;
         }
         else
         {
             var calculatedWidth = Convert.ToInt32(viewportSize.Width * _availableFraction);
-            if (isAISidebarOpen)
-            {
-                calculatedWidth -= AISidebarWidth;
-            }
 
             var calculatedViewportSize = new ViewportSize(
                 Math.Max(calculatedWidth, 0),
@@ -76,7 +70,7 @@ public partial class GridColumnManager : ComponentBase, IDisposable
     public void SetWidthFraction(float fraction)
     {
         _availableFraction = fraction;
-        SetViewportInformation(DimensionManager.ViewportSize, DimensionManager.IsAISidebarOpen);
+        SetViewportInformation(DimensionManager.ViewportSize);
     }
 
     /// <summary>

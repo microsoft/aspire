@@ -6,7 +6,7 @@
     var additionalButtonAttributes = new Dictionary<string, object>(AdditionalAttributes ?? ImmutableDictionary<string, object>.Empty)
     {
         { "aria-haspopup", "true" },
-        { "aria-expanded", _visible },
+        { "aria-expanded", _visible ? "true" : "false" },
         { "onkeydown", (KeyboardEventArgs args) => OnKeyDown(args) }
     };
 }
@@ -27,4 +27,4 @@
     }
 </FluentButton>
 
-<AspireMenu Anchor="@MenuButtonId" @bind-Open="@_visible" Items="_items" />
+<AspireMenu Anchor="@MenuButtonId" @bind-Open="@_visible" Items="_items" RestoreFocusOnItemClick="@RestoreFocusOnItemClick" />
