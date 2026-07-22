@@ -568,7 +568,12 @@ public class MSBuildTests(ITestOutputHelper outputHelper)
             repoRoot,
             additionalProperties);
         var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "fake-cli"));
-        File.WriteAllText(Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "dnx.exe" : "dnx"), "");
+        var dnxPath = Path.Combine(fakeCliDirectory.FullName, OperatingSystem.IsWindows() ? "dnx.exe" : "dnx");
+        File.WriteAllText(dnxPath, "");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(dnxPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
 
         CreateAppHostPackageDirectoryBuildFiles(appHostDirectory, repoRoot);
 

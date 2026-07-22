@@ -15,6 +15,8 @@
 | `ASPIRE010` | Warning | '\[ProjectName\]' is configured with AspireUseCliBundle=false. Some Aspire features require the Aspire CLI bundle. Set AspireUseCliBundle=true to enable those features, or suppress ASPIRE010 to continue without the bundle. | [src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets](../src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets) |
 | `ASPIRE011` | Error | '\[ProjectName\]' is configured with AspireCliInvocationMode=Dnx, but the dnx command could not be found on PATH. | [src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets](../src/Aspire.Hosting.AppHost/build/Aspire.Hosting.AppHost.in.targets) |
 
+Setting `AspireUseCliBundle=true` enables CLI delegation. When `aspire` is not available on `PATH` and `dnx` is available, the AppHost uses DNX noninteractively to restore and execute the exact `Aspire.Cli` version paired with its `Aspire.AppHost.Sdk` from the configured NuGet sources.
+
 ## Analyzer Warnings
 
 | Diagnostic ID | Severity | Description | Location |

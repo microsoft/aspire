@@ -34,7 +34,7 @@ internal static class CommandPathResolver
             foreach (var executableName in executableNames)
             {
                 var candidate = Path.Combine(directory, executableName);
-                if (seenPaths.Add(candidate) && File.Exists(candidate))
+                if (seenPaths.Add(candidate) && FileExistsAndIsExecutable(candidate))
                 {
                     yield return candidate;
                 }
@@ -47,6 +47,39 @@ internal static class CommandPathResolver
         return IsWindows()
             ? [$"{command}.exe", $"{command}.cmd", $"{command}.bat", command]
             : [command];
+    }
+
+    private static bool FileExistsAndIsExecutable(string path)
+    {
+        if (!File.Exists(path))
+        {
+            return false;
+        }
+
+#if NET
+        if (OperatingSystem.IsWindows())
+        {
+            return true;
+        }
+
+        try
+        {
+            const UnixFileMode ExecuteBits = UnixFileMode.UserExecute | UnixFileMode.GroupExecute | UnixFileMode.OtherExecute;
+
+            return (File.GetUnixFileMode(path) & ExecuteBits) != 0;
+        }
+        catch (IOException)
+        {
+            return false;
+        }
+        catch (UnauthorizedAccessException)
+        {
+            return false;
+        }
+#else
+        // .NET Framework only runs on Windows, where file existence is sufficient.
+        return true;
+#endif
     }
 
     private static bool IsWindows() => Path.DirectorySeparatorChar == '\\';
