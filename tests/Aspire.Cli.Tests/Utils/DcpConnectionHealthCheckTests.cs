@@ -57,6 +57,49 @@ public class DcpConnectionHealthCheckTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task TestConnectionAsync_WhenStartIsCanceledBeforeProcessStarts_PropagatesCancellationAndDisposesExecution()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var dcpDirectory = CreateDcpDirectoryWithExecutable(workspace);
+        TestProcessExecution? execution = null;
+        var processExecutionFactory = new TestProcessExecutionFactory
+        {
+            CreateExecutionWithFileNameCallback = (fileName, args, env, _, options) =>
+            {
+                var testExecution = new TestProcessExecution(
+                    fileName,
+                    args,
+                    env,
+                    options,
+                    (_, _, _) => Task.FromResult((0, (string?)null)),
+                    () => 1)
+                {
+                    ThrowOnHasExitedBeforeStart = true
+                };
+
+                execution = testExecution;
+                return testExecution;
+            }
+        };
+        var checker = new DcpConnectionChecker(
+            CertificateManager.Create(NullLogger.Instance, new HostEnvironment()),
+            processExecutionFactory,
+            CreateExecutionContext(workspace),
+            new HostEnvironment(),
+            NullLogger<DcpConnectionChecker>.Instance);
+        using var cancellation = new CancellationTokenSource();
+        cancellation.Cancel();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => checker.TestConnectionAsync(dcpDirectory.FullName, useDeveloperCertificate: false, cancellation.Token));
+
+        Assert.NotNull(execution);
+        Assert.False(execution.Started);
+        Assert.Equal(0, execution.KillCount);
+        Assert.Equal(1, execution.DisposeCount);
+    }
+
+    [Fact]
     public async Task CheckAsync_WhenDcpConnectionsSucceed_ReturnsSingleSuccessResult()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);

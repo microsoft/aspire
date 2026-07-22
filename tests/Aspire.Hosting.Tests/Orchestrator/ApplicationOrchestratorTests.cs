@@ -549,6 +549,29 @@ public class ApplicationOrchestratorTests(ITestOutputHelper testOutputHelper)
         Assert.Null(snapshotEvent.Snapshot.State?.Style);
     }
 
+    [Fact]
+    public async Task OnResourceStarting_ToolResourceType_TransitionsToStarting()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        builder.WithTestAndResourceLogging(testOutputHelper);
+
+        var resource = builder.AddResource(new CustomResource("tool"));
+
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var events = new DcpExecutorEvents();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+
+        var appOrchestrator = CreateOrchestrator(distributedAppModel, notificationService: resourceNotificationService, dcpEvents: events);
+        await appOrchestrator.RunApplicationAsync();
+
+        await events.PublishAsync(new OnResourceStartingContext(CancellationToken.None, KnownResourceTypes.Tool, resource.Resource, "tool-dcp"));
+
+        Assert.True(resourceNotificationService.TryGetCurrentState("tool-dcp", out var snapshotEvent));
+        Assert.Equal(KnownResourceStates.Starting, snapshotEvent.Snapshot.State?.Text);
+    }
+
     private ApplicationOrchestrator CreateOrchestrator(
         DistributedApplicationModel distributedAppModel,
         ResourceNotificationService notificationService,

@@ -151,13 +151,26 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
                 tap="${@: -1}"
                 org="${tap%%/*}"
                 repo="${tap##*/}"
-                mkdir -p "{{brewRepository}}/Library/Taps/$org/homebrew-$repo"
+                tap_root="{{brewRepository}}/Library/Taps/$org/homebrew-$repo"
+                mkdir -p "$tap_root/.github/workflows"
+                cat > "$tap_root/.github/workflows/tests.yml" <<'WORKFLOW'
+            jobs:
+              test:
+                options: --privileged
+            WORKFLOW
+                echo "# generated tap" > "$tap_root/README.md"
                 exit 0
                 ;;
               style|audit|info)
                 exit 0
                 ;;
               test-bot)
+                tap_root="{{brewRepository}}/Library/Taps/local/homebrew-aspire"
+                unexpected_file="$(find "$tap_root" -type f ! -path "$tap_root/Casks/aspire.rb" -print -quit)"
+                if [[ -n "$unexpected_file" ]]; then
+                  echo "Homebrew-generated file reached tap syntax validation: $unexpected_file" >&2
+                  exit 1
+                fi
                 exit 0
                 ;;
               install)
@@ -556,6 +569,25 @@ public class PRScriptInstallerModeTests(ITestOutputHelper testOutput)
 
         Assert.NotEqual(0, result.ExitCode);
         Assert.Contains("aspire --version failed after install", result.Output);
+    }
+
+    [Fact]
+    [RequiresTools(["ruby"])]
+    [SkipOnPlatform(TestPlatforms.Windows, "Bash script tests require bash shell")]
+    public async Task Bash_ValidateHomebrewCask_RemovesGeneratedTapTemplateBeforeSyntaxCheck()
+    {
+        using var env = new TestEnvironment();
+        var caskPath = Path.Combine(env.TempDirectory, "aspire.rb");
+        await File.WriteAllTextAsync(caskPath, "cask \"aspire\" do\n  version \"13.3.0\"\nend\n");
+        var mockBinDir = await CreateMockHomebrewBinAsync(env, aspireExitCode: 0);
+        using var cmd = new ScriptToolCommand("eng/homebrew/validate-cask-artifact.sh", env, _testOutput);
+        cmd.WithEnvironmentVariable("PATH", $"{mockBinDir}{Path.PathSeparator}/usr/bin:/bin:/usr/sbin:/sbin");
+
+        var result = await cmd.ExecuteAsync(
+            "--cask-file", caskPath,
+            "--validation-mode", "LiveArchives");
+
+        result.EnsureSuccessful();
     }
 
     [Fact]

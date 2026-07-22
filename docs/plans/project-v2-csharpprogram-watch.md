@@ -295,6 +295,21 @@ predicate; fallback: a dedicated prepare path or a distinct launch type). Preser
 **Verify:** F5/debug of a `DotnetProjectResource` (no watch) from a C# app host and the Aspire VS Code extension;
 debug behavior matches `AddProject`. *Depends on: 1.* **(R1)**
 
+**Status: ⚠️ Implementation complete; manual F5 verification not recorded.** DCP now treats an
+`ExecutableResource` carrying `IProjectMetadata` and `"project"` debug support as a project launch.
+`DotnetProjectResource` therefore gets launch-profile and Debug/NoDebug handling, is classified/rendered as a
+project, and passes only application arguments to the IDE. Project launches and other debug integrations that
+rewrite arguments deliberately have no Process fallback; persistent resources and IDEs without `"project"`
+support keep the normal process launch.
+
+The VS Code project debugger was extended for file-based `.cs` resources. It resolves the program through
+`dotnet run-api`, retains the built-DLL host prefix when `dotnet` is the launcher, and keeps the selected or
+disabled launch profile authoritative for application arguments, working directory, and environment while
+preserving required `DOTNET_ROOT*` host variables.
+
+Automated coverage exercises the DCP, package, snapshot, and extension behavior above. The C# app-host + VS Code
+F5 check in **Verify** remains unconfirmed. *(Watch-mode debugging remains out of scope; see Session 9.)*
+
 ### Session 3 — Core run sub-mode state (minimal, no mechanics)
 Add `IsWatch`/`RunSubMode` to `DistributedApplicationExecutionContext(+Options)`; populate from a CLI config
 key in `DistributedApplicationBuilder` (mirror `Publishing:Publisher`). No watch logic in core. **Verify:**
@@ -360,7 +375,8 @@ limitations (no watch-debug, no partial runs yet), `ASPIREDOTNETPROJECT001`. *De
                       ▲           ▲
                       └─ (4,5) ───┘
 ```
-Session 1 (✅ complete) is the root. Sessions 1b (✅ complete), 2, 4, 5 parallelize after 1; session 3 is independent.
+Session 1 (✅ complete) is the root. Sessions 1b (✅ complete) and 2 (✅ complete) are done; sessions 4, 5
+parallelize after 1; session 3 is independent.
 Service watch (6) needs 3+4+5; CLI `--watch` (7) needs 6+3; app-host watch (8) needs 7+4; tests/docs (9) last.
 Session 1b (the playground dogfood harness) is extended by session 9.
 

@@ -2649,14 +2649,17 @@ public class DotNetCliRunnerTests(ITestOutputHelper outputHelper)
 
         public int ProcessId => Environment.ProcessId;
 
+        public DateTimeOffset? StartTime => DateTimeOffset.UtcNow;
+
         public bool HasExited => _started;
 
         public int ExitCode => exitCode;
 
-        public bool Start()
+        public Task<bool> StartAsync(CancellationToken cancellationToken)
         {
+            cancellationToken.ThrowIfCancellationRequested();
             _started = true;
-            return true;
+            return Task.FromResult(true);
         }
 
         public Task<int> WaitForExitAsync(CancellationToken cancellationToken) => Task.FromResult(exitCode);

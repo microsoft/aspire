@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 #pragma warning disable ASPIREACANAMING001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREACANAMING002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Text.Json.Nodes;
 using Aspire.Hosting.ApplicationModel;
@@ -900,6 +901,12 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
             base.ResolveProperties(construct, options);
         }
+    }
+
+    private sealed class BicepIdentifierManagedEnvironmentNameResolver : ResourceNamePropertyResolver
+    {
+        public override BicepValue<string>? ResolveName(ProvisioningBuildOptions options, ProvisionableResource resource, ResourceNameRequirements requirements)
+            => resource is ContainerAppManagedEnvironment ? new BicepValue<string>(resource.BicepIdentifier) : null;
     }
 
     [Fact]
@@ -1865,8 +1872,10 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
 
         var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path, step: "publish-manifest");
 
-        var env1 = builder.AddAzureContainerAppEnvironment("env1");
-        var env2 = builder.AddAzureContainerAppEnvironment("env2");
+        var env1 = builder.AddAzureContainerAppEnvironment("env1")
+            .WithUniqueResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("env2")
+            .WithUniqueResourceNaming();
 
         builder.AddContainer("api1", "myimage")
             .WithComputeEnvironment(env1);
@@ -1880,6 +1889,426 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         await app.RunAsync();
 
         await VerifyFile(Path.Combine(workspace.Path, "aspire-manifest.json"));
+    }
+
+    [Fact]
+    public async Task MultipleAzureContainerAppEnvironmentsGenerateDistinctManagedEnvironmentNames()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Two environments in the same AppHost (and therefore the same resource group). Opting into
+        // unique naming keeps each resource name's digits so the environments get distinct names.
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithUniqueResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2")
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResources = model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
+        Assert.Equal(2, envResources.Count);
+
+        // Look up each environment by resource name rather than relying on the enumeration
+        // order of model.Resources, which isn't guaranteed and would make the assertions below
+        // flip (and fail) even when the naming behavior is correct.
+        var env1Resource = Assert.Single(envResources, r => r.Name == "cae1");
+        var env2Resource = Assert.Single(envResources, r => r.Name == "cae2");
+
+        var (_, bicep1) = await GetManifestWithBicep(env1Resource);
+        var (_, bicep2) = await GetManifestWithBicep(env2Resource);
+
+        var name1 = GetManagedEnvironmentNameExpression(bicep1);
+        var name2 = GetManagedEnvironmentNameExpression(bicep2);
+
+        // Both environments deploy to the same resource group, so their generated
+        // 'name:' expressions must differ. When they don't, the two symbolic
+        // environments collapse onto a single physical Azure Container Apps
+        // environment and concurrent container-app writes race with
+        // ManagedEnvironmentOperationInProgress. See
+        // https://github.com/microsoft/aspire/issues/18722.
+        Assert.NotEqual(name1, name2);
+
+        // The generated name is computed with the same algorithm as every other Azure resource type
+        // (sanitized resource name + '-' separator + uniqueString(resourceGroup().id) suffix, truncated to the
+        // 60-character managed environment limit), keeping the trailing digit so the two environments differ.
+        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 60)", name1);
+        Assert.Equal("take('cae2-${uniqueString(resourceGroup().id)}', 60)", name2);
+    }
+
+    [Fact]
+    public async Task MultipleAzureContainerAppEnvironmentsShareManagedEnvironmentNameByDefault()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Without opting into unique naming, both environments fall through to Azure.Provisioning's default
+        // name, whose sanitizer keeps only lowercase letters and drops the trailing digit. This preserves the
+        // pre-existing (colliding) behavior so already-deployed environments are not renamed. Deploying more
+        // than one environment to a single resource group in this mode collapses them onto one physical
+        // environment (the reason WithUniqueResourceNaming exists). See
+        // https://github.com/microsoft/aspire/issues/18722.
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1");
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2");
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResources = model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
+        Assert.Equal(2, envResources.Count);
+
+        var env1Resource = Assert.Single(envResources, r => r.Name == "cae1");
+        var env2Resource = Assert.Single(envResources, r => r.Name == "cae2");
+
+        var (_, bicep1) = await GetManifestWithBicep(env1Resource);
+        var (_, bicep2) = await GetManifestWithBicep(env2Resource);
+
+        var name1 = GetManagedEnvironmentNameExpression(bicep1);
+        var name2 = GetManagedEnvironmentNameExpression(bicep2);
+
+        Assert.Equal("take('cae${uniqueString(resourceGroup().id)}', 24)", name1);
+        Assert.Equal(name1, name2);
+    }
+
+    [Fact]
+    public async Task MultipleAzureContainerAppEnvironmentsWithCollidingLegacyNamesFailPublish()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1");
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2");
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
+
+        Assert.Equal(
+            "Azure Container App environments 'cae1', 'cae2' resolve to take('cae${uniqueString(resourceGroup().id)}', 24). " +
+            "Multiple environments with the same managed environment name cannot be deployed to one resource group. " +
+            "For environments using the default naming convention, call 'WithUniqueResourceNaming()'.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task ExcludedAzureContainerAppEnvironmentDoesNotParticipateInCollisionValidation()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var includedEnvironment = builder.AddAzureContainerAppEnvironment("cae1");
+        builder.AddAzureContainerAppEnvironment("cae2")
+            .ExcludeFromManifest();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(includedEnvironment);
+
+        using var app = builder.Build();
+
+        await app.RunAsync();
+    }
+
+    [Fact]
+    public async Task DirectlyAddedAzureContainerAppEnvironmentDoesNotRequireContainerAppsValidationStep()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureProvisioning();
+        builder.AddResource(new AzureContainerAppEnvironmentResource("env", _ => { }));
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+    }
+
+    [Fact]
+    public async Task WithUniqueResourceNamingPreservesDigitsInManagedEnvironmentName()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Opting into unique naming keeps the resource name's trailing digit, so the environment name is
+        // distinct from other digit-suffixed environments in the same resource group.
+        var env = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResource = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+
+        var (_, bicep) = await GetManifestWithBicep(envResource);
+
+        var name = GetManagedEnvironmentNameExpression(bicep);
+
+        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 60)", name);
+    }
+
+    [Fact]
+    public async Task WithUniqueResourceNamingComputesNameLikeStandardAzureResourceNaming()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // A hyphenated resource name normalizes to a bicep identifier with an underscore ("my_cae"). The managed
+        // environment character set doesn't allow underscores, so the sanitizer drops it exactly like it does for
+        // every other Azure resource type. This documents that WithUniqueResourceNaming is consistent with the
+        // standard naming algorithm rather than inventing a bespoke scheme.
+        var env = builder.AddAzureContainerAppEnvironment("my-cae")
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResource = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+
+        var (_, bicep) = await GetManifestWithBicep(envResource);
+
+        var name = GetManagedEnvironmentNameExpression(bicep);
+
+        Assert.Equal("take('mycae-${uniqueString(resourceGroup().id)}', 60)", name);
+    }
+
+    [Fact]
+    public async Task ConfiguredNameResolverWinsOverManagedEnvironmentNameFallback()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.Services.Configure<AzureProvisioningOptions>(options =>
+            options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new BicepIdentifierManagedEnvironmentNameResolver()));
+
+        var env = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var envResource = Assert.Single(model.Resources.OfType<AzureContainerAppEnvironmentResource>());
+
+        var bicep = envResource.GetBicepTemplateString();
+
+        var name = GetManagedEnvironmentNameExpression(bicep);
+
+        Assert.Equal("'cae1'", name);
+    }
+
+    [Fact]
+    public async Task ConfiguredNameResolverPreventsFalseLegacyCollision()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        builder.Services.Configure<AzureProvisioningOptions>(options =>
+            options.ProvisioningBuildOptions.InfrastructureResolvers.Insert(0, new BicepIdentifierManagedEnvironmentNameResolver()));
+
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1");
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2");
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await app.RunAsync();
+    }
+
+    [Fact]
+    public async Task UniqueNamingCollisionSuggestsRenamingOrExplicitResolver()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var env1 = builder.AddAzureContainerAppEnvironment("cae-1")
+            .WithUniqueResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "For environments already using 'WithUniqueResourceNaming()', rename one or more resources or configure an explicit name resolver.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task AzdNamingCollisionSuggestsRemovingAzdNamingOrExplicitNames()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithAzdResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2")
+            .WithAzdResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
+
+        Assert.Contains(
+            "For environments using 'WithAzdResourceNaming()', remove it or configure distinct managed environment names explicitly.",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task MixedAzdAndUniqueNamingDetectsEquivalentPhysicalNames()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = TestDistributedApplicationBuilder.Create(
+            DistributedApplicationOperation.Publish,
+            workspace.Path,
+            step: "publish-manifest");
+
+        var azdEnvironment = builder.AddAzureContainerAppEnvironment("azd")
+            .WithAzdResourceNaming();
+        var uniqueEnvironment = builder.AddAzureContainerAppEnvironment("cae")
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(azdEnvironment);
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(uniqueEnvironment);
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<DistributedApplicationException>(() => app.RunAsync());
+
+        Assert.Contains("'azd' resolve to 'cae-${resourceToken}'", exception.Message);
+        Assert.Contains("'cae' resolve to take('cae-${uniqueString(resourceGroup().id)}', 60)", exception.Message);
+    }
+
+    [Fact]
+    public void WithUniqueResourceNamingThrowsWhenBuilderIsNull()
+    {
+        Assert.Throws<ArgumentNullException>(() => AzureContainerAppExtensions.WithUniqueResourceNaming(null!));
+    }
+
+    [Fact]
+    public async Task WithCompactResourceNamingGeneratesDistinctManagedEnvironmentNames()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        // Compact naming doesn't set the managed environment name itself. Combined with unique naming, two
+        // compact environments in one resource group must still get distinct, digit-preserving names to avoid
+        // the collision in #18722.
+        var env1 = builder.AddAzureContainerAppEnvironment("cae1")
+            .WithCompactResourceNaming()
+            .WithUniqueResourceNaming();
+        var env2 = builder.AddAzureContainerAppEnvironment("cae2")
+            .WithCompactResourceNaming()
+            .WithUniqueResourceNaming();
+
+        builder.AddContainer("api1", "myimage")
+            .WithComputeEnvironment(env1);
+
+        builder.AddContainer("api2", "myimage")
+            .WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var envResources = model.Resources.OfType<AzureContainerAppEnvironmentResource>().ToList();
+        Assert.Equal(2, envResources.Count);
+
+        var env1Resource = Assert.Single(envResources, r => r.Name == "cae1");
+        var env2Resource = Assert.Single(envResources, r => r.Name == "cae2");
+
+        var (_, bicep1) = await GetManifestWithBicep(env1Resource);
+        var (_, bicep2) = await GetManifestWithBicep(env2Resource);
+
+        var name1 = GetManagedEnvironmentNameExpression(bicep1);
+        var name2 = GetManagedEnvironmentNameExpression(bicep2);
+
+        Assert.NotEqual(name1, name2);
+        Assert.Equal("take('cae1-${uniqueString(resourceGroup().id)}', 60)", name1);
+        Assert.Equal("take('cae2-${uniqueString(resourceGroup().id)}', 60)", name2);
+    }
+
+    private static string GetManagedEnvironmentNameExpression(string bicep)
+    {
+        // Extract the 'name:' line for the managed environment resource, e.g.:
+        //   resource cae1 'Microsoft.App/managedEnvironments@2025-07-01' = {
+        //     name: take('cae1-${uniqueString(resourceGroup().id)}', 60)
+        var match = System.Text.RegularExpressions.Regex.Match(
+            bicep,
+            @"'Microsoft\.App/managedEnvironments@[^']+'\s*=\s*\{\s*\r?\n\s*name:\s*(?<name>.+)");
+
+        Assert.True(match.Success, $"Could not find managed environment name in bicep:\n{bicep}");
+
+        return match.Groups["name"].Value.Trim();
     }
 
     [Fact]

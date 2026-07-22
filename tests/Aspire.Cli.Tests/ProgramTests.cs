@@ -6,6 +6,8 @@ using System.Text;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Utils;
+using Aspire.Shared;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Spectre.Console;
@@ -61,6 +63,27 @@ public class ProgramTests(ITestOutputHelper outputHelper)
         var output = writer.ToString();
         Assert.Contains("hello", output, StringComparison.Ordinal);
         Assert.DoesNotContain("\u001b", output, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public void AcquireBundleLeaseFromEnvironment_HoldsLeaseWhenBundleVersionDirectoryIsSet()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var versionDirectory = workspace.CreateDirectory("version");
+
+        {
+            using var result = RemoteExecutor.Invoke(static versionDirectory =>
+            {
+                Environment.SetEnvironmentVariable(BundleDiscovery.BundleVersionDirectoryEnvVar, versionDirectory);
+
+                using var lease = Program.AcquireBundleLeaseFromEnvironment(["run"]);
+
+                Assert.NotNull(lease);
+                Assert.True(BundleVersionLease.HasActiveLease(versionDirectory));
+            }, versionDirectory.FullName);
+        }
+
+        Assert.False(BundleVersionLease.HasActiveLease(versionDirectory.FullName));
     }
 
     [Fact]

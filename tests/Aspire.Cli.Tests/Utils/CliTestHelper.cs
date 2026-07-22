@@ -126,7 +126,6 @@ internal static class CliTestHelper
         services.AddSingleton(options.AddCommandPrompterFactory);
         services.AddSingleton(options.PublishCommandPrompterFactory);
         services.AddTransient(options.DotNetCliExecutionFactoryFactory);
-        services.AddTransient<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         services.AddTransient(options.DotNetCliRunnerFactory);
         services.AddTransient(options.NuGetPackageCacheFactory);
         services.AddSingleton<TemplateNuGetConfigService>();
@@ -171,7 +170,6 @@ internal static class CliTestHelper
         // Bundle layout services - return null/no-op implementations to trigger SDK mode fallback
         // This ensures backward compatibility: no layout found = use legacy SDK mode
         services.AddSingleton(options.LayoutDiscoveryFactory);
-        services.AddSingleton<IDetachedProcessLauncher, DefaultDetachedProcessLauncher>();
         services.AddTransient<LayoutProcessRunner>();
         services.AddTransient<ProcessTreeGracefulShutdownService>();
         // Mirror Program.cs so consumers (e.g. GuestAppHostProject) that depend on the
@@ -245,6 +243,7 @@ internal static class CliTestHelper
         services.AddTransient<NewCommand>();
         services.AddTransient<InitCommand>();
         services.AddTransient<AppHostLauncher>();
+        services.AddTransient<DcpWorkloadCleanupService>();
         services.AddTransient<RunCommand>();
         services.AddTransient<StopCommand>();
         services.AddTransient<StartCommand>();
@@ -795,13 +794,17 @@ internal sealed class TestBundleService(bool isBundle) : IBundleService
 
     public Layout.LayoutConfiguration? Layout { get; set; }
 
+    public Exception? EnsureExtractedException { get; set; }
+
     public Task EnsureExtractedAsync(CancellationToken cancellationToken = default) => Task.CompletedTask;
 
     public Task<BundleExtractResult> ExtractAsync(string destinationPath, bool force = false, CancellationToken cancellationToken = default)
         => Task.FromResult(isBundle ? BundleExtractResult.AlreadyUpToDate : BundleExtractResult.NoPayload);
 
     public Task<BundleLayoutLease?> EnsureExtractedAndAcquireLayoutAsync(string holderKind, string? commandName = null, CancellationToken cancellationToken = default)
-        => Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
+        => EnsureExtractedException is not null
+            ? Task.FromException<BundleLayoutLease?>(EnsureExtractedException)
+            : Task.FromResult(Layout is null ? null : new BundleLayoutLease(Layout, lease: null));
 
     public string? GetDefaultExtractDir(string processPath) => null;
 }

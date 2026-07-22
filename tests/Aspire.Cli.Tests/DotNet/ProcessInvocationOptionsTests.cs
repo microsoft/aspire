@@ -27,6 +27,8 @@ public sealed class ProcessInvocationOptionsTests
             KillEntireProcessTreeOnCancel = false,
             IsolateConsole = true,
             KillOnParentExit = true,
+            Detached = true,
+            EnvironmentVariableFilter = _ => false,
             GracefulShutdownSignaler = new RecordingGracefulSignaler(),
             ShutdownService = new TestGracefulShutdownWindow(),
         };

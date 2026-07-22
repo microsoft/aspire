@@ -50,6 +50,9 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
     [Inject]
     public required IJSRuntime JS { get; init; }
 
+    [Inject]
+    public required IServiceProvider ServiceProvider { get; init; }
+
     // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
     private const int EstimatedItemHeight = 32;
     private const int MenuVerticalPadding = 16;
@@ -190,6 +193,18 @@ public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 
     public async ValueTask DisposeAsync()
     {
+        if (_menu is { } menu)
+        {
+            // Remove this workaround once FluentMenu unregisters itself: https://github.com/microsoft/aspire/issues/18852
+            if (ServiceProvider.GetService<IMenuService>() is { } menuService)
+            {
+                menuService.Remove(menu);
+                menuService.OnMenuUpdated();
+            }
+
+            _menu = null;
+        }
+
         // Use try/finally so the DotNetObjectReference is always released, even if the
         // browser-side dispose call throws something other than JSDisconnectedException
         // (a transient JS error during teardown otherwise keeps this component rooted by
