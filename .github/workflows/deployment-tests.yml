@@ -298,6 +298,7 @@ jobs:
           providers=(
             Microsoft.Resources
             Microsoft.Authorization
+            Microsoft.Quota
             Microsoft.ManagedIdentity
             Microsoft.ContainerInstance
             Microsoft.OperationalInsights
@@ -383,76 +384,78 @@ jobs:
             echo "✅ All required resource providers registered."
           fi
 
-      # Ensure the target subscription has enough dedicated vCPU quota in the regions the
-      # deployment tests deploy into. Like provider registration above, this is per-subscription
-      # setup rather than a test concern: a fresh subscription starts with low compute quotas, so
-      # the AKS / Container Apps tests fail with QuotaExceeded (observed: standardDASv5Family in
-      # westus3 with a limit of 0). Read the current limit and only when it is below the target
-      # submit an increase request, so pointing the workflow at a new subscription self-heals.
-      # Best-effort and never fails the job: quota requests can route to manual review and are not
-      # guaranteed to be granted synchronously, so a still-short region surfaces its own
-      # QuotaExceeded error in the test that needs it.
-      - name: Ensure Azure compute quota
+      # Ensure the target subscription has enough quota for the resources the deployment tests
+      # provision. Like provider registration above, this is per-subscription setup rather than a
+      # test concern: a fresh subscription starts with low quotas, so tests fail with QuotaExceeded
+      # (observed: standardDASv5Family dedicated vCPUs in westus3 with a limit of 0). For each
+      # requested quota, read the current limit via the provider-agnostic Microsoft.Quota service
+      # and only when it is below the desired value submit an increase request, so pointing the
+      # workflow at a new subscription self-heals. Best-effort and never fails the job: quota
+      # requests can route to manual review and are not guaranteed to be granted synchronously, so a
+      # still-short quota surfaces its own QuotaExceeded error in the test that needs it.
+      - name: Ensure Azure quotas
+        env:
+          # Quotas to ensure, one per line: "provider location resourceName desiredLimit [resourceType]".
+          #   provider     - resource provider that owns the quota (e.g. Microsoft.Compute, Microsoft.Network)
+          #   location     - region the quota applies to; match the Azure__Location the tests deploy into
+          #   resourceName - the quota's resource name (e.g. standardDASv5Family, cores)
+          #   desiredLimit - both the minimum we accept and the value we request
+          #   resourceType - optional; compute vCPU quotas need it (dedicated | lowPriority), omit otherwise
+          # Add a line to cover a new provider, region, resource, or higher limit.
+          QUOTA_TARGETS: |
+            Microsoft.Compute westus3 standardDASv5Family 250 dedicated
         run: |
-          # family|location|min-cores of dedicated vCPUs. Extend as new regions/families are used;
-          # location must match the Azure__Location the tests deploy into.
-          quota_targets=(
-            "standardDASv5Family|westus3|250"
-          )
-
           sub="$ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION"
 
-          # 'az vm list-usage' is core CLI (no extension) and reports the current limit per family.
-          # Shape (one array element per family):
-          #   { "currentValue": 0, "limit": 0,
-          #     "name": { "localizedValue": "Standard DASv5 Family vCPUs",
-          #               "value": "standardDASv5Family" }, "unit": "Count" }
+          # az quota is the provider-agnostic way to read and request quotas, so it lives in an
+          # extension. Install once up front since every check below uses it.
+          az extension add --name quota --only-show-errors >/dev/null 2>&1 || true
+
+          # Read the current effective limit for a quota (works across providers). Shape of
+          # 'az quota show':
+          #   { "name": "standardDASv5Family",
+          #     "properties": { "limit": { "value": 100 }, "unit": "Count", ... } }
           read_limit() {
-            az vm list-usage --location "$2" \
-              --query "[?name.value=='$1'].limit | [0]" -o tsv 2>/dev/null || true
+            az quota show --resource-name "$2" --scope "$1" \
+              --query "properties.limit.value" -o tsv 2>/dev/null || true
           }
 
-          # 'az quota' lives in an extension and is only needed when a request is actually
-          # submitted, so install it lazily to keep a healthy subscription a pure read.
-          quota_ext_ready=""
-          ensure_quota_ext() {
-            [ -n "$quota_ext_ready" ] && return 0
-            az extension add --name quota --only-show-errors >/dev/null 2>&1 || true
-            quota_ext_ready=1
-          }
+          while read -r provider location name desired resource_type; do
+            [ -z "$provider" ] && continue
 
-          for entry in "${quota_targets[@]}"; do
-            IFS='|' read -r family location min <<<"$entry"
+            scope="/subscriptions/$sub/providers/$provider/locations/$location"
 
-            limit="$(read_limit "$family" "$location")"
+            limit="$(read_limit "$scope" "$name")"
             if [ -z "$limit" ] || ! [[ "$limit" =~ ^[0-9]+$ ]]; then
-              echo "⚠ Could not read $family quota in $location (got '${limit:-}'); skipping."
+              echo "⚠ Could not read $provider/$name quota in $location (got '${limit:-}'); skipping."
               continue
             fi
 
-            if [ "$limit" -ge "$min" ]; then
-              echo "✅ $family in $location: limit $limit ≥ $min, no request needed."
+            if [ "$limit" -ge "$desired" ]; then
+              echo "✅ $provider/$name in $location: limit $limit ≥ $desired, no request needed."
               continue
             fi
 
-            echo "$family in $location: limit $limit < $min; requesting increase to $min."
-            ensure_quota_ext
-            scope="/subscriptions/$sub/providers/Microsoft.Compute/locations/$location"
+            echo "$provider/$name in $location: limit $limit < $desired; requesting increase to $desired."
 
-            # A dedicated-vCPU quota override may not exist yet (only a default limit does), so try
-            # create (new override) first and fall back to update (adjust an existing override).
-            # Both submit a request to Microsoft.Quota that may auto-approve or route to manual
-            # review; neither is allowed to fail the job.
-            if az quota create --resource-name "$family" --scope "$scope" \
-                 --resource-type dedicated --limit-object value="$min" --only-show-errors >/dev/null 2>&1 \
-               || az quota update --resource-name "$family" --scope "$scope" \
-                 --resource-type dedicated --limit-object value="$min" --only-show-errors >/dev/null 2>&1; then
-              new="$(read_limit "$family" "$location")"
-              echo "  Request submitted for $family in $location (limit now: ${new:-unknown})."
+            # resource_type only applies to some providers (compute vCPU quotas need
+            # dedicated/lowPriority), so pass it only when the row supplies it.
+            rt_args=()
+            [ -n "$resource_type" ] && rt_args=(--resource-type "$resource_type")
+
+            # A quota override may not exist yet (only a default limit does), so try create (new
+            # override) first and fall back to update (adjust an existing override). Both submit a
+            # request to Microsoft.Quota that may auto-approve or route to manual review; neither is
+            # allowed to fail the job.
+            if az quota create --resource-name "$name" --scope "$scope" \
+                 --limit-object value="$desired" "${rt_args[@]}" --only-show-errors >/dev/null 2>&1 \
+               || az quota update --resource-name "$name" --scope "$scope" \
+                 --limit-object value="$desired" "${rt_args[@]}" --only-show-errors >/dev/null 2>&1; then
+              echo "  Request submitted for $provider/$name in $location (limit now: $(read_limit "$scope" "$name" || echo unknown))."
             else
-              echo "⚠ Quota request for $family in $location was not accepted (may need manual approval); continuing."
+              echo "⚠ Quota request for $provider/$name in $location was not accepted (may need manual approval); continuing."
             fi
-          done
+          done <<< "$QUOTA_TARGETS"
 
       - name: Verify Docker is running
         run: |
