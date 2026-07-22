@@ -25,6 +25,30 @@ public sealed partial class SqliteTelemetryRepository
     private const int HistogramPointType = 3;
     private const int MaxMetricPointBatchSize = 100;
     private const string MetricPointRangeFilterSql = "(@ApplyRange = 0 OR (p.start_time_ticks <= @EndTicks AND p.end_time_ticks >= @StartTicks) OR (p.start_time_ticks >= @StartTicks AND p.end_time_ticks <= @EndTicks))";
+    private const string SelectedMetricPointsCteSql = $"""
+        selected_metric_points AS (
+            SELECT p.*
+            FROM telemetry_metric_points p
+            WHERE p.dimension_id IN @DimensionIds
+              AND {MetricPointRangeFilterSql}
+        )
+        """;
+    private const string EffectiveMetricPointsCteSql = $"""
+        {SelectedMetricPointsCteSql},
+        ranked_metric_points AS (
+            SELECT
+                p.*,
+                ROW_NUMBER() OVER (
+                    PARTITION BY p.start_time_ticks, p.dimension_id
+                    ORDER BY p.point_id DESC) AS point_rank
+            FROM selected_metric_points p
+        ),
+        effective_metric_points AS (
+            SELECT *
+            FROM ranked_metric_points
+            WHERE point_rank = 1
+        )
+        """;
 
     private readonly MetricIngestionState _metricIngestionState = new();
 
@@ -259,7 +283,7 @@ public sealed partial class SqliteTelemetryRepository
             var latest = dimension.LatestPoint;
             var latestPointType = pendingLatest?.PointType ?? latest?.PointType;
             var latestEndTimeTicks = pendingLatest?.EndTimeTicks ?? latest?.EndTimeTicks;
-            var histogramCount = point.Count.ToString(CultureInfo.InvariantCulture);
+            var histogramCount = checked((long)point.Count);
             var sameCount = latestPointType == HistogramPointType &&
                 (pendingLatest?.HistogramCount ?? latest?.HistogramCount) == histogramCount;
             var endTimeTicks = OtlpHelpers.UnixNanoSecondsToDateTime(point.TimeUnixNano).Ticks;
@@ -297,7 +321,7 @@ public sealed partial class SqliteTelemetryRepository
                     HistogramSum = point.Sum,
                     HistogramCount = histogramCount,
                     Flags = (long)point.Flags,
-                    HistogramBucketCounts = point.BucketCounts.Select(count => count.ToString(CultureInfo.InvariantCulture)).ToArray(),
+                    HistogramBucketCounts = point.BucketCounts.Select(count => checked((long)count)).ToArray(),
                     HistogramExplicitBounds = point.ExplicitBounds.ToArray()
                 };
                 pendingPoint.Exemplars.AddRange(point.Exemplars);
@@ -774,42 +798,19 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         using var connection = _database.OpenConnection();
-        var dimensions = new List<DimensionScope>();
         var knownAttributeValues = new Dictionary<string, List<string?>>();
-        foreach (var instrument in instruments)
-        {
-            foreach (var dimension in MaterializeMetricDimensions(
-                connection,
-                instrument.InstrumentId,
-                instrument.Summary.Type == OtlpInstrumentType.Histogram,
-                request.StartTime,
-                request.EndTime))
-            {
-                var isFirst = dimensions.Count == 0;
-                foreach (var key in knownAttributeValues.Keys.Union(dimension.Attributes.Select(attribute => attribute.Key)).Distinct().ToList())
-                {
-                    if (!knownAttributeValues.TryGetValue(key, out var values))
-                    {
-                        values = [];
-                        knownAttributeValues.Add(key, values);
-                        if (!isFirst)
-                        {
-                            values.Add(null);
-                        }
-                    }
-                    var value = OtlpHelpers.GetValue(dimension.Attributes, key);
-                    if (!values.Contains(value))
-                    {
-                        values.Add(value);
-                    }
-                }
-                dimensions.Add(dimension);
-            }
-        }
+        var dimension = MaterializeMetricDimension(
+            connection,
+            instruments.Select(instrument => instrument.InstrumentId).ToArray(),
+            instruments[0].Summary.Type == OtlpInstrumentType.Histogram,
+            request.StartTime,
+            request.EndTime,
+            request.DimensionFilters,
+            knownAttributeValues);
         return new OtlpInstrumentData
         {
             Summary = instruments[0].Summary,
-            Dimensions = dimensions,
+            Dimensions = [dimension],
             KnownAttributeValues = knownAttributeValues,
             HasOverflow = instruments.Any(instrument => instrument.HasOverflow)
         };
@@ -870,82 +871,136 @@ public sealed partial class SqliteTelemetryRepository
         return instrument;
     }
 
-    private List<DimensionScope> MaterializeMetricDimensions(
+    private DimensionScope MaterializeMetricDimension(
         SqliteConnection connection,
-        long instrumentId,
+        IReadOnlyList<long> instrumentIds,
         bool isHistogram,
         DateTime? startTime,
-        DateTime? endTime)
+        DateTime? endTime,
+        IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters,
+        Dictionary<string, List<string?>> knownAttributeValues)
     {
-        var dimensionIds = connection.Query<long>("SELECT dimension_id FROM telemetry_metric_dimensions WHERE instrument_id = @InstrumentId ORDER BY dimension_id;", new { InstrumentId = instrumentId }).AsList();
-        var queryParameters = new DynamicParameters();
-        queryParameters.Add("DimensionIds", dimensionIds);
-        queryParameters.Add("ApplyRange", startTime is not null && endTime is not null);
-        queryParameters.Add("StartTicks", startTime?.Ticks ?? 0);
-        queryParameters.Add("EndTicks", endTime?.Ticks ?? 0);
+        var dimensionIds = connection.Query<long>("SELECT dimension_id FROM telemetry_metric_dimensions WHERE instrument_id IN @InstrumentIds ORDER BY dimension_id;", new { InstrumentIds = instrumentIds }).AsList();
         var attributes = connection.Query<OwnedAttributeRecord>("""
             SELECT dimension_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
             FROM telemetry_metric_dimension_attributes
             WHERE dimension_id IN @DimensionIds
             ORDER BY dimension_id, ordinal;
-            """, queryParameters).ToLookup(record => record.OwnerId);
+            """, new { DimensionIds = dimensionIds }).ToLookup(record => record.OwnerId);
+        PopulateKnownAttributeValues(dimensionIds, attributes, knownAttributeValues);
+
+        var selectedDimensionIds = dimensionIds
+            .Where(dimensionId => MatchesDimensionFilters(attributes[dimensionId], dimensionFilters))
+            .ToArray();
+        var queryParameters = new DynamicParameters();
+        queryParameters.Add("DimensionIds", selectedDimensionIds);
+        queryParameters.Add("ApplyRange", startTime is not null && endTime is not null);
+        queryParameters.Add("StartTicks", startTime?.Ticks ?? 0);
+        queryParameters.Add("EndTicks", endTime?.Ticks ?? 0);
         var points = connection.Query<MetricPointDataRecord>($"""
+            WITH {EffectiveMetricPointsCteSql},
+            aggregated_metric_points AS (
+                SELECT
+                    p.start_time_ticks AS PointId,
+                    p.point_type AS PointType,
+                    p.start_time_ticks AS StartTimeTicks,
+                    MAX(p.end_time_ticks) AS EndTimeTicks,
+                    MAX(p.repeat_count) AS RepeatCount,
+                    SUM(p.integer_value) AS IntegerValue,
+                    SUM(p.double_value) AS DoubleValue,
+                    SUM(p.histogram_sum) AS HistogramSum,
+                    SUM(p.histogram_count) AS HistogramCount
+                FROM effective_metric_points p
+                GROUP BY p.point_type, p.start_time_ticks
+            )
             SELECT
-                p.point_id AS PointId,
-                p.dimension_id AS DimensionId,
-                p.point_type AS PointType,
-                p.start_time_ticks AS StartTimeTicks,
-                p.end_time_ticks AS EndTimeTicks,
-                p.repeat_count AS RepeatCount,
-                p.integer_value AS IntegerValue,
-                p.double_value AS DoubleValue,
-                p.histogram_sum AS HistogramSum,
-                p.histogram_count AS HistogramCount
-            FROM telemetry_metric_points p
-            WHERE p.dimension_id IN @DimensionIds
-              AND {MetricPointRangeFilterSql}
-            ORDER BY p.dimension_id, p.point_id;
-            """, queryParameters).ToLookup(record => record.DimensionId);
+                p.PointId,
+                0 AS DimensionId,
+                p.PointType,
+                p.StartTimeTicks,
+                p.EndTimeTicks,
+                p.RepeatCount,
+                p.IntegerValue,
+                p.DoubleValue,
+                p.HistogramSum,
+                p.HistogramCount
+            FROM aggregated_metric_points p
+            ORDER BY p.StartTimeTicks;
+            """, queryParameters).AsList();
         var (bucketCounts, explicitBounds) = isHistogram
             ? MaterializeMetricHistogramData(connection, queryParameters)
             : (Array.Empty<MetricHistogramBucketRecord>().ToLookup(record => record.PointId),
                 Array.Empty<MetricHistogramBoundRecord>().ToLookup(record => record.PointId));
         var exemplars = MaterializeMetricExemplars(connection, queryParameters);
 
-        var results = new List<DimensionScope>(dimensionIds.Count);
-        foreach (var dimensionId in dimensionIds)
+        var result = new DimensionScope(_otlpContext.Options.MaxMetricsCount, []);
+        if (startTime is not null && endTime is not null)
         {
-            var dimension = new DimensionScope(
-                _otlpContext.Options.MaxMetricsCount,
-                attributes[dimensionId].Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray());
-            if (startTime is not null && endTime is not null)
+            foreach (var point in points)
             {
-                foreach (var point in points[dimensionId])
+                MetricValueBase value = point.PointType switch
                 {
-                    MetricValueBase value = point.PointType switch
+                    LongPointType => new MetricValue<long>(point.IntegerValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
+                    DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
+                    HistogramPointType => new HistogramValue(
+                        bucketCounts[point.PointId].Select(bucket => checked((ulong)bucket.BucketCount)).ToArray(),
+                        point.HistogramSum!.Value,
+                        checked((ulong)point.HistogramCount!.Value),
+                        new DateTime(point.StartTimeTicks, DateTimeKind.Utc),
+                        new DateTime(point.EndTimeTicks, DateTimeKind.Utc),
+                        explicitBounds[point.PointId].Select(bound => bound.ExplicitBound).ToArray()),
+                    _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
+                };
+                if (point.PointType != HistogramPointType)
+                {
+                    value.Count = checked((ulong)point.RepeatCount);
+                }
+                value.Exemplars.AddRange(exemplars[point.PointId]);
+                result.Values.Add(value);
+            }
+        }
+        return result;
+    }
+
+    private static bool MatchesDimensionFilters(IEnumerable<OwnedAttributeRecord> attributes, IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters)
+    {
+        foreach (var (key, values) in dimensionFilters)
+        {
+            var value = attributes.FirstOrDefault(attribute => attribute.AttributeKey == key)?.AttributeValue;
+            if (!values.Contains(value))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    private static void PopulateKnownAttributeValues(
+        IReadOnlyList<long> dimensionIds,
+        ILookup<long, OwnedAttributeRecord> attributes,
+        Dictionary<string, List<string?>> knownAttributeValues)
+    {
+        for (var dimensionIndex = 0; dimensionIndex < dimensionIds.Count; dimensionIndex++)
+        {
+            var dimensionId = dimensionIds[dimensionIndex];
+            foreach (var key in knownAttributeValues.Keys.Union(attributes[dimensionId].Select(attribute => attribute.AttributeKey)).Distinct().ToList())
+            {
+                if (!knownAttributeValues.TryGetValue(key, out var values))
+                {
+                    values = [];
+                    knownAttributeValues.Add(key, values);
+                    if (dimensionIndex > 0)
                     {
-                        LongPointType => new MetricValue<long>(point.IntegerValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
-                        DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
-                        HistogramPointType => new HistogramValue(
-                            bucketCounts[point.PointId].Select(bucket => ulong.Parse(bucket.BucketCount, CultureInfo.InvariantCulture)).ToArray(),
-                            point.HistogramSum!.Value,
-                            ulong.Parse(point.HistogramCount!, CultureInfo.InvariantCulture),
-                            new DateTime(point.StartTimeTicks, DateTimeKind.Utc),
-                            new DateTime(point.EndTimeTicks, DateTimeKind.Utc),
-                            explicitBounds[point.PointId].Select(bound => bound.ExplicitBound).ToArray()),
-                        _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
-                    };
-                    if (point.PointType != HistogramPointType)
-                    {
-                        value.Count = checked((ulong)point.RepeatCount);
+                        values.Add(null);
                     }
-                    value.Exemplars.AddRange(exemplars[point.PointId]);
-                    dimension.Values.Add(value);
+                }
+                var value = attributes[dimensionId].FirstOrDefault(attribute => attribute.AttributeKey == key)?.AttributeValue;
+                if (!values.Contains(value))
+                {
+                    values.Add(value);
                 }
             }
-            results.Add(dimension);
         }
-        return results;
     }
 
     private static (ILookup<long, MetricHistogramBucketRecord> BucketCounts, ILookup<long, MetricHistogramBoundRecord> ExplicitBounds) MaterializeMetricHistogramData(
@@ -953,20 +1008,24 @@ public sealed partial class SqliteTelemetryRepository
         DynamicParameters queryParameters)
     {
         var bucketCounts = connection.Query<MetricHistogramBucketRecord>($"""
-            SELECT b.point_id AS PointId, b.bucket_count AS BucketCount
+            WITH {EffectiveMetricPointsCteSql}
+            SELECT
+                p.start_time_ticks AS PointId,
+                SUM(b.bucket_count) AS BucketCount
             FROM telemetry_metric_histogram_bucket_counts b
-            JOIN telemetry_metric_points p ON p.point_id = b.point_id
-            WHERE p.dimension_id IN @DimensionIds
-              AND {MetricPointRangeFilterSql}
-            ORDER BY b.point_id, b.ordinal;
+            JOIN effective_metric_points p ON p.point_id = b.point_id
+            GROUP BY p.start_time_ticks, b.ordinal
+            ORDER BY p.start_time_ticks, b.ordinal;
             """, queryParameters).ToLookup(record => record.PointId);
         var explicitBounds = connection.Query<MetricHistogramBoundRecord>($"""
-            SELECT b.point_id AS PointId, b.explicit_bound AS ExplicitBound
+            WITH {EffectiveMetricPointsCteSql}
+            SELECT
+                p.start_time_ticks AS PointId,
+                MAX(b.explicit_bound) AS ExplicitBound
             FROM telemetry_metric_histogram_explicit_bounds b
-            JOIN telemetry_metric_points p ON p.point_id = b.point_id
-            WHERE p.dimension_id IN @DimensionIds
-              AND {MetricPointRangeFilterSql}
-            ORDER BY b.point_id, b.ordinal;
+            JOIN effective_metric_points p ON p.point_id = b.point_id
+            GROUP BY p.start_time_ticks, b.ordinal
+            ORDER BY p.start_time_ticks, b.ordinal;
             """, queryParameters).ToLookup(record => record.PointId);
 
         return (bucketCounts, explicitBounds);
@@ -977,26 +1036,24 @@ public sealed partial class SqliteTelemetryRepository
         DynamicParameters queryParameters)
     {
         var records = connection.Query<MetricExemplarRecord>($"""
+            WITH {SelectedMetricPointsCteSql}
             SELECT
                 e.exemplar_id AS ExemplarId,
-                e.point_id AS PointId,
+                p.start_time_ticks AS PointId,
                 e.start_time_ticks AS StartTimeTicks,
                 e.exemplar_value AS ExemplarValue,
                 e.span_id AS SpanId,
                 e.trace_id AS TraceId
             FROM telemetry_metric_exemplars e
-            JOIN telemetry_metric_points p ON p.point_id = e.point_id
-            WHERE p.dimension_id IN @DimensionIds
-              AND {MetricPointRangeFilterSql}
-            ORDER BY e.point_id, e.exemplar_id;
+            JOIN selected_metric_points p ON p.point_id = e.point_id
+            ORDER BY p.start_time_ticks, e.exemplar_id;
             """, queryParameters).AsList();
         var attributes = connection.Query<OwnedAttributeRecord>($"""
+            WITH {SelectedMetricPointsCteSql}
             SELECT a.exemplar_id AS OwnerId, a.attribute_key AS AttributeKey, a.attribute_value AS AttributeValue
             FROM telemetry_metric_exemplar_attributes a
             JOIN telemetry_metric_exemplars e ON e.exemplar_id = a.exemplar_id
-            JOIN telemetry_metric_points p ON p.point_id = e.point_id
-            WHERE p.dimension_id IN @DimensionIds
-              AND {MetricPointRangeFilterSql}
+            JOIN selected_metric_points p ON p.point_id = e.point_id
             ORDER BY a.exemplar_id, a.ordinal;
             """, queryParameters).ToLookup(record => record.OwnerId);
         return records.Select(record => new KeyValuePair<long, MetricsExemplar>(record.PointId, new MetricsExemplar
@@ -1164,7 +1221,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record PendingMetricExemplarAttribute(long ExemplarId, int Ordinal, string Key, string Value);
 
-    private sealed record PendingHistogramBucketCount(long PointId, int Ordinal, string BucketCount);
+    private sealed record PendingHistogramBucketCount(long PointId, int Ordinal, long BucketCount);
 
     private sealed record PendingHistogramExplicitBound(long PointId, int Ordinal, double ExplicitBound);
 
@@ -1194,11 +1251,11 @@ public sealed partial class SqliteTelemetryRepository
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
         public double? HistogramSum { get; init; }
-        public string? HistogramCount { get; init; }
+        public long? HistogramCount { get; init; }
         public required long Flags { get; init; }
         public long PointId { get; set; }
         public int SourcePointCount { get; set; } = 1;
-        public string[]? HistogramBucketCounts { get; init; }
+        public long[]? HistogramBucketCounts { get; init; }
         public double[]? HistogramExplicitBounds { get; init; }
         public List<Exemplar> Exemplars { get; } = [];
     }
@@ -1213,7 +1270,7 @@ public sealed partial class SqliteTelemetryRepository
         public long? EndTimeTicks { get; init; }
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
-        public string? HistogramCount { get; init; }
+        public long? HistogramCount { get; init; }
     }
 
     private class MetricPointRecord
@@ -1223,7 +1280,7 @@ public sealed partial class SqliteTelemetryRepository
         public required long EndTimeTicks { get; set; }
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
-        public string? HistogramCount { get; init; }
+        public long? HistogramCount { get; init; }
     }
 
     private sealed class MetricPointDataRecord : MetricPointRecord
@@ -1237,7 +1294,7 @@ public sealed partial class SqliteTelemetryRepository
     private sealed class MetricHistogramBucketRecord
     {
         public required long PointId { get; init; }
-        public required string BucketCount { get; init; }
+        public required long BucketCount { get; init; }
     }
 
     private sealed class MetricHistogramBoundRecord

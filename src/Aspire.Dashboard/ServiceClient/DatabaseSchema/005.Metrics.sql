@@ -39,14 +39,14 @@ CREATE TABLE IF NOT EXISTS telemetry_metric_points (
     integer_value INTEGER NULL,
     double_value REAL NULL,
     histogram_sum REAL NULL,
-    histogram_count TEXT NULL,
+    histogram_count INTEGER NULL,
     flags INTEGER NOT NULL
 ) STRICT;
 
 CREATE TABLE IF NOT EXISTS telemetry_metric_histogram_bucket_counts (
     point_id INTEGER NOT NULL REFERENCES telemetry_metric_points(point_id) ON DELETE CASCADE,
     ordinal INTEGER NOT NULL,
-    bucket_count TEXT NOT NULL,
+    bucket_count INTEGER NOT NULL,
     PRIMARY KEY (point_id, ordinal)
 ) STRICT;
 
