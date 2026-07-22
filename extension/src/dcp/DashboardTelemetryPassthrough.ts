@@ -943,6 +943,8 @@ const ALLOWED_DASHBOARD_PROPERTY_KEYS = new Set<string>([
     'Aspire.Dashboard.RequestId',
     'Aspire.Dashboard.StructuredLogs.SelectedLogLevel',
     'Aspire.Dashboard.Command.Name',
+    // TODO: Remove AIAssistant keys — the dashboard no longer emits these properties.
+    // See https://github.com/microsoft/aspire/issues/18751
     'Aspire.Dashboard.AIAssistant.Enabled',
     'Aspire.Dashboard.AIAssistant.ChatMessageCount',
     'Aspire.Dashboard.AIAssistant.SelectedModel',
@@ -957,6 +959,8 @@ const ALLOWED_DASHBOARD_METRIC_KEYS = new Set<string>([
 
 const ALLOWED_STRING_ARRAY_PROPERTY_KEYS = new Set<string>([
     'Aspire.Dashboard.Resource.Types',
+    // TODO: Remove — AIAssistant.ToolCalls is no longer emitted by the dashboard.
+    // See https://github.com/microsoft/aspire/issues/18751
     'Aspire.Dashboard.AIAssistant.ToolCalls',
 ]);
 

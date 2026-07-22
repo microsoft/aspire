@@ -107,36 +107,6 @@
         <target state="translated">Просмотреть фильтры</target>
         <note />
       </trans-unit>
-      <trans-unit id="ReconnectFailedText">
-        <source>Failed to rejoin.&lt;br /&gt;Please retry or reload the page.</source>
-        <target state="translated">Не удалось повторно присоединиться.&lt;br /&gt;Повторите попытку или перезагрузите страницу.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectFirstAttemptText">
-        <source>Rejoining the server...</source>
-        <target state="translated">Повторное присоединение к серверу...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRepeatedAttemptText">
-        <source>Rejoin failed... trying again in &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; seconds.</source>
-        <target state="translated">Не удалось повторно присоединиться... Повторная попытка через &lt;span id="components-seconds-to-next-attempt"&gt;&lt;/span&gt; с.</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ReconnectRetryButtonText">
-        <source>Retry</source>
-        <target state="translated">Повторить попытку</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceServiceReconnectDisconnectedText">
-        <source>Lost connection to the AppHost. Attempting to reconnect...</source>
-        <target state="new">Lost connection to the AppHost. Attempting to reconnect...</target>
-        <note />
-      </trans-unit>
-      <trans-unit id="ResourceServiceReconnectRetryButtonText">
-        <source>Retry</source>
-        <target state="new">Retry</target>
-        <note />
-      </trans-unit>
     </body>
   </file>
 </xliff>

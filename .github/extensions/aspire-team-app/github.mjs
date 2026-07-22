@@ -6,13 +6,19 @@
 // from davidfowl/pr-dashboard (frontend/src/utils/{models,signals,pullRequests}.ts).
 
 import {
+  actorIdentityKey,
   createAttentionBuckets,
   createForMeItems,
   createDeveloperPullRequestCounts,
   createAttentionSignals,
+  createFocusIssueBuckets,
+  createIssueSignals,
   computeFocusItems,
   computeFocusExclusionItems,
   computeCommunityItems,
+  isChecksFailing,
+  shouldHideFromSharedPullRequestLists,
+  visibleCheckState,
 } from "./model.mjs";
 import { currentRelease } from "./constants.mjs";
 
@@ -109,7 +115,7 @@ query($owner:String!, $name:String!, $after:String) {
       pageInfo { hasNextPage endCursor }
       nodes {
         number title url createdAt updatedAt
-        author { login avatarUrl }
+        author { __typename login avatarUrl }
         milestone { title }
         labels(first:15) { nodes { name } }
         assignees(first:10) { nodes { login } }
@@ -135,6 +141,25 @@ function mapCheckState(rollup) {
   if (state === "FAILURE" || state === "ERROR") return "failure";
   if (state === "PENDING" || state === "EXPECTED") return "pending";
   return "none";
+}
+
+// Build the engine-shaped ChecksStatus from the list-level rollup. The PR-list GraphQL query
+// deliberately carries only `statusCheckRollup { state }` (mirroring pr-dashboard's lean list
+// query, which enriches per-check detail lazily server-side). We therefore report zero per-check
+// detail: the non-blocking-check helpers in model.mjs treat this indeterminate shape correctly
+// (an aggregate failure on a rule-covered repo reads as "unknown" rather than red).
+function mapChecks(rollup) {
+  return {
+    state: mapCheckState(rollup),
+    totalCount: 0,
+    successCount: 0,
+    failureCount: 0,
+    pendingCount: 0,
+    neutralCount: 0,
+    skippedCount: 0,
+    completedAt: null,
+    failingChecks: [],
+  };
 }
 
 function mapMergeable(m) {
@@ -235,7 +260,11 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
   const labels = (node.labels?.nodes ?? []).map((l) => l.name);
   const assignees = (node.assignees?.nodes ?? []).map((a) => a.login);
   const rawUnresolved = (node.reviewThreads?.nodes ?? []).filter((t) => !t.isResolved).length;
-  const checksState = mapCheckState(node.commits?.nodes?.[0]?.commit?.statusCheckRollup);
+  const checks = mapChecks(node.commits?.nodes?.[0]?.commit?.statusCheckRollup);
+  // Visible state honors non-blocking check rules: an aggregate failure driven only by
+  // informational checks (e.g. aspire-1p proof-of-presence) reads as unknown/pending here,
+  // so the simplified lane/ship/count paths don't treat it as red CI.
+  const checksState = visibleCheckState({ repository: repo, checks }) ?? "none";
   const review = deriveReview(node.reviews?.nodes ?? [], requestedReviewers, viewers, repo, rawUnresolved);
   const mergeable = node.mergeable; // MERGEABLE | CONFLICTING | UNKNOWN
   const mergeableState = mapMergeable(mergeable);
@@ -284,7 +313,7 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
     lastCommitAt,
     linkedIssues,
     // Engine-shaped fields (read by model.mjs).
-    checks: { state: checksState, failureCount: 0, completedAt: null },
+    checks,
     mergeableState,
     // Back-compat fields read by the simplified Fowler lanes/signals path.
     unresolvedThreadCount: rawUnresolved,
@@ -294,7 +323,9 @@ function normalizePr(repo, node, viewers, repoPrivate = false) {
     // REVIEW_REQUIRED | null (null when the repo has no required reviews).
     reviewDecision: node.reviewDecision ?? null,
     review,
-    isMine: viewers.has(author.toLowerCase()),
+    // Key off the human identity so a Copilot PR attributed to me ("me/copilot") still
+    // counts as mine. actorIdentityKey strips the "/copilot" suffix and punctuation.
+    isMine: [...viewers].some((viewer) => actorIdentityKey(viewer) === actorIdentityKey(author)),
     // Private repos cannot have external community contributors, so PRs on them are
     // never "Community" — they flow through the normal team attention engine instead.
     repoPrivate: !!repoPrivate,
@@ -312,6 +343,10 @@ function normalizeIssue(repo, node, viewers) {
     url: node.url,
     author,
     authorAvatarUrl: node.author?.avatarUrl ?? null,
+    // __typename is the precise bot signal used by isBotAuthor's fast path. Issues
+    // fetch it just like PRs (normalizePr) so a Bot-typed author whose login lacks
+    // "bot" still earns the bot pill; the login string heuristics remain the fallback.
+    authorType: node.author?.__typename ?? null,
     createdAt: node.createdAt,
     updatedAt: node.updatedAt,
     milestone: node.milestone?.title ?? null,
@@ -417,8 +452,15 @@ function reviewReady(pr) {
 }
 
 // Review-ready PRs that still need a review (not the viewer's own, not yet approved).
+// Also honor the shared-list hide rule so PRs flagged for author action (draft, conflicts,
+// or a needs-author-action label) never surface in the team's shared review queue.
 function awaitingReview(pr) {
-  return reviewReady(pr) && !pr.isMine && pr.review.state !== "approved";
+  return (
+    reviewReady(pr) &&
+    !pr.isMine &&
+    pr.review.state !== "approved" &&
+    !shouldHideFromSharedPullRequestLists(pr)
+  );
 }
 
 // Oldest waits float to the top so nothing starves, with nudges for explicitly
@@ -484,30 +526,37 @@ function bucketReview(prs, { showDrafts = false, limit = REVIEW_LIMIT } = {}) {
   return lanes.filter((l) => l.items.length > 0);
 }
 
-function bucketIssues(issues) {
-  const lanes = [
-    { id: "assigned", label: "Assigned to you", tone: "danger", items: [] },
-    { id: "yours", label: "Your issues", tone: "accent", items: [] },
-    { id: "triage", label: "Needs triage", tone: "warning", items: [] },
-    { id: "active", label: "Recently active", tone: "muted", items: [] },
-  ];
-  for (const issue of issues) {
-    let laneId;
-    if (issue.assignedToMe) laneId = "assigned";
-    else if (issue.isMine) laneId = "yours";
-    else if (issue.labels.length === 0 && issue.assignees.length === 0) laneId = "triage";
-    else laneId = "active";
-    lanes.find((l) => l.id === laneId).items.push({ issue, signals: issueSignals(issue) });
-  }
-  return lanes.filter((l) => l.items.length > 0);
-}
+// Issues view: pr-dashboard focus buckets (Regression / CTI team / afscrome finds, plus a
+// per-viewer "My issues" lane) using the ported `createFocusIssueBuckets` + `createIssueSignals`.
+// Focus buckets only cover a curated subset, so residual lanes catch everything else and keep
+// no open issue from silently dropping out of the view.
+function bucketIssues(issues, login) {
+  const covered = new Set();
+  const toItem = (issue) => {
+    covered.add(issue.url);
+    return { issue, signals: createIssueSignals(issue) };
+  };
 
-function issueSignals(issue) {
-  const out = [];
-  if (issue.milestone) out.push({ label: issue.milestone, tone: "accent" });
-  if (issue.labels.length === 0) out.push({ label: "Unlabeled", tone: "warning" });
-  for (const l of issue.labels.slice(0, 3)) out.push({ label: l, tone: "muted" });
-  return out;
+  const lanes = createFocusIssueBuckets(issues, login).map((bucket) => ({
+    id: `focus-${bucket.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/(^-|-$)/g, "")}`,
+    label: bucket.label,
+    tone: bucket.tone,
+    items: bucket.issues.map(toItem),
+  }));
+
+  const residual = issues.filter((issue) => !covered.has(issue.url));
+  const isUntriaged = (issue) => issue.labels.length === 0 && issue.assignees.length === 0;
+  const triage = residual.filter(isUntriaged);
+  const active = residual.filter((issue) => !isUntriaged(issue));
+
+  if (triage.length) {
+    lanes.push({ id: "triage", label: "Needs triage", tone: "warning", items: triage.map(toItem) });
+  }
+  if (active.length) {
+    lanes.push({ id: "active", label: "Recently active", tone: "muted", items: active.map(toItem) });
+  }
+
+  return lanes.filter((lane) => lane.items.length > 0);
 }
 
 function bucketShip(prs, release, { showDrafts = false } = {}) {
@@ -649,7 +698,7 @@ export async function loadDashboard({ accounts, mode, release, prefs, dismissed,
   const errors = [...new Set(errorsRaw.filter((e) => !okRepos.has(e.repo)).map((e) => e.message))];
 
   let lanes;
-  if (mode === "issues") lanes = bucketIssues(allIssues);
+  if (mode === "issues") lanes = bucketIssues(allIssues, usable[0].login);
   else if (mode === "ship") lanes = bucketShip(allPrs, release ?? CURRENT_RELEASE, { showDrafts });
   else lanes = bucketReview(allPrs, { showDrafts, limit: reviewLimit });
 

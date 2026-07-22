@@ -19,7 +19,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
         {
-            using var workspace = TemporaryWorkspace.Create(outputHelper);
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
             {
                 options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
@@ -51,7 +51,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
         {
-            using var workspace = TemporaryWorkspace.Create(outputHelper);
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
             {
                 options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
@@ -81,7 +81,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
         {
-            using var workspace = TemporaryWorkspace.Create(outputHelper);
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
             {
                 options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
@@ -114,7 +114,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
         {
-            using var workspace = TemporaryWorkspace.Create(outputHelper);
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
             {
                 options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
@@ -140,7 +140,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
         {
-            using var workspace = TemporaryWorkspace.Create(outputHelper);
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
             {
                 options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
@@ -167,7 +167,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
         {
-            using var workspace = TemporaryWorkspace.Create(outputHelper);
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
             {
                 options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");
@@ -189,7 +189,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentTelemetry_ExitsZero_WithUnknownToken()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -205,7 +205,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task AgentTelemetry_ExitsZero_WithNoOptions()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -220,7 +220,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void AgentTelemetry_IsHidden()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -234,7 +234,7 @@ public class AgentTelemetryCommandTests(ITestOutputHelper outputHelper)
         var (capturedActivities, listener) = CreateCapturingListener(out var reportedSourceName);
         using (listener)
         {
-            using var workspace = TemporaryWorkspace.Create(outputHelper);
+            using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
             var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
             {
                 options.TelemetryFactory = _ => TestTelemetryHelper.CreateInitializedTelemetry(reportedSourceName, $"Diag.{Path.GetRandomFileName()}");

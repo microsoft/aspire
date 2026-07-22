@@ -20,7 +20,8 @@ internal static class ExtensionUtils
 
         if (!builder.TryGetLastAnnotation(out supportsDebuggingAnnotation)
             || string.IsNullOrEmpty(configuration[DcpExecutor.DebugSessionPortVar])
-            || builder.HasAnnotationOfType<ForceProcessExecutionAnnotation>())
+            || builder.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
+            || builder.HasPersistentLifetime())
         {
             return false;
         }

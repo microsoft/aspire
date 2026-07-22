@@ -142,6 +142,12 @@ internal class ResourceSnapshotBuilder
                 projectPath = projectResource.GetProjectMetadata().ProjectPath;
                 launchProfileName = projectResource.GetEffectiveLaunchProfile()?.Name;
             }
+            else if (appModelResource.TryGetLastAnnotation<IProjectMetadata>(out var projectMetadata))
+            {
+                // New-style, annotation-based C# service (DotnetProjectResource)
+                projectPath = projectMetadata.ProjectPath;
+                launchProfileName = appModelResource.GetEffectiveLaunchProfile()?.Name;
+            }
         }
 
         var state = executable.AppModelInitialState is "Hidden" ? "Hidden" : executable.Status?.State;

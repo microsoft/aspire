@@ -57,6 +57,14 @@ PATH. Do not assume the CLI supports a capability just because the current build
 
 Detect what the installed CLI supports at runtime instead of assuming, by reading capabilities from extension functionality that wraps `aspire config info`.
 
+Hidden or probe-style CLI calls from the extension should avoid paying for or emitting interactive
+startup UX. When the extension runs a CLI command for JSON or other machine-readable output, pass
+`--nologo` when the target CLI version supports it, keep the command's stdout parseable, and add a
+fallback/retry path for older CLIs that reject `--nologo`. Add or update CLI-side machine-readable
+detection if you introduce a new structured-output flag or hidden JSON command. This prevents
+first-run/banner/identity text from corrupting stdout and keeps extension startup comparable to
+direct `aspire run` / `aspire start`.
+
 ## Develop / modify the extension
 
 - Prefer **TypeScript** (`.ts`) files; never create `.js` source files for extension code.

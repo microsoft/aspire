@@ -1,8 +1,6 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using Aspire.Hosting.ApplicationModel;
-
 namespace Aspire.Hosting.Azure;
 
 /// <summary>
@@ -12,7 +10,7 @@ namespace Aspire.Hosting.Azure;
 /// role assignment.
 /// </summary>
 /// <param name="identity">The user-assigned identity resource to use for the <c>AcrPull</c> role.</param>
-internal sealed class AzureAppServiceEnvironmentAcrPullIdentityAnnotation(AzureUserAssignedIdentityResource identity) : IResourceAnnotation
+internal sealed class AzureAppServiceEnvironmentAcrPullIdentityAnnotation(AzureUserAssignedIdentityResource identity) : IAcrPullIdentityAnnotation
 {
     /// <summary>
     /// Gets the user-assigned identity resource that holds the <c>AcrPull</c> role.

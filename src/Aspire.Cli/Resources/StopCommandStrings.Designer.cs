@@ -111,6 +111,60 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string ForceOptionDescription {
+            get {
+                return ResourceManager.GetString("ForceOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string CouldNotDetermineAppHostPath {
+            get {
+                return ResourceManager.GetString("CouldNotDetermineAppHostPath", resourceCulture);
+            }
+        }
+
+        public static string CleaningPersistentResources {
+            get {
+                return ResourceManager.GetString("CleaningPersistentResources", resourceCulture);
+            }
+        }
+
+        public static string PersistentResourcesCleaned {
+            get {
+                return ResourceManager.GetString("PersistentResourcesCleaned", resourceCulture);
+            }
+        }
+
+        public static string DcpCleanupUnavailable {
+            get {
+                return ResourceManager.GetString("DcpCleanupUnavailable", resourceCulture);
+            }
+        }
+
+        public static string DcpCleanupCompatibilityCheckFailed {
+            get {
+                return ResourceManager.GetString("DcpCleanupCompatibilityCheckFailed", resourceCulture);
+            }
+        }
+
+        public static string DcpCleanupUnsupportedAppHostVersion {
+            get {
+                return ResourceManager.GetString("DcpCleanupUnsupportedAppHostVersion", resourceCulture);
+            }
+        }
+
+        public static string DcpCleanupFailed {
+            get {
+                return ResourceManager.GetString("DcpCleanupFailed", resourceCulture);
+            }
+        }
+
+        public static string DcpCleanupExitCode {
+            get {
+                return ResourceManager.GetString("DcpCleanupExitCode", resourceCulture);
+            }
+        }
+
         public static string MultipleAppHostsNonInteractive {
             get {
                 return ResourceManager.GetString("MultipleAppHostsNonInteractive", resourceCulture);
@@ -120,6 +174,12 @@ namespace Aspire.Cli.Resources {
         public static string AllAndProjectMutuallyExclusive {
             get {
                 return ResourceManager.GetString("AllAndProjectMutuallyExclusive", resourceCulture);
+            }
+        }
+
+        public static string UnknownAspireHostingVersion {
+            get {
+                return ResourceManager.GetString("UnknownAspireHostingVersion", resourceCulture);
             }
         }
 
