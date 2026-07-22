@@ -40,7 +40,8 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             type = "infra-failure",
             title = "Later job failed",
             job_name = "Tests / Linux",
-            error_pattern = "connection reset"
+            error_pattern = "connection reset",
+            failure_details = "Password: memory-branch-secret"
         };
 
         var output = await InvokeScriptAsync("add-occurrence", analysis, cause);
@@ -49,6 +50,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var occurrence = Assert.Single(result.GetProperty("occurrences").EnumerateArray());
         Assert.Equal("Tests / Linux", occurrence.GetProperty("job").GetString());
         Assert.Equal(987654, occurrence.GetProperty("run_id").GetInt32());
+        Assert.Equal("Password: [REDACTED]", result.GetProperty("failure_details").GetString());
 
         var occurrenceRow = await InvokeScriptAsync("occurrence-row", analysis, cause);
         Assert.Equal("| 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | Tests / Linux | #18763 |", occurrenceRow);
@@ -213,7 +215,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var input = new
         {
             standard_output = privateKeyAcrossTruncationBoundary,
-            standard_error = "Host=db;Password=secret-value;Timeout=30\nhttps://user:pass@example.com/path",
+            standard_error = "Host=db;Password=secret-value;Timeout=30\nTOKEN: colon-secret\nhttps://user:pass@example.com/path",
             nested = new[] { "eyJ1234567890.abcdefghijk.ABCDEFGHIJK" }
         };
         var inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-redact.json");
@@ -230,7 +232,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             $"{new string('x', 3950)}[REDACTED]\nExpected 42 but got 41",
             redacted.GetProperty("standard_output").GetString());
         Assert.Equal(
-            "Host=db;Password=[REDACTED];Timeout=30\nhttps://[REDACTED]:[REDACTED]@example.com/path",
+            "Host=db;Password=[REDACTED];Timeout=30\nTOKEN: [REDACTED]\nhttps://[REDACTED]:[REDACTED]@example.com/path",
             redacted.GetProperty("standard_error").GetString());
         Assert.Equal("[REDACTED]", redacted.GetProperty("nested")[0].GetString());
     }
