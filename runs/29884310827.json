@@ -1,0 +1,47 @@
+{
+  "run_id": 29884310827,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/29884310827",
+  "analyzed_at": "2026-07-22T02:21:16Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18853,
+    "title": "Prevent disposed dashboard menus from leaking",
+    "author": "JamesNK",
+    "state": "closed",
+    "head_branch": "fix/dashboard-menu-service-leak",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18853"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Hosting.PostgreSQL / Hosting.PostgreSQL (windows-latest)",
+      "id": 88811871380,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29884310827/job/88811871380",
+      "classification": "transient-infra",
+      "reason": "Post-test steps (upload logs, copy CLI E2E recordings, generate summary) all failed with exit code -1073741502 (0xC0000142 STATUS_DLL_INIT_FAILED). Tests themselves passed (92/92). This is a known Windows runner transient infrastructure issue.",
+      "failed_steps": ["Check for hang dump files", "Upload logs, and test results", "Copy CLI E2E recordings for upload", "Upload CLI E2E recordings", "Generate test results summary", "Post Checkout code"]
+    },
+    {
+      "name": "Tests / Cli / Cli (macos-latest)",
+      "id": 88811878846,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/29884310827/job/88811878846",
+      "classification": "flaky-test",
+      "reason": "Test LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable failed with a collection count mismatch. The PR only modifies dashboard files (AspireMenu.razor.cs and AspireMenuTests.cs), not CLI code. This test failure is unrelated to PR changes.",
+      "failed_steps": ["Run tests (Linux/macOS)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable",
+      "job": "Tests / Cli / Cli (macos-latest)",
+      "error": "Assert.Collection() Failure: Mismatched item count\nCollection:     [\"Failed to start the AppHost.\"]\nExpected count: 2\nActual count:   1",
+      "stack_trace": "at Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AppHostLauncherTests.cs:line 506\n   at Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AppHostLauncherTests.cs:line 527",
+      "classification": "flaky",
+      "reason": "The PR only modifies dashboard components (AspireMenu.razor.cs and AspireMenuTests.cs). This CLI test is in an unrelated area and fails with a timing-sensitive collection count mismatch, suggesting a race condition where the second expected message is not yet present."
+    }
+  ],
+  "causes": ["windows-process-init-failure-0xc0000142", "cli-apphostlauncher-reportsforkexitcode-flaky"]
+}

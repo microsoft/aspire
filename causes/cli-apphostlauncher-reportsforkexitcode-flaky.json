@@ -1,0 +1,17 @@
+{
+  "id": "cli-apphostlauncher-reportsforkexitcode-flaky",
+  "type": "flaky-test",
+  "title": "Flaky: AppHostLauncherTests.LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable fails with collection count mismatch on macOS",
+  "test_name": "Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable",
+  "error_pattern": "Assert.Collection() Failure: Mismatched item count\nCollection:     [\"Failed to start the AppHost.\"]\nExpected count: 2\nActual count:   1\n   at Aspire.Cli.Tests.Commands.AppHostLauncherTests.LaunchDetachedAsync_ReportsForkProcessExitCodeWhenChildExitsBeforeMonitorAndStartTimeIsUnavailable() in /Users/runner/work/aspire/aspire/tests/Aspire.Cli.Tests/Commands/AppHostLauncherTests.cs:line 506",
+  "occurrences": [
+    {
+      "run_id": 29884310827,
+      "run_url": "https://github.com/microsoft/aspire/actions/runs/29884310827",
+      "job": "Tests / Hosting.PostgreSQL / Hosting.PostgreSQL (windows-latest)",
+      "pr_number": 18853,
+      "observed_at": "2026-07-22T02:21:16Z"
+    }
+  ],
+  "issue_url": "https://github.com/microsoft/aspire/issues/18855"
+}
