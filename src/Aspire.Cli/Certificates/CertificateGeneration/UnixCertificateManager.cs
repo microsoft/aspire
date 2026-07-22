@@ -484,17 +484,19 @@ internal sealed partial class UnixCertificateManager : CertificateManager
         if (File.Exists(certPath))
         {
             var openSslUntrustSucceeded = false;
+            var certificateFileDeleted = TryDeleteCertificateFile(certPath);
 
-            if (IsCommandAvailable(OpenSslCommand))
+            if (certificateFileDeleted)
             {
-                if (TryDeleteCertificateFile(certPath) && TryRehashOpenSslCertificates(certDir))
+                if (IsCommandAvailable(OpenSslCommand))
                 {
+                    openSslUntrustSucceeded = TryRehashOpenSslCertificates(certDir);
+                }
+                else
+                {
+                    Log.UnixMissingOpenSslCommand(OpenSslCommand);
                     openSslUntrustSucceeded = true;
                 }
-            }
-            else
-            {
-                Log.UnixMissingOpenSslCommand(OpenSslCommand);
             }
 
             if (openSslUntrustSucceeded)

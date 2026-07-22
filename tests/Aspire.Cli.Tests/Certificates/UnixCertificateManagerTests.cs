@@ -43,6 +43,40 @@ public class UnixCertificateManagerTests
     }
 
     [Fact]
+    public void RemoveCertificate_WithMissingOpenSsl_DeletesOpenSslCertificate()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "OpenSSL certificate cleanup is only exercised on Linux.");
+
+        var openSslDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+            {
+                ["PATH"] = Path.Combine(openSslDirectory.FullName, "missing-tools"),
+                ["DOTNET_DEV_CERTS_NSSDB_PATHS"] = Path.Combine(openSslDirectory.FullName, "missing-nss-db"),
+                [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = openSslDirectory.FullName
+            });
+            var manager = new UnixCertificateManager(NullLogger.Instance, environment);
+            using var certificate = manager.CreateAspNetCoreHttpsDevelopmentCertificate(
+                DateTimeOffset.UtcNow.AddDays(-1),
+                DateTimeOffset.UtcNow.AddDays(365));
+            using var savedCertificate = manager.SaveCertificate(certificate);
+            var certificatePath = Path.Combine(openSslDirectory.FullName, $"aspnetcore-localhost-{savedCertificate.Thumbprint}.pem");
+            File.WriteAllText(certificatePath, "not a certificate");
+
+            var exception = Record.Exception(() => manager.RemoveCertificate(savedCertificate, CertificateManager.RemoveLocations.All));
+
+            Assert.Null(exception);
+            Assert.False(File.Exists(certificatePath));
+        }
+        finally
+        {
+            openSslDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
     public void RemoveCertificate_WithMissingCertUtilAndNssDbs_SkipsNssCleanup()
     {
         Assert.SkipUnless(OperatingSystem.IsLinux(), "NSS certificate cleanup is only exercised on Linux.");
