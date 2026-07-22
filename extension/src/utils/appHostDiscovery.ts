@@ -48,6 +48,13 @@ interface AppHostDiscoveryResult {
     candidates: CandidateAppHostDisplayInfo[];
 }
 
+interface CachedAppHostDiscovery {
+    promise: Promise<CandidateAppHostDisplayInfo[]>;
+    streamedCandidates: CandidateAppHostDisplayInfo[];
+    candidateCallbacks: Set<(candidate: CandidateAppHostDisplayInfo) => void>;
+    completed: boolean;
+}
+
 class CliProcessError extends Error {
     constructor(
         message: string,
@@ -70,7 +77,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private static readonly _candidateChangeDebounceMs = 250;
 
     private readonly _onDidChangeCandidates = new vscode.EventEmitter<vscode.WorkspaceFolder>();
-    private readonly _cache = new Map<string, Promise<CandidateAppHostDisplayInfo[]>>();
+    private readonly _cache = new Map<string, CachedAppHostDiscovery>();
     private readonly _watchers = new Map<string, vscode.Disposable[]>();
     private readonly _pendingInvalidationTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly _activeCliProcesses = new Set<ChildProcessWithoutNullStreams>();
@@ -93,13 +100,26 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
         this._ensureWatchers(workspaceFolder, key);
 
-        let resultPromise = this._cache.get(key);
-        if (!resultPromise) {
+        let cachedDiscovery = this._cache.get(key);
+        if (!cachedDiscovery) {
             const startTime = Date.now();
+            const candidateCallbacks = new Set<(candidate: CandidateAppHostDisplayInfo) => void>();
+            const streamedCandidates: CandidateAppHostDisplayInfo[] = [];
+            const publishCandidate = (candidate: CandidateAppHostDisplayInfo) => {
+                streamedCandidates.push(candidate);
+                for (const callback of candidateCallbacks) {
+                    try {
+                        callback(candidate);
+                    }
+                    catch (error) {
+                        extensionLogOutputChannel.warn(`AppHost discovery candidate callback failed: ${formatErrorMessage(error)}`);
+                    }
+                }
+            };
             // The cached discovery promise is shared across extension features. Keep caller
             // cancellation outside the cached operation so one cancelled refresh doesn't reject
             // unrelated callers that are awaiting the same workspace discovery.
-            const discoveryPromise = this._discoverCore(workspaceFolder, onCandidate)
+            const discoveryPromise = this._discoverCore(workspaceFolder, publishCandidate)
                 .then(async discovery => {
                     let candidates = discovery.candidates;
                     try {
@@ -117,17 +137,51 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                     throw error;
                 });
             let cachedPromise: Promise<CandidateAppHostDisplayInfo[]>;
+            let cachedDiscoveryForCleanup: CachedAppHostDiscovery;
             cachedPromise = discoveryPromise.catch(error => {
-                if (this._cache.get(key) === cachedPromise) {
+                if (this._cache.get(key) === cachedDiscoveryForCleanup) {
                     this._cache.delete(key);
                 }
                 throw error;
+            }).finally(() => {
+                cachedDiscoveryForCleanup.completed = true;
+                cachedDiscoveryForCleanup.candidateCallbacks.clear();
             });
-            resultPromise = cachedPromise;
-            this._cache.set(key, resultPromise);
+            cachedDiscovery = {
+                promise: cachedPromise,
+                streamedCandidates,
+                candidateCallbacks,
+                completed: false,
+            };
+            cachedDiscoveryForCleanup = cachedDiscovery;
+            this._cache.set(key, cachedDiscovery);
         }
 
-        return await withCancellation(resultPromise, cancellationToken);
+        const callback = (candidate: CandidateAppHostDisplayInfo): void => {
+            if (!cancellationToken?.isCancellationRequested) {
+                try {
+                    onCandidate(candidate);
+                }
+                catch (error) {
+                    extensionLogOutputChannel.warn(`AppHost discovery candidate callback failed: ${formatErrorMessage(error)}`);
+                }
+            }
+        };
+        if (!cachedDiscovery.completed) {
+            cachedDiscovery.candidateCallbacks.add(callback);
+        }
+        try {
+            if (!cachedDiscovery.completed) {
+                for (const candidate of cachedDiscovery.streamedCandidates) {
+                    callback(candidate);
+                }
+            }
+
+            return await withCancellation(cachedDiscovery.promise, cancellationToken);
+        }
+        finally {
+            cachedDiscovery.candidateCallbacks.delete(callback);
+        }
     }
 
     async resolveDebugTarget(filePath: string, workspaceFolder?: vscode.WorkspaceFolder): Promise<string> {

@@ -584,6 +584,50 @@ suite('AppHost discovery', () => {
             }
         });
 
+        test('candidate callbacks receive streamed candidates when joining shared in-flight discovery', async () => {
+            stubFileSystemWatchers(sandbox);
+            let options: cliModule.SpawnProcessOptions | undefined;
+            const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, spawnOptions) => {
+                options = spawnOptions;
+                return { kill: () => { } } as any;
+            });
+            const service = new AppHostDiscoveryService(makeTerminalProvider());
+            const workspaceFolder = makeWorkspaceFolder(buildPath('workspace'));
+            const firstCandidate = {
+                path: buildPath('workspace', 'First', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+            const secondCandidate = {
+                path: buildPath('workspace', 'Second', 'AppHost.csproj'),
+                language: 'csharp',
+                status: 'buildable',
+            };
+
+            try {
+                const firstDiscovery = service.discover(workspaceFolder);
+                await waitForMicrotasks();
+                assert.ok(options);
+
+                options.lineCallback?.(JSON.stringify(firstCandidate));
+
+                const observedCandidates: CandidateAppHostDisplayInfo[] = [];
+                const secondDiscovery = service.discover(workspaceFolder, false, undefined, candidate => observedCandidates.push(candidate));
+                assert.deepStrictEqual(observedCandidates, [firstCandidate]);
+
+                options.lineCallback?.(JSON.stringify(secondCandidate));
+                options.exitCallback?.(0);
+
+                assert.deepStrictEqual(await firstDiscovery, [firstCandidate, secondCandidate]);
+                assert.deepStrictEqual(await secondDiscovery, [firstCandidate, secondCandidate]);
+                assert.deepStrictEqual(observedCandidates, [firstCandidate, secondCandidate]);
+                assert.strictEqual(spawnStub.callCount, 1);
+            }
+            finally {
+                service.dispose();
+            }
+        });
+
         test('already cancelled caller token does not start discovery on cache miss', async () => {
             stubFileSystemWatchers(sandbox);
             const spawnStub = sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
