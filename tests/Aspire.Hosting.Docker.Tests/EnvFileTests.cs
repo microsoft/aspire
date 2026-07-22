@@ -3,13 +3,13 @@
 
 namespace Aspire.Hosting.Docker.Tests;
 
-public class EnvFileTests
+public class EnvFileTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public void Add_WithOnlyIfMissingTrue_DoesNotAddDuplicate()
     {
-        using var tempDir = new TestTempDirectory();
-        var envFilePath = Path.Combine(tempDir.Path, ".env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
 
         // Create initial .env file
         File.WriteAllLines(envFilePath, [
@@ -34,8 +34,8 @@ public class EnvFileTests
     [Fact]
     public void Add_WithOnlyIfMissingFalse_UpdatesExistingKey()
     {
-        using var tempDir = new TestTempDirectory();
-        var envFilePath = Path.Combine(tempDir.Path, ".env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
 
         // Create initial .env file
         File.WriteAllLines(envFilePath, [
@@ -60,8 +60,8 @@ public class EnvFileTests
     [Fact]
     public void Add_WithOnlyIfMissingFalse_UpdatesImageNameWithoutDuplication()
     {
-        using var tempDir = new TestTempDirectory();
-        var envFilePath = Path.Combine(tempDir.Path, ".env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
 
         // Create initial .env file simulating a project resource
         File.WriteAllLines(envFilePath, [
@@ -100,8 +100,8 @@ public class EnvFileTests
     [Fact]
     public void Add_NewKey_AddsToFile()
     {
-        using var tempDir = new TestTempDirectory();
-        var envFilePath = Path.Combine(tempDir.Path, ".env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
 
         // Create initial .env file
         File.WriteAllLines(envFilePath, [
@@ -125,8 +125,8 @@ public class EnvFileTests
     [Fact]
     public void Load_EmptyFile_ReturnsEmptyEnvFile()
     {
-        using var tempDir = new TestTempDirectory();
-        var envFilePath = Path.Combine(tempDir.Path, ".env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
 
         // Create empty file
         File.WriteAllText(envFilePath, string.Empty);
@@ -142,8 +142,8 @@ public class EnvFileTests
     [Fact]
     public void Load_NonExistentFile_ReturnsEmptyEnvFile()
     {
-        using var tempDir = new TestTempDirectory();
-        var envFilePath = Path.Combine(tempDir.Path, ".env");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var envFilePath = Path.Combine(workspace.Path, ".env");
 
         // Don't create the file
         var envFile = EnvFile.Load(envFilePath);

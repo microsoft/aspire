@@ -48,7 +48,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_InPlaceCreation_WithoutExistingConfig_CreatesInWorkingDirectory()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
 
         var mappings = new[]
@@ -69,7 +69,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_InPlaceCreation_WithExistingConfig_UpdatesWorkingDirectoryConfig()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
 
         // Create existing NuGet.config in working directory without the required source
@@ -104,7 +104,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_SubdirectoryCreation_WithParentConfig_IgnoresParentAndCreatesInOutputDirectory()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
@@ -148,7 +148,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_SubdirectoryCreation_WithExistingConfigInOutputDirectory_MergesInOutputDirectory()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
@@ -185,7 +185,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_SubdirectoryCreation_WithoutAnyConfig_CreatesInOutputDirectory()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
@@ -215,7 +215,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_ImplicitChannel_DoesNothing()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 
@@ -236,7 +236,7 @@ public class DotNetTemplateFactoryTests
     public async Task NuGetConfigMerger_ExplicitChannelWithoutMappings_DoesNothing()
     {
         // Arrange
-        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(_outputHelper);
         var workingDir = workspace.WorkspaceRoot;
         var outputDir = Directory.CreateDirectory(Path.Combine(workingDir.FullName, "MyProject"));
 

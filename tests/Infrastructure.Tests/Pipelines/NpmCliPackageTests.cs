@@ -24,7 +24,7 @@ public sealed class NpmCliPackageTests : IDisposable
         new("osx-arm64", "aspire", ["darwin"], ["arm64"], null)
     ];
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly ITestOutputHelper _output;
     private readonly string _repoRoot = RepoRoot.Path;
     private readonly string _packScriptPath;
@@ -32,10 +32,11 @@ public sealed class NpmCliPackageTests : IDisposable
     public NpmCliPackageTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _packScriptPath = Path.Combine(_repoRoot, "eng", "scripts", "pack-cli-npm-package.ps1");
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     public async Task LauncherDetectsMuslArm64AndThrowsUnsupported()
@@ -176,7 +177,7 @@ public sealed class NpmCliPackageTests : IDisposable
     public async Task LauncherPostinstallCheckExplainsDisabledOptionalDependenciesOnSupportedPlatform()
     {
         var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: false);
-        var testScriptPath = Path.Combine(_tempDirectory.Path, $"{Path.GetRandomFileName()}.js");
+        var testScriptPath = Path.Combine(_workspace.Path, $"{Path.GetRandomFileName()}.js");
         await File.WriteAllTextAsync(
             testScriptPath,
             """
@@ -216,7 +217,7 @@ public sealed class NpmCliPackageTests : IDisposable
     public async Task LauncherPostinstallCheckSkipsUnsupportedPlatform()
     {
         var pointerPackageRoot = await CreateFakeNpmInstallAsync(includeRidPackages: false);
-        var testScriptPath = Path.Combine(_tempDirectory.Path, $"{Path.GetRandomFileName()}.js");
+        var testScriptPath = Path.Combine(_workspace.Path, $"{Path.GetRandomFileName()}.js");
         await File.WriteAllTextAsync(
             testScriptPath,
             """
@@ -464,7 +465,7 @@ public sealed class NpmCliPackageTests : IDisposable
 
     private async Task<string> CreateFakeNpmInstallAsync(bool includeRidPackages)
     {
-        var testRoot = Path.Combine(_tempDirectory.Path, Path.GetRandomFileName());
+        var testRoot = Path.Combine(_workspace.Path, Path.GetRandomFileName());
         var nodeModulesRoot = Path.Combine(testRoot, "node_modules");
         var pointerPackageRoot = Path.Combine(nodeModulesRoot, "@microsoft", "aspire-cli");
         var pointerBinRoot = Path.Combine(pointerPackageRoot, "bin");
@@ -529,7 +530,7 @@ public sealed class NpmCliPackageTests : IDisposable
 
     private async Task<PackedNpmPackage> PackCliNpmPackageAsync(string rid)
     {
-        var testRoot = Path.Combine(_tempDirectory.Path, Path.GetRandomFileName());
+        var testRoot = Path.Combine(_workspace.Path, Path.GetRandomFileName());
         var stagingRoot = Path.Combine(testRoot, "staging");
         var outputPath = Path.Combine(testRoot, "output");
         var nativeBinaryPath = Path.Combine(testRoot, "native-aspire-stub");

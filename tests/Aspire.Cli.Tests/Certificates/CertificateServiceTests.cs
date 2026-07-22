@@ -21,7 +21,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_WithFullyTrustedCert_StillRunsTrustToUpdateAspireCache()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
@@ -48,7 +48,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_WithNoCertificates_RunsTrustOperation()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
@@ -75,7 +75,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_WithPartiallyTrustedCert_ReturnsFailureForInteractiveLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
@@ -102,7 +102,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_WithPartiallyTrustedCert_ReturnsSuccessForNonInteractiveLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
@@ -129,7 +129,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_TrustOperationFails_ReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
         {
@@ -150,7 +150,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_TrustOperationCancelled_ReturnsWasCancelled()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         using var sp = CreateServiceProvider(workspace, new TestCertificateToolRunner
         {
@@ -171,7 +171,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_ChecksButDoesNotTrustOnNonLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
         var checkCalled = false;
 
@@ -218,7 +218,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsWhenUntrustedOnNonLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -259,7 +259,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsWhenPartiallyTrustedOnNonLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -300,7 +300,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_ProceedsOnLinux()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var trustCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -342,7 +342,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_GeneratesCertWhenNoneExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var generateCalled = false;
         var checkCallCount = 0;
 
@@ -387,7 +387,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_SkipsCertGenerationWhenCertsExist()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var generateCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -425,7 +425,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_EnvVarOptOutSuppressesCertGeneration()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var generateCalled = false;
 
         var toolRunner = new TestCertificateToolRunner
@@ -471,7 +471,7 @@ public class CertificateServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureCertificatesTrustedAsync_NonInteractive_WarnsOnCertGenerationFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var toolRunner = new TestCertificateToolRunner
         {

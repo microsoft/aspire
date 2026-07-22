@@ -277,6 +277,35 @@ public class TelemetryConfigurationTests
         Assert.False(manager.HasAzureMonitor);
     }
 
+    [Theory]
+    [InlineData("1")]
+    [InlineData("true")]
+    public void AzureMonitor_Disabled_ForAgentTelemetry_WhenGlobalOptOutSet(string optOutValue)
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [AspireCliTelemetry.TelemetryOptOutConfigKey] = optOutValue
+            })
+            .Build();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+
+        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+
+        Assert.False(manager.HasAzureMonitor);
+    }
+
+    [Fact]
+    public void AzureMonitor_Enabled_ForAgentTelemetry_WhenNoOptOutSet()
+    {
+        var configuration = new ConfigurationBuilder().Build();
+        var tagsSource = new TelemetryTagsSource(NullLogger<TelemetryTagsSource>.Instance);
+
+        using var manager = new TelemetryManager(configuration, tagsSource, ["agent", "telemetry", "--event-type", "skill_invocation"]);
+
+        Assert.True(manager.HasAzureMonitor);
+    }
+
     private static ActivityListener CreateActivityListener(string sourceName)
     {
         var listener = new ActivityListener

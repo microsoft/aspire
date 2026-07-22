@@ -7,7 +7,6 @@ using Aspire.Cli.Agents;
 using Aspire.Cli.Agents.OpenCode;
 using Aspire.Cli.Agents.Playwright;
 using Aspire.Cli.Tests.TestServices;
-using Aspire.Cli.Tests.Utils;
 using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 
@@ -18,7 +17,7 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
     [Fact]
     public async Task ApplyAsync_WithMalformedOpenCodeJsonc_ThrowsInvalidOperationException()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a malformed opencode.jsonc at the workspace root
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "opencode.jsonc");
@@ -44,7 +43,7 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
     [Fact]
     public async Task ApplyAsync_WithEmptyOpenCodeJsonc_ThrowsInvalidOperationException()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create an empty opencode.jsonc
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "opencode.jsonc");
@@ -67,7 +66,7 @@ public class OpenCodeAgentEnvironmentScannerTests(ITestOutputHelper outputHelper
     [Fact]
     public async Task ApplyAsync_WithMalformedOpenCodeJsonc_DoesNotOverwriteFile()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         // Create a malformed opencode.jsonc with content the user may want to preserve
         var configPath = Path.Combine(workspace.WorkspaceRoot.FullName, "opencode.jsonc");

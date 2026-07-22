@@ -931,6 +931,12 @@ export interface CreateInteractionInputOptions {
     disabled?: boolean | null;
     /** Gets or sets the maximum length for text inputs. */
     maxLength?: number | null;
+    /** Gets or sets the maximum file size in bytes for file inputs. */
+    maxFileSize?: number | null;
+    /** Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs. */
+    allowMultipleFiles?: boolean | null;
+    /** Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute. */
+    fileFilter?: string | null;
 }
 
 /** Options controlling when a dynamic-loading callback runs. */
@@ -12760,6 +12766,11 @@ export interface InteractionService {
      */
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
     /**
+     * Creates a file input.
+     * @param options Additional options.
+     */
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
      * Creates a choice input that selects from a list of options.
      * @param name The name of the input.
      * @param options Additional options.
@@ -12823,6 +12834,11 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
      * @param options Additional options.
      */
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a file input.
+     * @param options Additional options.
+     */
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
     /**
      * Creates a choice input that selects from a list of options.
      * @param name The name of the input.
@@ -13065,6 +13081,25 @@ class InteractionServiceImpl implements InteractionService {
     }
 
     /** @internal */
+    async _createFileInputInternal(name: string, options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting/createFileInput',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Creates a file input.
+     * @param options Additional options.
+     */
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._createFileInputInternal(name, options), this._client);
+    }
+
+    /** @internal */
     async _createChoiceInputInternal(name: string, choices?: InteractionChoiceOption[], options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
         const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
         if (choices !== undefined) rpcArgs.choices = choices;
@@ -13146,6 +13181,10 @@ class InteractionServicePromiseImpl implements InteractionServicePromise {
 
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
         return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createNumberInput(name, options)), this._client);
+    }
+
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createFileInput(name, options)), this._client);
     }
 
     createChoiceInput(name: string, options?: CreateChoiceInputOptions): InteractionInputBuilderPromise {

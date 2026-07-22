@@ -23,7 +23,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_WhenNoAppHostRunning_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -38,7 +38,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_WithDevLocalhostDashboardApiUrl_UsesLocalhost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var requestedHosts = new List<string>();
         var resourcesJson = JsonSerializer.Serialize(
@@ -147,7 +147,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_WithDevLocalhostDashboardUrlArg_PreservesDisplayUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         var requestedHosts = new List<string>();
 
@@ -236,7 +236,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [InlineData(-100)]
     public async Task TelemetryTracesCommand_WithInvalidLimitValue_ReturnsInvalidCommand(int limitValue)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -251,7 +251,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_TableOutput_ResolvesUniqueResourceNames()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
@@ -302,7 +302,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
         var guid1 = Guid.Parse("11111111-2222-3333-4444-555555555555");
         var guid2 = Guid.Parse("aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         using var provider = TelemetryTestHelper.CreateTelemetryTestServices(workspace, outputHelper, outputWriter,
             resources:
@@ -400,7 +400,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_WithDashboardUrl_FetchesTracesDirectly()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
 
         var handler = new MockHttpMessageHandler(request =>
@@ -447,7 +447,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_WithDashboardUrlAndAppHost_ReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -470,7 +470,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_WithDashboardUrl_401_DisplaysAuthFailedMessage()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var testInteractionService = new TestInteractionService();
 
@@ -508,7 +508,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_JsonOutput_ProducesExpectedJson()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
 
         var resourceSpans = new OtlpResourceSpansJson[]
@@ -622,7 +622,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_JsonOutput_WithTraceIdAndNoTrace_ReturnsEmptyArray()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
 
         var apiResponse = new TelemetryApiResponse
@@ -676,7 +676,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_WithSearchOption_PassesSearchToUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         string? capturedUrl = null;
 
@@ -723,7 +723,7 @@ public class TelemetryTracesCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task TelemetryTracesCommand_WithDurationSearchFilter_PassesDurationFilterInSearchUrl()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputWriter = new TestOutputTextWriter(outputHelper);
         string? capturedUrl = null;
 

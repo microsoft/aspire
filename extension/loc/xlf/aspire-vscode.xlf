@@ -331,6 +331,9 @@
     <trans-unit id="aspire-vscode.strings.failedToStartProject">
       <source xml:lang="en">Failed to start project: {0}.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.aspireCliPathEnvironmentDescription">
+      <source xml:lang="en">Forwards aspire.aspireCliExecutablePath as AspireCliPath so MSBuild bundle resolution and integrated terminals use the configured Aspire CLI.</source>
+    </trans-unit>
     <trans-unit id="walkthrough.getStarted.title">
       <source xml:lang="en">Get started with Aspire</source>
     </trans-unit>
@@ -381,6 +384,9 @@
     </trans-unit>
     <trans-unit id="configuration.aspire.dashboardBrowser.debugEdge">
       <source xml:lang="en">Launch Microsoft Edge as a debug session (auto-closes when debugging ends).</source>
+    </trans-unit>
+    <trans-unit id="aspire-vscode.strings.executableLaunchProfileMissingExecutablePath">
+      <source xml:lang="en">Launch profile &apos;{0}&apos; uses commandName &apos;Executable&apos; but does not specify an executablePath. Add an executablePath to the launch profile.</source>
     </trans-unit>
     <trans-unit id="extension.debug.defaultConfiguration.description">
       <source xml:lang="en">Launch the effective Aspire AppHost in your workspace</source>
@@ -515,7 +521,10 @@
       <source xml:lang="en">Path to the AppHost to run</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.globalAppHostsPollingInterval">
-      <source xml:lang="en">Polling interval in milliseconds for fetching all running AppHosts (used in global view). Minimum: 1000.</source>
+      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.appHostsPollingInterval">
+      <source xml:lang="en">Polling interval in milliseconds for fetching running AppHosts. Minimum: 1000.</source>
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.processExitedWithCode">
       <source xml:lang="en">Process exited with code {0}.</source>
@@ -688,6 +697,9 @@
     <trans-unit id="aspire-vscode.strings.dashboardLaunchNoneDescription">
       <source xml:lang="en">The dashboard URL is still printed in the terminal and available from the Aspire panel.</source>
     </trans-unit>
+    <trans-unit id="aspire-vscode.strings.dotNetRunFileBasedExecutableProfileFallback">
+      <source xml:lang="en">The default launch profile &apos;{0}&apos; is an Executable profile, so dotnet run-api does not return the file-based app {1}; launching it with dotnet run without debugger attach. Breakpoints will not be hit for this resource.</source>
+    </trans-unit>
     <trans-unit id="configuration.aspire.aspireCliExecutablePath">
       <source xml:lang="en">The path to the Aspire CLI executable. If not set, the extension will attempt to use &apos;aspire&apos; from the system PATH.</source>
     </trans-unit>
@@ -702,6 +714,9 @@
     </trans-unit>
     <trans-unit id="aspire-vscode.strings.fieldRequired">
       <source xml:lang="en">This field is required.</source>
+    </trans-unit>
+    <trans-unit id="configuration.aspire.globalAppHostsPollingInterval.deprecated">
+      <source xml:lang="en">This setting has been renamed to aspire.appHostsPollingInterval.</source>
     </trans-unit>
     <trans-unit id="configuration.aspire.appHostDiscoveryTimeoutMs">
       <source xml:lang="en">Timeout in milliseconds for Aspire CLI commands that discover AppHost projects. Minimum: 1000.</source>

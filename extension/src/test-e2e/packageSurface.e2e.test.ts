@@ -497,6 +497,7 @@ const expectedCommandIds = [
 
 const expectedConfigurationKeys = [
     'aspire.appHostDiscoveryTimeoutMs',
+    'aspire.appHostsPollingInterval',
     'aspire.aspireCliExecutablePath',
     'aspire.closeDashboardOnDebugEnd',
     'aspire.dashboardBrowser',

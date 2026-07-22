@@ -192,6 +192,7 @@ export type AspireExtensionE2EControlCommand =
     | { name: 'restoreClipboardSnapshot' }
     | { name: 'captureWorkspaceAppHostPathClipboardExpectation' }
     | { name: 'assertClipboardMatchesLastExpectation' }
+    | { name: 'openFile'; filePath: string }
     | { name: 'openWorkspaceFolder'; folderPath: string }
     | { name: 'getWorkspaceFolders' }
     | { name: 'getActiveEditor' }

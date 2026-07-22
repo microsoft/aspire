@@ -14,7 +14,7 @@
     }
     else
     {
-        <span class="grid-value" title="@(ToolTip ?? Value)" id="@_cellTextId">
+        <span class="grid-value" title="@(ToolTip ?? Value)" id="@_cellTextId" @onkeydown:stopPropagation="true">
             @if (ContentBeforeValue == null && ContentAfterValue == null && string.IsNullOrEmpty(Value))
             {
                 <span class="empty-data"></span>
@@ -46,7 +46,7 @@
 
     @* Button area *@
 
-    <div @onclick:stopPropagation="true" class="button-container">
+    <div @onclick:stopPropagation="true" @onkeydown:stopPropagation="true" class="button-container">
 
         <span class="defaultHidden">
             <FluentButton Appearance="Appearance.Lightweight"
