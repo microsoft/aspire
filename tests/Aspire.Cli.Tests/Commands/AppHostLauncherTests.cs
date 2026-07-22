@@ -195,12 +195,12 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             stopAfterLaunchDelay: null,
             CancellationToken.None);
 
-        await harness.ProcessFactory.Started.Task.WaitAsync(TimeSpan.FromSeconds(10)).DefaultTimeout();
+        await harness.ProcessFactory.Started.Task.DefaultTimeout();
         Assert.NotSame(launchTask, await Task.WhenAny(launchTask, Task.Delay(TimeSpan.FromMilliseconds(100))).DefaultTimeout());
 
         readiness.SetResult(new WaitForAppHostReadyResponse { IsReady = true });
 
-        var result = await launchTask.WaitAsync(TimeSpan.FromSeconds(10)).DefaultTimeout();
+        var result = await launchTask.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.Success, result.ExitCode);
         Assert.Contains(RunCommandStrings.StartingAppHostInBackground, harness.InteractionService.DynamicStatusTexts);
@@ -312,11 +312,11 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             stopAfterLaunchDelay: null,
             CancellationToken.None);
 
-        await connectionLostStatusDisplayed.Task.WaitAsync(TimeSpan.FromSeconds(10)).DefaultTimeout();
+        await connectionLostStatusDisplayed.Task.DefaultTimeout();
         Assert.NotSame(launchTask, await Task.WhenAny(launchTask, Task.Delay(TimeSpan.FromMilliseconds(100))).DefaultTimeout());
 
         harness.ProcessFactory.StopStartedProcess();
-        var result = await launchTask.WaitAsync(TimeSpan.FromSeconds(10)).DefaultTimeout();
+        var result = await launchTask.DefaultTimeout();
 
         Assert.Equal(CliExitCodes.FailedToDotnetRunAppHost, result.ExitCode);
         Assert.Contains(RunCommandStrings.StartingAppHostInBackground, harness.InteractionService.DynamicStatusTexts);
@@ -609,7 +609,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             stopAfterLaunchDelay: null,
             cts.Token);
 
-        await harness.ProcessFactory.Started.Task.WaitAsync(TimeSpan.FromSeconds(10)).DefaultTimeout();
+        await harness.ProcessFactory.Started.Task.DefaultTimeout();
         var startedProcess = harness.ProcessFactory.StartedProcess ?? throw new InvalidOperationException("Expected child process to start.");
 
         try
@@ -617,7 +617,7 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             Assert.False(startedProcess.HasExited);
 
             await cts.CancelAsync().DefaultTimeout();
-            var result = await launchTask.WaitAsync(TimeSpan.FromSeconds(10)).DefaultTimeout();
+            var result = await launchTask.DefaultTimeout();
 
             Assert.Equal(CliExitCodes.Success, result.ExitCode);
             Assert.Empty(harness.InteractionService.DisplayedErrors);
