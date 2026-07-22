@@ -117,14 +117,8 @@
     <FluentDialogProvider/>
     <FluentTooltipProvider />
     <FluentMenuProvider />
-    @if (!_isSwitchingRuns)
-    {
-        var selectedRun = RunSelection.SelectedRun;
-        <CascadingValue @key="selectedRun.RunId" Name="DashboardRunProviders" Value="selectedRun.RunId" IsFixed="true">
-            <InteractionsProvider />
-            <ResourceServiceConnectionProvider />
-        </CascadingValue>
-    }
+    <InteractionsProvider />
+    <ResourceServiceConnectionProvider />
     <div id="blazor-error-ui">
         @Loc[nameof(Layout.MainLayoutUnhandledErrorMessage)]
         <a href="" class="reload">@Loc[nameof(Layout.MainLayoutUnhandledErrorReload)]</a>
