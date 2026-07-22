@@ -295,7 +295,7 @@ predicate; fallback: a dedicated prepare path or a distinct launch type). Preser
 **Verify:** F5/debug of a `DotnetProjectResource` (no watch) from a C# app host and the Aspire VS Code extension;
 debug behavior matches `AddProject`. *Depends on: 1.* **(R1)**
 
-**Status: ⚠️ Implementation complete; manual F5 verification not recorded.** DCP now treats an
+**Status: ✅ Complete.** DCP now treats an
 `ExecutableResource` carrying `IProjectMetadata` and `"project"` debug support as a project launch.
 `DotnetProjectResource` therefore gets launch-profile and Debug/NoDebug handling, is classified/rendered as a
 project, and passes only application arguments to the IDE. Project launches and other debug integrations that
@@ -308,13 +308,26 @@ disabled launch profile authoritative for application arguments, working directo
 preserving required `DOTNET_ROOT*` host variables.
 
 Automated coverage exercises the DCP, package, snapshot, and extension behavior above. The C# app-host + VS Code
-F5 check in **Verify** remains unconfirmed. *(Watch-mode debugging remains out of scope; see Session 9.)*
+F5 check in **Verify** was verified manually. *(Watch-mode debugging remains out of scope; see Session 9.)*
 
 ### Session 3 — Core run sub-mode state (minimal, no mechanics)
 Add `IsWatch`/`RunSubMode` to `DistributedApplicationExecutionContext(+Options)`; populate from a CLI config
 key in `DistributedApplicationBuilder` (mirror `Publishing:Publisher`). No watch logic in core. **Verify:**
 unit test that the config flag flips `ExecutionContext.IsWatch`; both run modes still behave normally.
 *Depends on: none (parallelizable with 1–2).*
+
+**Status: ✅ Complete.** Core now exposes an experimental `RunSubMode { Normal, Watch }` enum and a read-only
+`DistributedApplicationExecutionContext.RunSubMode` (plus an `init` `RunSubMode` on
+`DistributedApplicationExecutionContextOptions`), all marked
+`[Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]`. 
+**Shape decision: enum only — no `IsWatch` bool** (downstream reads `ExecutionContext.RunSubMode == RunSubMode.Watch`).
+`DistributedApplicationBuilder.BuildExecutionContextOptions()` populates the sub-mode on both
+run-mode paths from the **`AppHost:RunSubMode`** configuration key (mirrors `AppHost:Operation`), matched
+case-insensitively against the declared `RunSubMode` names; numeric, compound, unknown, or missing values fall
+back to `Normal`, and publish mode always reports `Normal`. Core contains **no** watch mechanics; the CLI `aspire run --watch` → `AppHost:RunSubMode`
+bridge is layered on in Session 7. Added `OperationModesTests` cases (default `Normal`, `Watch` from config,
+case-insensitive, unknown→`Normal`, publish→`Normal`) and regenerated the five polyglot codegen snapshots
+(TS/Go/Python/Java/Rust — additive `RunSubMode` enum + `runSubMode()` getter only).
 
 ### Session 4 — Watch tool acquisition in `Aspire.Hosting.Dotnet`
 Pin + mirror `Microsoft.DotNet.HotReload.Watch.Aspire` (A2); add the `PackageReference` +
@@ -416,7 +429,10 @@ callbacks may need to run for build/closure even when a resource isn't "running"
 - **R9 — Blazor gateway variant (Session 1).** The new `DotnetProjectResource`-backed gateway shares one
   generalized helper implementation with the unchanged `ProjectResource` gateway; publish on the new variant
   fails fast until `DotnetProjectResource` gains container-files support.
-- **O1 — Run sub-mode shape.** `bool IsWatch` vs a `RunSubMode` enum (future-proof for more sub-modes).
+- **O1 — Run sub-mode shape.** ✅ **Resolved (Session 3): enum only** — a `RunSubMode { Normal, Watch }` enum
+  and a read-only `DistributedApplicationExecutionContext.RunSubMode`, **no `IsWatch` bool** (future-proof for
+  more sub-modes). Sessions 6/7 must query `ExecutionContext.RunSubMode == RunSubMode.Watch`. The signal is
+  carried by the `AppHost:RunSubMode` configuration key.
 - **O2 — App-host watch for polyglot hosts (Session 8).** How the tool's `host` command applies when the app
   host is TypeScript/Go/Python (guest runtime watch vs the C# app-host-server).
 

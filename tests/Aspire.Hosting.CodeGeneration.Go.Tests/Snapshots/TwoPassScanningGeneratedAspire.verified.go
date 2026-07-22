@@ -59,6 +59,14 @@ const (
 	DistributedApplicationOperationPublish DistributedApplicationOperation = "Publish"
 )
 
+// RunSubMode represents RunSubMode.
+type RunSubMode string
+
+const (
+	RunSubModeNormal RunSubMode = "Normal"
+	RunSubModeWatch RunSubMode = "Watch"
+)
+
 // OtlpProtocol represents OtlpProtocol.
 type OtlpProtocol string
 
@@ -10431,6 +10439,7 @@ type DistributedApplicationExecutionContext interface {
 	IsRunMode() (bool, error)
 	Operation() (DistributedApplicationOperation, error)
 	PublisherName() (string, error)
+	RunSubMode() (RunSubMode, error)
 	ServiceProvider() ServiceProvider
 	Services() ServiceProvider
 	SetPublisherName(value string) DistributedApplicationExecutionContext
@@ -10505,6 +10514,21 @@ func (s *distributedApplicationExecutionContext) PublisherName() (string, error)
 		return zero, err
 	}
 	return decodeAs[string](result)
+}
+
+// RunSubMode the run sub-mode the AppHost is running under. Only meaningful when `Operation` is `Run`; otherwise `Normal`.
+func (s *distributedApplicationExecutionContext) RunSubMode() (RunSubMode, error) {
+	if s.err != nil { var zero RunSubMode; return zero, s.err }
+	ctx := context.Background()
+	reqArgs := map[string]any{
+		"context": s.handle.ToJSON(),
+	}
+	result, err := s.client.invokeCapability(ctx, "Aspire.Hosting/DistributedApplicationExecutionContext.runSubMode", reqArgs)
+	if err != nil {
+		var zero RunSubMode
+		return zero, err
+	}
+	return decodeAs[RunSubMode](result)
 }
 
 // ServiceProvider the `IServiceProvider` for the AppHost.
