@@ -16,7 +16,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
     private readonly TemporaryWorkspace _workspace;
     private readonly string _repoRoot;
-    private readonly string _harnessPath;
+    private readonly string _scriptPath;
     private readonly ITestOutputHelper _output;
 
     public AnalyzeCiFailureWorkflowTests(ITestOutputHelper output)
@@ -24,7 +24,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         _output = output;
         _workspace = TemporaryWorkspace.Create(output);
         _repoRoot = RepoRoot.Path;
-        _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "analyze-ci-failure.harness.js");
+        _scriptPath = Path.Combine(_repoRoot, ".github", "workflows", "analyze-ci-failure.js");
     }
 
     public void Dispose() => _workspace.Dispose();
@@ -43,11 +43,15 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             error_pattern = "connection reset"
         };
 
-        var result = await InvokeHarnessAsync<JsonElement>("addOccurrence", new { analysis, cause });
+        var output = await InvokeScriptAsync("add-occurrence", analysis, cause);
+        var result = JsonSerializer.Deserialize<JsonElement>(output, s_jsonOptions);
 
         var occurrence = Assert.Single(result.GetProperty("occurrences").EnumerateArray());
         Assert.Equal("Tests / Linux", occurrence.GetProperty("job").GetString());
         Assert.Equal(987654, occurrence.GetProperty("run_id").GetInt32());
+
+        var occurrenceRow = await InvokeScriptAsync("occurrence-row", analysis, cause);
+        Assert.Equal("| 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | Tests / Linux | #18763 |", occurrenceRow);
     }
 
     [Fact]
@@ -63,8 +67,6 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
                     job = "Tests / Windows",
                     error = "Wrong job",
                     stack_trace = "",
-                    standard_output = "",
-                    standard_error = "",
                     reason = "Wrong classification"
                 },
                 new
@@ -73,8 +75,8 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
                     job = "Tests / Linux",
                     error = "Expected <actual> & stable",
                     stack_trace = "at <frame>",
-                    standard_output = "stdout <b>bold</b>",
-                    standard_error = "stderr 'quoted'",
+                    standard_output = "Connecting to https://user:password@example.com\nSECRET_TOKEN=unmasked-token\nRetry remains useful",
+                    standard_error = "Server=database;Password=unmasked-password;Timeout=30\nAssertion context remains useful",
                     reason = "Retry <later> & inspect \"logs\".\n@team\n# Heading\n[logs](https://example.com)"
                 }
             ]);
@@ -88,9 +90,11 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             error_pattern = "Expected actual"
         };
 
-        var body = await InvokeHarnessAsync<string>(
-            "buildIssueBody",
-            new { analysis, cause, marker = "<!-- ci-failure-cause:sample-theory-flake -->" });
+        var body = await InvokeScriptAsync(
+            "issue-body",
+            analysis,
+            cause,
+            "<!-- ci-failure-cause:sample-theory-flake -->");
 
         var expected = """
             <!-- ci-failure-cause:sample-theory-flake -->
@@ -123,10 +127,13 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             at &lt;frame&gt;
 
             Standard Output:
-            stdout &lt;b&gt;bold&lt;/b&gt;
+            Connecting to https://[REDACTED]:[REDACTED]@example.com
+            SECRET_TOKEN=[REDACTED]
+            Retry remains useful
 
             Standard Error:
-            stderr &#39;quoted&#39;
+            Server=database;Password=[REDACTED];Timeout=30
+            Assertion context remains useful
             </pre>
 
             </details>
@@ -142,7 +149,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             | Date | Build | Job | PR |
             |------|-------|-----|----|
             | 2026-07-22 | [987654](https://github.com/microsoft/aspire/actions/runs/987654) | Tests / Linux | #18763 |
-            """.ReplaceLineEndings("\n") + "\n";
+            """.ReplaceLineEndings("\n");
 
         Assert.Equal(expected, body);
     }
@@ -162,14 +169,45 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
             failure_details = "Request to <feed> failed & timed out"
         };
 
-        var body = await InvokeHarnessAsync<string>(
-            "buildIssueBody",
-            new { analysis, cause, marker = "<!-- ci-failure-cause:linux-network-failure -->" });
+        var body = await InvokeScriptAsync(
+            "issue-body",
+            analysis,
+            cause,
+            "<!-- ci-failure-cause:linux-network-failure -->");
 
         Assert.Contains("Build error leg: Tests / Linux", body);
         Assert.Contains("Linux runner lost &lt;network&gt; connectivity.", body);
         Assert.Contains("Request to &lt;feed&gt; failed &amp; timed out", body);
         Assert.Contains("| Tests / Linux | #18763 |", body);
+    }
+
+    [Fact]
+    [RequiresTools(["node"])]
+    public async Task RedactOperationRemovesSensitiveValuesAndPreservesDiagnostics()
+    {
+        var input = new
+        {
+            standard_output = "Authorization: Bearer token-value\nAPI_KEY=key-value\nExpected 42 but got 41",
+            standard_error = "Host=db;Password=secret-value;Timeout=30\nhttps://user:pass@example.com/path",
+            nested = new[] { "eyJ1234567890.abcdefghijk.ABCDEFGHIJK" }
+        };
+        var inputPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-redact.json");
+        await File.WriteAllTextAsync(inputPath, JsonSerializer.Serialize(input, s_jsonOptions));
+
+        using var command = new NodeCommand(_output, "analyze-ci-failure-redact");
+        command.WithWorkingDirectory(_repoRoot);
+
+        var result = await command.ExecuteScriptAsync(_scriptPath, "redact", inputPath);
+
+        Assert.Equal(0, result.ExitCode);
+        var redacted = JsonSerializer.Deserialize<JsonElement>(result.Output, s_jsonOptions);
+        Assert.Equal(
+            "Authorization: Bearer [REDACTED]\nAPI_KEY=[REDACTED]\nExpected 42 but got 41",
+            redacted.GetProperty("standard_output").GetString());
+        Assert.Equal(
+            "Host=db;Password=[REDACTED];Timeout=30\nhttps://[REDACTED]:[REDACTED]@example.com/path",
+            redacted.GetProperty("standard_error").GetString());
+        Assert.Equal("[REDACTED]", redacted.GetProperty("nested")[0].GetString());
     }
 
     private static object CreateAnalysis(object[]? failedTests = null)
@@ -189,21 +227,22 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         };
     }
 
-    private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
+    private async Task<string> InvokeScriptAsync(string operation, object analysis, object cause, string? marker = null)
     {
-        var requestPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.json");
-        await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { operation, payload }, s_jsonOptions));
+        var analysisPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-analysis.json");
+        var causePath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}-cause.json");
+        await File.WriteAllTextAsync(analysisPath, JsonSerializer.Serialize(analysis, s_jsonOptions));
+        await File.WriteAllTextAsync(causePath, JsonSerializer.Serialize(cause, s_jsonOptions));
 
         using var command = new NodeCommand(_output, "analyze-ci-failure");
         command.WithWorkingDirectory(_repoRoot);
 
-        var result = await command.ExecuteScriptAsync(_harnessPath, requestPath);
+        var arguments = marker is null
+            ? new[] { operation, analysisPath, causePath }
+            : new[] { operation, analysisPath, causePath, marker };
+        var result = await command.ExecuteScriptAsync(_scriptPath, arguments);
         Assert.Equal(0, result.ExitCode);
 
-        var response = JsonSerializer.Deserialize<HarnessResponse<T>>(result.Output, s_jsonOptions);
-        Assert.NotNull(response);
-        return response!.Result;
+        return result.Output.ReplaceLineEndings("\n");
     }
-
-    private sealed record HarnessResponse<T>(T Result);
 }
