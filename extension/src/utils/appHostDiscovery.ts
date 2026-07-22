@@ -5,7 +5,7 @@ import type { ChildProcessWithoutNullStreams } from 'child_process';
 import { spawnCliProcess } from '../debugger/languages/cli';
 import { AspireTerminalProvider } from './AspireTerminalProvider';
 import { aspireConfigFileName, getAppHostPathFromConfig, readJsonFile } from './cliTypes';
-import { isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
+import { containsQuotedCliToken, isNoLogoUnsupportedOutput, noLogoOption, removeRootNoLogoOption } from './cliCompatibility';
 import { EnvironmentVariables } from './environment';
 import { extensionLogOutputChannel } from './logging';
 import { getAppHostDiscoveryTimeoutMs } from './settings';
@@ -48,6 +48,24 @@ interface AppHostDiscoveryResult {
     candidates: CandidateAppHostDisplayInfo[];
 }
 
+class CliProcessError extends Error {
+    constructor(
+        message: string,
+        public readonly args: readonly string[],
+        public readonly stdout: string,
+        public readonly stderr: string,
+        public readonly exitCode: number | null | undefined) {
+        super(message);
+        this.name = 'CliProcessError';
+    }
+}
+
+interface CliProcessOptions {
+    stdoutCallback?: (data: string) => void;
+    lineCallback?: (line: string) => void;
+    resetTimeoutOnOutput?: boolean;
+}
+
 export class AppHostDiscoveryService implements vscode.Disposable {
     private static readonly _candidateChangeDebounceMs = 250;
 
@@ -57,13 +75,14 @@ export class AppHostDiscoveryService implements vscode.Disposable {
     private readonly _pendingInvalidationTimers = new Map<string, ReturnType<typeof setTimeout>>();
     private readonly _activeCliProcesses = new Set<ChildProcessWithoutNullStreams>();
     private readonly _cancelActiveCliProcesses = new Set<(error: Error) => void>();
+    private _streamingLsSupported = true;
     private _disposed = false;
     readonly onDidChangeCandidates = this._onDidChangeCandidates.event;
 
     constructor(private readonly _terminalProvider: AspireTerminalProvider) {
     }
 
-    async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken): Promise<CandidateAppHostDisplayInfo[]> {
+    async discover(workspaceFolder: vscode.WorkspaceFolder, forceRefresh = false, cancellationToken?: vscode.CancellationToken, onCandidate: (candidate: CandidateAppHostDisplayInfo) => void = () => { }): Promise<CandidateAppHostDisplayInfo[]> {
         this._throwIfDisposed();
         throwIfCancellationRequested(cancellationToken);
 
@@ -80,7 +99,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             // The cached discovery promise is shared across extension features. Keep caller
             // cancellation outside the cached operation so one cancelled refresh doesn't reject
             // unrelated callers that are awaiting the same workspace discovery.
-            const discoveryPromise = this._discoverCore(workspaceFolder)
+            const discoveryPromise = this._discoverCore(workspaceFolder, onCandidate)
                 .then(async discovery => {
                     let candidates = discovery.candidates;
                     try {
@@ -173,9 +192,9 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         this._onDidChangeCandidates.dispose();
     }
 
-    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder): Promise<AppHostDiscoveryResult> {
+    private async _discoverCore(workspaceFolder: vscode.WorkspaceFolder, onCandidate: (candidate: CandidateAppHostDisplayInfo) => void): Promise<AppHostDiscoveryResult> {
         try {
-            const appHosts = await this._discoverWithLs(workspaceFolder);
+            const appHosts = await this._discoverWithLs(workspaceFolder, onCandidate);
             extensionLogOutputChannel.info(`Discovered ${appHosts.length} AppHost candidate(s) via aspire ls`);
             return { source: 'ls', candidates: appHosts };
         }
@@ -209,16 +228,69 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         }
     }
 
-    private async _discoverWithLs(workspaceFolder: vscode.WorkspaceFolder): Promise<CandidateAppHostDisplayInfo[]> {
+    private async _discoverWithLs(workspaceFolder: vscode.WorkspaceFolder, onCandidate: (candidate: CandidateAppHostDisplayInfo) => void): Promise<CandidateAppHostDisplayInfo[]> {
         this._throwIfDisposed();
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
-        const args = ['ls', '--format', 'json', noLogoOption];
-        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            args.push('--cli-wait-for-debugger');
+
+        if (this._streamingLsSupported) {
+            const streamArgs = ['ls', '--format', 'json', noLogoOption, '--stream'];
+            const candidates: CandidateAppHostDisplayInfo[] = [];
+            const handleLine = (line: string) => {
+                const trimmed = line.trim();
+                if (!trimmed) {
+                    return;
+                }
+
+                let parsed: unknown;
+                try {
+                    parsed = JSON.parse(trimmed);
+                }
+                catch {
+                    extensionLogOutputChannel.warn(`Ignoring unparseable aspire ls --stream line: ${trimmed}`);
+                    return;
+                }
+
+                if (!isLsCandidate(parsed)) {
+                    extensionLogOutputChannel.warn('Ignoring aspire ls --stream candidate with an unexpected shape.');
+                    return;
+                }
+
+                const candidate = toDisplayCandidate(parsed);
+                candidates.push(candidate);
+                try {
+                    onCandidate(candidate);
+                }
+                catch (error) {
+                    extensionLogOutputChannel.warn(`AppHost discovery candidate callback failed: ${formatErrorMessage(error)}`);
+                }
+            };
+
+            try {
+                const output = await this._runCliProcess(cliPath, streamArgs, workspaceFolder.uri.fsPath, {
+                    lineCallback: handleLine,
+                    resetTimeoutOnOutput: true,
+                });
+                if (candidates.length === 0 && output.trim()) {
+                    for (const candidate of parseCandidateOutput(output, 'aspire ls --stream')) {
+                        candidates.push(candidate);
+                        onCandidate(candidate);
+                    }
+                }
+                return candidates;
+            }
+            catch (error) {
+                if (!isLsStreamUnsupportedError(error)) {
+                    throw error;
+                }
+
+                this._streamingLsSupported = false;
+                extensionLogOutputChannel.info('Installed Aspire CLI does not recognize --stream; retrying AppHost discovery without it.');
+            }
         }
 
-        const output = await this._runCliForStdout(cliPath, args, workspaceFolder.uri.fsPath);
+        const args = ['ls', '--format', 'json', noLogoOption];
+        const output = await this._runCliProcess(cliPath, args, workspaceFolder.uri.fsPath);
         return parseCandidateOutput(output, 'aspire ls');
     }
 
@@ -227,11 +299,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
 
         const cliPath = await this._terminalProvider.getAspireCliExecutablePath();
         const args = ['extension', 'get-apphosts', noLogoOption];
-        if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-            args.push('--cli-wait-for-debugger');
-        }
-
-        const output = await this._runCliForStdout(cliPath, args, workspaceFolder.uri.fsPath);
+        const output = await this._runCliProcess(cliPath, args, workspaceFolder.uri.fsPath);
         const parsed = parseLegacyGetAppHostsOutput(output);
         return toCandidatesFromLegacySearchResult(parsed);
     }
@@ -336,9 +404,13 @@ export class AppHostDiscoveryService implements vscode.Disposable {
         return filteredCandidates;
     }
 
-    private _runCliForStdout(cliPath: string, args: string[], workingDirectory: string): Promise<string> {
-        return new Promise((resolve, reject) => {
+    private _runCliProcess(cliPath: string, args: string[], workingDirectory: string, options: CliProcessOptions = {}): Promise<string> {
+        return new Promise<string>((resolve, reject) => {
             this._throwIfDisposed();
+
+            const cliArgs = process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true'
+                ? [...args, '--cli-wait-for-debugger']
+                : args;
 
             let stdout = '';
             let stderr = '';
@@ -349,7 +421,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 if (childProcess && !childProcess.killed) {
                     try {
                         if (!childProcess.kill()) {
-                            extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: aspire ${args.join(' ')}`);
+                            extensionLogOutputChannel.warn(`Failed to stop AppHost discovery command: aspire ${cliArgs.join(' ')}`);
                         }
                     }
                     catch (killError) {
@@ -379,24 +451,49 @@ export class AppHostDiscoveryService implements vscode.Disposable {
                 complete();
             };
 
+            const timeoutMs = getAppHostDiscoveryTimeoutMs();
+            const startTimeout = () => {
+                if (settled) {
+                    return;
+                }
+
+                if (timeout) {
+                    clearTimeout(timeout);
+                }
+                timeout = setTimeout(() => {
+                    const silence = options.resetTimeoutOnOutput ? ' without output' : '';
+                    cancel(new Error(`aspire ${cliArgs.join(' ')} timed out after ${timeoutMs / 1000} seconds${silence}.`));
+                }, timeoutMs);
+            };
+            const onActivity = options.resetTimeoutOnOutput ? startTimeout : undefined;
             this._cancelActiveCliProcesses.add(cancel);
             try {
-                childProcess = spawnCliProcess(this._terminalProvider, cliPath, args, {
+                childProcess = spawnCliProcess(this._terminalProvider, cliPath, cliArgs, {
                     noExtensionVariables: true,
                     workingDirectory,
-                    stdoutCallback: data => { stdout += data; },
+                    stdoutCallback: data => {
+                        onActivity?.();
+                        stdout += data;
+                        options.stdoutCallback?.(data);
+                    },
+                    lineCallback: options.lineCallback
+                        ? line => {
+                            onActivity?.();
+                            options.lineCallback!(line);
+                        }
+                        : undefined,
                     stderrCallback: data => { stderr += data; },
                     exitCallback: code => {
                         settle(() => {
                             if (code === 0) {
                                 resolve(stdout);
                             }
-                            else if (isNoLogoUnsupportedOutput(args, stdout, stderr)) {
+                            else if (isNoLogoUnsupportedOutput(cliArgs, stdout, stderr)) {
                                 extensionLogOutputChannel.info(`Installed Aspire CLI does not recognize ${noLogoOption}; retrying AppHost discovery without it.`);
-                                this._runCliForStdout(cliPath, removeRootNoLogoOption(args), workingDirectory).then(resolve, reject);
+                                this._runCliProcess(cliPath, removeRootNoLogoOption(args), workingDirectory, options).then(resolve, reject);
                             }
                             else {
-                                reject(new Error(stderr || `exit code ${code ?? 1}`));
+                                reject(new CliProcessError(stderr || stdout || `exit code ${code ?? 1}`, cliArgs, stdout, stderr, code));
                             }
                         });
                     },
@@ -415,10 +512,7 @@ export class AppHostDiscoveryService implements vscode.Disposable {
             }
 
             this._activeCliProcesses.add(childProcess);
-            const timeoutMs = getAppHostDiscoveryTimeoutMs();
-            timeout = setTimeout(() => {
-                cancel(new Error(`aspire ${args.join(' ')} timed out after ${timeoutMs / 1000} seconds.`));
-            }, timeoutMs);
+            startTimeout();
         });
     }
 }
@@ -438,6 +532,19 @@ function emitAppHostDiscoveryTelemetry(
         candidate_count: candidates.length,
         buildable_candidate_count: candidates.filter(candidate => candidate.status === 'buildable').length,
     });
+}
+
+function isLsStreamUnsupportedError(error: unknown): boolean {
+    if (!(error instanceof CliProcessError) || !error.args.includes('--stream')) {
+        return false;
+    }
+
+    const output = `${error.stdout}\n${error.stderr}`;
+
+    // Older CLIs localize the unsupported-option message, but System.CommandLine preserves the
+    // rejected option token in diagnostics, e.g. "Unrecognized command or argument '--stream'."
+    // Scope the check to failed invocations where we actually passed --stream.
+    return containsQuotedCliToken(output, '--stream') || output.includes('--stream');
 }
 
 export function findCandidateForEditorFile(filePath: string, candidates: readonly CandidateAppHostDisplayInfo[]): CandidateAppHostDisplayInfo | undefined {
@@ -706,6 +813,11 @@ function toDisplayCandidate(candidate: CandidateAppHostDisplayInfo | AppHostCand
         language: candidate.language,
         status: candidate.status,
     };
+
+    const selected = 'selected' in candidate ? candidate.selected : undefined;
+    if (selected !== undefined) {
+        displayCandidate.selected = selected;
+    }
 
     return displayCandidate;
 }

@@ -43,9 +43,36 @@ class TestChildProcess extends EventEmitter {
 
 function createLsLineCallback(options: any): (line: string) => void {
     return line => {
+        if (options?.lineCallback) {
+            for (const candidate of toStreamCandidates(line)) {
+                options.lineCallback(JSON.stringify(candidate));
+            }
+
+            options.exitCallback?.(0);
+            return;
+        }
+
         options?.stdoutCallback?.(line);
         options?.exitCallback?.(0);
     };
+}
+
+function toStreamCandidates(output: string): CandidateAppHostDisplayInfo[] {
+    const parsed = JSON.parse(output);
+    if (Array.isArray(parsed)) {
+        return parsed;
+    }
+
+    if (!Array.isArray(parsed.all_project_file_candidates)) {
+        return [];
+    }
+
+    return parsed.all_project_file_candidates.map((candidatePath: string) => ({
+        path: candidatePath,
+        language: 'csharp',
+        status: 'buildable',
+        selected: candidatePath === parsed.selected_project_file,
+    }));
 }
 
 suite('AppHostDataRepository', () => {
@@ -2543,7 +2570,7 @@ suite('AppHostDataRepository', () => {
         try {
             await waitForAppHostDiscovery();
             assert.ok(getAppHostsLineCallback);
-            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--nologo']);
+            assert.deepStrictEqual(spawnStub.firstCall.args[2], ['ls', '--format', 'json', '--nologo', '--stream']);
 
             getAppHostsLineCallback(JSON.stringify([
                 {
