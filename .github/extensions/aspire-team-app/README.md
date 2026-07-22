@@ -18,12 +18,13 @@ Enterprise (GHES/EMU) cards can't open a sub-session, so they render a single bu
 with no dropdown that runs the action in the current conversation. The buttons a card
 shows are driven by its lane and its signal pills:
 
-- **Test** / **Review** — someone else's PR that's waiting on you. Each self-routes
-  to the repo's matching skill (`/pr-testing`, `/code-review`), falling back to a
-  thorough manual pass.
+- **Test** / **Review** — someone else's PR that's waiting on you, or any card carrying
+  a "re-review" pill (the author pushed after a review). Each self-routes to the repo's
+  matching skill (`/pr-testing`, `/code-review`), falling back to a thorough manual pass.
 - **Address review** / **Discuss review** — a review-debt card (aged without an
   approving review; a PR that was only commented on or had changes requested still
-  counts until it's approved). Address review runs a fresh review; Discuss review
+  counts until it's approved), keyed off the "review debt" pill so it shows in the
+  breakdown and community lanes too. Address review runs a fresh review; Discuss review
   talks through the existing feedback and lays out response options without rewriting
   anything.
 - **Address feedback** / **Discuss review** — your own PR with changes requested (the

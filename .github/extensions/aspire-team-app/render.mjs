@@ -1348,16 +1348,26 @@ function mergeActions() {
 }
 
 // Signal-driven actions available on ANY card, keyed off the danger pills the model attaches.
-// Wherever a card shows one of these problem signals it now also offers the matching action, so
-// e.g. every card with a "merge conflicts" pill gets a Resolve conflicts button. Signal labels
-// come from model.mjs: "merge conflicts", "CI failing[ \u00b7 N checks]", and "{n} unresolved".
+// Wherever a card shows one of these signals it now also offers the matching action, so e.g. every
+// card with a "merge conflicts" pill gets a Resolve conflicts button. Signal labels come from
+// model.mjs: "merge conflicts", "CI failing[ \u00b7 N checks]", "{n} unresolved", "review debt"
+// (constants.mjs reviewDebtSignalLabel), and "re-review" (actionSignal). The first three are
+// author-fixable, so they surface on every card including your own. "review debt" (aged without an
+// approving review) and "re-review" (author pushed after a review) are review actions, so — like
+// focusCardActions — they are withheld on your own PRs (you don't review your own work). Keying them
+// here surfaces them on breakdown and community cards too, not just the lanes mapped by label.
 function signalActions(item) {
   var sigs = (item && item.signals) || [];
+  var pr = (item && item.pr) || {};
   function hasSig(re) { return sigs.some(function (s) { return s && re.test(s.label || ""); }); }
   var out = [];
   if (hasSig(/conflict/i)) out.push(CARD_ACTIONS.resolveConflicts);
   if (hasSig(/^CI failing/i)) out.push(CARD_ACTIONS.fixCi);
   if (hasSig(/^\d+\s+unresolved$/)) out.push(CARD_ACTIONS.resolveFeedback);
+  if (!pr.isMine) {
+    if (hasSig(/^review debt$/i)) { out.push(CARD_ACTIONS.reviewDebt); out.push(CARD_ACTIONS.discussReview); }
+    if (hasSig(/^re-review$/i)) out.push(CARD_ACTIONS.review);
+  }
   return out;
 }
 

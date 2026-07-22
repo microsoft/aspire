@@ -123,8 +123,16 @@ test("signalActions surfaces conflict / CI / unresolved actions from a card's si
   assert.equal(resolve[0].kind, "address-feedback");
   assert.equal(resolve[0].label, "Resolve");
 
-  // A plain metadata pill (e.g. "review debt") is not a problem signal and yields nothing.
-  assert.equal(api.signalActions({ signals: [{ label: "review debt" }] }).length, 0);
+  // A "review debt" pill (aged without an approving review) offers Address review + Discuss review,
+  // and a "re-review" pill (author pushed after a review) offers Review — on cards you'd review.
+  const debt = api.signalActions({ pr: { isMine: false }, signals: [{ label: "review debt" }] });
+  assert.equal(debt.map((a) => a.kind).join(","), "review-debt,discuss-review");
+  const reReview = api.signalActions({ pr: { isMine: false }, signals: [{ label: "re-review" }] });
+  assert.equal(reReview.map((a) => a.kind).join(","), "review");
+
+  // Both are review actions, so they are withheld on your own PRs (you don't review your own work).
+  assert.equal(api.signalActions({ pr: { isMine: true }, signals: [{ label: "review debt" }] }).length, 0);
+  assert.equal(api.signalActions({ pr: { isMine: true }, signals: [{ label: "re-review" }] }).length, 0);
   assert.equal(api.signalActions({}).length, 0);
 });
 
