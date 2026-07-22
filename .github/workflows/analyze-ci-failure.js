@@ -100,7 +100,9 @@ Pull request: #${analysis.pr?.number || 0}
 
 ## Classification Analysis
 
+<pre>
 ${escapeHtml(failureInformation.classificationAnalysis)}
+</pre>
 
 ## Failure Information
 
