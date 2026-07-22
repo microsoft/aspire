@@ -48,10 +48,12 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout (for retry patterns)
+      - name: Checkout analysis helpers
         uses: actions/checkout@v4
         with:
-          sparse-checkout: eng/test-retry-patterns.json
+          sparse-checkout: |
+            .github/workflows/analyze-ci-failure.js
+            eng/test-retry-patterns.json
           sparse-checkout-cone-mode: false
       - name: Collect CI failure data
         id: collect
@@ -277,6 +279,9 @@ jobs:
               done
               jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
               rm -f ci-failure-data/test-failures.jsonl
+              node .github/workflows/analyze-ci-failure.js redact ci-failure-data/test-failures.json \
+                > ci-failure-data/test-failures-redacted.json
+              mv ci-failure-data/test-failures-redacted.json ci-failure-data/test-failures.json
               echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
 
               # Clean up the extracted files to save space in artifact
@@ -350,7 +355,7 @@ jobs:
             if [ -f "ci-failure-data/test-failures.json" ]; then
               FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end) + (if .standard_output != "" then "**Standard Output:**\n```\n\(.standard_output)\n```\n" else "" end) + (if .standard_error != "" then "**Standard Error:**\n```\n\(.standard_error)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end) + (if .standard_output != "" then "**Standard Output (sensitive values redacted):**\n```\n\(.standard_output)\n```\n" else "" end) + (if .standard_error != "" then "**Standard Error (sensitive values redacted):**\n```\n\(.standard_error)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
                 echo "No test failures extracted from TRX artifacts."
               fi
@@ -958,8 +963,8 @@ Write the run summary to `/tmp/gh-aw/agent/analysis-result.json`. The JSON must 
       "job": "job-name",
       "error": "the error message from the test failure",
       "stack_trace": "the stack trace from the test failure (first few frames)",
-      "standard_output": "standard output captured in the TRX file, when available",
-      "standard_error": "standard error captured in the TRX file, when available",
+      "standard_output": "standard output captured in the TRX file with sensitive values redacted, when available",
+      "standard_error": "standard error captured in the TRX file with sensitive values redacted, when available",
       "classification": "flaky | code-issue",
       "reason": "Why this test is classified this way"
     }
@@ -974,8 +979,8 @@ Field details:
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
 - `failed_tests[].error`: The full error message from the TRX test failure data.
 - `failed_tests[].stack_trace`: The stack trace from the TRX test failure data (include the first few relevant frames).
-- `failed_tests[].standard_output`: The test's standard output from the TRX data, when available.
-- `failed_tests[].standard_error`: The test's standard error from the TRX data, when available.
+- `failed_tests[].standard_output`: The test's standard output from the TRX data with recognizable sensitive values replaced by `[REDACTED]`, when available.
+- `failed_tests[].standard_error`: The test's standard error from the TRX data with recognizable sensitive values replaced by `[REDACTED]`, when available.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 - `causes`: An array of cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts.
 
@@ -1006,7 +1011,7 @@ Field details:
 - `job_name`: The exact name of the failed job containing this cause.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
 - `analysis`: Explain why the evidence supports the selected `type`. Use the same rationale represented in the corresponding `failed_tests[].reason` or `failed_jobs[].reason` entry.
-- `failure_details`: For flaky tests, copy the test failure content from the TRX data, including the error, stack trace, standard output, and standard error when available (up to ~8000 characters). For infrastructure failures, copy the relevant error-focused job log excerpt (up to ~4000 characters). Do not summarize or invent output in this field.
+- `failure_details`: For flaky tests, copy the error, stack trace, and redacted standard output and standard error from the TRX data (up to ~8000 characters). The supplied output has already had recognizable sensitive values replaced by `[REDACTED]`; do not reconstruct or infer redacted values. For infrastructure failures, copy the relevant error-focused job log excerpt (up to ~4000 characters). Do not summarize or invent output in this field.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON.
 
