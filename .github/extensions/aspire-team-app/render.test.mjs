@@ -79,7 +79,7 @@ test("failed repo saves show the API error and revert the optimistic draft", asy
   assert.equal(errEl.classList.has("show"), true);
 });
 
-test("forYouCardActions maps review-requested picks to a Review action", () => {
+test("forYouCardActions maps pick labels (and layered signals) to actions", () => {
   const { api } = createRendererHarness();
 
   const resolve = api.forYouCardActions({ action: "Resolve conflicts" });
@@ -91,8 +91,88 @@ test("forYouCardActions maps review-requested picks to a Review action", () => {
   assert.equal(review[0].kind, "review");
   assert.equal(review[0].label, "Review");
 
-  assert.equal(api.forYouCardActions({ action: "Respond here" }), null);
+  const fixCi = api.forYouCardActions({ action: "Fix CI" });
+  assert.equal(fixCi.length, 1);
+  assert.equal(fixCi[0].kind, "fix-ci");
+  assert.equal(fixCi[0].label, "Evaluate CI failures");
+
+  // "Respond here" (your PR has feedback waiting) now offers Address feedback + Discuss review.
+  const respond = api.forYouCardActions({ action: "Respond here" });
+  assert.equal(respond.map((a) => a.kind).join(","), "address-feedback,discuss-review");
+  assert.equal(respond[0].label, "Address feedback");
+
+  // A pick that also carries a problem signal surfaces the matching action, deduped by kind:
+  // "Resolve conflicts" pick + "merge conflicts" signal is still a single resolve-conflicts button.
+  const deduped = api.forYouCardActions({ action: "Resolve conflicts", signals: [{ label: "merge conflicts" }] });
+  assert.equal(deduped.map((a) => a.kind).join(","), "resolve-conflicts");
+
+  assert.equal(api.forYouCardActions({ action: "Needs your attention" }), null);
   assert.equal(api.forYouCardActions(null), null);
+});
+
+test("signalActions surfaces conflict / CI / unresolved actions from a card's signal pills", () => {
+  const { api } = createRendererHarness();
+
+  assert.equal(api.signalActions({ signals: [{ label: "merge conflicts" }] }).map((a) => a.kind).join(","), "resolve-conflicts");
+  assert.equal(api.signalActions({ signals: [{ label: "CI failing \u00b7 2 checks" }] }).map((a) => a.kind).join(","), "fix-ci");
+
+  // The unresolved-threads pill is "{n} unresolved" (model.mjs formatCount). It maps to the
+  // address-feedback agent action, surfaced here as a "Resolve" button.
+  const resolve = api.signalActions({ signals: [{ label: "3 unresolved" }] });
+  assert.equal(resolve.length, 1);
+  assert.equal(resolve[0].kind, "address-feedback");
+  assert.equal(resolve[0].label, "Resolve");
+
+  // A plain metadata pill (e.g. "review debt") is not a problem signal and yields nothing.
+  assert.equal(api.signalActions({ signals: [{ label: "review debt" }] }).length, 0);
+  assert.equal(api.signalActions({}).length, 0);
+});
+
+test("focusCardActions layers review-debt / review context with signal actions", () => {
+  const { api } = createRendererHarness();
+
+  // Review-debt card: Address review + Discuss review.
+  const debt = api.focusCardActions({ reviewDebt: true, pr: { isMine: false } });
+  assert.equal(debt.map((a) => a.kind).join(","), "review-debt,discuss-review");
+
+  // Someone else's PR: Test + Review, plus a layered conflict action from its signal.
+  const other = api.focusCardActions({ pr: { isMine: false }, signals: [{ label: "merge conflicts" }] });
+  assert.equal(other.map((a) => a.kind).join(","), "test,review,resolve-conflicts");
+
+  // Your own PR with no problem signal: no buttons (you don't review your own work).
+  assert.equal(api.focusCardActions({ pr: { isMine: true } }), null);
+
+  // Your own PR that is failing CI still offers the signal-driven fix action.
+  const mineCi = api.focusCardActions({ pr: { isMine: true }, signals: [{ label: "CI failing" }] });
+  assert.equal(mineCi.map((a) => a.kind).join(","), "fix-ci");
+});
+
+test("laneCardActions keys breakdown-lane actions off the lane label", () => {
+  const { api } = createRendererHarness();
+  const other = { pr: { isMine: false } };
+  const mine = { pr: { isMine: true } };
+
+  assert.equal(api.laneCardActions({ label: "Needs review" }, other).map((a) => a.kind).join(","), "test,review");
+  assert.equal(api.laneCardActions({ label: "Re-review needed" }, other).map((a) => a.kind).join(","), "review");
+  assert.equal(api.laneCardActions({ label: "Unresolved feedback" }, other).map((a) => a.kind).join(","), "address-feedback,discuss-review");
+
+  // Test/Review are withheld on your own PRs.
+  assert.equal(api.laneCardActions({ label: "Needs review" }, mine), null);
+
+  // Conflict/CI lanes carry the matching signal, so the button comes from signalActions.
+  assert.equal(
+    api.laneCardActions({ label: "Merge conflicts" }, { pr: { isMine: false }, signals: [{ label: "merge conflicts" }] }).map((a) => a.kind).join(","),
+    "resolve-conflicts",
+  );
+
+  // Unresolved-feedback lane card that also carries the "N unresolved" pill stays a single
+  // address-feedback button (Address feedback wins over the signal's "Resolve" by dedup).
+  const unresolved = api.laneCardActions(
+    { label: "Unresolved feedback" },
+    { pr: { isMine: false }, signals: [{ label: "2 unresolved" }] },
+  );
+  assert.equal(unresolved.map((a) => a.kind).join(","), "address-feedback,discuss-review");
+  assert.equal(unresolved[0].label, "Address feedback");
 });
 
 test("queuePanel reports an honest 'N shown' metric for a mixed (non-prefix) selection", () => {
@@ -420,7 +500,7 @@ function createRendererHarness(overrides = {}) {
     console,
   };
 
-  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
+  vm.runInNewContext(`${APP_JS}\n;globalThis.__test = {\n  render,\n  withRefresh,\n  load,\n  rescanAccounts,\n  onCardAction,\n  deleteRepo,\n  persistAccountRepos,\n  draftReposByAcct,\n  editingByAcct,\n  forYouCardActions,\n  focusCardActions,\n  laneCardActions,\n  signalActions,\n  mergeActions,\n  queuePanel,\n  cardActionBtn,\n  actionKey,\n  inflightActions,\n  setProgress,\n  setState(value) { state = value; },\n  getState() { return state; },\n  getAppliedSeq() { return lastAppliedSeq; },\n  setPrefs(value) { prefs = value; },\n  setView(value) { view = value; },\n  setRefreshInFlight(value) { refreshInFlight = value; },\n  setLoadError(value) { loadError = value; },\n  getLoadError() { return loadError; },\n};`, sandbox);
 
   return { app, api: sandbox.__test };
 }

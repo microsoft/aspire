@@ -784,6 +784,7 @@ const ICONS = {
   alert: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
   eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
   merge: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg>',
+  pulse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
   xcircle: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>',
   chat: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   pr: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>',
@@ -1298,35 +1299,99 @@ function cbMenuItem(target, icon, label, sub) {
     '<span class="cb-mi-sub">' + esc(sub) + "</span></span></button>";
 }
 
-// Which action buttons a "Needs attention" card gets: a review-debt card offers only
-// the interactive "Address review" button; otherwise someone else's PR offers Test +
-// Review (each opens a sub-session). Your own non-debt cards get no buttons.
-function focusCardActions(item) {
-  const pr = (item && item.pr) || {};
-  if (isReviewDebtItem(item)) {
-    return [{ kind: "review-debt", label: "Address review", done: "Sent to agent", icon: ICONS.eye }];
+// Shared action-button descriptors, so a given agent action's label, confirmation text, and
+// icon stay identical wherever it is offered. "Resolve" and "Address feedback" are the same
+// underlying agent action (address-feedback): both work the unresolved review threads and
+// resolve them; they differ only in the surface wording (a signal pill vs. a lane).
+var CARD_ACTIONS = {
+  test: { kind: "test", label: "Test", done: "Testing requested", icon: ICONS.check },
+  review: { kind: "review", label: "Review", done: "Review requested", icon: ICONS.eye },
+  resolveConflicts: { kind: "resolve-conflicts", label: "Resolve conflicts", done: "Sent to agent", icon: ICONS.merge },
+  reviewDebt: { kind: "review-debt", label: "Address review", done: "Sent to agent", icon: ICONS.eye },
+  fixCi: { kind: "fix-ci", label: "Evaluate CI failures", done: "Sent to agent", icon: ICONS.pulse },
+  discussReview: { kind: "discuss-review", label: "Discuss review", done: "Sent to agent", icon: ICONS.chat },
+  addressFeedback: { kind: "address-feedback", label: "Address feedback", done: "Sent to agent", icon: ICONS.check },
+  resolveFeedback: { kind: "address-feedback", label: "Resolve", done: "Sent to agent", icon: ICONS.check },
+};
+
+// Combine several action lists into one, first-wins by kind, so a card that qualifies for the
+// same underlying action twice (e.g. an "Unresolved feedback" lane card that also carries the
+// "N unresolved" signal) shows a single button. Returns null when nothing applies, matching the
+// "no actions" contract the card renderers expect.
+function mergeActions() {
+  var out = [], seen = {};
+  for (var i = 0; i < arguments.length; i++) {
+    var list = arguments[i];
+    if (!list) continue;
+    for (var j = 0; j < list.length; j++) {
+      var a = list[j];
+      if (!a || seen[a.kind]) continue;
+      seen[a.kind] = true;
+      out.push(a);
+    }
   }
-  if (!pr.isMine) {
-    return [
-      { kind: "test", label: "Test", done: "Testing requested", icon: ICONS.check },
-      { kind: "review", label: "Review", done: "Review requested", icon: ICONS.eye },
-    ];
-  }
-  return null;
+  return out.length ? out : null;
 }
 
-// "For you" picks that carry an actionable label get an interactive split button. Resolve-conflicts
-// picks send the resolve-conflicts agent action; review-requested picks ("Review this") send the
-// same review action the focus lane offers, so a PR that wants the viewer's review is actionable
-// from the "For you" lane too (matches personalPickActions.reviewThis in constants.mjs).
+// Signal-driven actions available on ANY card, keyed off the danger pills the model attaches.
+// Wherever a card shows one of these problem signals it now also offers the matching action, so
+// e.g. every card with a "merge conflicts" pill gets a Resolve conflicts button. Signal labels
+// come from model.mjs: "merge conflicts", "CI failing[ \u00b7 N checks]", and "{n} unresolved".
+function signalActions(item) {
+  var sigs = (item && item.signals) || [];
+  function hasSig(re) { return sigs.some(function (s) { return s && re.test(s.label || ""); }); }
+  var out = [];
+  if (hasSig(/conflict/i)) out.push(CARD_ACTIONS.resolveConflicts);
+  if (hasSig(/^CI failing/i)) out.push(CARD_ACTIONS.fixCi);
+  if (hasSig(/^\d+\s+unresolved$/)) out.push(CARD_ACTIONS.resolveFeedback);
+  return out;
+}
+
+// Which action buttons a "Needs attention" card gets: a review-debt card offers Address review
+// (a fresh review) plus Discuss review (talk through existing feedback); otherwise someone else's
+// PR offers Test + Review. Signal-driven actions (conflicts, CI, unresolved) are layered on for
+// every card. Test/Review are withheld on your own PRs (you don't review your own work).
+function focusCardActions(item) {
+  var pr = (item && item.pr) || {};
+  var ctx = [];
+  if (isReviewDebtItem(item)) {
+    ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
+  } else if (!pr.isMine) {
+    ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
+  }
+  return mergeActions(ctx, signalActions(item));
+}
+
+// "For you" picks that carry an actionable label get an interactive split button. The pick's
+// action label maps to the matching agent action; "Respond here" (your PR has feedback waiting)
+// offers Address feedback + Discuss review. Signal-driven actions are layered on, so a pick that
+// also carries a problem signal (conflicts/CI/unresolved) still surfaces it, deduped by kind.
 function forYouCardActions(item) {
-  if (item && item.action === "Resolve conflicts") {
-    return [{ kind: "resolve-conflicts", label: "Resolve conflicts", done: "Sent to agent", icon: ICONS.merge }];
+  var action = item && item.action;
+  var ctx = [];
+  if (action === "Resolve conflicts") ctx = [CARD_ACTIONS.resolveConflicts];
+  else if (action === "Fix CI") ctx = [CARD_ACTIONS.fixCi];
+  else if (action === "Review this") ctx = [CARD_ACTIONS.review];
+  else if (action === "Respond here") ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+  return mergeActions(ctx, signalActions(item));
+}
+
+// Which action buttons a breakdown-lane card gets, keyed on the lane's signal bucket. Review/Test
+// only make sense for a PR the viewer would review, so they are withheld on the viewer's own PRs.
+// The "Merge conflicts" and "CI failing" lanes are covered by signalActions (their cards carry the
+// matching pill), so they need no explicit mapping here.
+function laneCardActions(lane, item) {
+  var pr = (item && item.pr) || {};
+  var label = lane && lane.label;
+  var ctx = [];
+  if (label === "Needs review") {
+    ctx = pr.isMine ? [] : [CARD_ACTIONS.test, CARD_ACTIONS.review];
+  } else if (label === "Re-review needed" || label === "Review started" || label === "Quick wins") {
+    ctx = pr.isMine ? [] : [CARD_ACTIONS.review];
+  } else if (label === "Unresolved feedback") {
+    ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
   }
-  if (item && item.action === "Review this") {
-    return [{ kind: "review", label: "Review", done: "Review requested", icon: ICONS.eye }];
-  }
-  return null;
+  return mergeActions(ctx, signalActions(item));
 }
 
 function isReviewDebtItem(item) {
@@ -1380,7 +1445,7 @@ function laneIcon(lane) {
 }
 
 function laneHtml(lane) {
-  const items = (lane.items || []).map((it) => (it.pr ? prCard(it) : issueCard(it))).join("");
+  const items = (lane.items || []).map((it) => (it.pr ? prCard(it, laneCardActions(lane, it)) : issueCard(it))).join("");
   const tone = lane.tone || "muted";
   const repos = new Set((lane.items || []).map((it) => (it.pr || it.issue || {}).repository).filter(Boolean));
   const repoLabel = repos.size + (repos.size === 1 ? " repo" : " repos");
@@ -1526,6 +1591,7 @@ function reviewBoardHtml() {
     id: "outside-focus", title: "Your PRs outside Needs attention", tone: "info", icon: ICONS.pr,
     subtitle: "Open non-draft PRs you authored that do not currently qualify for the focused queue.",
     items: (att.focusExclusions || []).slice(0, 10), cappedTotal: (att.focusExclusions || []).length,
+    cardActions: focusCardActions,
     emptyText: "None right now \u00b7 every open PR you authored is already in the queue or still in draft.",
   });
 
@@ -1540,7 +1606,7 @@ function reviewBoardHtml() {
       count: att.community.length,
       note: "external contributors \u00b7 " + repos.size + (repos.size === 1 ? " repo" : " repos"),
       subtitle: "Recently active external-contributor PRs, tracked apart from the core-team queue.",
-      body: '<div class="grid">' + att.community.map((it) => (it.pr ? prCard(it) : issueCard(it))).join("") + "</div>",
+      body: '<div class="grid">' + att.community.map((it) => (it.pr ? prCard(it, signalActions(it)) : issueCard(it))).join("") + "</div>",
     });
   }
 

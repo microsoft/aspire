@@ -12,7 +12,10 @@
 //     via open_pr_session, so the work runs against the right repository even when the
 //     canvas is hosted from an unrelated repo. Test, Review, and Review-debt self-detect a
 //     matching skill (/pr-testing or /code-review) and fall back to a thorough manual pass;
-//     the conflict action runs in that sub-session.
+//     Fix-CI self-detects a CI-failure diagnosis skill (/ci-test-failures) and otherwise
+//     evaluates the failing checks manually; Discuss-review talks through the outstanding
+//     feedback and lays out response options; Address-feedback works the unresolved review
+//     threads and resolves them; the conflict action runs a direct git flow.
 //   - "current-session": do the work right here, in the session that owns the canvas,
 //     without spawning a sub-session. Useful when the canvas is already open on the PR's
 //     own repo and the user wants to stay in this conversation.
@@ -20,7 +23,7 @@
 // The PR descriptor originates from client-supplied card data, so every prompt tells
 // the agent to treat it as untrusted metadata and fetch the live PR before acting.
 
-export const AGENT_ACTION_KINDS = ["test", "review", "resolve-conflicts", "review-debt"];
+export const AGENT_ACTION_KINDS = ["test", "review", "resolve-conflicts", "review-debt", "fix-ci", "discuss-review", "address-feedback"];
 export const AGENT_ACTION_TARGETS = ["new-session", "current-session"];
 
 // Convert an untrusted client-supplied PR number to a strict positive integer, or NaN. Unlike
@@ -215,6 +218,9 @@ export function buildAgentActionLog(kind, rawPr, target = "new-session") {
     case "review": action = `Review PR ${ref}${title}`; break;
     case "resolve-conflicts": action = `Resolve merge conflicts on PR ${ref}${title}`; break;
     case "review-debt": action = `Address review on PR ${ref}${title}`; break;
+    case "fix-ci": action = `Evaluate CI failures on PR ${ref}${title}`; break;
+    case "discuss-review": action = `Discuss the review on PR ${ref}${title}`; break;
+    case "address-feedback": action = `Address review feedback on PR ${ref}${title}`; break;
     default: action = `Work on PR ${ref}${title}`;
   }
   return `${action} in ${where}`;
@@ -251,6 +257,27 @@ function newSessionPrompt(kind, ctx) {
         summary: "The sub-session reviews the PR in that repo and reports what should change before it can merge.",
         ctx,
         kickoff: reviewDebtKickoff(ctx),
+      });
+    case "fix-ci":
+      return openPrSessionPrompt({
+        verb: "evaluate the failing CI on",
+        summary: "The sub-session picks the repo's CI-diagnosis skill or falls back to a manual diagnosis, then reports the failing checks, the likely root cause, and a suggested fix.",
+        ctx,
+        kickoff: fixCiKickoff(ctx),
+      });
+    case "discuss-review":
+      return openPrSessionPrompt({
+        verb: "talk through the outstanding review on",
+        summary: "The sub-session summarizes the outstanding feedback and lays out concrete response options before making any change.",
+        ctx,
+        kickoff: discussReviewKickoff(ctx),
+      });
+    case "address-feedback":
+      return openPrSessionPrompt({
+        verb: "address the outstanding review feedback on",
+        summary: "The sub-session works through the unresolved review threads, makes the requested changes where the intent is clear, and replies to and resolves each thread before pushing.",
+        ctx,
+        kickoff: addressFeedbackKickoff(ctx),
       });
     default:
       // Unreachable: kind was validated against AGENT_ACTION_KINDS above.
@@ -318,6 +345,48 @@ First choose how to proceed, based on THIS repository's own skills:
 Post concrete, high-signal, actionable review feedback and report what should change before this can merge.`;
 }
 
+// Fix-CI kickoff. Like the Test/Review kickoffs, skill detection happens in the sub-session where
+// the repo is checked out and its skills are actually loaded. This is a diagnostic action: it
+// evaluates the failing checks and reports a suggested fix rather than autonomously pushing one.
+function fixCiKickoff({ ref, url }) {
+  return `You are going to evaluate the failing CI on pull request ${ref}: ${url}
+
+${UNTRUSTED}
+
+First choose how to proceed, based on THIS repository's own skills:
+1. List the skills available in this session and look for a CI / test-failure diagnosis skill. Also check the repo for a matching skill directory (for example .agents/skills/ci-test-failures/SKILL.md).
+2. If a suitable CI-diagnosis skill exists, run it against this PR by invoking it as \`/{skill-name} ${url}\` (for this repo that is \`/ci-test-failures ${url}\`) and follow it end to end.
+3. If this repo has no CI-diagnosis skill, do NOT force one \u2014 evaluate the failures manually instead: identify the failing checks, pull the failing job logs, and tie each failure to this PR's own diff (versus a flaky or unrelated failure) to find the root cause.
+
+Report the failing checks, the most likely root cause of each, and a concrete suggested fix. Check in before making or pushing any change.`;
+}
+
+// Discuss-review kickoff. This is an advisory, conversational action: it surfaces the PR's
+// outstanding review feedback and lays out response options rather than autonomously reviewing
+// or rewriting. No skill routing \u2014 the value is the discussion, not a fresh review pass.
+function discussReviewKickoff({ ref, url }) {
+  return `You are going to talk through the outstanding review on pull request ${ref}: ${url}
+
+${UNTRUSTED}
+
+Read the PR's review state: the unresolved review threads, any requested changes, and whatever is blocking it from merging. Summarize the outstanding feedback clearly, and for each point lay out concrete options for how to respond (for example: accept and make the change, push back with a rationale, or ask the reviewer for clarification) with a short recommendation.
+
+This is a discussion, not an autonomous rewrite: surface the feedback and the options and report back \u2014 do not make code changes or push without checking in first.`;
+}
+
+// Address-feedback kickoff. Unlike discuss-review (advisory), this action actually works the
+// unresolved review threads: it makes the requested changes where the intent is clear, then
+// replies to and resolves each thread. Ambiguous points are surfaced rather than guessed.
+function addressFeedbackKickoff({ ref, url }) {
+  return `You are going to address the outstanding review feedback on pull request ${ref}: ${url}
+
+${UNTRUSTED}
+
+Read the PR's unresolved review threads and requested changes. For each piece of feedback, make the change the reviewer asked for where the intent is clear, then reply to the thread and resolve it. Where a comment is ambiguous, or you would push back rather than change the code, check in before acting rather than guessing.
+
+Validate your changes (build and tests where practical) and push only once the feedback is addressed. Report what you changed and anything you left for the author or reviewer to decide.`;
+}
+
 // ---- current-session prompts: do the work here, no sub-session ----
 
 function currentSessionPrompt(kind, { ref, url }) {
@@ -344,6 +413,24 @@ ${UNTRUSTED}`;
       return `Let's clear the review debt on pull request ${ref}: ${url}
 
 Work interactively in this session (do not open a separate sub-session). Prefer a code-review skill if one is available here \u2014 invoke it as \`/code-review ${url}\` and follow it end to end. If there is no such skill, review the full diff and assess correctness, security, error handling, edge cases, test coverage, and the repo's own conventions. Give concrete, high-signal feedback on what should change before this can merge.
+
+${UNTRUSTED}`;
+    case "fix-ci":
+      return `Evaluate the failing CI on pull request ${ref}: ${url}
+
+Work in THIS session (do not open a separate sub-session). Prefer a CI / test-failure diagnosis skill if one is available here \u2014 invoke it as \`/ci-test-failures ${url}\` and follow it end to end. If there is no such skill, identify the failing checks, pull the failing job logs, and tie each failure to this PR's own diff (versus a flaky or unrelated failure) to find the root cause. Report the failing checks, the likely root cause of each, and a concrete suggested fix, and check in before making or pushing any change.
+
+${UNTRUSTED}`;
+    case "discuss-review":
+      return `Let's talk through the outstanding review on pull request ${ref}: ${url}
+
+Work interactively in this session (do not open a separate sub-session). Read the unresolved review threads, requested changes, and anything blocking merge; summarize the feedback, and for each point lay out concrete response options (accept and make the change, push back with a rationale, or ask for clarification) with a short recommendation. This is a discussion \u2014 surface the feedback and options and check in before making any code changes.
+
+${UNTRUSTED}`;
+    case "address-feedback":
+      return `Let's address the outstanding review feedback on pull request ${ref}: ${url}
+
+Work interactively in this session (do not open a separate sub-session). Read the unresolved review threads and requested changes; for each, make the change where the intent is clear, then reply to and resolve the thread. Check in with me on anything ambiguous before acting, validate your changes, and push only once the feedback is addressed.
 
 ${UNTRUSTED}`;
     default:

@@ -12,11 +12,24 @@ lanes for everything waiting on you:
 
 ![Aspire Team App review queue](media/review-queue.png)
 
-Per-card action buttons (Test / Review / Resolve conflicts) with a split-button
-dropdown to run each action in a new sub-session (the PR's own repo) or in the
-current conversation. Test and Review self-route to the repo's matching skill
-(`/pr-testing`, `/code-review`), falling back to a thorough manual pass; Resolve
-conflicts runs a direct git conflict-resolution flow:
+Per-card action buttons with a split-button dropdown to run each action in a new
+sub-session (the PR's own repo) or in the current conversation. The buttons a card
+shows are driven by its lane and its signal pills:
+
+- **Test** / **Review** — someone else's PR that's waiting on you. Each self-routes
+  to the repo's matching skill (`/pr-testing`, `/code-review`), falling back to a
+  thorough manual pass.
+- **Address review** / **Discuss review** — a review-debt card (aged without a
+  review). Address review runs a fresh review; Discuss review talks through the
+  existing feedback and lays out response options without rewriting anything.
+- **Resolve conflicts** — any card carrying a "merge conflicts" signal; runs a
+  direct git conflict-resolution flow.
+- **Evaluate CI failures** — any card carrying a "CI failing" signal; self-routes to
+  the repo's CI-diagnosis skill (`/ci-test-failures`) or diagnoses manually, then
+  reports the failing checks, likely root cause, and a suggested fix.
+- **Resolve** / **Address feedback** — a card with unresolved review threads (an
+  "N unresolved" signal or the Unresolved feedback lane); works each thread, makes
+  the requested change, and resolves it.
 
 ![Card action split buttons](media/card-actions.png)
 
@@ -53,6 +66,7 @@ conflicts runs a direct git conflict-resolution flow:
 | `model.mjs` | Attention buckets, focus queue, core-team / community classification. |
 | `constants.mjs` | Configuration: core-team members, release milestone, personal picks. |
 | `render.mjs` | Iframe HTML / CSS / client JS, styled with Copilot theme tokens. |
+| `agent.mjs` | Card-action prompt/log builders (Test, Review, Resolve conflicts, Address review, Evaluate CI failures, Discuss review, Address feedback) with untrusted-PR hardening. |
 | `state.mjs` | Durable per-account preferences (watched repos, active flag, notifications). |
 
 The canvas reads each account's token from `GH_TOKEN` / `GITHUB_TOKEN`, the

@@ -91,6 +91,32 @@ test("new-session resolve-conflicts and review-debt open a sub-session in the PR
   assert.match(debt, /`\/code-review https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
 });
 
+test("new-session fix-ci, discuss-review, and address-feedback open a sub-session with the right intent", () => {
+  // Fix-CI is a diagnostic action: it self-routes to a CI-failure skill (with a manual fallback)
+  // and reports a suggested fix rather than autonomously pushing one.
+  const fixCi = buildAgentActionPrompt("fix-ci", validPr);
+  assert.match(fixCi, /open_pr_session/);
+  assert.match(fixCi, /evaluate the failing CI/i);
+  assert.match(fixCi, /List the skills available in this session/);
+  assert.match(fixCi, /\.agents\/skills\/ci-test-failures\/SKILL\.md/);
+  assert.match(fixCi, /`\/ci-test-failures https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
+  assert.match(fixCi, /check in before making or pushing any change/i);
+
+  // Discuss-review is advisory: it summarizes feedback and lays out options, and must NOT rewrite.
+  const discuss = buildAgentActionPrompt("discuss-review", validPr);
+  assert.match(discuss, /open_pr_session/);
+  assert.match(discuss, /talk through the outstanding review/i);
+  assert.match(discuss, /response options|options for how to respond/i);
+  assert.match(discuss, /do not make code changes/i);
+
+  // Address-feedback works the unresolved threads: make the change, reply, and resolve each thread.
+  const address = buildAgentActionPrompt("address-feedback", validPr);
+  assert.match(address, /open_pr_session/);
+  assert.match(address, /address the outstanding review feedback/i);
+  assert.match(address, /reply to the thread and resolve it/i);
+  assert.match(address, /push only once the feedback is addressed/i);
+});
+
 test("current-session target runs every action here without a sub-session", () => {
   for (const kind of AGENT_ACTION_KINDS) {
     const p = buildAgentActionPrompt(kind, validPr, "current-session");
@@ -100,6 +126,8 @@ test("current-session target runs every action here without a sub-session", () =
   assert.match(buildAgentActionPrompt("test", validPr, "current-session"), /`\/pr-testing https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
   assert.match(buildAgentActionPrompt("review", validPr, "current-session"), /`\/code-review https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
   assert.match(buildAgentActionPrompt("review-debt", validPr, "current-session"), /`\/code-review https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
+  assert.match(buildAgentActionPrompt("fix-ci", validPr, "current-session"), /`\/ci-test-failures https:\/\/github\.com\/microsoft\/aspire\/pull\/123`/);
+  assert.match(buildAgentActionPrompt("address-feedback", validPr, "current-session"), /reply to and resolve the thread/i);
 });
 
 test("buildAgentActionPrompt reconstructs a github.com url when the descriptor url is untrustworthy", () => {
@@ -171,6 +199,9 @@ test("buildAgentActionLog produces a concise per-kind breadcrumb with the routin
   assert.equal(buildAgentActionLog("review", validPr), 'Review PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
   assert.equal(buildAgentActionLog("resolve-conflicts", validPr), 'Resolve merge conflicts on PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
   assert.equal(buildAgentActionLog("review-debt", validPr), 'Address review on PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
+  assert.equal(buildAgentActionLog("fix-ci", validPr), 'Evaluate CI failures on PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
+  assert.equal(buildAgentActionLog("discuss-review", validPr), 'Discuss the review on PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
+  assert.equal(buildAgentActionLog("address-feedback", validPr), 'Address review feedback on PR microsoft/aspire#123 \u2014 "Add widget" in a new session');
   assert.equal(buildAgentActionLog("test", validPr, "current-session"), 'Test PR microsoft/aspire#123 \u2014 "Add widget" in this session');
 });
 
