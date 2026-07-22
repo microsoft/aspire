@@ -472,18 +472,23 @@ public class AppHostLauncherTests(ITestOutputHelper outputHelper)
             {
                 FileName = "/bin/sh",
                 UseShellExecute = false,
-                ArgumentList = { "-c", "exit 11" }
+                RedirectStandardInput = true,
+                ArgumentList = { "-c", "read value; exit 11" }
             }) ?? throw new InvalidOperationException("Failed to start test child process.");
+
+            detachedHandle = Process.GetProcessById(startedProcess.Id);
 
             forkProcess = Process.Start(new ProcessStartInfo
             {
                 FileName = "/bin/sh",
                 UseShellExecute = false,
-                ArgumentList = { "-c", "sleep 0.2; exit 11" }
+                RedirectStandardInput = true,
+                ArgumentList = { "-c", "read value; exit 11" }
             }) ?? throw new InvalidOperationException("Failed to start test DCP monitor process.");
 
-            detachedHandle = Process.GetProcessById(startedProcess.Id);
+            startedProcess.StandardInput.Close();
             await startedProcess.WaitForExitAsync(cancellationToken).DefaultTimeout();
+            forkProcess.StandardInput.Close();
 
             return new MonitoredProcessExecutionAdapter(detachedHandle, forkProcess, startTime: null, useSuppliedStartTime: true);
         };
