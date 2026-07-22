@@ -102,6 +102,25 @@ impl std::fmt::Display for DistributedApplicationOperation {
     }
 }
 
+/// RunSubMode
+#[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
+pub enum RunSubMode {
+    #[default]
+    #[serde(rename = "Normal")]
+    Normal,
+    #[serde(rename = "Watch")]
+    Watch,
+}
+
+impl std::fmt::Display for RunSubMode {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Normal => write!(f, "Normal"),
+            Self::Watch => write!(f, "Watch"),
+        }
+    }
+}
+
 /// OtlpProtocol
 #[derive(Debug, Clone, Copy, Default, PartialEq, Eq, Serialize, Deserialize)]
 pub enum OtlpProtocol {
@@ -6435,6 +6454,14 @@ impl DistributedApplicationExecutionContext {
         let mut args: HashMap<String, Value> = HashMap::new();
         args.insert("context".to_string(), self.handle.to_json());
         let result = self.client.invoke_capability("Aspire.Hosting/DistributedApplicationExecutionContext.operation", args)?;
+        Ok(serde_json::from_value(result)?)
+    }
+
+    /// The run sub-mode the AppHost is running under. Only meaningful when `Operation` is `Run`; otherwise `Normal`.
+    pub fn run_sub_mode(&self) -> Result<RunSubMode, Box<dyn std::error::Error>> {
+        let mut args: HashMap<String, Value> = HashMap::new();
+        args.insert("context".to_string(), self.handle.to_json());
+        let result = self.client.invoke_capability("Aspire.Hosting/DistributedApplicationExecutionContext.runSubMode", args)?;
         Ok(serde_json::from_value(result)?)
     }
 

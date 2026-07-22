@@ -719,6 +719,22 @@ export enum ResourceCommandVisibility {
     Api = "Api",
 }
 
+/**
+ * Describes the sub-mode the AppHost is running under when `Operation` is `Run`.
+ *
+ * The run sub-mode is populated from configuration by the AppHost builder and surfaced through
+ * `RunSubMode`. It lets integrations vary how their
+ * resources are launched without changing the core hosting behavior. In
+ * `Publish` mode the sub-mode is always
+ * `Normal`.
+ */
+export enum RunSubMode {
+    /** The AppHost is running normally. Resources are launched using their standard run behavior. */
+    Normal = "Normal",
+    /** The AppHost is running in watch sub-mode. Integrations that support watch can launch their resources so that source changes are hot-reloaded. */
+    Watch = "Watch",
+}
+
 /** Test persistence mode enum. */
 export enum TestPersistenceMode {
     None = "None",
@@ -3644,6 +3660,8 @@ export interface DistributedApplicationExecutionContext {
     };
     /** The operation currently being performed by the AppHost. */
     operation(): Promise<DistributedApplicationOperation>;
+    /** The run sub-mode the AppHost is running under. Only meaningful when `Operation` is `Run`; otherwise `Normal`. */
+    runSubMode(): Promise<RunSubMode>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
     /** The `IServiceProvider` for the AppHost. */
@@ -3657,6 +3675,8 @@ export interface DistributedApplicationExecutionContext {
 export interface DistributedApplicationExecutionContextPromise extends PromiseLike<DistributedApplicationExecutionContext> {
     /** The operation currently being performed by the AppHost. */
     operation(): Promise<DistributedApplicationOperation>;
+    /** The run sub-mode the AppHost is running under. Only meaningful when `Operation` is `Run`; otherwise `Normal`. */
+    runSubMode(): Promise<RunSubMode>;
     /** The `IServiceProvider` for the AppHost. */
     serviceProvider(): ServiceProviderPromise;
     /** The `IServiceProvider` for the AppHost. */
@@ -3696,6 +3716,13 @@ class DistributedApplicationExecutionContextImpl implements DistributedApplicati
     async operation(): Promise<DistributedApplicationOperation> {
         return await this._client.invokeCapability<DistributedApplicationOperation>(
             'Aspire.Hosting/DistributedApplicationExecutionContext.operation',
+            { context: this._handle }
+        );
+    }
+
+    async runSubMode(): Promise<RunSubMode> {
+        return await this._client.invokeCapability<RunSubMode>(
+            'Aspire.Hosting/DistributedApplicationExecutionContext.runSubMode',
             { context: this._handle }
         );
     }
@@ -3755,6 +3782,10 @@ class DistributedApplicationExecutionContextPromiseImpl implements DistributedAp
 
     operation(): Promise<DistributedApplicationOperation> {
         return this._promise.then(obj => obj.operation());
+    }
+
+    runSubMode(): Promise<RunSubMode> {
+        return this._promise.then(obj => obj.runSubMode());
     }
 
     serviceProvider(): ServiceProviderPromise {

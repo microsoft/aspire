@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREWATCH001
 
 using Aspire.Hosting.Utils;
 using Microsoft.AspNetCore.InternalTesting;
@@ -138,5 +139,69 @@ public class OperationModesTests(ITestOutputHelper outputHelper)
             .Create(["--operation", "publish", "--publisher", "manifest", "--output-path", "test-output-path"])
             .WithTestAndResourceLogging(outputHelper);
         Assert.Equal(DistributedApplicationOperation.Publish, builder.ExecutionContext.Operation);
+    }
+
+    [Fact]
+    public void RunSubModeDefaultsToNormalInRunMode()
+    {
+        // Without any run sub-mode configuration the AppHost runs in the Normal sub-mode.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create()
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
+    }
+
+    [Fact]
+    public void RunSubModeIsWatchWhenConfigured()
+    {
+        // The "AppHost:RunSubMode" configuration key selects the run sub-mode, mirroring "AppHost:Operation".
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["AppHost:RunSubMode=Watch"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.Equal(RunSubMode.Watch, builder.ExecutionContext.RunSubMode);
+    }
+
+    [Fact]
+    public void RunSubModeParsingIsCaseInsensitive()
+    {
+        // The value is parsed case-insensitively so callers do not have to match the enum casing exactly.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["AppHost:RunSubMode=watch"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.Equal(RunSubMode.Watch, builder.ExecutionContext.RunSubMode);
+    }
+
+    [Fact]
+    public void RunSubModeFallsBackToNormalForUnknownValue()
+    {
+        // An unrecognized value must never fail the run; it falls back to Normal.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["AppHost:RunSubMode=bogus"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsRunMode);
+        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
+    }
+
+    [Fact]
+    public void RunSubModeIsNormalInPublishModeEvenWhenConfigured()
+    {
+        // The run sub-mode is only meaningful in run mode; publish mode always reports Normal.
+
+        using var builder = TestDistributedApplicationBuilder
+            .Create(["--operation", "publish", "--publisher", "manifest", "--output-path", "test-output-path", "AppHost:RunSubMode=Watch"])
+            .WithTestAndResourceLogging(outputHelper);
+
+        Assert.True(builder.ExecutionContext.IsPublishMode);
+        Assert.Equal(RunSubMode.Normal, builder.ExecutionContext.RunSubMode);
     }
 }

@@ -7947,6 +7947,14 @@ public class DistributedApplicationExecutionContext extends HandleWrapperBase {
         return DistributedApplicationOperation.fromValue((String) result);
     }
 
+    /** The run sub-mode the AppHost is running under. Only meaningful when `Operation` is `Run`; otherwise `Normal`. */
+    public RunSubMode runSubMode() {
+        Map<String, Object> reqArgs = new HashMap<>();
+        reqArgs.put("context", AspireClient.serializeValue(getHandle()));
+        var result = getClient().invokeCapability("Aspire.Hosting/DistributedApplicationExecutionContext.runSubMode", reqArgs);
+        return RunSubMode.fromValue((String) result);
+    }
+
     /** The `IServiceProvider` for the AppHost. */
     public IServiceProvider serviceProvider() {
         Map<String, Object> reqArgs = new HashMap<>();
@@ -21663,6 +21671,35 @@ public class ResourceUrlsEditor extends HandleWrapperBase {
 
 }
 
+// ===== RunSubMode.java =====
+// RunSubMode.java - GENERATED CODE - DO NOT EDIT
+
+package aspire;
+
+import java.util.*;
+import java.util.function.*;
+
+/** RunSubMode enum. */
+public enum RunSubMode implements WireValueEnum {
+    NORMAL("Normal"),
+    WATCH("Watch");
+
+    private final String value;
+
+    RunSubMode(String value) {
+        this.value = value;
+    }
+
+    public String getValue() { return value; }
+
+    public static RunSubMode fromValue(String value) {
+        for (RunSubMode e : values()) {
+            if (e.value.equals(value)) return e;
+        }
+        throw new IllegalArgumentException("Unknown value: " + value);
+    }
+}
+
 // ===== TestCallbackContext.java =====
 // TestCallbackContext.java - GENERATED CODE - DO NOT EDIT
 
@@ -29281,6 +29318,7 @@ public final class WithVolumeOptions {
 .aspire/modules/ResourceUrlAnnotation.java
 .aspire/modules/ResourceUrlsCallbackContext.java
 .aspire/modules/ResourceUrlsEditor.java
+.aspire/modules/RunSubMode.java
 .aspire/modules/TestCallbackContext.java
 .aspire/modules/TestCollectionContext.java
 .aspire/modules/TestConfigDto.java
