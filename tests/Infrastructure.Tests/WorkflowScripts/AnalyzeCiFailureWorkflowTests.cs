@@ -37,7 +37,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var cause = new
         {
             id = "later-job-failure",
-            type = "transient-infra",
+            type = "infra-failure",
             title = "Later job failed",
             job_name = "Tests / Linux",
             error_pattern = "connection reset"
@@ -75,7 +75,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
                     stack_trace = "at <frame>",
                     standard_output = "stdout <b>bold</b>",
                     standard_error = "stderr 'quoted'",
-                    reason = "Retry <later> & inspect \"logs\"."
+                    reason = "Retry <later> & inspect \"logs\".\n@team\n# Heading\n[logs](https://example.com)"
                 }
             ]);
         var cause = new
@@ -103,7 +103,12 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
 
             ## Classification Analysis
 
+            <pre>
             Retry &lt;later&gt; &amp; inspect &quot;logs&quot;.
+            @team
+            # Heading
+            [logs](https://example.com)
+            </pre>
 
             ## Failure Information
 
@@ -150,7 +155,7 @@ public sealed class AnalyzeCiFailureWorkflowTests : IDisposable
         var cause = new
         {
             id = "linux-network-failure",
-            type = "transient-infra",
+            type = "infra-failure",
             title = "Linux network failure",
             job_name = "Tests / Linux",
             analysis = "Fallback should not be used",
