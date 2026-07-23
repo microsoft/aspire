@@ -33,6 +33,7 @@ import type {
   ManageDataResponse,
   TelemetrySummary,
 } from "./types";
+import { PARAMETER_RESOURCE_TYPE } from "./types";
 
 // (MetricSeriesQuery re-exported from types for callers that import from deck.)
 export type { MetricSeriesQuery } from "./types";
@@ -255,16 +256,15 @@ export function onInteractions(cb: (interactions: InteractionInfo[]) => void): U
 
 // Replies to one interaction on the active AppHost. `values` maps input names to
 // string values (booleans as "true"/"false", choices as the option value).
-export function respondInteraction(interactionId: number, action: string, values: Record<string, string>): void {
+export function respondInteraction(interactionId: number, action: string, values: Record<string, string>): Promise<void> {
   if (isTauri()) {
-    void invoke("deck_respond_interaction", { interactionId, action, values });
-    return;
+    return invoke("deck_respond_interaction", { interactionId, action, values });
   }
   if (isHttpBackend()) {
-    httpBackend.respondInteraction(interactionId, action, values);
-    return;
+    return httpBackend.respondInteraction(interactionId, action, values);
   }
   mockBackend.respondInteraction(interactionId, action, values);
+  return Promise.resolve();
 }
 
 export function getTelemetrySummary(): Promise<TelemetrySummary> {
@@ -336,6 +336,12 @@ export function executeCommand(args: ExecuteCommandArgs): Promise<CommandRespons
     return invoke<CommandResponse>("deck_execute_command", { ...args });
   }
   if (isAotBackend()) {
+    // Parameter updates are interaction-backed commands. Until command interactions
+    // migrate as one capability, keep both command execution and its responses on the
+    // legacy dashboard client so one resource-service session owns the whole exchange.
+    if (args.resourceType === PARAMETER_RESOURCE_TYPE) {
+      return httpBackend.executeCommand(args);
+    }
     return nativeBackend.hasCapability("commands").then((supported) => (
       supported ? nativeBackend.executeCommand(args) : httpBackend.executeCommand(args)
     ));

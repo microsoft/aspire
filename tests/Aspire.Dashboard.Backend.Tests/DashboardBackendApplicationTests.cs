@@ -9,6 +9,7 @@ using System.Text.Json;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
@@ -200,6 +201,44 @@ public class DashboardBackendApplicationTests
         using var response = await app.GetTestClient().GetAsync(path, TestContext.Current.CancellationToken);
 
         Assert.Equal(expectedStatus, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Interactions_UseLegacyFallbackWithBrowserCredentials()
+    {
+        var proxy = new TestLegacyApiProxy();
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardLegacyApiProxy>(proxy);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, "/api/deck/interactions");
+        getRequest.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
+        using var getResponse = await client.SendAsync(getRequest, TestContext.Current.CancellationToken);
+
+        getResponse.EnsureSuccessStatusCode();
+        Assert.Equal("api/deck/interactions", proxy.Path);
+        Assert.Equal(".Aspire.Dashboard=browser-session", proxy.Credentials?.Cookie);
+        Assert.Equal("[]", await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        using var postResponse = await client.PostAsJsonAsync(
+            "/api/deck/interactions/respond",
+            new { interactionId = 42, action = "submit", values = new { value = "updated" } },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, postResponse.StatusCode);
+        Assert.Equal("api/deck/interactions/respond", proxy.Path);
+
+        using var commandResponse = await client.PostAsJsonAsync(
+            "/api/deck/commands/execute",
+            new { resourceName = "db-connection-string", commandName = "set-parameter" },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, commandResponse.StatusCode);
+        Assert.Equal("api/deck/commands/execute", proxy.Path);
     }
 
     [Fact]
@@ -813,6 +852,27 @@ public class DashboardBackendApplicationTests
                 cancellationToken.ThrowIfCancellationRequested();
                 yield return logEvent;
                 await Task.Yield();
+            }
+        }
+    }
+
+    private sealed class TestLegacyApiProxy : IDashboardLegacyApiProxy
+    {
+        public string? Path { get; private set; }
+        public DashboardRequestCredentials? Credentials { get; private set; }
+
+        public async Task ProxyAsync(HttpContext context, string path)
+        {
+            Path = path;
+            Credentials = DashboardRequestCredentials.From(context.Request);
+            if (HttpMethods.IsGet(context.Request.Method))
+            {
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("[]", context.RequestAborted);
+            }
+            else
+            {
+                context.Response.StatusCode = StatusCodes.Status204NoContent;
             }
         }
     }

@@ -19,6 +19,7 @@ internal static class DashboardBackendApplication
         builder.Services.TryAddSingleton<IDashboardCommandExecutor, DashboardCommandExecutor>();
         builder.Services.TryAddSingleton<IDashboardStructuredLogSource, DashboardStructuredLogProxy>();
         builder.Services.TryAddSingleton<IDashboardConsoleLogSource, DashboardConsoleLogProxy>();
+        builder.Services.TryAddSingleton<IDashboardLegacyApiProxy, DashboardLegacyApiProxy>();
         builder.Services.TryAddSingleton<IDashboardFrontendAssetProvider, EmbeddedDashboardFrontendAssetProvider>();
         builder.Services.AddHostedService(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.AddSignalR();
@@ -138,6 +139,22 @@ internal static class DashboardBackendApplication
                 return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
         });
+
+        // Parameter editing and commands that collect user input are still owned by the
+        // existing dashboard. Keep these two legacy endpoints on the AOT origin so the
+        // React fallback preserves browser credentials and same-origin request semantics.
+        app.MapGet("/api/deck/interactions", (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+            legacyApiProxy.ProxyAsync(context, "api/deck/interactions"));
+        app.MapPost("/api/deck/interactions/respond", (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+            legacyApiProxy.ProxyAsync(context, "api/deck/interactions/respond"));
+        app.MapPost("/api/deck/commands/execute", (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+            legacyApiProxy.ProxyAsync(context, "api/deck/commands/execute"));
 
         // Keep the SPA fallback last so versioned API and SignalR routes always win. Unknown
         // /api paths remain 404s instead of being disguised as successful HTML responses.

@@ -138,6 +138,16 @@ test(`${features("STRESS-CONFIG-001", "STRESS-RESOURCES-001", "STRESS-VISIBILITY
   await expect(table).not.toContainText("testParameterResource");
   await expect(table).not.toContainText("frontend");
 
+  const longNameRow = table.getByRole("row").filter({ hasText: "executableWithMultipleArgs" });
+  await expect(longNameRow).toHaveCount(1);
+  const [nameBounds, stateBounds] = await Promise.all([
+    longNameRow.locator(".resource-name").boundingBox(),
+    longNameRow.locator(".state").boundingBox(),
+  ]);
+  expect(nameBounds).not.toBeNull();
+  expect(stateBounds).not.toBeNull();
+  expect(nameBounds!.x + nameBounds!.width).toBeLessThanOrEqual(stateBounds!.x);
+
   await attachScreenshot(page, testInfo, "stress-live-resources-desktop");
 });
 
@@ -316,6 +326,16 @@ test(`${features("STRESS-PARAMETERS-001")} renders live parameters with secure d
   await expect(table).toContainText("testParameterResource");
   await expect(table.getByText("Not set", { exact: true })).toHaveCount(2);
   await expect(table.getByRole("button", { name: "Reveal value" })).toHaveCount(1);
+
+  await table.getByRole("row", { name: /db-connection-string Not set/ }).click();
+  const parameterDetails = page.getByRole("dialog", { name: "db-connection-string" });
+  await parameterDetails.getByRole("button", { name: "Set parameter" }).click();
+  const setParameterDialog = page.getByRole("dialog", { name: "Set parameter" });
+  const value = setParameterDialog.getByRole("textbox", { name: "db-connection-string" });
+  await value.fill("Server=localhost;Database=stress");
+  await setParameterDialog.getByRole("button", { name: "Set parameter", exact: true }).click();
+  await expect(setParameterDialog).toHaveCount(0);
+  await expect(parameterDetails).toContainText("Server=localhost;Database=stress");
 
   await attachScreenshot(page, testInfo, "stress-live-parameters");
 });
@@ -574,8 +594,9 @@ test(`${features("STRESS-RESPONSIVE-001")} keeps the live resource workflow usab
   await expect.poll(async () => (await drawer.boundingBox())?.x).toBe(0);
   const drawerBounds = await drawer.boundingBox();
   expect(drawerBounds).not.toBeNull();
-  expect(drawerBounds!.x).toBe(0);
-  expect(drawerBounds!.width).toBe(390);
+  // Chromium can report viewport-aligned CSS edges at a fractional device-pixel offset.
+  expect(Math.abs(drawerBounds!.x)).toBeLessThan(1);
+  expect(Math.abs(drawerBounds!.x + drawerBounds!.width - 390)).toBeLessThan(1);
 
   await attachScreenshot(page, testInfo, "stress-live-resources-mobile");
 });

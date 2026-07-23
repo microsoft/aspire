@@ -1170,6 +1170,8 @@ table.data tbody tr.selected {
   display: flex;
   align-items: center;
   gap: 9px;
+  min-width: 0;
+  overflow-wrap: anywhere;
   font-weight: 550;
 }
 .cell-type-icon {

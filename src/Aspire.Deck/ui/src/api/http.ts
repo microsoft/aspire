@@ -695,8 +695,8 @@ export const httpBackend = {
   },
   onApphosts,
   onInteractions,
-  respondInteraction(interactionId: number, action: string, values: Record<string, string>): void {
-    void postNoContent("interactions/respond", { interactionId, action, values }).catch(() => undefined);
+  respondInteraction(interactionId: number, action: string, values: Record<string, string>): Promise<void> {
+    return postNoContent("interactions/respond", { interactionId, action, values });
   },
   async getTelemetrySummary(): Promise<TelemetrySummary> {
     const [logsResponse, spansResponse, metrics] = await Promise.all([
