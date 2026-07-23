@@ -881,6 +881,120 @@ public class AzureStorageExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
+    public void AddBlobContainerReusesCustomNamedBlobService()
+    {
+        // Repro for https://github.com/microsoft/aspire/issues/12493
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+        var blobs = storage.AddBlobs("blobs");
+
+        var container1 = storage.AddBlobContainer("originals");
+        var container2 = storage.AddBlobContainer("thumbnails");
+
+        var blobServices = builder.Resources.OfType<AzureBlobStorageResource>().ToList();
+        Assert.Single(blobServices);
+        Assert.Equal("blobs", blobServices[0].Name);
+        Assert.Same(blobs.Resource, container1.Resource.Parent);
+        Assert.Same(blobs.Resource, container2.Resource.Parent);
+    }
+
+    [Fact]
+    public void AddQueueReusesCustomNamedQueueService()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+        var queues = storage.AddQueues("queues");
+
+        var q1 = storage.AddQueue("q1");
+        var q2 = storage.AddQueue("q2");
+
+        var queueServices = builder.Resources.OfType<AzureQueueStorageResource>().ToList();
+        Assert.Single(queueServices);
+        Assert.Equal("queues", queueServices[0].Name);
+        Assert.Same(queues.Resource, q1.Resource.Parent);
+        Assert.Same(queues.Resource, q2.Resource.Parent);
+    }
+
+    [Fact]
+    public void AddDataLakeFileSystemReusesCustomNamedDataLakeService()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+        var dataLake = storage.AddDataLake("datalake");
+
+        var fs1 = storage.AddDataLakeFileSystem("fs1");
+        var fs2 = storage.AddDataLakeFileSystem("fs2");
+
+        var dataLakeServices = builder.Resources.OfType<AzureDataLakeStorageResource>().ToList();
+        Assert.Single(dataLakeServices);
+        Assert.Equal("datalake", dataLakeServices[0].Name);
+        Assert.Same(dataLake.Resource, fs1.Resource.Parent);
+        Assert.Same(dataLake.Resource, fs2.Resource.Parent);
+    }
+
+    [Fact]
+    public void AddBlobContainerFirstThenCustomAddBlobsCreatesBoth()
+    {
+        // Documents order-matters: when AddBlobContainer is called before any AddBlobs,
+        // the implicit default-named service is auto-created. A later custom-named
+        // AddBlobs creates an additional resource — same behavior as the existing
+        // default-name test pre-PR #10635. Also pins that subsequent AddBlobContainer
+        // calls continue to attach to the implicit default-named service rather than
+        // re-parenting to the later custom-named service.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+
+        var originals = storage.AddBlobContainer("originals");
+        var customBlobs = storage.AddBlobs("blobs");
+        var derived = storage.AddBlobContainer("derived");
+
+        var blobServices = builder.Resources.OfType<AzureBlobStorageResource>().ToList();
+        Assert.Equal(2, blobServices.Count);
+
+        var defaultBlobService = Assert.Single(blobServices, r => r.Name == "storage-blobs");
+        var customBlobService = Assert.Single(blobServices, r => r.Name == "blobs");
+
+        Assert.Equal("blobs", customBlobs.Resource.Name);
+        Assert.Same(customBlobService, customBlobs.Resource);
+
+        Assert.Same(defaultBlobService, originals.Resource.Parent);
+        Assert.Same(defaultBlobService, derived.Resource.Parent);
+    }
+
+    [Fact]
+    public void AddBlobsCustomThenAddBlobsDefaultCreatesBoth()
+    {
+        // Pins GetBlobService semantics: adding a custom-named blob service first does
+        // not cause a later AddBlobs("{storage}-blobs") to return the custom one.
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+
+        var customBlobs = storage.AddBlobs("blobs");
+        var defaultBlobs = storage.AddBlobs("storage-blobs");
+
+        var blobServices = builder.Resources.OfType<AzureBlobStorageResource>().ToList();
+        Assert.Equal(2, blobServices.Count);
+        Assert.NotSame(customBlobs.Resource, defaultBlobs.Resource);
+        Assert.Equal("blobs", customBlobs.Resource.Name);
+        Assert.Equal("storage-blobs", defaultBlobs.Resource.Name);
+    }
+
+    [Fact]
+    public void AddBlobsFirstCustomWinsAsImplicitParent()
+    {
+        // When multiple custom-named blob services are added, AddBlobContainer parents
+        // to the first one added (first-wins for implicit parenting).
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var storage = builder.AddAzureStorage("storage");
+
+        var first = storage.AddBlobs("a");
+        storage.AddBlobs("b");
+        var container = storage.AddBlobContainer("c");
+
+        Assert.Same(first.Resource, container.Resource.Parent);
+    }
+
+    [Fact]
     public void RunAsEmulatorAppliesEmulatorResourceAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
