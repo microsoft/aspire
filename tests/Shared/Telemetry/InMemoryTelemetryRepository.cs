@@ -2349,6 +2349,28 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         return resources.Count > 1 ? summaries.DistinctBy(summary => summary.GetKey()).ToList() : summaries;
     }
 
+    public OtlpInstrumentSummary? GetInstrumentSummary(ResourceKey resourceKey, string meterName, string instrumentName)
+    {
+        var instrumentKey = new OtlpInstrumentKey(meterName, instrumentName);
+        foreach (var resource in GetResourceEntries(resourceKey))
+        {
+            resource.MetricsLock.EnterReadLock();
+            try
+            {
+                if (resource.Instruments.TryGetValue(instrumentKey, out var instrument))
+                {
+                    return instrument.Summary;
+                }
+            }
+            finally
+            {
+                resource.MetricsLock.ExitReadLock();
+            }
+        }
+
+        return null;
+    }
+
     public OtlpInstrumentData? GetInstrument(GetInstrumentRequest request)
     {
         var resources = GetResourceEntries(request.ResourceKey);

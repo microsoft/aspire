@@ -30,11 +30,13 @@ else
                 </div>
             }
         </div>
+        @* Avoid rendering the inactive graph or table because both subscribe to and process metric data updates. *@
         <FluentTabs ActiveTabId="@($"tab-{ActiveView}")" OnTabChange="@OnTabChangeAsync" Size="null">
             <FluentTab LabelClass="tab-label"
                        Id="@($"tab-{Metrics.MetricViewKind.Graph}")"
                        aria-label="@Loc[nameof(ControlsStrings.ChartContainerGraphAccessibleLabel)]"
                        Label="@Loc[nameof(ControlsStrings.ChartContainerGraphTab)]"
+                       DeferredLoading="true"
                        Icon="@(new Icons.Regular.Size24.DataArea())">
                 <div class="metrics-chart-container metric-tab">
                     <PlotlyChart InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime"/>
@@ -44,6 +46,7 @@ else
             <FluentTab LabelClass="tab-label"
                        Id="@($"tab-{Metrics.MetricViewKind.Table}")"
                        Label="@Loc[nameof(ControlsStrings.ChartContainerTableTab)]"
+                       DeferredLoading="true"
                        Icon="@(new Icons.Regular.Size24.Table())">
                 <div class="metrics-chart-container metric-tab">
                     <MetricTable InstrumentViewModel="_instrumentViewModel" Duration="Duration" Resources="Resources" DataEndTime="_dataEndTime" />

@@ -101,6 +101,11 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
                 Assert.Equal("widget", instrument.Unit);
                 Assert.Equal("test-meter2", instrument.Parent.Name);
             });
+
+            var instrumentSummary = repository.GetInstrumentSummary(resources[0].ResourceKey, "test-meter2", "test2");
+            Assert.NotNull(instrumentSummary);
+            Assert.Equal(OtlpInstrumentType.Histogram, instrumentSummary.Type);
+            Assert.Null(repository.GetInstrumentSummary(resources[0].ResourceKey, "test-meter2", "missing"));
     }
 
     [Fact]

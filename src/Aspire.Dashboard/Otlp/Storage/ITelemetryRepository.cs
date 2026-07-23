@@ -51,6 +51,16 @@ public interface ITelemetryRepository : IDisposable
     OtlpSpan? GetSpan(string traceId, string spanId);
     OtlpResource? GetPeerResource(OtlpSpan span);
     List<OtlpInstrumentSummary> GetInstrumentSummaries(ResourceKey key);
+
+    /// <summary>
+    /// Gets the summary for an instrument emitted by a resource.
+    /// </summary>
+    /// <param name="resourceKey">The resource that emitted the instrument.</param>
+    /// <param name="meterName">The name of the meter that contains the instrument.</param>
+    /// <param name="instrumentName">The name of the instrument.</param>
+    /// <returns>The instrument summary, or <see langword="null"/> when the instrument is not found.</returns>
+    OtlpInstrumentSummary? GetInstrumentSummary(ResourceKey resourceKey, string meterName, string instrumentName);
+
     OtlpInstrumentData? GetInstrument(GetInstrumentRequest request);
     DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName);
 

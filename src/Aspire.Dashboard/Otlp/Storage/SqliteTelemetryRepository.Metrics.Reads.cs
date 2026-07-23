@@ -126,6 +126,7 @@ public sealed partial class SqliteTelemetryRepository
             request.DimensionFilters,
             request.DimensionCursors,
             request.DataPointInterval,
+            request.IncludeExemplars,
             request.PopulateExemplarAttributes,
             knownAttributeValues);
         return new OtlpInstrumentData
@@ -164,6 +165,7 @@ public sealed partial class SqliteTelemetryRepository
         IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters,
         IReadOnlyList<MetricDimensionCursor> dimensionCursors,
         TimeSpan? dataPointInterval,
+        bool includeExemplars,
         bool populateExemplarAttributes,
         Dictionary<string, List<string?>> knownAttributeValues)
     {
@@ -172,13 +174,26 @@ public sealed partial class SqliteTelemetryRepository
             throw new ArgumentOutOfRangeException(nameof(dataPointInterval), interval, "The metric data point interval must be greater than zero.");
         }
 
-        var dimensionIds = connection.Query<long>("SELECT dimension_id FROM telemetry_metric_dimensions WHERE instrument_id IN @InstrumentIds ORDER BY dimension_id;", new { InstrumentIds = instrumentIds }).AsList();
-        var attributes = connection.Query<OwnedAttributeRecord>("""
-            SELECT dimension_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
-            FROM telemetry_metric_dimension_attributes
-            WHERE dimension_id IN @DimensionIds
-            ORDER BY dimension_id, ordinal;
-            """, new { DimensionIds = dimensionIds }).ToLookup(record => record.OwnerId);
+        var dimensionRecords = connection.Query<MetricDimensionAttributeRecord>("""
+            SELECT
+                d.dimension_id AS DimensionId,
+                a.attribute_key AS AttributeKey,
+                a.attribute_value AS AttributeValue
+            FROM telemetry_metric_dimensions d
+            LEFT JOIN telemetry_metric_dimension_attributes a ON a.dimension_id = d.dimension_id
+            WHERE d.instrument_id IN @InstrumentIds
+            ORDER BY d.dimension_id, a.ordinal;
+            """, new { InstrumentIds = instrumentIds }).AsList();
+        var dimensionIds = dimensionRecords.Select(record => record.DimensionId).Distinct().ToArray();
+        var attributes = dimensionRecords
+            .Where(record => record.AttributeKey is not null)
+            .Select(record => new OwnedAttributeRecord
+            {
+                OwnerId = record.DimensionId,
+                AttributeKey = record.AttributeKey!,
+                AttributeValue = record.AttributeValue!
+            })
+            .ToLookup(record => record.OwnerId);
         PopulateKnownAttributeValues(dimensionIds, attributes, knownAttributeValues);
 
         var selectedDimensionIds = dimensionIds
@@ -231,13 +246,15 @@ public sealed partial class SqliteTelemetryRepository
             ? MaterializeMetricHistogramData(connection, pointRecords.Select(point => point.PointId).ToArray())
             : (Array.Empty<MetricHistogramBucketRecord>().ToLookup(record => record.PointId),
                 Array.Empty<MetricHistogramBoundRecord>().ToLookup(record => record.PointId));
-        var exemplars = MaterializeMetricExemplars(
-            connection,
-            dimensionQueryRangesCteSql,
-            queryParameters,
-            dataPointInterval,
-            pointRecords,
-            populateExemplarAttributes);
+        var exemplars = includeExemplars
+            ? MaterializeMetricExemplars(
+                connection,
+                dimensionQueryRangesCteSql,
+                queryParameters,
+                dataPointInterval,
+                pointRecords,
+                populateExemplarAttributes)
+            : Array.Empty<KeyValuePair<long, MetricsExemplar>>().ToLookup(pair => pair.Key, pair => pair.Value);
 
         for (var dimensionIndex = 0; dimensionIndex < selectedDimensionIds.Length; dimensionIndex++)
         {
@@ -450,6 +467,13 @@ public sealed partial class SqliteTelemetryRepository
         public required long StartTimeTicks { get; init; }
         public required long RepeatCount { get; init; }
         public double? HistogramSum { get; init; }
+    }
+
+    private sealed class MetricDimensionAttributeRecord
+    {
+        public required long DimensionId { get; init; }
+        public string? AttributeKey { get; init; }
+        public string? AttributeValue { get; init; }
     }
 
     private sealed class MetricHistogramBucketRecord

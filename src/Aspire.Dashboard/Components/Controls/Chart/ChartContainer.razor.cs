@@ -24,7 +24,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private IDisposable? _themeChangedSubscription;
     private readonly InstrumentViewModel _instrumentViewModel = new InstrumentViewModel();
     private (ResourceKey ResourceKey, string MeterName, string InstrumentName)? _dataEndTimeKey;
+    private (ResourceKey ResourceKey, string MeterName, string InstrumentName, TimeSpan Duration)? _instrumentRequestKey;
     private DateTimeOffset? _dataEndTime;
+    private long _lastDataFetchTimestamp;
 
     [Parameter, EditorRequired]
     public required ResourceKey ResourceKey { get; set; }
@@ -64,6 +66,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     [Inject]
     public required PauseManager PauseManager { get; init; }
 
+    [Inject]
+    public required DashboardActivitySource DashboardActivitySource { get; init; }
+
     public ImmutableList<DimensionFilterViewModel> DimensionFilters { get; set; } = [];
     public string? PreviousMeterName { get; set; }
     public string? PreviousInstrumentName { get; set; }
@@ -76,7 +81,10 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         {
             // Update the graph every 200ms. This displays the latest data and moves time forward.
             _tickTimer = new PeriodicTimer(s_chartUpdateInterval);
-            _tickTask = Task.Run(UpdateDataAsync);
+            using (ExecutionContext.SuppressFlow())
+            {
+                _tickTask = Task.Run(UpdateDataAsync);
+            }
         }
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
         {
@@ -100,13 +108,14 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     private async Task UpdateDataAsync()
     {
         var timer = _tickTimer;
-        long? lastDataFetchTimestamp = null;
         while (await timer!.WaitForNextTickAsync())
         {
-            if (lastDataFetchTimestamp is null || Stopwatch.GetElapsedTime(lastDataFetchTimestamp.Value) >= s_dataFetchInterval)
+            var lastDataFetchTimestamp = Volatile.Read(ref _lastDataFetchTimestamp);
+            if (lastDataFetchTimestamp == 0 || Stopwatch.GetElapsedTime(lastDataFetchTimestamp) >= s_dataFetchInterval)
             {
+                using var activity = DashboardActivitySource.ActivitySource.StartActivity("Update metric chart data from tick");
+
                 _instrument = GetInstrument(useIncrementalCache: true);
-                lastDataFetchTimestamp = Stopwatch.GetTimestamp();
 
                 if (_instrument is not null && HaveDimensionFilterValuesChanged(_instrument))
                 {
@@ -160,6 +169,16 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     protected override async Task OnParametersSetAsync()
     {
+        var requestKey = (ResourceKey, MeterName, InstrumentName, Duration);
+        if (_instrumentRequestKey != requestKey)
+        {
+            _instrumentRequestKey = requestKey;
+            await RefreshChartAsync();
+        }
+    }
+
+    private async Task RefreshChartAsync()
+    {
         _instrument = GetInstrument(useIncrementalCache: false);
 
         if (_instrument == null)
@@ -178,6 +197,17 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     private OtlpInstrumentData? GetInstrument(bool useIncrementalCache)
     {
+        var instrumentSummary = TelemetryRepository.GetInstrumentSummary(ResourceKey, MeterName, InstrumentName);
+        if (instrumentSummary is null)
+        {
+            Logger.LogDebug(
+                "Unable to find instrument. ResourceKey: {ResourceKey}, MeterName: {MeterName}, InstrumentName: {InstrumentName}",
+                ResourceKey,
+                MeterName,
+                InstrumentName);
+            return null;
+        }
+
         DateTime endDate;
         if (TelemetryRepository.IsReadOnly)
         {
@@ -192,6 +222,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         }
 
         var dataPointInterval = MetricDataPointInterval.Get(Duration);
+        var includeExemplars = instrumentSummary.Type == OtlpInstrumentType.Histogram;
 
         // Histogram graphs need one preceding rollup to calculate bucket count changes at the beginning of the chart.
         var historyDuration = TimeSpan.FromTicks(Math.Max(TimeSpan.FromSeconds(30).Ticks, dataPointInterval.Ticks));
@@ -208,6 +239,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
             StartTime = startDate,
             EndTime = endDate,
             DataPointInterval = dataPointInterval,
+            IncludeExemplars = includeExemplars,
             PopulateExemplarAttributes = false,
             DimensionCursors = cursors,
             DimensionFilters = DimensionFilters
@@ -216,17 +248,10 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
                 filter => filter.Name,
                 filter => (IReadOnlyList<string?>)filter.SelectedValues.Select(value => value.Value).ToArray())
         });
+        Debug.Assert(refreshedInstrument is not null);
+        Volatile.Write(ref _lastDataFetchTimestamp, Stopwatch.GetTimestamp());
 
-        if (refreshedInstrument == null)
-        {
-            Logger.LogDebug(
-                "Unable to find instrument. ResourceKey: {ResourceKey}, MeterName: {MeterName}, InstrumentName: {InstrumentName}",
-                ResourceKey,
-                MeterName,
-                InstrumentName);
-        }
-
-        return refreshedInstrument is not null && _instrument is not null && cursors.Count > 0
+        return _instrument is not null && cursors.Count > 0
             ? MetricInstrumentDataCache.Merge(_instrument, refreshedInstrument, cursors, startDate)
             : refreshedInstrument;
     }
