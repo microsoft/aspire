@@ -31,7 +31,8 @@ public class TerminalHostFailureDiagnosticServiceTests
 
             await notifications.PublishUpdateAsync(host, s => s with
             {
-                State = new ResourceStateSnapshot(KnownResourceStates.FailedToStart, null),
+                State = new ResourceStateSnapshot("failedtostart", null),
+                ExitCode = 0,
                 IsHidden = true,
             }).DefaultTimeout();
 
@@ -109,6 +110,83 @@ public class TerminalHostFailureDiagnosticServiceTests
             // No way to deterministically prove "nothing happens" — give the service a
             // moment to observe the event, then assert the host is still hidden and no
             // logs were written.
+            await Task.Delay(200, stopCts.Token);
+
+            var current = await ReadCurrentSnapshotAsync(notifications, host).DefaultTimeout();
+            Assert.True(current.IsHidden);
+
+            var hasLogs = await TryReadAnyLogAsync(loggers, host);
+            Assert.False(hasLogs);
+        }
+        finally
+        {
+            await stopCts.CancelAsync();
+            await service.StopAsync(CancellationToken.None).DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task ExitedWithoutExitCode_WaitsForExitCodeBeforeSurfacingFailure()
+    {
+        var (notifications, loggers, host, service, stopCts) = CreateHarness(
+            terminalHostPath: "/usr/local/share/aspire/cli/managed/aspire-managed",
+            terminalHostInvocationArgs: "terminalhost");
+
+        try
+        {
+            await service.StartAsync(stopCts.Token).DefaultTimeout();
+
+            await notifications.PublishUpdateAsync(host, s => s with
+            {
+                State = new ResourceStateSnapshot(KnownResourceStates.Exited, null),
+                IsHidden = true,
+            }).DefaultTimeout();
+
+            await Task.Delay(200, stopCts.Token);
+
+            var current = await ReadCurrentSnapshotAsync(notifications, host).DefaultTimeout();
+            Assert.True(current.IsHidden);
+
+            var hasLogs = await TryReadAnyLogAsync(loggers, host);
+            Assert.False(hasLogs);
+
+            await notifications.PublishUpdateAsync(host, s => s with
+            {
+                State = new ResourceStateSnapshot(KnownResourceStates.Exited, null),
+                ExitCode = 1,
+                IsHidden = true,
+            }).DefaultTimeout();
+
+            await WaitForUnhideAsync(notifications, host).DefaultTimeout();
+
+            var logs = await ReadLogsAsync(loggers, host, expected: 2).DefaultTimeout();
+            Assert.Contains("exit code 1", logs[0].Content);
+        }
+        finally
+        {
+            await stopCts.CancelAsync();
+            await service.StopAsync(CancellationToken.None).DefaultTimeout();
+        }
+    }
+
+    [Fact]
+    public async Task DcpTerminatedHost_DoesNotSurfaceAsFailure()
+    {
+        var (notifications, loggers, host, service, stopCts) = CreateHarness(
+            terminalHostPath: "/usr/local/share/aspire/cli/managed/aspire-managed",
+            terminalHostInvocationArgs: "terminalhost");
+
+        try
+        {
+            await service.StartAsync(stopCts.Token).DefaultTimeout();
+
+            await notifications.PublishUpdateAsync(host, s => s with
+            {
+                State = new ResourceStateSnapshot(KnownResourceStates.Exited, null),
+                IsDcpExecutableTerminated = true,
+                IsHidden = true,
+            }).DefaultTimeout();
+
             await Task.Delay(200, stopCts.Token);
 
             var current = await ReadCurrentSnapshotAsync(notifications, host).DefaultTimeout();

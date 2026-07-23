@@ -24,6 +24,11 @@ public sealed record CustomResourceSnapshot
     internal long Version { get; init; }
 
     /// <summary>
+    /// Gets whether the normalized snapshot state came from DCP executable termination.
+    /// </summary>
+    internal bool IsDcpExecutableTerminated { get; init; }
+
+    /// <summary>
     /// The type of the resource.
     /// </summary>
     public required string ResourceType { get; init; }

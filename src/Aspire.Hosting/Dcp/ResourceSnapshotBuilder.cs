@@ -98,7 +98,8 @@ internal class ResourceSnapshotBuilder
         IResource? appModelResource = null;
         _ = executable.AppModelResourceName is not null && _resourceState.ApplicationModel.TryGetValue(executable.AppModelResourceName, out appModelResource);
 
-        var state = executable.AppModelInitialState is "Hidden" ? "Hidden" : executable.Status?.State;
+        var rawState = executable.Status?.State;
+        var state = executable.AppModelInitialState is "Hidden" ? "Hidden" : DcpStateMapper.NormalizeExecutableState(rawState);
         var environment = GetEnvironmentVariables(executable.Status?.EffectiveEnv, executable.Spec.Env);
         var effectiveArgs = executable.Status?.EffectiveArgs;
         var launchArguments = GetLaunchArgs(executable, effectiveArgs);
@@ -114,6 +115,7 @@ internal class ResourceSnapshotBuilder
             ResourceType = previous.ResourceType ?? KnownResourceTypes.Executable,
             State = state,
             ExitCode = executable.Status?.ExitCode,
+            IsDcpExecutableTerminated = DcpStateMapper.IsExecutableTerminated(rawState),
             Properties = previous.Properties.SetResourcePropertyRange([
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Args, effectiveArgs ?? [], isSensitive: true),
@@ -150,7 +152,8 @@ internal class ResourceSnapshotBuilder
             }
         }
 
-        var state = executable.AppModelInitialState is "Hidden" ? "Hidden" : executable.Status?.State;
+        var rawState = executable.Status?.State;
+        var state = executable.AppModelInitialState is "Hidden" ? "Hidden" : DcpStateMapper.NormalizeExecutableState(rawState);
         if (executable.Spec.Start is false && IsNotStartedExecutableState(state))
         {
             state = KnownResourceStates.NotStarted;
@@ -176,6 +179,7 @@ internal class ResourceSnapshotBuilder
                 ResourceType = previous.ResourceType ?? KnownResourceTypes.Project,
                 State = state,
                 ExitCode = executable.Status?.ExitCode,
+                IsDcpExecutableTerminated = DcpStateMapper.IsExecutableTerminated(rawState),
                 Properties = previous.Properties.SetResourcePropertyRange([
                     ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
                     ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Project, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),
@@ -200,6 +204,7 @@ internal class ResourceSnapshotBuilder
             ResourceType = previous.ResourceType ?? KnownResourceTypes.Executable,
             State = state,
             ExitCode = executable.Status?.ExitCode,
+            IsDcpExecutableTerminated = DcpStateMapper.IsExecutableTerminated(rawState),
             Properties = previous.Properties.SetResourcePropertyRange([
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.Path, executable.Spec.ExecutablePath),
                 ResourcePropertySnapshotMetadata.Create(KnownResourceTypes.Executable, KnownProperties.Executable.WorkDir, executable.Spec.WorkingDirectory),

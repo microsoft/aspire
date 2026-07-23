@@ -63,4 +63,8 @@
     <Compile Include="$(TestsSharedDir)DistributedApplicationTestingBuilderExtensions.cs" Link="shared/DistributedApplicationTestingBuilderExtensions.cs" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Compile Include="$(TestsSharedDir)TempDirectory.cs" Link="shared/TempDirectory.cs" Condition="Exists('$(TestsSharedDir)TempDirectory.cs')" />
+  </ItemGroup>
+
 </Project>
