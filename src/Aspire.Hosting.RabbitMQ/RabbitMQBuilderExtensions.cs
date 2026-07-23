@@ -4,8 +4,10 @@
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.RabbitMQ;
+using Aspire.Hosting.RabbitMQ.Provisioning;
 using Microsoft.Extensions.DependencyInjection;
-using RabbitMQ.Client;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting;
 
@@ -55,22 +57,21 @@ public static class RabbitMQBuilderExtensions
         });
 
         var healthCheckKey = $"{name}_check";
-        // cache the connection so it is reused on subsequent calls to the health check
-        IConnection? connection = null;
+
+        builder.Services.AddKeyedSingleton<IRabbitMQProvisioningClient>(
+            rabbitMq.Name,
+            (sp, _) => new RabbitMQProvisioningClient(rabbitMq, sp.GetRequiredService<ILogger<RabbitMQProvisioningClient>>()));
+
         builder.Services.AddHealthChecks().AddRabbitMQ(async (sp) =>
         {
             // NOTE: Ensure that execution of this setup callback is deferred until after
             //       the container is built & started.
-            return connection ??= await CreateConnection(connectionString!).ConfigureAwait(false);
-
-            static Task<IConnection> CreateConnection(string connectionString)
-            {
-                var factory = new ConnectionFactory
-                {
-                    Uri = new Uri(connectionString)
-                };
-                return factory.CreateConnectionAsync();
-            }
+            // The cast to RabbitMQProvisioningClient is intentional: AddRabbitMQ (the AspNetCore health-check
+            // extension) requires an IConnection, which is a RabbitMQ.Client type. Exposing IConnection on
+            // IRabbitMQProvisioningClient would leak the client library into the internal facade, so we keep
+            // the cast here — the concrete type is internal and registered by us.
+            var client = (RabbitMQProvisioningClient)sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(rabbitMq.Name);
+            return await client.GetOrCreateConnectionAsync("/", default).ConfigureAwait(false);
         }, healthCheckKey);
 
         var rabbitmq = builder.AddResource(rabbitMq)
@@ -142,7 +143,60 @@ public static class RabbitMQBuilderExtensions
     }
 
     /// <summary>
-    /// Enables the RabbitMQ management plugin
+    /// Enables a RabbitMQ plugin.
+    /// </summary>
+    /// <param name="builder">The RabbitMQ server resource builder.</param>
+    /// <param name="plugin">The plugin to enable.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    [AspireExportIgnore(Reason = "RabbitMQPlugin is a C# enum — not usable from polyglot hosts. Use the string overload (withPlugin) instead.")]
+    public static IResourceBuilder<RabbitMQServerResource> WithPlugin(
+        this IResourceBuilder<RabbitMQServerResource> builder,
+        RabbitMQPlugin plugin)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        return builder.WithPlugin(plugin.ToPluginName());
+    }
+
+    /// <summary>
+    /// Enables a RabbitMQ plugin by name.
+    /// </summary>
+    /// <param name="builder">The RabbitMQ server resource builder.</param>
+    /// <param name="pluginName">The name of the plugin to enable.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-summary>Enables a RabbitMQ plugin by name.</ats-summary>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport("withPluginByName", MethodName = "withPlugin")]
+    public static IResourceBuilder<RabbitMQServerResource> WithPlugin(
+        this IResourceBuilder<RabbitMQServerResource> builder,
+        string pluginName)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentException.ThrowIfNullOrWhiteSpace(pluginName);
+
+        builder.Resource.EnabledPlugins.Add(pluginName);
+
+        if (!builder.Resource.HasPluginFileCallback)
+        {
+            builder.Resource.HasPluginFileCallback = true;
+            builder.WithContainerFiles("/etc/rabbitmq", (context, ct) =>
+            {
+                var plugins = builder.Resource.EnabledPlugins
+                    .OrderBy(x => x, StringComparer.Ordinal);
+
+                var content = $"[{string.Join(",", plugins)}].";
+                IEnumerable<ContainerFileSystemItem> items =
+                [
+                    new ContainerFile { Name = "enabled_plugins", Contents = content }
+                ];
+                return Task.FromResult(items);
+            });
+        }
+
+        return builder;
+    }
+
+    /// <summary>
+    /// Enables the RabbitMQ management plugin.
     /// </summary>
     [AspireExport("withManagementPlugin")]
     internal static IResourceBuilder<RabbitMQServerResource> WithManagementPluginForPolyglot(
@@ -156,17 +210,7 @@ public static class RabbitMQBuilderExtensions
 
     /// <inheritdoc cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource})" />
     /// <param name="builder">The resource builder.</param>
-    /// <param name="port">The host port that can be used to access the management UI page when running locally.</param>
-    /// <remarks>
-    /// <example>
-    /// Use <see cref="WithManagementPlugin(IResourceBuilder{RabbitMQServerResource}, int?)"/> to specify a port to access the RabbitMQ management UI page.
-    /// <code>
-    /// var rabbitmq = builder.AddRabbitMQ("rabbitmq")
-    ///                       .WithDataVolume()
-    ///                       .WithManagementPlugin(port: 15672);
-    /// </code>
-    /// </example>
-    /// </remarks>
+    /// <param name="port">The host port used to access the management UI when running locally.</param>
     [AspireExportIgnore(Reason = "Polyglot app hosts use the internal withManagementPlugin dispatcher export.")]
     public static IResourceBuilder<RabbitMQServerResource> WithManagementPlugin(this IResourceBuilder<RabbitMQServerResource> builder, int? port)
     {
@@ -225,11 +269,102 @@ public static class RabbitMQBuilderExtensions
 
         if (handled)
         {
-            builder.WithHttpEndpoint(port: port, targetPort: 15672, name: RabbitMQServerResource.ManagementEndpointName);
+            if (!builder.Resource.Annotations.OfType<EndpointAnnotation>()
+                .Any(e => e.Name == RabbitMQServerResource.ManagementEndpointName))
+            {
+                builder.WithHttpEndpoint(port: port, targetPort: 15672, name: RabbitMQServerResource.ManagementEndpointName);
+            }
+
+            // Register the plugins that the management image bundles so that the enabled_plugins file
+            // reflects the full set when WithPlugin is also called.
+            builder.WithPlugin(RabbitMQPlugin.Management);
+            builder.WithPlugin(RabbitMQPlugin.ManagementAgent);
+            builder.WithPlugin(RabbitMQPlugin.WebDispatch);
+            builder.WithPlugin(RabbitMQPlugin.Prometheus);
+
             return builder;
         }
 
         throw new DistributedApplicationException($"Cannot configure the RabbitMQ resource '{builder.Resource.Name}' to enable the management plugin as it uses an unrecognized container image registry, name, or tag.");
+    }
+
+    internal static IResourceBuilder<RabbitMQVirtualHostResource> GetOrAddDefaultVirtualHost(this IResourceBuilder<RabbitMQServerResource> server)
+    {
+        var defaultVhost = server.Resource.VirtualHosts.FirstOrDefault(v => v.IsDefault);
+        if (defaultVhost is not null)
+        {
+            return server.ApplicationBuilder.CreateResourceBuilder(defaultVhost);
+        }
+
+        return server.AddVirtualHost($"{server.Resource.Name}-default-vhost", RabbitMQVirtualHostResource.DefaultVirtualHostName);
+    }
+
+    /// <summary>
+    /// Registers a provisioning health check for the given resource and wires it up.
+    /// The server name is derived from <see cref="IRabbitMQServerChild.VirtualHost"/> so it
+    /// does not need to be passed explicitly at every call site.
+    /// </summary>
+    internal static IResourceBuilder<T> WithProvisionableHealthCheck<T>(
+        this IResourceBuilder<T> builder)
+        where T : RabbitMQProvisionableResource, IRabbitMQServerChild
+    {
+        var resource = builder.Resource;
+        var serverName = resource.VirtualHost.Parent.Name;
+        var healthCheckKey = $"{resource.Name}_check";
+
+        builder.ApplicationBuilder.Services.AddHealthChecks().Add(new HealthCheckRegistration(
+            healthCheckKey,
+            sp =>
+            {
+                var client = sp.GetRequiredKeyedService<IRabbitMQProvisioningClient>(serverName);
+                var notifications = sp.GetRequiredService<ResourceNotificationService>();
+                var logger = sp.GetRequiredService<ILoggerFactory>().CreateLogger<RabbitMQProvisionableHealthCheck>();
+                // Pass serverName so the health check can short-circuit when the broker is not Running,
+                // avoiding a live probe call (which would hang until the HTTP timeout) against a dead broker.
+                return new RabbitMQProvisionableHealthCheck(resource, serverName, client, notifications, logger);
+            },
+            failureStatus: null,
+            tags: null));
+
+        return builder.WithHealthCheck(healthCheckKey);
+    }
+
+    internal static IResourceBuilder<T> WithPropertiesCore<T>(IResourceBuilder<T> builder, Action<T> configure)
+        where T : Resource
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        ArgumentNullException.ThrowIfNull(configure);
+        configure(builder.Resource);
+        return builder;
+    }
+
+    /// <summary>
+    /// Resolves which queues and exchanges in <paramref name="vhost"/> match <paramref name="policy"/>
+    /// and wires up the applied-policies lists and dashboard relationships.
+    /// Exposed internally for testing.
+    /// </summary>
+    internal static void ResolveAndApplyPolicyMatches(
+        RabbitMQPolicyResource policy,
+        RabbitMQVirtualHostResource vhost,
+        IResourceBuilder<RabbitMQPolicyResource> policyBuilder)
+    {
+        foreach (var queue in vhost.Queues)
+        {
+            if (policy.AppliesTo(queue.QueueName, RabbitMQDestinationKind.Queue))
+            {
+                queue.AppliedPolicies.Add(policy);
+                policyBuilder.WithRelationship(queue, "Policy");
+            }
+        }
+
+        foreach (var exchange in vhost.Exchanges)
+        {
+            if (policy.AppliesTo(exchange.ExchangeName, RabbitMQDestinationKind.Exchange))
+            {
+                exchange.AppliedPolicies.Add(policy);
+                policyBuilder.WithRelationship(exchange, "Policy");
+            }
+        }
     }
 
     private static bool IsVersion(string tag)
