@@ -12,6 +12,29 @@ namespace Aspire.Hosting.Pipelines;
 /// Relative paths are resolved from the AppHost project directory. Pipeline steps must write
 /// artifacts to the path returned by <see cref="IPipelineOutputResolver.Resolve"/>.
 /// </remarks>
+/// <example>
+/// This example declares and resolves an inventory directory:
+/// <code>
+/// var inventoryDefinition = new PipelineOutputDefinition(
+///     "inventory",
+///     ".configgen",
+///     PipelineOutputKind.Directory);
+///
+/// var step = new PipelineStep
+/// {
+///     Name = "generate-inventory",
+///     Outputs = [inventoryDefinition],
+///     SupportsOutputPathRelocation = true,
+///     Action = context =>
+///     {
+///         var inventory = context.Outputs.Resolve(inventoryDefinition);
+///         Directory.CreateDirectory(inventory.OutputPath);
+///         File.WriteAllText(Path.Combine(inventory.OutputPath, "inventory.txt"), "generated");
+///         return Task.CompletedTask;
+///     }
+/// };
+/// </code>
+/// </example>
 [Experimental("ASPIREPIPELINES004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
 public sealed class PipelineOutputDefinition
 {
@@ -21,6 +44,16 @@ public sealed class PipelineOutputDefinition
     /// <param name="name">The name that uniquely identifies this output within its pipeline step.</param>
     /// <param name="defaultPath">The default logical target path.</param>
     /// <param name="kind">The kind of output.</param>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="name"/> or <paramref name="defaultPath"/> is <see langword="null"/>.
+    /// </exception>
+    /// <exception cref="ArgumentException">
+    /// Thrown when <paramref name="name"/> is empty, contains a colon, or when
+    /// <paramref name="defaultPath"/> is empty or rooted.
+    /// </exception>
+    /// <exception cref="ArgumentOutOfRangeException">
+    /// Thrown when <paramref name="kind"/> is not a defined <see cref="PipelineOutputKind"/> value.
+    /// </exception>
     public PipelineOutputDefinition(string name, string defaultPath, PipelineOutputKind kind)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(name);
