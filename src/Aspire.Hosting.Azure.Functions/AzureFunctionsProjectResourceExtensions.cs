@@ -226,6 +226,19 @@ public static class AzureFunctionsProjectResourceExtensions
 
                 // Set the storage connection string.
                 ((IResourceWithAzureFunctionsConfig)resource.HostStorage).ApplyAzureFunctionsConfiguration(context.EnvironmentVariables, "AzureWebJobsStorage");
+
+                if (context.ExecutionContext.IsRunMode)
+                {
+                    var launchProfile = resource.GetEffectiveLaunchProfile()?.LaunchProfile;
+                    if (launchProfile is not null)
+                    {
+                        foreach (var envVar in launchProfile.EnvironmentVariables)
+                        {
+                            var value = Environment.ExpandEnvironmentVariables(envVar.Value);
+                            context.EnvironmentVariables.TryAdd(envVar.Key, value);
+                        }
+                    }
+                }
             })
             .WithOtlpExporter()
             .WithFunctionsHttpEndpoint();
