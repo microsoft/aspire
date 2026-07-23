@@ -27,7 +27,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -37,7 +37,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -65,7 +65,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -75,7 +75,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -166,7 +166,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -176,7 +176,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -195,7 +195,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -205,7 +205,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -227,7 +227,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -237,7 +237,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -251,14 +251,14 @@ public class ProvisioningContextProviderTests
     }
 
     [Fact]
-    public async Task CreateProvisioningContextAsync_RetrievesUserPrincipal()
+    public async Task CreateProvisioningContextAsync_RetrievesPrincipal()
     {
         // Arrange
         var options = ProvisioningTestHelpers.CreateOptions();
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -268,7 +268,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -290,7 +290,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -300,7 +300,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -323,7 +323,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -333,7 +333,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -418,7 +418,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -428,7 +428,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -478,7 +478,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -488,7 +488,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -579,7 +579,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger<PublishModeProvisioningContextProvider>();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -589,7 +589,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Publish),
@@ -619,7 +619,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -629,7 +629,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -665,7 +665,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -675,7 +675,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -708,7 +708,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -718,7 +718,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -766,7 +766,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -776,7 +776,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));
@@ -809,7 +809,7 @@ public class ProvisioningContextProviderTests
         var environment = ProvisioningTestHelpers.CreateEnvironment();
         var logger = ProvisioningTestHelpers.CreateLogger();
         var armClientProvider = ProvisioningTestHelpers.CreateArmClientProvider();
-        var userPrincipalProvider = ProvisioningTestHelpers.CreateUserPrincipalProvider();
+        var azurePrincipalProvider = ProvisioningTestHelpers.CreateAzurePrincipalProvider();
         var tokenCredentialProvider = ProvisioningTestHelpers.CreateTokenCredentialProvider();
         var deploymentStateManager = ProvisioningTestHelpers.CreateUserSecretsManager();
 
@@ -819,7 +819,7 @@ public class ProvisioningContextProviderTests
             environment,
             logger,
             armClientProvider,
-            userPrincipalProvider,
+            azurePrincipalProvider,
             tokenCredentialProvider,
             deploymentStateManager,
             new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run));

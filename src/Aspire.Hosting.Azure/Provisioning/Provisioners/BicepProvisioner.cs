@@ -1403,7 +1403,13 @@ internal sealed class BicepProvisioner(
         {
             ValidateUnknownPrincipalParameter(context);
 
-            resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = "User";
+            // Use the principal type detected from the credential's access token (the `idtyp`
+            // claim) instead of hardcoding "User". A hardcoded "User" caused the role-assignment
+            // `-roles` deployments synthesized by AzureResourcePreparer to fail with
+            // `UnmatchedPrincipalType` / `PrincipalNotFound` whenever the AppHost ran under a
+            // service-principal / federated-workload-identity credential (CI, CD, deploy bots).
+            // See https://github.com/microsoft/aspire/issues/13933.
+            resource.Parameters[AzureBicepResource.KnownParameters.PrincipalType] = context.Principal.Type;
         }
 
         if (!resource.Parameters.TryGetValue(AzureBicepResource.KnownParameters.Location, out var location) || location is null)
