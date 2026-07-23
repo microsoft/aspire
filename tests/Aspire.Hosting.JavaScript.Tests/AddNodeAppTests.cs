@@ -209,6 +209,38 @@ public class AddNodeAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyWorkspaceDockerfileResolvesEntryPointRelativeToPackagePath()
+    {
+        using var tempDir = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+
+        var workspaceDir = Path.Combine(tempDir.Path, "workspace");
+        var apiDir = Path.Combine(workspaceDir, "packages", "api");
+        Directory.CreateDirectory(apiDir);
+        Directory.CreateDirectory(Path.Combine(apiDir, "dist"));
+
+        File.WriteAllText(Path.Combine(workspaceDir, "package.json"), "{}");
+        File.WriteAllText(Path.Combine(workspaceDir, "pnpm-workspace.yaml"), "packages:\n  - packages/*\n");
+        File.WriteAllText(Path.Combine(workspaceDir, "pnpm-lock.yaml"), "lockfileVersion: '9.0'\n");
+        // The member's package name must match the workspaceProjectName ("workspace-api") passed to
+        // AddNodeApp, otherwise the workspace configuration validator flags it as an unknown member.
+        File.WriteAllText(Path.Combine(apiDir, "package.json"), """{ "name": "workspace-api" }""");
+        File.WriteAllText(Path.Combine(apiDir, "dist", "index.js"), "console.log('hello');");
+
+        var workspace = builder.AddPnpmWorkspace("workspace", workspaceDir);
+        var nodeApp = workspace.AddNodeApp("api", "workspace-api", "dist/index.js", "packages/api")
+            .WithBuildScript("build");
+
+        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+
+        var dockerfileContents = await File.ReadAllTextAsync(Path.Combine(tempDir.Path, "api.Dockerfile"));
+
+        // Snapshot the whole Dockerfile so the member-manifest COPY layer, the topological build RUN,
+        // and the package-path-relative ENTRYPOINT (node packages/api/dist/index.js) are all locked in.
+        await Verify(dockerfileContents);
+    }
+
+    [Fact]
     public async Task VerifyDockerfileWithCustomBaseImage()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
