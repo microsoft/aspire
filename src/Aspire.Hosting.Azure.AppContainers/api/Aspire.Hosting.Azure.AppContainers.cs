@@ -48,6 +48,10 @@ namespace Aspire.Hosting
 
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<Azure.AppContainers.AzureContainerAppEnvironmentResource> WithHttpsUpgrade(this ApplicationModel.IResourceBuilder<Azure.AppContainers.AzureContainerAppEnvironmentResource> builder, bool upgrade = true) { throw null; }
+
+        [AspireExport]
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREACANAMING002", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        public static ApplicationModel.IResourceBuilder<Azure.AppContainers.AzureContainerAppEnvironmentResource> WithUniqueResourceNaming(this ApplicationModel.IResourceBuilder<Azure.AppContainers.AzureContainerAppEnvironmentResource> builder) { throw null; }
     }
 
     public static partial class AzureContainerAppProjectExtensions

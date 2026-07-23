@@ -71,6 +71,10 @@ namespace Aspire.Hosting
         [AspireExport]
         public static Orleans.OrleansService WithMemoryStreaming(this Orleans.OrleansService orleansServiceBuilder, string name) { throw null; }
 
+        [AspireExport]
+        public static ApplicationModel.IResourceBuilder<T> WithOrleansProviderType<T>(this ApplicationModel.IResourceBuilder<T> builder, string providerType)
+            where T : ApplicationModel.IResourceWithConnectionString { throw null; }
+
         [AspireExport("withOrleansReference")]
         public static ApplicationModel.IResourceBuilder<T> WithReference<T>(this ApplicationModel.IResourceBuilder<T> builder, Orleans.OrleansService orleansService)
             where T : ApplicationModel.IResourceWithEnvironment, ApplicationModel.IResourceWithEndpoints { throw null; }
@@ -104,6 +108,13 @@ namespace Aspire.Hosting.Orleans
     {
         void ConfigureResource<T>(ApplicationModel.IResourceBuilder<T> resourceBuilder, string configSectionPath)
             where T : ApplicationModel.IResourceWithEnvironment;
+    }
+
+    public sealed partial class OrleansProviderTypeAnnotation : ApplicationModel.IResourceAnnotation
+    {
+        public OrleansProviderTypeAnnotation(string providerType) { }
+
+        public string ProviderType { get { throw null; } }
     }
 
     [AspireExport]
