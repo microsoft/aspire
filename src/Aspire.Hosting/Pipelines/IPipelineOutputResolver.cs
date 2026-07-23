@@ -33,5 +33,8 @@ public interface IPipelineOutputResolver
     /// <exception cref="InvalidOperationException">
     /// Thrown when the definition is not declared by the current pipeline step.
     /// </exception>
+    /// <exception cref="ArgumentNullException">
+    /// Thrown when <paramref name="definition"/> is <see langword="null"/>.
+    /// </exception>
     ResolvedPipelineOutput Resolve(PipelineOutputDefinition definition);
 }
