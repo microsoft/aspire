@@ -1193,7 +1193,10 @@ public class MetricsTests
 
         Assert.NotNull(instrument);
         var dimension = Assert.Single(instrument.Dimensions);
-        Assert.Single(dimension.Values);
+var histogramValue = Assert.IsType<HistogramValue>(Assert.Single(dimension.Values));
+        Assert.Equal([1UL, 2UL, 3UL], histogramValue.Values);
+        Assert.Equal([1d, 2d], histogramValue.ExplicitBounds);
+        Assert.Equal(6UL, histogramValue.Count);
     }
 
     [Fact]
