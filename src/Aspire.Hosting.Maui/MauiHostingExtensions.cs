@@ -4,6 +4,8 @@
 using Aspire.Hosting.Lifecycle;
 using Aspire.Hosting.Maui.Lifecycle;
 using Aspire.Hosting.Maui.Utilities;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.DependencyInjection.Extensions;
 
 namespace Aspire.Hosting.Maui;
 
@@ -16,6 +18,14 @@ internal static class MauiHostingExtensions
     [AspireExportIgnore(Reason = "Use AddMauiProject() instead.")]
     public static void AddMauiHostingServices(this IDistributedApplicationBuilder builder)
     {
+        // Prerequisites must be validated before build queue or device-selection subscribers start
+        // work that assumes the local MAUI/Android/Xcode toolchains are usable.
+        builder.Services.TryAddEventingSubscriber<MauiPrerequisiteCheckEventSubscriber>();
+        builder.Services.TryAddSingleton<IProcessRunner, ProcessRunner>();
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IMauiPrerequisiteChecker, MauiWorkloadChecker>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IMauiPrerequisiteChecker, AndroidSdkChecker>());
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IMauiPrerequisiteChecker, XcodeChecker>());
+
         // Register the build queue subscriber to serialize builds per-project
         builder.Services.TryAddEventingSubscriber<MauiBuildQueueEventSubscriber>();
 
