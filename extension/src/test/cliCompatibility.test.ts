@@ -1,5 +1,6 @@
 import * as assert from 'assert';
 import {
+    containsQuotedCliToken,
     hasRootNoLogoOption,
     isNoLogoUnsupportedOutput,
     noLogoOption,
@@ -83,6 +84,20 @@ suite('utils/cliCompatibility tests', () => {
         test('matches the error message on stdout (some CLIs route errors there)', () => {
             const stdout = `Unrecognized option '${noLogoOption}'.`;
             assert.strictEqual(isNoLogoUnsupportedOutput(['ls', noLogoOption], stdout, ''), true);
+        });
+    });
+
+    suite('containsQuotedCliToken', () => {
+        test('matches CLI tokens surrounded by straight or curly quotes', () => {
+            assert.strictEqual(containsQuotedCliToken("Unrecognized command or argument '--stream'.", '--stream'), true);
+            assert.strictEqual(containsQuotedCliToken('Unrecognized command or argument "--stream".', '--stream'), true);
+            assert.strictEqual(containsQuotedCliToken('Unrecognized command or argument \u2018--stream\u2019.', '--stream'), true);
+            assert.strictEqual(containsQuotedCliToken('Unrecognized command or argument \u201C--stream\u201D.', '--stream'), true);
+        });
+
+        test('does not match unquoted tokens or quoted prefixes', () => {
+            assert.strictEqual(containsQuotedCliToken('Unrecognized command or argument --stream.', '--stream'), false);
+            assert.strictEqual(containsQuotedCliToken("Unrecognized command or argument '--streaming'.", '--stream'), false);
         });
     });
 });

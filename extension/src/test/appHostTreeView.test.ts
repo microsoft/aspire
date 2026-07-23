@@ -241,6 +241,18 @@ async function flushPromises(): Promise<void> {
     await new Promise(resolve => setImmediate(resolve));
 }
 
+async function waitForCondition(condition: () => boolean, message: string): Promise<void> {
+    for (let i = 0; i < 100; i++) {
+        if (condition()) {
+            return;
+        }
+
+        await flushPromises();
+    }
+
+    assert.fail(message);
+}
+
 suite('shortenPath', () => {
     test('.csproj returns just the filename', () => {
         assert.strictEqual(shortenPath('/home/user/repos/MyApp/MyApp.AppHost.csproj'), 'MyApp.AppHost.csproj');
@@ -1435,15 +1447,21 @@ suite('AppHostDataRepository', () => {
     });
 
     test('workspace apphost name uses all candidates to disambiguate duplicate filenames', async () => {
-        let lineCallback: ((line: string) => void) | undefined;
+        let emitCandidates: ((candidates: { path: string; language: string; status: string; selected?: boolean }[]) => void) | undefined;
         sandbox.stub(vscode.workspace, 'workspaceFolders').value([{
             uri: vscode.Uri.file('/workspace'),
             name: 'workspace',
             index: 0,
         }]);
-        sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, _args, options) => {
-            lineCallback = line => {
-                options?.stdoutCallback?.(line);
+        sandbox.stub(cliModule, 'spawnCliProcess').callsFake((_terminalProvider, _command, args, options) => {
+            if (args?.[0] !== 'ls') {
+                return { kill: () => { } } as any;
+            }
+
+            emitCandidates = candidates => {
+                for (const candidate of candidates) {
+                    options?.lineCallback?.(JSON.stringify(candidate));
+                }
                 options?.exitCallback?.(0);
             };
             return { kill: () => { } } as any;
@@ -1452,18 +1470,26 @@ suite('AppHostDataRepository', () => {
 
         try {
             await flushPromises();
-            assert.ok(lineCallback);
+            assert.ok(emitCandidates);
 
-            lineCallback(JSON.stringify({
-                selected_project_file: '/workspace/apps/Store/AppHost.csproj',
-                all_project_file_candidates: [
-                    '/workspace/apps/Store/AppHost.csproj',
-                    '/workspace/samples/Store/AppHost.csproj',
-                ],
-            }));
+            emitCandidates([
+                {
+                    path: '/workspace/apps/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                    selected: true,
+                },
+                {
+                    path: '/workspace/samples/Store/AppHost.csproj',
+                    language: 'csharp',
+                    status: 'buildable',
+                    selected: false,
+                },
+            ]);
             await flushPromises();
-            await new Promise(resolve => setTimeout(resolve, 0));
-            await flushPromises();
+            await waitForCondition(
+                () => repository.workspaceAppHostName === 'apps/Store/AppHost.csproj',
+                'workspace AppHost name was not updated');
 
             assert.strictEqual(repository.workspaceAppHostName, 'apps/Store/AppHost.csproj');
         } finally {
