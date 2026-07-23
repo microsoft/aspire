@@ -2,10 +2,16 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.ApplicationModel;
+using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Microsoft.Data.SqlClient;
 using Microsoft.Extensions.DependencyInjection;
+using System.Security.Cryptography;
+using System.Security.Cryptography.X509Certificates;
 using System.Net.Sockets;
+
+#pragma warning disable ASPIRECERTIFICATES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 namespace Aspire.Hosting.SqlServer.Tests;
 
@@ -93,7 +99,140 @@ public class AddSqlServerTests
         var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
 
         Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;TrustServerCertificate=true", connectionString);
-        Assert.Equal("Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value};TrustServerCertificate=true", connectionStringResource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal(
+            "Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value}{cond-sqlserver-bindings-tcp-tlsenabled-bbec657b.connectionString}",
+            connectionStringResource.ConnectionStringExpression.ValueExpression);
+    }
+
+    [Fact]
+    public async Task SqlServerConnectionStringWithNoCertificate()
+    {
+        var connectionStrings = await GetConnectionStringsForScenarioAsync(
+            builder => builder.AddSqlServer("sqlserver").WithoutHttpsCertificate());
+
+        Assert.True(connectionStrings.ConnectionStringBuilder.TrustServerCertificate);
+        Assert.True(string.IsNullOrEmpty(connectionStrings.ConnectionStringBuilder.HostNameInCertificate));
+
+        Assert.Contains("trustServerCertificate=true", connectionStrings.JdbcConnectionString);
+        Assert.DoesNotContain("encrypt=", connectionStrings.JdbcConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SqlServerConnectionStringWithPreV6DeveloperCertificate()
+    {
+        using var certificate = CreateCertificate(devCertVersion: 5);
+
+        var connectionStrings = await GetConnectionStringsForScenarioAsync(
+            builder =>
+            {
+                builder.Services.AddSingleton<IDeveloperCertificateService>(
+                    new TestDeveloperCertificateService([certificate], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+
+                return builder.AddSqlServer("sqlserver").WithHttpsDeveloperCertificate();
+            });
+
+        Assert.True(connectionStrings.ConnectionStringBuilder.TrustServerCertificate);
+        Assert.True(string.IsNullOrEmpty(connectionStrings.ConnectionStringBuilder.HostNameInCertificate));
+
+        Assert.Contains(";trustServerCertificate=true", connectionStrings.JdbcConnectionString);
+        Assert.DoesNotContain(";encrypt=", connectionStrings.JdbcConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SqlServerConnectionStringWithModernDeveloperCertificate()
+    {
+        using var certificate = CreateCertificate(devCertVersion: 6);
+
+        var connectionStrings = await GetConnectionStringsForScenarioAsync(
+            builder =>
+            {
+                builder.Services.AddSingleton<IDeveloperCertificateService>(
+                    new TestDeveloperCertificateService([certificate], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+
+                return builder.AddSqlServer("sqlserver").WithHttpsDeveloperCertificate();
+            });
+
+        Assert.Equal(SqlConnectionEncryptOption.Mandatory, connectionStrings.ConnectionStringBuilder.Encrypt);
+        Assert.False(connectionStrings.ConnectionStringBuilder.TrustServerCertificate);
+        Assert.True(string.IsNullOrEmpty(connectionStrings.ConnectionStringBuilder.HostNameInCertificate));
+
+        Assert.Contains("encrypt=true", connectionStrings.JdbcConnectionString);
+        Assert.DoesNotContain("trustServerCertificate=true", connectionStrings.JdbcConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SqlServerConnectionStringWithImplicitDeveloperCertificate()
+    {
+        using var certificate = CreateCertificate(devCertVersion: 6);
+
+        var connectionStrings = await GetConnectionStringsForScenarioAsync(
+            builder =>
+            {
+                builder.Services.AddSingleton<IDeveloperCertificateService>(
+                    new TestDeveloperCertificateService([certificate], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+
+                return builder.AddSqlServer("sqlserver");
+            });
+
+        Assert.Equal(SqlConnectionEncryptOption.Mandatory, connectionStrings.ConnectionStringBuilder.Encrypt);
+        Assert.False(connectionStrings.ConnectionStringBuilder.TrustServerCertificate);
+        Assert.True(string.IsNullOrEmpty(connectionStrings.ConnectionStringBuilder.HostNameInCertificate));
+        Assert.Contains(";encrypt=true", connectionStrings.JdbcConnectionString);
+        Assert.DoesNotContain(";trustServerCertificate=true", connectionStrings.JdbcConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SqlServerConnectionStringWithImplicitPreV6DeveloperCertificateUsesTrustServerCertificate()
+    {
+        using var certificate = CreateCertificate(devCertVersion: 2);
+
+        var connectionStrings = await GetConnectionStringsForScenarioAsync(
+            builder =>
+            {
+                builder.Services.AddSingleton<IDeveloperCertificateService>(
+                    new TestDeveloperCertificateService([certificate], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+
+                return builder.AddSqlServer("sqlserver");
+            });
+
+        Assert.True(connectionStrings.ConnectionStringBuilder.TrustServerCertificate);
+        Assert.True(string.IsNullOrEmpty(connectionStrings.ConnectionStringBuilder.HostNameInCertificate));
+        Assert.Contains(";trustServerCertificate=true", connectionStrings.JdbcConnectionString);
+        Assert.DoesNotContain(";encrypt=", connectionStrings.JdbcConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SqlServerConnectionStringWithImplicitDeveloperCertificateAndNoCertificatesUsesTrustServerCertificate()
+    {
+        var connectionStrings = await GetConnectionStringsForScenarioAsync(
+            builder =>
+            {
+                builder.Services.AddSingleton<IDeveloperCertificateService>(
+                    new TestDeveloperCertificateService([], supportsContainerTrust: true, trustCertificate: true, tlsTerminate: true));
+
+                return builder.AddSqlServer("sqlserver");
+            });
+
+        Assert.True(connectionStrings.ConnectionStringBuilder.TrustServerCertificate);
+        Assert.True(string.IsNullOrEmpty(connectionStrings.ConnectionStringBuilder.HostNameInCertificate));
+        Assert.Contains(";trustServerCertificate=true", connectionStrings.JdbcConnectionString);
+        Assert.DoesNotContain(";encrypt=", connectionStrings.JdbcConnectionString, StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task SqlServerConnectionStringWithCustomCertificate()
+    {
+        using var certificate = CreateCertificate();
+
+        var connectionStrings = await GetConnectionStringsForScenarioAsync(
+            builder => builder.AddSqlServer("sqlserver").WithHttpsCertificate(certificate));
+
+        Assert.Equal(SqlConnectionEncryptOption.Mandatory, connectionStrings.ConnectionStringBuilder.Encrypt);
+        Assert.False(connectionStrings.ConnectionStringBuilder.TrustServerCertificate);
+        Assert.True(string.IsNullOrEmpty(connectionStrings.ConnectionStringBuilder.HostNameInCertificate));
+        
+        Assert.Contains("encrypt=true", connectionStrings.JdbcConnectionString);
+        Assert.DoesNotContain("trustServerCertificate=true", connectionStrings.JdbcConnectionString, StringComparison.OrdinalIgnoreCase);
     }
 
     [Fact]
@@ -278,6 +417,54 @@ public class AddSqlServerTests
         var connectionStringResource = Assert.Single(appModel.Resources.OfType<SqlServerServerResource>());
         var connectionString = await connectionStringResource.GetConnectionStringAsync(default);
         Assert.Equal("Server=127.0.0.1,1433;User ID=sa;Password=p@ssw0rd1;TrustServerCertificate=true", connectionString);
-        Assert.Equal("Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value};TrustServerCertificate=true", connectionStringResource.ConnectionStringExpression.ValueExpression);
+        Assert.Equal(
+            "Server={sqlserver.bindings.tcp.host},{sqlserver.bindings.tcp.port};User ID=sa;Password={pass.value}{cond-sqlserver-bindings-tcp-tlsenabled-bbec657b.connectionString}",
+            connectionStringResource.ConnectionStringExpression.ValueExpression);
+    }
+
+    private static async Task<(SqlConnectionStringBuilder ConnectionStringBuilder, string JdbcConnectionString)> GetConnectionStringsForScenarioAsync(Func<IDistributedApplicationBuilder, IResourceBuilder<SqlServerServerResource>> configure)
+    {
+        using var appBuilder = TestDistributedApplicationBuilder.Create();
+
+        var sqlServer = configure(appBuilder)
+            .WithEndpoint("tcp", e => e.AllocatedEndpoint = new AllocatedEndpoint(e, "localhost", 1433));
+
+        using var app = appBuilder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var eventing = app.Services.GetRequiredService<IDistributedApplicationEventing>();
+
+        await eventing.PublishAsync(new BeforeStartEvent(app.Services, appModel), default);
+
+        var connectionString = await sqlServer.Resource.GetConnectionStringAsync(default);
+        Assert.NotNull(connectionString);
+        Assert.DoesNotContain(";;", connectionString);
+
+        var jdbcConnectionString = await sqlServer.Resource.JdbcConnectionString.GetValueAsync(default);
+        Assert.NotNull(jdbcConnectionString);
+        Assert.DoesNotContain(";;", jdbcConnectionString);
+
+        return (
+            new SqlConnectionStringBuilder(connectionString),
+            jdbcConnectionString);
+    }
+
+    private static X509Certificate2 CreateCertificate(byte? devCertVersion = null)
+    {
+        using var rsa = RSA.Create(2048);
+        var request = new CertificateRequest(
+            new X500DistinguishedName("CN=localhost"),
+            rsa,
+            HashAlgorithmName.SHA256,
+            RSASignaturePadding.Pkcs1);
+
+        if (devCertVersion is byte version)
+        {
+            request.CertificateExtensions.Add(new X509Extension(
+                new Oid("1.3.6.1.4.1.311.84.1.1", "ASP.NET Core HTTPS development certificate"),
+                [version],
+                critical: false));
+        }
+
+        return request.CreateSelfSigned(DateTimeOffset.UtcNow.AddDays(-1), DateTimeOffset.UtcNow.AddDays(1));
     }
 }
