@@ -148,7 +148,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         var resources = repository.GetResources();
-        var instruments = repository.GetInstrumentsSummaries(resources[0].ResourceKey);
+        var instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
         Assert.Equal(InMemoryTelemetryRepository.MaxInstrumentCount, instruments.Count);
 
         // Adding one more instrument should fail.
@@ -172,7 +172,7 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
         Assert.Equal(1, failContext.FailureCount);
         Assert.Equal(0, failContext.SuccessCount);
 
-        instruments = repository.GetInstrumentsSummaries(resources[0].ResourceKey);
+        instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
         Assert.Equal(InMemoryTelemetryRepository.MaxInstrumentCount, instruments.Count);
     }
 

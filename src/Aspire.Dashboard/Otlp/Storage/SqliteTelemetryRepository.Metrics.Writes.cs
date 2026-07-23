@@ -47,7 +47,7 @@ public sealed partial class SqliteTelemetryRepository
                     }
                     catch (Exception exception)
                     {
-                        context.FailureCount += resourceMetricsItem.ScopeMetrics.Sum(scope => scope.Metrics.Sum(OtlpResource.GetMetricDataPointCount));
+                        context.FailureCount += resourceMetricsItem.ScopeMetrics.Sum(scope => scope.Metrics.Sum(OtlpHelpers.GetMetricDataPointCount));
                         _otlpContext.Logger.LogInformation(exception, "Error adding resource.");
                         continue;
                     }
@@ -61,7 +61,7 @@ public sealed partial class SqliteTelemetryRepository
                         }
                         catch (Exception exception)
                         {
-                            context.FailureCount += scopeMetrics.Metrics.Sum(OtlpResource.GetMetricDataPointCount);
+                            context.FailureCount += scopeMetrics.Metrics.Sum(OtlpHelpers.GetMetricDataPointCount);
                             _otlpContext.Logger.LogInformation(exception, "Error adding metric scope.");
                             continue;
                         }
@@ -113,7 +113,7 @@ public sealed partial class SqliteTelemetryRepository
         MetricIngestionState ingestionState,
         MetricPointBatch pointBatch)
     {
-        var pointCount = OtlpResource.GetMetricDataPointCount(metric);
+        var pointCount = OtlpHelpers.GetMetricDataPointCount(metric);
         if (metric.DataCase is Metric.DataOneofCase.Summary or Metric.DataOneofCase.ExponentialHistogram)
         {
             context.FailureCount += pointCount;

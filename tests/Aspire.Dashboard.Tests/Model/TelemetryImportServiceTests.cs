@@ -131,7 +131,7 @@ public sealed class TelemetryImportServiceTests
         var resources = repository.GetResources();
         Assert.Single(resources);
 
-        var instruments = resources[0].GetInstrumentsSummary();
+        var instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
         Assert.Single(instruments);
         Assert.Equal("test.metric", instruments[0].Name);
     }

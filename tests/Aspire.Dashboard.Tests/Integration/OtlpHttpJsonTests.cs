@@ -711,7 +711,7 @@ public class OtlpHttpJsonTests
         var telemetryRepository = app.Services.GetRequiredService<ITelemetryRepository>();
         var resource = AssertMyServiceResource(telemetryRepository);
 
-        var instruments = resource.GetInstrumentsSummary();
+        var instruments = telemetryRepository.GetInstrumentSummaries(resource.ResourceKey);
         Assert.Collection(instruments,
             counter =>
             {
@@ -762,7 +762,7 @@ public class OtlpHttpJsonTests
         var resources = telemetryRepository.GetResourcesByName("copilot-chat");
         var resource = Assert.Single(resources);
 
-        var instruments = resource.GetInstrumentsSummary();
+        var instruments = telemetryRepository.GetInstrumentSummaries(resource.ResourceKey);
         var summary = Assert.Single(instruments);
         Assert.Equal("copilot_chat.tool.call.duration", summary.Name);
 

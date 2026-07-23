@@ -68,7 +68,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         var cachedResource = Assert.Single(repository.GetResources());
         var log = Assert.Single(repository.GetLogs(CreateLogsContext()).Items);
         var span = Assert.Single(Assert.Single(repository.GetTraces(GetTracesRequest.ForResourceKey(cachedResource.ResourceKey)).PagedResult.Items).Spans);
-        var instrument = Assert.Single(repository.GetInstrumentsSummaries(cachedResource.ResourceKey));
+        var instrument = Assert.Single(repository.GetInstrumentSummaries(cachedResource.ResourceKey));
 
         Assert.Same(cachedResource, log.ResourceView.Resource);
         Assert.Same(cachedResource, span.Source.Resource);
@@ -111,7 +111,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         activities.Clear();
 
         var secondResource = Assert.Single(historicalRepository.GetResources());
-        var summary = Assert.Single(historicalRepository.GetInstrumentsSummaries(firstResource.ResourceKey));
+        var summary = Assert.Single(historicalRepository.GetInstrumentSummaries(firstResource.ResourceKey));
         var view = Assert.Single(firstResource.GetViews());
 
         Assert.Same(firstResource, secondResource);
@@ -262,7 +262,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         using (var historicalRepository = CreateRepository(workspace.Path, readOnly: true))
         {
             var resourceKey = new ResourceKey("TestService", "TestId");
-            var summary = Assert.Single(historicalRepository.GetInstrumentsSummaries(resourceKey));
+            var summary = Assert.Single(historicalRepository.GetInstrumentSummaries(resourceKey));
             Assert.Equal("requests", summary.Name);
             Assert.Equal("TestMeter", summary.Parent.Name);
 

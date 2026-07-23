@@ -71,7 +71,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var instruments = repository.GetInstrumentsSummaries(resources[0].ResourceKey);
+        var instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
         Assert.Collection(instruments,
             instrument =>
             {
@@ -635,7 +635,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         var resourceKey = new ResourceKey("resource1", InstanceId: null);
-        var instruments = repository.GetInstrumentsSummaries(resourceKey);
+        var instruments = repository.GetInstrumentSummaries(resourceKey);
         Assert.Collection(instruments,
             instrument =>
             {
@@ -745,11 +745,11 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         var resource1Key = new ResourceKey("resource1", InstanceId: null);
-        var resource1Instruments = repository.GetInstrumentsSummaries(resource1Key);
+        var resource1Instruments = repository.GetInstrumentSummaries(resource1Key);
         Assert.Empty(resource1Instruments);
 
         var resource2Key = new ResourceKey("resource2", InstanceId: null);
-        var resource2Instruments = repository.GetInstrumentsSummaries(resource2Key);
+        var resource2Instruments = repository.GetInstrumentSummaries(resource2Key);
 
         Assert.Empty(resource2Instruments);
     }
@@ -820,7 +820,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         var resource1Key = new ResourceKey("resource1", InstanceId: null);
-        var resource1Instruments = repository.GetInstrumentsSummaries(resource1Key);
+        var resource1Instruments = repository.GetInstrumentSummaries(resource1Key);
 
         var resource1Instrument = Assert.Single(resource1Instruments);
         Assert.Equal("test1", resource1Instrument.Name);
@@ -855,7 +855,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.Null(resource1Test2Instrument);
 
         var resource2Key = new ResourceKey("resource2", InstanceId: null);
-        var resource2Instruments = repository.GetInstrumentsSummaries(resource2Key);
+        var resource2Instruments = repository.GetInstrumentSummaries(resource2Key);
 
         Assert.Collection(resource2Instruments,
             instrument =>
@@ -970,7 +970,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         var resource1Key = new ResourceKey("resource1", InstanceId: null);
-        var resource1Instruments = repository.GetInstrumentsSummaries(resource1Key);
+        var resource1Instruments = repository.GetInstrumentSummaries(resource1Key);
         Assert.Empty(resource1Instruments);
 
         var resource1Test1Instrument = repository.GetInstrument(new GetInstrumentRequest
@@ -996,7 +996,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.Null(resource1Test2Instrument);
 
         var resource2Key = new ResourceKey("resource2", InstanceId: null);
-        var resource2Instruments = repository.GetInstrumentsSummaries(resource2Key);
+        var resource2Instruments = repository.GetInstrumentSummaries(resource2Key);
         Assert.Collection(resource2Instruments,
             instrument =>
             {
@@ -1077,7 +1077,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         Assert.Equal(1, addContext.FailureCount);
 
         var resource1Key = new ResourceKey("resource1", InstanceId: null);
-        var resource1Instruments = repository.GetInstrumentsSummaries(resource1Key);
+        var resource1Instruments = repository.GetInstrumentSummaries(resource1Key);
         Assert.Collection(resource1Instruments,
             instrument =>
             {
@@ -1276,7 +1276,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var instruments = repository.GetInstrumentsSummaries(resources[0].ResourceKey);
+        var instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
         Assert.Collection(instruments,
             instrument =>
             {
@@ -2009,7 +2009,7 @@ public sealed class SqliteMetricsTests : MetricsTests
 
         Assert.Equal(1, context.SuccessCount);
         Assert.Equal(0, context.FailureCount);
-        Assert.Single(repository.GetInstrumentsSummaries(CreateResource().GetResourceKey()));
+        Assert.Single(repository.GetInstrumentSummaries(CreateResource().GetResourceKey()));
     }
 
     private static ResourceMetrics CreateResourceMetrics(Metric metric) => new()

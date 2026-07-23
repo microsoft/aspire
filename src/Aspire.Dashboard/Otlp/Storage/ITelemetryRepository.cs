@@ -50,7 +50,7 @@ public interface ITelemetryRepository : IDisposable
     OtlpTrace? GetTrace(string traceId);
     OtlpSpan? GetSpan(string traceId, string spanId);
     OtlpResource? GetPeerResource(OtlpSpan span);
-    List<OtlpInstrumentSummary> GetInstrumentsSummaries(ResourceKey key);
+    List<OtlpInstrumentSummary> GetInstrumentSummaries(ResourceKey key);
     OtlpInstrumentData? GetInstrument(GetInstrumentRequest request);
     DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName);
 
