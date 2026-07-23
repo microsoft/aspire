@@ -53,7 +53,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         Assert.Single(repository.GetLogs(new GetLogsContext { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).Items);
         var resource = repository.GetResource(resourceKey);
         Assert.NotNull(resource);
-        Assert.NotEmpty(resource.GetInstrumentsSummary());
+        Assert.NotEmpty(repository.GetInstrumentSummaries(resource.ResourceKey));
         Assert.Single(repository.GetTraces(new GetTracesRequest { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).PagedResult.Items);
 
         void AddLog()
@@ -237,7 +237,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Equal(2, traces.PagedResult.TotalItemCount);
 
-        var resource1Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource1", "123"));
+        var resource1Metrics = repository.GetInstrumentSummaries(new ResourceKey("resource1", "123"));
         Assert.Single(resource1Metrics);
 
         // Assert - resource2 data is unaffected
@@ -249,7 +249,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         var resource2Traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [resource2Key], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Single(resource2Traces.PagedResult.Items);
 
-        var resource2Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource2", "456"));
+        var resource2Metrics = repository.GetInstrumentSummaries(new ResourceKey("resource2", "456"));
         Assert.Single(resource2Metrics);
     }
 
@@ -280,10 +280,10 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Equal(2, traces.PagedResult.TotalItemCount);
 
-        var resource1Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource1", "111"));
+        var resource1Metrics = repository.GetInstrumentSummaries(new ResourceKey("resource1", "111"));
         Assert.Single(resource1Metrics);
 
-        var resource3Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource3", "333"));
+        var resource3Metrics = repository.GetInstrumentSummaries(new ResourceKey("resource3", "333"));
         Assert.Single(resource3Metrics);
 
         // Assert - resource2 is removed from the repository since all data types were cleared
@@ -352,7 +352,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Empty(traces.PagedResult.Items);
 
-        var metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource1", "123"));
+        var metrics = repository.GetInstrumentSummaries(new ResourceKey("resource1", "123"));
         Assert.Single(metrics);
     }
 

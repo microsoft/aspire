@@ -187,7 +187,7 @@ public sealed class TelemetryExportService
     {
         foreach (var resource in resources)
         {
-            var instrumentSummaries = _dataSource.TelemetryRepository.GetInstrumentsSummaries(resource.ResourceKey);
+            var instrumentSummaries = _dataSource.TelemetryRepository.GetInstrumentSummaries(resource.ResourceKey);
 
             if (instrumentSummaries.Count == 0)
             {

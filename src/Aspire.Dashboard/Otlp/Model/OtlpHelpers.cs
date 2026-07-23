@@ -11,6 +11,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
+using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Resource.V1;
 using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
@@ -39,6 +40,19 @@ public static partial class OtlpHelpers
             SpanKind.Producer => OtlpSpanKind.Producer,
             SpanKind.Consumer => OtlpSpanKind.Consumer,
             _ => OtlpSpanKind.Unspecified
+        };
+    }
+
+    internal static int GetMetricDataPointCount(Metric metric)
+    {
+        return metric.DataCase switch
+        {
+            Metric.DataOneofCase.Gauge => metric.Gauge.DataPoints.Count,
+            Metric.DataOneofCase.Sum => metric.Sum.DataPoints.Count,
+            Metric.DataOneofCase.Histogram => metric.Histogram.DataPoints.Count,
+            Metric.DataOneofCase.Summary => metric.Summary.DataPoints.Count,
+            Metric.DataOneofCase.ExponentialHistogram => metric.ExponentialHistogram.DataPoints.Count,
+            _ => 0,
         };
     }
 

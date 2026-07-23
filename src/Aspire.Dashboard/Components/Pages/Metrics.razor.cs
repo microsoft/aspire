@@ -181,7 +181,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     private void UpdateInstruments(MetricsViewModel viewModel)
     {
         var selectedInstance = viewModel.SelectedResource.Id?.GetResourceKey();
-        viewModel.Instruments = selectedInstance != null ? TelemetryRepository.GetInstrumentsSummaries(selectedInstance.Value) : null;
+        viewModel.Instruments = selectedInstance != null ? TelemetryRepository.GetInstrumentSummaries(selectedInstance.Value) : null;
     }
 
     private void UpdateResources()
@@ -335,7 +335,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
                 if (selectedResourceKey != null)
                 {
                     // If there are more instruments than before then update the UI.
-                    var instruments = TelemetryRepository.GetInstrumentsSummaries(selectedResourceKey.Value);
+                    var instruments = TelemetryRepository.GetInstrumentSummaries(selectedResourceKey.Value);
 
                     if (PageViewModel.Instruments is null || instruments.Count != PageViewModel.Instruments.Count)
                     {

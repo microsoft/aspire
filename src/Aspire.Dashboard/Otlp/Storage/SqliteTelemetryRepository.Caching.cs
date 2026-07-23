@@ -593,10 +593,6 @@ public sealed partial class SqliteTelemetryRepository
     private CachedResource CreateCachedResource(long resourceId, ResourceKey key, bool uninstrumentedPeer)
     {
         var resource = new OtlpResource(key.Name, key.InstanceId, uninstrumentedPeer, _otlpContext);
-        resource.ConfigureDataProviders(
-            (meterName, instrumentName, startTime, endTime) => GetResourceInstrumentFromDatabase(key, meterName, instrumentName, startTime, endTime),
-            () => GetCachedInstrumentSummaries(key),
-            () => GetCachedResourceViews(key));
         var cachedResource = new CachedResource(resourceId, resource);
         _cachedResourcesByKey.Add(key, cachedResource);
         _cachedResourcesById.Add(resourceId, cachedResource);
@@ -662,17 +658,6 @@ public sealed partial class SqliteTelemetryRepository
             _cachedInstrumentsById.Add(record.InstrumentId, instrument);
         }
         return instrument;
-    }
-
-    private List<OtlpResourceView> GetCachedResourceViews(ResourceKey key)
-    {
-        EnsureCachePopulated();
-        lock (_cacheLock)
-        {
-            return _cachedResourcesByKey.TryGetValue(key, out var resource)
-                ? resource.ViewsById.Values.Select(view => view.View).ToList()
-                : [];
-        }
     }
 
     private List<OtlpInstrumentSummary> GetCachedInstrumentSummaries(ResourceKey key)

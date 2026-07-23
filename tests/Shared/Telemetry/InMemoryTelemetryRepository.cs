@@ -52,7 +52,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
     private List<SpanWatcher>? _spanWatchers;
     private List<LogWatcher>? _logWatchers;
 
-    private readonly ConcurrentDictionary<ResourceKey, OtlpResource> _resources = new();
+    private readonly ConcurrentDictionary<ResourceKey, ResourceEntry> _resources = new();
 
     private readonly ReaderWriterLockSlim _logsLock = new();
     // Bounded by MaxScopeCount. Cleared when all logs are cleared.
@@ -140,7 +140,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
 
     private List<OtlpResource> GetResourcesCore(bool includeUninstrumentedPeers, string? name)
     {
-        IEnumerable<OtlpResource> results = _resources.Values;
+        IEnumerable<OtlpResource> results = _resources.Values.Select(entry => entry.Resource);
         if (!includeUninstrumentedPeers)
         {
             results = results.Where(a => !a.UninstrumentedPeer);
@@ -160,7 +160,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         {
             if (kvp.Key.EqualsCompositeName(compositeName))
             {
-                return kvp.Value;
+                return kvp.Value.Resource;
             }
         }
 
@@ -174,8 +174,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
             throw new InvalidOperationException($"{nameof(ResourceKey)} must have an instance ID.");
         }
 
-        _resources.TryGetValue(key, out var resource);
-        return resource;
+        return _resources.TryGetValue(key, out var entry) ? entry.Resource : null;
     }
 
     public List<OtlpResource> GetResources(ResourceKey key, bool includeUninstrumentedPeers = false)
@@ -192,6 +191,20 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
 
         return [resource];
+    }
+
+    private List<ResourceEntry> GetResourceEntries(ResourceKey key, bool includeUninstrumentedPeers = false)
+    {
+        IEnumerable<ResourceEntry> entries = key.InstanceId is null
+            ? _resources.Values.Where(entry => string.Equals(entry.Resource.ResourceName, key.Name, StringComparisons.ResourceName))
+            : _resources.TryGetValue(key, out var entry) ? [entry] : [];
+
+        if (!includeUninstrumentedPeers)
+        {
+            entries = entries.Where(entry => !entry.Resource.UninstrumentedPeer);
+        }
+
+        return entries.ToList();
     }
 
     public Dictionary<ResourceKey, int> GetResourceUnviewedErrorLogsCount()
@@ -240,28 +253,30 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
     }
 
-    private OtlpResourceView GetOrAddResourceView(Resource resource)
+    private OtlpResourceView GetOrAddResourceView(Resource resource) => GetOrAddResourceView(resource, out _);
+
+    private OtlpResourceView GetOrAddResourceView(Resource resource, out ResourceEntry resourceEntry)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
         var key = resource.GetResourceKey();
 
-        var (otlpResource, isNew) = GetOrAddResource(key, uninstrumentedPeer: false);
+        (resourceEntry, var isNew) = GetOrAddResourceEntry(key, uninstrumentedPeer: false);
         if (isNew)
         {
             RaiseSubscriptionChanged(_resourceSubscriptions);
         }
 
-        return otlpResource.GetView(resource.Attributes);
+        return resourceEntry.Resource.GetView(resource.Attributes);
     }
 
-    private (OtlpResource Resource, bool IsNew) GetOrAddResource(ResourceKey key, bool uninstrumentedPeer)
+    private (ResourceEntry Entry, bool IsNew) GetOrAddResourceEntry(ResourceKey key, bool uninstrumentedPeer)
     {
         // Fast path.
-        if (_resources.TryGetValue(key, out var resource))
+        if (_resources.TryGetValue(key, out var entry))
         {
-            resource.SetUninstrumentedPeer(uninstrumentedPeer);
-            return (Resource: resource, IsNew: false);
+            entry.Resource.SetUninstrumentedPeer(uninstrumentedPeer);
+            return (Entry: entry, IsNew: false);
         }
 
         // Check resource limit before adding a new resource.
@@ -275,20 +290,20 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         // Slower get or add path.
         // This GetOrAdd allocates a closure, so we avoid it if possible.
         var newResource = false;
-        resource = _resources.GetOrAdd(key, _ =>
+        entry = _resources.GetOrAdd(key, _ =>
         {
             newResource = true;
-            return new OtlpResource(key.Name, key.InstanceId, uninstrumentedPeer, _otlpContext);
+            return new ResourceEntry(new OtlpResource(key.Name, key.InstanceId, uninstrumentedPeer, _otlpContext));
         });
         if (!newResource)
         {
-            resource.SetUninstrumentedPeer(uninstrumentedPeer);
+            entry.Resource.SetUninstrumentedPeer(uninstrumentedPeer);
         }
         else
         {
             _logger.LogTrace("New resource added: {ResourceKey}", key);
         }
-        return (Resource: resource, IsNew: newResource);
+        return (Entry: entry, IsNew: newResource);
     }
 
     public Subscription OnNewResources(Func<Task> callback)
@@ -1449,7 +1464,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
 
                 foreach (var resource in _resources.Values)
                 {
-                    SetResourceHasTraces(resource, false);
+                    SetResourceHasTraces(resource.Resource, false);
                 }
             }
             else
@@ -1513,7 +1528,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
 
                 foreach (var resource in _resources.Values)
                 {
-                    SetResourceHasLogs(resource, false);
+                    SetResourceHasLogs(resource.Resource, false);
                 }
 
                 _resourceUnviewedErrorLogs.Clear();
@@ -1558,20 +1573,29 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
     {
         ThrowIfReadOnly();
 
-        List<OtlpResource> resources;
+        List<ResourceEntry> resources;
         if (resourceKey.HasValue)
         {
-            resources = GetResources(resourceKey.Value);
+            resources = GetResourceEntries(resourceKey.Value);
         }
         else
         {
             resources = _resources.Values.ToList();
         }
 
-        foreach (var resource in resources)
+        foreach (var entry in resources)
         {
-            resource.ClearMetrics();
-            SetResourceHasMetrics(resource, false);
+            entry.MetricsLock.EnterWriteLock();
+            try
+            {
+                entry.Instruments.Clear();
+                entry.Meters.Clear();
+            }
+            finally
+            {
+                entry.MetricsLock.ExitWriteLock();
+            }
+            SetResourceHasMetrics(entry.Resource, false);
         }
 
         RaiseSubscriptionChanged(_metricsSubscriptions);
@@ -1728,22 +1752,180 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         foreach (var rm in resourceMetrics)
         {
             OtlpResourceView resourceView;
+            ResourceEntry resourceEntry;
             try
             {
-                resourceView = GetOrAddResourceView(rm.Resource);
+                resourceView = GetOrAddResourceView(rm.Resource, out resourceEntry);
             }
             catch (Exception ex)
             {
-                context.FailureCount += rm.ScopeMetrics.Sum(sm => sm.Metrics.Sum(OtlpResource.GetMetricDataPointCount));
+                context.FailureCount += rm.ScopeMetrics.Sum(sm => sm.Metrics.Sum(OtlpHelpers.GetMetricDataPointCount));
                 _otlpContext.Logger.LogInformation(ex, "Error adding resource.");
                 continue;
             }
 
-            resourceView.Resource.AddMetrics(context, rm.ScopeMetrics);
+            AddMetrics(resourceEntry, context, rm.ScopeMetrics);
             SetResourceHasMetrics(resourceView.Resource, true);
         }
 
         RaiseSubscriptionChanged(_metricsSubscriptions);
+    }
+
+    private void AddMetrics(ResourceEntry resourceEntry, AddContext context, RepeatedField<ScopeMetrics> scopeMetrics)
+    {
+        resourceEntry.MetricsLock.EnterWriteLock();
+
+        try
+        {
+            // Temporary attributes array to use when adding metrics to the instruments.
+            KeyValuePair<string, string>[]? tempAttributes = null;
+
+            foreach (var scopeMetric in scopeMetrics)
+            {
+                if (!OtlpHelpers.TryGetOrAddScope(resourceEntry.Meters, scopeMetric.Scope, _otlpContext, TelemetryType.Metrics, out var scope))
+                {
+                    context.FailureCount += scopeMetric.Metrics.Sum(OtlpHelpers.GetMetricDataPointCount);
+                    continue;
+                }
+
+                foreach (var metric in scopeMetric.Metrics)
+                {
+                    OtlpInstrument instrument;
+
+                    try
+                    {
+                        if (string.IsNullOrEmpty(metric.Name))
+                        {
+                            throw new InvalidOperationException("Instrument name is required.");
+                        }
+
+                        var instrumentKey = new OtlpInstrumentKey(scope.Name, metric.Name);
+                        if (resourceEntry.Instruments.TryGetValue(instrumentKey, out var existingInstrument))
+                        {
+                            instrument = existingInstrument;
+                        }
+                        else if (resourceEntry.Instruments.Count < TelemetryRepositoryLimits.MaxInstrumentCount)
+                        {
+                            instrument = new OtlpInstrument
+                            {
+                                Summary = new OtlpInstrumentSummary
+                                {
+                                    Name = metric.Name,
+                                    Description = metric.Description,
+                                    Unit = metric.Unit,
+                                    Type = MapMetricType(metric.DataCase),
+                                    AggregationTemporality = MapAggregationTemporality(metric),
+                                    Parent = scope
+                                },
+                                Context = _otlpContext
+                            };
+
+                            resourceEntry.Instruments.Add(instrumentKey, instrument);
+                            _otlpContext.Logger.LogTrace("Added metric instrument '{InstrumentName}' for scope '{ScopeName}'.", instrument.Summary.Name, scope.Name);
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"Instrument limit of {TelemetryRepositoryLimits.MaxInstrumentCount} reached. Instrument '{metric.Name}' will not be added.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // If we can't create the instrument then all data points for it are failures.
+                        context.FailureCount += OtlpHelpers.GetMetricDataPointCount(metric);
+                        _otlpContext.Logger.LogInformation(ex, "Error adding metric instrument {MetricName}.", metric.Name);
+                        continue;
+                    }
+
+                    AddMetrics(instrument, metric, context, ref tempAttributes);
+                }
+            }
+        }
+        finally
+        {
+            resourceEntry.MetricsLock.ExitWriteLock();
+        }
+    }
+
+    private void AddMetrics(OtlpInstrument instrument, Metric metric, AddContext context, ref KeyValuePair<string, string>[]? tempAttributes)
+    {
+        switch (metric.DataCase)
+        {
+            case Metric.DataOneofCase.Gauge:
+                foreach (var dataPoint in metric.Gauge.DataPoints)
+                {
+                    try
+                    {
+                        instrument.FindScope(dataPoint.Attributes, ref tempAttributes).AddPointValue(dataPoint, _otlpContext);
+                        context.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        context.FailureCount++;
+                        _otlpContext.Logger.LogInformation(ex, "Error adding metric.");
+                    }
+                }
+                break;
+            case Metric.DataOneofCase.Sum:
+                foreach (var dataPoint in metric.Sum.DataPoints)
+                {
+                    try
+                    {
+                        instrument.FindScope(dataPoint.Attributes, ref tempAttributes).AddPointValue(dataPoint, _otlpContext);
+                        context.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        context.FailureCount++;
+                        _otlpContext.Logger.LogInformation(ex, "Error adding metric.");
+                    }
+                }
+                break;
+            case Metric.DataOneofCase.Histogram:
+                foreach (var dataPoint in metric.Histogram.DataPoints)
+                {
+                    try
+                    {
+                        instrument.FindScope(dataPoint.Attributes, ref tempAttributes).AddHistogramValue(dataPoint, _otlpContext);
+                        context.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        context.FailureCount++;
+                        _otlpContext.Logger.LogInformation(ex, "Error adding metric.");
+                    }
+                }
+                break;
+            case Metric.DataOneofCase.Summary:
+                context.FailureCount += metric.Summary.DataPoints.Count;
+                _otlpContext.Logger.LogInformation("Error adding summary metrics. Summary is not supported.");
+                break;
+            case Metric.DataOneofCase.ExponentialHistogram:
+                context.FailureCount += metric.ExponentialHistogram.DataPoints.Count;
+                _otlpContext.Logger.LogInformation("Error adding exponential histogram metrics. Exponential histogram is not supported.");
+                break;
+        }
+    }
+
+    private static OtlpInstrumentType MapMetricType(Metric.DataOneofCase data)
+    {
+        return data switch
+        {
+            Metric.DataOneofCase.Gauge => OtlpInstrumentType.Gauge,
+            Metric.DataOneofCase.Sum => OtlpInstrumentType.Sum,
+            Metric.DataOneofCase.Histogram => OtlpInstrumentType.Histogram,
+            _ => OtlpInstrumentType.Unsupported
+        };
+    }
+
+    private static OtlpAggregationTemporality MapAggregationTemporality(Metric metric)
+    {
+        return metric.DataCase switch
+        {
+            Metric.DataOneofCase.Sum => (OtlpAggregationTemporality)metric.Sum.AggregationTemporality,
+            Metric.DataOneofCase.Histogram => (OtlpAggregationTemporality)metric.Histogram.AggregationTemporality,
+            Metric.DataOneofCase.ExponentialHistogram => (OtlpAggregationTemporality)metric.ExponentialHistogram.AggregationTemporality,
+            _ => OtlpAggregationTemporality.Unspecified
+        };
     }
 
     public void AddTraces(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
@@ -1997,8 +2179,8 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
 
                 try
                 {
-                    var (resource, _) = GetOrAddResource(peerKey, uninstrumentedPeer: true);
-                    trace.SetSpanUninstrumentedPeer(span, resource);
+                    var (resource, _) = GetOrAddResourceEntry(peerKey, uninstrumentedPeer: true);
+                    trace.SetSpanUninstrumentedPeer(span, resource.Resource);
                 }
                 catch (Exception ex)
                 {
@@ -2146,34 +2328,32 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         return newSpan;
     }
 
-    public List<OtlpInstrumentSummary> GetInstrumentsSummaries(ResourceKey key)
+    public List<OtlpInstrumentSummary> GetInstrumentSummaries(ResourceKey key)
     {
-        var resources = GetResources(key);
-        if (resources.Count == 0)
+        var resources = GetResourceEntries(key);
+        var summaries = new List<OtlpInstrumentSummary>();
+        foreach (var resource in resources)
         {
-            return new List<OtlpInstrumentSummary>();
-        }
-        else if (resources.Count == 1)
-        {
-            return resources[0].GetInstrumentsSummary();
-        }
-        else
-        {
-            var allResourceSummaries = resources
-                .SelectMany(a => a.GetInstrumentsSummary())
-                .DistinctBy(s => s.GetKey())
-                .ToList();
-
-            return allResourceSummaries;
+            resource.MetricsLock.EnterReadLock();
+            try
+            {
+                summaries.AddRange(resource.Instruments.Values.Select(instrument => instrument.Summary));
+            }
+            finally
+            {
+                resource.MetricsLock.ExitReadLock();
+            }
         }
 
+        return resources.Count > 1 ? summaries.DistinctBy(summary => summary.GetKey()).ToList() : summaries;
     }
 
     public OtlpInstrumentData? GetInstrument(GetInstrumentRequest request)
     {
-        var resources = GetResources(request.ResourceKey);
+        var resources = GetResourceEntries(request.ResourceKey);
+        var instrumentKey = new OtlpInstrumentKey(request.MeterName, request.InstrumentName);
         var instruments = resources
-            .Select(a => a.GetInstrument(request.MeterName, request.InstrumentName, request.StartTime, request.EndTime))
+            .Select(resource => CloneInstrument(resource, instrumentKey, request.StartTime, request.EndTime))
             .OfType<OtlpInstrument>()
             .ToList();
 
@@ -2208,6 +2388,21 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         };
     }
 
+    private static OtlpInstrument? CloneInstrument(ResourceEntry resource, OtlpInstrumentKey key, DateTime? valuesStart, DateTime? valuesEnd)
+    {
+        resource.MetricsLock.EnterReadLock();
+        try
+        {
+            return resource.Instruments.TryGetValue(key, out var instrument)
+                ? OtlpInstrument.Clone(instrument, cloneData: true, valuesStart: valuesStart, valuesEnd: valuesEnd)
+                : null;
+        }
+        finally
+        {
+            resource.MetricsLock.ExitReadLock();
+        }
+    }
+
     private static bool MatchesDimensionFilters(
         KeyValuePair<string, string>[] attributes,
         IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters)
@@ -2224,10 +2419,16 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
 
     public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName)
     {
-        return GetResources(resourceKey)
-            .Select(resource => resource.GetInstrument(meterName, instrumentName, DateTime.MinValue, DateTime.MaxValue))
-            .OfType<OtlpInstrument>()
-            .SelectMany(instrument => instrument.Dimensions.Values)
+        var instrument = GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resourceKey,
+            MeterName = meterName,
+            InstrumentName = instrumentName,
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+
+        return instrument?.Dimensions
             .SelectMany(dimension => dimension.Values)
             .Select(value => (DateTime?)value.End)
             .Max();
@@ -2268,5 +2469,14 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
 
         DisposeWatchers();
+    }
+
+    private sealed record ResourceEntry(OtlpResource Resource)
+    {
+        public ReaderWriterLockSlim MetricsLock { get; } = new();
+        // Bounded by MaxScopeCount. Cleared when metrics are cleared.
+        public Dictionary<string, OtlpScope> Meters { get; } = [];
+        // Bounded by MaxInstrumentCount. Cleared when metrics are cleared.
+        public Dictionary<OtlpInstrumentKey, OtlpInstrument> Instruments { get; } = [];
     }
 }

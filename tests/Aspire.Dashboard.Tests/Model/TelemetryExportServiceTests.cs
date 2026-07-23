@@ -526,7 +526,7 @@ public sealed class TelemetryExportServiceTests
 
         var resources = repository.GetResources();
         var resource = resources[0];
-        var instrumentSummaries = repository.GetInstrumentsSummaries(resource.ResourceKey);
+        var instrumentSummaries = repository.GetInstrumentSummaries(resource.ResourceKey);
 
         // Get full instrument data with values
         var instrumentsData = new List<OtlpInstrumentData>();
@@ -612,7 +612,7 @@ public sealed class TelemetryExportServiceTests
 
         var resources = repository.GetResources();
         var resource = resources[0];
-        var instrumentSummaries = repository.GetInstrumentsSummaries(resource.ResourceKey);
+        var instrumentSummaries = repository.GetInstrumentSummaries(resource.ResourceKey);
 
         // Get full instrument data with values
         var instrumentsData = new List<OtlpInstrumentData>();

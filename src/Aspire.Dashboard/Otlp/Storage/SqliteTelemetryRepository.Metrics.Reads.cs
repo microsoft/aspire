@@ -155,43 +155,6 @@ public sealed partial class SqliteTelemetryRepository
         return endTimeTicks is not null ? new DateTime(endTimeTicks.Value, DateTimeKind.Utc) : null;
     }
 
-    private OtlpInstrument? GetResourceInstrumentFromDatabase(
-        ResourceKey resourceKey,
-        string meterName,
-        string instrumentName,
-        DateTime? startTime,
-        DateTime? endTime)
-    {
-        var data = GetInstrumentFromDatabase(new GetInstrumentRequest
-        {
-            ResourceKey = resourceKey,
-            MeterName = meterName,
-            InstrumentName = instrumentName,
-            StartTime = startTime,
-            EndTime = endTime
-        });
-        if (data is null)
-        {
-            return null;
-        }
-
-        var instrument = new OtlpInstrument
-        {
-            Summary = data.Summary,
-            Context = _otlpContext,
-            HasOverflow = data.HasOverflow
-        };
-        foreach (var (key, values) in data.KnownAttributeValues)
-        {
-            instrument.KnownAttributeValues.Add(key, values);
-        }
-        foreach (var dimension in data.Dimensions)
-        {
-            instrument.Dimensions.Add(dimension.Attributes, dimension);
-        }
-        return instrument;
-    }
-
     private List<DimensionScope> MaterializeMetricDimensions(
         SqliteConnection connection,
         IReadOnlyList<long> instrumentIds,
