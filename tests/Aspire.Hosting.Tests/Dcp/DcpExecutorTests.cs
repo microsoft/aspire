@@ -3566,7 +3566,10 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var sslCertDir = Assert.Single(exe.Spec.Env!, e => e.Name == "SSL_CERT_DIR").Value;
 
         Assert.NotNull(sslCertDir);
-        Assert.Contains(customSslCertDir, sslCertDir.Split(Path.PathSeparator));
+        var sslCertDirs = sslCertDir.Split(Path.PathSeparator);
+        Assert.Equal(2, sslCertDirs.Length);
+        Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", sslCertDirs[0]);
+        Assert.Equal(customSslCertDir, sslCertDirs[1]);
     }
 
     [Fact]

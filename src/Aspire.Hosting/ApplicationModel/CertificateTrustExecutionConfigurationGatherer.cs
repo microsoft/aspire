@@ -85,7 +85,10 @@ internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfig
         if (additionalData.Scope == CertificateTrustScope.Append &&
             context.EnvironmentVariables.TryGetValue("SSL_CERT_DIR", out var existingCertificateDirectoriesPath))
         {
-            certificateDirectoriesPath = AppendCertificateDirectoriesPath(certificateDirectoriesPath, existingCertificateDirectoriesPath, configurationContext.IsContainer ? ':' : Path.PathSeparator);
+            certificateDirectoriesPath = AppendCertificateDirectoriesPath(
+                configurationContext.CertificateDirectoriesPathBeforeFallback ?? certificateDirectoriesPath,
+                existingCertificateDirectoriesPath,
+                configurationContext.IsContainer ? ':' : Path.PathSeparator);
         }
 
         // Apply default OpenSSL environment configuration for certificate trust
@@ -192,6 +195,8 @@ public class CertificateTrustExecutionConfigurationContext
     /// The path(s) to the certificate directories in the resource context (e.g., container filesystem).
     /// </summary>
     public required ReferenceExpression CertificateDirectoriesPath { get; init; }
+
+    internal ReferenceExpression? CertificateDirectoriesPathBeforeFallback { get; init; }
 
     /// <summary>
     /// The root path certificates will be written to in the resource context (e.g., container filesystem).

@@ -494,6 +494,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         var customBundleOutputPath = Path.Join(certificatesRootDir, "bundles");
         var certificatesOutputPath = Path.Join(certificatesRootDir, "certs");
         var baseServerAuthOutputPath = Path.Join(certificatesRootDir, "private");
+        var resourceCertificateDirectoriesPath = ReferenceExpression.Create($"{certificatesOutputPath}");
 
         var configuration = await ExecutionConfigurationBuilder.Create(er.ModelResource)
             .WithArgumentsConfig()
@@ -508,6 +509,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                         scope,
                         Environment.GetEnvironmentVariable(SslCertDirEnvVar),
                         includeWellKnownCertificateDirectories: OperatingSystem.IsLinux())}"),
+                    CertificateDirectoriesPathBeforeFallback = resourceCertificateDirectoriesPath,
                     RootCertificatesPath = certificatesRootDir,
                 };
             })

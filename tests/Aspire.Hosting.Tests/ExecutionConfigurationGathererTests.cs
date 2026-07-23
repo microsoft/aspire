@@ -408,6 +408,48 @@ public class ExecutionConfigurationGathererTests
     }
 
     [Fact]
+    public async Task CertificateTrustExecutionConfigurationGatherer_WithAppendScopeAndExistingSslCertDir_UsesResourceValueBeforeFallback()
+    {
+        // Arrange
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var cert = CreateTestCertificate();
+        var caCollection = builder.AddCertificateAuthorityCollection("test-ca").WithCertificate(cert);
+
+        var resource = builder.AddContainer("test", "image")
+            .WithCertificateAuthorityCollection(caCollection)
+            .WithCertificateTrustScope(CertificateTrustScope.Append)
+            .Resource;
+
+        await builder.BuildAsync();
+
+        var context = new ExecutionConfigurationGathererContext();
+        context.EnvironmentVariables["SSL_CERT_DIR"] = "/private-roots";
+        var gatherer = new CertificateTrustExecutionConfigurationGatherer(_ => new CertificateTrustExecutionConfigurationContext
+        {
+            CertificateBundlePath = ReferenceExpression.Create($"/aspire/cert.pem"),
+            CertificateDirectoriesPath = ReferenceExpression.Create($"/aspire/certs:/ambient-roots"),
+            CertificateDirectoriesPathBeforeFallback = ReferenceExpression.Create($"/aspire/certs"),
+            RootCertificatesPath = "/aspire",
+            IsContainer = true,
+        });
+
+        // Act
+        await gatherer.GatherAsync(context, resource, NullLogger.Instance, builder.ExecutionContext);
+
+        // Assert
+        var sslCertDir = Assert.IsType<ReferenceExpression>(context.EnvironmentVariables["SSL_CERT_DIR"]);
+        Assert.Equal("/aspire/certs:/private-roots", await sslCertDir.GetValueAsync(CancellationToken.None));
+
+        var emptyContext = new ExecutionConfigurationGathererContext();
+        emptyContext.EnvironmentVariables["SSL_CERT_DIR"] = string.Empty;
+
+        await gatherer.GatherAsync(emptyContext, resource, NullLogger.Instance, builder.ExecutionContext);
+
+        sslCertDir = Assert.IsType<ReferenceExpression>(emptyContext.EnvironmentVariables["SSL_CERT_DIR"]);
+        Assert.Equal("/aspire/certs", await sslCertDir.GetValueAsync(CancellationToken.None));
+    }
+
+    [Fact]
     public async Task CertificateTrustExecutionConfigurationGatherer_WithAppendScope_DoesNotSetSSL_CERT_FILE()
     {
         // Arrange
