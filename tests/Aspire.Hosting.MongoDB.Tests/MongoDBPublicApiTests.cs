@@ -285,6 +285,56 @@ public class MongoDBPublicApiTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(nameof(name), exception.ParamName);
     }
 
+    [Fact]
+    public void WithReplicaSetShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<MongoDBServerResource> builder = null!;
+
+        var action = () => builder.WithReplicaSet();
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithReplicaSetShouldThrowWhenReplicaSetNameIsEmpty()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+            .AddMongoDB("MongoDB");
+
+        var action = () => builder.WithReplicaSet(string.Empty);
+
+        var exception = Assert.Throws<ArgumentException>(action);
+        Assert.Equal("replicaSetName", exception.ParamName);
+    }
+
+    [Fact]
+    public void WithReplicaSetShouldThrowWhenCalledTwice()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+            .AddMongoDB("MongoDB")
+            .WithReplicaSet();
+
+        Assert.Throws<InvalidOperationException>(() => builder.WithReplicaSet());
+    }
+
+    [Fact]
+    public void WithReplicaSetReplicaSetNamePropertyIsExposed()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+            .AddMongoDB("MongoDB")
+            .WithReplicaSet("myrs");
+
+        Assert.Equal("myrs", builder.Resource.ReplicaSetName);
+    }
+
+    [Fact]
+    public void ReplicaSetNameIsNullByDefault()
+    {
+        var resource = new MongoDBServerResource("mongodb");
+        Assert.Null(resource.ReplicaSetName);
+    }
+
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
