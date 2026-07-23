@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Text;
 using System.Text.Json;
+using System.Text.RegularExpressions;
 using System.Xml;
 using System.Xml.Linq;
 using Aspire.Cli.Backchannel;
@@ -27,7 +29,7 @@ namespace Aspire.Cli.Projects;
 /// <summary>
 /// Handler for .NET AppHost projects (.csproj and single-file .cs).
 /// </summary>
-internal sealed class DotNetAppHostProject : IAppHostProject
+internal sealed partial class DotNetAppHostProject : IAppHostProject
 {
     private readonly IDotNetCliRunner _runner;
     private readonly IInteractionService _interactionService;
@@ -58,6 +60,11 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private const string ProjectAppHostSourceFileName = "AppHost.cs";
     private const string DirectoryBuildPropsName = "Directory.Build.props";
     private const string DirectoryBuildTargetsName = "Directory.Build.targets";
+
+    // The conventional MSBuild directory-level import files, in the order the ancestor walk probes them.
+    // Hoisted to a static so AncestorDirectoryContainsAppHostMarker doesn't reallocate this array at every
+    // ancestor level it walks (the prefilter runs in parallel over every candidate project during a scan).
+    private static readonly string[] s_directoryBuildFileNames = [DirectoryBuildPropsName, DirectoryBuildTargetsName];
 
     internal static IReadOnlyCollection<string> ProjectExtensions { get; } =
         Array.AsReadOnly([".csproj", ".fsproj", ".vbproj"]);
@@ -190,13 +197,33 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     {
         if (!TryLoadProjectRoot(projectFile.FullName, out var root) || root is null)
         {
-            // The file is missing, unreadable, or not well-formed XML. Fall back to the name heuristic so a
-            // broken AppHost project is still treated as a candidate (and can later surface as unbuildable).
+            // The file is missing, unreadable, or not well-formed XML. Before falling back to the
+            // name heuristic, still consult ancestor Directory.Build.* markers — those can promote
+            // an ordinary-named broken project to a real AppHost candidate, which should flow to
+            // MSBuild as "possibly unbuildable" rather than be silently rejected here.
+            if (AncestorDirectoryContainsAppHostMarker(projectFile.Directory))
+            {
+                return true;
+            }
             return MatchesAppHostNameHeuristics(projectFile);
         }
 
         // 1) An Aspire AppHost marker declared inline in the project file itself.
         if (ContainsAppHostMarker(root))
+        {
+            return true;
+        }
+
+        // 1b) The project file itself can also pull in a marker via a dynamic walk-up Import — for
+        //     example
+        //       <Import Project="$([MSBuild]::GetPathOfFileAbove('Aspire.Common.props', ...))" />
+        //     where the resolved file sets <IsAspireHost>true</IsAspireHost> or imports
+        //     Aspire.AppHost.Sdk. The same fragility that prevents us from following these statically
+        //     in ancestor Directory.Build.* files applies here, so apply the same narrow fallback:
+        //     dynamic walk-up imports → candidate, ordinary static or unrelated-SDK imports → still
+        //     filtered out by the cheap pre-check. Skipping this check leaves a regression hole where
+        //     a normal-named project gets silently rejected before MSBuild evaluation runs.
+        if (ContainsDynamicWalkUpImport(root))
         {
             return true;
         }
@@ -208,7 +235,15 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         //    element is detected while a mere *consumer* of the property
         //    (Condition="'$(IsAspireHost)' == 'true'") is ignored. A loose substring match would instead
         //    over-promote every sibling that only reads the property.
-        if (DirectoryContainsAppHostMarker(projectFile.Directory))
+        //
+        //    MSBuild walks up the directory tree to import Directory.Build.props/.targets from the nearest
+        //    ancestor that has one (see
+        //    https://learn.microsoft.com/visualstudio/msbuild/customize-by-directory#search-scope), and that
+        //    ancestor commonly chains to further parents via $(DirectoryBuildPropsPath)-style imports. Walk
+        //    *all* ancestors here rather than stopping at the project's own directory: missing an ancestor
+        //    marker would falsely reject a legal AppHost before MSBuild ever runs, which is the exact failure
+        //    mode that broke `aspire run` against explicit/settings AppHost paths.
+        if (AncestorDirectoryContainsAppHostMarker(projectFile.Directory))
         {
             return true;
         }
@@ -231,22 +266,141 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         }
     }
 
-    private static bool DirectoryContainsAppHostMarker(DirectoryInfo? directory)
+    private static bool AncestorDirectoryContainsAppHostMarker(DirectoryInfo? directory)
     {
-        if (directory is null)
+        // Walk from the project's own directory up to the filesystem root (or a .git boundary, matching
+        // AppHostInfoDiskCache's walk-up — see Caching/AppHostInfoDiskCache.cs). Stopping at the first
+        // Directory.Build.props/.targets we *find* (matching MSBuild's "nearest wins" rule exactly) would
+        // miss the common case where the nearest file does nothing more than chain to a shared parent that
+        // contains the actual marker. A false negative here silently rejects a real AppHost, so we err the
+        // other way and check every ancestor up to the .git boundary — finding any setter is treated as
+        // "plausibly an AppHost", and MSBuild evaluation remains the authoritative confirmation downstream.
+        for (var current = directory; current is not null; current = current.Parent)
         {
-            return false;
+            foreach (var fileName in s_directoryBuildFileNames)
+            {
+                var filePath = Path.Combine(current.FullName, fileName);
+                if (!File.Exists(filePath))
+                {
+                    continue;
+                }
+
+                if (!TryLoadProjectRoot(filePath, out var root) || root is null)
+                {
+                    // A relevant parent build file exists but we can't read/parse it. MSBuild would still
+                    // try to evaluate it, and it could legally set <IsAspireHost>true</IsAspireHost> or
+                    // import Aspire.AppHost.Sdk. Treat the project as a candidate so the authoritative
+                    // MSBuild evaluation gets to weigh in rather than silently rejecting it.
+                    return true;
+                }
+
+                if (ContainsAppHostMarker(root))
+                {
+                    return true;
+                }
+
+                // Real-world Directory.Build.* files in this repo (tests/Aspire.Hosting.TestUtilities,
+                // playground/...) chain to shared parents via tree-walking MSBuild helpers like
+                //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.targets', ...))" />
+                // and an AppHost marker can live in the file behind that import (for example a
+                // RepoTesting.props that sets <IsAspireHost>true</IsAspireHost> or imports
+                // Aspire.AppHost.Sdk). Following these statically is fragile — they use property
+                // expressions and walk-up resolution that only MSBuild can compute — so when an
+                // ancestor build file uses GetPathOfFileAbove / GetDirectoryNameOfFileAbove, treat the
+                // project as a candidate and let MSBuild evaluation decide.
+                //
+                // Ordinary static imports (e.g. <Import Project="NullablePolyfill.targets" />) and
+                // non-Aspire SDK imports (e.g. Sdk="Microsoft.DotNet.Arcade.Sdk") are NOT treated as
+                // uncertain. Doing so would over-promote essentially every project in a typical .NET
+                // repo, because root-level Directory.Build.props/.targets routinely import Arcade,
+                // common analyzer polyfills, and similar shared infrastructure that does not declare
+                // Aspire markers.
+                if (ContainsDynamicWalkUpImport(root))
+                {
+                    return true;
+                }
+            }
+
+            // Stop at a .git boundary to avoid walking the entire user profile (matches the bounds
+            // AppHostInfoDiskCache uses for cache-fingerprint walk-ups). In a regular checkout `.git`
+            // is a directory; in a worktree, submodule, or certain tool-managed setups it is a regular
+            // file that points at the real git dir. Check both so the walk terminates in those layouts.
+            // https://git-scm.com/docs/git-worktree#_details
+            //
+            // This bound is chosen for parity with the fingerprint walk and deliberately trades away one
+            // narrow false-negative window: MSBuild's own Directory.Build.* discovery does NOT stop at
+            // .git, so a marker set in a Directory.Build.props *above* a nested .git boundary (for example
+            // an Aspire app checked in inside a repository that has its own inner .git, or a submodule
+            // whose marker lives in the outer parent) would be found by MSBuild but not by this prefilter.
+            // That layout is unusual; if it ever needs to be supported, this is the boundary to revisit.
+            var gitMarker = Path.Combine(current.FullName, ".git");
+            if (Directory.Exists(gitMarker) || File.Exists(gitMarker))
+            {
+                break;
+            }
         }
 
-        foreach (var fileName in new[] { DirectoryBuildPropsName, DirectoryBuildTargetsName })
+        return false;
+    }
+
+    private static bool ContainsDynamicWalkUpImport(XElement root)
+    {
+        // Match <Import Project="..."> values that use MSBuild's tree-walking path helpers:
+        //   $([MSBuild]::GetPathOfFileAbove('<filename>', '<starting-dir>'))
+        //   $([MSBuild]::GetDirectoryNameOfFileAbove('<starting-dir>', '<filename>'))
+        // These resolve at evaluation time by walking parent directories, and they routinely point at
+        // files (RepoTesting.props, custom shared targets) that we do not enumerate by name in the
+        // ancestor walk. A statically-named Import like <Import Project="NullablePolyfill.targets" />
+        // does NOT match — it points at a fixed file the project author already named, and treating
+        // those as uncertain would over-promote every project in a repo whose root Directory.Build.*
+        // imports Arcade or common polyfills. The Sdk attribute is intentionally not consulted here:
+        // <Import Sdk="Aspire.AppHost.Sdk" .../> is already recognized as a positive marker by
+        // ContainsAppHostMarker, and any other <Import Sdk="..."> brings in an unrelated SDK whose
+        // contents will not declare Aspire markers.
+        //
+        // Match case-insensitively because MSBuild property function names are themselves
+        // case-insensitive — `$([MSBuild]::getpathoffileabove(...))` and
+        // `$([MSBuild]::GetPathOfFileAbove(...))` resolve to the same path at evaluation time, so a
+        // case-sensitive substring check here would silently filter out the lower/mixed-case variants
+        // and re-open the false-negative window this fallback is meant to close.
+        //
+        // Special-case exact-cased conventional Directory.Build.props / Directory.Build.targets chaining: lines
+        // such as
+        //   <Import Project="$([MSBuild]::GetPathOfFileAbove('Directory.Build.props', ...))" />
+        // appear in this repo's own src/Directory.Build.props, tests/Directory.Build.props, and
+        // tests/Directory.Build.targets. The ancestor walk already enumerates Directory.Build.props
+        // and Directory.Build.targets at every parent level by name, so the dynamic chain delivers
+        // no content we cannot already see — and treating it as uncertain over-promotes every
+        // ordinary project under src/, tests/, etc. Non-conventional targets (RepoTesting.props,
+        // Shared.props, Aspire.Common.props, ...) and differently-cased targets on case-sensitive
+        // filesystems are still treated as uncertain.
+        // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#msbuild-property-functions
+        foreach (var import in root.Descendants().Where(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal)))
         {
-            var filePath = Path.Combine(directory.FullName, fileName);
-            if (!File.Exists(filePath))
+            var project = import.Attribute("Project")?.Value;
+            if (project is null)
             {
                 continue;
             }
 
-            if (TryLoadProjectRoot(filePath, out var root) && root is not null && ContainsAppHostMarker(root))
+            if (TryGetWalkUpTargetFileName(project, out var targetFileName))
+            {
+                if (IsConventionalDirectoryBuildFileName(targetFileName))
+                {
+                    continue;
+                }
+
+                return true;
+            }
+
+            // We recognized the walk-up function but couldn't parse the file-name argument (for
+            // example because the argument is itself an MSBuild property expression). Be
+            // conservative and treat the project as uncertain. Match the function-call *shape*
+            // (name followed by `(`) rather than a raw substring — a static import like
+            //   <Import Project="build/GetPathOfFileAbove.props" />
+            // contains the helper name as path text but is not a function call, and treating it
+            // as uncertain would over-promote ordinary projects.
+            if (WalkUpFunctionCallStartRegex().IsMatch(project))
             {
                 return true;
             }
@@ -254,6 +408,203 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
         return false;
     }
+
+    private static bool TryGetWalkUpTargetFileName(string projectAttributeValue, out string targetFileName)
+    {
+        // Parse one MSBuild property-function walk-up call out of the Import Project value and
+        // determine the *actual final import target file name*. The actual target may be:
+        //   * The first argument of GetPathOfFileAbove (the function returns a file path), OR
+        //   * The text appended after the closing `))` of the call when the result is concatenated
+        //     onto more path text — most commonly with GetDirectoryNameOfFileAbove, which returns
+        //     a directory and is then joined to a file name, e.g.
+        //       $([MSBuild]::GetDirectoryNameOfFileAbove(..., 'Directory.Build.props'))/Shared.props
+        //     where Shared.props is the actual imported file, not Directory.Build.props.
+        // Returns false when no walk-up call is recognized, when the call is malformed, or when
+        // the resolved target cannot be determined statically (e.g. an MSBuild expression appears
+        // where the file name would be). The caller treats false as "fall through to the fallback
+        // shape check" and ultimately as "uncertain".
+        var callMatch = WalkUpFunctionCallStartRegex().Match(projectAttributeValue);
+        if (!callMatch.Success)
+        {
+            targetFileName = string.Empty;
+            return false;
+        }
+
+        var functionName = callMatch.Groups[1].Value;
+        var argsStart = callMatch.Index + callMatch.Length;
+
+        if (!TryParseFunctionCallArgs(projectAttributeValue, argsStart, out var args, out var afterCloseParen))
+        {
+            targetFileName = string.Empty;
+            return false;
+        }
+
+        // Skip past the `)` that closes the surrounding $(...) expression, if present, to land on
+        // any path suffix the author appended to the function call.
+        var suffixStart = afterCloseParen;
+        if (suffixStart < projectAttributeValue.Length && projectAttributeValue[suffixStart] == ')')
+        {
+            suffixStart++;
+        }
+
+        if (suffixStart < projectAttributeValue.Length)
+        {
+            var suffixFileName = TryExtractFileNameFromSuffix(projectAttributeValue[suffixStart..]);
+            if (!string.IsNullOrEmpty(suffixFileName))
+            {
+                targetFileName = suffixFileName;
+                return true;
+            }
+        }
+
+        // No appended path: the function output itself is the import target. GetPathOfFileAbove
+        // returns the located file, so its first argument is the file name. GetDirectoryNameOfFileAbove
+        // returns only a directory and cannot determine a file on its own — leave that case to the
+        // fallback so we conservatively treat it as uncertain.
+        if (functionName.Equals("GetPathOfFileAbove", StringComparison.OrdinalIgnoreCase) && args.Count >= 1)
+        {
+            targetFileName = StripQuotes(args[0]).Trim();
+            return targetFileName.Length > 0;
+        }
+
+        targetFileName = string.Empty;
+        return false;
+    }
+
+    private static bool TryParseFunctionCallArgs(string text, int startIndex, out List<string> args, out int afterCloseParen)
+    {
+        // Hand-rolled comma-splitter with balanced-paren and quote awareness. MSBuild property-
+        // function arguments can be:
+        //   * Single-quoted strings ('like this')
+        //   * Double-quoted strings ("like this")
+        //   * Unquoted scalars (Directory.Build.props)
+        //   * MSBuild property references that contain parens, e.g. $(MSBuildThisFileDirectory)..
+        //   * Other nested function calls
+        // We need to find the top-level commas separating arguments and the `)` that closes the
+        // call we started inside. Regex with `[^,)]` would prematurely terminate on the `)` inside
+        // a $(...) reference; a tiny state machine handles this correctly.
+        args = new List<string>();
+        var current = new StringBuilder();
+        var depth = 1;
+        var inSingleQuote = false;
+        var inDoubleQuote = false;
+
+        for (var i = startIndex; i < text.Length; i++)
+        {
+            var c = text[i];
+
+            if (inSingleQuote)
+            {
+                if (c == '\'')
+                {
+                    inSingleQuote = false;
+                }
+                current.Append(c);
+                continue;
+            }
+            if (inDoubleQuote)
+            {
+                if (c == '"')
+                {
+                    inDoubleQuote = false;
+                }
+                current.Append(c);
+                continue;
+            }
+
+            switch (c)
+            {
+                case '\'':
+                    inSingleQuote = true;
+                    current.Append(c);
+                    break;
+                case '"':
+                    inDoubleQuote = true;
+                    current.Append(c);
+                    break;
+                case '(':
+                    depth++;
+                    current.Append(c);
+                    break;
+                case ')':
+                    depth--;
+                    if (depth == 0)
+                    {
+                        args.Add(current.ToString().Trim());
+                        afterCloseParen = i + 1;
+                        return true;
+                    }
+                    current.Append(c);
+                    break;
+                case ',' when depth == 1:
+                    args.Add(current.ToString().Trim());
+                    current.Clear();
+                    break;
+                default:
+                    current.Append(c);
+                    break;
+            }
+        }
+
+        afterCloseParen = text.Length;
+        return false;
+    }
+
+    private static string TryExtractFileNameFromSuffix(string suffix)
+    {
+        // The suffix is path text appended after the closing `)` of a walk-up function. We try to
+        // recover a static file name from its last path segment. If the suffix contains MSBuild
+        // expression syntax ($ or @) we can't tell what the final file will be — return empty so
+        // the caller treats the call as having no determinable target (and the fallback regex
+        // conservatively classifies the import as uncertain).
+        var trimmed = suffix.Trim();
+        if (trimmed.Length == 0 || trimmed.Contains('$') || trimmed.Contains('@'))
+        {
+            return string.Empty;
+        }
+
+        var lastSep = Math.Max(trimmed.LastIndexOf('/'), trimmed.LastIndexOf('\\'));
+        var segment = lastSep >= 0 ? trimmed[(lastSep + 1)..] : trimmed;
+
+        // Must look like a file name (has an extension and no expression chars).
+        if (segment.Length > 0 && segment.Contains('.'))
+        {
+            return segment;
+        }
+
+        return string.Empty;
+    }
+
+    private static string StripQuotes(string value)
+    {
+        var trimmed = value.Trim();
+        if (trimmed.Length >= 2
+            && ((trimmed[0] == '\'' && trimmed[^1] == '\'')
+                || (trimmed[0] == '"' && trimmed[^1] == '"')))
+        {
+            return trimmed[1..^1];
+        }
+        return trimmed;
+    }
+
+    private static bool IsConventionalDirectoryBuildFileName(string fileName)
+    {
+        // Only skip dynamic walk-up imports for the exact file names the ancestor walk probes.
+        // On case-sensitive filesystems, differently-cased names can resolve to different files;
+        // keep those candidates flowing to MSBuild instead of assuming we already inspected them.
+        return fileName.Equals(DirectoryBuildPropsName, StringComparison.Ordinal)
+            || fileName.Equals(DirectoryBuildTargetsName, StringComparison.Ordinal);
+    }
+
+    // Strict MSBuild property-function call shape: the full $([MSBuild]::Function( prefix. Static
+    // import paths that merely contain the helper name as text (e.g.
+    // "build/GetPathOfFileAbove('Shared.props').props") do NOT match because they lack the
+    // $([MSBuild]::...) wrapper that MSBuild requires for property-function invocation.
+    // Docs: https://learn.microsoft.com/visualstudio/msbuild/property-functions#calling-static-methods
+    [GeneratedRegex(
+        @"\$\(\s*\[MSBuild\]\s*::\s*(GetPathOfFileAbove|GetDirectoryNameOfFileAbove)\s*\(",
+        RegexOptions.IgnoreCase | RegexOptions.CultureInvariant)]
+    private static partial Regex WalkUpFunctionCallStartRegex();
 
     private static bool ContainsAppHostMarker(XElement root)
     {
@@ -288,12 +639,33 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return true;
         }
 
-        // 3) Explicit <IsAspireHost>true</IsAspireHost> property element. The Aspire.AppHost.Sdk sets this
+        // 3) <Import> form of an SDK reference, e.g.:
+        //      <Import Project="Sdk.props" Sdk="Aspire.AppHost.Sdk" Version="9.0.0" />
+        //      <Import Project="Sdk.targets" Sdk="Aspire.AppHost.Sdk" />
+        //    This is functionally equivalent to the previous two forms — it lets a project import an SDK's
+        //    Sdk.props/Sdk.targets at a specific point in the file. Missing it means an AppHost using this
+        //    form is silently rejected by the cheap pre-check. See:
+        //    https://learn.microsoft.com/visualstudio/msbuild/how-to-use-project-sdk#import-an-sdk-into-your-project
+        var hasImportSdk = root.Descendants()
+            .Any(e => e.Name.LocalName.Equals("Import", StringComparison.Ordinal)
+                && string.Equals(e.Attribute("Sdk")?.Value, AspireAppHostSdkName, StringComparison.OrdinalIgnoreCase));
+        if (hasImportSdk)
+        {
+            return true;
+        }
+
+        // 4) Explicit <IsAspireHost>true</IsAspireHost> property element. The Aspire.AppHost.Sdk sets this
         //    during evaluation, but it can also appear literally in a project or build file. Matching on the
         //    element (rather than a substring) means a consumer condition such as
         //    Condition="'$(IsAspireHost)' == 'true'" is correctly not treated as a marker.
+        //
+        //    Match the element name case-insensitively because MSBuild property names are themselves
+        //    case-insensitive — `<isaspirehost>true</isaspirehost>` sets `$(IsAspireHost)` to `true` at
+        //    evaluation time just as the PascalCase form does, so a case-sensitive comparison here would
+        //    silently reject a real AppHost using lower- or mixed-case marker syntax.
+        //    Docs: https://learn.microsoft.com/visualstudio/msbuild/msbuild-properties
         return root.Descendants()
-            .Any(e => e.Name.LocalName.Equals(IsAspireHostProperty, StringComparison.Ordinal)
+            .Any(e => e.Name.LocalName.Equals(IsAspireHostProperty, StringComparison.OrdinalIgnoreCase)
                 && string.Equals(e.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase));
     }
 
