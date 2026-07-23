@@ -2,11 +2,13 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREFILESYSTEM001
+#pragma warning disable ASPIREDOCKERFILEBUILDER001
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES004
 
-using Aspire.Hosting.Pipelines;
+using System.Text.Json;
 using Aspire.Hosting.Backchannel;
+using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -49,13 +51,11 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(configurationValues)
             .Build();
-        var outputService = new PipelineOutputService(
-            Options.Create(new PipelineOptions { OutputPath = Path.Combine(root, "primary") }),
-            configuration,
-            fileSystem);
+        var pipelineOptions = Options.Create(new PipelineOptions { OutputPath = Path.Combine(root, "primary") });
+        var outputService = new PipelineOutputService(pipelineOptions, configuration, fileSystem);
 
         var exception = Assert.Throws<InvalidOperationException>(
-            () => new PipelineOutputRegistry(configuration, outputService));
+            () => new PipelineOutputRegistry(configuration, outputService, pipelineOptions));
 
         Assert.Contains("must be specified together", exception.Message);
     }
@@ -176,6 +176,27 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void Prepare_AllowsNamedOutputWithPrimarySyntheticIdentifiers()
+    {
+        using var fixture = CreateRegistry();
+        var definition = new PipelineOutputDefinition("primary", ".configgen", PipelineOutputKind.Directory);
+        var step = CreateStep("aspire", definition);
+
+        fixture.Registry.Prepare([step]);
+
+        var primary = fixture.Registry.GetPrimaryOutput();
+        var named = new PipelineStepOutputResolver(fixture.Registry, step).Resolve(definition);
+        Assert.NotSame(primary, named);
+        Assert.True(primary.IsPrimary);
+        Assert.False(named.IsPrimary);
+        Assert.Equal(Path.Combine(fixture.AppHostDirectory, ".configgen"), named.OutputPath);
+        Assert.Collection(
+            fixture.Registry.GetOutputs().Where(output => output.PublisherName == "aspire" && output.Name == "primary"),
+            output => Assert.True(output.IsPrimary),
+            output => Assert.False(output.IsPrimary));
+    }
+
+    [Fact]
     public void Prepare_RejectsConflictingDeclarations()
     {
         using var fixture = CreateRegistry();
@@ -289,12 +310,35 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
     [Fact]
     public void PrimaryOutput_UsesLogicalTargetKindDuringRelocation()
     {
-        using var fixture = CreateRegistry(relocate: true, primaryTargetFileName: "aspire-manifest.json");
+        using var fixture = CreateRegistry(
+            relocate: true,
+            primaryTargetFileName: "aspire-manifest.json",
+            pipelineStep: WellKnownPipelineSteps.PublishManifest);
         fixture.Registry.Prepare([]);
 
         var primary = fixture.Registry.GetPrimaryOutput();
         Assert.Equal(PipelineOutputKind.File, primary.Kind);
         Assert.Equal(fixture.PrimaryOutputPath, primary.OutputPath);
+        Assert.Equal(fixture.PrimaryTargetPath, primary.LogicalTargetPath);
+    }
+
+    [Fact]
+    public void PrimaryOutput_UsesDirectoryKindForNonManifestJsonTarget()
+    {
+        using var fixture = CreateRegistry(
+            primaryTargetFileName: "artifacts.json",
+            createPrimaryTargetDirectory: true,
+            pipelineStep: "publish-docker-compose",
+            additionalConfiguration: new Dictionary<string, string?>
+            {
+                ["Pipeline:Step"] = WellKnownPipelineSteps.PublishManifest
+            });
+        fixture.Registry.Prepare([]);
+
+        var primary = fixture.Registry.GetPrimaryOutput();
+
+        Assert.Equal(PipelineOutputKind.Directory, primary.Kind);
+        Assert.Equal(fixture.PrimaryTargetPath, primary.OutputPath);
         Assert.Equal(fixture.PrimaryTargetPath, primary.LogicalTargetPath);
     }
 
@@ -354,7 +398,13 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(appHostDirectory, outputPlan.AppHostDirectory);
         Assert.Equal(nameof(PipelineOutputExecutionState.Prepared), outputPlan.State);
         Assert.All(outputPlan.Steps, step => Assert.True(step.SupportsOutputPathRelocation));
-        Assert.Collection(outputPlan.Outputs, output => Assert.Equal("aspire", output.PublisherName));
+        Assert.Collection(
+            outputPlan.Outputs,
+            output =>
+            {
+                Assert.True(output.IsPrimary);
+                Assert.Equal("aspire", output.PublisherName);
+            });
         Assert.False(beforePublish.Task.IsCompleted);
         Assert.False(stepExecuted.Task.IsCompleted);
 
@@ -385,10 +435,12 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
             options => options.ProjectDirectory = appHostDirectory,
             testOutputHelper,
             "AppHost:Operation=publish",
-            "Pipeline:Step=publish-manifest",
+            $"Pipeline:Step={WellKnownPipelineSteps.PublishManifest}",
             $"Pipeline:OutputPath={primaryOutputPath}",
             $"{PipelineOutputRegistry.StagingPathConfigurationKey}={stagingPath}",
             $"{PipelineOutputRegistry.TargetOutputPathConfigurationKey}={primaryTargetPath}");
+        builder.AddContainer("api", "alpine")
+            .WithDockerfileBuilder(appHostDirectory, context => context.Builder.From("alpine"));
         using var app = builder.Build();
         await app.StartAsync();
 
@@ -400,9 +452,23 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         var generatedManifestPath = Path.GetExtension(primaryTargetPath).Equals(".json", StringComparison.OrdinalIgnoreCase)
             ? primaryOutputPath
             : Path.Combine(primaryOutputPath, "aspire-manifest.json");
+        var logicalManifestPath = Path.GetExtension(primaryTargetPath).Equals(".json", StringComparison.OrdinalIgnoreCase)
+            ? primaryTargetPath
+            : Path.Combine(primaryTargetPath, "aspire-manifest.json");
+        var generatedDockerfilePath = Path.Combine(Path.GetDirectoryName(generatedManifestPath)!, "api.Dockerfile");
+        var logicalDockerfilePath = Path.Combine(Path.GetDirectoryName(logicalManifestPath)!, "api.Dockerfile");
         Assert.True(File.Exists(generatedManifestPath));
+        Assert.True(File.Exists(generatedDockerfilePath));
+        Assert.False(File.Exists(logicalDockerfilePath));
         Assert.False(File.Exists(primaryTargetPath));
         Assert.False(Directory.Exists(primaryTargetPath));
+
+        using var manifest = JsonDocument.Parse(await File.ReadAllTextAsync(generatedManifestPath));
+        var build = manifest.RootElement.GetProperty("resources").GetProperty("api").GetProperty("build");
+        Assert.Equal("api.Dockerfile", build.GetProperty("dockerfile").GetString());
+        Assert.Equal(
+            Path.GetRelativePath(Path.GetDirectoryName(logicalManifestPath)!, appHostDirectory).Replace('\\', '/'),
+            build.GetProperty("context").GetString());
         Assert.Equal(PipelineOutputExecutionState.Succeeded, registry.GetExecutionState());
     }
 
@@ -485,6 +551,8 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
     private static RegistryFixture CreateRegistry(
         bool relocate = false,
         string? primaryTargetFileName = null,
+        bool createPrimaryTargetDirectory = false,
+        string? pipelineStep = null,
         IReadOnlyDictionary<string, string?>? additionalConfiguration = null)
     {
         var bootstrapConfiguration = new ConfigurationBuilder().Build();
@@ -500,6 +568,10 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         var primaryOutputPath = relocate
             ? Path.Combine(stagingPath!, primaryTargetFileName ?? "primary")
             : primaryTargetPath;
+        if (createPrimaryTargetDirectory)
+        {
+            Directory.CreateDirectory(primaryTargetPath);
+        }
 
         var configurationValues = new Dictionary<string, string?>
         {
@@ -523,13 +595,15 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         var configuration = new ConfigurationBuilder()
             .AddInMemoryCollection(configurationValues)
             .Build();
-        var outputService = new PipelineOutputService(
-            Options.Create(new PipelineOptions { OutputPath = primaryOutputPath }),
-            configuration,
-            fileSystem);
+        var pipelineOptions = Options.Create(new PipelineOptions
+        {
+            OutputPath = primaryOutputPath,
+            Step = pipelineStep
+        });
+        var outputService = new PipelineOutputService(pipelineOptions, configuration, fileSystem);
 
         return new RegistryFixture(
-            new PipelineOutputRegistry(configuration, outputService),
+            new PipelineOutputRegistry(configuration, outputService, pipelineOptions),
             fileSystem,
             appHostDirectory,
             primaryOutputPath,

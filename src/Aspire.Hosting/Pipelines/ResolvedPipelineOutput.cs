@@ -16,18 +16,22 @@ public sealed class ResolvedPipelineOutput
         string name,
         PipelineOutputKind kind,
         string outputPath,
-        string logicalTargetPath)
+        string logicalTargetPath,
+        bool isPrimary)
     {
         PublisherName = publisherName;
         Name = name;
         Kind = kind;
         OutputPath = outputPath;
         LogicalTargetPath = logicalTargetPath;
+        IsPrimary = isPrimary;
     }
 
     internal string PublisherName { get; }
 
     internal string Name { get; }
+
+    internal bool IsPrimary { get; }
 
     /// <summary>
     /// Gets the kind of output.

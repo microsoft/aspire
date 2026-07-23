@@ -198,6 +198,7 @@ public class BackchannelJsonSerializerContextTests
             [
                 new PipelineOutputInfo
                 {
+                    IsPrimary = false,
                     PublisherName = "generate-config",
                     Name = "inventory",
                     Kind = "Directory",
@@ -213,6 +214,7 @@ public class BackchannelJsonSerializerContextTests
         Assert.NotNull(roundTripped);
         Assert.Equal(response.AppHostDirectory, roundTripped.AppHostDirectory);
         Assert.Equal("generate-config", Assert.Single(roundTripped.Steps).Name);
+        Assert.False(Assert.Single(roundTripped.Outputs).IsPrimary);
         Assert.Equal(
             response.Outputs[0].LogicalTargetPath,
             Assert.Single(roundTripped.Outputs).LogicalTargetPath);

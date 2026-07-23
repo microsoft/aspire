@@ -27,7 +27,7 @@ internal static class ManifestPublishingExtensions
     {
         var step = new PipelineStep
         {
-            Name = "publish-manifest",
+            Name = WellKnownPipelineSteps.PublishManifest,
             Description = "Publishes the Aspire application model as a JSON manifest file.",
             SupportsOutputPathRelocation = true,
             Action = async context =>
@@ -57,7 +57,12 @@ internal static class ManifestPublishingExtensions
                 using var stream = new FileStream(outputPath, FileMode.Create);
                 using var jsonWriter = new Utf8JsonWriter(stream, new JsonWriterOptions { Indented = true });
 
-                var publishingContext = new ManifestPublishingContext(executionContext, logicalManifestPath, jsonWriter, context.CancellationToken);
+                var publishingContext = new ManifestPublishingContext(
+                    executionContext,
+                    outputPath,
+                    logicalManifestPath,
+                    jsonWriter,
+                    context.CancellationToken);
 
                 await publishingContext.WriteModel(context.Model, context.CancellationToken).ConfigureAwait(false);
 
@@ -77,8 +82,8 @@ internal static class ManifestPublishingExtensions
             return outputPath;
         }
 
-        // A .json suffix preserves the legacy azd file-path contract. Every other primary
-        // output is a directory shared by publishers, so the manifest gets its standard name.
+        // The registry preserves the legacy direct-manifest file-path contract by assigning
+        // File kind. Shared primary outputs are directories and use the standard manifest name.
         return Path.Combine(outputPath, "aspire-manifest.json");
     }
 }
