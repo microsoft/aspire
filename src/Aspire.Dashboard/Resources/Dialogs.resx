@@ -539,7 +539,7 @@
     <value>AI agents</value>
   </data>
   <data name="AIAgentsDialogStandaloneDescription" xml:space="preserve">
-    <value>Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+    <value>Aspire makes agentic development more powerful. It gives AI coding agents deep observability into your app. Agents can use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
 
 - 📊 Distributed traces
 - 🔗 Trace spans
@@ -560,14 +560,14 @@ For more information about using AI agents with the dashboard, including setting
     <comment>{0} is the dashboard URL, {1} is the learn more URL, {2} is the install CLI URL</comment>
   </data>
   <data name="AIAgentsDialogAppHostDescription" xml:space="preserve">
-    <value>Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+    <value>Aspire makes agentic development more powerful. It gives AI coding agents deep observability into your app. Agents can use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
 
 - 📦 Resource state, health checks, and relationships
 - 🖥️ Console logs
 - 📊 Distributed traces
 - 🪵 Structured logs
 
-AI agents access dashboard telemetry through the Aspire CLI. If you haven’t installed it yet, [install the Aspire CLI]({1}).
+AI agents access dashboard telemetry through the Aspire CLI. If you haven't installed it yet, [install the Aspire CLI]({1}).
 
 Initialize AI agent support in your project with:
 
