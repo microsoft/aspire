@@ -3613,8 +3613,6 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         RemoteExecutor.Invoke(static () =>
         {
-            Environment.SetEnvironmentVariable("SSL_CERT_DIR", string.Empty);
-
             var sslCertDir = GetPlainExecutableSslCertDirAsync().GetAwaiter().GetResult();
 
             Assert.NotNull(sslCertDir);
