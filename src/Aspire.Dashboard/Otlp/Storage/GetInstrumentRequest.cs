@@ -49,6 +49,11 @@ public sealed class GetInstrumentRequest
     public TimeSpan? DataPointInterval { get; init; }
 
     /// <summary>
+    /// Gets a value indicating whether exemplars should be retrieved.
+    /// </summary>
+    public bool IncludeExemplars { get; init; } = true;
+
+    /// <summary>
     /// Gets a value indicating whether exemplar attributes should be populated.
     /// </summary>
     public bool PopulateExemplarAttributes { get; init; } = true;

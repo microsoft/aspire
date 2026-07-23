@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Web;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
@@ -20,6 +22,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Metrics.V1;
+using Aspire.Tests;
 using Xunit;
 using static Aspire.Dashboard.Components.Pages.Metrics;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -67,7 +70,7 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ChartContainer_AllDimensionsSelected_IncludesNewDimensionInFirstFetch()
+    public void ChartContainer_ParametersAndActiveView_OnlyRefreshAndRenderWhenChanged()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         MetricsSetupHelpers.SetupMetricsPage(this);
@@ -112,6 +115,23 @@ public partial class MetricsTests : DashboardTestContext
         var dimensionFilters = cut.Instance.DimensionFilters;
         var dimensionFilter = Assert.Single(dimensionFilters);
         Assert.Equal("GET", Assert.Single(dimensionFilter.SelectedValues).Value);
+        Assert.Single(cut.FindComponents<PlotlyChart>());
+        Assert.Empty(cut.FindComponents<MetricTable>());
+
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetryRepository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+
+        cut.SetParametersAndRender(builder => builder.Add(component => component.ActiveView, MetricViewKind.Table));
+
+        Assert.Empty(cut.FindComponents<PlotlyChart>());
+        Assert.Single(cut.FindComponents<MetricTable>());
+        Assert.Empty(activities);
+
+        cut.SetParametersAndRender(builder => builder.Add(component => component.ActiveView, MetricViewKind.Graph));
+
+        Assert.Single(cut.FindComponents<PlotlyChart>());
+        Assert.Empty(cut.FindComponents<MetricTable>());
+        Assert.Empty(activities);
 
         telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
@@ -134,8 +154,13 @@ public partial class MetricsTests : DashboardTestContext
                 }
             }
         });
+        activities.Clear();
 
         cut.SetParametersAndRender(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(5)));
+
+        Assert.Empty(activities);
+
+        cut.SetParametersAndRender(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(1)));
 
         var updatedFilter = Assert.Single(cut.Instance.DimensionFilters);
         Assert.NotSame(dimensionFilters, cut.Instance.DimensionFilters);
@@ -148,6 +173,41 @@ public partial class MetricsTests : DashboardTestContext
         var dimensions = chart.Instance.InstrumentViewModel.MatchedDimensions!;
         Assert.Equal(2, dimensions.Count);
         Assert.All(dimensions, dimension => Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value));
+        Assert.Contains(activities, activity => ((string?)activity.GetTagItem("db.query.text"))?.Contains("telemetry_metric_points", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public async Task ChartContainer_TickUpdate_CreatesActivity()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+
+        var activitySource = Services.GetRequiredService<DashboardActivitySource>();
+        var activityStopped = new TaskCompletionSource<Activity>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = ActivityListenerHelper.Create(activitySource.ActivitySource, onActivityStopped: activity =>
+        {
+            if (activity.OperationName == "Update metric chart data from tick")
+            {
+                activityStopped.TrySetResult(activity);
+            }
+        });
+
+        var cut = RenderComponent<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, new ResourceKey("TestApp", null));
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "test-instrument");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ActiveView, MetricViewKind.Graph);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.Resources, []);
+            builder.Add(component => component.PauseText, null);
+        });
+
+        var activity = await activityStopped.Task.WaitAsync(DefaultWaitTimeout);
+
+        Assert.Equal(ActivityKind.Internal, activity.Kind);
+        Assert.Null(activity.ParentId);
     }
 
     [Fact]

@@ -272,6 +272,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
     protected virtual ValueTask DisposeAsync(bool disposing)
     {
+        InstrumentViewModel.DataUpdateSubscriptions.Remove(OnInstrumentDataUpdate);
         _cts.Cancel();
         _cts.Dispose();
         return ValueTask.CompletedTask;

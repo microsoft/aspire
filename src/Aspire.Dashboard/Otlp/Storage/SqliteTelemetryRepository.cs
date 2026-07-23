@@ -167,6 +167,8 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     public OtlpSpan? GetSpan(string traceId, string spanId) => GetSpanFromDatabase(traceId, spanId);
     public OtlpResource? GetPeerResource(OtlpSpan span) => span.UninstrumentedPeer;
     public List<OtlpInstrumentSummary> GetInstrumentSummaries(ResourceKey key) => GetCachedInstrumentSummaries(key);
+    public OtlpInstrumentSummary? GetInstrumentSummary(ResourceKey resourceKey, string meterName, string instrumentName) =>
+        GetCachedInstruments(resourceKey, meterName, instrumentName).FirstOrDefault()?.Summary;
     public OtlpInstrumentData? GetInstrument(GetInstrumentRequest request) => GetInstrumentFromDatabase(request);
     public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName) =>
         GetInstrumentLatestEndTimeFromDatabase(resourceKey, meterName, instrumentName);
