@@ -46,6 +46,10 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
 
             return results;
         }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            throw;
+        }
         catch (Exception ex)
         {
             logger.LogDebug(ex, "Error checking dev-certs");
@@ -362,13 +366,19 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         if (openSslPath is not null)
         {
             var (success, hash) = await TryGetOpenSslHashAsync(openSslPath, certificateFile, cancellationToken).ConfigureAwait(false);
-            return success &&
-                HasMatchingHashEntry(trustPath, hash, certificate);
+            return success
+                ? HasMatchingHashEntry(trustPath, hash, certificate)
+                : HasMatchingHashStyleEntry(trustPath, certificate);
         }
 
         // Without openssl we cannot compute the subject hash that OpenSSL requires. The
         // absence of any hash-style entry for the certificate is still definitely broken,
         // but a matching entry can only be treated as sufficient evidence to avoid warning.
+        return HasMatchingHashStyleEntry(trustPath, certificate);
+    }
+
+    private static bool HasMatchingHashStyleEntry(string trustPath, X509Certificate2 certificate)
+    {
         return Directory.EnumerateFiles(trustPath)
             .Where(path => s_openSslHashFileNameRegex.IsMatch(Path.GetFileName(path)))
             .Any(path => CertificateFileMatches(path, certificate));
@@ -444,6 +454,15 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
 
             var hash = stdout.ToString().Trim();
             return hash.Length > 0 ? (true, hash) : (false, "");
+        }
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+        {
+            if (started)
+            {
+                TryKillProcess(process);
+            }
+
+            throw;
         }
         catch (Exception ex) when (ex is OperationCanceledException or IOException or InvalidOperationException)
         {

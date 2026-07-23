@@ -81,9 +81,15 @@ internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfig
         }
 
         var configurationContext = _configContextFactory(additionalData.Scope);
+        var certificateDirectoriesPath = configurationContext.CertificateDirectoriesPath;
+        if (additionalData.Scope == CertificateTrustScope.Append &&
+            context.EnvironmentVariables.TryGetValue("SSL_CERT_DIR", out var existingCertificateDirectoriesPath))
+        {
+            certificateDirectoriesPath = AppendCertificateDirectoriesPath(certificateDirectoriesPath, existingCertificateDirectoriesPath, configurationContext.IsContainer ? ':' : Path.PathSeparator);
+        }
 
         // Apply default OpenSSL environment configuration for certificate trust
-        context.EnvironmentVariables["SSL_CERT_DIR"] = configurationContext.CertificateDirectoriesPath;
+        context.EnvironmentVariables["SSL_CERT_DIR"] = certificateDirectoriesPath;
 
         if (additionalData.Scope != CertificateTrustScope.Append)
         {
@@ -96,7 +102,7 @@ internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfig
             Resource = resource,
             Scope = additionalData.Scope,
             CertificateBundlePath = configurationContext.CertificateBundlePath,
-            CertificateDirectoriesPath = configurationContext.CertificateDirectoriesPath,
+            CertificateDirectoriesPath = certificateDirectoriesPath,
             // Must use the tracked reference to ensure proper tracking of usage
             RootCertificatesPath = configurationContext.RootCertificatesPath,
             Arguments = context.Arguments,
@@ -123,6 +129,28 @@ internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfig
             resourceLogger.LogInformation("Resource '{ResourceName}' has a certificate trust scope of '{Scope}'. Automatically including system root certificates in the trusted configuration.", resource.Name, Enum.GetName(additionalData.Scope));
         }
 
+    }
+
+    private static ReferenceExpression AppendCertificateDirectoriesPath(ReferenceExpression certificateDirectoriesPath, object existingCertificateDirectoriesPath, char pathSeparator)
+    {
+        if (existingCertificateDirectoriesPath is string { Length: 0 })
+        {
+            return certificateDirectoriesPath;
+        }
+
+        var builder = new ReferenceExpressionBuilder();
+        builder.Append($"{certificateDirectoriesPath}");
+        builder.AppendLiteral(pathSeparator.ToString());
+        if (existingCertificateDirectoriesPath is string existingCertificateDirectoriesPathString)
+        {
+            builder.Append($"{existingCertificateDirectoriesPathString}");
+        }
+        else
+        {
+            builder.AppendValueProvider(existingCertificateDirectoriesPath);
+        }
+
+        return builder.Build();
     }
 }
 
