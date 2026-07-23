@@ -162,11 +162,18 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // and TerminalView in MainSection (both stay mounted so flipping does
     // not tear down the PTY or the log subscription) and uses CSS to hide
     // the inactive one. For non-terminal resources only LogViewer is shown
-    // and this field is unused. The view is purely user-controlled — the
-    // page defaults to Console on resource selection and only changes via
-    // the ⋯ menu picker. There is no auto-switching in either direction:
-    // hosting messages (WaitFor, startup failures, stop/exit output) stay
-    // visible on Console until the user explicitly clicks Terminal.
+    // and this field is unused.
+    //
+    // The default is chosen once per resource selection (see SubscribeAsync):
+    // a live (Running) terminal resource defaults to Terminal because its PTY
+    // is the surface the user came for, while every other case (non-terminal,
+    // or a terminal resource that isn't live yet or has already exited)
+    // defaults to Console so pre-PTY hosting messages (WaitFor, startup
+    // failures) and post-PTY exit output stay visible. After that initial
+    // default there is no state-driven auto-switching: later refreshes such
+    // as a filter/clear change (which also route through SubscribeAsync)
+    // preserve the current view, and the user can flip either way via the
+    // ⋯ menu picker.
     private ConsoleLogsView _activeView = ConsoleLogsView.Console;
     // Tracks the view that was rendered to the DOM on the previous render
     // pass. When the active view flips back to Terminal we need to nudge
