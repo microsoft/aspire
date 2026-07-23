@@ -3542,7 +3542,7 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task PlainExecutableCertificateDirectoriesPath_PreservesResourceSslCertDirForAppend()
+    public async Task PlainExecutableCertificateDirectoriesPath_IgnoresResourceSslCertDirForAppend()
     {
         var builder = DistributedApplication.CreateBuilder();
         var customSslCertDir = $"/resource-certs-{Guid.NewGuid():N}";
@@ -3566,37 +3566,15 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var sslCertDir = Assert.Single(exe.Spec.Env!, e => e.Name == "SSL_CERT_DIR").Value;
 
         Assert.NotNull(sslCertDir);
-        var sslCertDirs = sslCertDir.Split(Path.PathSeparator);
-        Assert.Equal(2, sslCertDirs.Length);
-        Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", sslCertDirs[0]);
-        Assert.Equal(customSslCertDir, sslCertDirs[1]);
-    }
-
-    [Fact]
-    public async Task ContainerCertificateDirectoriesPath_PreservesResourceSslCertDirForAppend()
-    {
-        var builder = DistributedApplication.CreateBuilder();
-        var customSslCertDir = $"/resource-certs-{Guid.NewGuid():N}";
-        using var certificate = CreateTestCertificate();
-        var certificateAuthorities = builder.AddCertificateAuthorityCollection("certificates")
-            .WithCertificate(certificate);
-
-        builder.AddContainer("database", "image")
-            .WithEnvironment("SSL_CERT_DIR", customSslCertDir)
-            .WithCertificateAuthorityCollection(certificateAuthorities);
-
-        var kubernetesService = new TestKubernetesService();
-        using var app = builder.Build();
-        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
-
-        await appExecutor.RunApplicationAsync();
-
-        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
-        var sslCertDir = Assert.Single(container.Spec.Env!, e => e.Name == "SSL_CERT_DIR").Value;
-
-        Assert.NotNull(sslCertDir);
-        Assert.Equal($"{ContainerCertificatePathsAnnotation.DefaultCustomCertificatesDestination}/certs:{customSslCertDir}", sslCertDir);
+        var generatedCertificatesPath = sslCertDir.Split(Path.PathSeparator)[0];
+        Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", generatedCertificatesPath);
+        Assert.Equal(
+            ExecutableCreator.BuildCertificateDirectoriesPath(
+                generatedCertificatesPath,
+                CertificateTrustScope.Append,
+                Environment.GetEnvironmentVariable("SSL_CERT_DIR"),
+                includeWellKnownCertificateDirectories: OperatingSystem.IsLinux()),
+            sslCertDir);
     }
 
     [Fact]

@@ -700,7 +700,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
         }
 
         var serverAuthCertificatesBasePath = $"{certificatesDestination}/private";
-        var resourceCertificateDirectoriesPath = ReferenceExpression.Create($"{certificatesDestination}/certs");
 
         var configuration = await ExecutionConfigurationBuilder.Create(cr.ModelResource)
             .WithArgumentsConfig()
@@ -717,7 +716,6 @@ internal sealed class ContainerCreator : IObjectCreator<Container, ContainerCrea
                 {
                     CertificateBundlePath = ReferenceExpression.Create($"{certificatesDestination}/cert.pem"),
                     CertificateDirectoriesPath = ReferenceExpression.Create($"{string.Join(':', dirs)}"),
-                    CertificateDirectoriesPathBeforeFallback = resourceCertificateDirectoriesPath,
                     RootCertificatesPath = certificatesDestination,
                     IsContainer = true,
                 };
