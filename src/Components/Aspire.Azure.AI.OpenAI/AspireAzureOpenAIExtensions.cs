@@ -131,7 +131,11 @@ public static class AspireAzureOpenAIExtensions
 
         protected override IHealthCheck CreateHealthCheck(AzureOpenAIClient client, AzureOpenAISettings settings)
         {
-            throw new NotImplementedException();
+            // Azure OpenAI does not expose a lightweight read-only health check endpoint.
+            // GetOpenAIModelClient() explicitly throws NotSupportedException in AzureOpenAIClient,
+            // and all other sub-clients require a deployment name and initiate inference operations.
+            // Health checks remain disabled until a suitable API is available in the Azure.AI.OpenAI SDK.
+            throw new NotSupportedException("Health checks are not supported for AzureOpenAIClient.");
         }
 
         protected override bool GetHealthCheckEnabled(AzureOpenAISettings settings)

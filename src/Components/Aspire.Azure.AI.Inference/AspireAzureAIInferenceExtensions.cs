@@ -186,10 +186,10 @@ public static class AspireAzureAIInferenceExtensions
             => configuration.Bind(settings);
 
         protected override IHealthCheck CreateHealthCheck(ChatCompletionsClient client, ChatCompletionsClientSettings settings)
-            => throw new NotImplementedException();
+            => new AzureAIInferenceChatCompletionsHealthCheck(client);
 
         protected override bool GetHealthCheckEnabled(ChatCompletionsClientSettings settings)
-            => false;
+            => !settings.DisableHealthChecks;
 
         protected override bool GetMetricsEnabled(ChatCompletionsClientSettings settings)
             => !settings.DisableMetrics;
@@ -439,10 +439,10 @@ public static class AspireAzureAIInferenceExtensions
             => configuration.Bind(settings);
 
         protected override IHealthCheck CreateHealthCheck(EmbeddingsClient client, ChatCompletionsClientSettings settings)
-            => throw new NotImplementedException();
+            => new AzureAIInferenceEmbeddingsHealthCheck(client);
 
         protected override bool GetHealthCheckEnabled(ChatCompletionsClientSettings settings)
-            => false;
+            => !settings.DisableHealthChecks;
 
         protected override bool GetMetricsEnabled(ChatCompletionsClientSettings settings)
             => !settings.DisableMetrics;
