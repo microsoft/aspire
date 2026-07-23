@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Test-only fix for flaky CLI launcher tests — no user-facing behavior change",
+  "mergedAt": "2026-07-23T00:20:14Z",
+  "number": 18856,
+  "runDate": "2026-07-23T06:48:46Z",
+  "status": "excluded",
+  "title": "Fix flaky AppHost launcher cancellation test"
+}

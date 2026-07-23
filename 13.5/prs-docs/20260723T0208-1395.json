@@ -1,0 +1,9 @@
+{
+  "author": "jasontaylordev",
+  "comment": "General docs improvement adding messaging context to Azure Service Bus page; no matching product changelog entry",
+  "mergedAt": "2026-07-23T02:08:29Z",
+  "number": 1395,
+  "runDate": "2026-07-23T06:48:46Z",
+  "status": "excluded",
+  "title": "Updates to \"Get started with the Azure Service Bus integrations\" docs"
+}

@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Expands existing security documentation for the dashboard telemetry section; no matching product changelog entry",
+  "mergedAt": "2026-07-23T01:44:18Z",
+  "number": 1396,
+  "runDate": "2026-07-23T06:48:46Z",
+  "status": "excluded",
+  "title": "Expand dashboard telemetry security guidance"
+}
