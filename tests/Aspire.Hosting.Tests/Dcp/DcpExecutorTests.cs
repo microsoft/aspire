@@ -25,6 +25,7 @@ using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.UserSecrets;
 using k8s.Models;
 using Microsoft.AspNetCore.InternalTesting;
+using Microsoft.DotNet.RemoteExecutor;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
@@ -3539,6 +3540,49 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
 
         Assert.Equal(Path.Join(expectedCertificatesRoot, "certs"), sslCertDir);
         Assert.Equal(Path.Join(expectedCertificatesRoot, "cert.pem"), sslCertFile);
+    }
+
+    [Fact]
+    public void PlainExecutableCertificateDirectoriesPath_IncludesExistingWellKnownDirectoriesForAppendWhenSslCertDirIsUnsetOnLinux()
+    {
+        Assert.SkipUnless(OperatingSystem.IsLinux(), "OpenSSL default certificate directories are only inferred on Linux.");
+
+        var options = new RemoteInvokeOptions();
+        options.StartInfo.Environment.Remove("SSL_CERT_DIR");
+
+        RemoteExecutor.Invoke(static async () =>
+        {
+            Environment.SetEnvironmentVariable("SSL_CERT_DIR", null);
+
+            var expectedWellKnownCertificateDirectories = ContainerCertificatePathsAnnotation.DefaultCertificateDirectoriesPaths
+                .Where(Directory.Exists)
+                .ToArray();
+            Assert.NotEmpty(expectedWellKnownCertificateDirectories);
+
+            var builder = DistributedApplication.CreateBuilder();
+            using var certificate = CreateTestCertificate();
+            var certificateAuthorities = builder.AddCertificateAuthorityCollection("certificates")
+                .WithCertificate(certificate);
+
+            var executable = new TestExecutableResource("test-working-directory");
+            builder.AddResource(executable)
+                .WithCertificateAuthorityCollection(certificateAuthorities);
+
+            var kubernetesService = new TestKubernetesService();
+            using var app = builder.Build();
+            var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+            var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+            await appExecutor.RunApplicationAsync();
+
+            var exe = Assert.Single(kubernetesService.CreatedResources.OfType<Executable>(), e => e.AppModelResourceName == "TestExecutable");
+            var sslCertDir = Assert.Single(exe.Spec.Env!, e => e.Name == "SSL_CERT_DIR").Value;
+
+            Assert.NotNull(sslCertDir);
+            var sslCertDirs = sslCertDir.Split(Path.PathSeparator);
+            Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", sslCertDirs[0]);
+            Assert.Equal(expectedWellKnownCertificateDirectories, sslCertDirs.Skip(1));
+        }, options).Dispose();
     }
 
     [Fact]

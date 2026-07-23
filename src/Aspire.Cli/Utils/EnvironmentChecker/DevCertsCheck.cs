@@ -453,7 +453,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
 
             throw;
         }
-        catch (Exception ex) when (ex is OperationCanceledException or IOException or InvalidOperationException)
+        catch
         {
             if (started)
             {

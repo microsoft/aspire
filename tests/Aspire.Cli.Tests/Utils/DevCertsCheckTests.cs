@@ -489,6 +489,61 @@ public class DevCertsCheckTests
 
     [Fact]
     [SkipOnPlatform(TestPlatforms.Windows, "The synthetic openssl command uses a POSIX shell script.")]
+    public async Task CheckAsync_LinuxWithOpenSslHashProbeStartFailure_ReturnsOpenSslCertificateCacheWarning()
+    {
+        using var certificate = CreateCertificate();
+        var tempDirectory = Directory.CreateTempSubdirectory();
+
+        try
+        {
+            CreateCertUtil(tempDirectory);
+            CreateOpenSsl(tempDirectory, "12345678");
+            var trustDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.FullName, "trust"));
+            WriteOpenSslCertificateCache(trustDirectory, certificate, "12345678.0");
+
+            var certs = new List<DevCertInfo>
+            {
+                CreateDevCertInfo(CertificateManager.TrustLevel.Full, certificate, MinVersion),
+            };
+            var toolRunner = new TestCertificateToolRunner
+            {
+                CheckHttpCertificateCallback = () => new CertificateTrustResult
+                {
+                    HasCertificates = true,
+                    TrustLevel = CertificateManager.TrustLevel.Full,
+                    Certificates = certs
+                }
+            };
+            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
+            {
+                ["PATH"] = tempDirectory.FullName,
+                [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
+            });
+            var processExecutionFactory = new TestProcessExecutionFactory
+            {
+                CreateExecutionWithFileNameCallback = (fileName, args, env, workingDirectory, options) =>
+                    new TestProcessExecution(fileName, args, env, options, (_, _, _) => Task.FromResult((0, (string?)"12345678")), () => 1)
+                    {
+                        StartException = new InvalidOperationException("openssl failed to start")
+                    }
+            };
+            var check = CreateCheck(toolRunner, environment, processExecutionFactory);
+
+            var results = await check.CheckAsync();
+
+            var cacheResult = Assert.Single(results, r => r.Name == DevCertsCheck.OpenSslCertificateCacheCheckName);
+            Assert.Equal(EnvironmentCheckStatus.Warning, cacheResult.Status);
+            Assert.Contains(certificate.Thumbprint, cacheResult.Details);
+            Assert.Contains("subject-hash", cacheResult.Details);
+        }
+        finally
+        {
+            tempDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    [SkipOnPlatform(TestPlatforms.Windows, "The synthetic openssl command uses a POSIX shell script.")]
     public async Task CheckAsync_LinuxWithMissingOpenSslHashEntry_ReturnsOpenSslCertificateCacheWarning()
     {
         using var certificate = CreateCertificate();
