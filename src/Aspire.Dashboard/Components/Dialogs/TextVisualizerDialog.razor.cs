@@ -4,21 +4,24 @@
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Markdown;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
+using Icons = Microsoft.FluentUI.AspNetCore.Components.Icons;
 
 namespace Aspire.Dashboard.Components.Dialogs;
 
 public partial class TextVisualizerDialog : ComponentBase
 {
     private readonly string _copyButtonId = $"copy-{Guid.NewGuid():N}";
-    private readonly string _selectFormatId = $"select-format-{Guid.NewGuid():N}";
 
     private List<SelectViewModel<string>> _options = null!;
     private SelectViewModel<string> _selectedFormat = null!;
+    private readonly List<MenuButtonItem> _menuItems = [];
     private bool _isLoading = true;
+    private bool _noWrap;
     private MarkdownProcessor? _markdownProcessor;
     private TextVisualizerDialogViewModel? _previousContent;
     internal TextVisualizerViewModel TextVisualizerViewModel { get; set; } = default!;
@@ -26,6 +29,7 @@ public partial class TextVisualizerDialog : ComponentBase
     public HashSet<string?> EnabledOptions { get; } = [];
     internal bool? ShowSecretsWarning { get; private set; }
     internal bool IsMarkdownFormat => TextVisualizerViewModel.FormatKind == DashboardUIHelpers.MarkdownFormat;
+    internal bool ShowOptionsMenu => _menuItems.Count > 0;
 
     /// <summary>
     /// Returns true if the dialog has a fixed format that cannot be changed by the user.
@@ -68,6 +72,7 @@ public partial class TextVisualizerDialog : ComponentBase
         if (_previousContent == Content)
         {
             _selectedFormat = GetSelectedFormatOption(TextVisualizerViewModel.FormatKind);
+            UpdateMenuItems();
             return;
         }
 
@@ -101,6 +106,7 @@ public partial class TextVisualizerDialog : ComponentBase
 
         _previousContent = Content;
         _selectedFormat = GetSelectedFormatOption(TextVisualizerViewModel.FormatKind);
+        UpdateMenuItems();
     }
 
     private bool IsTextContentDisplayed
@@ -116,12 +122,11 @@ public partial class TextVisualizerDialog : ComponentBase
         }
     }
 
-    private void OnSelectedFormatChanged() => ChangeFormat(_selectedFormat.Id);
-
     internal void ChangeFormat(string? newFormat)
     {
         _selectedFormat = GetSelectedFormatOption(newFormat);
         TextVisualizerViewModel.UpdateFormat(_selectedFormat.Id ?? DashboardUIHelpers.PlaintextFormat);
+        UpdateMenuItems();
     }
 
     private SelectViewModel<string> GetSelectedFormatOption(string? format) => _options.SingleOrDefault(o => o.Id == format) ?? _options[0];
@@ -152,6 +157,82 @@ public partial class TextVisualizerDialog : ComponentBase
         if (Content.DownloadFileName is not null)
         {
             await JS.DownloadFileAsync(Content.DownloadFileName, TextVisualizerViewModel.FormattedText);
+        }
+    }
+
+    private async Task ChangeFormatAsync(string? newFormat)
+    {
+        ChangeFormat(newFormat);
+        await InvokeAsync(StateHasChanged);
+    }
+
+    private async Task ToggleWrapLinesAsync()
+    {
+        ToggleWrapLines();
+        await InvokeAsync(StateHasChanged);
+    }
+
+    internal void ToggleWrapLines()
+    {
+        _noWrap = !_noWrap;
+        UpdateMenuItems();
+    }
+
+    private void UpdateMenuItems()
+    {
+        _menuItems.Clear();
+
+        if (!HasFixedFormat)
+        {
+            var formatItems = new List<MenuButtonItem>(_options.Count);
+            foreach (var option in _options)
+            {
+                var isSelected = _selectedFormat.Id == option.Id;
+                formatItems.Add(new()
+                {
+                    Text = option.Name,
+                    OnClick = () => ChangeFormatAsync(option.Id),
+                    // Show a checkmark only for the selected option; reserve the icon column
+                    // for unselected options so all label text aligns at the same position.
+                    // Do NOT set role="menuitemradio" — that activates FAST's native indicator
+                    // zone which adds extra left padding before slot="start", breaking alignment.
+                    Icon = isSelected ? new Icons.Regular.Size16.Checkmark() : null,
+                    ReserveIconSpace = !isSelected,
+                    IsDisabled = !EnabledOptions.Contains(option.Id),
+                    AdditionalAttributes = new Dictionary<string, object>
+                    {
+                        ["aria-checked"] = isSelected ? "true" : "false"
+                    }
+                });
+            }
+
+            _menuItems.Add(new()
+            {
+                Text = Loc[nameof(Resources.Dialogs.TextVisualizerSelectFormatType)],
+                Icon = new Icons.Regular.Size16.TextBulletListSquare(),
+                NestedMenuItems = formatItems
+            });
+        }
+
+        if (!IsMarkdownFormat)
+        {
+            _menuItems.Add(new()
+            {
+                OnClick = ToggleWrapLinesAsync,
+                Text = _noWrap
+                    ? ControlsStringsLoc[nameof(ControlsStrings.GridValueWrapLines)]
+                    : ControlsStringsLoc[nameof(ControlsStrings.GridValueNoWrapLines)],
+                // Use explicit wrap icons instead of role="menuitemcheckbox" to avoid the
+                // native FAST indicator zone that would add extra left padding before the icon.
+                // Match the icon style used on the console logs page.
+                // The icon represents the action label shown to the user.
+                // "Wrap lines" -> TextWrap, "Don't wrap lines" -> TextWrapOff.
+                Icon = _noWrap ? new Icons.Regular.Size16.TextWrap() : new Icons.Regular.Size16.TextWrapOff(),
+                AdditionalAttributes = new Dictionary<string, object>
+                {
+                    ["aria-checked"] = _noWrap ? "false" : "true"
+                }
+            });
         }
     }
 

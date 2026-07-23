@@ -716,8 +716,14 @@ fluent-switch.table-switch::part(label) {
 }
 
 .wrap-log-container .log-content {
-    white-space: nowrap;
+    white-space: pre;
     overflow-wrap: normal;
+}
+
+.wrap-log-container .log-line-row {
+    white-space: pre;
+    width: max-content;
+    min-width: 100%;
 }
 
 .log-line-row-container {

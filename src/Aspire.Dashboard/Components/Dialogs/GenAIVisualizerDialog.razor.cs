@@ -33,6 +33,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
     private List<OtlpSpan> _contextSpans = default!;
     private int _currentSpanContextIndex;
+    private bool _noWrap;
     private GenAIVisualizerDialogViewModel? _content;
 
     private GenAIItemViewModel? SelectedItem { get; set; }
@@ -276,6 +277,45 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         return true;
     }
 
+    private Task SetWrapLines(bool wrapLines)
+    {
+        _noWrap = !wrapLines;
+        return Task.CompletedTask;
+    }
+
+    private static bool CanToggleWrapLines(GenAIItemViewModel selectedItem, ItemViewKind selectedView)
+    {
+        return selectedView switch
+        {
+            ItemViewKind.Raw => selectedItem.ItemParts.Count > 0,
+            ItemViewKind.Preview => selectedItem.ItemParts.Any(IsPreviewPartRenderedByTextVisualizer),
+            _ => false
+        };
+    }
+
+    private static bool IsPreviewPartRenderedByTextVisualizer(GenAIItemPartViewModel itemPart)
+    {
+        if (itemPart.ErrorMessage == itemPart.TextVisualizerViewModel.Text)
+        {
+            return false;
+        }
+
+        if (CanRenderAsDataPart(itemPart, MimeTypeHelpers.SupportedImageTypes)
+            || CanRenderAsDataPart(itemPart, MimeTypeHelpers.SupportedAudioTypes)
+            || CanRenderAsDataPart(itemPart, MimeTypeHelpers.SupportedVideoTypes)
+            || CanRenderAsDataPart(itemPart, matchingMimeTypes: null))
+        {
+            return false;
+        }
+
+        if (itemPart.AdditionalProperties is { Count: > 0 })
+        {
+            return false;
+        }
+
+        return itemPart.TextVisualizerViewModel.FormatKind is not DashboardUIHelpers.PlaintextFormat and not DashboardUIHelpers.MarkdownFormat;
+    }
+
     private static string GetToolHeadingTooltip(ToolDefinitionViewModel vm)
     {
         if (string.IsNullOrEmpty(vm.ToolDefinition.Description))
@@ -287,6 +327,20 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     }
 
     private record DataInfo(string Url, string MimeType, string FileName);
+
+    private static bool CanRenderAsDataPart(GenAIItemPartViewModel itemPart, HashSet<string>? matchingMimeTypes)
+    {
+        return itemPart.MessagePart switch
+        {
+            BlobPart blobPart => MatchMimeType(blobPart.MimeType, matchingMimeTypes) && !string.IsNullOrEmpty(blobPart.Content),
+            UriPart uriPart => MatchMimeType(uriPart.MimeType, matchingMimeTypes)
+                && !string.IsNullOrEmpty(uriPart.Uri)
+                // Only attempt to display image if it is an http/https address.
+                && Uri.TryCreate(uriPart.Uri, UriKind.Absolute, out var result)
+                && result.Scheme.ToLowerInvariant() is "http" or "https",
+            _ => false
+        };
+    }
 
     private static bool TryGetDataPart(GenAIItemPartViewModel itemPart, HashSet<string>? matchingMimeTypes, [NotNullWhen(true)] out DataInfo? dataInfo)
     {
@@ -330,34 +384,34 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
 
         dataInfo = null;
         return false;
+    }
 
-        static bool MatchMimeType(string? mimeType, HashSet<string>? matchingMimeTypes)
+    private static bool MatchMimeType(string? mimeType, HashSet<string>? matchingMimeTypes)
+    {
+        if (!string.IsNullOrEmpty(mimeType))
         {
-            if (!string.IsNullOrEmpty(mimeType))
-            {
-                return matchingMimeTypes is null || matchingMimeTypes.Contains(mimeType);
-            }
-
-            return false;
+            return matchingMimeTypes is null || matchingMimeTypes.Contains(mimeType);
         }
 
-        static string CalculateFileName(string? currentFileName, string mimeType)
-        {
-            if (!string.IsNullOrEmpty(currentFileName))
-            {
-                return currentFileName;
-            }
+        return false;
+    }
 
-            if (MimeTypeHelpers.MimeToExtension.TryGetValue(mimeType, out var extension))
-            {
-                return $"download{extension}";
-            }
-            else
-            {
-                // The part didn't include a name (probably a blob) and we don't know the mime type.
-                // We have to give a download file name without an extension.
-                return "download";
-            }
+    private static string CalculateFileName(string? currentFileName, string mimeType)
+    {
+        if (!string.IsNullOrEmpty(currentFileName))
+        {
+            return currentFileName;
+        }
+
+        if (MimeTypeHelpers.MimeToExtension.TryGetValue(mimeType, out var extension))
+        {
+            return $"download{extension}";
+        }
+        else
+        {
+            // The part didn't include a name (probably a blob) and we don't know the mime type.
+            // We have to give a download file name without an extension.
+            return "download";
         }
     }
 
@@ -391,4 +445,3 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
         await dialogService.ShowDialogAsync<GenAIVisualizerDialog>(dialogViewModel, parameters);
     }
 }
-

@@ -5,10 +5,12 @@ using System.Collections.Immutable;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Components.Tests.Shared;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
 using Bunit;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
 
@@ -79,7 +81,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Render_TextVisualizerDialog_FormatPicker_UsesFluentSelectAndPreservesSelectionAfterParentRerenderAsync()
+    public async Task Render_TextVisualizerDialog_FormatMenu_ContainsFormatItemsAndPreservesSelectionAfterParentRerenderAsync()
     {
         const string rawXml = """<parent><child>text<!-- comment --></child></parent>""";
 
@@ -88,22 +90,41 @@ public class TextVisualizerDialogTests : DashboardTestContext
         await dialogService.ShowDialogAsync<TextVisualizerDialog>(content, []);
         cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
 
-        var formatSelect = Assert.Single(cut.FindComponents<FluentSelect<SelectViewModel<string>>>());
-        Assert.NotNull(formatSelect.Find("fluent-select"));
+        var menuButton = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
+        var formatMenu = Assert.Single(menuButton.Instance.Items, i => i.NestedMenuItems is not null);
+        Assert.Equal(Aspire.Dashboard.Resources.Dialogs.TextVisualizerSelectFormatType, formatMenu.Text);
+        Assert.NotNull(formatMenu.Icon);
+        Assert.True(menuButton.Instance.RestoreFocusOnItemClick);
 
-        Assert.Equal(Aspire.Dashboard.Resources.Dialogs.TextVisualizerSelectFormatType, formatSelect.Instance.AriaLabel);
-        Assert.Equal(DashboardUIHelpers.XmlFormat, formatSelect.Instance.SelectedOption?.Id);
+        var formatOptions = formatMenu.NestedMenuItems ?? throw new InvalidOperationException("Expected nested format options.");
+        Assert.All(formatOptions, option =>
+        {
+            Assert.NotNull(option.AdditionalAttributes);
+            // Do NOT assert role="menuitemradio" here — that role activates the FAST indicator zone
+            // which adds extra left padding. We rely on aria-checked alone.
+            Assert.False(option.AdditionalAttributes!.ContainsKey("role"), "Format items should not set role= to avoid native indicator padding.");
+            Assert.True(option.AdditionalAttributes.ContainsKey("aria-checked"));
+        });
+        Assert.Single(formatOptions, option => string.Equals(option.AdditionalAttributes!["aria-checked"]?.ToString(), "true", StringComparison.Ordinal));
+        // Only the selected option has an icon; unselected options reserve icon space for text alignment.
+        Assert.Single(formatOptions, option => option.Icon is not null);
+        Assert.Equal(formatOptions.Count - 1, formatOptions.Count(option => option.Icon is null && option.ReserveIconSpace));
 
-        var formatOptions = formatSelect.Instance.Items ?? throw new InvalidOperationException("Expected format options.");
-        var plaintextOption = formatOptions.Single(o => o.Id == DashboardUIHelpers.PlaintextFormat);
-        await formatSelect.InvokeAsync(() => formatSelect.Instance.SelectedOptionChanged.InvokeAsync(plaintextOption));
+        var plaintextOption = formatOptions.Single(i => i.Text == Aspire.Dashboard.Resources.Dialogs.TextVisualizerDialogPlaintextFormat);
+        await plaintextOption.OnClick!.Invoke();
 
         cut.WaitForAssertion(() =>
         {
             var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
             Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
             Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
-            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
+
+            var selectedOptions = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+                .Instance.Items.Single(i => i.NestedMenuItems is not null).NestedMenuItems!;
+            Assert.Single(selectedOptions, option => string.Equals(option.AdditionalAttributes!["aria-checked"]?.ToString(), "true", StringComparison.Ordinal));
+            Assert.Single(selectedOptions, option => option.Icon is not null);
+            Assert.Equal(selectedOptions.Count - 1, selectedOptions.Count(option => option.Icon is null && option.ReserveIconSpace));
         });
 
         cut.FindComponent<TextVisualizerDialog>().SetParametersAndRender(parameters => parameters.Add(p => p.Content, content));
@@ -113,7 +134,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
             var dialog = cut.FindComponent<TextVisualizerDialog>().Instance;
             Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
             Assert.Equal(rawXml, dialog.TextVisualizerViewModel.FormattedText);
-            Assert.Equal(DashboardUIHelpers.PlaintextFormat, cut.FindComponent<FluentSelect<SelectViewModel<string>>>().Instance.SelectedOption?.Id);
+            Assert.Equal(DashboardUIHelpers.PlaintextFormat, dialog.TextVisualizerViewModel.FormatKind);
         });
     }
 
@@ -165,6 +186,91 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         var link = cut.Find("a[href='https://aka.ms/aspire/container-runtime-unhealthy']");
         Assert.Equal("_blank", link.GetAttribute("target"));
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_ToggleWrapLines_UpdatesTextVisualizerClassAsync()
+    {
+        const string rawText = "line 1\nline 2";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var controlsStrings = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+        var wrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueWrapLines)].Value;
+        var noWrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueNoWrapLines)].Value;
+        var menuButton = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
+        var wrapMenuItem = Assert.Single(menuButton.Instance.Items, i => i.Text == noWrapLinesLabel);
+        Assert.NotNull(wrapMenuItem.AdditionalAttributes);
+        Assert.False(wrapMenuItem.AdditionalAttributes!.ContainsKey("role"), "Wrap item should not set role= to avoid native indicator padding.");
+        Assert.Equal("true", wrapMenuItem.AdditionalAttributes["aria-checked"]);
+        Assert.Equal("TextWrapOff", wrapMenuItem.Icon?.GetType().Name);
+        Assert.Empty(cut.FindAll(".wrap-log-container"));
+
+        await wrapMenuItem.OnClick!.Invoke();
+        cut.WaitForAssertion(() => Assert.NotEmpty(cut.FindAll(".wrap-log-container")));
+        Assert.Equal("false", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+            .Instance.Items.Single(i => i.Text == wrapLinesLabel).AdditionalAttributes!["aria-checked"]);
+        Assert.Equal("TextWrap", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+            .Instance.Items.Single(i => i.Text == wrapLinesLabel).Icon?.GetType().Name);
+
+        await Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+            .Instance.Items.Single(i => i.Text == wrapLinesLabel).OnClick!.Invoke();
+        cut.WaitForAssertion(() => Assert.Empty(cut.FindAll(".wrap-log-container")));
+        Assert.Equal("true", Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>())
+            .Instance.Items.Single(i => i.Text == noWrapLinesLabel).AdditionalAttributes!["aria-checked"]);
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_MarkdownFormat_HidesWrapLinesMenuItemAsync()
+    {
+        const string rawText = "# heading";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var dialog = cut.FindComponent<TextVisualizerDialog>();
+        dialog.Instance.ChangeFormat(DashboardUIHelpers.MarkdownFormat);
+        dialog.Render();
+
+        var controlsStrings = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+        var wrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueWrapLines)].Value;
+        var noWrapLinesLabel = controlsStrings[nameof(ControlsStrings.GridValueNoWrapLines)].Value;
+
+        cut.WaitForAssertion(() =>
+        {
+            var menuItems = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>()).Instance.Items;
+            Assert.All(menuItems, item =>
+            {
+                Assert.NotEqual(wrapLinesLabel, item.Text);
+                Assert.NotEqual(noWrapLinesLabel, item.Text);
+            });
+        });
+    }
+
+    [Fact]
+    public async Task Render_TextVisualizerDialog_WithDownloadFile_RendersOptionsMenuBeforeActionsAsync()
+    {
+        const string rawText = "line 1\nline 2";
+
+        var cut = SetUpDialog(out var dialogService);
+        await dialogService.ShowDialogAsync<TextVisualizerDialog>(new TextVisualizerDialogViewModel(rawText, string.Empty, false, DownloadFileName: "test.txt"), []);
+        cut.WaitForAssertion(() => Assert.True(cut.HasComponent<TextVisualizerDialog>()));
+
+        var controlsStrings = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+        Assert.True(cut.HasComponent<Aspire.Dashboard.Components.AspireMenuButton>());
+        var markup = cut.Markup;
+        var optionsButtonIndex = markup.IndexOf("text-visualizer-options-menu-button", StringComparison.Ordinal);
+        var downloadButtonIndex = markup.IndexOf(controlsStrings[nameof(ControlsStrings.Download)].Value, StringComparison.Ordinal);
+        var copyButtonIndex = markup.IndexOf(controlsStrings[nameof(ControlsStrings.GridValueCopyToClipboard)].Value, StringComparison.Ordinal);
+
+        Assert.True(optionsButtonIndex >= 0);
+        Assert.True(downloadButtonIndex >= 0);
+        Assert.True(copyButtonIndex >= 0);
+        Assert.True(optionsButtonIndex < downloadButtonIndex);
+        Assert.True(optionsButtonIndex < copyButtonIndex);
     }
 
     [Fact]
@@ -245,7 +351,7 @@ public class TextVisualizerDialogTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task Render_TextVisualizerDialog_WithFixedFormat_UsesFixedFormatAndHidesDropdownAsync()
+    public async Task Render_TextVisualizerDialog_WithFixedFormat_UsesFixedFormatAndHidesFormatMenuAsync()
     {
         const string rawText = """export VAR=value""";
 
@@ -259,8 +365,9 @@ public class TextVisualizerDialogTests : DashboardTestContext
         Assert.Equal(DashboardUIHelpers.PropertiesFormat, instance.TextVisualizerViewModel.FormatKind);
         Assert.True(instance.HasFixedFormat);
 
-        // Verify the format dropdown is not rendered
-        Assert.Empty(cut.FindComponents<FluentSelect<SelectViewModel<string>>>());
+        var formatMenuText = Services.GetRequiredService<IStringLocalizer<Aspire.Dashboard.Resources.Dialogs>>()[nameof(Aspire.Dashboard.Resources.Dialogs.TextVisualizerSelectFormatType)].Value;
+        var menuButton = Assert.Single(cut.FindComponents<Aspire.Dashboard.Components.AspireMenuButton>());
+        Assert.All(menuButton.Instance.Items, item => Assert.NotEqual(formatMenuText, item.Text));
     }
 
     [Fact]
@@ -292,11 +399,13 @@ public class TextVisualizerDialogTests : DashboardTestContext
 
         var module = JSInterop.SetupModule("/Components/Controls/TextVisualizer.razor.js");
         module.SetupVoid();
+        JSInterop.SetupModule("/Components/Controls/MarkdownRenderer.razor.js").SetupVoid();
 
         FluentUISetupHelpers.SetupFluentAnchoredRegion(this);
         FluentUISetupHelpers.SetupFluentInputLabel(this);
         FluentUISetupHelpers.SetupFluentList(this);
         FluentUISetupHelpers.SetupFluentMenu(this);
+        FluentUISetupHelpers.SetupFluentCheckbox(this);
 
         var cut = FluentUISetupHelpers.RenderDialogProvider(this);
 
