@@ -136,8 +136,8 @@ variables:
   - template: /eng/common/templates-official/variables/pool-providers.yml@self
   - name: NPM_PUBLISH_REQUIRED_OWNERS
     value: joperezr,ankj
-  # Variable group containing VscePublishToken for VS Code Marketplace publishing and aspire-repo-bot credentials
-  # Note: NuGet publishing uses service connection 'NuGet.org - dotnet/aspire' instead of API key
+  # Variable group containing aspire-repo-bot credentials.
+  # Note: NuGet and VS Code Marketplace publishing use service connections instead of API keys.
   - group: Aspire-Release-Secrets
   # Variable group containing aspire-winget-bot-pat for WinGet publishing
   - group: Aspire-Secrets
@@ -2167,8 +2167,9 @@ extends:
               type: releaseJob
               isProduction: true
               # No ESRP publish runs in this job; vsce publishes directly to the VS Code Marketplace
-              # using a PAT. Skip the auto-injected MicroBuildAuthorizePublishPlugin@0 so it
-              # does not 401 against the devdiv MicroBuildToolset feed.
+              # using the Azure credential from the Marketplace service connection. Skip the
+              # auto-injected MicroBuildAuthorizePublishPlugin@0 so it does not 401 against the
+              # devdiv MicroBuildToolset feed.
               mb:
                 publish:
                   enabled: false
@@ -2189,128 +2190,126 @@ extends:
                   vsce --version
                 displayName: 'Install vsce'
 
-              - pwsh: |
-                  $ErrorActionPreference = 'Stop'
-
-                  $publisher = 'microsoft-aspire'
-                  $artifactPath = "$(Pipeline.Workspace)/vscode/aspire-vscode-extension"
-                  $dryRun = [System.Convert]::ToBoolean("${{ parameters.DryRun }}")
-                  $preRelease = [System.Convert]::ToBoolean("${{ parameters.IsPrerelease }}")
-
-                  if ([string]::IsNullOrWhiteSpace($env:VSCE_PAT)) {
-                    Write-Error "VscePublishToken is empty. Update or rotate the VscePublishToken secret in the Aspire-Release-Secrets variable group before publishing the VS Code extension."
-                    exit 1
-                  }
-
-                  $vsixFiles = @(Get-ChildItem -Path $artifactPath -Filter "*.vsix" -Recurse -File)
-                  if ($vsixFiles.Count -ne 1) {
-                    Write-Error "Expected exactly one VSIX under '$artifactPath', found $($vsixFiles.Count)."
-                    exit 1
-                  }
-
-                  $vsix = $vsixFiles[0]
-                  $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.Name)
-                  $manifestPath = Join-Path $vsix.DirectoryName "$baseName.manifest"
-                  $signaturePath = Join-Path $vsix.DirectoryName "$baseName.signature.p7s"
-
-                  if (!(Test-Path $manifestPath)) {
-                    Write-Error "Manifest file not found: $manifestPath"
-                    exit 1
-                  }
-                  if (!(Test-Path $signaturePath)) {
-                    Write-Error "Signature file not found: $signaturePath"
-                    exit 1
-                  }
-
-                  $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
-                  if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
-                    $firstByte = if ($bytes.Length -gt 0) { "0x{0:X2}" -f $bytes[0] } else { "empty" }
-                    Write-Error "$baseName.signature.p7s does not appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)."
-                    exit 1
-                  }
-
-                  Add-Type -AssemblyName System.IO.Compression.ZipFile
-                  $archive = [System.IO.Compression.ZipFile]::OpenRead($vsix.FullName)
-                  try {
-                    $vsixManifestEntry = $archive.GetEntry("extension.vsixmanifest")
-                    if ($null -eq $vsixManifestEntry) {
-                      Write-Error "VSIX package '$($vsix.FullName)' does not contain extension.vsixmanifest."
-                      exit 1
-                    }
-
-                    $reader = [System.IO.StreamReader]::new($vsixManifestEntry.Open())
-                    try {
-                      [xml]$vsixManifest = $reader.ReadToEnd()
-                    } finally {
-                      $reader.Dispose()
-                    }
-                  } finally {
-                    $archive.Dispose()
-                  }
-
-                  $manifestPreRelease = $false
-                  $preReleaseNode = $vsixManifest.SelectSingleNode("//*[local-name()='Property' and @Id='Microsoft.VisualStudio.Code.PreRelease']")
-                  if ($null -ne $preReleaseNode) {
-                    $preReleaseValue = $preReleaseNode.GetAttribute("Value").Trim().ToLowerInvariant()
-                    if ($preReleaseValue -eq "true") {
-                      $manifestPreRelease = $true
-                    } elseif ($preReleaseValue -eq "false") {
-                      $manifestPreRelease = $false
-                    } else {
-                      Write-Error "VSIX extension.vsixmanifest has invalid Microsoft.VisualStudio.Code.PreRelease value '$($preReleaseNode.GetAttribute("Value"))'. Expected 'true' or 'false'."
-                      exit 1
-                    }
-                  }
-
-                  if ($manifestPreRelease -ne $preRelease) {
-                    Write-Error "VSIX pre-release manifest flag is '$manifestPreRelease', but release pipeline IsPrerelease is '$preRelease'. Queue the source build with 'Package VS Code Extension as Pre-Release=$preRelease' or rerun this pipeline with IsPrerelease=$manifestPreRelease."
-                    exit 1
-                  }
-
-                  Write-Host "VSIX pre-release manifest flag matches IsPrerelease: $preRelease"
-
-                  Write-Host "Verifying VS Code extension signature for $($vsix.Name)..."
-                  vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
-                  if ($LASTEXITCODE -ne 0) {
-                    Write-Error "Signature verification failed for $($vsix.Name)."
-                    exit 1
-                  }
-
-                  Write-Host "Verifying VS Code Marketplace PAT for publisher '$publisher'..."
-                  vsce verify-pat $publisher
-                  if ($LASTEXITCODE -ne 0) {
-                    Write-Error "PAT verification failed for publisher '$publisher'. Ensure Aspire-Release-Secrets/VscePublishToken has Marketplace: Manage scope and rotate it if it expired."
-                    exit 1
-                  }
-
-                  $publishArgs = @("publish", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)
-                  if ($preRelease) {
-                    $publishArgs += "--pre-release"
-                  }
-
-                  if ($dryRun) {
-                    Write-Host "=== DRY RUN MODE ==="
-                    Write-Host "[DRY RUN] Would run: vsce $($publishArgs -join ' ')"
-                    Write-Host "=== DRY RUN - VS Code extension was not published ==="
-                    exit 0
-                  }
-
-                  if ($preRelease) {
-                    Write-Host "Publishing $($vsix.Name) to VS Code Marketplace as PRE-RELEASE..."
-                  } else {
-                    Write-Host "Publishing $($vsix.Name) to VS Code Marketplace..."
-                  }
-
-                  vsce @publishArgs
-                  if ($LASTEXITCODE -ne 0) {
-                    Write-Error "Failed to publish $($vsix.Name)."
-                    exit 1
-                  }
-
-                  Write-Host "✓ $($vsix.Name) published successfully"
+              - task: AzureCLI@2
                 displayName: 'Validate and publish VS Code extension'
-                env:
-                  VSCE_PAT: $(VscePublishToken)
+                inputs:
+                  azureSubscription: 'VSCode Marketplace Publishing'
+                  scriptType: pscore
+                  scriptLocation: inlineScript
+                  inlineScript: |
+                    $ErrorActionPreference = 'Stop'
+
+                    $publisher = 'microsoft-aspire'
+                    $artifactPath = "$(Pipeline.Workspace)/vscode/aspire-vscode-extension"
+                    $dryRun = [System.Convert]::ToBoolean("${{ parameters.DryRun }}")
+                    $preRelease = [System.Convert]::ToBoolean("${{ parameters.IsPrerelease }}")
+
+                    $vsixFiles = @(Get-ChildItem -Path $artifactPath -Filter "*.vsix" -Recurse -File)
+                    if ($vsixFiles.Count -ne 1) {
+                      Write-Error "Expected exactly one VSIX under '$artifactPath', found $($vsixFiles.Count)."
+                      exit 1
+                    }
+
+                    $vsix = $vsixFiles[0]
+                    $baseName = [System.IO.Path]::GetFileNameWithoutExtension($vsix.Name)
+                    $manifestPath = Join-Path $vsix.DirectoryName "$baseName.manifest"
+                    $signaturePath = Join-Path $vsix.DirectoryName "$baseName.signature.p7s"
+
+                    if (!(Test-Path $manifestPath)) {
+                      Write-Error "Manifest file not found: $manifestPath"
+                      exit 1
+                    }
+                    if (!(Test-Path $signaturePath)) {
+                      Write-Error "Signature file not found: $signaturePath"
+                      exit 1
+                    }
+
+                    $bytes = [System.IO.File]::ReadAllBytes($signaturePath)
+                    if ($bytes.Length -eq 0 -or $bytes[0] -ne 0x30) {
+                      $firstByte = if ($bytes.Length -gt 0) { "0x{0:X2}" -f $bytes[0] } else { "empty" }
+                      Write-Error "$baseName.signature.p7s does not appear to be signed. First byte: $firstByte (expected 0x30 for PKCS#7)."
+                      exit 1
+                    }
+
+                    Add-Type -AssemblyName System.IO.Compression.ZipFile
+                    $archive = [System.IO.Compression.ZipFile]::OpenRead($vsix.FullName)
+                    try {
+                      $vsixManifestEntry = $archive.GetEntry("extension.vsixmanifest")
+                      if ($null -eq $vsixManifestEntry) {
+                        Write-Error "VSIX package '$($vsix.FullName)' does not contain extension.vsixmanifest."
+                        exit 1
+                      }
+
+                      $reader = [System.IO.StreamReader]::new($vsixManifestEntry.Open())
+                      try {
+                        [xml]$vsixManifest = $reader.ReadToEnd()
+                      } finally {
+                        $reader.Dispose()
+                      }
+                    } finally {
+                      $archive.Dispose()
+                    }
+
+                    $manifestPreRelease = $false
+                    $preReleaseNode = $vsixManifest.SelectSingleNode("//*[local-name()='Property' and @Id='Microsoft.VisualStudio.Code.PreRelease']")
+                    if ($null -ne $preReleaseNode) {
+                      $preReleaseValue = $preReleaseNode.GetAttribute("Value").Trim().ToLowerInvariant()
+                      if ($preReleaseValue -eq "true") {
+                        $manifestPreRelease = $true
+                      } elseif ($preReleaseValue -eq "false") {
+                        $manifestPreRelease = $false
+                      } else {
+                        Write-Error "VSIX extension.vsixmanifest has invalid Microsoft.VisualStudio.Code.PreRelease value '$($preReleaseNode.GetAttribute("Value"))'. Expected 'true' or 'false'."
+                        exit 1
+                      }
+                    }
+
+                    if ($manifestPreRelease -ne $preRelease) {
+                      Write-Error "VSIX pre-release manifest flag is '$manifestPreRelease', but release pipeline IsPrerelease is '$preRelease'. Queue the source build with 'Package VS Code Extension as Pre-Release=$preRelease' or rerun this pipeline with IsPrerelease=$manifestPreRelease."
+                      exit 1
+                    }
+
+                    Write-Host "VSIX pre-release manifest flag matches IsPrerelease: $preRelease"
+
+                    Write-Host "Verifying VS Code extension signature for $($vsix.Name)..."
+                    vsce verify-signature --packagePath $vsix.FullName --manifestPath $manifestPath --signaturePath $signaturePath
+                    if ($LASTEXITCODE -ne 0) {
+                      Write-Error "Signature verification failed for $($vsix.Name)."
+                      exit 1
+                    }
+
+                    Write-Host "Verifying VS Code Marketplace publisher access for '$publisher' using Azure credential..."
+                    vsce verify-pat --azure-credential $publisher
+                    if ($LASTEXITCODE -ne 0) {
+                      Write-Error "Azure credential verification failed for publisher '$publisher'. Ensure the 'VSCode Marketplace Publishing' service connection identity is a Contributor on the Visual Studio Marketplace publisher."
+                      exit 1
+                    }
+
+                    $publishArgs = @("publish", "--azure-credential", "--packagePath", $vsix.FullName, "--manifestPath", $manifestPath, "--signaturePath", $signaturePath)
+                    if ($preRelease) {
+                      $publishArgs += "--pre-release"
+                    }
+
+                    if ($dryRun) {
+                      Write-Host "=== DRY RUN MODE ==="
+                      Write-Host "[DRY RUN] Would run: vsce $($publishArgs -join ' ')"
+                      Write-Host "=== DRY RUN - VS Code extension was not published ==="
+                      exit 0
+                    }
+
+                    if ($preRelease) {
+                      Write-Host "Publishing $($vsix.Name) to VS Code Marketplace as PRE-RELEASE..."
+                    } else {
+                      Write-Host "Publishing $($vsix.Name) to VS Code Marketplace..."
+                    }
+
+                    vsce @publishArgs
+                    if ($LASTEXITCODE -ne 0) {
+                      Write-Error "Failed to publish $($vsix.Name)."
+                      exit 1
+                    }
+
+                    Write-Host "✓ $($vsix.Name) published successfully"
 
           # ===== WINGET PUBLISHING =====
           - job: WinGetJob

@@ -66,6 +66,7 @@ Before starting a release:
 3. **Permissions and approvals**:
    - Access to run Azure DevOps pipelines with the publishing pool.
    - Permission to use the NuGet.org service connection.
+   - Permission to use the `VSCode Marketplace Publishing` service connection if publishing the VS Code extension.
    - Approval to use the DevDiv ESRP service connection for MicroBuild npm publishing.
    - Valid ESRP owner and approver aliases for npm publishing.
    - GitHub write access for creating tags, releases, and PRs if you need to run the GitHub workflow manually.
@@ -218,7 +219,7 @@ These automations are designed to be idempotent and safe to re-run.
 | Validate Published npm Package from Registry | Confirm the pointer package is visible on npm and that `npm install -g @microsoft/aspire-cli@<version>` works. If registry propagation is slow, re-run with completed publish steps skipped after the package is visible. |
 | Promote Build to Channel | Re-run with completed publish steps skipped. |
 | WinGet publishing / Homebrew validation | Re-run with the corresponding skip flags for completed work. |
-| Publish VS Code Extension to Marketplace | Check that `aspire-vscode-extension` contains one `.vsix`, `.manifest`, and `.signature.p7s`; verify `VscePublishToken` in `Aspire-Release-Secrets` has Marketplace: Manage scope; re-run with the already-completed `Skip*` flags set to `true`. |
+| Publish VS Code Extension to Marketplace | Check that `aspire-vscode-extension` contains one `.vsix`, `.manifest`, and `.signature.p7s`; verify the `VSCode Marketplace Publishing` service connection identity is a Contributor on the Visual Studio Marketplace `microsoft-aspire` publisher; re-run with the already-completed `Skip*` flags set to `true`. |
 | GitHubTasks dispatch | Re-run with completed AzDO-side work skipped and `SkipGitHubTasks: false`; set `SkipReleaseAssets` according to whether release asset upload already completed. |
 | Release asset upload | Re-run with `SkipGitHubTasks: true` and `SkipReleaseAssets: false` after the GitHub release exists. |
 | Nix flake update dispatch | Re-run with `SkipGitHubTasks: true`, `SkipReleaseAssets: true`, and `SkipNixPackageUpdate: false` after the stable GitHub release assets and `update-baseline-<version>` branch exist. If the Nix manifest was already committed to the baseline PR, set `SkipNixPackageUpdate: true` instead. For prereleases, leave it skipped because the Nix manifest only tracks stable `x.y.z` releases. |
@@ -250,7 +251,7 @@ The pipeline uses:
 
 | Variable group | Purpose |
 |----------------|---------|
-| `Aspire-Release-Secrets` | Release pipeline secrets, including the `aspire-repo-bot` GitHub App credentials. NuGet publishing uses a service connection rather than a variable-group API key. `VscePublishToken` in this group is used only by the VS Code extension Marketplace publish job; rotate it from the Visual Studio Marketplace publisher management UI when `vsce verify-pat microsoft-aspire` fails or before the PAT expires. |
+| `Aspire-Release-Secrets` | Release pipeline secrets, including the `aspire-repo-bot` GitHub App credentials. NuGet and VS Code Marketplace publishing use service connections rather than variable-group API keys. |
 | `Aspire-Secrets` | WinGet bot token. |
 
 ### Service connections
@@ -258,6 +259,7 @@ The pipeline uses:
 | Connection name | Purpose |
 |-----------------|---------|
 | `NuGet.org - dotnet/aspire` | NuGet service connection for publishing packages to NuGet.org. |
+| `VSCode Marketplace Publishing` | Azure Resource Manager workload-identity service connection used by `vsce --azure-credential` to publish the signed VS Code extension to the Visual Studio Marketplace. Its managed identity must be a Contributor on the `microsoft-aspire` Marketplace publisher. |
 | `DevDivEsrpAzDoSrvConn` | ESRP service connection used by the MicroBuild publish template for npm publishing. |
 | `Darc: Maestro Production` | Used for darc channel promotion. |
 
