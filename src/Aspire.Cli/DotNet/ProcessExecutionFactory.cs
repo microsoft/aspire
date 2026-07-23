@@ -73,6 +73,12 @@ internal sealed class ProcessExecutionFactory : IProcessExecutionFactory
         StripIdentityEnvVars(startInfo);
         ApplyEnvironmentVariableFilter(startInfo, options.EnvironmentVariableFilter);
 
+        foreach (var envVar in options.EnvironmentVariablesToRemove)
+        {
+            effectiveLogger.LogDebug("{FileName} env remove: {EnvKey}", fileName, envVar);
+            startInfo.Environment.Remove(envVar);
+        }
+
         if (env is not null)
         {
             foreach (var envKvp in env)

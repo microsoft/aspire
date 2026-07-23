@@ -571,6 +571,7 @@ public class Program
 
         // AppHost project handlers.
         builder.Services.AddSingleton<DotNetAppHostProject>();
+        builder.Services.AddSingleton<CliManagedDotNetAppHostProject>();
         builder.Services.AddSingleton<Func<LanguageInfo, GuestAppHostProject>>(sp =>
         {
             return language => ActivatorUtilities.CreateInstance<GuestAppHostProject>(sp, language);

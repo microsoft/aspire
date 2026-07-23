@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Hosting.Utils;
+using Aspire.Cli.Tests.TestServices;
 
 namespace Aspire.Cli.Tests.Utils;
 
@@ -40,7 +41,7 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
         File.WriteAllText(target.FullName, "<Project />");
 
         var linkPath = Path.Combine(workspace.WorkspaceRoot.FullName, "link.csproj");
-        TryCreateSymlink(linkPath, target.FullName, isDirectory: false);
+        TestSymlinkHelper.TryCreateSymlink(linkPath, target.FullName, isDirectory: false);
 
         var resolved = PathNormalizer.ResolveSymlinks(linkPath);
 
@@ -65,7 +66,7 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
         File.WriteAllText(file.FullName, "<Project />");
 
         var linkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
-        TryCreateSymlink(linkDirectory, realDirectory.FullName, isDirectory: true);
+        TestSymlinkHelper.TryCreateSymlink(linkDirectory, realDirectory.FullName);
 
         // Path through the link should resolve to the same canonical path as the path
         // through the real directory.
@@ -84,7 +85,7 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
 
         var missingTarget = Path.Combine(workspace.WorkspaceRoot.FullName, "missing.csproj");
         var linkPath = Path.Combine(workspace.WorkspaceRoot.FullName, "broken-link.csproj");
-        TryCreateSymlink(linkPath, missingTarget, isDirectory: false);
+        TestSymlinkHelper.TryCreateSymlink(linkPath, missingTarget, isDirectory: false);
 
         // A broken link should not throw — the method must fall back to returning the
         // path so callers can still surface a useful "file not found" error.
@@ -93,29 +94,63 @@ public class PathNormalizerTests(ITestOutputHelper outputHelper)
         Assert.False(string.IsNullOrEmpty(resolved));
     }
 
-    private static void TryCreateSymlink(string linkPath, string targetPath, bool isDirectory)
+    [Fact]
+    public void ResolveToFilesystemPath_ResolvesSymlinkedDirectory()
     {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix-only: validates symlink canonicalization that does not apply on Windows.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var realDirectory = workspace.WorkspaceRoot.CreateSubdirectory("real");
+        var projectFile = new FileInfo(Path.Combine(realDirectory.FullName, "AppHost.csproj"));
+        File.WriteAllText(projectFile.FullName, "<Project />");
+
+        var linkDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "link");
+        TestSymlinkHelper.TryCreateSymlink(linkDirectory, realDirectory.FullName);
+
+        var linkPath = Path.Combine(linkDirectory, projectFile.Name);
+        var resolved = PathNormalizer.ResolveToFilesystemPath(linkPath);
+
+        Assert.Equal(PathNormalizer.ResolveSymlinks(projectFile.FullName), resolved);
+    }
+
+    [Fact]
+    public void ResolveToFilesystemPath_ResolvesMacOSFirmlink()
+    {
+        Assert.SkipWhen(!OperatingSystem.IsMacOS(), "macOS APFS firmlinks only exist on macOS.");
+
+        var tempDirectory = Directory.CreateTempSubdirectory("aspire-path-normalizer-");
         try
         {
-            if (isDirectory)
-            {
-                Directory.CreateSymbolicLink(linkPath, targetPath);
-            }
-            else
-            {
-                File.CreateSymbolicLink(linkPath, targetPath);
-            }
+            var file = new FileInfo(Path.Combine(tempDirectory.FullName, "AppHost.csproj"));
+            File.WriteAllText(file.FullName, "<Project />");
+
+            var logicalPath = file.FullName.StartsWith("/private/var/", StringComparison.Ordinal)
+                ? file.FullName["/private".Length..]
+                : file.FullName;
+
+            Assert.SkipWhen(!logicalPath.StartsWith("/var/", StringComparison.Ordinal), $"Temp path '{logicalPath}' is not under /var.");
+
+            var resolved = PathNormalizer.ResolveToFilesystemPath(logicalPath);
+
+            Assert.Equal($"/private{logicalPath}", resolved);
         }
-        catch (UnauthorizedAccessException ex)
+        finally
         {
-            // Creating symlinks on Windows requires either administrator rights or
-            // Developer Mode. Skip cleanly on environments that don't allow it rather
-            // than failing the test for an environment reason.
-            Assert.Skip($"Cannot create symbolic links in this environment: {ex.Message}");
-        }
-        catch (IOException ex)
-        {
-            Assert.Skip($"Symbolic link creation failed in this environment: {ex.Message}");
+            tempDirectory.Delete(recursive: true);
         }
     }
+
+    [Fact]
+    public void ResolveToFilesystemPath_DoesNotThrow_WhenIntermediateDirectoryIsMissing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var missingPath = Path.Combine(workspace.WorkspaceRoot.FullName, "Missing.AppHost", "Missing.AppHost.csproj");
+
+        var resolved = PathNormalizer.ResolveToFilesystemPath(missingPath);
+
+        Assert.EndsWith(Path.Combine("Missing.AppHost", "Missing.AppHost.csproj"), resolved, StringComparison.Ordinal);
+    }
+
 }
