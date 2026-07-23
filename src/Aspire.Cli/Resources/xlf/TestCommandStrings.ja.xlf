@@ -1,0 +1,37 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<xliff xmlns="urn:oasis:names:tc:xliff:document:1.2" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" version="1.2" xsi:schemaLocation="urn:oasis:names:tc:xliff:document:1.2 xliff-core-1.2-transitional.xsd">
+  <file datatype="xml" source-language="en" target-language="ja" original="../TestCommandStrings.resx">
+    <body>
+      <trans-unit id="Description">
+        <source>Run an Aspire AppHost and exit when its test resources finish</source>
+        <target state="new">Run an Aspire AppHost and exit when its test resources finish</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="NoTestResources">
+        <source>No test resources were found. Mark a resource with WithTestRun() to bound the run.</source>
+        <target state="new">No test resources were found. Mark a resource with WithTestRun() to bound the run.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestResourceFailed">
+        <source>Test resource '{0}' failed.</source>
+        <target state="new">Test resource '{0}' failed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestResourcePassed">
+        <source>Test resource '{0}' passed.</source>
+        <target state="new">Test resource '{0}' passed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="TestRunSummary">
+        <source>{0} passed, {1} failed.</source>
+        <target state="new">{0} passed, {1} failed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="WaitingForTestResources">
+        <source>Waiting for test resources to complete...</source>
+        <target state="new">Waiting for test resources to complete...</target>
+        <note />
+      </trans-unit>
+    </body>
+  </file>
+</xliff>

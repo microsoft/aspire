@@ -1108,6 +1108,11 @@ internal sealed class TestPromptBackchannel : IAppHostCliBackchannel
         await Task.CompletedTask; // Suppress CS1998
         yield break;
     }
+    public async IAsyncEnumerable<TestRunUpdate> GetTestRunUpdatesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        await Task.CompletedTask; // Suppress CS1998
+        yield break;
+    }
     public Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken) => Task.CompletedTask;
     public Task WaitForDisconnectAsync(CancellationToken cancellationToken) => Task.CompletedTask;

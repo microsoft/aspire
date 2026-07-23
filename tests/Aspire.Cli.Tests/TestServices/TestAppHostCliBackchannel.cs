@@ -18,6 +18,9 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
     public TaskCompletionSource? GetResourceStatesAsyncCalled { get; set; }
     public Func<CancellationToken, IAsyncEnumerable<RpcResourceState>>? GetResourceStatesAsyncCallback { get; set; }
 
+    public TaskCompletionSource? GetTestRunUpdatesAsyncCalled { get; set; }
+    public Func<CancellationToken, IAsyncEnumerable<TestRunUpdate>>? GetTestRunUpdatesAsyncCallback { get; set; }
+
     public TaskCompletionSource? GetAppHostLogEntriesAsyncCalled { get; set; }
     public Func<CancellationToken, IAsyncEnumerable<BackchannelLogEntry>>? GetAppHostLogEntriesAsyncCallback { get; set; }
 
@@ -104,9 +107,26 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
     }
 
+    public async IAsyncEnumerable<TestRunUpdate> GetTestRunUpdatesAsync([EnumeratorCancellation]CancellationToken cancellationToken)
+    {
+        GetTestRunUpdatesAsyncCalled?.SetResult();
+
+        if (GetTestRunUpdatesAsyncCallback != null)
+        {
+            await foreach (var update in GetTestRunUpdatesAsyncCallback.Invoke(cancellationToken).ConfigureAwait(false))
+            {
+                yield return update;
+            }
+        }
+        else
+        {
+            yield return new TestRunUpdate { Resource = "tests", Status = KnownTestRunStatuses.Running };
+            yield return new TestRunUpdate { Resource = "tests", Status = KnownTestRunStatuses.Passed, Detail = "Finished" };
+        }
+    }
+
     public Task ConnectAsync(string socketPath, int retryCount, CancellationToken cancellationToken)
         => ConnectAsync(socketPath, autoReconnect: false, retryCount: retryCount, cancellationToken);
-
     public async Task ConnectAsync(string socketPath, bool autoReconnect, int retryCount, CancellationToken cancellationToken)
     {
         ConnectAsyncCalled?.SetResult();
@@ -235,7 +255,7 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         }
         else
         {
-            return ["baseline.v2", "pipeline-steps.v1"];
+            return ["baseline.v2", "pipeline-steps.v1", "test.v1"];
         }
     }
 

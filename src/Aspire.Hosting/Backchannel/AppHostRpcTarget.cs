@@ -155,6 +155,34 @@ internal class AppHostRpcTarget(
         }
     }
 
+    public async IAsyncEnumerable<TestRunUpdate> GetTestRunUpdatesAsync([EnumeratorCancellation] CancellationToken cancellationToken)
+    {
+        // Complete the stream immediately if shutdown has already been requested.
+        if (_shutdownCts.IsCancellationRequested)
+        {
+            yield break;
+        }
+
+        // The coordinator is only registered in run mode (see DistributedApplicationBuilder). If it is not
+        // present, there is nothing to stream — complete so the CLI stops the app host rather than hang.
+        var coordinator = serviceProvider.GetService<Cli.TestRunCoordinator>();
+        if (coordinator is null)
+        {
+            yield break;
+        }
+
+        // Create a linked token source that will be cancelled when shutdown is requested
+        using var linkedCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken, _shutdownCts.Token);
+        var linkedToken = linkedCts.Token;
+
+        // Use a helper that swallows OperationCanceledException on cancellation instead of propagating it,
+        // since yield return cannot appear in a try/catch block.
+        await foreach (var update in AsyncEnumerableUtils.ReadUntilCancelledAsync(coordinator.WatchTestRunAsync(linkedToken), linkedToken).ConfigureAwait(false))
+        {
+            yield return update;
+        }
+    }
+
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
         _ = cancellationToken;
@@ -229,7 +257,8 @@ internal class AppHostRpcTarget(
         _ = cancellationToken;
         return Task.FromResult(new string[] {
             "baseline.v2",
-            "pipeline-steps.v1"
+            "pipeline-steps.v1",
+            "test.v1"
             });
     }
 #pragma warning restore CA1822
