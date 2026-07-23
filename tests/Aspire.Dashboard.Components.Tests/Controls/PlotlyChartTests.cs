@@ -56,18 +56,14 @@ public class PlotlyChartTests : DashboardTestContext
         var options = new TelemetryLimitOptions();
         var logger = NullLogger.Instance;
         var context = new OtlpContext { Options = options, Logger = logger };
-        var instrument = new OtlpInstrument
+        var instrumentSummary = new OtlpInstrumentSummary
         {
-            Summary = new OtlpInstrumentSummary
-            {
-                Name = "Name-<b>Bold</b>",
-                Unit = "Unit-<b>Bold</b>",
-                Description = "Description-<b>Bold</b>",
-                Parent = new OtlpScope("Parent-Name-<b>Bold</b>", string.Empty, []),
-                Type = OtlpInstrumentType.Sum,
-                AggregationTemporality = OtlpAggregationTemporality.Cumulative
-            },
-            Context = context
+            Name = "Name-<b>Bold</b>",
+            Unit = "Unit-<b>Bold</b>",
+            Description = "Description-<b>Bold</b>",
+            Parent = new OtlpScope("Parent-Name-<b>Bold</b>", string.Empty, []),
+            Type = OtlpInstrumentType.Sum,
+            AggregationTemporality = OtlpAggregationTemporality.Cumulative
         };
 
         var model = new InstrumentViewModel();
@@ -79,7 +75,7 @@ public class PlotlyChartTests : DashboardTestContext
             TimeUnixNano = long.MaxValue
         }, context);
 
-        await model.UpdateDataAsync(instrument.Summary, [dimension]);
+        await model.UpdateDataAsync(instrumentSummary, [dimension]);
 
         // Act
         var cut = RenderComponent<PlotlyChart>(builder =>
