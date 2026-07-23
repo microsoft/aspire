@@ -56,7 +56,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     public string? ResourceName { get; set; }
 
     [Inject]
-    private DashboardDataSource DataSource { get; set; } = null!;
+    public required DashboardDataSource DataSource { get; init; }
 
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 

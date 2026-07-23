@@ -30,7 +30,7 @@ public partial class FilterDialog : IAsyncDisposable
     public FilterDialogViewModel Content { get; set; } = default!;
 
     [Inject]
-    private DashboardDataSource DataSource { get; set; } = null!;
+    public required DashboardDataSource DataSource { get; init; }
 
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 

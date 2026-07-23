@@ -37,7 +37,7 @@ public partial class DashboardRunSelect : ComponentBase
     public required BrowserTimeProvider TimeProvider { get; init; }
 
     [Inject]
-    internal IDashboardRunStore RunStore { get; init; } = null!;
+    public required IDashboardRunStore RunStore { get; init; }
 
     private void LoadRuns()
     {

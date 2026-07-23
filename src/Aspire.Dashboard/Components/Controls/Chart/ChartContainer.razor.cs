@@ -16,7 +16,7 @@ namespace Aspire.Dashboard.Components;
 public partial class ChartContainer : ComponentBase, IAsyncDisposable
 {
     private static readonly TimeSpan s_chartUpdateInterval = TimeSpan.FromSeconds(0.2);
-    private static readonly TimeSpan s_dataFetchInterval = TimeSpan.FromSeconds(10);
+    private static readonly TimeSpan s_dataFetchInterval = TimeSpan.FromSeconds(1);
 
     private OtlpInstrumentData? _instrument;
     private PeriodicTimer? _tickTimer;
@@ -53,7 +53,7 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     public required string? PauseText { get; set; }
 
     [Inject]
-    private DashboardDataSource DataSource { get; set; } = null!;
+    public required DashboardDataSource DataSource { get; init; }
 
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 

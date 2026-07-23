@@ -81,7 +81,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    private DashboardDataSource DataSource { get; set; } = null!;
+    public required DashboardDataSource DataSource { get; init; }
 
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 

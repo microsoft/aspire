@@ -47,7 +47,7 @@ public partial class GenAIVisualizerDialog : ComponentBase, IComponentWithTeleme
     public required BrowserTimeProvider TimeProvider { get; init; }
 
     [Inject]
-    private DashboardDataSource DataSource { get; set; } = null!;
+    public required DashboardDataSource DataSource { get; init; }
 
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 

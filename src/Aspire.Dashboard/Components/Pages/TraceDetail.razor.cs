@@ -63,7 +63,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [Inject]
-    private DashboardDataSource DataSource { get; set; } = null!;
+    public required DashboardDataSource DataSource { get; init; }
 
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 

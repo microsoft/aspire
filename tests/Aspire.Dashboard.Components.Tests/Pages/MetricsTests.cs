@@ -177,35 +177,71 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public async Task ChartContainer_TickUpdate_CreatesActivity()
+    public async Task ChartContainer_TickUpdate_FetchesDataAfterInterval()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         MetricsSetupHelpers.SetupMetricsPage(this);
 
-        var activitySource = Services.GetRequiredService<DashboardActivitySource>();
-        var activityStopped = new TaskCompletionSource<Activity>(TaskCreationOptions.RunContinuationsAsynchronously);
-        using var listener = ActivityListenerHelper.Create(activitySource.ActivitySource, onActivityStopped: activity =>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
         {
-            if (activity.OperationName == "Update metric chart data from tick")
+            new ResourceMetrics
             {
-                activityStopped.TrySetResult(activity);
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test-instrument", startTime: DateTime.UtcNow.AddMinutes(-1))
+                        }
+                    }
+                }
             }
         });
+        var resource = telemetryRepository.GetResources().Single();
 
+        var activitySource = Services.GetRequiredService<DashboardActivitySource>();
+        var activityStarted = new TaskCompletionSource<(Activity Activity, long Timestamp)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var activityStopped = new TaskCompletionSource<Activity>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = ActivityListenerHelper.Create(
+            activitySource.ActivitySource,
+            onActivityStarted: activity =>
+            {
+                if (activity.OperationName == "Update metric chart data from tick")
+                {
+                    activityStarted.TrySetResult((activity, Stopwatch.GetTimestamp()));
+                }
+            },
+            onActivityStopped: activity =>
+            {
+                if (activity.OperationName == "Update metric chart data from tick")
+                {
+                    activityStopped.TrySetResult(activity);
+                }
+            });
+
+        var renderStartedTimestamp = Stopwatch.GetTimestamp();
         var cut = RenderComponent<ChartContainer>(builder =>
         {
-            builder.Add(component => component.ResourceKey, new ResourceKey("TestApp", null));
+            builder.Add(component => component.ResourceKey, resource.ResourceKey);
             builder.Add(component => component.MeterName, "test-meter");
             builder.Add(component => component.InstrumentName, "test-instrument");
             builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
             builder.Add(component => component.ActiveView, MetricViewKind.Graph);
             builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
-            builder.Add(component => component.Resources, []);
+            builder.Add(component => component.Resources, [resource]);
             builder.Add(component => component.PauseText, null);
         });
 
+        var started = await activityStarted.Task.WaitAsync(DefaultWaitTimeout);
         var activity = await activityStopped.Task.WaitAsync(DefaultWaitTimeout);
+        var elapsed = Stopwatch.GetElapsedTime(renderStartedTimestamp, started.Timestamp);
 
+        Assert.Same(started.Activity, activity);
+        Assert.InRange(elapsed, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
         Assert.Equal(ActivityKind.Internal, activity.Kind);
         Assert.Null(activity.ParentId);
     }

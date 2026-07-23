@@ -58,7 +58,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public StructuredLogsPageViewModel PageViewModel { get; set; } = null!;
 
     [Inject]
-    private DashboardDataSource DataSource { get; set; } = null!;
+    public required DashboardDataSource DataSource { get; init; }
 
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
