@@ -132,7 +132,6 @@ public sealed class StopNonInteractiveTests(ITestOutputHelper output)
     }
 
     [Fact]
-    [QuarantinedTest("https://github.com/microsoft/aspire/issues/16643")]
     public async Task StopAllAppHostsFromUnrelatedDirectory()
     {
         var repoRoot = CliE2ETestHelpers.GetRepoRoot();
