@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES002
 #pragma warning disable ASPIREPIPELINES003
+#pragma warning disable ASPIREPIPELINES004
 
 using System.Diagnostics;
 using System.Globalization;
@@ -48,6 +49,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             Name = WellKnownPipelineSteps.ProcessParameters,
             Description = "Prompts for parameter values before build, publish, or deployment operations.",
+            SupportsOutputPathRelocation = true,
             Action = async context =>
             {
                 // Parameter processing - ensure all parameters are initialized and resolved
@@ -301,6 +303,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             Name = WellKnownPipelineSteps.Publish,
             Description = "Aggregation step for all publish operations. All publish steps should be required by this step.",
+            SupportsOutputPathRelocation = true,
             Action = _ => Task.CompletedTask
         });
 
@@ -308,6 +311,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             Name = WellKnownPipelineSteps.PublishPrereq,
             Description = "Prerequisite step that runs before any publish operations.",
+            SupportsOutputPathRelocation = true,
             Action = _ => Task.CompletedTask,
         });
 
@@ -315,6 +319,7 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         {
             Name = ValidateBuildOnlyContainerReferencesStepName,
             Description = "Validates that build-only containers are consumed by another resource before publish or deploy.",
+            SupportsOutputPathRelocation = true,
             Action = static context =>
             {
                 ValidateBuildOnlyContainerReferences(context.Model);
@@ -572,17 +577,32 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
 
     public async Task ExecuteAsync(PipelineContext context)
     {
+        var executionPlan = await PrepareAsync(context).ConfigureAwait(false);
+        await ExecuteAsync(executionPlan, context).ConfigureAwait(false);
+    }
+
+    internal async Task<PipelineExecutionPlan> PrepareAsync(PipelineContext context)
+    {
         var allSteps = await ResolveStepsAsync(context).ConfigureAwait(false);
 
-        if (allSteps.Count == 0)
+        var (selectedSteps, _) = FilterStepsForExecution(allSteps, context);
+        var stepsToExecute = selectedSteps.Select(step => step.Clone()).ToList();
+        var stepsByName = stepsToExecute.ToDictionary(step => step.Name, StringComparer.Ordinal);
+        var orderedSteps = GetTopologicalOrder(stepsToExecute);
+        context.Services.GetRequiredService<PipelineOutputRegistry>().Prepare(orderedSteps);
+
+        return new PipelineExecutionPlan(stepsToExecute, stepsByName);
+    }
+
+    internal static async Task ExecuteAsync(PipelineExecutionPlan executionPlan, PipelineContext context)
+    {
+        if (executionPlan.Steps.Count == 0)
         {
             return;
         }
 
-        var (stepsToExecute, stepsByName) = FilterStepsForExecution(allSteps, context);
-
         // Build dependency graph and execute with readiness-based scheduler
-        await ExecuteStepsAsTaskDag(stepsToExecute, stepsByName, context).ConfigureAwait(false);
+        await ExecuteStepsAsTaskDag(executionPlan.Steps, executionPlan.StepsByName, context).ConfigureAwait(false);
     }
 
     /// <summary>
@@ -903,7 +923,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                     var stepContext = new PipelineStepContext
                     {
                         PipelineContext = context,
-                        ReportingStep = reportingStep
+                        ReportingStep = reportingStep,
+                        Outputs = new PipelineStepOutputResolver(context.Services, step)
                     };
 
                     try
@@ -1014,7 +1035,8 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
                 var stepContext = new PipelineStepContext
                 {
                     PipelineContext = context,
-                    ReportingStep = reportingStep
+                    ReportingStep = reportingStep,
+                    Outputs = new PipelineStepOutputResolver(context.Services, step)
                 };
 
                 try
@@ -1532,5 +1554,14 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
         }
 
         return sb.ToString();
+    }
+
+    internal sealed class PipelineExecutionPlan(
+        List<PipelineStep> steps,
+        Dictionary<string, PipelineStep> stepsByName)
+    {
+        public List<PipelineStep> Steps { get; } = steps;
+
+        public Dictionary<string, PipelineStep> StepsByName { get; } = stepsByName;
     }
 }
