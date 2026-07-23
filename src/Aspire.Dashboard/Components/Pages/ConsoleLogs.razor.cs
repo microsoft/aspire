@@ -208,7 +208,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             var isAllSelected = IsAllSelected();
             var selectedResourceName = PageViewModel.SelectedResource.Id?.InstanceId;
 
-            await SubscribeAsync(isAllSelected, selectedResourceName);
+            // A filter change (e.g. clearing the console logs) is not a resource
+            // selection change, so preserve the user's current view instead of
+            // snapping back to the default.
+            await SubscribeAsync(isAllSelected, selectedResourceName, resetView: false);
         });
 
         var consoleSettingsResult = await LocalStorage.GetUnprotectedAsync<ConsoleLogConsoleSettings>(BrowserStorageKeys.ConsoleLogConsoleSettings);
@@ -438,7 +441,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         if (needsNewSubscription)
         {
-            await SubscribeAsync(isAllSelected, selectedResourceName);
+            await SubscribeAsync(isAllSelected, selectedResourceName, resetView: true);
         }
 
         UpdateTelemetryProperties();
@@ -477,7 +480,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _lastRenderedView = _activeView;
     }
 
-    private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName)
+    private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName, bool resetView)
     {
         Logger.LogDebug("Subscription change needed. IsAllSelected: {IsAllSelected}, SelectedResource: {SelectedResource}", isAllSelected, selectedResourceName);
 
@@ -489,14 +492,23 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // the wrong badge/dims/dropdown for the new resource while the JS
         // terminal is initializing and pushing its first snapshot.
         _terminalToolbarState = null;
-        // Default the view to Console on every resource change. A terminal-
-        // enabled resource that isn't live yet (Waiting/Starting) or has already
-        // stopped (Exited/Finished/FailedToStart) has no active PTY, so Console
-        // is where the useful output lives: pre-PTY hosting messages (WaitFor,
-        // startup failures) and post-PTY exit messages. When the resource is
-        // live (Running) the PTY is the primary surface, so we flip the default
-        // to Terminal below.
-        _activeView = ConsoleLogsView.Console;
+
+        // Only (re)default the view on an actual resource-selection change.
+        // SubscribeAsync also runs on filter changes (clearing the console logs
+        // routes through ConsoleLogsManager.OnFiltersChanged), and those
+        // refreshes must preserve whatever view the user is currently on rather
+        // than snapping back to the default.
+        if (resetView)
+        {
+            // Default the view to Console on every resource change. A terminal-
+            // enabled resource that isn't live yet (Waiting/Starting) or has already
+            // stopped (Exited/Finished/FailedToStart) has no active PTY, so Console
+            // is where the useful output lives: pre-PTY hosting messages (WaitFor,
+            // startup failures) and post-PTY exit messages. When the resource is
+            // live (Running) the PTY is the primary surface, so we flip the default
+            // to Terminal below.
+            _activeView = ConsoleLogsView.Console;
+        }
 
         if (!isAllSelected && selectedResourceName is not null &&
             _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
@@ -512,8 +524,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             // terminal the default view on selection — that's the surface the
             // user came for. Non-running terminal resources stay on Console so
             // pre-PTY hosting messages and post-PTY exit output remain visible
-            // immediately. The user can still flip either way via the ⋯ menu.
-            if (selectedResource.IsRunningState())
+            // immediately. Gated on resetView so a filter refresh (e.g. clearing
+            // logs) never overrides a manual view choice. The user can still flip
+            // either way via the ⋯ menu.
+            if (resetView && selectedResource.IsRunningState())
             {
                 _activeView = ConsoleLogsView.Terminal;
             }
