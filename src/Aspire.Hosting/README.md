@@ -26,6 +26,43 @@ Aspire's approach ensures flexibility, strong tooling support, and clear separat
 
 For the full details and specification, see the [App Model document](https://github.com/microsoft/aspire/blob/main/docs/specs/appmodel.md).
 
+## Publisher output paths
+
+Custom pipeline publishers must declare each persistent named output on the owning `PipelineStep` before the pipeline runs. Default paths are relative to the AppHost project directory, so publishers do not need to search for a repository root:
+
+```csharp
+var inventoryDefinition = new PipelineOutputDefinition(
+    "inventory",
+    ".configgen",
+    PipelineOutputKind.Directory);
+
+var step = new PipelineStep
+{
+    Name = "generate-inventory",
+    Outputs = [inventoryDefinition],
+    SupportsOutputPathRelocation = true,
+    Action = context =>
+    {
+        var inventory = context.Outputs.Resolve(inventoryDefinition);
+        Directory.CreateDirectory(inventory.OutputPath);
+
+        // Write only through OutputPath. Use LogicalTargetPath when generated
+        // content needs to refer to its checked-in destination.
+        File.WriteAllText(
+            Path.Combine(inventory.OutputPath, "inventory.txt"),
+            inventory.LogicalTargetPath);
+
+        return Task.CompletedTask;
+    }
+};
+
+builder.Pipeline.AddStep(step);
+```
+
+`context.Outputs.AppHostDirectory` is the authoritative AppHost project directory. `OutputPath` is the only path a publisher should write to, while `LogicalTargetPath` identifies the normal checked-in destination and can differ when output relocation is active. Configuration can override a named target with `Pipeline:Outputs:<step-name>:<output-name>:Path`. The existing primary `--output-path` destination is available through `context.Outputs.PrimaryOutput` and should not be redeclared as a named output.
+
+Set `SupportsOutputPathRelocation` to `true` only when the step has no other persistent writes. Named destinations must not overlap each other, and verification-compatible destinations should remain inside the AppHost Git repository.
+
 ## Feedback & contributing
 
 https://github.com/microsoft/aspire

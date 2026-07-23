@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES004
 #pragma warning disable ASPIREAZURE001
 
 using System.Diagnostics.CodeAnalysis;
@@ -71,6 +72,7 @@ public class AzureAppServiceEnvironmentResource :
             {
                 Name = $"validate-appservice-config-{name}",
                 Description = $"Validates Azure App Service configuration for {name}.",
+                SupportsOutputPathRelocation = true,
                 Action = ctx => ValidateAppServiceConfigurationAsync(ctx, model),
                 RequiredBySteps = [WellKnownPipelineSteps.Publish],
                 DependsOnSteps = [WellKnownPipelineSteps.PublishPrereq]

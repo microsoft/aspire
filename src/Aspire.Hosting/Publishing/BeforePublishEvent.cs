@@ -9,6 +9,11 @@ namespace Aspire.Hosting.Publishing;
 /// <summary>
 /// This event is published before the distributed application is published.
 /// </summary>
+/// <remarks>
+/// The selected pipeline step graph and its output declarations are resolved before this event is
+/// published. Handlers can mutate model data consumed by those steps, but changes that add or
+/// reconfigure pipeline steps do not affect the current publication.
+/// </remarks>
 /// <param name="services">The <see cref="IServiceProvider"/> for the app host.</param>
 /// <param name="model">The <see cref="DistributedApplicationModel"/>.</param>
 [AspireExport(ExposeProperties = true)]

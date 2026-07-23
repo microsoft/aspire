@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+#pragma warning disable ASPIREPIPELINES004
 #pragma warning disable ASPIRECOMPUTE002 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
 using System.Diagnostics.CodeAnalysis;
@@ -231,6 +232,7 @@ public sealed class KubernetesEnvironmentResource : Resource, IComputeEnvironmen
             {
                 Name = $"publish-{Name}",
                 Description = $"Publishes the Kubernetes environment configuration for {Name}.",
+                SupportsOutputPathRelocation = true,
                 Action = ctx => PublishAsync(ctx)
             };
             // Depend on publish-prereq so that process-parameters has run before we

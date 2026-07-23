@@ -1045,6 +1045,114 @@ internal sealed class GetPipelineStepsResponse
 }
 
 /// <summary>
+/// Represents a resolved pipeline output for CLI reconciliation.
+/// </summary>
+internal sealed class PipelineOutputInfo
+{
+    /// <summary>
+    /// Gets the pipeline-step name that owns the output.
+    /// </summary>
+    public required string PublisherName { get; init; }
+
+    /// <summary>
+    /// Gets the name of the output.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets the output kind.
+    /// </summary>
+    public required string Kind { get; init; }
+
+    /// <summary>
+    /// Gets the path where the pipeline wrote the output.
+    /// </summary>
+    public required string OutputPath { get; init; }
+
+    /// <summary>
+    /// Gets the logical target path for the output.
+    /// </summary>
+    public required string LogicalTargetPath { get; init; }
+}
+
+/// <summary>
+/// Represents output relocation support for a selected pipeline step.
+/// </summary>
+internal sealed class PipelineOutputStepInfo
+{
+    /// <summary>
+    /// Gets the pipeline-step name.
+    /// </summary>
+    public required string Name { get; init; }
+
+    /// <summary>
+    /// Gets a value indicating whether the step supports output-path relocation.
+    /// </summary>
+    public bool SupportsOutputPathRelocation { get; init; }
+}
+
+/// <summary>
+/// Request for getting resolved pipeline outputs.
+/// </summary>
+internal sealed class GetPipelineOutputsRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override GetPipelineOutputsRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext
+    };
+}
+
+/// <summary>
+/// Response containing resolved pipeline outputs.
+/// </summary>
+internal sealed class GetPipelineOutputsResponse
+{
+    /// <summary>
+    /// Gets the fully qualified AppHost directory used as the logical publication root.
+    /// </summary>
+    public required string AppHostDirectory { get; init; }
+
+    /// <summary>
+    /// Gets the output-plan execution state.
+    /// </summary>
+    public required string State { get; init; }
+
+    /// <summary>
+    /// Gets the selected pipeline steps in execution order.
+    /// </summary>
+    public required PipelineOutputStepInfo[] Steps { get; init; }
+
+    /// <summary>
+    /// Gets the resolved outputs in deterministic publisher/name order.
+    /// </summary>
+    public required PipelineOutputInfo[] Outputs { get; init; }
+}
+
+/// <summary>
+/// Request to authorize execution of a relocated pipeline output plan.
+/// </summary>
+internal sealed class AuthorizePipelineExecutionRequest : BackchannelRequest
+{
+    /// <inheritdoc />
+    public override AuthorizePipelineExecutionRequest WithTraceContext(BackchannelTraceContext traceContext) => new()
+    {
+        TraceContext = traceContext
+    };
+}
+
+/// <summary>
+/// Response indicating that a relocated pipeline output plan was authorized.
+/// </summary>
+internal sealed class AuthorizePipelineExecutionResponse
+{
+    /// <summary>
+    /// Gets a value indicating whether execution was authorized.
+    /// </summary>
+    public bool IsAuthorized { get; init; }
+}
+
+/// <summary>
 /// Represents the connection information for the Dashboard MCP server.
 /// </summary>
 internal sealed class DashboardMcpConnectionInfo

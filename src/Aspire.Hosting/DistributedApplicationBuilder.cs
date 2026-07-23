@@ -554,7 +554,9 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<PipelineActivityReporter>();
         _innerBuilder.Services.AddSingleton<IPipelineActivityReporter, PipelineActivityReporter>(sp => sp.GetRequiredService<PipelineActivityReporter>());
         _innerBuilder.Services.AddSingleton<IPipelineOutputService, PipelineOutputService>();
-        _innerBuilder.Services.AddSingleton(Pipeline);
+        _innerBuilder.Services.AddSingleton<PipelineOutputRegistry>();
+        _innerBuilder.Services.AddSingleton((DistributedApplicationPipeline)Pipeline);
+        _innerBuilder.Services.AddSingleton<IDistributedApplicationPipeline>(sp => sp.GetRequiredService<DistributedApplicationPipeline>());
 
         // Configure pipeline logging options
         _innerBuilder.Services.Configure<PipelineLoggingOptions>(options =>
