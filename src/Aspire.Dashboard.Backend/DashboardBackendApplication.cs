@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
+using Aspire.Shared;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -59,7 +60,9 @@ internal static class DashboardBackendApplication
         {
             var configuration = new DashboardConfiguration(
                 builder.Configuration["DashboardBackend:ApplicationName"] ?? "Aspire",
-                builder.Configuration["DashboardBackend:Version"] ?? "0.0.0-dev",
+                builder.Configuration["DashboardBackend:Version"]
+                    ?? AssemblyVersionHelper.GetDisplayVersion(typeof(DashboardBackendApplication).Assembly)
+                    ?? "unknown",
                 RuntimeInformation.FrameworkDescription);
 
             return Results.Json(

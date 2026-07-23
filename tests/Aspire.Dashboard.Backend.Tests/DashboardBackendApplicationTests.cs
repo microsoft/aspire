@@ -7,6 +7,7 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
@@ -107,6 +108,23 @@ public class DashboardBackendApplicationTests
         Assert.Equal("13.5.0-aot", root.GetProperty("dashboardVersion").GetString());
         Assert.StartsWith(".NET", root.GetProperty("runtimeVersion").GetString(), StringComparison.Ordinal);
         Assert.Equal(3, root.EnumerateObject().Count());
+    }
+
+    [Fact]
+    public async Task GetConfiguration_UsesProductVersionByDefault()
+    {
+        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            "/api/dashboard/v1/config",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            AssemblyVersionHelper.GetDisplayVersion(typeof(DashboardBackendApplication).Assembly),
+            document.RootElement.GetProperty("dashboardVersion").GetString());
     }
 
     [Fact]

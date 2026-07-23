@@ -28,6 +28,7 @@
 
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Dashboard.Backend.Tests" />
+    <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="AssemblyVersionHelper.cs" />
   </ItemGroup>
 
   <ItemGroup>
