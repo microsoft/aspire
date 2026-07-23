@@ -15,13 +15,23 @@ interface RecordedEvent {
 class FakeTelemetryReporter {
     public events: RecordedEvent[] = [];
 
+    public telemetryLevel: 'all' | 'error' | 'crash' | 'off' = 'all';
+
     sendTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
-        this.events.push({ name, properties, measurements });
+        // Extension code now bypasses this path; recording here would only
+        // see a regression to the prefixed channel. Kept as a typed no-op
+        // so the fake still satisfies the TelemetryReporter shape.
     }
 
     sendTelemetryErrorEvent(): void { /* not used here */ }
-    sendDangerousTelemetryEvent(): void { /* not used here */ }
-    sendDangerousTelemetryErrorEvent(): void { /* not used here */ }
+
+    sendDangerousTelemetryEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
+
+    sendDangerousTelemetryErrorEvent(name: string, properties?: Record<string, string>, measurements?: Record<string, number>): void {
+        this.events.push({ name, properties, measurements });
+    }
     sendRawTelemetryEvent(): void { /* not used here */ }
     dispose(): Promise<void> { return Promise.resolve(); }
 }
@@ -185,10 +195,10 @@ suite('AppHostLaunchService', () => {
         try {
             await assert.rejects(service.launch('/repo/AppHost.csproj', 'run', true), /did not start the Aspire run session/);
 
-            const appHostLaunchEvents = fake.events.filter(e => e.name === 'apphost/launch/result');
+            const appHostLaunchEvents = fake.events.filter(e => e.name === 'aspire/vscode/apphost/launch/result');
             assert.strictEqual(appHostLaunchEvents.length, 1);
             const event = appHostLaunchEvents[0];
-            assert.strictEqual(event.name, 'apphost/launch/result');
+            assert.strictEqual(event.name, 'aspire/vscode/apphost/launch/result');
             assert.strictEqual(event.properties?.outcome, 'error');
             assert.strictEqual(event.properties?.error_kind, 'StartDebuggingDeclined');
             assert.ok(typeof event.measurements?.duration_ms === 'number');
@@ -209,10 +219,10 @@ suite('AppHostLaunchService', () => {
 
             assert.strictEqual(startDebuggingStub.called, false);
             assert.strictEqual(service.isLaunching('/repo/AppHost.csproj'), false);
-            const appHostLaunchEvents = fake.events.filter(e => e.name === 'apphost/launch/result');
+            const appHostLaunchEvents = fake.events.filter(e => e.name === 'aspire/vscode/apphost/launch/result');
             assert.strictEqual(appHostLaunchEvents.length, 1);
             const event = appHostLaunchEvents[0];
-            assert.strictEqual(event.name, 'apphost/launch/result');
+            assert.strictEqual(event.name, 'aspire/vscode/apphost/launch/result');
             assert.strictEqual(event.properties?.outcome, 'canceled');
             assert.strictEqual(event.properties?.error_kind, undefined);
             assert.ok(typeof event.measurements?.duration_ms === 'number');
@@ -238,10 +248,10 @@ suite('AppHostLaunchService', () => {
         try {
             await service.launch('/repo/AppHost.csproj', 'custom' as Parameters<AppHostLaunchService['launch']>[1], true);
 
-            const appHostLaunchEvents = fake.events.filter(e => e.name === 'apphost/launch/result');
+            const appHostLaunchEvents = fake.events.filter(e => e.name === 'aspire/vscode/apphost/launch/result');
             assert.strictEqual(appHostLaunchEvents.length, 1);
             const event = appHostLaunchEvents[0];
-            assert.strictEqual(event.name, 'apphost/launch/result');
+            assert.strictEqual(event.name, 'aspire/vscode/apphost/launch/result');
             assert.strictEqual(event.properties?.command, 'other');
             assert.strictEqual(event.properties?.outcome, 'success');
             assert.strictEqual(event.properties?.mode, 'run');

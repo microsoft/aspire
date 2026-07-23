@@ -1,6 +1,6 @@
 {
   "events": {
-    "microsoft-aspire.aspire-vscode/extension/activated": {
+    "aspire/vscode/extension/activated": {
       "workspace_open": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -17,7 +17,7 @@
         "comment": "The number of workspace folders in the VS Code window when the extension activated."
       }
     },
-    "microsoft-aspire.aspire-vscode/command/invoked": {
+    "aspire/vscode/command/invoked": {
       "command": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -44,7 +44,7 @@
         "comment": "The duration of the command invocation in milliseconds."
       }
     },
-    "microsoft-aspire.aspire-vscode/cli/availability": {
+    "aspire/vscode/cli/availability": {
       "available": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -66,7 +66,7 @@
         "comment": "The duration of the Aspire CLI availability check in milliseconds."
       }
     },
-    "microsoft-aspire.aspire-vscode/apphost/discovery/result": {
+    "aspire/vscode/apphost/discovery/result": {
       "outcome": {
         "classification": "SystemMetaData",
         "purpose": "PerformanceAndHealth",
@@ -98,7 +98,7 @@
         "comment": "The number of AppHost candidates marked buildable by discovery."
       }
     },
-    "microsoft-aspire.aspire-vscode/apphost/launch/result": {
+    "aspire/vscode/apphost/launch/result": {
       "mode": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -135,7 +135,7 @@
         "comment": "The duration of the AppHost launch request in milliseconds."
       }
     },
-    "microsoft-aspire.aspire-vscode/engagement/active": {
+    "aspire/vscode/engagement/active": {
       "trigger": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -152,7 +152,7 @@
         "comment": "The number of workspace folders in the VS Code window."
       }
     },
-    "microsoft-aspire.aspire-vscode/runningapphostsview/shown": {
+    "aspire/vscode/runningapphostsview/shown": {
       "view_mode": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -189,7 +189,7 @@
         "comment": "The number of workspace AppHost candidates known when the running AppHosts view was shown."
       }
     },
-    "microsoft-aspire.aspire-vscode/debug/apphost/start": {
+    "aspire/vscode/debug/apphost/start": {
       "mode": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -206,7 +206,7 @@
         "comment": "The bounded Aspire command used to start the AppHost: run, deploy, publish, do, or other."
       }
     },
-    "microsoft-aspire.aspire-vscode/debug/apphost/end": {
+    "aspire/vscode/debug/apphost/end": {
       "mode": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -253,7 +253,7 @@
         "comment": "The number of distinct Aspire resource types observed in child debug sessions."
       }
     },
-    "microsoft-aspire.aspire-vscode/debug/runsession/start": {
+    "aspire/vscode/debug/runsession/start": {
       "resource_type": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -270,7 +270,7 @@
         "comment": "Whether the resource was launched in run or debug mode."
       }
     },
-    "microsoft-aspire.aspire-vscode/debug/runsession/end": {
+    "aspire/vscode/debug/runsession/end": {
       "resource_type": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -307,7 +307,7 @@
         "comment": "The numeric process exit code for the resource debug session."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/launch/resolved": {
+    "aspire/vscode/dashboard/launch/resolved": {
       "behavior": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -319,14 +319,14 @@
         "comment": "The configuration source that selected the dashboard launch behavior."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/launch/migration": {
+    "aspire/vscode/dashboard/launch/migration": {
       "action": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
         "comment": "The one-time dashboard launch behavior migration notification action, such as shown, settings, changelog, or dismissed."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/operation": {
+    "aspire/dashboard/operation": {
       "dashboard_event_name": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -353,7 +353,7 @@
         "comment": "The dashboard operation result classification."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/usertask": {
+    "aspire/dashboard/usertask": {
       "dashboard_event_name": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -380,7 +380,7 @@
         "comment": "The dashboard user-task result classification."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/fault": {
+    "aspire/dashboard/fault": {
       "dashboard_event_name": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -407,7 +407,7 @@
         "comment": "The dashboard fault severity classification."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/asset": {
+    "aspire/dashboard/asset": {
       "dashboard_event_name": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -439,7 +439,7 @@
         "comment": "The dashboard asset event version."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/scope/start": {
+    "aspire/dashboard/scope/start": {
       "dashboard_event_name": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -471,7 +471,7 @@
         "comment": "The dashboard scope kind."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/scope/end": {
+    "aspire/dashboard/scope/end": {
       "dashboard_event_name": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -508,7 +508,7 @@
         "comment": "The dashboard scope duration in milliseconds."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/property/set": {
+    "aspire/dashboard/property/set": {
       "property_name": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -525,7 +525,7 @@
         "comment": "A JSON object containing numeric dashboard measurements."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/property/recurring": {
+    "aspire/dashboard/property/recurring": {
       "property_name": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",
@@ -542,7 +542,7 @@
         "comment": "A JSON object containing numeric dashboard measurements."
       }
     },
-    "microsoft-aspire.aspire-vscode/dashboard/commandlineflags": {
+    "aspire/dashboard/commandlineflags": {
       "flag_prefixes": {
         "classification": "SystemMetaData",
         "purpose": "FeatureInsight",

@@ -1,4 +1,5 @@
 import { TelemetryReporter } from '@vscode/extension-telemetry';
+import * as os from 'os';
 import * as vscode from 'vscode';
 import {
     CommonTelemetryProperties,
@@ -17,22 +18,40 @@ export type {
 } from './telemetryRegistry';
 
 // Module-private state.
-// Aspire emits all telemetry through a single TelemetryReporter (which itself
-// honors `vscode.env.isTelemetryEnabled`, including transitions between
-// "on" / "errorsOnly" / "off"). We keep it as a module singleton because the
-// reporter is created at activation time and consumed from multiple places —
-// the command wrapper, the engagement reporter, the tree view, the debug
-// session, and the dashboard telemetry passthrough server.
+// Aspire emits all telemetry through a single TelemetryReporter. We bypass
+// VS Code's automatic `<extensionId>/<eventName>` prefix (added by
+// `vscode.env.createTelemetryLogger`) by routing every event through
+// `sendDangerousTelemetryEvent` / `sendDangerousTelemetryErrorEvent`, which
+// reach the underlying sender without going through the prefix-applying
+// logger. That gives us full control over the wire event name — the
+// registry-declared names (e.g. `aspire/vscode/command/invoked`) ARE the
+// names the telemetry backend sees.
+//
+// The "dangerous" variants skip the reporter's built-in telemetry-enabled
+// gate, so we enforce it ourselves via `getCurrentTelemetryLevel()` below:
+//   - regular events emit only when telemetry level === 'all'
+//   - error events emit when level === 'all' or 'error'
+//   - nothing emits when level is 'crash' or 'off'
+// This mirrors what `@vscode/extension-telemetry` does for the non-dangerous
+// path and matches `vscode.env.isTelemetryEnabled` for the regular channel.
+//
+// We keep the reporter as a module singleton because it is created at
+// activation time and consumed from multiple places — the command wrapper,
+// the engagement reporter, the tree view, the debug session, and the
+// dashboard telemetry passthrough server.
 let reporter: TelemetryReporter | undefined;
-const defaultTelemetryReporterFactory = (aiKey: string): TelemetryReporter => new TelemetryReporter(aiKey);
+const telemetryReplacementOptions = [
+    { lookup: /(?:^|_)(?:path|message|description|args?)(?:_|$)/i, replacementString: '<redacted>' },
+];
+const defaultTelemetryReporterFactory = (aiKey: string): TelemetryReporter => new TelemetryReporter(aiKey, telemetryReplacementOptions);
 let telemetryReporterFactory = defaultTelemetryReporterFactory;
+let reporterCommonProperties: Record<string, string> = {};
+const extensionTelemetryPackageName = '@vscode/extension-telemetry';
 
-// Common properties merged into every event we emit. The TelemetryReporter
-// already injects extension version, OS, machine id, etc., so this map is
-// reserved for Aspire-specific cross-event signals (e.g. detected AppHost
-// language, run mode). The key set is intentionally tiny and registered in
-// `telemetryRegistry.ts` because each common property duplicates into a row
-// per event in the classification catalog.
+// Aspire-specific common properties merged into every event we emit (e.g.
+// detected AppHost language, run mode). Keep this key set intentionally tiny
+// and registered in `telemetryRegistry.ts` because each common property
+// duplicates into a row per event in the classification catalog.
 // Values are kept as strings because @vscode/extension-telemetry only supports
 // string-valued properties; numeric data must go through `measurements`.
 const commonProperties: Partial<Record<CommonTelemetryProperty, string>> = {};
@@ -53,20 +72,41 @@ export function initializeTelemetry(context: vscode.ExtensionContext): void {
     // telemetry initialization read from the same extension manifest.
     const aiKey = context.extension.packageJSON.aiKey;
     if (aiKey) {
+        reporterCommonProperties = getReporterCommonProperties(context);
         reporter = telemetryReporterFactory(aiKey);
         context.subscriptions.push({ dispose: () => reporter?.dispose() });
     }
 }
 
 /**
- * Whether telemetry is allowed to leave the machine right now. Combines our
- * reporter availability with VS Code's global telemetry user setting so that
- * the dashboard passthrough endpoint advertises "enabled" only when both are
- * true. The reporter itself enforces the user setting on send, but we also
- * gate the dashboard's session-start handshake to avoid pointless traffic.
+ * Whether dashboard telemetry is allowed to leave the machine right now. The
+ * dashboard has fault/failure events that route through the error channel, so
+ * the passthrough handshake must stay enabled for VS Code's "errors only"
+ * setting. Individual regular dashboard events are still gated to `'all'` at
+ * send time by {@link sendTelemetryEvent}.
  */
 export function isExtensionTelemetryEnabled(): boolean {
-    return reporter !== undefined && vscode.env.isTelemetryEnabled;
+    const level = getCurrentTelemetryLevel();
+    return level === 'all' || level === 'error';
+}
+
+/**
+ * Returns the reporter's currently observed telemetry level. The level is
+ * computed by `@vscode/extension-telemetry` from the VS Code user setting
+ * (`telemetry.telemetryLevel`) and reflects state transitions over time
+ * (so a user toggling telemetry off mid-session is honored immediately).
+ *
+ *  - `'all'`   → both usage and error events allowed
+ *  - `'error'` → only error events allowed (e.g. user selected "errors only")
+ *  - `'crash'` → only crash events (no usage, no errors via this API)
+ *  - `'off'`   → nothing allowed
+ *
+ * Returns `'off'` when the reporter has not been initialized (or has been
+ * disposed) so the dangerous-send path is a no-op in tests and when the
+ * extension's aiKey is absent.
+ */
+function getCurrentTelemetryLevel(): 'all' | 'error' | 'crash' | 'off' {
+    return reporter?.telemetryLevel ?? 'off';
 }
 
 /**
@@ -101,7 +141,53 @@ function mergeProperties<E extends KnownTelemetryEventName>(properties?: EventPr
     // value). The result is intentionally widened to `{ [key: string]: string }`
     // because that's what the underlying TelemetryReporter expects — the
     // narrow typing is enforced at the public wrapper boundary above.
-    return { ...commonProperties, ...((properties ?? {}) as { [key: string]: string }) };
+    return sanitizeTelemetryProperties({
+        ...reporterCommonProperties,
+        ...commonProperties,
+        ...((properties ?? {}) as { [key: string]: string }),
+    });
+}
+
+function getReporterCommonProperties(context: vscode.ExtensionContext): Record<string, string> {
+    const telemetryClientVersion = getExtensionTelemetryClientVersion(context);
+    return {
+        'common.extname': context.extension.id,
+        'common.extversion': String(context.extension.packageJSON.version ?? ''),
+        'common.os': os.platform(),
+        'common.nodeArch': os.arch(),
+        'common.platformversion': os.release().replace(/^(\d+)(\.\d+)?(\.\d+)?(.*)/, '$1$2$3'),
+        'common.telemetryclientversion': telemetryClientVersion,
+    };
+}
+
+function getExtensionTelemetryClientVersion(context: vscode.ExtensionContext): string {
+    const dependencies = context.extension.packageJSON.dependencies as Record<string, unknown> | undefined;
+    // The dangerous send path bypasses @vscode/extension-telemetry's normal
+    // common-property mix-in, so mirror the client version from the manifest
+    // dependency instead of maintaining a second literal that can drift.
+    const packageVersion = dependencies?.[extensionTelemetryPackageName];
+
+    return typeof packageVersion === 'string' ? packageVersion : '';
+}
+
+function sanitizeTelemetryProperties(properties: Record<string, string>): Record<string, string> {
+    const sanitized: Record<string, string> = {};
+    for (const [key, value] of Object.entries(properties)) {
+        sanitized[key] = sanitizeTelemetryValue(value);
+    }
+
+    return sanitized;
+}
+
+function sanitizeTelemetryValue(value: string): string {
+    return value
+        .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '<email>')
+        // Preserve the original backslash run length so JSON-encoded values
+        // like `"C:\\Users\\alice\\repo"` remain valid JSON after redaction.
+        .replace(/\b([A-Za-z]:)(\\+)Users(\\+)[^\\\r\n"']+(?=\\|$)/g, (_, drive: string, usersSeparator: string, nameSeparator: string) => `${drive}${usersSeparator}Users${nameSeparator}<user>`)
+        .replace(/(\/Users\/)[^/\r\n"']+(?=\/|$)/g, '$1<user>')
+        .replace(/(\/home\/)[^/\r\n"']+(?=\/|$)/g, '$1<user>')
+        .replace(/\b(password|passwd|pwd|token|secret|api[_-]?key|key)(\s*[:=]\s*)[^&\s"',;}]+/gi, '$1$2<redacted>');
 }
 
 /**
@@ -110,26 +196,64 @@ function mergeProperties<E extends KnownTelemetryEventName>(properties?: EventPr
  * accepted `properties` / `measurements` keys are constrained to the per-event
  * union declared there. This prevents accidental introduction of new
  * (event, property) pairs that would need data classification.
+ *
+ * Routed through `sendDangerousTelemetryEvent` so the registry-declared event
+ * name is what reaches the telemetry backend verbatim — VS Code's
+ * `TelemetryLogger` would otherwise prepend `<extensionId>/` and turn
+ * `aspire/vscode/command/invoked` into `microsoft-aspire.aspire-vscode/aspire/vscode/command/invoked`.
+ * This path intentionally bypasses `TelemetryLogger.cleanData()`, so
+ * {@link mergeProperties} applies our explicit value sanitizer before calling
+ * the dangerous API.
+ * Telemetry opt-in is enforced explicitly here (the dangerous API bypasses
+ * the reporter's built-in gate) so we still respect the user's
+ * `telemetry.telemetryLevel` setting and live changes to it.
  */
 export function sendTelemetryEvent<E extends KnownTelemetryEventName>(
     eventName: E,
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    reporter?.sendTelemetryEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
+    if (reporter === undefined) {
+        return;
+    }
+
+    // Regular (non-error) events require full telemetry. Mirrors the gate
+    // `sendTelemetryEvent` applies internally via `TelemetryLogger.logUsage`.
+    if (getCurrentTelemetryLevel() !== 'all') {
+        return;
+    }
+    reporter.sendDangerousTelemetryEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
 }
 
 /**
  * Emits an error telemetry event. Use for faults (unexpected exceptions,
- * dashboard fault posts, etc.) — the underlying reporter applies stricter
- * PII scrubbing on error events than on regular events.
+ * dashboard fault posts, etc.). The dangerous error path still emits an
+ * EventData/customEvent payload, so downstream distinguishes errors by the
+ * registry-declared event name and the error-level opt-in gate rather than an
+ * App Insights exception envelope.
+ *
+ * Routed through `sendDangerousTelemetryErrorEvent` for the same reason as
+ * {@link sendTelemetryEvent}: VS Code's TelemetryLogger would otherwise add
+ * an extension-id prefix to the wire event name. Error events emit when the
+ * user has opted into 'error' OR 'all' (i.e. anything except 'crash' / 'off'),
+ * matching the standard non-dangerous error API's gate. This path intentionally
+ * bypasses `TelemetryLogger.cleanData()`, so {@link mergeProperties} applies
+ * our explicit value sanitizer before calling the dangerous API.
  */
 export function sendTelemetryErrorEvent<E extends KnownTelemetryEventName>(
     eventName: E,
     properties?: EventProperties<E>,
     measurements?: EventMeasurements<E>
 ): void {
-    reporter?.sendTelemetryErrorEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
+    if (reporter === undefined) {
+        return;
+    }
+
+    const level = getCurrentTelemetryLevel();
+    if (level !== 'all' && level !== 'error') {
+        return;
+    }
+    reporter.sendDangerousTelemetryErrorEvent(eventName, mergeProperties(properties), measurements as { [key: string]: number } | undefined);
 }
 
 /**
@@ -201,7 +325,7 @@ export async function withCommandTelemetry<T>(
     }
     finally {
         const durationMs = Date.now() - startTime;
-        const properties: EventProperties<'command/invoked'> = {
+        const properties: EventProperties<'aspire/vscode/command/invoked'> = {
             command: commandName,
             outcome,
             ...(additionalProperties ?? {}),
@@ -209,7 +333,7 @@ export async function withCommandTelemetry<T>(
         if (errorKind) {
             properties.error_kind = errorKind;
         }
-        sendTelemetryEvent('command/invoked', properties, { duration_ms: durationMs });
+        sendTelemetryEvent('aspire/vscode/command/invoked', properties, { duration_ms: durationMs });
         commandInvocationEmitter.fire({
             command: commandName,
             outcome,
@@ -239,12 +363,16 @@ function isCancellation(err: unknown): boolean {
 
 export function classifyError(err: unknown): string {
     if (err instanceof Error) {
-        return err.name || 'Error';
+        return normalizeErrorKind(err.name);
     }
     if (typeof err === 'string') {
         return 'String';
     }
     return typeof err;
+}
+
+function normalizeErrorKind(errorKind: string): string {
+    return /^[A-Za-z_][A-Za-z0-9_]{0,63}$/.test(errorKind) ? errorKind : 'Error';
 }
 
 function isHandledCommandFailure(value: unknown): value is { success: false; errorKind?: unknown } {
@@ -259,7 +387,7 @@ function isHandledCommandFailure(value: unknown): value is { success: false; err
 
 function getHandledCommandFailureKind(value: { errorKind?: unknown }): string {
     return typeof value.errorKind === 'string' && value.errorKind.length > 0
-        ? value.errorKind
+        ? normalizeErrorKind(value.errorKind)
         : 'HandledError';
 }
 
@@ -314,4 +442,5 @@ export function __resetCommonPropertiesForTests(): void {
     for (const key of Object.keys(commonProperties) as CommonTelemetryProperty[]) {
         delete commonProperties[key];
     }
+    reporterCommonProperties = {};
 }
