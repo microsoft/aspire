@@ -48,10 +48,12 @@ jobs:
     env:
       GH_TOKEN: ${{ github.token }}
     steps:
-      - name: Checkout (for retry patterns)
+      - name: Checkout analysis helpers
         uses: actions/checkout@v4
         with:
-          sparse-checkout: eng/test-retry-patterns.json
+          sparse-checkout: |
+            .github/workflows/analyze-ci-failure.js
+            eng/test-retry-patterns.json
           sparse-checkout-cone-mode: false
       - name: Collect CI failure data
         id: collect
@@ -268,13 +270,19 @@ jobs:
                   .[] |
                   {
                     test: (.["+@testName"] // ""),
-                    error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:1000]),
-                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end | .[0:2000])
+                    error: ((.Output.ErrorInfo.Message // "") | if type == "object" then (.["+content"] // "") else tostring end),
+                    stack_trace: ((.Output.ErrorInfo.StackTrace // "") | if type == "object" then (.["+content"] // "") else tostring end),
+                    standard_output: ((.Output.StdOut // "") | if type == "object" then (.["+content"] // "") else tostring end),
+                    standard_error: ((.Output.StdErr // "") | if type == "object" then (.["+content"] // "") else tostring end)
                   }
                 ' >> ci-failure-data/test-failures.jsonl 2>/dev/null || true
               done
               jq -s '.' ci-failure-data/test-failures.jsonl > ci-failure-data/test-failures.json 2>/dev/null || echo "[]" > ci-failure-data/test-failures.json
               rm -f ci-failure-data/test-failures.jsonl
+              # Redact complete values before the script applies field limits so truncation cannot split credential patterns.
+              node .github/workflows/analyze-ci-failure.js redact ci-failure-data/test-failures.json \
+                > ci-failure-data/test-failures-redacted.json
+              mv ci-failure-data/test-failures-redacted.json ci-failure-data/test-failures.json
               echo "Extracted $(jq 'length' ci-failure-data/test-failures.json) test failure(s) from TRX files"
 
               # Clean up the extracted files to save space in artifact
@@ -348,7 +356,7 @@ jobs:
             if [ -f "ci-failure-data/test-failures.json" ]; then
               FAILURE_COUNT=$(jq 'length' ci-failure-data/test-failures.json 2>/dev/null || echo "0")
               if [ "${FAILURE_COUNT}" -gt 0 ]; then
-                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
+                jq -r '.[] | "### `\(.test)`\n\n**Error:**\n```\n\(.error)\n```\n" + (if .stack_trace != "" then "**Stack Trace:**\n```\n\(.stack_trace)\n```\n" else "" end) + (if .standard_output != "" then "**Standard Output (sensitive values redacted):**\n```\n\(.standard_output)\n```\n" else "" end) + (if .standard_error != "" then "**Standard Error (sensitive values redacted):**\n```\n\(.standard_error)\n```\n" else "" end)' ci-failure-data/test-failures.json 2>/dev/null || echo "No parseable test failures."
               else
                 echo "No test failures extracted from TRX artifacts."
               fi
@@ -471,6 +479,11 @@ safe-outputs:
       env:
         GH_TOKEN: ${{ github.token }}
       steps:
+        - name: Checkout issue renderer
+          uses: actions/checkout@v4
+          with:
+            sparse-checkout: .github/workflows/analyze-ci-failure.js
+            sparse-checkout-cone-mode: false
         - name: Publish analysis data and comment on PR
           run: |
             set -euo pipefail
@@ -547,12 +560,6 @@ safe-outputs:
               if [ -d "$CAUSES_DIR" ]; then
                 mkdir -p "memory-repo/causes"
 
-                # Build the occurrence entry from the run summary JSON
-                ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-                PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-                # Find the first failed job name for context in the occurrence
-                FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
-
                 for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                   [ -f "$CAUSE_FILE" ] || continue
                   # Skip code-issue causes — only persist transient/flaky causes.
@@ -563,14 +570,9 @@ safe-outputs:
                   CAUSE_BASENAME=$(basename "$CAUSE_FILE")
                   EXISTING="memory-repo/causes/${CAUSE_BASENAME}"
 
-                  # Add an occurrences array with this run's entry to the agent's cause file
-                  CAUSE_WITH_OCC=$(jq --argjson run_id "$RUN_ID" \
-                    --arg run_url "$RUN_URL" \
-                    --arg job "$FIRST_JOB" \
-                    --argjson pr_number "$PR_NUMBER" \
-                    --arg observed_at "$ANALYZED_AT" \
-                    '. + {occurrences: [{run_id: $run_id, run_url: $run_url, job: $job, pr_number: $pr_number, observed_at: $observed_at}]}' \
-                    "$CAUSE_FILE")
+                  # Add an occurrences array using the job associated with this cause.
+                  CAUSE_WITH_OCC=$(node .github/workflows/analyze-ci-failure.js \
+                    add-occurrence "$ANALYSIS_FILE" "$CAUSE_FILE")
 
                   if [ -f "$EXISTING" ]; then
                     # Merge: append new occurrence, deduplicate by run_id
@@ -594,15 +596,6 @@ safe-outputs:
 
             # ── 2. Create or update issues for each cause ──
             if [ -d "$CAUSES_DIR" ]; then
-              # Build occurrence info from the run summary for issue updates
-              ANALYZED_AT=$(jq -r '.analyzed_at' "$ANALYSIS_FILE")
-              PR_NUMBER=$(jq -r '.pr.number // 0' "$ANALYSIS_FILE")
-              FIRST_JOB=$(jq -r '.failed_jobs[0].name // "unknown"' "$ANALYSIS_FILE")
-
-              # Build the occurrence table row for this run
-              OCC_DATE=$(echo "$ANALYZED_AT" | cut -dT -f1)
-              NEW_OCCURRENCE_ROW="| ${OCC_DATE} | [${RUN_ID}](${RUN_URL}) | ${FIRST_JOB} | #${PR_NUMBER} |"
-
               for CAUSE_FILE in "$CAUSES_DIR"/*.json; do
                 [ -f "$CAUSE_FILE" ] || continue
                 jq empty "$CAUSE_FILE" 2>/dev/null || continue
@@ -625,6 +618,8 @@ safe-outputs:
                   continue
                 fi
 
+                NEW_OCCURRENCE_ROW=$(node .github/workflows/analyze-ci-failure.js \
+                  occurrence-row "$ANALYSIS_FILE" "$CAUSE_FILE")
                 CAUSE_STORED="memory-repo/causes/${CAUSE_ID}.json"
                 MARKER="<!-- ci-failure-cause:${CAUSE_ID} -->"
 
@@ -706,38 +701,8 @@ safe-outputs:
                 else
                   # Create a new issue for this cause
                   BODY_FILE=$(mktemp)
-                  TEST_NAME=$(jq -r '.test_name // empty' "$CAUSE_FILE")
-                  {
-                    echo "${MARKER}"
-                    echo ""
-                    echo "## Build Information"
-                    echo ""
-                    echo "Build: ${RUN_URL}"
-                    if [ -n "$TEST_NAME" ]; then
-                      echo "Build error leg or test failing: ${FIRST_JOB} / \`${TEST_NAME}\`"
-                    else
-                      echo "Build error leg: ${FIRST_JOB}"
-                    fi
-                    echo "Pull request: #${PR_NUMBER}"
-                    echo ""
-                    echo "## Error Message"
-                    echo ""
-                    echo '```'
-                    jq -r '.error_pattern' "$CAUSE_FILE"
-                    echo '```'
-                    echo ""
-                    echo "## Description"
-                    echo ""
-                    jq -r '.title' "$CAUSE_FILE"
-                    echo ""
-                    echo "**Type**: ${CAUSE_TYPE}"
-                    echo ""
-                    echo "## Occurrences"
-                    echo ""
-                    echo "| Date | Build | Job | PR |"
-                    echo "|------|-------|-----|----|"
-                    echo "$NEW_OCCURRENCE_ROW"
-                  } > "$BODY_FILE"
+                  node .github/workflows/analyze-ci-failure.js \
+                    issue-body "$ANALYSIS_FILE" "$CAUSE_FILE" "$MARKER" > "$BODY_FILE"
 
                   LABELS="ci-failure-cause"
                   if [ "$CAUSE_TYPE" = "flaky-test" ]; then
@@ -999,6 +964,8 @@ Write the run summary to `/tmp/gh-aw/agent/analysis-result.json`. The JSON must 
       "job": "job-name",
       "error": "the error message from the test failure",
       "stack_trace": "the stack trace from the test failure (first few frames)",
+      "standard_output": "standard output captured in the TRX file with sensitive values redacted, when available",
+      "standard_error": "standard error captured in the TRX file with sensitive values redacted, when available",
       "classification": "flaky | code-issue",
       "reason": "Why this test is classified this way"
     }
@@ -1013,6 +980,8 @@ Field details:
 - `failed_tests[].classification`: Per-test classification — `"flaky"` or `"code-issue"`.
 - `failed_tests[].error`: The full error message from the TRX test failure data.
 - `failed_tests[].stack_trace`: The stack trace from the TRX test failure data (include the first few relevant frames).
+- `failed_tests[].standard_output`: The test's standard output from the TRX data with recognizable sensitive values replaced by `[REDACTED]`, when available.
+- `failed_tests[].standard_error`: The test's standard error from the TRX data with recognizable sensitive values replaced by `[REDACTED]`, when available.
 - `analyzed_at`: The current UTC timestamp in ISO 8601 format.
 - `causes`: An array of cause IDs (strings) that were identified for this run. These correspond to the cause files written in Step 3b. The publish job uses this to add an occurrence entry to each referenced cause. Empty array `[]` for code-issue verdicts.
 
@@ -1028,7 +997,10 @@ Each cause file must follow this schema:
   "type": "flaky-test | infra-failure",
   "title": "Human-readable short description of the cause",
   "test_name": "Fully.Qualified.TestName (only for flaky-test with a specific test)",
-  "error_pattern": "The key error message or pattern that identifies this cause"
+  "job_name": "Name of the failed job containing this cause",
+  "error_pattern": "The key error message or pattern that identifies this cause",
+  "analysis": "Why the evidence indicates this failure category",
+  "failure_details": "Test output from TRX or a relevant job log snippet"
 }
 ```
 
@@ -1037,7 +1009,10 @@ Field details:
 - `type`: One of `"flaky-test"` or `"infra-failure"`. Do NOT create cause files for code-issue classifications.
 - `title`: A brief human-readable description (e.g., "Flaky: MyNamespace.MyTest times out intermittently", "NuGet feed connection timeout").
 - `test_name`: The fully qualified test name. Omit this field for infrastructure failures that aren't test-specific.
+- `job_name`: The exact name of the failed job containing this cause.
 - `error_pattern`: The actual error message and relevant stack trace from the failure. For flaky tests, use the error message and first few stack trace frames from the TRX data. For infra failures, use the error text from the job logs. Include enough detail to identify and reproduce the issue (up to ~500 characters).
+- `analysis`: Explain why the evidence supports the selected `type`. Use the same rationale represented in the corresponding `failed_tests[].reason` or `failed_jobs[].reason` entry.
+- `failure_details`: For flaky tests, copy the error, stack trace, and redacted standard output and standard error from the TRX data (up to ~8000 characters). The supplied output has already had recognizable sensitive values replaced by `[REDACTED]`; do not reconstruct or infer redacted values. For infrastructure failures, copy the relevant error-focused job log excerpt (up to ~4000 characters). Do not summarize or invent output in this field.
 
 Do NOT include an `occurrences` field — the publish job builds occurrences automatically from the run summary JSON.
 
