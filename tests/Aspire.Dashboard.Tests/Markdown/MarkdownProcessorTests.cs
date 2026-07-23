@@ -169,6 +169,27 @@ public class MarkdownProcessorTests
     }
 
     [Fact]
+    public void ToHtml_FencedCodeBlockLanguageWithHtml_HtmlEncoded()
+    {
+        // Arrange
+        var processor = CreateMarkdownProcessor();
+
+        var markdown =
+            """
+            ```</div><svg/onload=alert(1)>
+            In code block.
+            ```
+            """;
+
+        // Act
+        var html = processor.ToHtml(markdown, inCompleteDocument: true);
+
+        // Assert
+        var title = Regex.Match(html, "<div class=\"code-title\">(.*?)</div>").Groups[1].Value;
+        Assert.Equal("&lt;/div&gt;&lt;svg/onload=alert(1)&gt;", title);
+    }
+
+    [Fact]
     public void ToHtml_ContainsHtml_HtmlIgnored()
     {
         // Arrange
