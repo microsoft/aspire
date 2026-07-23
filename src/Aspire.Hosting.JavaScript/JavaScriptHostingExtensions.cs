@@ -21,6 +21,8 @@ using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using YamlDotNet.Core;
+using YamlDotNet.Serialization;
 
 namespace Aspire.Hosting;
 
@@ -1988,7 +1990,8 @@ public static class JavaScriptHostingExtensions
 
         var workingDirectory = resource.Resource.WorkingDirectory;
         var hasPnpmLock = File.Exists(Path.Combine(workingDirectory, "pnpm-lock.yaml"));
-        var hasPnpmWorkspace = File.Exists(Path.Combine(workingDirectory, "pnpm-workspace.yaml"));
+        var pnpmWorkspacePath = Path.Combine(workingDirectory, "pnpm-workspace.yaml");
+        var hasPnpmWorkspace = File.Exists(pnpmWorkspacePath);
 
         installArgs ??= GetDefaultPnpmInstallArgs(resource, hasPnpmLock);
 
@@ -2003,21 +2006,28 @@ public static class JavaScriptHostingExtensions
             packageFilesSourcePattern += " pnpm-workspace.yaml";
         }
 
-        resource
-            .WithAnnotation(new JavaScriptPackageManagerAnnotation("pnpm", runScriptCommand: "run", cacheMount: "/pnpm/store")
+        var pmAnnotation = new JavaScriptPackageManagerAnnotation("pnpm", runScriptCommand: "run", cacheMount: "/pnpm/store")
+        {
+            PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
+            // pnpm does not strip the -- separator and passes it to the script, causing Vite to ignore subsequent arguments.
+            CommandSeparator = null,
+            // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
+            InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
+            InitializeDockerRuntimeStage = stage =>
             {
-                PackageFilesPatterns = { new CopyFilePattern(packageFilesSourcePattern, "./") },
-                // pnpm does not strip the -- separator and passes it to the script, causing Vite to ignore subsequent arguments.
-                CommandSeparator = null,
-                // pnpm is not included in the Node.js Docker image by default, so we need to enable it via corepack
-                InitializeDockerBuildStage = stage => stage.Run("corepack enable pnpm"),
-                InitializeDockerRuntimeStage = stage =>
-                {
-                    // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
-                    // the first container start can try to download pnpm before running the app.
-                    stage.Run("corepack enable pnpm && pnpm --version");
-                },
-            })
+                // Corepack's shim is not enough by itself: without invoking pnpm during the image build,
+                // the first container start can try to download pnpm before running the app.
+                stage.Run("corepack enable pnpm && pnpm --version");
+            },
+        };
+
+        if (hasPnpmWorkspace)
+        {
+            pmAnnotation.PackageFilesPatterns.AddRange(GetPnpmPatchedDependenciesFilePatterns(pnpmWorkspacePath));
+        }
+
+        resource
+            .WithAnnotation(pmAnnotation)
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--prod"
@@ -2566,5 +2576,52 @@ public static class JavaScriptHostingExtensions
         }
 
         return false;
+    }
+
+    /// <summary>
+    /// Parses the pnpm-workspace.yaml file to extract patched dependencies and constructs copy patterns for them.
+    /// </summary>
+    /// <param name="pnpmWorkspacePath">The path to the pnpm-workspace.yaml file.</param>
+    /// <returns>An enumerable of <see cref="CopyFilePattern"/> representing the patched dependencies.</returns>
+    private static IEnumerable<CopyFilePattern> GetPnpmPatchedDependenciesFilePatterns(string pnpmWorkspacePath)
+    {
+        object? pnpmWorkspaceYaml = null;
+        var copyPatterns = new Dictionary<string, List<string>>(); // key: destination path, value: patch files path
+
+        try
+        {
+            using var reader = new StreamReader(pnpmWorkspacePath);
+            pnpmWorkspaceYaml = new Deserializer().Deserialize(reader);
+        }
+        catch (Exception ex) when (ex is IOException or YamlException)
+        {
+            // logger.LogWarning(ex, "Failed to parse pnpm workspace file");
+        }
+
+        if (pnpmWorkspaceYaml is Dictionary<object, object> yamlDict &&
+            yamlDict.TryGetValue("patchedDependencies", out var patchedDependenciesObj) &&
+            patchedDependenciesObj is Dictionary<object, object> patchedDependencies)
+        {
+            foreach (var (_, pdPath) in patchedDependencies)
+            {
+                var sourcePath = pdPath as string;
+                if (!string.IsNullOrEmpty(sourcePath))
+                {
+                    var dirIdx = sourcePath.LastIndexOf('/');
+                    var destDir = dirIdx >= 0 ? sourcePath[..dirIdx] : ".";
+
+                    if (copyPatterns.TryGetValue(destDir, out var files))
+                    {
+                        files.Add(sourcePath);
+                    }
+                    else
+                    {
+                        copyPatterns[destDir] = [sourcePath];
+                    }
+                }
+            }
+        }
+
+        return copyPatterns.Select(kvp => new CopyFilePattern(string.Join(' ', kvp.Value), kvp.Key));
     }
 }
