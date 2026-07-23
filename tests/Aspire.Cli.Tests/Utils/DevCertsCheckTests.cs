@@ -438,7 +438,7 @@ public class DevCertsCheckTests
 
     [Fact]
     [SkipOnPlatform(TestPlatforms.Windows, "The synthetic openssl command uses a POSIX shell script.")]
-    public async Task CheckAsync_LinuxWithFailedOpenSslHashProbeAndMatchingHashStyleEntry_DoesNotReturnOpenSslCertificateCacheWarning()
+    public async Task CheckAsync_LinuxWithFailedOpenSslHashProbeAndMatchingHashStyleEntry_ReturnsOpenSslCertificateCacheWarning()
     {
         using var certificate = CreateCertificate();
         var tempDirectory = Directory.CreateTempSubdirectory();
@@ -476,7 +476,10 @@ public class DevCertsCheckTests
 
             var results = await check.CheckAsync();
 
-            Assert.DoesNotContain(results, r => r.Name == DevCertsCheck.OpenSslCertificateCacheCheckName);
+            var cacheResult = Assert.Single(results, r => r.Name == DevCertsCheck.OpenSslCertificateCacheCheckName);
+            Assert.Equal(EnvironmentCheckStatus.Warning, cacheResult.Status);
+            Assert.Contains(certificate.Thumbprint, cacheResult.Details);
+            Assert.Contains("subject-hash", cacheResult.Details);
         }
         finally
         {
@@ -649,7 +652,7 @@ public class DevCertsCheckTests
     }
 
     [Fact]
-    public async Task CheckAsync_LinuxWithMissingOpenSslHashEntryAndNoOpenSsl_ReturnsOpenSslCertificateCacheWarningWithOpenSslFix()
+    public async Task CheckAsync_LinuxWithMissingOpenSslHashEntryAndNoOpenSsl_DoesNotReturnOpenSslCertificateCacheWarning()
     {
         using var certificate = CreateCertificate();
         var tempDirectory = Directory.CreateTempSubdirectory();
@@ -682,11 +685,7 @@ public class DevCertsCheckTests
 
             var results = await check.CheckAsync();
 
-            var cacheResult = Assert.Single(results, r => r.Name == DevCertsCheck.OpenSslCertificateCacheCheckName);
-            Assert.Equal(EnvironmentCheckStatus.Warning, cacheResult.Status);
-            Assert.Contains(certificate.Thumbprint, cacheResult.Details);
-            Assert.Contains("Install openssl", cacheResult.Fix);
-            Assert.Contains("aspire certs trust", cacheResult.Fix);
+            Assert.DoesNotContain(results, r => r.Name == DevCertsCheck.OpenSslCertificateCacheCheckName);
         }
         finally
         {

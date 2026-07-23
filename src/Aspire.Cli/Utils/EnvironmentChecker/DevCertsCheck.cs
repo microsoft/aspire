@@ -6,7 +6,6 @@ using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
 using System.Text;
 using System.Text.Json.Nodes;
-using System.Text.RegularExpressions;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
@@ -33,7 +32,6 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     private static readonly string s_trustFixCommand = string.Format(CultureInfo.InvariantCulture, DoctorCommandStrings.DevCertsTrustFixFormat, "aspire certs trust");
     private static readonly string s_cleanAndTrustFixCommand = string.Format(CultureInfo.InvariantCulture, DoctorCommandStrings.DevCertsCleanAndTrustFixFormat, "aspire certs clean", "aspire certs trust");
     private static readonly string s_installOpenSslCleanAndTrustFixCommand = string.Format(CultureInfo.InvariantCulture, DoctorCommandStrings.DevCertsInstallOpenSslCleanAndTrustFixFormat, "openssl", "aspire certs clean", "aspire certs trust");
-    private static readonly Regex s_openSslHashFileNameRegex = new("^[0-9a-fA-F]{8}\\.\\d+$", RegexOptions.CultureInvariant);
 
     public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
@@ -366,22 +364,13 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         if (openSslPath is not null)
         {
             var (success, hash) = await TryGetOpenSslHashAsync(openSslPath, certificateFile, cancellationToken).ConfigureAwait(false);
-            return success
-                ? HasMatchingHashEntry(trustPath, hash, certificate)
-                : HasMatchingHashStyleEntry(trustPath, certificate);
+            return success &&
+                HasMatchingHashEntry(trustPath, hash, certificate);
         }
 
-        // Without openssl we cannot compute the subject hash that OpenSSL requires. The
-        // absence of any hash-style entry for the certificate is still definitely broken,
-        // but a matching entry can only be treated as sufficient evidence to avoid warning.
-        return HasMatchingHashStyleEntry(trustPath, certificate);
-    }
-
-    private static bool HasMatchingHashStyleEntry(string trustPath, X509Certificate2 certificate)
-    {
-        return Directory.EnumerateFiles(trustPath)
-            .Where(path => s_openSslHashFileNameRegex.IsMatch(Path.GetFileName(path)))
-            .Any(path => CertificateFileMatches(path, certificate));
+        // Without openssl we cannot compute the subject hash that OpenSSL requires, so
+        // friendly-name PEM checks are the strongest validation we can perform.
+        return true;
     }
 
     private static bool HasMatchingHashEntry(string trustPath, string hash, X509Certificate2 certificate)

@@ -3573,6 +3573,33 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task ContainerCertificateDirectoriesPath_PreservesResourceSslCertDirForAppend()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+        var customSslCertDir = $"/resource-certs-{Guid.NewGuid():N}";
+        using var certificate = CreateTestCertificate();
+        var certificateAuthorities = builder.AddCertificateAuthorityCollection("certificates")
+            .WithCertificate(certificate);
+
+        builder.AddContainer("database", "image")
+            .WithEnvironment("SSL_CERT_DIR", customSslCertDir)
+            .WithCertificateAuthorityCollection(certificateAuthorities);
+
+        var kubernetesService = new TestKubernetesService();
+        using var app = builder.Build();
+        var distributedAppModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var appExecutor = CreateAppExecutor(distributedAppModel, kubernetesService: kubernetesService);
+
+        await appExecutor.RunApplicationAsync();
+
+        var container = Assert.Single(kubernetesService.CreatedResources.OfType<Container>());
+        var sslCertDir = Assert.Single(container.Spec.Env!, e => e.Name == "SSL_CERT_DIR").Value;
+
+        Assert.NotNull(sslCertDir);
+        Assert.Equal($"{ContainerCertificatePathsAnnotation.DefaultCustomCertificatesDestination}/certs:{customSslCertDir}", sslCertDir);
+    }
+
+    [Fact]
     public void ExecutableCertificateDirectoriesPath_IncludesExistingWellKnownDirectoriesForAppendWhenSslCertDirIsUnset()
     {
         var result = ExecutableCreator.BuildCertificateDirectoriesPath(
