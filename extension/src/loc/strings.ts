@@ -122,6 +122,8 @@ export const appHostOpenSourceActionLabel = vscode.l10n.t('Open AppHost source')
 export const appHostRunActionLabel = vscode.l10n.t('Run AppHost');
 export const appHostDebugActionLabel = vscode.l10n.t('Debug AppHost');
 export const appHostPathLabel = vscode.l10n.t('Path');
+export const appHostPathCopiedToClipboard = vscode.l10n.t('AppHost path copied to clipboard.');
+export const appHostPathInvalid = vscode.l10n.t('Could not determine the AppHost path to copy.');
 export const appHostStartingDescription = vscode.l10n.t('Starting...');
 export const appHostStoppingDescription = vscode.l10n.t('Stopping...');
 export const resourceCountDescription = (count: number) => vscode.l10n.t('({0} resources)', count);

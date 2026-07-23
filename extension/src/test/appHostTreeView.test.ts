@@ -16,7 +16,7 @@ import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConst
 import type { AspireSubcommand } from '../utils/AspireTerminalProvider';
 import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
-import { terminalCommandArgumentControlCharacters } from '../loc/strings';
+import { terminalCommandArgumentControlCharacters, appHostPathCopiedToClipboard, appHostPathInvalid } from '../loc/strings';
 import { onDidInvokeCommand, withCommandTelemetry } from '../utils/telemetry';
 
 function makeResource(overrides: Partial<ResourceJson> = {}): ResourceJson {
@@ -2028,18 +2028,25 @@ suite('AspireAppHostTreeProvider.findAppHostElement', () => {
         assert.strictEqual(appHostItem.label, 'AppHost.csproj');
         assert.strictEqual(appHostItem.contextValue, 'workspaceAppHost');
         assert.strictEqual(appHostItem.collapsibleState, vscode.TreeItemCollapsibleState.Collapsed);
-        assert.deepStrictEqual(provider.getChildren(appHostItem).map(item => item.contextValue), [
+        const appHostChildren = provider.getChildren(appHostItem);
+        assert.deepStrictEqual(appHostChildren.map(item => item.contextValue), [
             'workspaceAppHostAction:openSource',
             'workspaceAppHostAction:run',
             'workspaceAppHostAction:debug',
             'workspaceAppHostPath',
         ]);
-        assert.deepStrictEqual(provider.getChildren(appHostItem).map(item => item.command?.command), [
+        assert.deepStrictEqual(appHostChildren.map(item => item.command?.command), [
             'aspire-vscode.openAppHostSource',
             'aspire-vscode.runAppHost',
             'aspire-vscode.debugAppHost',
-            undefined,
+            'aspire-vscode.copyAppHostPath',
         ]);
+        // Clicking the Path row copies the AppHost path via the same handler as the right-click
+        // context menu, so its command must carry the parent AppHost item as its argument
+        // (https://github.com/microsoft/aspire/issues/18578).
+        const pathItem = appHostChildren.find(item => item.contextValue === 'workspaceAppHostPath');
+        assert.ok(pathItem, 'Expected a Path tree item under the workspace AppHost.');
+        assert.deepStrictEqual(pathItem.command?.arguments, [appHostItem]);
         // findAppHostElement rebuilds the tree (getChildren is not cached), so the returned
         // element is a fresh instance. Match by stable id/contextValue rather than reference.
         assert.ok(result, 'Expected to find the workspace AppHost candidate');
@@ -2853,6 +2860,78 @@ suite('viewAppHostLogFile', () => {
         assert.ok(warningStub.calledOnce);
         assert.match(warningStub.firstCall.args[0], /File not found/);
         provider.dispose();
+    });
+});
+
+suite('copyAppHostPath', () => {
+    let sandbox: sinon.SinonSandbox;
+
+    setup(() => {
+        sandbox = sinon.createSandbox();
+    });
+
+    teardown(() => {
+        sandbox.restore();
+    });
+
+    test('copies the workspace AppHost path and shows a confirmation notification', async () => {
+        const previousClipboard = await vscode.env.clipboard.readText();
+        const appHostPath = path.resolve('workspace', 'apps', 'Store', 'AppHost.csproj');
+        const onDidChangeData: vscode.Event<void> = () => ({ dispose: () => { } });
+        const repository = {
+            viewMode: 'workspace' as ViewMode,
+            appHosts: [],
+            workspaceResources: [],
+            workspaceAppHostPath: appHostPath,
+            workspaceAppHostCandidatePaths: [appHostPath],
+            workspaceAppHostName: 'Store',
+            workspaceAppHostDescription: undefined,
+            onDidChangeData,
+        } as unknown as AppHostDataRepository;
+        const provider = new AspireAppHostTreeProvider(repository, makeTerminalProvider(), makeLaunchService());
+        // vscode.env.clipboard.writeText is non-configurable, so exercise the real clipboard and read
+        // it back rather than stubbing it. Seed a sentinel first so a matching read proves the copy ran.
+        try {
+            await vscode.env.clipboard.writeText('sentinel-before-copy');
+            const infoStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+
+            const [appHostItem] = provider.getChildren();
+            assert.strictEqual(appHostItem.contextValue, 'workspaceAppHost');
+            await provider.copyAppHostPath(appHostItem as any);
+
+            assert.strictEqual(await vscode.env.clipboard.readText(), appHostPath);
+            assert.strictEqual(infoStub.callCount, 1);
+            assert.strictEqual(infoStub.firstCall.args[0], appHostPathCopiedToClipboard);
+        } finally {
+            try {
+                await vscode.env.clipboard.writeText(previousClipboard);
+            } finally {
+                provider.dispose();
+            }
+        }
+    });
+
+    test('shows a warning and skips the notification when the AppHost path is missing', async () => {
+        const previousClipboard = await vscode.env.clipboard.readText();
+        const provider = makeTreeProvider([]);
+        try {
+            await vscode.env.clipboard.writeText('sentinel-unchanged');
+            const infoStub = sandbox.stub(vscode.window, 'showInformationMessage').resolves(undefined);
+            const warningStub = sandbox.stub(vscode.window, 'showWarningMessage').resolves(undefined as any);
+
+            await provider.copyAppHostPath({ appHostPath: undefined } as any);
+
+            assert.strictEqual(await vscode.env.clipboard.readText(), 'sentinel-unchanged');
+            assert.strictEqual(infoStub.callCount, 0);
+            assert.ok(warningStub.calledOnce);
+            assert.strictEqual(warningStub.firstCall.args[0], appHostPathInvalid);
+        } finally {
+            try {
+                await vscode.env.clipboard.writeText(previousClipboard);
+            } finally {
+                provider.dispose();
+            }
+        }
     });
 });
 

@@ -173,6 +173,8 @@
   "aspire-vscode.strings.aspireRestoreAllCompleted": "Aspire restore completed",
   "aspire-vscode.strings.aspireRestoreFailed": "aspire restore failed for {0}: {1}",
   "aspire-vscode.strings.aspireRestoreFailedStatusBar": "Aspire restore failed (click to retry)",
+  "aspire-vscode.strings.appHostPathCopiedToClipboard": "AppHost path copied to clipboard.",
+  "aspire-vscode.strings.appHostPathInvalid": "Could not determine the AppHost path to copy.",
   "aspire-vscode.strings.appHostSourceNotFound": "Could not determine the AppHost source file to open.",
   "aspire-vscode.strings.appHostSourceOpenFailed": "Failed to open AppHost source file: {0}",
   "aspire-vscode.strings.logFilePathInvalid": "Could not determine the AppHost log file to open.",

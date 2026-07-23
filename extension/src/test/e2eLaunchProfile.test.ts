@@ -274,6 +274,103 @@ suite('E2E launch profile', () => {
         assert.ok(assertions.includes("waitFor === 'applied' ? file.control.status === 'applied' : file.control.startedObserved === true"));
     });
 
+    test('keeps E2E clipboard snapshots out of diagnostic state and control files', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const appHostTreeE2E = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'appHostTree.e2e.test.ts'), 'utf8');
+        const treeActionsE2E = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+
+        assert.ok(apiTypes.includes("{ name: 'snapshotClipboard' }"));
+        assert.ok(apiTypes.includes("{ name: 'restoreClipboardSnapshot' }"));
+        assert.ok(apiTypes.includes("{ name: 'captureWorkspaceAppHostPathClipboardExpectation' }"));
+        assert.ok(apiTypes.includes("{ name: 'assertClipboardMatchesLastExpectation' }"));
+        assert.ok(!apiTypes.includes("{ name: 'readClipboard' }"));
+        assert.ok(!apiTypes.includes("{ name: 'writeClipboard'; text: string }"));
+
+        assert.ok(e2eStateFileBridge.includes("case 'snapshotClipboard':"));
+        assert.ok(e2eStateFileBridge.includes("case 'restoreClipboardSnapshot':"));
+        assert.ok(e2eStateFileBridge.includes("case 'captureWorkspaceAppHostPathClipboardExpectation':"));
+        assert.ok(e2eStateFileBridge.includes("case 'assertClipboardMatchesLastExpectation':"));
+        assert.ok(!e2eStateFileBridge.includes('return await vscode.env.clipboard.readText();'));
+        assert.ok(!e2eStateFileBridge.includes('await vscode.env.clipboard.writeText(command.text);'));
+
+        assert.ok(fixtures.includes('snapshotClipboardForE2E'));
+        assert.ok(fixtures.includes('restoreClipboardSnapshotForE2E'));
+        assert.ok(fixtures.includes('captureWorkspaceAppHostPathClipboardExpectationForE2E'));
+        assert.ok(fixtures.includes('assertClipboardMatchesLastExpectationForE2E'));
+        assert.ok(!fixtures.includes('readClipboardForE2E'));
+        assert.ok(!fixtures.includes('writeClipboardForE2E'));
+
+        assert.ok(appHostTreeE2E.includes('snapshotClipboardForE2E'));
+        assert.ok(appHostTreeE2E.includes('restoreClipboardSnapshotForE2E'));
+        assert.ok(appHostTreeE2E.includes('await captureWorkspaceAppHostPathClipboardExpectationForE2E();'));
+        assert.ok(appHostTreeE2E.includes('await assertClipboardMatchesLastExpectationForE2E();'));
+        assert.ok(!appHostTreeE2E.includes('clipboardTextToRestore'));
+
+        assert.ok(treeActionsE2E.includes('snapshotClipboardForE2E'));
+        assert.ok(treeActionsE2E.includes('restoreClipboardSnapshotForE2E'));
+        assert.ok(treeActionsE2E.indexOf('() => restoreClipboardSnapshotForE2E()') < treeActionsE2E.indexOf('() => setCliUnavailableForE2E(false)'));
+        assert.ok(treeActionsE2E.indexOf('await snapshotClipboardForE2E();') < treeActionsE2E.indexOf("await executeE2eControlCommand({ name: 'copyAppHostPath'"));
+    });
+
+    test('keeps copied values out of E2E control command results', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+        const fixtures = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'helpers', 'fixtures.ts'), 'utf8');
+        const treeActionsE2E = fs.readFileSync(path.join(extensionRoot, 'src', 'test-e2e', 'treeActions.e2e.test.ts'), 'utf8');
+
+        const copyAppHostPathCase = getSwitchCase(e2eStateFileBridge, 'copyAppHostPath', 'viewAppHostLogFile');
+        const copyLogFilePathCase = getSwitchCase(e2eStateFileBridge, 'copyLogFilePath', 'viewResourceLogs');
+        const copyResourceNameCase = getSwitchCase(e2eStateFileBridge, 'copyResourceName', 'copyEndpointUrl');
+        const copyEndpointUrlCase = getSwitchCase(e2eStateFileBridge, 'copyEndpointUrl', 'openInIntegratedBrowser');
+
+        assert.ok(copyAppHostPathCase.includes("vscode.commands.executeCommand('aspire-vscode.copyAppHostPath'"));
+        assert.ok(copyLogFilePathCase.includes("vscode.commands.executeCommand('aspire-vscode.copyLogFilePath'"));
+        assert.ok(copyResourceNameCase.includes("vscode.commands.executeCommand('aspire-vscode.copyResourceName'"));
+        assert.ok(copyEndpointUrlCase.includes("vscode.commands.executeCommand('aspire-vscode.copyEndpointUrl'"));
+
+        assert.ok(!copyAppHostPathCase.includes('return copiedPath;'));
+        assert.ok(!copyAppHostPathCase.includes("'appHostPath'"));
+        assert.ok(!copyLogFilePathCase.includes('return logFilePath;'));
+        assert.ok(!copyLogFilePathCase.includes("'logFilePath'"));
+        assert.ok(!copyResourceNameCase.includes('return command.resourceName;'));
+        assert.ok(!copyEndpointUrlCase.includes('return endpoint.url;'));
+        assert.ok(!apiTypes.includes('expectedText: string'));
+        assert.ok(!fixtures.includes('assertClipboardTextForE2E(expectedText'));
+        assert.ok(!e2eStateFileBridge.includes('command.expectedText'));
+        assert.ok(!treeActionsE2E.includes("name: 'copyEndpointUrl', appHostPath, resourceName: 'e2e-worker', url"));
+
+        assert.ok(!treeActionsE2E.includes('copiedAppHost.result'));
+        assert.ok(!treeActionsE2E.includes('copiedResourceName.result'));
+        assert.ok(!treeActionsE2E.includes('copiedEndpointUrl.result'));
+        assert.ok(!treeActionsE2E.includes('copiedLogPath.result'));
+    });
+
+    test('keeps E2E clipboard assertions tied to captured in-memory expectations', () => {
+        const extensionRoot = path.resolve(__dirname, '..', '..');
+        const e2eStateFileBridge = fs.readFileSync(path.join(extensionRoot, 'src', 'testing', 'e2eStateFileBridge.ts'), 'utf8');
+
+        const copyAppHostPathCase = getSwitchCase(e2eStateFileBridge, 'copyAppHostPath', 'viewAppHostLogFile');
+        const copyLogFilePathCase = getSwitchCase(e2eStateFileBridge, 'copyLogFilePath', 'viewResourceLogs');
+        const copyResourceNameCase = getSwitchCase(e2eStateFileBridge, 'copyResourceName', 'copyEndpointUrl');
+        const copyEndpointUrlCase = getSwitchCase(e2eStateFileBridge, 'copyEndpointUrl', 'openInIntegratedBrowser');
+        const assertClipboardCase = getSwitchCase(e2eStateFileBridge, 'assertClipboardMatchesLastExpectation', 'openWorkspaceFolder');
+
+        assert.ok(e2eStateFileBridge.includes('const clipboardExpectation: E2eClipboardExpectation = {};'));
+        assert.ok(copyAppHostPathCase.includes("setClipboardExpectation(clipboardExpectation, expectedClipboardText, 'path');"));
+        assert.ok(copyLogFilePathCase.includes("setClipboardExpectation(clipboardExpectation, expectedClipboardText, 'path');"));
+        assert.ok(copyResourceNameCase.includes('setClipboardExpectation(clipboardExpectation, expectedClipboardText);'));
+        assert.ok(copyEndpointUrlCase.includes('setClipboardExpectation(clipboardExpectation, endpoint.url);'));
+        assert.ok(assertClipboardCase.includes('await assertExpectedClipboardText(clipboardExpectation);'));
+        assert.ok(!assertClipboardCase.includes('createStateSnapshot'));
+        assert.ok(!assertClipboardCase.includes('getEndpointElement'));
+        assert.ok(!assertClipboardCase.includes('getLogFileElement'));
+        assert.ok(!assertClipboardCase.includes('getResourceElement'));
+    });
+
     test('latches E2E AppHost stopping path transitions before snapshots can clear', () => {
         const extensionRoot = path.resolve(__dirname, '..', '..');
         const apiTypes = fs.readFileSync(path.join(extensionRoot, 'src', 'types', 'extensionApi.ts'), 'utf8');
@@ -498,3 +595,13 @@ suite('E2E launch profile', () => {
         assert.ok(!resourceLifecycleCommands.includes("['Stopped', 'Finished', 'Exited']"));
     });
 });
+
+function getSwitchCase(source: string, startCase: string, nextCase: string): string {
+    const start = source.indexOf(`case '${startCase}':`);
+    const end = source.indexOf(`case '${nextCase}':`, start);
+
+    assert.ok(start >= 0, `Expected to find ${startCase} case.`);
+    assert.ok(end > start, `Expected to find ${nextCase} case after ${startCase}.`);
+
+    return source.slice(start, end);
+}
