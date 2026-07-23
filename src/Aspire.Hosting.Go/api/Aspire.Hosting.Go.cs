@@ -18,7 +18,7 @@ namespace Aspire.Hosting
             where T : Go.GoAppResource { throw null; }
 
         [AspireExport]
-        public static ApplicationModel.IResourceBuilder<T> WithDelveServer<T>(this ApplicationModel.IResourceBuilder<T> builder, int port = 2345)
+        public static ApplicationModel.IResourceBuilder<T> WithDelveServer<T>(this ApplicationModel.IResourceBuilder<T> builder, int port = 2345, bool acceptMulticlient = true, bool? onlySameUser = null, bool continueOnStart = false, bool log = false, string logOutput = "")
             where T : Go.GoAppResource { throw null; }
 
         [AspireExport]

@@ -21,6 +21,14 @@ namespace Aspire.Hosting
         public static ApplicationModel.IResourceBuilder<BlazorWasmAppResource> AddBlazorWasmProject<TProject>(this IDistributedApplicationBuilder builder, string name)
             where TProject : IProjectMetadata, new() { throw null; }
 
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "The DotnetProjectResource-backed Blazor gateway is experimental and not yet stable for ATS export.")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.DotnetProjectResource> AddDotnetProjectBlazorGateway(this IDistributedApplicationBuilder builder, string name) { throw null; }
+
+        [System.Diagnostics.CodeAnalysis.Experimental("ASPIREDOTNETPROJECT001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+        [AspireExportIgnore(Reason = "The DotnetProjectResource-backed Blazor gateway is experimental and not yet stable for ATS export.")]
+        public static ApplicationModel.IResourceBuilder<ApplicationModel.DotnetProjectResource> WithBlazorClientApp(this ApplicationModel.IResourceBuilder<ApplicationModel.DotnetProjectResource> gateway, ApplicationModel.IResourceBuilder<BlazorWasmAppResource> wasmApp, string apiPrefix = "_api", string otlpPrefix = "_otlp", bool proxyTelemetry = true) { throw null; }
+
         [AspireExport]
         public static ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> WithBlazorClientApp(this ApplicationModel.IResourceBuilder<ApplicationModel.ProjectResource> gateway, ApplicationModel.IResourceBuilder<BlazorWasmAppResource> wasmApp, string apiPrefix = "_api", string otlpPrefix = "_otlp", bool proxyTelemetry = true) { throw null; }
     }
