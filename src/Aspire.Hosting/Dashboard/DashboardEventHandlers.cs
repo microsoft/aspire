@@ -17,6 +17,8 @@ using Aspire.Hosting.Dcp;
 using Aspire.Hosting.Devcontainers.Codespaces;
 using Aspire.Hosting.Eventing;
 using Aspire.Hosting.Lifecycle;
+using Aspire.Hosting.Orchestrator;
+using Aspire.Hosting.Resources;
 using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Aspire.Shared.ConsoleLogs;
@@ -34,6 +36,7 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
                                              ILogger<DistributedApplication> distributedApplicationLogger,
                                              IDashboardEndpointProvider dashboardEndpointProvider,
                                              DistributedApplicationExecutionContext executionContext,
+                                             DistributedApplicationOptions distributedApplicationOptions,
                                              ResourceNotificationService resourceNotificationService,
                                              ResourceLoggerService resourceLoggerService,
                                              ILoggerFactory loggerFactory,
@@ -320,7 +323,14 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
             if (!File.Exists(dashboardDll))
             {
-                distributedApplicationLogger.LogError("Dashboard DLL not found: {Path}", dashboardDll);
+                if (distributedApplicationOptions.DisableDashboard)
+                {
+                    distributedApplicationLogger.LogDebug("Dashboard DLL not found while dashboard auto-start is disabled: {Path}", dashboardDll);
+                }
+                else
+                {
+                    distributedApplicationLogger.LogError("Dashboard DLL not found: {Path}", dashboardDll);
+                }
             }
 
             dashboardResource = new ExecutableResource(KnownResourceNames.AspireDashboard, "dotnet", dashboardWorkingDirectory ?? "");
@@ -343,9 +353,20 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
     private void ConfigureAspireDashboardResource(IResource dashboardResource)
     {
+        var isDashboardExplicitStart = distributedApplicationOptions.DisableDashboard;
+        if (isDashboardExplicitStart &&
+            !dashboardResource.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+        {
+            dashboardResource.Annotations.Add(new ExplicitStartupAnnotation());
+        }
+
         // The dashboard resource can be visible during development. We don't want people to be able to stop the dashboard from inside the dashboard.
         // Exclude the lifecycle commands from the dashboard resource so they're not accidently clicked during development.
         dashboardResource.Annotations.Add(new ExcludeLifecycleCommandsAnnotation());
+        if (isDashboardExplicitStart)
+        {
+            AddDisabledDashboardStartCommand(dashboardResource);
+        }
 
         // Add the ContentView icon to the dashboard resource
         dashboardResource.Annotations.Add(new ResourceIconAnnotation("ContentView"));
@@ -498,6 +519,56 @@ internal sealed class DashboardEventHandlers(IConfiguration configuration,
 
         // Print dashboard URL details when started.
         eventing.Subscribe<ResourceReadyEvent>(dashboardResource, DashboardStarted);
+    }
+
+    private static void AddDisabledDashboardStartCommand(IResource dashboardResource)
+    {
+        if (dashboardResource.TryGetAnnotationsOfType<ResourceCommandAnnotation>(out var commands) &&
+            commands.Any(command => string.Equals(command.Name, KnownResourceCommands.StartCommand, StringComparison.Ordinal)))
+        {
+            return;
+        }
+
+        dashboardResource.Annotations.Add(new ResourceCommandAnnotation(
+            name: KnownResourceCommands.StartCommand,
+            displayName: CommandStrings.StartName,
+            executeCommand: async context =>
+            {
+                var orchestrator = context.Services.GetRequiredService<ApplicationOrchestrator>();
+                await orchestrator.StartResourceAsync(context.ResourceName, context.CancellationToken).ConfigureAwait(false);
+                return new ExecuteCommandResult
+                {
+                    Success = true,
+                    Message = string.Format(CultureInfo.InvariantCulture, CommandStrings.ResourceStarted, dashboardResource.GetResolvedDisplayResourceName(context.ResourceName))
+                };
+            },
+            updateState: context =>
+            {
+                var state = context.ResourceSnapshot.State?.Text;
+                if (state == KnownResourceStates.Starting ||
+                    state == KnownResourceStates.Building ||
+                    state == KnownResourceStates.RuntimeUnhealthy ||
+                    string.IsNullOrEmpty(state))
+                {
+                    return ResourceCommandState.Disabled;
+                }
+
+                if (KnownResourceStates.TerminalStates.Contains(state) ||
+                    state == KnownResourceStates.NotStarted ||
+                    state == KnownResourceStates.Waiting ||
+                    state == "Unknown")
+                {
+                    return ResourceCommandState.Enabled;
+                }
+
+                return ResourceCommandState.Hidden;
+            },
+            displayDescription: CommandStrings.StartDescription,
+            arguments: null,
+            confirmationMessage: null,
+            iconName: "Play",
+            iconVariant: IconVariant.Filled,
+            isHighlighted: true));
     }
 
     private async Task DashboardStarted(ResourceReadyEvent @event, CancellationToken cancellationToken)

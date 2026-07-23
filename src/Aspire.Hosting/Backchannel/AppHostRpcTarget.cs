@@ -20,7 +20,6 @@ internal class AppHostRpcTarget(
     ProfilingTelemetry profilingTelemetry,
     PipelineActivityReporter activityReporter,
     IHostApplicationLifetime lifetime,
-    DistributedApplicationOptions options,
     AppHostStartupState startupState,
     IFileUploadStore fileUploadStore,
     IConfiguration configuration)
@@ -178,13 +177,6 @@ internal class AppHostRpcTarget(
     public async Task<DashboardUrlsState> GetDashboardUrlsAsync(CancellationToken cancellationToken)
     {
         using var activity = profilingTelemetry.StartJsonRpcServerCall(nameof(GetDashboardUrlsAsync), streaming: false);
-        if (!options.DashboardEnabled)
-        {
-            logger.LogDebug("Dashboard URL requested but dashboard is disabled.");
-            activity.SetDashboardHealthy(false);
-            return new DashboardUrlsState { DashboardHealthy = false };
-        }
-
         try
         {
             var urls = await DashboardUrlsHelper.GetDashboardUrlsAsync(serviceProvider, logger, cancellationToken).ConfigureAwait(false);

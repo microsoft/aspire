@@ -252,7 +252,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
-        var snapshot = Assert.Single(result);
+        var snapshot = Assert.Single(result, s => s.Name == "myresource");
 
         // State
         Assert.Equal("Running", snapshot.State);
@@ -614,7 +614,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
-        var snapshot = Assert.Single(result);
+        var snapshot = Assert.Single(result, s => s.Name == "myresource");
         Assert.Equal("42", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["number"]).GetValue<string>());
         Assert.Equal(bool.TrueString, Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["flag"]).GetValue<string>());
         Assert.Equal("one,two", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["list"]).GetValue<string>());
@@ -656,7 +656,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             ClientCapabilities = [AuxiliaryBackchannelCapabilities.V3]
         }).DefaultTimeout();
 
-        var snapshot = Assert.Single(response.Resources);
+        var snapshot = Assert.Single(response.Resources, s => s.Name == "myresource");
         Assert.Equal(42, Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["number"]).GetValue<int>());
         Assert.True(Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["flag"]).GetValue<bool>());
         var list = Assert.IsAssignableFrom<JsonArray>(snapshot.Properties["list"]);
@@ -698,7 +698,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
-        var snapshot = Assert.Single(result);
+        var snapshot = Assert.Single(result, s => s.Name == "myapp");
         Assert.Equal("true", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.enabled"]).GetValue<string>());
         Assert.Equal("0", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.replicaIndex"]).GetValue<string>());
         Assert.Equal("1", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.replicaCount"]).GetValue<string>());
@@ -734,7 +734,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
 
-        var snapshot = Assert.Single(result);
+        var snapshot = Assert.Single(result, s => s.Name == "myapp");
         Assert.DoesNotContain(snapshot.Properties.Keys, k => k.StartsWith("terminal.", StringComparison.Ordinal));
 
         await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
@@ -2051,16 +2051,24 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task GetDashboardUrlsAsync_ReturnsUnhealthy_WhenDashboardResourceIsAbsent()
+    public async Task GetDashboardUrlsAsync_ReturnsUnhealthy_WhenDashboardIsExplicitStart()
     {
-        // When the dashboard is disabled, there is no dashboard resource in the app model.
-        // The method must return promptly rather than waiting forever for a resource event
-        // that will never arrive.
+        // When the dashboard auto-start is disabled, use a real NotStarted snapshot.
+        // URL lookup should still return promptly as unhealthy.
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = true,
             outputHelper);
 
         using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources, r => r.Name == KnownResourceNames.AspireDashboard);
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(dashboard, snapshot => snapshot with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null)
+        }).DefaultTimeout();
 
         var target = new AuxiliaryBackchannelRpcTarget(
             NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
@@ -2072,6 +2080,126 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.False(result.DashboardHealthy);
         Assert.Null(result.BaseUrlWithLoginToken);
+    }
+
+    [Theory]
+    [InlineData("Waiting")]
+    [InlineData("Unknown")]
+    public async Task GetDashboardUrlsAsync_ReturnsUnhealthy_WhenDashboardIsExplicitStartAndNotRunnable(string state)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true,
+            outputHelper);
+
+        using var app = builder.Build();
+        await app.ExecuteBeforeStartHooksAsync(default).DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources, r => r.Name == KnownResourceNames.AspireDashboard);
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(dashboard, snapshot => snapshot with
+        {
+            State = new ResourceStateSnapshot(state, null)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetDashboardUrlsAsync().DefaultTimeout();
+
+        Assert.False(result.DashboardHealthy);
+        Assert.Null(result.BaseUrlWithLoginToken);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_ValidateOnly_AllowsDashboardStart_WhenDashboardIsExplicitStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true,
+            outputHelper);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var startResponse = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = KnownResourceNames.AspireDashboard,
+            CommandName = KnownResourceCommands.StartCommand,
+            ValidateOnly = true
+        }).DefaultTimeout();
+
+        Assert.True(startResponse.Success);
+
+        var stopResponse = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = KnownResourceNames.AspireDashboard,
+            CommandName = KnownResourceCommands.StopCommand,
+            ValidateOnly = true
+        }).DefaultTimeout();
+
+        Assert.False(stopResponse.Success);
+        Assert.Equal($"Command '{KnownResourceCommands.StopCommand}' not available for resource '{KnownResourceNames.AspireDashboard}'.", stopResponse.Message);
+    }
+
+    [Fact]
+    public async Task ExecuteResourceCommandAsync_StartDashboardCommand_TransitionsFromNotStarted_WhenDashboardIsExplicitStart()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.DisableDashboard = true,
+            outputHelper);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var dashboard = Assert.Single(model.Resources, r => r.Name == KnownResourceNames.AspireDashboard);
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(dashboard, snapshot => snapshot with
+        {
+            State = new ResourceStateSnapshot(KnownResourceStates.NotStarted, null)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var response = await target.ExecuteResourceCommandAsync(new ExecuteResourceCommandRequest
+        {
+            ResourceName = KnownResourceNames.AspireDashboard,
+            CommandName = KnownResourceCommands.StartCommand,
+            ValidateOnly = false
+        }).DefaultTimeout();
+
+        Assert.True(response.Success, response.Message);
+        var deadline = DateTime.UtcNow.AddSeconds(5);
+        string? observedState = null;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (notificationService.TryGetCurrentState(KnownResourceNames.AspireDashboard, out var currentEvent))
+            {
+                observedState = currentEvent.Snapshot.State?.Text;
+                if (!string.IsNullOrEmpty(observedState) && observedState != KnownResourceStates.NotStarted)
+                {
+                    break;
+                }
+            }
+
+            await Task.Delay(100).DefaultTimeout();
+        }
+
+        Assert.False(string.IsNullOrEmpty(observedState));
+        Assert.NotEqual(KnownResourceStates.NotStarted, observedState);
     }
 
     [Fact]

@@ -12,7 +12,7 @@ internal class TransportOptionsValidator(IConfiguration configuration, Distribut
 {
     public ValidateOptionsResult Validate(string? name, TransportOptions transportOptions)
     {
-        var effectiveAllowUnsecureTransport = transportOptions.AllowUnsecureTransport || distributedApplicationOptions.DisableDashboard || distributedApplicationOptions.AllowUnsecuredTransport;
+        var effectiveAllowUnsecureTransport = transportOptions.AllowUnsecureTransport || distributedApplicationOptions.AllowUnsecuredTransport;
 
         if (executionContext.IsPublishMode || effectiveAllowUnsecureTransport)
         {

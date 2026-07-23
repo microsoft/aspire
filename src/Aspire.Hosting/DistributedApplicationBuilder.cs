@@ -421,69 +421,66 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         if (ExecutionContext.IsRunMode)
         {
             // Dashboard
-            if (!options.DisableDashboard)
+            if (!IsDashboardUnsecured(_innerBuilder.Configuration))
             {
-                if (!IsDashboardUnsecured(_innerBuilder.Configuration))
+                // Passed to apps as a standard OTEL attribute to include in OTLP requests and the dashboard to validate.
+                // Set a random API key for the OTLP exporter if one isn't already present in configuration.
+                // If a key is generated, it's stored in the user secrets store so that it will be auto-loaded
+                // on subsequent runs and not recreated. This is important to ensure it doesn't change the state
+                // of persistent containers (as a new key would be a spec change).
+                _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:OtlpApiKey", TokenGenerator.GenerateToken);
+
+                // Set a random API key for the Dashboard Telemetry API if one isn't already present in configuration.
+                _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:DashboardApiKey", TokenGenerator.GenerateToken);
+
+                // Determine the frontend browser token.
+                if (_innerBuilder.Configuration.GetString(KnownConfigNames.DashboardFrontendBrowserToken,
+                                                          KnownConfigNames.Legacy.DashboardFrontendBrowserToken, fallbackOnEmpty: true) is not { } browserToken)
                 {
-                    // Passed to apps as a standard OTEL attribute to include in OTLP requests and the dashboard to validate.
-                    // Set a random API key for the OTLP exporter if one isn't already present in configuration.
-                    // If a key is generated, it's stored in the user secrets store so that it will be auto-loaded
-                    // on subsequent runs and not recreated. This is important to ensure it doesn't change the state
-                    // of persistent containers (as a new key would be a spec change).
-                    _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:OtlpApiKey", TokenGenerator.GenerateToken);
+                    // No browser token was specified in configuration, so generate one.
+                    browserToken = TokenGenerator.GenerateToken();
+                }
 
-                    // Set a random API key for the Dashboard Telemetry API if one isn't already present in configuration.
-                    _userSecretsManager.GetOrSetSecret(_innerBuilder.Configuration, "AppHost:DashboardApiKey", TokenGenerator.GenerateToken);
-
-                    // Determine the frontend browser token.
-                    if (_innerBuilder.Configuration.GetString(KnownConfigNames.DashboardFrontendBrowserToken,
-                                                              KnownConfigNames.Legacy.DashboardFrontendBrowserToken, fallbackOnEmpty: true) is not { } browserToken)
+                _innerBuilder.Configuration.AddInMemoryCollection(
+                    new Dictionary<string, string?>
                     {
-                        // No browser token was specified in configuration, so generate one.
-                        browserToken = TokenGenerator.GenerateToken();
+                        ["AppHost:BrowserToken"] = browserToken
                     }
+                );
+ 
+                // Determine the resource service API key.
+                var apiKey = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardResourceServiceClientApiKey,
+                                                                   KnownConfigNames.Legacy.DashboardResourceServiceClientApiKey, fallbackOnEmpty: true);
 
-                    _innerBuilder.Configuration.AddInMemoryCollection(
-                        new Dictionary<string, string?>
-                        {
-                            ["AppHost:BrowserToken"] = browserToken
-                        }
-                    );
+                // If no API key was specified in configuration, generate one.
+                apiKey ??= TokenGenerator.GenerateToken();
 
-                    // Determine the resource service API key.
-                    var apiKey = _innerBuilder.Configuration.GetString(KnownConfigNames.DashboardResourceServiceClientApiKey,
-                                                                       KnownConfigNames.Legacy.DashboardResourceServiceClientApiKey, fallbackOnEmpty: true);
-
-                    // If no API key was specified in configuration, generate one.
-                    apiKey ??= TokenGenerator.GenerateToken();
-
-                    _innerBuilder.Configuration.AddInMemoryCollection(
-                        new Dictionary<string, string?>
-                        {
-                            ["AppHost:ResourceService:AuthMode"] = nameof(ResourceServiceAuthMode.ApiKey),
-                            ["AppHost:ResourceService:ApiKey"] = apiKey
-                        }
-                    );
-                }
-                else
-                {
-                    // The dashboard is enabled but is unsecured. Set auth mode config setting to reflect this state.
-                    _innerBuilder.Configuration.AddInMemoryCollection(
-                        new Dictionary<string, string?>
-                        {
-                            ["AppHost:ResourceService:AuthMode"] = nameof(ResourceServiceAuthMode.Unsecured)
-                        }
-                    );
-                }
-
-                _innerBuilder.Services.AddOptions<TransportOptions>().ValidateOnStart().PostConfigure(MapTransportOptionsFromCustomKeys);
-                _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TransportOptions>, TransportOptionsValidator>());
-                _innerBuilder.Services.AddSingleton<DashboardServiceHost>();
-                _innerBuilder.Services.AddHostedService(sp => sp.GetRequiredService<DashboardServiceHost>());
-                _innerBuilder.Services.AddSingleton<IDashboardEndpointProvider, HostDashboardEndpointProvider>();
-                _innerBuilder.Services.AddEventingSubscriber<DashboardEventHandlers>();
-                _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<DashboardOptions>, ConfigureDefaultDashboardOptions>());
+                _innerBuilder.Configuration.AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["AppHost:ResourceService:AuthMode"] = nameof(ResourceServiceAuthMode.ApiKey),
+                        ["AppHost:ResourceService:ApiKey"] = apiKey
+                    }
+                );
             }
+            else
+            {
+                // The dashboard is enabled but is unsecured. Set auth mode config setting to reflect this state.
+                _innerBuilder.Configuration.AddInMemoryCollection(
+                    new Dictionary<string, string?>
+                    {
+                        ["AppHost:ResourceService:AuthMode"] = nameof(ResourceServiceAuthMode.Unsecured)
+                    }
+                );
+            }
+
+            _innerBuilder.Services.AddOptions<TransportOptions>().ValidateOnStart().PostConfigure(MapTransportOptionsFromCustomKeys);
+            _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IValidateOptions<TransportOptions>, TransportOptionsValidator>());
+            _innerBuilder.Services.AddSingleton<DashboardServiceHost>();
+            _innerBuilder.Services.AddHostedService(sp => sp.GetRequiredService<DashboardServiceHost>());
+            _innerBuilder.Services.AddSingleton<IDashboardEndpointProvider, HostDashboardEndpointProvider>();
+            _innerBuilder.Services.AddEventingSubscriber<DashboardEventHandlers>();
+            _innerBuilder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IConfigureOptions<DashboardOptions>, ConfigureDefaultDashboardOptions>());
 
             if (options.EnableResourceLogging)
             {

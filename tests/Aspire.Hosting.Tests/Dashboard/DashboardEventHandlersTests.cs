@@ -199,6 +199,29 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         Assert.Empty(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>());
     }
 
+    [Fact]
+    public async Task BeforeStartAsync_DisabledDashboard_AddsOnlyStartLifecycleCommand()
+    {
+        var resourceLoggerService = new ResourceLoggerService();
+        var resourceNotificationService = ResourceNotificationServiceTestHelpers.Create();
+        var configuration = new ConfigurationBuilder().Build();
+        var hook = CreateHook(
+            resourceLoggerService,
+            resourceNotificationService,
+            configuration,
+            distributedApplicationOptions: new DistributedApplicationOptions { DisableDashboard = true });
+
+        var model = new DistributedApplicationModel(new ResourceCollection());
+
+        await hook.OnBeforeStartAsync(new BeforeStartEvent(new TestServiceProvider(), model), CancellationToken.None).DefaultTimeout();
+        var dashboardResource = model.Resources.Single(r => string.Equals(r.Name, KnownResourceNames.AspireDashboard, StringComparisons.ResourceName));
+        dashboardResource.AddLifeCycleCommands();
+
+        Assert.Single(dashboardResource.Annotations.OfType<ExcludeLifecycleCommandsAnnotation>());
+        var commands = Assert.Single(dashboardResource.Annotations.OfType<ResourceCommandAnnotation>());
+        Assert.Equal(KnownResourceCommands.StartCommand, commands.Name);
+    }
+
     [Theory]
     [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123-", "aspire-extension-run-123-dashboard", true)]
     [InlineData("localhost:8080", 8080, "1234", "cert", "aspire-extension-run-123", "aspire-extension-run-123-dashboard", false)]
@@ -758,6 +781,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
         ILoggerFactory? loggerFactory = null,
         IOptions<CodespacesOptions>? codespacesOptions = null,
         IOptions<DashboardOptions>? dashboardOptions = null,
+        DistributedApplicationOptions? distributedApplicationOptions = null,
         Hosting.Eventing.DistributedApplicationEventing? eventing = null,
         ILogger<DistributedApplication>? distributedApplicationLogger = null
         )
@@ -778,6 +802,7 @@ public class DashboardEventHandlersTests(ITestOutputHelper testOutputHelper)
             distributedApplicationLogger ?? NullLogger<DistributedApplication>.Instance,
             new TestDashboardEndpointProvider(),
             executionContext,
+            distributedApplicationOptions ?? new DistributedApplicationOptions(),
             resourceNotificationService,
             resourceLoggerService,
             loggerFactory ?? NullLoggerFactory.Instance,
