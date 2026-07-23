@@ -78,7 +78,7 @@ public partial class MainLayout : IGlobalKeydownListener, IAsyncDisposable
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    internal IDashboardRunStore RunStore { get; init; } = null!;
+    public required IDashboardRunStore RunStore { get; init; }
 
     [Inject]
     internal IDashboardRunSelection RunSelection { get; init; } = null!;

@@ -28,7 +28,7 @@ public partial class ResourceNameButtonValue
     public required IDashboardClient DashboardClient { get; init; }
 
     [Inject]
-    private DashboardDataSource DataSource { get; set; } = null!;
+    public required DashboardDataSource DataSource { get; init; }
 
     [Inject]
     public required IconResolver IconResolver { get; init; }

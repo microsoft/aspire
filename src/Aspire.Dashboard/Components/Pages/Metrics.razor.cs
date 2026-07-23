@@ -60,7 +60,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    private DashboardDataSource DataSource { get; set; } = null!;
+    public required DashboardDataSource DataSource { get; init; }
 
     public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
