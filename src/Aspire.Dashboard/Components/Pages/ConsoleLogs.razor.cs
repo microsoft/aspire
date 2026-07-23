@@ -489,9 +489,13 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // the wrong badge/dims/dropdown for the new resource while the JS
         // terminal is initializing and pushing its first snapshot.
         _terminalToolbarState = null;
-        // Default the view to Console on every resource change so pre-PTY
-        // hosting messages (WaitFor, startup failures) are visible immediately
-        // on selection. The user picks Terminal explicitly from the ⋯ menu.
+        // Default the view to Console on every resource change. A terminal-
+        // enabled resource that isn't live yet (Waiting/Starting) or has already
+        // stopped (Exited/Finished/FailedToStart) has no active PTY, so Console
+        // is where the useful output lives: pre-PTY hosting messages (WaitFor,
+        // startup failures) and post-PTY exit messages. When the resource is
+        // live (Running) the PTY is the primary surface, so we flip the default
+        // to Terminal below.
         _activeView = ConsoleLogsView.Console;
 
         if (!isAllSelected && selectedResourceName is not null &&
@@ -503,6 +507,17 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _terminalResourceName = selectedResource.DisplayName;
             _terminalReplicaIndex = replicaIndex;
             Logger.LogDebug("Resource '{ResourceName}' has terminal at replica {ReplicaIndex}", selectedResourceName, replicaIndex);
+
+            // When the resource is live (Running) its PTY is active, so make the
+            // terminal the default view on selection — that's the surface the
+            // user came for. Non-running terminal resources stay on Console so
+            // pre-PTY hosting messages and post-PTY exit output remain visible
+            // immediately. The user can still flip either way via the ⋯ menu.
+            if (selectedResource.IsRunningState())
+            {
+                _activeView = ConsoleLogsView.Terminal;
+            }
+
             // Intentionally fall through to the normal subscription path so
             // the resource's console log stream is collected even while the
             // user is on the Terminal view. The Console view in the View
