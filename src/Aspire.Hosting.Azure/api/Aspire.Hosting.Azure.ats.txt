@@ -11,6 +11,7 @@ Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureUserAssignedIdentityResource
 Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference [ExposeProperties]
 Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzureKeyVaultResource [interface]
 Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzureKeyVaultSecretReference [interface]
+Aspire.Hosting.Azure/Aspire.Hosting.Azure.IAzurePrivateEndpointTarget [interface]
 
 # Capabilities
 Aspire.Hosting.Azure/addAzureEnvironment() -> Aspire.Hosting.Azure/Aspire.Hosting.Azure.AzureEnvironmentResource
@@ -23,6 +24,15 @@ Aspire.Hosting.Azure/asExisting(name: string|Aspire.Hosting/Aspire.Hosting.Appli
 Aspire.Hosting.Azure/asExistingInResourceGroup(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, resourceGroup: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, subscription: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
 Aspire.Hosting.Azure/asExistingInSubscription(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource, subscription: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
 Aspire.Hosting.Azure/asExistingInTenant(name: string|Aspire.Hosting/Aspire.Hosting.ApplicationModel.ParameterResource) -> Aspire.Hosting.Azure/Aspire.Hosting.ApplicationModel.IAzureResource
+Aspire.Hosting.Azure/AzureKustoClusterResource.outputs(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoClusterResource) -> Aspire.Hosting/Dict<string,any>
+Aspire.Hosting.Azure/AzureKustoClusterResource.parameters(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoClusterResource) -> Aspire.Hosting/Dict<string,any>
+Aspire.Hosting.Azure/AzureKustoClusterResource.secretOutputs(context: Aspire.Hosting.Azure.Kusto/Aspire.Hosting.Azure.AzureKustoClusterResource) -> Aspire.Hosting/Dict<string,string>
+Aspire.Hosting.Azure/AzureManagedRedisResource.outputs(context: Aspire.Hosting.Azure.Redis/Aspire.Hosting.Azure.AzureManagedRedisResource) -> Aspire.Hosting/Dict<string,any>
+Aspire.Hosting.Azure/AzureManagedRedisResource.parameters(context: Aspire.Hosting.Azure.Redis/Aspire.Hosting.Azure.AzureManagedRedisResource) -> Aspire.Hosting/Dict<string,any>
+Aspire.Hosting.Azure/AzureManagedRedisResource.secretOutputs(context: Aspire.Hosting.Azure.Redis/Aspire.Hosting.Azure.AzureManagedRedisResource) -> Aspire.Hosting/Dict<string,string>
+Aspire.Hosting.Azure/AzureSqlServerResource.outputs(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> Aspire.Hosting/Dict<string,any>
+Aspire.Hosting.Azure/AzureSqlServerResource.parameters(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> Aspire.Hosting/Dict<string,any>
+Aspire.Hosting.Azure/AzureSqlServerResource.secretOutputs(context: Aspire.Hosting.Azure.Sql/Aspire.Hosting.Azure.AzureSqlServerResource) -> Aspire.Hosting/Dict<string,string>
 Aspire.Hosting.Azure/BicepOutputReference.name(context: Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference) -> string
 Aspire.Hosting.Azure/BicepOutputReference.value(context: Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference) -> string
 Aspire.Hosting.Azure/BicepOutputReference.valueExpression(context: Aspire.Hosting.Azure/Aspire.Hosting.Azure.BicepOutputReference) -> string
