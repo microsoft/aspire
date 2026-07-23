@@ -299,4 +299,102 @@ public class MongoDBPublicApiTests(ITestOutputHelper testOutputHelper)
             : Assert.Throws<ArgumentException>(action);
         Assert.Equal(nameof(name), exception.ParamName);
     }
+
+    [Fact]
+    public void WithReplicaSetShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<MongoDBServerResource> builder = null!;
+        const string name = "rs0";
+
+        var action = () => builder.WithReplicaSet(name);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithReplicaSetShouldThrowWhenNameIsNullOrEmpty(bool isNull)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+        var mongo = builder.AddMongoDB("mongo1");
+        var name = isNull ? null! : string.Empty;
+
+        var action = () => mongo.WithReplicaSet(name);
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(name), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithBindAllIpShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<MongoDBServerResource> builder = null!;
+
+        var action = () => builder.WithBindIpAll();
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithTlsShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<MongoDBServerResource> builder = null!;
+
+        var action = () => builder.WithTls();
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithKeyFileShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<MongoDBServerResource> builder = null!;
+        var keyValue = ReferenceExpression.Create($"test-key");
+        const string keyFilePath = "/etc/rs.key";
+
+        var action = () => builder.WithKeyFile(keyValue, keyFilePath);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Theory]
+    [InlineData(true)]
+    [InlineData(false)]
+    public void WithKeyFileShouldThrowWhenKeyFilePathIsNullOrEmpty(bool isNull)
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+            .AddMongoDB("MongoDB");
+
+        var keyValue = ReferenceExpression.Create($"test-key");
+        var keyFilePath = isNull ? null! : string.Empty;
+
+        var action = () => builder.WithKeyFile(keyValue, keyFilePath);
+
+        var exception = isNull
+            ? Assert.Throws<ArgumentNullException>(action)
+            : Assert.Throws<ArgumentException>(action);
+        Assert.Equal(nameof(keyFilePath), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithKeyFileShouldThrowWhenKeyValueIsNull()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(testOutputHelper)
+            .AddMongoDB("MongoDB");
+
+        IExpressionValue keyValue = null!;
+        const string keyFilePath = "/etc/rs.key";
+
+        var action = () => builder.WithKeyFile(keyValue, keyFilePath);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(keyValue), exception.ParamName);
+    }
 }
