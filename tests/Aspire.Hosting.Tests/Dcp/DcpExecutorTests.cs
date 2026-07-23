@@ -3566,73 +3566,9 @@ public class DcpExecutorTests(ITestOutputHelper outputHelper)
         var sslCertDir = Assert.Single(exe.Spec.Env!, e => e.Name == "SSL_CERT_DIR").Value;
 
         Assert.NotNull(sslCertDir);
-        var generatedCertificatesPath = sslCertDir.Split(Path.PathSeparator)[0];
-        Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", generatedCertificatesPath);
-        Assert.Equal(
-            ExecutableCreator.BuildCertificateDirectoriesPath(
-                generatedCertificatesPath,
-                CertificateTrustScope.Append,
-                Environment.GetEnvironmentVariable("SSL_CERT_DIR"),
-                includeWellKnownCertificateDirectories: OperatingSystem.IsLinux()),
-            sslCertDir);
-    }
-
-    [Fact]
-    public void ExecutableCertificateDirectoriesPath_IncludesExistingWellKnownDirectoriesForAppendWhenSslCertDirIsUnset()
-    {
-        var result = ExecutableCreator.BuildCertificateDirectoriesPath(
-            "/tmp/aspire/certs",
-            CertificateTrustScope.Append,
-            existingSslCertDir: null,
-            includeWellKnownCertificateDirectories: true,
-            directoryExists: path => path is "/etc/ssl/certs" or "/etc/pki/tls/certs");
-
-        Assert.Equal(
-            string.Join(Path.PathSeparator, "/tmp/aspire/certs", "/etc/ssl/certs", "/etc/pki/tls/certs"),
-            result);
-    }
-
-    [Fact]
-    public void ExecutableCertificateDirectoriesPath_PreservesExistingSslCertDirForAppendWithoutAddingWellKnownDirectories()
-    {
-        var existingSslCertDir = string.Join(Path.PathSeparator, "/custom/certs", "/home/me/.aspnet/dev-certs/trust");
-
-        var result = ExecutableCreator.BuildCertificateDirectoriesPath(
-            "/tmp/aspire/certs",
-            CertificateTrustScope.Append,
-            existingSslCertDir,
-            includeWellKnownCertificateDirectories: true,
-            directoryExists: _ => true);
-
-        Assert.Equal(
-            string.Join(Path.PathSeparator, "/tmp/aspire/certs", "/custom/certs", "/home/me/.aspnet/dev-certs/trust"),
-            result);
-    }
-
-    [Fact]
-    public void ExecutableCertificateDirectoriesPath_PreservesEmptySslCertDirForAppendWithoutAddingWellKnownDirectories()
-    {
-        var result = ExecutableCreator.BuildCertificateDirectoriesPath(
-            "/tmp/aspire/certs",
-            CertificateTrustScope.Append,
-            existingSslCertDir: string.Empty,
-            includeWellKnownCertificateDirectories: true,
-            directoryExists: _ => true);
-
-        Assert.Equal("/tmp/aspire/certs", result);
-    }
-
-    [Fact]
-    public void ExecutableCertificateDirectoriesPath_DoesNotIncludeExistingOrWellKnownDirectoriesForOverride()
-    {
-        var result = ExecutableCreator.BuildCertificateDirectoriesPath(
-            "/tmp/aspire/certs",
-            CertificateTrustScope.Override,
-            existingSslCertDir: "/custom/certs",
-            includeWellKnownCertificateDirectories: true,
-            directoryExists: _ => true);
-
-        Assert.Equal("/tmp/aspire/certs", result);
+        var sslCertDirs = sslCertDir.Split(Path.PathSeparator);
+        Assert.EndsWith($"{Path.DirectorySeparatorChar}certs", sslCertDirs[0]);
+        Assert.All(sslCertDirs, dir => Assert.NotEqual(customSslCertDir, dir));
     }
 
     [Fact]

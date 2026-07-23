@@ -16,6 +16,9 @@ namespace Aspire.Hosting.ApplicationModel;
 /// </summary>
 internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfigurationGatherer
 {
+    internal const string SslCertDirEnvironmentVariable = "SSL_CERT_DIR";
+    internal const string SslCertFileEnvironmentVariable = "SSL_CERT_FILE";
+
     private readonly Func<CertificateTrustScope, CertificateTrustExecutionConfigurationContext> _configContextFactory;
 
     /// <summary>
@@ -83,11 +86,11 @@ internal class CertificateTrustExecutionConfigurationGatherer : IExecutionConfig
         var configurationContext = _configContextFactory(additionalData.Scope);
 
         // Apply default OpenSSL environment configuration for certificate trust
-        context.EnvironmentVariables["SSL_CERT_DIR"] = configurationContext.CertificateDirectoriesPath;
+        context.EnvironmentVariables[SslCertDirEnvironmentVariable] = configurationContext.CertificateDirectoriesPath;
 
         if (additionalData.Scope != CertificateTrustScope.Append)
         {
-            context.EnvironmentVariables["SSL_CERT_FILE"] = configurationContext.CertificateBundlePath;
+            context.EnvironmentVariables[SslCertFileEnvironmentVariable] = configurationContext.CertificateBundlePath;
         }
 
         var callbackContext = new CertificateTrustConfigurationCallbackAnnotationContext
