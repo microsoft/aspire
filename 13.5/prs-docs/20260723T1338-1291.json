@@ -1,0 +1,9 @@
+{
+  "author": "app/aspire-repo-bot",
+  "comment": "Documents unified graceful shutdown for aspire run (PR 17814)",
+  "mergedAt": "2026-07-23T13:38:50Z",
+  "number": 1291,
+  "runDate": "2026-07-23T18:26:39Z",
+  "status": "included",
+  "title": "[docs] Update aspire run/stop graceful shutdown documentation"
+}
