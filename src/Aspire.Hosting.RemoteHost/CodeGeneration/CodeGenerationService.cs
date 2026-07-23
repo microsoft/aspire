@@ -240,7 +240,16 @@ internal sealed class CodeGenerationService
             var generator = _resolver.GetCodeGenerator(language);
             if (generator == null)
             {
-                throw new ArgumentException(BuildNoCodeGeneratorMessage(language));
+                // A missing generator is frequently the visible symptom of an integration assembly
+                // that failed to load (typically an Aspire.TypeSystem binary mismatch between the
+                // bundled apphost server and the restored SDK packages). The resolver swallows that
+                // ReflectionTypeLoadException during discovery, so surface it here as the inner
+                // exception. This lets CodeGenerationDiagnosticBuilder classify the failure as an
+                // incompatible SDK and return the actionable "run aspire update" diagnostic instead
+                // of the opaque "no code generator found" message reaching the user verbatim.
+                var loadFailures = _resolver.Discovery.LoadFailures;
+                var loadFailure = loadFailures.Count > 0 ? loadFailures[0] : null;
+                throw new ArgumentException(BuildNoCodeGeneratorMessage(language), loadFailure);
             }
 
             var context = _atsContextFactory.GetContext();
