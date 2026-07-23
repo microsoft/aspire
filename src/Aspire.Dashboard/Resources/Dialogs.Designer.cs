@@ -61,7 +61,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+        ///   Looks up a localized string similar to Aspire makes agentic development more powerful. It gives AI coding agents deep observability into your app. Agents can use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
         ///
         ///- 📦 Resource state, health checks, and relationships
         ///- 🖥️ Console logs
@@ -85,7 +85,7 @@ namespace Aspire.Dashboard.Resources {
         }
         
         /// <summary>
-        ///   Looks up a localized string similar to Give AI agents deep observability into your app so they can diagnose issues faster and verify fixes with confidence 🚀
+        ///   Looks up a localized string similar to Aspire makes agentic development more powerful. It gives AI coding agents deep observability into your app. Agents can use telemetry to diagnose issues faster and verify fixes with confidence. 🚀
         ///
         ///- 📊 Distributed traces
         ///- 🔗 Trace spans
