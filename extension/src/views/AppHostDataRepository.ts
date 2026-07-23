@@ -1385,7 +1385,11 @@ export class AppHostDataRepository {
     // ── ps polling ──
 
     private _startPsPolling(): void {
-        this._stopPolling();
+        // Restarting `ps` polling is routine while the workspace AppHost discovery result settles, the
+        // polling interval changes, or the view resumes. Keep explicit post-stop refreshes alive across
+        // those restarts; otherwise a debug-session stop can lose the authoritative `aspire ps` snapshot
+        // that clears a stale global AppHost row.
+        this._stopPolling({ clearPostStopRefreshTimers: false });
         if (this._supportsPsFollow) {
             this._startPsFollow();
             return;
@@ -1411,7 +1415,9 @@ export class AppHostDataRepository {
         }, intervalMs);
     }
 
-    private _stopPolling(): void {
+    // Most callers are leaving the polling lifecycle and should cancel post-stop refreshes. Internal
+    // restarts keep those timers so a pending AppHost-stop reconciliation is not lost.
+    private _stopPolling(options?: { clearPostStopRefreshTimers?: boolean }): void {
         this._psPollingGeneration++;
         this._psFetchVersion++;
         this._fetchInProgress = false;
@@ -1420,7 +1426,9 @@ export class AppHostDataRepository {
         this._authoritativeSnapshotPending = false;
         this._authoritativeSnapshotPendingForce = false;
         this._activeAuthoritativeSnapshotRequestId = undefined;
-        this._clearPostStopRefreshTimers();
+        if (options?.clearPostStopRefreshTimers ?? true) {
+            this._clearPostStopRefreshTimers();
+        }
         if (this._pollingInterval) {
             clearInterval(this._pollingInterval);
             this._pollingInterval = undefined;
