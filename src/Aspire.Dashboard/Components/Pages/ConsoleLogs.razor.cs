@@ -162,11 +162,18 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // and TerminalView in MainSection (both stay mounted so flipping does
     // not tear down the PTY or the log subscription) and uses CSS to hide
     // the inactive one. For non-terminal resources only LogViewer is shown
-    // and this field is unused. The view is purely user-controlled — the
-    // page defaults to Console on resource selection and only changes via
-    // the ⋯ menu picker. There is no auto-switching in either direction:
-    // hosting messages (WaitFor, startup failures, stop/exit output) stay
-    // visible on Console until the user explicitly clicks Terminal.
+    // and this field is unused.
+    //
+    // The default is chosen once per resource selection (see SubscribeAsync):
+    // a live (Running) terminal resource defaults to Terminal because its PTY
+    // is the surface the user came for, while every other case (non-terminal,
+    // or a terminal resource that isn't live yet or has already exited)
+    // defaults to Console so pre-PTY hosting messages (WaitFor, startup
+    // failures) and post-PTY exit output stay visible. After that initial
+    // default there is no state-driven auto-switching: later refreshes such
+    // as a filter/clear change (which also route through SubscribeAsync)
+    // preserve the current view, and the user can flip either way via the
+    // ⋯ menu picker.
     private ConsoleLogsView _activeView = ConsoleLogsView.Console;
     // Tracks the view that was rendered to the DOM on the previous render
     // pass. When the active view flips back to Terminal we need to nudge
@@ -208,7 +215,10 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             var isAllSelected = IsAllSelected();
             var selectedResourceName = PageViewModel.SelectedResource.Id?.InstanceId;
 
-            await SubscribeAsync(isAllSelected, selectedResourceName);
+            // A filter change (e.g. clearing the console logs) is not a resource
+            // selection change, so preserve the user's current view instead of
+            // snapping back to the default.
+            await SubscribeAsync(isAllSelected, selectedResourceName, resetView: false);
         });
 
         var consoleSettingsResult = await LocalStorage.GetUnprotectedAsync<ConsoleLogConsoleSettings>(BrowserStorageKeys.ConsoleLogConsoleSettings);
@@ -438,7 +448,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
 
         if (needsNewSubscription)
         {
-            await SubscribeAsync(isAllSelected, selectedResourceName);
+            await SubscribeAsync(isAllSelected, selectedResourceName, resetView: true);
         }
 
         UpdateTelemetryProperties();
@@ -477,7 +487,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         _lastRenderedView = _activeView;
     }
 
-    private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName)
+    private async Task SubscribeAsync(bool isAllSelected, string? selectedResourceName, bool resetView)
     {
         Logger.LogDebug("Subscription change needed. IsAllSelected: {IsAllSelected}, SelectedResource: {SelectedResource}", isAllSelected, selectedResourceName);
 
@@ -489,10 +499,23 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // the wrong badge/dims/dropdown for the new resource while the JS
         // terminal is initializing and pushing its first snapshot.
         _terminalToolbarState = null;
-        // Default the view to Console on every resource change so pre-PTY
-        // hosting messages (WaitFor, startup failures) are visible immediately
-        // on selection. The user picks Terminal explicitly from the ⋯ menu.
-        _activeView = ConsoleLogsView.Console;
+
+        // Only (re)default the view on an actual resource-selection change.
+        // SubscribeAsync also runs on filter changes (clearing the console logs
+        // routes through ConsoleLogsManager.OnFiltersChanged), and those
+        // refreshes must preserve whatever view the user is currently on rather
+        // than snapping back to the default.
+        if (resetView)
+        {
+            // Default the view to Console on every resource change. A terminal-
+            // enabled resource that isn't live yet (Waiting/Starting) or has already
+            // stopped (Exited/Finished/FailedToStart) has no active PTY, so Console
+            // is where the useful output lives: pre-PTY hosting messages (WaitFor,
+            // startup failures) and post-PTY exit messages. When the resource is
+            // live (Running) the PTY is the primary surface, so we flip the default
+            // to Terminal below.
+            _activeView = ConsoleLogsView.Console;
+        }
 
         if (!isAllSelected && selectedResourceName is not null &&
             _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
@@ -503,6 +526,19 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _terminalResourceName = selectedResource.DisplayName;
             _terminalReplicaIndex = replicaIndex;
             Logger.LogDebug("Resource '{ResourceName}' has terminal at replica {ReplicaIndex}", selectedResourceName, replicaIndex);
+
+            // When the resource is live (Running) its PTY is active, so make the
+            // terminal the default view on selection — that's the surface the
+            // user came for. Non-running terminal resources stay on Console so
+            // pre-PTY hosting messages and post-PTY exit output remain visible
+            // immediately. Gated on resetView so a filter refresh (e.g. clearing
+            // logs) never overrides a manual view choice. The user can still flip
+            // either way via the ⋯ menu.
+            if (resetView && selectedResource.IsRunningState())
+            {
+                _activeView = ConsoleLogsView.Terminal;
+            }
+
             // Intentionally fall through to the normal subscription path so
             // the resource's console log stream is collected even while the
             // user is on the Terminal view. The Console view in the View
