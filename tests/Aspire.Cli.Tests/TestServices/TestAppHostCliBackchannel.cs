@@ -36,6 +36,8 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
 
     public TaskCompletionSource? GetPipelineOutputsAsyncCalled { get; set; }
     public Func<CancellationToken, Task<GetPipelineOutputsResponse>>? GetPipelineOutputsAsyncCallback { get; set; }
+    public TaskCompletionSource? AuthorizePipelineExecutionAsyncCalled { get; set; }
+    public Func<CancellationToken, Task>? AuthorizePipelineExecutionAsyncCallback { get; set; }
 
     public Task RequestStopAsync(CancellationToken cancellationToken)
     {
@@ -299,7 +301,11 @@ internal sealed class TestAppHostBackchannel : IAppHostCliBackchannel
         };
     }
 
-    public Task AuthorizePipelineExecutionAsync(CancellationToken cancellationToken) => Task.CompletedTask;
+    public Task AuthorizePipelineExecutionAsync(CancellationToken cancellationToken)
+    {
+        AuthorizePipelineExecutionAsyncCalled?.SetResult();
+        return AuthorizePipelineExecutionAsyncCallback?.Invoke(cancellationToken) ?? Task.CompletedTask;
+    }
 
     public Func<string, string, CancellationToken, Task<UploadFileResponse>>? UploadFileAsyncCallback { get; set; }
 

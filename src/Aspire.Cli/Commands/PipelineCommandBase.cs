@@ -129,6 +129,19 @@ internal abstract class PipelineCommandBase : BaseCommand
     /// </summary>
     protected virtual string[] GetCommandArgs(ParseResult parseResult) => [];
 
+    /// <summary>
+    /// Creates an optional command-specific execution session after the AppHost and logical output
+    /// path have been resolved, but before the AppHost is launched.
+    /// </summary>
+    protected virtual Task<IPipelineExecutionSession?> CreateExecutionSessionAsync(
+        FileInfo appHostFile,
+        string? fullyQualifiedOutputPath,
+        ParseResult parseResult,
+        CancellationToken cancellationToken)
+    {
+        return Task.FromResult<IPipelineExecutionSession?>(null);
+    }
+
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
     {
         // If running in the extension context (Aspire terminal) without a debug session,
@@ -150,7 +163,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 }
             }
 
-            var commandArgs = GetCommandArgs(parseResult).Concat(parseResult.UnmatchedTokens).ToArray();
+            var commandArgs = GetDebugSessionArguments(parseResult);
 
             extensionInteractionService.DisplayConsolePlainText($"Detected aspire {Name} inside the Aspire extension, starting a debug session in VS Code...");
             await extensionInteractionService.StartDebugSessionAsync(ExecutionContext.WorkingDirectory.FullName, passedAppHostProjectFile?.FullName, debug: true, new DebugSessionOptions { Command = Name, Args = commandArgs.Length > 0 ? commandArgs : null });
@@ -164,6 +177,9 @@ internal abstract class PipelineCommandBase : BaseCommand
 
         Task<int>? pendingRun = null;
         PublishContext? publishContext = null;
+        IPipelineExecutionSession? executionSession = null;
+        IAppHostCliBackchannel? connectedBackchannel = null;
+        var stopRequested = false;
 
         // Send terminal infinite progress bar start sequence
         StartTerminalProgressBar();
@@ -199,18 +215,33 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             var outputPath = parseResult.GetValue(_outputPathOption);
             var fullyQualifiedOutputPath = outputPath != null ? Path.GetFullPath(outputPath) : null;
+            executionSession = await CreateExecutionSessionAsync(
+                effectiveAppHostFile,
+                fullyQualifiedOutputPath,
+                parseResult,
+                cancellationToken).ConfigureAwait(false);
+            var effectiveOutputPath = executionSession?.OutputPath ?? fullyQualifiedOutputPath;
 
             var backchannelCompletionSource = new TaskCompletionSource<IAppHostCliBackchannel>();
 
             var unmatchedTokens = parseResult.UnmatchedTokens.ToArray();
+            var runArguments = await GetRunArgumentsAsync(
+                effectiveOutputPath,
+                unmatchedTokens,
+                parseResult,
+                cancellationToken).ConfigureAwait(false);
+            if (executionSession is not null)
+            {
+                runArguments = [.. runArguments, .. executionSession.AdditionalAppHostArguments];
+            }
 
             // Create the publish context and delegate to IAppHostProject
             publishContext = new PublishContext
             {
                 AppHostFile = effectiveAppHostFile,
-                OutputPath = fullyQualifiedOutputPath,
+                OutputPath = effectiveOutputPath,
                 EnvironmentVariables = env,
-                Arguments = await GetRunArgumentsAsync(fullyQualifiedOutputPath, unmatchedTokens, parseResult, cancellationToken),
+                Arguments = runArguments,
                 BackchannelCompletionSource = backchannelCompletionSource,
                 WorkingDirectory = ExecutionContext.WorkingDirectory,
                 Debug = debugMode,
@@ -256,6 +287,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 var innerException = completedTask.IsFaulted ? completedTask.Exception : null;
                 throw new InvalidOperationException("Run completed without returning a backchannel.", innerException);
             }), emoji: KnownEmojis.HammerAndWrench);
+            connectedBackchannel = backchannel;
 
             // If --list-steps was specified, get pipeline steps and print them instead of executing
             var listSteps = parseResult.GetValue(s_listStepsOption);
@@ -277,8 +309,14 @@ internal abstract class PipelineCommandBase : BaseCommand
                 PrintPipelineSteps(response.Steps);
 
                 await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
+                stopRequested = true;
                 await pendingRun;
                 return CommandResult.Success();
+            }
+
+            if (executionSession is not null)
+            {
+                await executionSession.PreflightAndAuthorizeAsync(backchannel, cancellationToken).ConfigureAwait(false);
             }
 
             var publishingActivities = backchannel.GetPublishingActivitiesAsync(cancellationToken);
@@ -297,7 +335,22 @@ internal abstract class PipelineCommandBase : BaseCommand
             // Send terminal progress bar stop sequence
             StopTerminalProgressBar();
 
+            if (executionSession is not null && noFailuresReported)
+            {
+                if (pendingRun.IsCompleted)
+                {
+                    var earlyExitCode = await pendingRun.ConfigureAwait(false);
+                    if (earlyExitCode != CliExitCodes.Success)
+                    {
+                        return CommandResult.FromExitCode(earlyExitCode);
+                    }
+                }
+
+                await executionSession.CaptureFinalStateAsync(backchannel, cancellationToken).ConfigureAwait(false);
+            }
+
             await backchannel.RequestStopAsync(cancellationToken).ConfigureAwait(false);
+            stopRequested = true;
             var exitCode = await pendingRun;
 
             // If the apphost returned a non-zero exit code, use it directly.
@@ -316,6 +369,11 @@ internal abstract class PipelineCommandBase : BaseCommand
             if (!noFailuresReported)
             {
                 return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
+            }
+
+            if (executionSession is not null)
+            {
+                return await executionSession.CompleteAsync(cancellationToken).ConfigureAwait(false);
             }
 
             // Both apphost exit code and backchannel indicate success
@@ -373,7 +431,35 @@ internal abstract class PipelineCommandBase : BaseCommand
             {
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
-            return CommandResult.FromExitCode(pendingRun is { } && debugMode ? await pendingRun : CliExitCodes.FailedToBuildArtifacts);
+
+            if (executionSession is not null && pendingRun is not null)
+            {
+                try
+                {
+                    var verificationExitCode = await pendingRun
+                        .WaitAsync(TimeSpan.FromSeconds(5), CancellationToken.None)
+                        .ConfigureAwait(false);
+                    if (verificationExitCode != CliExitCodes.Success)
+                    {
+                        return CommandResult.FromExitCode(verificationExitCode);
+                    }
+                }
+                catch (Exception waitException) when (waitException is TimeoutException or OperationCanceledException)
+                {
+                    _logger.LogDebug(waitException, "The AppHost exit code was not available after the verification backchannel disconnected.");
+                }
+            }
+
+            return CommandResult.FromExitCode(
+                pendingRun is { IsCompleted: true } && (executionSession is not null || debugMode)
+                    ? await pendingRun.ConfigureAwait(false)
+                    : CliExitCodes.FailedToBuildArtifacts);
+        }
+        catch (PublishVerificationException ex)
+        {
+            StopTerminalProgressBar();
+            Telemetry.RecordError("Publish verification failed before reconciliation.", ex);
+            return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts, ex.Message);
         }
         catch (Exception ex)
         {
@@ -387,6 +473,91 @@ internal abstract class PipelineCommandBase : BaseCommand
                 InteractionService.DisplayLines(outputCollector.GetLines());
             }
             return CommandResult.Failure(CliExitCodes.FailedToBuildArtifacts);
+        }
+        finally
+        {
+            if (executionSession is not null)
+            {
+                if (!stopRequested && connectedBackchannel is not null)
+                {
+                    try
+                    {
+                        using var stopTimeout = new CancellationTokenSource(TimeSpan.FromSeconds(10));
+                        await connectedBackchannel.RequestStopAsync(stopTimeout.Token).ConfigureAwait(false);
+                    }
+                    catch (OperationCanceledException ex)
+                    {
+                        _logger.LogError(ex, "Timed out requesting AppHost shutdown during publish verification cleanup.");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Failed to stop the AppHost while cleaning up publish verification.");
+                    }
+                }
+
+                if (pendingRun is not null)
+                {
+                    try
+                    {
+                        await pendingRun.WaitAsync(TimeSpan.FromSeconds(30), CancellationToken.None).ConfigureAwait(false);
+                    }
+                    catch (TimeoutException ex)
+                    {
+                        _logger.LogError(ex, "Timed out waiting for the AppHost to stop during publish verification cleanup.");
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "The AppHost run ended with an exception during publish verification cleanup.");
+                    }
+                }
+
+                await executionSession.DisposeAsync().ConfigureAwait(false);
+            }
+        }
+    }
+
+    private string[] GetDebugSessionArguments(ParseResult parseResult)
+    {
+        var arguments = new List<string>();
+
+        AddStringOption(arguments, "--output-path", parseResult.GetValue(_outputPathOption));
+        AddStringOption(arguments, "--pipeline-log-level", parseResult.GetValue(s_pipelineLogLevelOption));
+        AddStringOption(arguments, "--environment", parseResult.GetValue(s_environmentOption));
+
+        if (parseResult.GetValue(s_includeExceptionDetailsOption))
+        {
+            arguments.Add("--include-exception-details");
+        }
+
+        if (parseResult.GetValue(s_noBuildOption))
+        {
+            arguments.Add("--no-build");
+        }
+
+        if (parseResult.GetValue(s_listStepsOption))
+        {
+            arguments.Add("--list-steps");
+        }
+
+        arguments.AddRange(GetCommandArgs(parseResult));
+        if (parseResult.UnmatchedTokens.Count > 0)
+        {
+            // The extension relaunches the CLI, so restore the delimiter that System.CommandLine
+            // removes from UnmatchedTokens. Without it, publisher arguments matching CLI options
+            // are rebound by the relaunched CLI instead of reaching the AppHost unchanged.
+            arguments.Add("--");
+            arguments.AddRange(parseResult.UnmatchedTokens);
+        }
+
+        return [.. arguments];
+    }
+
+    private static void AddStringOption(List<string> arguments, string optionName, string? value)
+    {
+        if (!string.IsNullOrEmpty(value))
+        {
+            arguments.Add(optionName);
+            arguments.Add(value);
         }
     }
 

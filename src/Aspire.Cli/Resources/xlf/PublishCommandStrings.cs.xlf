@@ -47,6 +47,156 @@
         <target state="translated">Vyberte vydavatele:</target>
         <note />
       </trans-unit>
+      <trans-unit id="VerificationFailed">
+        <source>Published output verification failed.</source>
+        <target state="new">Published output verification failed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerificationSucceeded">
+        <source>Published output is up to date.</source>
+        <target state="new">Published output is up to date.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyAppHostDirectoryChanged">
+        <source>The AppHost output plan reported a different AppHost directory.</source>
+        <target state="new">The AppHost output plan reported a different AppHost directory.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyAppHostDirectoryUnavailable">
+        <source>The AppHost project directory could not be resolved.</source>
+        <target state="new">The AppHost project directory could not be resolved.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyDestinationLinkEscape">
+        <source>A publish destination escapes the Git repository through a symbolic link or junction.</source>
+        <target state="new">A publish destination escapes the Git repository through a symbolic link or junction.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyDestinationOutsideRepository">
+        <source>All publish destinations must be inside the AppHost Git repository.</source>
+        <target state="new">All publish destinations must be inside the AppHost Git repository.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyDuplicateOutputs">
+        <source>The AppHost output plan contains duplicate output identities.</source>
+        <target state="new">The AppHost output plan contains duplicate output identities.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyFinalStateUnavailable">
+        <source>The final AppHost output state was not available for reconciliation.</source>
+        <target state="new">The final AppHost output state was not available for reconciliation.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyGitQueryFailed">
+        <source>Git could not evaluate the files included in the publish destinations.</source>
+        <target state="new">Git could not evaluate the files included in the publish destinations.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyGitUnavailable">
+        <source>Publish verification requires the AppHost to be inside an available Git repository.</source>
+        <target state="new">Publish verification requires the AppHost to be inside an available Git repository.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyHostingIncompatible">
+        <source>The AppHost does not support publish verification. Update the AppHost to a newer version of Aspire.</source>
+        <target state="new">The AppHost does not support publish verification. Update the AppHost to a newer version of Aspire.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyInvalidDestinationPath">
+        <source>A publish destination path could not be resolved safely.</source>
+        <target state="new">A publish destination path could not be resolved safely.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyLinkedOutputPath">
+        <source>Publish verification does not support symbolic links or junctions inside output trees.</source>
+        <target state="new">Publish verification does not support symbolic links or junctions inside output trees.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyListStepsNotSupported">
+        <source>The --verify and --list-steps options cannot be used together.</source>
+        <target state="new">The --verify and --list-steps options cannot be used together.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyMissingFilesHeader">
+        <source>Missing files in '{0}':</source>
+        <target state="new">Missing files in '{0}':</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyNestedRepository">
+        <source>Publish destinations cannot contain or be inside nested Git repositories or submodules.</source>
+        <target state="new">Publish destinations cannot contain or be inside nested Git repositories or submodules.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyOptionDescription">
+        <source>Verify generated artifacts match the Git-included output without modifying it</source>
+        <target state="new">Verify generated artifacts match the Git-included output without modifying it</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyOrphanedFilesHeader">
+        <source>Orphaned files in '{0}':</source>
+        <target state="new">Orphaned files in '{0}':</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyOutputChangedDuringShutdown">
+        <source>Published output changed after the AppHost reported completion.</source>
+        <target state="new">Published output changed after the AppHost reported completion.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyOutputKindMismatch">
+        <source>A publish output path does not match its declared file or directory kind.</source>
+        <target state="new">A publish output path does not match its declared file or directory kind.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyOutputPlanChanged">
+        <source>The AppHost output plan changed after execution was authorized.</source>
+        <target state="new">The AppHost output plan changed after execution was authorized.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyOverlappingOutputs">
+        <source>The AppHost output plan contains overlapping destinations or staging paths.</source>
+        <target state="new">The AppHost output plan contains overlapping destinations or staging paths.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyPrimaryOutputMismatch">
+        <source>The AppHost output plan does not contain the expected staged primary output.</source>
+        <target state="new">The AppHost output plan does not contain the expected staged primary output.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyRegenerateCommand">
+        <source>Regenerate with: {0}</source>
+        <target state="new">Regenerate with: {0}</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyStagingCleanupFailed">
+        <source>The temporary publish verification directory could not be removed.</source>
+        <target state="new">The temporary publish verification directory could not be removed.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyStaleFilesHeader">
+        <source>Stale files in '{0}':</source>
+        <target state="new">Stale files in '{0}':</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyUnexpectedOutputState">
+        <source>The AppHost reported an unexpected output-plan state: {0}.</source>
+        <target state="new">The AppHost reported an unexpected output-plan state: {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyUnknownOutputKind">
+        <source>The AppHost reported an unsupported output kind: {0}.</source>
+        <target state="new">The AppHost reported an unsupported output kind: {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyUnsupportedSteps">
+        <source>These selected pipeline steps do not support output relocation: {0}.</source>
+        <target state="new">These selected pipeline steps do not support output relocation: {0}.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VerifyWritablePathOutsideStaging">
+        <source>The AppHost output plan contains a writable path outside the verification staging directory.</source>
+        <target state="new">The AppHost output plan contains a writable path outside the verification staging directory.</target>
+        <note />
+      </trans-unit>
     </body>
   </file>
 </xliff>

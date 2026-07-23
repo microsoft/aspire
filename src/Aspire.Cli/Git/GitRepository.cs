@@ -19,72 +19,61 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
     /// <inheritdoc />
     public async Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken)
     {
-        logger.LogDebug("Searching for Git repository root from working directory: {WorkingDirectory}", executionContext.WorkingDirectory.FullName);
+        return await GetRootAsync(executionContext.WorkingDirectory, cancellationToken).ConfigureAwait(false);
+    }
 
-        try
+    /// <inheritdoc />
+    public async Task<DirectoryInfo?> GetRootAsync(DirectoryInfo startDirectory, CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(startDirectory);
+
+        if (!startDirectory.Exists)
         {
-            var startInfo = new ProcessStartInfo("git")
-            {
-                WorkingDirectory = executionContext.WorkingDirectory.FullName,
-                RedirectStandardOutput = true,
-                RedirectStandardError = true,
-                UseShellExecute = false,
-                CreateNoWindow = true
-            };
-            startInfo.ArgumentList.Add("rev-parse");
-            startInfo.ArgumentList.Add("--show-toplevel");
+            logger.LogDebug("Git repository discovery directory does not exist: {StartDirectory}", startDirectory.FullName);
+            return null;
+        }
 
-            using var process = new Process { StartInfo = startInfo };
-            using var activity = profilingTelemetry.StartGitCommand("rev-parse", startInfo.FileName, startInfo.ArgumentList, executionContext.WorkingDirectory);
+        logger.LogDebug("Searching for Git repository root from directory: {StartDirectory}", startDirectory.FullName);
 
-            process.Start();
-            activity.SetProcessId(process.Id);
-            using var cancellationRegistration = RegisterProcessKillOnCancellation(process, cancellationToken);
+        var result = await RunGitAsync(
+            startDirectory,
+            "rev-parse",
+            ["rev-parse", "--show-toplevel"],
+            standardInput: null,
+            exitCode => exitCode == 0,
+            cancellationToken).ConfigureAwait(false);
 
-            // Read both streams concurrently so a verbose git failure cannot block on a full stderr
-            // pipe while the CLI is waiting for stdout or process exit.
-            var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
-            var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+        if (result is null)
+        {
+            return null;
+        }
 
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
+        if (result.ExitCode != 0)
+        {
+            logger.LogDebug(
+                "git rev-parse returned non-zero exit code {ExitCode} from {StartDirectory}: {Error}",
+                result.ExitCode,
+                startDirectory.FullName,
+                result.StandardError.Trim());
+            return null;
+        }
 
-            var output = await outputTask.ConfigureAwait(false);
-            var errorOutput = await errorTask.ConfigureAwait(false);
-            activity.SetGitOutputLengths(output.Length, errorOutput.Length);
+        var rootPath = result.StandardOutput.Trim();
+        if (string.IsNullOrEmpty(rootPath))
+        {
+            logger.LogDebug("git rev-parse returned empty output from {StartDirectory}", startDirectory.FullName);
+            return null;
+        }
 
-            if (process.ExitCode != 0)
-            {
-                activity.SetError($"git rev-parse exited with code {process.ExitCode}.");
-                logger.LogDebug("Git command returned non-zero exit code {ExitCode}: {Error}", process.ExitCode, errorOutput.Trim());
-                return null;
-            }
-
-            var rootPath = output.Trim();
-
-            if (string.IsNullOrEmpty(rootPath))
-            {
-                logger.LogDebug("Git command returned empty output");
-                return null;
-            }
-
-            var directoryInfo = new DirectoryInfo(rootPath);
-            if (directoryInfo.Exists)
-            {
-                logger.LogDebug("Found Git repository root: {GitRoot}", directoryInfo.FullName);
-                return directoryInfo;
-            }
-
+        var directoryInfo = new DirectoryInfo(rootPath);
+        if (!directoryInfo.Exists)
+        {
             logger.LogDebug("Git repository root path does not exist: {GitRoot}", rootPath);
             return null;
         }
-        catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
-        {
-            // Missing git is not fatal for callers. Ambient discovery treats null as
-            // "git acceleration unavailable" and falls back to the filesystem walker.
-            logger.LogDebug(ex, "Git is not installed or not found in PATH");
-            return null;
-        }
+
+        logger.LogDebug("Found Git repository root: {GitRoot}", directoryInfo.FullName);
+        return directoryInfo;
     }
 
     /// <inheritdoc />
@@ -98,84 +87,266 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             return null;
         }
 
-        logger.LogDebug("Listing git-included files under: {SearchRoot}", searchRoot.FullName);
+        var repositoryRoot = await GetRootAsync(searchRoot, cancellationToken).ConfigureAwait(false);
+        if (repositoryRoot is null)
+        {
+            return null;
+        }
 
+        return await GetIncludedFilesAsync(repositoryRoot, [searchRoot.FullName], cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlySet<string>?> GetIncludedFilesAsync(
+        DirectoryInfo repositoryRoot,
+        IReadOnlyList<string> searchPaths,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(repositoryRoot);
+        ArgumentNullException.ThrowIfNull(searchPaths);
+
+        if (!repositoryRoot.Exists)
+        {
+            logger.LogDebug("Explicit Git repository root does not exist: {RepositoryRoot}", repositoryRoot.FullName);
+            return null;
+        }
+
+        if (searchPaths.Count == 0)
+        {
+            return new HashSet<string>(PathComparer);
+        }
+
+        var arguments = new List<string>
+        {
+            "ls-files",
+            "--cached",
+            "--others",
+            "--exclude-standard",
+            "-z"
+        };
+
+        var relativeSearchPaths = searchPaths
+            .Select(path => GetRepositoryRelativePath(repositoryRoot.FullName, path))
+            .Distinct(PathComparer)
+            .ToArray();
+
+        if (!relativeSearchPaths.Any(string.IsNullOrEmpty))
+        {
+            arguments.Add("--");
+            arguments.AddRange(relativeSearchPaths.Select(ToLiteralPathspec));
+        }
+
+        logger.LogDebug(
+            "Listing Git-included files under {PathCount} paths from repository root {RepositoryRoot}.",
+            searchPaths.Count,
+            repositoryRoot.FullName);
+
+        var result = await RunGitAsync(
+            repositoryRoot,
+            "ls-files",
+            arguments,
+            standardInput: null,
+            exitCode => exitCode == 0,
+            cancellationToken).ConfigureAwait(false);
+
+        if (result is null)
+        {
+            return null;
+        }
+
+        if (result.ExitCode != 0)
+        {
+            logger.LogDebug(
+                "git ls-files returned non-zero exit code {ExitCode} from {RepositoryRoot}: {Error}",
+                result.ExitCode,
+                repositoryRoot.FullName,
+                result.StandardError.Trim());
+            return null;
+        }
+
+        var includedFiles = ParseAbsolutePaths(repositoryRoot.FullName, result.StandardOutput);
+        logger.LogDebug(
+            "git ls-files returned {Count} files for {PathCount} paths under {RepositoryRoot}.",
+            includedFiles.Count,
+            searchPaths.Count,
+            repositoryRoot.FullName);
+        return includedFiles;
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlySet<string>?> GetIgnoredFilesAsync(
+        DirectoryInfo repositoryRoot,
+        IReadOnlyList<string> candidatePaths,
+        CancellationToken cancellationToken)
+    {
+        ArgumentNullException.ThrowIfNull(repositoryRoot);
+        ArgumentNullException.ThrowIfNull(candidatePaths);
+
+        if (!repositoryRoot.Exists)
+        {
+            logger.LogDebug("Explicit Git repository root does not exist: {RepositoryRoot}", repositoryRoot.FullName);
+            return null;
+        }
+
+        if (candidatePaths.Count == 0)
+        {
+            return new HashSet<string>(PathComparer);
+        }
+
+        var relativeCandidates = candidatePaths
+            .Select(path => GetRepositoryRelativePath(repositoryRoot.FullName, path))
+            .Distinct(PathComparer)
+            .ToArray();
+
+        // `git check-ignore --stdin -z` consumes and emits NUL-delimited repository-relative
+        // paths, for example `.configgen/a b.json\0.pipelines/line\nbreak.yml\0`.
+        // Exit code 1 is the documented success result when none of the paths are ignored.
+        var standardInput = string.Join('\0', relativeCandidates) + '\0';
+        var result = await RunGitAsync(
+            repositoryRoot,
+            "check-ignore",
+            ["check-ignore", "--no-index", "-z", "--stdin"],
+            standardInput,
+            exitCode => exitCode is 0 or 1,
+            cancellationToken).ConfigureAwait(false);
+
+        if (result is null)
+        {
+            return null;
+        }
+
+        if (result.ExitCode is not (0 or 1))
+        {
+            logger.LogDebug(
+                "git check-ignore returned unexpected exit code {ExitCode} from {RepositoryRoot}: {Error}",
+                result.ExitCode,
+                repositoryRoot.FullName,
+                result.StandardError.Trim());
+            return null;
+        }
+
+        return ParseAbsolutePaths(repositoryRoot.FullName, result.StandardOutput);
+    }
+
+    private StringComparer PathComparer =>
+        environment.IsWindows() || environment.IsMacOS()
+            ? StringComparer.OrdinalIgnoreCase
+            : StringComparer.Ordinal;
+
+    private HashSet<string> ParseAbsolutePaths(string repositoryRoot, string output)
+    {
+        var paths = new HashSet<string>(PathComparer);
+
+        // Git's -z output is repository-relative and always uses '/' separators. The trailing
+        // NUL produces an empty split entry, while embedded spaces and newlines remain unambiguous.
+        foreach (var rawPath in output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
+        {
+            var relativePath = Path.DirectorySeparatorChar == '/'
+                ? rawPath
+                : rawPath.Replace('/', Path.DirectorySeparatorChar);
+            paths.Add(Path.GetFullPath(relativePath, repositoryRoot));
+        }
+
+        return paths;
+    }
+
+    private static string GetRepositoryRelativePath(string repositoryRoot, string path)
+    {
+        var fullPath = Path.GetFullPath(path);
+        var relativePath = Path.GetRelativePath(repositoryRoot, fullPath);
+        if (relativePath == ".." ||
+            relativePath.StartsWith($"..{Path.DirectorySeparatorChar}", StringComparison.Ordinal) ||
+            Path.IsPathRooted(relativePath))
+        {
+            throw new ArgumentException(
+                $"Path '{fullPath}' is outside Git repository root '{repositoryRoot}'.",
+                nameof(path));
+        }
+
+        if (relativePath == ".")
+        {
+            return string.Empty;
+        }
+
+        return relativePath.Replace(Path.DirectorySeparatorChar, '/');
+    }
+
+    private static string ToLiteralPathspec(string relativePath)
+    {
+        return $":(top,literal){relativePath}";
+    }
+
+    private async Task<GitProcessResult?> RunGitAsync(
+        DirectoryInfo workingDirectory,
+        string command,
+        IReadOnlyList<string> arguments,
+        string? standardInput,
+        Func<int, bool> isExpectedExitCode,
+        CancellationToken cancellationToken)
+    {
         try
         {
             var startInfo = new ProcessStartInfo("git")
             {
-                WorkingDirectory = searchRoot.FullName,
+                WorkingDirectory = workingDirectory.FullName,
+                RedirectStandardInput = standardInput is not null,
                 RedirectStandardOutput = true,
                 RedirectStandardError = true,
                 UseShellExecute = false,
-                CreateNoWindow = true,
+                CreateNoWindow = true
             };
 
-            // -z separates entries with NUL so paths containing newlines or spaces are unambiguous.
-            // --cached: tracked files. --others: untracked files. --exclude-standard: respect .gitignore,
-            // .git/info/exclude, and the user's global excludesfile. Submodule contents are not enumerated.
-            startInfo.ArgumentList.Add("ls-files");
-            startInfo.ArgumentList.Add("--cached");
-            startInfo.ArgumentList.Add("--others");
-            startInfo.ArgumentList.Add("--exclude-standard");
-            startInfo.ArgumentList.Add("-z");
+            foreach (var argument in arguments)
+            {
+                startInfo.ArgumentList.Add(argument);
+            }
 
             using var process = new Process { StartInfo = startInfo };
-            using var activity = profilingTelemetry.StartGitCommand("ls-files", startInfo.FileName, startInfo.ArgumentList, searchRoot);
+            using var activity = profilingTelemetry.StartGitCommand(command, startInfo.FileName, startInfo.ArgumentList, workingDirectory);
 
             process.Start();
             activity.SetProcessId(process.Id);
             using var cancellationRegistration = RegisterProcessKillOnCancellation(process, cancellationToken);
 
-            // Read both streams concurrently so a verbose git failure cannot block on a full stderr
-            // pipe while the CLI is waiting for stdout or process exit.
+            // Read both streams concurrently to avoid deadlock when a pipe buffer fills. Standard
+            // input is also written concurrently because check-ignore can emit while consuming.
             var outputTask = process.StandardOutput.ReadToEndAsync(cancellationToken);
             var errorTask = process.StandardError.ReadToEndAsync(cancellationToken);
+            var inputTask = standardInput is null
+                ? Task.CompletedTask
+                : WriteStandardInputAsync(process, standardInput, cancellationToken);
 
-            await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
-            activity.SetProcessExitCode(process.ExitCode);
+            await Task.WhenAll(process.WaitForExitAsync(cancellationToken), inputTask).ConfigureAwait(false);
 
             var output = await outputTask.ConfigureAwait(false);
             var errorOutput = await errorTask.ConfigureAwait(false);
+            activity.SetProcessExitCode(process.ExitCode);
             activity.SetGitOutputLengths(output.Length, errorOutput.Length);
 
-            if (process.ExitCode != 0)
+            if (!isExpectedExitCode(process.ExitCode))
             {
-                activity.SetError($"git ls-files exited with code {process.ExitCode}.");
-                logger.LogDebug("git ls-files returned non-zero exit code {ExitCode} from {SearchRoot}: {Error}", process.ExitCode, searchRoot.FullName, errorOutput.Trim());
-                return null;
+                activity.SetError($"git {command} exited with code {process.ExitCode}.");
             }
 
-            var pathComparer = environment.IsWindows() || environment.IsMacOS()
-                ? StringComparer.OrdinalIgnoreCase
-                : StringComparer.Ordinal;
-            var includedFiles = new HashSet<string>(pathComparer);
-
-            var rootFullName = searchRoot.FullName;
-
-            // `git ls-files -z` emits NUL-delimited paths relative to searchRoot, for example:
-            // `src/AppHost/AppHost.csproj\0playground/apphost.ts\0`. Git always uses '/' as the
-            // separator in this output, and the trailing NUL produces an empty split entry.
-            foreach (var rawPath in output.Split('\0', StringSplitOptions.RemoveEmptyEntries))
-            {
-                var relativePath = Path.DirectorySeparatorChar == '/'
-                    ? rawPath
-                    : rawPath.Replace('/', Path.DirectorySeparatorChar);
-
-                var absolutePath = Path.GetFullPath(Path.Combine(rootFullName, relativePath));
-                includedFiles.Add(absolutePath);
-            }
-
-            logger.LogDebug("git ls-files returned {Count} files under {SearchRoot}", includedFiles.Count, searchRoot.FullName);
-            return includedFiles;
+            return new GitProcessResult(process.ExitCode, output, errorOutput);
         }
         catch (Exception ex) when (ex is InvalidOperationException or System.ComponentModel.Win32Exception)
         {
-            // Missing git is not fatal for callers. Ambient discovery treats null as
-            // "git acceleration unavailable" and falls back to the filesystem walker.
+            // Ambient discovery treats null as "git acceleration unavailable"; verification treats
+            // it as a hard failure. The caller chooses based on the operation being performed.
             logger.LogDebug(ex, "Git is not installed or not found in PATH");
             return null;
         }
+    }
+
+    private static async Task WriteStandardInputAsync(
+        Process process,
+        string standardInput,
+        CancellationToken cancellationToken)
+    {
+        await process.StandardInput.WriteAsync(standardInput.AsMemory(), cancellationToken).ConfigureAwait(false);
+        await process.StandardInput.FlushAsync(cancellationToken).ConfigureAwait(false);
+        process.StandardInput.Close();
     }
 
     private static CancellationTokenRegistration RegisterProcessKillOnCancellation(Process process, CancellationToken cancellationToken)
@@ -210,4 +381,6 @@ internal sealed class GitRepository(CliExecutionContext executionContext, IEnvir
             }
         }, process);
     }
+
+    private sealed record GitProcessResult(int ExitCode, string StandardOutput, string StandardError);
 }
