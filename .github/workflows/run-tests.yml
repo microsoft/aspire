@@ -114,9 +114,7 @@ jobs:
           WSL_INTEROP: ""
 
       - name: Verify Docker is running
-        # nested docker containers not supported on windows
-        if: runner.os == 'Linux'
-        run: docker info
+        uses: ./.github/actions/verify-docker
 
       - name: Download prebuilt CLI E2E Docker image
         if: ${{ fromJson(inputs.properties).requiresCliArchive == true && runner.os == 'Linux' }}
