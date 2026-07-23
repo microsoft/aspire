@@ -4,13 +4,14 @@
     <TargetFrameworks>$(AllTargetFrameworks)</TargetFrameworks>
     <IsPackable>true</IsPackable>
     <PackageTags>$(ComponentAzurePackageTags) cosmos cosmosdb data database db nosql cloud</PackageTags>
-    <Description>A client for Azure Cosmos DB that integrates with Aspire, including logging and telemetry.</Description>
+    <Description>A client for Azure Cosmos DB that integrates with Aspire, including health checks, logging, and telemetry.</Description>
     <PackageIconFullPath>$(SharedDir)AzureCosmosDB_256x.png</PackageIconFullPath>
     <NoWarn>$(NoWarn);SYSLIB1100;SYSLIB1101</NoWarn>
   </PropertyGroup>
 
   <ItemGroup>
     <Compile Include="..\Common\ConfigurationSchemaAttributes.cs" Link="ConfigurationSchemaAttributes.cs" />
+    <Compile Include="..\Common\HealthChecksExtensions.cs" Link="HealthChecksExtensions.cs" />
     <Compile Include="..\..\Shared\Cosmos\CosmosConstants.cs" Link="Shared\CosmosConstants.cs" />
     <Compile Include="..\..\Shared\Cosmos\CosmosUtils.cs" Link="Shared\CosmosUtils.cs" />
     <Compile Include="..\..\Shared\StableConnectionStringBuilder.cs" Link="Shared\StableConnectionStringBuilder.cs" />
@@ -22,6 +23,7 @@
     <PackageReference Include="Microsoft.Azure.Cosmos" />
     <PackageReference Include="Newtonsoft.Json" /> <!-- Required by Microsoft.Azure.Cosmos -->
     <PackageReference Include="Microsoft.Extensions.Configuration.Binder" />
+    <PackageReference Include="Microsoft.Extensions.Diagnostics.HealthChecks" />
     <PackageReference Include="Microsoft.Extensions.Hosting.Abstractions" />
     <PackageReference Include="OpenTelemetry.Extensions.Hosting" />
   </ItemGroup>
