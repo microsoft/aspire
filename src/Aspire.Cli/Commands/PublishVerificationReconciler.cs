@@ -30,15 +30,17 @@ internal static class PublishVerificationReconciler
         CancellationToken cancellationToken)
     {
         var contentComparer = new PublishVerificationContentComparer(outputs);
-        var inventoryByOutput = inventory.ToDictionary(item => (item.Output.PublisherName, item.Output.Name));
+        var inventoryByOutput = inventory.ToDictionary(
+            item => (item.Output.IsPrimary, item.Output.PublisherName, item.Output.Name));
         var groups = new List<PublishVerificationGroup>(outputs.Count);
 
         foreach (var output in outputs
             .OrderBy(item => GetDisplayPath(repositoryRoot, item.LogicalTargetPath), StringComparer.Ordinal)
+            .ThenByDescending(item => item.IsPrimary)
             .ThenBy(item => item.PublisherName, StringComparer.Ordinal)
             .ThenBy(item => item.Name, StringComparer.Ordinal))
         {
-            var generatedFiles = inventoryByOutput[(output.PublisherName, output.Name)].Files;
+            var generatedFiles = inventoryByOutput[(output.IsPrimary, output.PublisherName, output.Name)].Files;
             var includedFiles = GetIncludedFiles(output, includedTargetFiles);
             var relativePaths = generatedFiles.Keys
                 .Concat(includedFiles.Keys)
@@ -202,7 +204,9 @@ internal sealed class PublishVerificationContentComparer
         _replacements = outputs
             .SelectMany(output =>
             {
-                var canonicalPrefix = $"aspire-output://{output.PublisherName}/{output.Name}";
+                var canonicalPrefix = output.IsPrimary
+                    ? "aspire-output://primary"
+                    : $"aspire-output://named/{output.PublisherName}/{output.Name}";
                 return GetPathVariants(output.OutputPath)
                     .Concat(GetPathVariants(output.LogicalTargetPath))
                     .Select(path => new Replacement(path, canonicalPrefix));

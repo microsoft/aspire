@@ -188,6 +188,7 @@ public class PublishVerificationSessionTests(ITestOutputHelper outputHelper)
             [
                 new PipelineOutputInfo
                 {
+                    IsPrimary = false,
                     PublisherName = "publisher",
                     Name = "nested",
                     Kind = "Directory",
@@ -203,6 +204,45 @@ public class PublishVerificationSessionTests(ITestOutputHelper outputHelper)
 
         await Assert.ThrowsAsync<PublishVerificationException>(
             () => session.PreflightAndAuthorizeAsync(backchannel, TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task PreflightAndAuthorizeAsync_NamedOutputMayReusePrimaryIdentifiers()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var context = await CreateContextAsync(workspace);
+        await using var session = await context.CreateSessionAsync();
+        var plan = CreatePlan(
+            context,
+            session,
+            "Prepared",
+            additionalOutputs:
+            [
+                new PipelineOutputInfo
+                {
+                    IsPrimary = false,
+                    PublisherName = "aspire",
+                    Name = "primary",
+                    Kind = "Directory",
+                    OutputPath = Path.Combine(Directory.GetParent(session.OutputPath)!.FullName, "named"),
+                    LogicalTargetPath = Path.Combine(context.RepositoryRoot.FullName, "named-output")
+                }
+            ]);
+        var authorized = false;
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetCapabilitiesAsyncCallback = _ => Task.FromResult<string[]>(["baseline.v2", "pipeline-outputs.v1"]),
+            GetPipelineOutputsAsyncCallback = _ => Task.FromResult(plan),
+            AuthorizePipelineExecutionAsyncCallback = _ =>
+            {
+                authorized = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        await session.PreflightAndAuthorizeAsync(backchannel, TestContext.Current.CancellationToken);
+
+        Assert.True(authorized);
     }
 
     [Fact]
@@ -311,6 +351,7 @@ public class PublishVerificationSessionTests(ITestOutputHelper outputHelper)
             [
                 new PipelineOutputInfo
                 {
+                    IsPrimary = true,
                     PublisherName = "aspire",
                     Name = "primary",
                     Kind = "Directory",

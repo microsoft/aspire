@@ -385,6 +385,7 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
                             [
                                 new PipelineOutputInfo
                                 {
+                                    IsPrimary = true,
                                     PublisherName = "aspire",
                                     Name = "primary",
                                     Kind = "Directory",
