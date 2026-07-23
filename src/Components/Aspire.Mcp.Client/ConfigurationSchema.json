@@ -1,0 +1,49 @@
+{
+  "definitions": {
+    "logLevel": {
+      "properties": {
+        "ModelContextProtocol.Authentication.ClientOAuthProvider": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "ModelContextProtocol.Client.AutoDetectingClientSessionTransport": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "ModelContextProtocol.Client.HttpClientTransport": {
+          "$ref": "#/definitions/logLevelThreshold"
+        },
+        "ModelContextProtocol.Client.McpClient": {
+          "$ref": "#/definitions/logLevelThreshold"
+        }
+      }
+    }
+  },
+  "type": "object",
+  "properties": {
+    "Aspire": {
+      "type": "object",
+      "properties": {
+        "Mcp": {
+          "type": "object",
+          "properties": {
+            "Client": {
+              "type": "object",
+              "properties": {
+                "DisableHealthChecks": {
+                  "type": "boolean",
+                  "description": "Gets or sets a value indicating whether health checks are disabled.",
+                  "default": false
+                },
+                "Endpoint": {
+                  "type": "string",
+                  "format": "uri",
+                  "description": "Gets or sets the explicit MCP endpoint URI."
+                }
+              },
+              "description": "Provides configuration settings for 'ModelContextProtocol.Client.McpClient' registrations."
+            }
+          }
+        }
+      }
+    }
+  }
+}
