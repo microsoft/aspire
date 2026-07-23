@@ -275,6 +275,10 @@
     <Project Path="playground/GitHubModelsEndToEnd/GitHubModelsEndToEnd.AppHost/GitHubModelsEndToEnd.AppHost.csproj" />
     <Project Path="playground/GitHubModelsEndToEnd/GitHubModelsEndToEnd.WebStory/GitHubModelsEndToEnd.WebStory.csproj" />
   </Folder>
+  <Folder Name="/playground/Godot/">
+    <Project Path="playground/Godot/Godot.AppHost/Godot.AppHost.csproj" />
+    <Project Path="playground/Godot/Godot.Matchmaker/Godot.Matchmaker.csproj" />
+  </Folder>
   <Folder Name="/playground/ExternalServices/">
     <Project Path="playground/ExternalServices/ExternalServices.AppHost/ExternalServices.AppHost.csproj" />
     <Project Path="playground/ExternalServices/WebFrontEnd/WebFrontEnd.csproj" />

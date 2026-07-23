@@ -84,6 +84,7 @@
     <ProjectReference Include="$(PlaygroundSourceDir)AzureFunctionsEndToEnd/AzureFunctionsEndToEnd.AppHost/AzureFunctionsEndToEnd.AppHost.csproj" />
     <ProjectReference Include="$(PlaygroundSourceDir)AzureStorageEndToEnd/AzureStorageEndToEnd.AppHost/AzureStorageEndToEnd.AppHost.csproj" />
     <ProjectReference Include="$(PlaygroundSourceDir)CosmosEndToEnd/CosmosEndToEnd.AppHost/CosmosEndToEnd.AppHost.csproj" />
+    <ProjectReference Include="$(PlaygroundSourceDir)Godot/Godot.AppHost/Godot.AppHost.csproj" />
     <ProjectReference Include="$(PlaygroundSourceDir)kafka/KafkaBasic.AppHost/KafkaBasic.AppHost.csproj" />
     <ProjectReference Include="$(PlaygroundSourceDir)keycloak/Keycloak.AppHost/Keycloak.AppHost.csproj" />
     <ProjectReference Include="$(PlaygroundSourceDir)milvus/MilvusPlayground.AppHost/MilvusPlayground.AppHost.csproj" />
