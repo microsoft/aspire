@@ -55,7 +55,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const gitCommitSha = readGitCommitSha(context);
   extensionLogOutputChannel.info(`Activating Aspire extension (commit: ${gitCommitSha})`);
   initializeTelemetry(context);
-  sendTelemetryEvent('extension/activated', {
+  sendTelemetryEvent('aspire/vscode/extension/activated', {
     workspace_open: vscode.workspace.workspaceFolders?.length ? 'true' : 'false',
     extension_mode: getExtensionModeForTelemetry(context.extensionMode),
   }, {
@@ -214,6 +214,7 @@ export async function activate(context: vscode.ExtensionContext) {
   const stopResourceRegistration = registerInstrumentedCommand('aspire-vscode.stopResource', 'tree', (element) => appHostTreeProvider.stopResource(element));
   const startResourceRegistration = registerInstrumentedCommand('aspire-vscode.startResource', 'tree', (element) => appHostTreeProvider.startResource(element));
   const restartResourceRegistration = registerInstrumentedCommand('aspire-vscode.restartResource', 'tree', (element) => appHostTreeProvider.restartResource(element));
+  const attachDebuggerToResourceRegistration = registerInstrumentedCommand('aspire-vscode.attachDebuggerToResource', 'tree', (element) => appHostTreeProvider.attachDebuggerToResource(element));
   const viewResourceLogsRegistration = registerInstrumentedCommand('aspire-vscode.viewResourceLogs', 'tree', (element) => appHostTreeProvider.viewResourceLogs(element));
   const openResourceTerminalRegistration = registerInstrumentedCommand('aspire-vscode.openResourceTerminal', 'tree', (element) => appHostTreeProvider.openResourceTerminal(element));
   const executeResourceCommandRegistration = registerInstrumentedCommand('aspire-vscode.executeResourceCommand', 'tree', (element) => appHostTreeProvider.executeResourceCommand(element));
@@ -252,6 +253,7 @@ export async function activate(context: vscode.ExtensionContext) {
     stopResourceRegistration,
     startResourceRegistration,
     restartResourceRegistration,
+    attachDebuggerToResourceRegistration,
     viewResourceLogsRegistration,
     openResourceTerminalRegistration,
     executeResourceCommandRegistration,

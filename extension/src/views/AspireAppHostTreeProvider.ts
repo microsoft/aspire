@@ -2,7 +2,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
-import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
+import { ResourceState, HealthStatus, StateStyle, ResourceType } from '../editor/resourceConstants';
 import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import {
     pidDescription,
@@ -36,6 +36,11 @@ import {
     resourceCommandDisabledDescription,
     appHostStartingDescription,
     appHostStoppingDescription,
+    attachDebuggerConfigurationName,
+    attachDebuggerUnavailable,
+    attachDebuggerResourceNotFound,
+    attachDebuggerCsharpExtensionRequired,
+    attachDebuggerDeclined,
     dashboardUrlNotFound,
     dashboardUrlUnsupported,
     errorMessage,
@@ -57,12 +62,17 @@ import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsL
 import { executeResourceCommand as executeResourceCommandWithUi, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
 import { isCommandCancellation } from '../utils/telemetry';
+import { isCsharpInstalled } from '../capabilities';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
 const integratedBrowserOpenCommand = 'workbench.action.browser.open';
 const terminalEnabledPropertyName = 'terminal.enabled';
 const terminalReplicaIndexPropertyName = 'terminal.replicaIndex';
+const executablePidPropertyName = 'executable.pid';
+const executablePathPropertyName = 'executable.path';
+const projectPathPropertyName = 'project.path';
+const dotNetProjectFileExtensions = ['.csproj', '.fsproj', '.vbproj'];
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -305,7 +315,7 @@ class LogFileItem extends vscode.TreeItem {
 }
 
 class ResourcesGroupItem extends vscode.TreeItem {
-    constructor(public readonly resources: ResourceJson[], public readonly appHostPid: number) {
+    constructor(public readonly resources: ResourceJson[], public readonly appHostPid: number, public readonly appHostPath: string) {
         super(resourcesGroupLabel, vscode.TreeItemCollapsibleState.Expanded);
         this.id = `resources:${appHostPid}`;
         this.iconPath = new vscode.ThemeIcon('layers', new vscode.ThemeColor('aspire.brandPurple'));
@@ -409,11 +419,11 @@ class ResourceItem extends vscode.TreeItem {
         this.iconPath = getResourceIcon(resource);
         this.description = buildResourceDescription(resource);
         this.tooltip = buildResourceTooltip(resource);
-        this.contextValue = getResourceContextValue(resource);
+        this.contextValue = getResourceContextValue(resource, isCsharpInstalled());
     }
 }
 
-export function getResourceContextValue(resource: ResourceJson): string {
+export function getResourceContextValue(resource: ResourceJson, canAttachDebugger: boolean): string {
     const commands = resource.commands;
     const parts = ['resource'];
     if (hasEnabledCommand(commands, 'start') || hasEnabledCommand(commands, 'resource-start')) {
@@ -428,6 +438,9 @@ export function getResourceContextValue(resource: ResourceJson): string {
     if (isTerminalEnabled(resource)) {
         parts.push('canOpenTerminal');
     }
+    if (canAttachDebugger && getAttachDebuggerResourceInfo(resource) !== undefined) {
+        parts.push('canAttachDebugger');
+    }
     return parts.join(':');
 }
 
@@ -439,6 +452,177 @@ function hasEnabledCommand(commands: Record<string, ResourceCommandJson> | null 
 function isTerminalEnabled(resource: ResourceJson): boolean {
     const value = resource.properties?.[terminalEnabledPropertyName];
     return value?.trim().toLowerCase() === 'true';
+}
+
+interface AttachDebuggerResourceInfo {
+    projectPath: string;
+    processName: string;
+}
+
+/**
+ * Handled failure returned by {@link AspireAppHostTreeProvider.attachDebuggerToResource} for guard
+ * conditions that are surfaced to the user with a warning (a stale/missing resource, a resource that
+ * is no longer an attachable running .NET project, or the C# extension being absent). Returning this
+ * shape — rather than throwing or returning `void` — lets `withCommandTelemetry` classify the
+ * invocation as an `error` outcome with a specific `error_kind`, while suppressing VS Code's generic
+ * "command failed" notification that a thrown error would otherwise trigger. The genuine
+ * "VS Code declined to start the attach session" case still throws so its distinct behavior is
+ * preserved.
+ */
+interface AttachDebuggerHandledFailure {
+    success: false;
+    errorKind: 'ResourceNotFound' | 'ResourceNotAttachable' | 'CSharpExtensionMissing';
+}
+
+function getAttachDebuggerResourceInfo(resource: ResourceJson): AttachDebuggerResourceInfo | undefined {
+    // Avoid inspecting executable.args here. The backchannel redacts that sensitive property
+    // to null, so use only the non-sensitive project path and executable path.
+    if (resource.resourceType !== ResourceType.Project || resource.state !== ResourceState.Running || getParentResourceName(resource) !== null) {
+        return undefined;
+    }
+
+    if (getAttachDebuggerProcessId(resource) === undefined) {
+        return undefined;
+    }
+
+    if (!isDotNetExecutable(resource)) {
+        return undefined;
+    }
+
+    const projectPath: unknown = resource.properties?.[projectPathPropertyName];
+    if (typeof projectPath !== 'string') {
+        return undefined;
+    }
+
+    const processName = getDotNetProjectProcessName(projectPath);
+    return processName ? { projectPath, processName } : undefined;
+}
+
+function getAttachDebuggerProcessId(resource: ResourceJson): number | undefined {
+    const value: unknown = resource.properties?.[executablePidPropertyName];
+    if (typeof value === 'number' && Number.isInteger(value) && value > 0) {
+        return value;
+    }
+
+    if (typeof value !== 'string') {
+        return undefined;
+    }
+
+    const processId = Number(value);
+    if (!Number.isInteger(processId) || processId <= 0) {
+        return undefined;
+    }
+
+    return processId;
+}
+
+function isDotNetExecutable(resource: ResourceJson): boolean {
+    const executablePath: unknown = resource.properties?.[executablePathPropertyName];
+    if (typeof executablePath !== 'string') {
+        return false;
+    }
+
+    const executableName = executablePath.split(/[\\/]/).pop()?.toLowerCase();
+    if (executableName !== 'dotnet' && executableName !== 'dotnet.exe') {
+        return false;
+    }
+
+    return true;
+}
+
+function getDotNetProjectProcessName(projectPath: string): string | undefined {
+    const fileName = projectPath.trim().split(/[\\/]/).pop();
+    const projectExtension = dotNetProjectFileExtensions.find(extension => fileName?.toLowerCase().endsWith(extension));
+    if (!fileName || !projectExtension) {
+        return undefined;
+    }
+
+    const processName = fileName.slice(0, -projectExtension.length);
+    return processName.length > 0 ? processName : undefined;
+}
+
+async function resolveDotNetProjectProcessName(projectPath: string, fallbackProcessName: string): Promise<string> {
+    // AssemblyName defaults to the project filename, but users can override it in the project
+    // file. Read simple literal values best-effort so the generated attach config matches the
+    // actual apphost process more often without requiring a new Aspire CLI/backchannel contract.
+    // Reject MSBuild expressions like "$(MSBuildProjectName).Api" because CoreCLR treats the
+    // processName as a literal process matcher, not as an evaluated MSBuild property.
+    // Also ignore conditional values like:
+    //   <AssemblyName Condition="'$(Configuration)' == 'Release'">MyApp.Release</AssemblyName>
+    //   <PropertyGroup Condition="'$(Configuration)' == 'Release'">
+    //     <AssemblyName>MyApp.Release</AssemblyName>
+    //   </PropertyGroup>
+    //   <Choose>
+    //     <When Condition="'$(Configuration)' == 'Release'">...</When>
+    //   </Choose>
+    // The attach action does not have the evaluated MSBuild context, so a conditional value can be
+    // less safe than the project filename fallback.
+    try {
+        const content = Buffer.from(await vscode.workspace.fs.readFile(vscode.Uri.file(projectPath))).toString('utf8');
+        const contentWithoutComments = content.replace(/<!--[\s\S]*?-->/g, '');
+        const assemblyName = getUnconditionalAssemblyName(contentWithoutComments);
+        return assemblyName && isSimpleLiteralAssemblyName(assemblyName) ? assemblyName : fallbackProcessName;
+    }
+    catch {
+        return fallbackProcessName;
+    }
+}
+
+function getUnconditionalAssemblyName(projectFileContent: string): string | undefined {
+    const conditionalAncestorRanges = getConditionalAssemblyNameAncestorRanges(projectFileContent);
+    const assemblyNameRegex = /<AssemblyName\b([^>]*)>([^<]+)<\/AssemblyName\s*>/ig;
+    let assemblyName: string | undefined;
+    for (const match of projectFileContent.matchAll(assemblyNameRegex)) {
+        const index = match.index ?? -1;
+        const attributes = match[1];
+        if (hasConditionAttribute(attributes) || conditionalAncestorRanges.some(range => index >= range.start && index < range.end)) {
+            continue;
+        }
+
+        assemblyName = match[2].trim();
+    }
+
+    return assemblyName;
+}
+
+function getConditionalAssemblyNameAncestorRanges(projectFileContent: string): { start: number; end: number }[] {
+    return [
+        ...getElementRanges(projectFileContent, 'PropertyGroup', hasConditionAttribute),
+        // Any AssemblyName inside Choose/When/Otherwise depends on MSBuild branch evaluation. Treat the
+        // whole Choose block as conditional because the attach action does not know which branch applied.
+        ...getElementRanges(projectFileContent, 'Choose', () => true),
+    ];
+}
+
+function getElementRanges(projectFileContent: string, elementName: string, shouldInclude: (attributes: string) => boolean): { start: number; end: number }[] {
+    const ranges: { start: number; end: number }[] = [];
+    const stack: { start: number; include: boolean }[] = [];
+    const elementRegex = new RegExp(`<(/?)${elementName}\\b([^>]*)>`, 'ig');
+    for (const match of projectFileContent.matchAll(elementRegex)) {
+        const isClosingElement = match[1] === '/';
+        if (isClosingElement) {
+            const openElement = stack.pop();
+            if (openElement?.include) {
+                ranges.push({ start: openElement.start, end: (match.index ?? 0) + match[0].length });
+            }
+            continue;
+        }
+
+        if (!/\/\s*>$/.test(match[0])) {
+            const attributes = match[2];
+            stack.push({ start: match.index ?? 0, include: shouldInclude(attributes) });
+        }
+    }
+
+    return ranges;
+}
+
+function hasConditionAttribute(attributes: string): boolean {
+    return /(?:^|\s)Condition\s*=/i.test(attributes);
+}
+
+function isSimpleLiteralAssemblyName(assemblyName: string): boolean {
+    return /^[A-Za-z0-9][A-Za-z0-9_.-]*$/.test(assemblyName);
 }
 
 function getTerminalReplicaIndex(resource: ResourceJson): string | undefined {
@@ -1180,7 +1364,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             }
 
             if (appHost.resources && appHost.resources.length > 0) {
-                items.push(new ResourcesGroupItem(appHost.resources, appHost.appHostPid));
+                items.push(new ResourcesGroupItem(appHost.resources, appHost.appHostPid, appHost.appHostPath));
             }
 
             return items;
@@ -1190,7 +1374,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             const topLevel = element.resources.filter(r => !getParentResourceName(r));
             return sortResources(topLevel).map(r => {
                 const hasChildren = element.resources.some(c => getParentResourceName(c) === r.name);
-                return new ResourceItem(r, element.appHostPid, hasChildren, element.resources);
+                return new ResourceItem(r, element.appHostPid, hasChildren, element.resources, element.appHostPath);
             });
         }
 
@@ -1447,6 +1631,94 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     async restartResource(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
         return await this._runResourceCommand(element, 'restart');
+    }
+
+    async attachDebuggerToResource(element: ResourceItem): Promise<AttachDebuggerHandledFailure | void> {
+        const resource = this._findLatestResourceForElement(element);
+        if (!resource) {
+            vscode.window.showWarningMessage(attachDebuggerResourceNotFound);
+            return { success: false, errorKind: 'ResourceNotFound' };
+        }
+
+        const attachInfo = getAttachDebuggerResourceInfo(resource);
+        if (attachInfo === undefined) {
+            vscode.window.showWarningMessage(attachDebuggerUnavailable);
+            return { success: false, errorKind: 'ResourceNotAttachable' };
+        }
+
+        if (!isCsharpInstalled()) {
+            vscode.window.showWarningMessage(attachDebuggerCsharpExtensionRequired);
+            return { success: false, errorKind: 'CSharpExtensionMissing' };
+        }
+
+        const resourceLabel = resource.displayName ?? resource.name;
+        const processName = await resolveDotNetProjectProcessName(attachInfo.projectPath, attachInfo.processName);
+        const configuration: vscode.DebugConfiguration = {
+            type: 'coreclr',
+            request: 'attach',
+            name: attachDebuggerConfigurationName(resourceLabel),
+            // `executable.pid` is the DCP-launched `dotnet run` process. The user app is a
+            // child process, so attach by project assembly name instead of the launcher PID.
+            processName,
+        };
+
+        const started = await vscode.debug.startDebugging(undefined, configuration);
+        if (!started) {
+            const error = new Error(attachDebuggerDeclined(resourceLabel));
+            error.name = 'StartDebuggingDeclined';
+            throw error;
+        }
+    }
+
+    private _findLatestResourceForElement(element: ResourceItem): ResourceJson | undefined {
+        const resources = this._findLatestResourcesForElement(element);
+        return resources?.find(resource => resource.name === element.resource.name);
+    }
+
+    private _findLatestResourcesForElement(element: ResourceItem): readonly ResourceJson[] | undefined {
+        const workspaceResources = [...this._repository.workspaceResources];
+        const selectedAppHostPath = this._repository.workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
+
+        if (element.appHostPath) {
+            const matchingAppHosts = this._repository.appHosts.filter(appHost => isMatchingAppHostPath(appHost.appHostPath, element.appHostPath!));
+            const appHostByPid = element.appHostPid !== null
+                ? matchingAppHosts.find(appHost => appHost.appHostPid === element.appHostPid)
+                : undefined;
+            const appHost = appHostByPid ?? (matchingAppHosts.length === 1 ? matchingAppHosts[0] : undefined);
+            if (appHost) {
+                if (workspaceResources.length > 0 && selectedAppHostPath && isMatchingAppHostPath(appHost.appHostPath, selectedAppHostPath) && hasNoResources(appHost.resources)) {
+                    return workspaceResources;
+                }
+
+                return appHost.resources ?? [];
+            }
+
+            if (matchingAppHosts.length > 1) {
+                return undefined;
+            }
+
+            if (!selectedAppHostPath || !isMatchingAppHostPath(element.appHostPath, selectedAppHostPath)) {
+                return undefined;
+            }
+
+            return workspaceResources.length > 0
+                ? workspaceResources
+                : this._repository.workspaceAppHost?.resources ?? [];
+        }
+
+        const appHost = element.appHostPid !== null
+            ? this._repository.appHosts.find(appHost => appHost.appHostPid === element.appHostPid)
+            : undefined;
+
+        if (appHost && workspaceResources.length > 0 && selectedAppHostPath && isMatchingAppHostPath(appHost.appHostPath, selectedAppHostPath) && hasNoResources(appHost.resources)) {
+            return workspaceResources;
+        }
+
+        if (appHost) {
+            return appHost.resources ?? [];
+        }
+
+        return element.appHostPid === null ? workspaceResources : undefined;
     }
 
     async viewResourceLogs(element: ResourceItem): Promise<void> {

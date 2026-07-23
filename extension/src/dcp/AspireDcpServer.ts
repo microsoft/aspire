@@ -315,7 +315,7 @@ export default class AspireDcpServer {
                 // because the user did try to run something through us.
                 hooks.onRunSessionAccepted?.({ resourceType: launchConfig.type, mode });
                 const runSessionStartTimeMs = Date.now();
-                sendTelemetryEvent('debug/runsession/start', {
+                sendTelemetryEvent('aspire/vscode/debug/runsession/start', {
                     resource_type: supportedResourceType,
                     debugger_extension_matched: foundDebuggerExtension ? 'true' : 'false',
                     mode,
@@ -332,7 +332,7 @@ export default class AspireDcpServer {
                     aggregate.distinctResourceTypes.add(supportedResourceType);
                     aggregate.anyNonZeroExit = true;
 
-                    sendTelemetryErrorEvent('debug/runsession/end', {
+                    sendTelemetryErrorEvent('aspire/vscode/debug/runsession/end', {
                         resource_type: supportedResourceType,
                         mode,
                         exit_code_bucket: 'nonzero',
@@ -575,12 +575,11 @@ export default class AspireDcpServer {
                 const durationMs = Date.now() - entry.startTimeMs;
                 const exitCode = sessionTerminated.exit_code;
                 const exitBucket = exitCode === 0 ? 'success' : exitCode === -1 ? 'canceled' : 'nonzero';
-                // Route non-zero exits through the error-event channel so they get the
-                // reporter's stricter scrubbing pass and are surfaced as errors in the
-                // telemetry pipeline (consistent with the synchronous launch-failure path
-                // above and the dashboard fault path in DashboardTelemetryPassthrough).
+                // Route non-zero exits through `sendTelemetryErrorEvent` so users with error- or
+                // all-level telemetry still emit them, consistent with the launch-failure path
+                // above and the dashboard fault path in DashboardTelemetryPassthrough.
                 const emitEnd = exitBucket === 'nonzero' ? sendTelemetryErrorEvent : sendTelemetryEvent;
-                emitEnd('debug/runsession/end', {
+                emitEnd('aspire/vscode/debug/runsession/end', {
                     resource_type: entry.resourceType,
                     mode: entry.mode,
                     exit_code_bucket: exitBucket,
