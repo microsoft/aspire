@@ -762,6 +762,31 @@ public class AtsMarshallerTests
     }
 
     [Fact]
+    public void UnmarshalFromJson_UnmarshalsCustomAtsObjectDto()
+    {
+        var (marshaller, context) = CreateMarshallerWithContext();
+        var jsonContent = """
+        {
+            "name": "test",
+            "count": 5,
+            "complex": {
+                "nestedProperty": true
+            }
+        }
+        """;
+
+        var json = JsonNode.Parse(jsonContent);
+
+        var result = marshaller.UnmarshalFromJson(json, typeof(CustomAtsObjectDto), context);
+
+        Assert.NotNull(result);
+        var dto = (CustomAtsObjectDto)result;
+        Assert.Equal("test", dto.Object!["name"]);
+        Assert.Equal(5L, dto.Object!["count"]);
+        Assert.True((bool)(dto.Object!["complex"] as Dictionary<string, object?>)!["nestedProperty"]!);
+    }
+
+    [Fact]
     public void MarshalToJson_MarshalsDto()
     {
         var marshaller = CreateMarshaller();
