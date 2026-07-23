@@ -17,6 +17,8 @@ public static class KafkaBuilderExtensions
     private const int KafkaBrokerPort = 9092;
     private const int KafkaInternalBrokerPort = 9093;
     private const int KafkaUIPort = 8080;
+    private const int KafkaSchemaRegistryPort = 8081;
+
     private const string Target = "/var/lib/kafka/data";
 
     /// <summary>
@@ -116,13 +118,15 @@ public static class KafkaBuilderExtensions
             builder.ApplicationBuilder.Eventing.Subscribe<BeforeResourceStartedEvent>(kafkaUi, (e, ct) =>
             {
                 var kafkaResources = builder.ApplicationBuilder.Resources.OfType<KafkaServerResource>();
+                var kafkaSchemaRegistryResources = builder.ApplicationBuilder.Resources.OfType<KafkaSchemaRegistryResource>().ToArray();
 
                 int i = 0;
                 foreach (var kafkaResource in kafkaResources)
                 {
-                    var endpoint = kafkaResource.InternalEndpoint;
+                    var schemaRegistryResource = kafkaSchemaRegistryResources.FirstOrDefault(
+                        schemaRegistry => StringComparer.OrdinalIgnoreCase.Equals(schemaRegistry.KafkaServer.Name, kafkaResource.Name));
                     int index = i;
-                    kafkaUiBuilder.WithEnvironment(context => ConfigureKafkaUIContainer(context, endpoint, index));
+                    kafkaUiBuilder.WithEnvironment(context => ConfigureKafkaUIContainer(context, kafkaResource, schemaRegistryResource, index));
 
                     i++;
                 }
@@ -135,8 +139,9 @@ public static class KafkaBuilderExtensions
             return builder;
         }
 
-        static void ConfigureKafkaUIContainer(EnvironmentCallbackContext context, EndpointReference endpoint, int index)
+        static void ConfigureKafkaUIContainer(EnvironmentCallbackContext context, KafkaServerResource kafkaResource, KafkaSchemaRegistryResource? schemaRegistryResource, int index)
         {
+            var endpoint = kafkaResource.InternalEndpoint;
             var bootstrapServers = context.ExecutionContext.IsRunMode
                 // In run mode, Kafka UI assumes Kafka is being accessed over a default Aspire container network and hardcodes the host as the Kafka resource name
                 // This will need to be refactored once updated service discovery APIs are available
@@ -145,8 +150,56 @@ public static class KafkaBuilderExtensions
 
             context.EnvironmentVariables[$"KAFKA_CLUSTERS_{index}_NAME"] = endpoint.Resource.Name;
             context.EnvironmentVariables[$"KAFKA_CLUSTERS_{index}_BOOTSTRAPSERVERS"] = bootstrapServers;
+
+            if (schemaRegistryResource is not null)
+            {
+                var schemaRegistryEndpoint = schemaRegistryResource.PrimaryEndpoint;
+                var schemaRegistryUrl = context.ExecutionContext.IsRunMode
+                    ? ReferenceExpression.Create($"http://{schemaRegistryEndpoint.Resource.Name}:{schemaRegistryEndpoint.Property(EndpointProperty.TargetPort)}")
+                    : ReferenceExpression.Create($"{schemaRegistryEndpoint.Property(EndpointProperty.Url)}");
+
+                context.EnvironmentVariables[$"KAFKA_CLUSTERS_{index}_SCHEMAREGISTRY"] = schemaRegistryUrl;
+            }
         }
 
+    }
+
+    /// <summary>
+    /// Adds a Kafka Schema Registry container to the application.
+    /// </summary>
+    /// <remarks>
+    /// This version of the package defaults to the <inheritdoc cref="KafkaContainerImageTags.KafkaSchemaRegistryTag"/> tag of the <inheritdoc cref="KafkaContainerImageTags.KafkaSchemaRegistryImage"/> container image.
+    /// </remarks>
+    /// <param name="builder">The Kafka server resource builder.</param>
+    /// <param name="configureContainer">Configuration callback for Kafka Schema Registry container resource.</param>
+    /// <param name="containerName">The name of the container (Optional).</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{KafkaSchemaRegistryResource}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
+    [AspireExport(RunSyncOnBackgroundThread = true)]
+    public static IResourceBuilder<KafkaSchemaRegistryResource> WithKafkaSchemaRegistry(this IResourceBuilder<KafkaServerResource> builder, Action<IResourceBuilder<KafkaSchemaRegistryResource>>? configureContainer = null, string? containerName = null)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+        containerName ??= $"{builder.Resource.Name}-schema-registry";
+
+        var kafkaSchemaRegistry = new KafkaSchemaRegistryResource(containerName, builder.Resource);
+        var kafkaSchemaRegistryBuilder = builder.ApplicationBuilder.AddResource(kafkaSchemaRegistry)
+            .WithImage(KafkaContainerImageTags.KafkaSchemaRegistryImage, KafkaContainerImageTags.KafkaSchemaRegistryTag)
+            .WithImageRegistry(KafkaContainerImageTags.Registry)
+            .WithHttpEndpoint(targetPort: KafkaSchemaRegistryPort, name: KafkaSchemaRegistryResource.PrimaryEndpointName)
+            .WithEnvironment(context =>
+            {
+                context.EnvironmentVariables["SCHEMA_REGISTRY_HOST_NAME"] = "localhost";
+                context.EnvironmentVariables["SCHEMA_REGISTRY_KAFKASTORE_BOOTSTRAP_SERVERS"] = builder.Resource.InternalEndpoint.Property(EndpointProperty.HostAndPort);
+                context.EnvironmentVariables["SCHEMA_REGISTRY_LISTENERS"] = $"http://0.0.0.0:{KafkaSchemaRegistryPort}";
+            })
+            .WithHttpHealthCheck("/subjects", 200, KafkaSchemaRegistryResource.PrimaryEndpointName)
+            .WaitFor(builder)
+            .WithParentRelationship(builder.Resource)
+            .ExcludeFromManifest();
+
+        configureContainer?.Invoke(kafkaSchemaRegistryBuilder);
+
+        return kafkaSchemaRegistryBuilder;
     }
 
     /// <summary>
@@ -161,6 +214,23 @@ public static class KafkaBuilderExtensions
         ArgumentNullException.ThrowIfNull(builder);
 
         return builder.WithEndpoint("http", endpoint =>
+        {
+            endpoint.Port = port;
+        });
+    }
+
+    /// <summary>
+    /// Configures the host port that the Kafka Schema Registry resource is exposed on instead of using randomly assigned port.
+    /// </summary>
+    /// <param name="builder">The resource builder for Kafka Schema Registry.</param>
+    /// <param name="port">The port to bind on the host. If <see langword="null"/> is used random port will be assigned.</param>
+    /// <returns>The resource builder for Kafka Schema Registry.</returns>
+    [AspireExport("withKafkaSchemaRegistryHostPort", MethodName = "withHostPort")]
+    public static IResourceBuilder<KafkaSchemaRegistryResource> WithHostPort(this IResourceBuilder<KafkaSchemaRegistryResource> builder, int? port)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithEndpoint(KafkaSchemaRegistryResource.PrimaryEndpointName, endpoint =>
         {
             endpoint.Port = port;
         });
