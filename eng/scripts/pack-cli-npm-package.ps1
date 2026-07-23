@@ -234,7 +234,7 @@ $pointerPackageJson = [ordered]@{
     node = '>=20'
   }
   optionalDependencies = $optionalDependencies
-  files = New-StringList @('bin', 'README.md')
+  files = New-StringList @('bin', 'README.md', 'CHANGELOG.md')
 }
 
 Write-JsonFile (Join-Path $pointerPackageRoot 'package.json') $pointerPackageJson
@@ -245,6 +245,17 @@ $pointerReadme = Expand-Template $pointerReadmeTemplate @{
 }
 
 Write-TextFile (Join-Path $pointerPackageRoot 'README.md') $pointerReadme
+
+# Ship a version-stamped CHANGELOG.md in the pointer package. npmjs.com renders
+# CHANGELOG.md on a dedicated tab, so this gives users a discoverable, per-version
+# pointer to the GitHub release notes before they update (microsoft/aspire#17719).
+$pointerChangelogTemplate = Read-TemplateFile (Join-Path $PSScriptRoot 'pack-cli-npm-package.CHANGELOG.md')
+$pointerChangelog = Expand-Template $pointerChangelogTemplate @{
+  PACKAGE_NAME = $PackageName
+  VERSION = $Version
+}
+
+Write-TextFile (Join-Path $pointerPackageRoot 'CHANGELOG.md') $pointerChangelog
 
 Invoke-NpmPack $ridPackageRoot $OutputPath
 Invoke-NpmPack $pointerPackageRoot $OutputPath

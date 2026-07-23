@@ -45,6 +45,20 @@ public sealed class SelectTestsWorkflowTests
             testsYml);
     }
 
+    [Fact]
+    public void CiSkipGateKeepsNpmChangelogTemplateUnmatched()
+    {
+        var ciYml = File.ReadAllText(CiWorkflowPath);
+        var action = File.ReadAllText(CheckChangedFilesActionPath);
+
+        Assert.Contains("keep_unmatched:", action);
+        Assert.Contains("KEEP_UNMATCHED_PATTERNS", action);
+        Assert.Contains("keep_unmatched: |", ciYml);
+        Assert.Contains("eng/scripts/pack-cli-npm-package.CHANGELOG.md", ciYml);
+        Assert.Contains("eng/scripts/pack-cli-npm-package.pointer.README.md", ciYml);
+        Assert.Contains("eng/scripts/pack-cli-npm-package.rid.README.md", ciYml);
+    }
+
     // The comment_selection job posts one comment per pushed commit (createComment for a new commit,
     // updateComment for a re-run of the same commit) and collapses superseded comments with
     // minimizeComment -- it must never delete. This guard fails if deletion is introduced or the
@@ -134,6 +148,12 @@ public sealed class SelectTestsWorkflowTests
 
     private static string SelectTestsActionPath
         => Path.Combine(RepoRoot.Path, ".github", "actions", "select-tests", "action.yml");
+
+    private static string CheckChangedFilesActionPath
+        => Path.Combine(RepoRoot.Path, ".github", "actions", "check-changed-files", "action.yml");
+
+    private static string CiWorkflowPath
+        => Path.Combine(RepoRoot.Path, ".github", "workflows", "ci.yml");
 
     private static string TestsWorkflowPath
         => Path.Combine(RepoRoot.Path, ".github", "workflows", "tests.yml");
