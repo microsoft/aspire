@@ -470,8 +470,10 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
                 process.Kill(entireProcessTree: true);
             }
         }
-        catch (InvalidOperationException)
+        catch (Exception)
         {
+            // Process cleanup is best-effort; do not let a kill failure mask caller cancellation
+            // or turn a non-critical OpenSSL probe failure into a failed doctor check.
         }
     }
 
