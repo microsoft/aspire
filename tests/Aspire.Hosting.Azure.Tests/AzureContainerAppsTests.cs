@@ -3149,6 +3149,383 @@ public class AzureContainerAppsTests(ITestOutputHelper outputHelper)
         Assert.Equal(enableDashboard, hasPrintDashboardUrlStep);
     }
 
+    [Fact]
+    public async Task SameEnvironmentFloatingContainerAppsAreChainedWithDependsOn()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddContainer("api", "myimage");
+        builder.AddContainer("worker", "myimage");
+        builder.AddContainer("cache", "myimage");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The apps share a managed environment and express no dependencies of their own, so they
+        // are chained into a serial order: api -> worker -> cache.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Equal(["api"], GetDependsOnTargets(GetComputeResource(model, "worker")));
+        Assert.Equal(["worker"], GetDependsOnTargets(GetComputeResource(model, "cache")));
+    }
+
+    [Fact]
+    public async Task SameEnvironmentContainerAppJobIsChainedWithDependsOn()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        // "worker" publishes as a Container App Job rather than an app. Jobs are compute resources
+        // that write to the same managed environment, so they must be serialized alongside apps to
+        // avoid ContainerAppOperationInProgress failures.
+        builder.AddContainer("api", "myimage");
+        builder.AddContainer("worker", "myimage").PublishAsAzureContainerAppJob();
+        builder.AddContainer("cache", "myimage");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The job is chained into the serial order exactly like an app: api -> worker -> cache.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Equal(["api"], GetDependsOnTargets(GetComputeResource(model, "worker")));
+        Assert.Equal(["worker"], GetDependsOnTargets(GetComputeResource(model, "cache")));
+    }
+
+    [Fact]
+    public async Task ContainerAppWithDependencyOnAnotherAppIsNotChainedRedundantly()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var api = builder.AddContainer("api", "myimage");
+        builder.AddContainer("worker", "myimage").WaitFor(api);
+        builder.AddContainer("cache", "myimage");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // All three apps are linearized into a single serial order (api -> worker -> cache).
+        // "worker" already depends on "api", so no redundant synthetic edge is added there; the chain
+        // is completed by adding cache -> worker.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "worker")));
+        Assert.Equal(["worker"], GetDependsOnTargets(GetComputeResource(model, "cache")));
+    }
+
+    [Fact]
+    public async Task ContainerAppWithExistingDependsOnIsNotChainedIntoCycle()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var api = builder.AddContainer("api", "myimage");
+        var worker = builder.AddContainer("worker", "myimage");
+
+        api.WithRelationship(worker.Resource, "DependsOn");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apps = model.GetComputeResources().ToList();
+
+        Assert.Equal(["worker"], GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "worker")));
+
+        var predecessorCounts = apps
+            .Select(computeResource => GetTransitiveOrderingPredecessors(computeResource, apps).Count)
+            .OrderBy(count => count)
+            .ToArray();
+
+        Assert.Equal(Enumerable.Range(0, apps.Count).ToArray(), predecessorCounts);
+    }
+
+    [Fact]
+    public async Task ContainerAppsSharingADependencyAreStillSerialized()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        // Both api and worker depend on shared but not on each other. Without serialization they
+        // would deploy in parallel after shared; the synthetic edge orders them.
+        var shared = builder.AddContainer("shared", "myimage");
+        builder.AddContainer("api", "myimage").WaitFor(shared);
+        builder.AddContainer("worker", "myimage").WaitFor(shared);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Topological order is shared -> api -> worker. shared has no predecessor; api already
+        // depends on shared (no redundant edge); worker gets a synthetic edge to api to complete the
+        // total order so at most one app deploys at a time.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "shared")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Equal(["api"], GetDependsOnTargets(GetComputeResource(model, "worker")));
+    }
+
+    [Fact]
+    public async Task ContainerAppsInDifferentEnvironmentsAreChainedIndependently()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env1 = builder.AddAzureContainerAppEnvironment("env1");
+        var env2 = builder.AddAzureContainerAppEnvironment("env2");
+
+        builder.AddContainer("a", "myimage").WithComputeEnvironment(env1);
+        builder.AddContainer("b", "myimage").WithComputeEnvironment(env1);
+        builder.AddContainer("c", "myimage").WithComputeEnvironment(env2);
+        builder.AddContainer("d", "myimage").WithComputeEnvironment(env2);
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // Each environment has its own serial chain; there are no edges across environments because
+        // apps in different environments don't share a write lock.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "a")));
+        Assert.Equal(["a"], GetDependsOnTargets(GetComputeResource(model, "b")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "c")));
+        Assert.Equal(["c"], GetDependsOnTargets(GetComputeResource(model, "d")));
+    }
+
+    [Fact]
+    public async Task SingleContainerAppHasNoDependsOnRelationship()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddContainer("api", "myimage");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
+    }
+
+    [Fact]
+    public async Task DependsOnRelationshipsAreNotAddedInRunMode()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        builder.AddContainer("api", "myimage");
+        builder.AddContainer("worker", "myimage");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The serial-ordering constraint only matters when deploying, so no DependsOn edges are
+        // added in run mode.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "worker")));
+    }
+
+    [Fact]
+    public async Task SameEnvironmentContainerAppsFormATotalDeploymentOrder()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        // A mix of floating apps and apps with their own declared dependencies. Regardless of the
+        // shape of the declared graph, the environment must end up with a single total deployment
+        // order so a model-graph-driven deployer never writes two apps in the environment at once.
+        var shared = builder.AddContainer("shared", "myimage");
+        builder.AddContainer("api", "myimage").WaitFor(shared);
+        builder.AddContainer("worker", "myimage").WaitFor(shared);
+        builder.AddContainer("cache", "myimage");
+        builder.AddContainer("gateway", "myimage");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        var apps = model.GetComputeResources().ToList();
+
+        // The "must deploy before" relation formed by every ordering edge (the synthetic DependsOn
+        // edges plus the user-declared Reference/WaitFor edges) must be a strict total order over the
+        // apps. In a strict total order of N elements, the number of transitive predecessors is a
+        // permutation of 0, 1, ..., N-1: exactly one app deploys first, exactly one second, and so on.
+        // That profile is what guarantees at most one app deploys at a time.
+        var predecessorCounts = apps
+            .Select(computeResource => GetTransitiveOrderingPredecessors(computeResource, apps).Count)
+            .OrderBy(count => count)
+            .ToArray();
+
+        Assert.Equal(Enumerable.Range(0, apps.Count).ToArray(), predecessorCounts);
+    }
+
+    [Fact]
+    public async Task MutuallyDependentContainerAppsAreNotChainedIntoCycle()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        builder.AddAzureContainerAppEnvironment("env");
+
+        // api and worker reference each other, forming a dependency cycle that can't be linearized.
+        // cache is an independent app in the same environment.
+        var api = builder.AddContainer("api", "myimage");
+        var worker = builder.AddContainer("worker", "myimage");
+        var cache = builder.AddContainer("cache", "myimage");
+
+        api.WithRelationship(worker.Resource, "Reference");
+        worker.WithRelationship(api.Resource, "Reference");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // The mutually dependent apps can't be ordered relative to each other without creating a
+        // DependsOn cycle, so no synthetic edge is added between them. cache is serialized against the
+        // whole cycle by depending on every member of it, so it never deploys alongside either one.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "api")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "worker")));
+        Assert.Equal(["api", "worker"], GetDependsOnTargets(GetComputeResource(model, "cache")).OrderBy(name => name).ToArray());
+    }
+
+    [Fact]
+    public async Task CrossEnvironmentTransitiveDependencyDoesNotCreateCycle()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var env1 = builder.AddAzureContainerAppEnvironment("env1");
+        var env2 = builder.AddAzureContainerAppEnvironment("env2");
+
+        var a = builder.AddContainer("a", "myimage").WithComputeEnvironment(env1);
+        var b = builder.AddContainer("b", "myimage").WithComputeEnvironment(env1);
+        var c = builder.AddContainer("c", "myimage").WithComputeEnvironment(env2);
+
+        // Existing acyclic ordering a -> c -> b routes through another environment: a must deploy
+        // after c, and c after b, so a must deploy after b. The serial-ordering pass must honor that
+        // transitive order and not add the reverse b -> a edge, which would form a cycle.
+        a.WithRelationship(c.Resource, "Reference");
+        c.WithRelationship(b.Resource, "Reference");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        // b already precedes a transitively through c, so no synthetic edge is needed within env1
+        // and, crucially, no reverse b -> a edge is added.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "a")));
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "b")));
+
+        // env2's single app has no serial-ordering edge of its own.
+        Assert.Empty(GetDependsOnTargets(GetComputeResource(model, "c")));
+    }
+
+    [Fact]
+    public async Task CrossEnvironmentCrossedDependenciesDoNotCreateSerialOrderingCycle()
+    {
+        var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var envA = builder.AddAzureContainerAppEnvironment("env-a");
+        var envB = builder.AddAzureContainerAppEnvironment("env-b");
+
+        var a1 = builder.AddContainer("a1", "myimage").WithComputeEnvironment(envA);
+        var a2 = builder.AddContainer("a2", "myimage").WithComputeEnvironment(envA);
+        var b1 = builder.AddContainer("b1", "myimage").WithComputeEnvironment(envB);
+        var b2 = builder.AddContainer("b2", "myimage").WithComputeEnvironment(envB);
+
+        // Crossed dependencies between two managed environments. If each environment computes
+        // reachability from a stale model snapshot and then adds its own serial edge, the combined
+        // edges can form a cycle: a1 -> b2 -> b1 -> a2 -> a1.
+        a1.WithRelationship(b2.Resource, "Reference");
+        b1.WithRelationship(a2.Resource, "Reference");
+
+        using var app = builder.Build();
+
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var model = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var apps = model.GetComputeResources().ToList();
+
+        foreach (var appResource in apps)
+        {
+            var selfCycles = GetTransitiveOrderingPredecessors(appResource, apps)
+                .Where(predecessor => ReferenceEquals(predecessor, appResource))
+                .Select(predecessor => predecessor.Name)
+                .ToArray();
+
+            Assert.Empty(selfCycles);
+        }
+    }
+
+    // Ordering relationship types that force one resource to deploy before another: the synthetic
+    // serialization edges (DependsOn) plus the user-declared dependencies (Reference/WaitFor).
+    private static readonly string[] s_orderingRelationshipTypes = ["DependsOn", "Reference", "WaitFor"];
+
+    private static HashSet<IResource> GetTransitiveOrderingPredecessors(IResource resource, IReadOnlyList<IResource> apps)
+    {
+        var appSet = new HashSet<IResource>(apps);
+        var predecessors = new HashSet<IResource>();
+        var stack = new Stack<IResource>();
+        stack.Push(resource);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+
+            var directPredecessors = current.Annotations.OfType<ResourceRelationshipAnnotation>()
+                .Where(r => s_orderingRelationshipTypes.Contains(r.Type))
+                .Select(r => r.Resource)
+                .Where(target => appSet.Contains(target) && !ReferenceEquals(target, current));
+
+            foreach (var predecessor in directPredecessors)
+            {
+                if (predecessors.Add(predecessor))
+                {
+                    stack.Push(predecessor);
+                }
+            }
+        }
+
+        return predecessors;
+    }
+
+    private static IResource GetComputeResource(DistributedApplicationModel model, string name)
+        => Assert.Single(model.GetComputeResources(), r => string.Equals(r.Name, name, StringComparison.OrdinalIgnoreCase));
+
+    private static string[] GetDependsOnTargets(IResource resource)
+        => resource.Annotations.OfType<ResourceRelationshipAnnotation>()
+            .Where(r => r.Type == "DependsOn")
+            .Select(r => r.Resource.Name)
+            .ToArray();
+
     private static async Task<List<PipelineStep>> CreateStepsAsync(DistributedApplication app, AzureContainerAppEnvironmentResource resource)
     {
         var pipelineContext = new PipelineContext(

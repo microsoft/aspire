@@ -203,6 +203,10 @@ public class AzureContainerAppEnvironmentResource :
             this,
             services);
 
+        // Container apps targeted to this environment, in model order. Collected so that after all
+        // deployment targets are materialized we can chain them into a serial deployment order.
+        var targets = new List<IResource>();
+
         foreach (var r in appModel.GetComputeResources())
         {
             // Skip resources that are explicitly targeted to a different compute environment
@@ -222,10 +226,303 @@ public class AzureContainerAppEnvironmentResource :
                 ContainerRegistry = this,
                 ComputeEnvironment = this
             });
+
+            targets.Add(r);
         }
+
+        AddSerialDeploymentOrdering(targets);
 
         // Log once about all HTTP endpoints upgraded to HTTPS
         containerAppEnvironmentContext.LogHttpsUpgradeIfNeeded();
+    }
+
+    // Relationship type used to serialize deployment of container apps that share a managed
+    // environment. Defined locally because KnownRelationshipTypes is internal to Aspire.Hosting and
+    // not visible to this assembly.
+    private const string DependsOnRelationshipType = "DependsOn";
+
+    // Relationship types that express an ordering dependency between resources. These mirror the
+    // internal KnownRelationshipTypes values added by WithReference/WaitFor and the DependsOn
+    // relationship used to serialize deployment.
+    private const string ReferenceRelationshipType = "Reference";
+    private const string WaitForRelationshipType = "WaitFor";
+
+    private static readonly object s_serialDeploymentOrderingLock = new();
+
+    /// <summary>
+    /// Chains the container apps targeted to this managed environment into a serial deployment order
+    /// using <c>DependsOn</c> relationships.
+    /// </summary>
+    /// <remarks>
+    /// Azure Container Apps serializes write operations within a single managed environment:
+    /// creating or updating two container apps in the same environment concurrently fails with
+    /// <c>ContainerAppOperationInProgress</c>. The application model otherwise has no edge telling a
+    /// model-graph-driven deployer that these apps must not deploy in parallel. To make the
+    /// constraint explicit, the apps are linearized so that at most one app in the environment
+    /// deploys at a time.
+    /// <para>
+    /// Existing ordering dependencies (<c>Reference</c>, <c>WaitFor</c>, or already materialized
+    /// <c>DependsOn</c>) are honored. Reachability is computed over the whole model, not just the
+    /// apps in this environment, so a transitive order that routes through a resource in another
+    /// environment (for example <c>a</c> depends on <c>c</c> depends on <c>b</c>) is respected and
+    /// the reverse edge is never added.
+    /// </para>
+    /// <para>
+    /// Apps that are mutually dependent in the existing model form a reference cycle and cannot be
+    /// ordered relative to each other without creating a <c>DependsOn</c> cycle. Such apps are
+    /// grouped into a strongly connected component; no edges are added within a component, but the
+    /// component as a whole is serialized against the other apps by making every member depend on
+    /// every member of the preceding component. A synthetic edge is skipped when the existing graph
+    /// already orders the two apps, avoiding redundant relationships. See
+    /// https://github.com/microsoft/aspire/issues/18682.
+    /// </para>
+    /// </remarks>
+    private static void AddSerialDeploymentOrdering(IReadOnlyList<IResource> targets)
+    {
+        if (targets.Count < 2)
+        {
+            return;
+        }
+
+        lock (s_serialDeploymentOrderingLock)
+        {
+            AddSerialDeploymentOrderingCore(targets);
+        }
+    }
+
+    private static void AddSerialDeploymentOrderingCore(IReadOnlyList<IResource> targets)
+    {
+        var comparer = new ResourceNameComparer();
+
+        // Multiple managed environments prepare their deployment targets in independent pipeline
+        // steps. Keep the reachability snapshot and mutation atomic so concurrent environment passes
+        // cannot each add an edge from stale model state that jointly forms a cross-environment cycle.
+        // reachable[x] = the apps in this environment that x must deploy after, following ordering
+        // relationships transitively through the entire model. Traversing beyond this environment's
+        // apps is deliberate: a chain like a -> c -> b, where c lives in another environment, still
+        // orders a after b, and ignoring it would let us add the reverse edge and form a cycle.
+        var targetSet = new HashSet<IResource>(targets, comparer);
+        var reachable = new Dictionary<IResource, HashSet<IResource>>(comparer);
+        foreach (var target in targets)
+        {
+            reachable[target] = GetReachableTargets(target, targetSet, comparer);
+        }
+
+        // Collapse mutual-dependency cycles into strongly connected components. Two apps are in the
+        // same component exactly when each can reach the other. Members of a component cannot be
+        // ordered relative to each other, so they are chained as a unit rather than internally.
+        var componentId = ComputeComponentIds(targets, reachable, comparer);
+
+        // Order the components dependency-first, using model order as a stable tie-break.
+        var components = OrderComponents(targets, reachable, componentId, comparer);
+
+        // Serialize deployment by making every member of each component depend on every member of the
+        // immediately preceding component. Consecutive components deploy strictly one after another,
+        // so at most one app in the environment is written at a time (except within an unavoidable
+        // pre-existing reference cycle, whose members race only against each other). An edge is
+        // skipped when the existing graph already orders the two apps. Because the components are
+        // ordered dependency-first, a member of an earlier component never reaches a member of a
+        // later one, so no cycle can be introduced.
+        for (var i = 1; i < components.Count; i++)
+        {
+            foreach (var current in components[i])
+            {
+                foreach (var previous in components[i - 1])
+                {
+                    if (reachable[current].Contains(previous))
+                    {
+                        continue;
+                    }
+
+                    current.Annotations.Add(new ResourceRelationshipAnnotation(previous, DependsOnRelationshipType));
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Returns the set of resources in <paramref name="candidates"/> that <paramref name="resource"/>
+    /// must deploy after, following <c>Reference</c>/<c>WaitFor</c>/<c>DependsOn</c> relationships
+    /// transitively through the entire model. Intermediate resources that are not candidates (for
+    /// example apps in another environment) are traversed but not included in the result.
+    /// </summary>
+    private static HashSet<IResource> GetReachableTargets(IResource resource, HashSet<IResource> candidates, IEqualityComparer<IResource?> comparer)
+    {
+        var result = new HashSet<IResource>(comparer);
+        var visited = new HashSet<IResource>(comparer) { resource };
+        var stack = new Stack<IResource>();
+        stack.Push(resource);
+
+        while (stack.Count > 0)
+        {
+            var current = stack.Pop();
+
+            if (!current.TryGetAnnotationsOfType<ResourceRelationshipAnnotation>(out var relationships))
+            {
+                continue;
+            }
+
+            foreach (var relationship in relationships)
+            {
+                if (relationship.Type is not (ReferenceRelationshipType or WaitForRelationshipType or DependsOnRelationshipType))
+                {
+                    continue;
+                }
+
+                var dependency = relationship.Resource;
+
+                // A self-relationship does not order the app relative to any other app.
+                if (comparer.Equals(dependency, current))
+                {
+                    continue;
+                }
+
+                if (candidates.Contains(dependency) && !comparer.Equals(dependency, resource))
+                {
+                    result.Add(dependency);
+                }
+
+                if (visited.Add(dependency))
+                {
+                    stack.Push(dependency);
+                }
+            }
+        }
+
+        return result;
+    }
+
+    /// <summary>
+    /// Assigns each target a strongly connected component id. Two targets share a component exactly
+    /// when they are mutually reachable through the existing ordering graph. Mutual reachability is
+    /// transitive, so grouping by the first mutually reachable target captures whole components.
+    /// </summary>
+    private static Dictionary<IResource, int> ComputeComponentIds(IReadOnlyList<IResource> targets, Dictionary<IResource, HashSet<IResource>> reachable, IEqualityComparer<IResource?> comparer)
+    {
+        var componentId = new Dictionary<IResource, int>(comparer);
+        var nextId = 0;
+
+        foreach (var target in targets)
+        {
+            if (componentId.ContainsKey(target))
+            {
+                continue;
+            }
+
+            var id = nextId++;
+            componentId[target] = id;
+
+            // Any not-yet-assigned target that is mutually reachable with this one belongs to the
+            // same component.
+            foreach (var other in targets)
+            {
+                if (componentId.ContainsKey(other))
+                {
+                    continue;
+                }
+
+                if (reachable[target].Contains(other) && reachable[other].Contains(target))
+                {
+                    componentId[other] = id;
+                }
+            }
+        }
+
+        return componentId;
+    }
+
+    /// <summary>
+    /// Orders the components dependency-first: a component is emitted once every dependency outside
+    /// the component has been emitted, with model order as a stable tie-break. The condensation of a
+    /// graph is always acyclic, so a ready component always exists; the remaining components are
+    /// appended defensively in model order should that invariant ever be violated.
+    /// </summary>
+    private static List<List<IResource>> OrderComponents(IReadOnlyList<IResource> targets, Dictionary<IResource, HashSet<IResource>> reachable, Dictionary<IResource, int> componentId, IEqualityComparer<IResource?> comparer)
+    {
+        // Members of each component, preserving model order within the component.
+        var members = new Dictionary<int, List<IResource>>();
+        foreach (var target in targets)
+        {
+            var id = componentId[target];
+            if (!members.TryGetValue(id, out var list))
+            {
+                list = new List<IResource>();
+                members[id] = list;
+            }
+
+            list.Add(target);
+        }
+
+        var order = new List<List<IResource>>();
+        var emittedComponents = new HashSet<int>();
+        var emittedTargets = new HashSet<IResource>(comparer);
+
+        while (order.Count < members.Count)
+        {
+            List<IResource>? next = null;
+
+            foreach (var target in targets)
+            {
+                var id = componentId[target];
+                if (emittedComponents.Contains(id))
+                {
+                    continue;
+                }
+
+                if (IsComponentReady(members[id], reachable, id, componentId, emittedTargets))
+                {
+                    next = members[id];
+                    break;
+                }
+            }
+
+            if (next is null)
+            {
+                foreach (var target in targets)
+                {
+                    var id = componentId[target];
+                    if (emittedComponents.Add(id))
+                    {
+                        order.Add(members[id]);
+                        foreach (var member in members[id])
+                        {
+                            emittedTargets.Add(member);
+                        }
+                    }
+                }
+
+                break;
+            }
+
+            emittedComponents.Add(componentId[next[0]]);
+            order.Add(next);
+            foreach (var member in next)
+            {
+                emittedTargets.Add(member);
+            }
+        }
+
+        return order;
+    }
+
+    /// <summary>
+    /// A component is ready to emit once every dependency of every member that lies outside the
+    /// component has already been emitted.
+    /// </summary>
+    private static bool IsComponentReady(List<IResource> members, Dictionary<IResource, HashSet<IResource>> reachable, int id, Dictionary<IResource, int> componentId, HashSet<IResource> emittedTargets)
+    {
+        foreach (var member in members)
+        {
+            foreach (var dependency in reachable[member])
+            {
+                if (componentId[dependency] != id && !emittedTargets.Contains(dependency))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     internal bool UseAzdNamingConvention { get; set; }
