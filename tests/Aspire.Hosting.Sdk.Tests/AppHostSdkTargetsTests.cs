@@ -11,6 +11,7 @@ namespace Aspire.Hosting.Sdk.Tests;
 
 public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
 {
+    private const string AspireCliVersion = "13.5.0";
     private const string SuppressCliRunHookEnvironmentVariable = "ASPIRE_SUPPRESS_CLI_RUN_HOOK";
 
     private static readonly string[] s_supportedRids =
@@ -25,10 +26,24 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     ];
 
     [Fact]
-    public async Task AddReferenceToDashboardAndDcpIsSkippedWhenCliBundleIsDefaulted()
+    public async Task AddReferenceToDashboardAndDcpIsAddedWhenCliBundleIsDefaulted()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(workspace, extraProjectXml: null);
+
+        AssertDashboardAndOrchestrationReferences(packageReferences);
+    }
+
+    [Fact]
+    public async Task AddReferenceToDashboardAndDcpIsSkippedWhenCliBundleIsEnabled()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var packageReferences = await RunAddReferenceToDashboardAndDcpAsync(workspace,
+            """
+              <PropertyGroup>
+                <AspireUseCliBundle>true</AspireUseCliBundle>
+              </PropertyGroup>
+            """);
 
         Assert.DoesNotContain(packageReferences, static packageReference => packageReference.StartsWith("Aspire.Dashboard.Sdk.", StringComparison.Ordinal));
         Assert.DoesNotContain(packageReferences, static packageReference => packageReference.StartsWith("Aspire.Hosting.Orchestration.", StringComparison.Ordinal));
@@ -82,16 +97,135 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
         var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
-        await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
             ["-p:RunArguments=--custom foo"],
             CreatePathEnvironment(fakeCliDirectory.FullName));
 
-        Assert.Equal(GetExpectedAspireRunCommand(), properties["RunCommand"]);
-        Assert.Equal(GetExpectedAspireRunArguments(project, "--custom foo"), properties["RunArguments"]);
+        Assert.Equal("Aspire", properties["_AspireResolvedCliInvocationMode"]);
+        Assert.Equal("13.5.0", properties["_AspireResolvedCliVersion"]);
+        Assert.Equal("true", properties["_AspireCliVersionSupportsRunHook"]);
+        Assert.Equal(GetExpectedAspireRunCommand(aspireCliPath), properties["RunCommand"]);
+        Assert.Equal(GetExpectedAspireRunArguments(aspireCliPath, project, "--custom foo"), properties["RunArguments"]);
         Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("Dnx")]
+    [InlineData("dNx")]
+    public async Task ComputeRunArgumentsUsesDnxAspireCliWhenSelected(string? invocationMode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var dnxPath = await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        if (invocationMode is not null)
+        {
+            await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        }
+
+        var extraProjectXml = invocationMode is null
+            ? null
+            : $$"""
+              <PropertyGroup>
+                <AspireCliInvocationMode>{{invocationMode}}</AspireCliInvocationMode>
+              </PropertyGroup>
+            """;
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, extraProjectXml);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            ["-p:RunArguments=--custom foo"],
+            new Dictionary<string, string>
+            {
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.Equal("Dnx", properties["_AspireResolvedCliInvocationMode"]);
+        Assert.Equal("13.5.0", properties["_AspireResolvedCliVersion"]);
+        Assert.Equal("true", properties["_AspireCliVersionSupportsRunHook"]);
+        Assert.Equal(GetExpectedDnxRunCommand(dnxPath), properties["RunCommand"]);
+        Assert.Equal(GetExpectedDnxRunArguments(dnxPath, project, "--custom foo"), properties["RunArguments"]);
+        Assert.Contains($"aspire.cli@{AspireCliVersion}", properties["_AspireCliVersionCommand"]);
+        Assert.Equal(project.ProjectDirectory, properties["RunWorkingDirectory"]);
+    }
+
+    [Fact]
+    public async Task ComputeRunArgumentsFailsWhenDnxModeIsConfiguredAndDnxIsMissing()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var emptyPathDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "empty-path"));
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>Dnx</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", project.ProjectFile],
+            CreatePathEnvironment(emptyPathDirectory.FullName, includeCurrentPath: false));
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains("ASPIRE011", result.Output);
+        Assert.Contains("AspireCliInvocationMode=Dnx", result.Output);
+        Assert.Contains("dnx command could not be found on PATH", result.Output);
+        Assert.Contains("Install or use the .NET SDK 10.0 or later", result.Output);
+        Assert.Contains("dotnet tool restore", result.Output);
+    }
+
+    [Fact]
+    public async Task ComputeRunArgumentsSkipsNonExecutableDnxOnUnix()
+    {
+        Assert.SkipWhen(OperatingSystem.IsWindows(), "Unix execute permissions are not used on Windows.");
+
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var nonExecutableDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "non-executable"));
+        var nonExecutableDnxPath = Path.Combine(nonExecutableDirectory.FullName, "dnx");
+        await File.WriteAllTextAsync(nonExecutableDnxPath, "");
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(nonExecutableDnxPath, UnixFileMode.UserRead | UnixFileMode.UserWrite);
+        }
+
+        var executableDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "executable"));
+        var executableDnxPath = await CreateFakeDnxAsync(executableDirectory.FullName);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var path = $"{nonExecutableDirectory.FullName}{Path.PathSeparator}{CreatePathWithoutAspire(executableDirectory.FullName)}";
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            environment: new Dictionary<string, string>
+            {
+                [GetPathEnvironmentVariableName()] = path
+            });
+
+        Assert.Equal(executableDnxPath, properties["_AspireResolvedDnxPath"]);
+    }
+
+    [Fact]
+    public async Task ComputeRunArgumentsFailsWhenDnxVersionProbeFails()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        await CreateFakeDnxThatFailsVersionAsync(fakeCliDirectory.FullName);
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["msbuild", "-nologo", "-restore", "-t:ComputeRunArguments", project.ProjectFile],
+            new Dictionary<string, string>
+            {
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+            });
+
+        Assert.NotEqual(0, result.ExitCode);
+        Assert.Contains($"DNX could not restore or run aspire.cli@{AspireCliVersion}", result.Output);
+        Assert.Contains("package sources, authentication, or connectivity", result.Output);
     }
 
     [Fact]
@@ -103,6 +237,32 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(project, [$"-p:AspireCliPath={aspireCliPath}"]);
+
+        Assert.Equal(aspireCliPath, properties["RunCommand"]);
+        Assert.Equal(GetExpectedExplicitAspireRunArguments(project), properties["RunArguments"]);
+    }
+
+    [Fact]
+    public async Task ComputeRunArgumentsUsesConfiguredAspireCliPathWhenDnxModeIsConfigured()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var emptyPathDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "empty-path"));
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true,
+            """
+              <PropertyGroup>
+                <AspireCliInvocationMode>Dnx</AspireCliInvocationMode>
+              </PropertyGroup>
+            """);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+
+        var properties = await GetComputeRunArgumentsPropertiesAsync(
+            project,
+            [$"-p:AspireCliPath={aspireCliPath}"],
+            new Dictionary<string, string>
+            {
+                [GetPathEnvironmentVariableName()] = CreatePathWithoutDnx(emptyPathDirectory.FullName)
+            });
 
         Assert.Equal(aspireCliPath, properties["RunCommand"]);
         Assert.Equal(GetExpectedExplicitAspireRunArguments(project), properties["RunArguments"]);
@@ -136,15 +296,15 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             """;
         var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true, extraProjectXml: extraProjectXml);
         var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
-        await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var aspireCliPath = await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
             ["-p:RunArguments=--custom foo"],
             CreatePathEnvironment(fakeCliDirectory.FullName));
 
-        Assert.Equal(GetExpectedAspireRunCommand(), properties["RunCommand"]);
-        Assert.Equal(GetExpectedAspireRunArguments(appHostFile, "--custom foo"), properties["RunArguments"]);
+        Assert.Equal(GetExpectedAspireRunCommand(aspireCliPath), properties["RunCommand"]);
+        Assert.Equal(GetExpectedAspireRunArguments(aspireCliPath, appHostFile, "--custom foo"), properties["RunArguments"]);
         Assert.Equal(appHostDirectory, properties["RunWorkingDirectory"]);
     }
 
@@ -186,15 +346,16 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
-        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "selected cli"));
         var captureFile = Path.Combine(workspace.Path, "aspire-args.txt");
         await CreateFakeAspireCliAsync(fakeCliDirectory.FullName);
+        var shadowCaptureFile = await CreateFailingWorkingDirectoryShadowAsync(project.ProjectDirectory, "aspire");
 
         var pathEnvironmentVariable = GetPathEnvironmentVariableName();
         var environment = new Dictionary<string, string>
         {
             ["ASPIRE_TEST_CAPTURE_PATH"] = captureFile,
-            [pathEnvironmentVariable] = $"{fakeCliDirectory.FullName}{Path.PathSeparator}{Environment.GetEnvironmentVariable(pathEnvironmentVariable)}"
+            [pathEnvironmentVariable] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
         };
 
         var result = await RunDotNetWithArgumentsAsync(
@@ -214,6 +375,47 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 "foo"
             ],
             await File.ReadAllLinesAsync(captureFile));
+        Assert.False(File.Exists(shadowCaptureFile), "The working-directory Aspire shim was invoked instead of the resolved PATH command.");
+    }
+
+    [Fact]
+    public async Task DotNetRunUsesDnxAspireCliWhenAspireCliIsUnavailable()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
+        var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "selected cli"));
+        var captureFile = Path.Combine(workspace.Path, "dnx-args.txt");
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
+        var shadowCaptureFile = await CreateFailingWorkingDirectoryShadowAsync(project.ProjectDirectory, "dnx");
+
+        var pathEnvironmentVariable = GetPathEnvironmentVariableName();
+        var environment = new Dictionary<string, string>
+        {
+            ["ASPIRE_TEST_CAPTURE_PATH"] = captureFile,
+            [pathEnvironmentVariable] = CreatePathWithoutAspire(fakeCliDirectory.FullName)
+        };
+
+        var result = await RunDotNetWithArgumentsAsync(
+            project.ProjectDirectory,
+            ["run", "--project", project.ProjectFile, "--", "--custom", "foo"],
+            environment);
+
+        Assert.True(result.ExitCode == 0, result.Output);
+        Assert.Equal(
+            [
+                "--yes",
+                $"aspire.cli@{AspireCliVersion}",
+                "--",
+                "run",
+                "--project",
+                project.ProjectFile,
+                "--no-build",
+                "--",
+                "--custom",
+                "foo"
+            ],
+            await File.ReadAllLinesAsync(captureFile));
+        Assert.False(File.Exists(shadowCaptureFile), "The working-directory DNX shim was invoked instead of the resolved PATH command.");
     }
 
     [Theory]
@@ -242,6 +444,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var project = await CreateRunHookProjectAsync(workspace.Path, aspireUseCliBundle: true);
         var fakeCliDirectory = Directory.CreateDirectory(Path.Combine(workspace.Path, "fake-cli"));
         await CreateFakeAspireCliWithVersionAsync(fakeCliDirectory.FullName, "13.4.5");
+        await CreateFakeDnxAsync(fakeCliDirectory.FullName);
 
         var properties = await GetComputeRunArgumentsPropertiesAsync(
             project,
@@ -413,10 +616,11 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 <OutputType>Exe</OutputType>
                 <TargetFramework>net8.0</TargetFramework>
                 <IsAspireHost>true</IsAspireHost>
-                <AspireHostingSDKVersion>9.0.0</AspireHostingSDKVersion>
+                <AspireHostingSDKVersion>{{AspireCliVersion}}</AspireHostingSDKVersion>
                 <AspireUseCliBundle>{{aspireUseCliBundle.ToString().ToLowerInvariant()}}</AspireUseCliBundle>
                 <AspireDashboardPath>$(MSBuildProjectDirectory)/Aspire.Dashboard.dll</AspireDashboardPath>
                 <DcpDir>$(MSBuildProjectDirectory)</DcpDir>
+                <_AspireTasksAssembly>{{SecurityElement.Escape(GetAspireHostingTasksAssemblyPath())}}</_AspireTasksAssembly>
                 <SkipAspireWorkloadManifest>true</SkipAspireWorkloadManifest>
                 <SkipValidateAspireHostProjectResources>true</SkipValidateAspireHostProjectResources>
               </PropertyGroup>
@@ -446,7 +650,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
             "-nologo",
             "-restore",
             "-t:ComputeRunArguments",
-            "-getProperty:RunCommand,RunArguments,RunWorkingDirectory",
+            "-getProperty:RunCommand,RunArguments,RunWorkingDirectory,_AspireResolvedCliInvocationMode,_AspireResolvedCliPath,_AspireResolvedDnxPath,_AspireResolvedCliVersion,_AspireCliVersionSupportsRunHook,_AspireCliVersionCommand",
             project.ProjectFile
         };
 
@@ -491,17 +695,87 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, """
+        await File.WriteAllTextAsync(aspirePath, ("""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 echo "13.5.0"
                 exit 0
             fi
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
 
         return aspirePath;
+    }
+
+    private static async Task<string> CreateFakeDnxAsync(string fakeCliDirectory)
+    {
+        var dnxPath = Path.Combine(fakeCliDirectory, OperatingSystem.IsWindows() ? "dnx.cmd" : "dnx");
+        await File.WriteAllTextAsync(dnxPath, OperatingSystem.IsWindows()
+            ? """
+                @echo off
+                if "%~1"=="--yes" if "%~2"=="aspire.cli@13.5.0" if "%~3"=="--" if "%~4"=="--version" (
+                    echo 13.5.0
+                    exit /b 0
+                )
+                type nul > "%ASPIRE_TEST_CAPTURE_PATH%"
+                :loop
+                if "%~1"=="" exit /b 0
+                >> "%ASPIRE_TEST_CAPTURE_PATH%" echo %~1
+                shift
+                goto loop
+                """
+            : ("""
+                #!/bin/sh
+                if [ "$1" = "--yes" ] && [ "$2" = "aspire.cli@13.5.0" ] && [ "$3" = "--" ] && [ "$4" = "--version" ]; then
+                    echo "13.5.0"
+                    exit 0
+                fi
+                printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
+                """).ReplaceLineEndings("\n"));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(dnxPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+
+        return dnxPath;
+    }
+
+    private static async Task CreateFakeDnxThatFailsVersionAsync(string fakeCliDirectory)
+    {
+        var dnxPath = Path.Combine(fakeCliDirectory, OperatingSystem.IsWindows() ? "dnx.cmd" : "dnx");
+        await File.WriteAllTextAsync(dnxPath, OperatingSystem.IsWindows()
+            ? """
+                @echo off
+                exit /b 42
+                """
+            : ("""
+                #!/bin/sh
+                exit 42
+                """).ReplaceLineEndings("\n"));
+
+        if (!OperatingSystem.IsWindows())
+        {
+            File.SetUnixFileMode(dnxPath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
+        }
+    }
+
+    private static async Task<string> CreateFailingWorkingDirectoryShadowAsync(string workingDirectory, string command)
+    {
+        var captureFile = Path.Combine(workingDirectory, $"{command}-shadow-invoked.txt");
+        if (OperatingSystem.IsWindows())
+        {
+            await File.WriteAllTextAsync(
+                Path.Combine(workingDirectory, $"{command}.cmd"),
+                $$"""
+                @echo off
+                type nul > "{{captureFile}}"
+                exit /b 1
+                """);
+        }
+
+        return captureFile;
     }
 
     private static async Task CreateFakeAspireCliWithVersionAsync(string fakeCliDirectory, string version)
@@ -526,14 +800,14 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, $$"""
+        await File.WriteAllTextAsync(aspirePath, ($$"""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 echo "{{version}}"
                 exit 0
             fi
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
@@ -555,7 +829,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, $$"""
+        await File.WriteAllTextAsync(aspirePath, ($$"""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 i=0
@@ -567,7 +841,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 exit 0
             fi
             exit 0
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
@@ -589,7 +863,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, """
+        await File.WriteAllTextAsync(aspirePath, ("""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 while true; do
@@ -597,7 +871,7 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
                 done
             fi
             exit 0
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
@@ -622,13 +896,13 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         }
 
         var aspirePath = Path.Combine(fakeCliDirectory, "aspire");
-        await File.WriteAllTextAsync(aspirePath, """
+        await File.WriteAllTextAsync(aspirePath, ("""
             #!/bin/sh
             if [ "$1" = "--version" ]; then
                 exit 1
             fi
             printf '%s\n' "$@" > "$ASPIRE_TEST_CAPTURE_PATH"
-            """);
+            """).ReplaceLineEndings("\n"));
         File.SetUnixFileMode(aspirePath, UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute);
     }
 
@@ -660,6 +934,18 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return toolPath!;
     }
 
+    private static string GetAspireHostingTasksAssemblyPath()
+    {
+        var assembly = typeof(AppHostSdkTargetsTests).Assembly;
+        var taskAssemblyPath = assembly
+            .GetCustomAttributes<AssemblyMetadataAttribute>()
+            .Single(a => string.Equals(a.Key, "AspireHostingTasksAssemblyPath", StringComparison.Ordinal))
+            .Value;
+        Assert.False(string.IsNullOrEmpty(taskAssemblyPath), "AspireHostingTasksAssemblyPath assembly metadata is not set.");
+        Assert.True(File.Exists(taskAssemblyPath), $"Aspire.Hosting.Tasks was not built at '{taskAssemblyPath}'. Build the test project to produce it.");
+        return taskAssemblyPath!;
+    }
+
     private static string GetPackageRid(string packageReference, string prefix)
     {
         var equalsIndex = packageReference.IndexOf('=');
@@ -668,17 +954,20 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         return packageReference[prefix.Length..equalsIndex];
     }
 
-    private static string GetExpectedAspireRunCommand() => OperatingSystem.IsWindows() ? "cmd" : "aspire";
+    private static string GetExpectedAspireRunCommand(string aspireCliPath) => OperatingSystem.IsWindows() ? "cmd" : aspireCliPath;
 
-    private static string GetExpectedAspireRunArguments(RunHookProject project, string? extraArguments = null)
-        => GetExpectedAspireRunArguments(project.ProjectFile, extraArguments);
+    private static string GetExpectedDnxRunCommand(string dnxPath) => OperatingSystem.IsWindows() ? "cmd" : dnxPath;
 
-    private static string GetExpectedAspireRunArguments(string projectPath, string? extraArguments = null)
+    private static string GetExpectedAspireRunArguments(string aspireCliPath, RunHookProject project, string? extraArguments = null)
+        => GetExpectedAspireRunArguments(aspireCliPath, project.ProjectFile, extraArguments);
+
+    private static string GetExpectedAspireRunArguments(string aspireCliPath, string projectPath, string? extraArguments = null)
     {
-        var prefix = OperatingSystem.IsWindows() ? "/C aspire " : string.Empty;
+        var prefix = OperatingSystem.IsWindows() ? $"/D /S /C \"\"{aspireCliPath}\" " : string.Empty;
         var arguments = $"{prefix}run --project \"{projectPath}\" --no-build --";
+        arguments = string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
 
-        return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
+        return OperatingSystem.IsWindows() ? $"{arguments}\"" : arguments;
     }
 
     private static string GetExpectedExplicitAspireRunArguments(RunHookProject project, string? extraArguments = null)
@@ -686,6 +975,15 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         var arguments = $"run --project \"{project.ProjectFile}\" --no-build --";
 
         return string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
+    }
+
+    private static string GetExpectedDnxRunArguments(string dnxPath, RunHookProject project, string? extraArguments = null)
+    {
+        var prefix = OperatingSystem.IsWindows() ? $"/D /S /C \"\"{dnxPath}\" " : string.Empty;
+        var arguments = $"{prefix}--yes aspire.cli@{AspireCliVersion} -- run --project \"{project.ProjectFile}\" --no-build --";
+        arguments = string.IsNullOrEmpty(extraArguments) ? arguments : $"{arguments} {extraArguments}";
+
+        return OperatingSystem.IsWindows() ? $"{arguments}\"" : arguments;
     }
 
     private static void AssertUsesDotNetRun(Dictionary<string, string> properties, RunHookProject project, string expectedArguments = "")
@@ -715,6 +1013,32 @@ public class AppHostSdkTargetsTests(ITestOutputHelper outputHelper)
         {
             [pathEnvironmentVariable] = path
         };
+    }
+
+    private static string CreatePathWithoutAspire(string firstDirectory)
+        => CreatePathWithoutCommand(firstDirectory, "aspire");
+
+    private static string CreatePathWithoutDnx(string firstDirectory)
+        => CreatePathWithoutCommand(firstDirectory, "dnx");
+
+    private static string CreatePathWithoutCommand(string firstDirectory, string commandName)
+    {
+        var pathEnvironmentVariable = GetPathEnvironmentVariableName();
+        var currentPath = Environment.GetEnvironmentVariable(pathEnvironmentVariable) ?? string.Empty;
+        var pathDirectories = currentPath
+            .Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries)
+            .Where(directory => !ContainsCommand(directory, commandName));
+
+        return string.Join(Path.PathSeparator, pathDirectories.Prepend(firstDirectory));
+    }
+
+    private static bool ContainsCommand(string directory, string commandName)
+    {
+        var executableNames = OperatingSystem.IsWindows()
+            ? new[] { $"{commandName}.exe", $"{commandName}.cmd", $"{commandName}.bat", commandName }
+            : [commandName];
+
+        return executableNames.Any(executableName => File.Exists(Path.Combine(directory.Trim().Trim('"'), executableName)));
     }
 
     private static async Task<(int ExitCode, string Output)> RunDotNetAsync(string workingDirectory, string arguments)
