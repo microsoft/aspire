@@ -13,6 +13,7 @@ public static class TelemetryComponentIds
     public const string NotFound = nameof(NotFound);
     public const string Metrics = nameof(Metrics);
     public const string Error = nameof(Error);
+    public const string ErrorMode = nameof(ErrorMode);
     public const string ConsoleLogs = nameof(ConsoleLogs);
 
     // Controls
