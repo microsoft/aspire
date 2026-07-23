@@ -24,7 +24,7 @@
 const fs = require('node:fs');
 
 const failureConclusions = new Set(['failure', 'cancelled', 'timed_out', 'startup_failure']);
-const ignoredJobs = new Set(['Final Results', 'Tests / Final Test Results']);
+const ignoredJobs = new Set(['Final Results', 'Tests / Final Test Results', 'Tests / run_tests / Test Results']);
 const defaultMaxRetryableJobs = 5;
 const defaultMaxRunAttempt = 3;
 

@@ -37,7 +37,10 @@ param(
   [string]$ArtifactsDir,
 
   [Parameter(Mandatory=$true)]
-  [string]$OutputMatrixFile
+  [string]$OutputMatrixFile,
+
+  [Parameter(Mandatory=$false)]
+  [string]$SpecializedTraitFilter = ''
 )
 
 $ErrorActionPreference = 'Stop'
@@ -90,6 +93,32 @@ function Copy-CITestProperties {
       $Entry['properties'][$propName] = $propsSource.$propName
     }
   }
+}
+
+function New-FilterQueryArgument {
+  param([Parameter(Mandatory=$true)][string]$Query)
+
+  return "--filter-query `"$Query`""
+}
+
+function New-SpecializedTraitExpression {
+  param([Parameter(Mandatory=$true)][string]$TraitFilter)
+
+  return "($TraitFilter)&(category!=failing)"
+}
+
+function New-TraitFilterArgs {
+  param(
+    [Parameter(Mandatory=$true)][string]$TraitFilter,
+    [Parameter(Mandatory=$false)][string]$AdditionalArgs = ''
+  )
+
+  $filterArgs = "--filter-trait `"$TraitFilter`""
+  if ([string]::IsNullOrWhiteSpace($AdditionalArgs)) {
+    return $filterArgs
+  }
+
+  return "$filterArgs $AdditionalArgs"
 }
 
 # Helper function to apply defaults and normalize an entry
@@ -152,7 +181,12 @@ function New-RegularTestEntry {
 
   # Add metadata if available
   if ($Metadata) {
-    if ($Metadata.PSObject.Properties['extraTestArgs'] -and $Metadata.extraTestArgs) { $entry['extraTestArgs'] = $Metadata.extraTestArgs }
+    if ($SpecializedTraitFilter) {
+      $additionalArgs = if ($Metadata.PSObject.Properties['extraTestArgs']) { $Metadata.extraTestArgs } else { '' }
+      $entry['extraTestArgs'] = New-TraitFilterArgs -TraitFilter $SpecializedTraitFilter -AdditionalArgs $additionalArgs
+    } elseif ($Metadata.PSObject.Properties['extraTestArgs'] -and $Metadata.extraTestArgs) {
+      $entry['extraTestArgs'] = $Metadata.extraTestArgs
+    }
     if ($Metadata.PSObject.Properties['mtpBaseArgs'] -and $Metadata.mtpBaseArgs) { $entry['mtpBaseArgs'] = $Metadata.mtpBaseArgs }
 
     Copy-CITestProperties -Entry $entry -Metadata $Metadata
@@ -205,9 +239,17 @@ function New-CollectionTestEntry {
 
   # Add test filter for collection-based splitting
   if ($IsUncollected) {
-    $entry['extraTestArgs'] = '--filter-not-trait "Partition=*"'
+    if ($SpecializedTraitFilter) {
+      $entry['extraTestArgs'] = New-FilterQueryArgument "/[$(New-SpecializedTraitExpression $SpecializedTraitFilter)&(Partition!=*)]"
+    } else {
+      $entry['extraTestArgs'] = '--filter-not-trait "Partition=*"'
+    }
   } else {
-    $entry['extraTestArgs'] = "--filter-trait `"Partition=$CollectionName`""
+    if ($SpecializedTraitFilter) {
+      $entry['extraTestArgs'] = New-FilterQueryArgument "/[$(New-SpecializedTraitExpression $SpecializedTraitFilter)&(Partition=$CollectionName)]"
+    } else {
+      $entry['extraTestArgs'] = "--filter-trait `"Partition=$CollectionName`""
+    }
   }
 
   # Add supported OSes from metadata
@@ -252,7 +294,11 @@ function New-ClassTestEntry {
   Copy-CITestProperties -Entry $entry -Metadata $Metadata
 
   # Add test filter for class-based splitting
-  $entry['extraTestArgs'] = "--filter-class `"$ClassName`""
+  if ($SpecializedTraitFilter) {
+    $entry['extraTestArgs'] = "--filter-class `"$ClassName`" --filter-trait `"$SpecializedTraitFilter`""
+  } else {
+    $entry['extraTestArgs'] = "--filter-class `"$ClassName`""
+  }
 
   # Add supported OSes from metadata
   if ($Metadata.PSObject.Properties['supportedOSes']) {
@@ -310,6 +356,13 @@ foreach ($metadataFile in $metadataFiles) {
     # Extract the array testPartitions
     $partitionsJson = Get-Content -Raw -Path $partitionsFile | ConvertFrom-Json
     $testPartitions = $partitionsJson.testPartitions
+
+    if ($SpecializedTraitFilter -and @($testPartitions | Where-Object { $_ -match '^(collection:.+|uncollected:\*)$' }).Count -gt 0) {
+      Write-Host "  → Specialized partition-mode split test (collapsing to one trait-filtered entry)"
+      $entry = New-RegularTestEntry -Metadata $metadata
+      $matrixEntries.Add($entry)
+      continue
+    }
 
     $partitionCount = 0
     $classCount = 0

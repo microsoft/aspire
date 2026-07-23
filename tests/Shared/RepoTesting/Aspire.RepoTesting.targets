@@ -50,7 +50,7 @@
     <IncludeTestPackages Condition="'$(IncludeTestPackages)' == '' and ('$(IsTestProject)' == 'true' or '$(IsTestUtilityProject)' == 'true')">true</IncludeTestPackages>
     <GeneratedPackagesVersionsPropsPath Condition="'$(GeneratedPackagesVersionsPropsPath)' == ''">$(IntermediateOutputPath)Directory.Packages.Versions.props</GeneratedPackagesVersionsPropsPath>
 
-    <TestingPlatformCommandLineArguments>$(TestingPlatformCommandLineArguments) --filter-not-trait "category=failing"</TestingPlatformCommandLineArguments>
+    <TestingPlatformCommandLineArguments Condition="'$(DisableDefaultFailingTestFilter)' != 'true'">$(TestingPlatformCommandLineArguments) --filter-not-trait "category=failing"</TestingPlatformCommandLineArguments>
     <TestingPlatformCommandLineArguments Condition="'$(TrxFileNamePrefix)' != ''">$(TestingPlatformCommandLineArguments) --report-trx-filename  "$(TrxFileNamePrefix)_$(TargetFramework)_$([System.DateTime]::UtcNow.ToString('yyyyMMddhhmmss')).trx"</TestingPlatformCommandLineArguments>
   </PropertyGroup>
 

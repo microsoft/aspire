@@ -144,6 +144,7 @@ path_rules:
       - eng/TestEnumerationRunsheetBuilder/**
       - eng/testing/CITestsProperties.props
       - .github/workflows/tests.yml
+      - .github/workflows/run-tests-core.yml
       - .github/workflows/run-tests.yml
       - .github/workflows/specialized-test-runner.yml
       - .github/workflows/build-packages.yml
