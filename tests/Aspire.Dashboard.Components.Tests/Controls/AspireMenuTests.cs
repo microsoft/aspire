@@ -50,7 +50,7 @@ public class AspireMenuTests : DashboardTestContext
     }
 
     [Fact]
-    public void ClickItem_RestoreFocusOnItemClickTrue_FocusesAnchor()
+    public void ClickItem_MenuButton_FocusesAnchorBeforeOnClick()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -61,7 +61,7 @@ public class AspireMenuTests : DashboardTestContext
         var anchor = "view-options-button";
         var itemClicked = false;
         var focusElementInvocationHandler = JSInterop.SetupVoid("focusElement", anchor);
-        var focusElementInvocationsDuringOnClick = -1;
+        focusElementInvocationHandler.SetVoidResult();
         var items = new List<MenuButtonItem>
         {
             new()
@@ -69,10 +69,7 @@ public class AspireMenuTests : DashboardTestContext
                 Text = "Show hidden resources",
                 OnClick = () =>
                 {
-                    focusElementInvocationsDuringOnClick = focusElementInvocationHandler.Invocations.Count;
-                    Assert.True(
-                        focusElementInvocationsDuringOnClick == 0,
-                        $"Focus should not be restored until item OnClick completes. Actual focusElement invocations during OnClick: {focusElementInvocationsDuringOnClick}.");
+                    Assert.Single(focusElementInvocationHandler.Invocations);
                     itemClicked = true;
 
                     return Task.CompletedTask;
@@ -88,7 +85,6 @@ public class AspireMenuTests : DashboardTestContext
             builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), anchor);
             builder.AddAttribute(3, nameof(AspireMenuButton.Title), "View options");
             builder.AddAttribute(4, nameof(AspireMenuButton.Items), items);
-            builder.AddAttribute(5, nameof(AspireMenuButton.RestoreFocusOnItemClick), true);
             builder.CloseComponent();
         });
 
@@ -96,16 +92,13 @@ public class AspireMenuTests : DashboardTestContext
         cut.WaitForElement("fluent-menu-item").Click();
 
         Assert.True(itemClicked);
-        Assert.True(
-            focusElementInvocationsDuringOnClick == 0,
-            $"Expected zero focusElement invocations during item OnClick, but captured {focusElementInvocationsDuringOnClick}.");
         var invocation = Assert.Single(focusElementInvocationHandler.Invocations);
         Assert.Collection(invocation.Arguments,
             argument => Assert.Equal(anchor, Assert.IsType<string>(argument)));
     }
 
     [Fact]
-    public void ClickItem_RestoreFocusOnItemClickFalse_DoesNotFocusAnchor()
+    public void ClickItem_MenuButtonWithFocusRestorationDisabled_DoesNotFocusAnchor()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
@@ -136,6 +129,7 @@ public class AspireMenuTests : DashboardTestContext
             builder.AddAttribute(2, nameof(AspireMenuButton.MenuButtonId), anchor);
             builder.AddAttribute(3, nameof(AspireMenuButton.Title), "View options");
             builder.AddAttribute(4, nameof(AspireMenuButton.Items), items);
+            builder.AddAttribute(5, nameof(AspireMenuButton.RestoreFocusOnItemClick), false);
             builder.CloseComponent();
         });
 

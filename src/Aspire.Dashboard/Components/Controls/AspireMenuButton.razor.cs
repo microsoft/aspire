@@ -55,11 +55,10 @@ public partial class AspireMenuButton : FluentComponentBase
     /// Gets or sets a value indicating whether focus should return to this menu button after a menu item is clicked.
     /// </summary>
     /// <remarks>
-    /// Use this for button-anchored menus because the underlying menu anchor is the element that opened the menu.
-    /// Do not use this behavior for cursor-positioned or context menus where the anchor is only used for positioning.
+    /// Focus restoration is enabled by default because the underlying menu anchor is the button that opened the menu.
     /// </remarks>
     [Parameter]
-    public bool RestoreFocusOnItemClick { get; set; }
+    public bool RestoreFocusOnItemClick { get; set; } = true;
 
     protected override void OnParametersSet()
     {
