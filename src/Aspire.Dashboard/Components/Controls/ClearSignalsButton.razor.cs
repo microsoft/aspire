@@ -18,6 +18,11 @@ public partial class ClearSignalsButton : ComponentBase
     private static readonly Icon s_clearAllResourcesIcon = new Icons.Regular.Size16.Stack();
 
     [Inject]
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
     public required IStringLocalizer<ControlsStrings> ControlsStringsLoc { get; init; }
 
     [Parameter]
@@ -37,7 +42,7 @@ public partial class ClearSignalsButton : ComponentBase
             Id = "clear-menu-all",
             Icon = s_clearAllResourcesIcon,
             OnClick = () => HandleClearSignal(null),
-            IsDisabled = DashboardClient.IsReadOnly,
+            IsDisabled = TelemetryRepository.IsReadOnly,
             Text = ControlsStringsLoc[name: nameof(ControlsStrings.ClearAllResources)],
         });
 
@@ -46,7 +51,7 @@ public partial class ClearSignalsButton : ComponentBase
             Id = "clear-menu-resource",
             Icon = s_clearSelectedResourceIcon,
             OnClick = () => HandleClearSignal(SelectedResource.Id?.GetResourceKey()),
-            IsDisabled = DashboardClient.IsReadOnly || SelectedResource.Id == null,
+            IsDisabled = TelemetryRepository.IsReadOnly || SelectedResource.Id == null,
             Text = SelectedResource.Id == null
                 ? ControlsStringsLoc[nameof(ControlsStrings.ClearPendingSelectedResource)]
                 : string.Format(CultureInfo.InvariantCulture, ControlsStringsLoc[name: nameof(ControlsStrings.ClearSelectedResource)], SelectedResource.Name),

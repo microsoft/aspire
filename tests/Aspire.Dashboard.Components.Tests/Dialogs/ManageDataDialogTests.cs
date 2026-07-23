@@ -152,10 +152,12 @@ public sealed class ManageDataDialogTests : DashboardTestContext
         Assert.Equal(0, clickCount);
     }
 
-    [Fact]
-    public async Task Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource()
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public async Task Render_ClearedSignals_PrunesSelectionsAndSupportsRemovingEmptyResource(bool dashboardClientIsReadOnly)
     {
-        var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: []);
+        var dashboardClient = new TestDashboardClient(isEnabled: false, initialResources: [], isReadOnly: dashboardClientIsReadOnly);
         SetupManageDataDialogServices(dashboardClient);
 
         var repository = Services.GetRequiredService<SqliteTelemetryRepository>();

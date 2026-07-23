@@ -778,7 +778,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ReadOnly_HighlightedCommandIsVisibleAndDisabled()
+    public void DashboardReadOnly_DisablesCommandButNotTelemetryActions()
     {
         var resource = ModelTestHelpers.CreateResource(
             resourceName: "test-resource",
@@ -817,10 +817,10 @@ public partial class ConsoleLogsTests : DashboardTestContext
             var clearButton = Assert.Single(
                 cut.FindComponents<FluentButton>(),
                 button => string.Equals(button.Instance.Class, "clear-button", StringComparison.Ordinal));
-            Assert.True(clearButton.Instance.Disabled);
+            Assert.False(clearButton.Instance.Disabled);
 
             var pauseButton = Assert.Single(cut.FindComponents<PauseIncomingDataSwitch>());
-            Assert.True(pauseButton.Instance.Disabled);
+            Assert.False(pauseButton.Instance.Disabled);
         });
     }
 
