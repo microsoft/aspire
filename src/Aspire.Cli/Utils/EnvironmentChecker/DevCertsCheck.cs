@@ -25,7 +25,6 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     internal const string OpenSslCertificateCacheCheckName = "dev-certs-openssl-cache";
     private const string OpenSslCommand = "openssl";
     private const int OpenSslHashCollisionSearchLimit = 10;
-    private static readonly TimeSpan s_openSslHashTimeout = TimeSpan.FromSeconds(5);
 
     public int Order => 35; // After SDK check (30), before container checks (40+)
 
@@ -424,18 +423,16 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
                 StandardErrorCallback = _ => { },
             });
         var started = false;
-        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        timeoutCts.CancelAfter(s_openSslHashTimeout);
 
         try
         {
-            started = await process.StartAsync(timeoutCts.Token).ConfigureAwait(false);
+            started = await process.StartAsync(cancellationToken).ConfigureAwait(false);
             if (!started)
             {
                 return (false, "");
             }
 
-            var exitCode = await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            var exitCode = await process.WaitForExitAsync(cancellationToken).ConfigureAwait(false);
             if (exitCode != 0)
             {
                 return (false, "");

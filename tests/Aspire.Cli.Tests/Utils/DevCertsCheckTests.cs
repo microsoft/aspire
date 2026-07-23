@@ -648,65 +648,6 @@ public class DevCertsCheckTests
     }
 
     [Fact]
-    [SkipOnPlatform(TestPlatforms.Windows, "The synthetic openssl command uses a POSIX shell script.")]
-    public async Task CheckAsync_LinuxWithCanceledOpenSslHashProbe_ReturnsOpenSslCertificateCacheWarning()
-    {
-        using var certificate = CreateCertificate();
-        var tempDirectory = Directory.CreateTempSubdirectory();
-        using var cancellationTokenSource = new CancellationTokenSource();
-
-        try
-        {
-            CreateCertUtil(tempDirectory);
-            CreateOpenSsl(tempDirectory, "12345678");
-            var trustDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.FullName, "trust"));
-            File.WriteAllText(Path.Combine(trustDirectory.FullName, GetOpenSslCertificateFileName(certificate)), certificate.ExportCertificatePem());
-
-            var certs = new List<DevCertInfo>
-            {
-                CreateDevCertInfo(CertificateManager.TrustLevel.Full, certificate, MinVersion),
-            };
-            var toolRunner = new TestCertificateToolRunner
-            {
-                CheckHttpCertificateCallback = () => new CertificateTrustResult
-                {
-                    HasCertificates = true,
-                    TrustLevel = CertificateManager.TrustLevel.Full,
-                    Certificates = certs
-                }
-            };
-            var environment = TestEnvironment.CreateLinux(new Dictionary<string, string?>
-            {
-                ["PATH"] = tempDirectory.FullName,
-                [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
-            });
-            var processExecutionFactory = new TestProcessExecutionFactory
-            {
-                AsyncAttemptCallback = async (_, _, cancellationToken) =>
-                {
-                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
-                    return (0, (string?)"12345678");
-                }
-            };
-            var check = CreateCheck(toolRunner, environment, processExecutionFactory);
-
-            var results = await check.CheckAsync(cancellationTokenSource.Token);
-
-            var cacheResult = Assert.Single(results, r => r.Name == DevCertsCheck.OpenSslCertificateCacheCheckName);
-            Assert.Equal(EnvironmentCheckStatus.Warning, cacheResult.Status);
-            Assert.Contains(certificate.Thumbprint, cacheResult.Details);
-            Assert.Contains("subject-hash", cacheResult.Details);
-            var processExecution = Assert.IsType<TestProcessExecution>(Assert.Single(processExecutionFactory.CreatedExecutions));
-            Assert.Equal(1, processExecution.KillCount);
-            Assert.True(processExecution.KilledEntireProcessTree);
-        }
-        finally
-        {
-            tempDirectory.Delete(recursive: true);
-        }
-    }
-
-    [Fact]
     public async Task CheckAsync_LinuxWithMissingOpenSslHashEntryAndNoOpenSsl_DoesNotReturnOpenSslCertificateCacheWarning()
     {
         using var certificate = CreateCertificate();
