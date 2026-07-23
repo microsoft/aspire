@@ -17,6 +17,7 @@ using Google.Protobuf.Collections;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Resource.V1;
@@ -1790,7 +1791,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
 
                 foreach (var metric in scopeMetric.Metrics)
                 {
-                    OtlpInstrument instrument;
+                    InMemoryInstrument instrument;
 
                     try
                     {
@@ -1806,7 +1807,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                         }
                         else if (resourceEntry.Instruments.Count < TelemetryRepositoryLimits.MaxInstrumentCount)
                         {
-                            instrument = new OtlpInstrument
+                            instrument = new InMemoryInstrument
                             {
                                 Summary = new OtlpInstrumentSummary
                                 {
@@ -1846,7 +1847,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
     }
 
-    private void AddMetrics(OtlpInstrument instrument, Metric metric, AddContext context, ref KeyValuePair<string, string>[]? tempAttributes)
+    private void AddMetrics(InMemoryInstrument instrument, Metric metric, AddContext context, ref KeyValuePair<string, string>[]? tempAttributes)
     {
         switch (metric.DataCase)
         {
@@ -2354,7 +2355,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         var instrumentKey = new OtlpInstrumentKey(request.MeterName, request.InstrumentName);
         var instruments = resources
             .Select(resource => CloneInstrument(resource, instrumentKey, request.StartTime, request.EndTime))
-            .OfType<OtlpInstrument>()
+            .OfType<InMemoryInstrument>()
             .ToList();
 
         if (instruments.Count == 0)
@@ -2388,13 +2389,13 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         };
     }
 
-    private static OtlpInstrument? CloneInstrument(ResourceEntry resource, OtlpInstrumentKey key, DateTime? valuesStart, DateTime? valuesEnd)
+    private static InMemoryInstrument? CloneInstrument(ResourceEntry resource, OtlpInstrumentKey key, DateTime? valuesStart, DateTime? valuesEnd)
     {
         resource.MetricsLock.EnterReadLock();
         try
         {
             return resource.Instruments.TryGetValue(key, out var instrument)
-                ? OtlpInstrument.Clone(instrument, cloneData: true, valuesStart: valuesStart, valuesEnd: valuesEnd)
+                ? InMemoryInstrument.Clone(instrument, valuesStart, valuesEnd)
                 : null;
         }
         finally
@@ -2471,12 +2472,148 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         DisposeWatchers();
     }
 
+    [DebuggerDisplay("Name = {Summary.Name}, Unit = {Summary.Unit}, Type = {Summary.Type}")]
+    private sealed class InMemoryInstrument
+    {
+        public required OtlpInstrumentSummary Summary { get; init; }
+        public required OtlpContext Context { get; init; }
+
+        public Dictionary<ReadOnlyMemory<KeyValuePair<string, string>>, DimensionScope> Dimensions { get; } = new(ScopeAttributesComparer.Instance);
+        public Dictionary<string, List<string?>> KnownAttributeValues { get; } = [];
+        public bool HasOverflow { get; set; }
+
+        public DimensionScope FindScope(RepeatedField<KeyValue> attributes, ref KeyValuePair<string, string>[]? tempAttributes)
+        {
+            // See https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/sdk.md#overflow-attribute
+            // Inspect attributes before they're merged with parent attributes. "otel.metric.overflow" should be the only attribute.
+            if (!HasOverflow && attributes.Count == 1 && attributes[0].Key == "otel.metric.overflow" && attributes[0].Value.GetString() == "true")
+            {
+                HasOverflow = true;
+            }
+
+            // We want to find the dimension scope that matches the attributes, but we don't want to allocate.
+            // Copy values to a temporary reusable array.
+            //
+            // A meter can have attributes. Merge these with the data point attributes when creating a dimension.
+            OtlpHelpers.CopyKeyValuePairs(attributes, Summary.Parent.Attributes, Context, out var copyCount, ref tempAttributes);
+            Array.Sort(tempAttributes, 0, copyCount, KeyValuePairComparer.Instance);
+
+            var comparableAttributes = tempAttributes.AsMemory(0, copyCount);
+
+            // Can't use CollectionsMarshal.GetValueRefOrAddDefault here because comparableAttributes is a view over mutable data.
+            // Need to add dimensions using durable attributes instance after scope is created.
+            if (!Dimensions.TryGetValue(comparableAttributes, out var dimension))
+            {
+                if (Dimensions.Count >= TelemetryRepositoryLimits.MaxDimensionCount)
+                {
+                    throw new InvalidOperationException($"Dimension limit of {TelemetryRepositoryLimits.MaxDimensionCount} reached for instrument '{Summary.Name}'.");
+                }
+
+                dimension = CreateDimensionScope(comparableAttributes);
+                Dimensions.Add(dimension.Attributes, dimension);
+            }
+            return dimension;
+        }
+
+        private DimensionScope CreateDimensionScope(Memory<KeyValuePair<string, string>> comparableAttributes)
+        {
+            var isFirst = Dimensions.Count == 0;
+            var durableAttributes = comparableAttributes.ToArray();
+            var dimension = new DimensionScope(Context.Options.MaxMetricsCount, durableAttributes);
+
+            var keys = KnownAttributeValues.Keys.Union(durableAttributes.Select(attribute => attribute.Key)).Distinct();
+            foreach (var key in keys)
+            {
+                ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(KnownAttributeValues, key, out var existed);
+                // Adds to dictionary if not present.
+                if (values is null)
+                {
+                    if (!existed && KnownAttributeValues.Count > TelemetryRepositoryLimits.MaxKnownAttributeValueCount)
+                    {
+                        // Over limit. Remove the default entry that GetValueRefOrAddDefault added.
+                        KnownAttributeValues.Remove(key);
+                        continue;
+                    }
+
+                    values = [];
+
+                    // If the key is new and there are already dimensions, add an empty value because there are dimensions without this key.
+                    if (!isFirst)
+                    {
+                        TryAddValue(values, null, TelemetryRepositoryLimits.MaxKnownAttributeValuesPerKey);
+                    }
+                }
+
+                var currentDimensionValue = OtlpHelpers.GetValue(durableAttributes, key);
+                TryAddValue(values, currentDimensionValue, TelemetryRepositoryLimits.MaxKnownAttributeValuesPerKey);
+            }
+
+            return dimension;
+
+            static void TryAddValue(List<string?> values, string? value, int maxValues)
+            {
+                if (values.Count < maxValues && !values.Contains(value))
+                {
+                    values.Add(value);
+                }
+            }
+        }
+
+        public static InMemoryInstrument Clone(InMemoryInstrument instrument, DateTime? valuesStart, DateTime? valuesEnd)
+        {
+            var newInstrument = new InMemoryInstrument
+            {
+                Summary = instrument.Summary,
+                Context = instrument.Context,
+                HasOverflow = instrument.HasOverflow
+            };
+
+            foreach (var item in instrument.KnownAttributeValues)
+            {
+                newInstrument.KnownAttributeValues.Add(item.Key, item.Value.ToList());
+            }
+            foreach (var item in instrument.Dimensions)
+            {
+                newInstrument.Dimensions.Add(item.Key, DimensionScope.Clone(item.Value, valuesStart, valuesEnd));
+            }
+
+            return newInstrument;
+        }
+
+        private sealed class ScopeAttributesComparer : IEqualityComparer<ReadOnlyMemory<KeyValuePair<string, string>>>
+        {
+            public static readonly ScopeAttributesComparer Instance = new();
+
+            public bool Equals(ReadOnlyMemory<KeyValuePair<string, string>> x, ReadOnlyMemory<KeyValuePair<string, string>> y) =>
+                x.Span.SequenceEqual(y.Span);
+
+            public int GetHashCode([DisallowNull] ReadOnlyMemory<KeyValuePair<string, string>> obj)
+            {
+                var hashcode = new HashCode();
+                foreach (var pair in obj.Span)
+                {
+                    hashcode.Add(pair.Key);
+                    hashcode.Add(pair.Value);
+                }
+                return hashcode.ToHashCode();
+            }
+        }
+
+        private sealed class KeyValuePairComparer : IComparer<KeyValuePair<string, string>>
+        {
+            public static readonly KeyValuePairComparer Instance = new();
+
+            public int Compare(KeyValuePair<string, string> x, KeyValuePair<string, string> y) =>
+                string.Compare(x.Key, y.Key, StringComparison.Ordinal);
+        }
+    }
+
     private sealed record ResourceEntry(OtlpResource Resource)
     {
         public ReaderWriterLockSlim MetricsLock { get; } = new();
         // Bounded by MaxScopeCount. Cleared when metrics are cleared.
         public Dictionary<string, OtlpScope> Meters { get; } = [];
         // Bounded by MaxInstrumentCount. Cleared when metrics are cleared.
-        public Dictionary<OtlpInstrumentKey, OtlpInstrument> Instruments { get; } = [];
+        public Dictionary<OtlpInstrumentKey, InMemoryInstrument> Instruments { get; } = [];
     }
 }
