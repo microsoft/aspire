@@ -350,6 +350,7 @@ internal class AppHostRpcTarget(
             }).ToArray(),
             Outputs = outputs.Select(output => new PipelineOutputInfo
             {
+                IsPrimary = output.IsPrimary,
                 PublisherName = output.PublisherName,
                 Name = output.Name,
                 Kind = output.Kind.ToString(),

@@ -39,6 +39,7 @@ var inventoryDefinition = new PipelineOutputDefinition(
 var step = new PipelineStep
 {
     Name = "generate-inventory",
+    RequiredBySteps = [WellKnownPipelineSteps.Publish],
     Outputs = [inventoryDefinition],
     SupportsOutputPathRelocation = true,
     Action = context =>
@@ -58,6 +59,8 @@ var step = new PipelineStep
 
 builder.Pipeline.AddStep(step);
 ```
+
+`RequiredBySteps = [WellKnownPipelineSteps.Publish]` includes the custom publisher when `aspire publish` runs.
 
 `context.Outputs.AppHostDirectory` is the authoritative AppHost project directory. `OutputPath` is the only path a publisher should write to, while `LogicalTargetPath` identifies the normal checked-in destination and can differ when output relocation is active. Configuration can override a named target with `Pipeline:Outputs:<step-name>:<output-name>:Path`. The existing primary `--output-path` destination is available through `context.Outputs.PrimaryOutput` and should not be redeclared as a named output.
 

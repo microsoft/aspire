@@ -786,7 +786,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             // If no explicit --step was provided, set it to run only the manifest step
             if (string.IsNullOrEmpty(_innerBuilder.Configuration["Pipeline:Step"]))
             {
-                _innerBuilder.Configuration["Pipeline:Step"] = "publish-manifest";
+                _innerBuilder.Configuration["Pipeline:Step"] = WellKnownPipelineSteps.PublishManifest;
             }
 
             // If no explicit operation was set, default to Publish mode

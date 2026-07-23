@@ -1050,6 +1050,11 @@ internal sealed class GetPipelineStepsResponse
 internal sealed class PipelineOutputInfo
 {
     /// <summary>
+    /// Gets a value indicating whether this is the shared primary pipeline output.
+    /// </summary>
+    public required bool IsPrimary { get; init; }
+
+    /// <summary>
     /// Gets the pipeline-step name that owns the output.
     /// </summary>
     public required string PublisherName { get; init; }

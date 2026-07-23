@@ -9,6 +9,7 @@ using System.Runtime.ExceptionServices;
 using System.Text;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Pipelines;
 
@@ -23,6 +24,7 @@ internal sealed class PipelineOutputRegistry
     private readonly IConfiguration _configuration;
     private readonly string? _stagingPath;
     private readonly Dictionary<OutputKey, ResolvedPipelineOutput> _outputs = [];
+    private readonly ResolvedPipelineOutput _primaryOutput;
     private readonly TaskCompletionSource _preparationCompleted = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private readonly TaskCompletionSource _executionAuthorized = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private IReadOnlyList<PipelineStep> _selectedSteps = [];
@@ -30,7 +32,10 @@ internal sealed class PipelineOutputRegistry
     private PipelineOutputExecutionState _executionState = PipelineOutputExecutionState.Preparing;
     private bool _prepared;
 
-    public PipelineOutputRegistry(IConfiguration configuration, IPipelineOutputService outputService)
+    public PipelineOutputRegistry(
+        IConfiguration configuration,
+        IPipelineOutputService outputService,
+        IOptions<PipelineOptions> pipelineOptions)
     {
         _configuration = configuration;
 
@@ -57,19 +62,22 @@ internal sealed class PipelineOutputRegistry
         var primaryOutputPath = Path.GetFullPath(outputService.GetOutputDirectory());
         var primaryTargetPath = NormalizeOptionalPath(configuredPrimaryTargetPath, AppHostDirectory)
             ?? primaryOutputPath;
-        var primaryKind = Path.GetExtension(primaryTargetPath).Equals(".json", StringComparison.OrdinalIgnoreCase)
-            ? PipelineOutputKind.File
-            : PipelineOutputKind.Directory;
+        // Direct manifest publishing historically accepts a .json file path. Every other
+        // publisher treats the primary output as a directory, regardless of its suffix.
+        var primaryKind =
+            string.Equals(pipelineOptions.Value.Step, WellKnownPipelineSteps.PublishManifest, StringComparison.Ordinal) &&
+            Path.GetExtension(primaryTargetPath).Equals(".json", StringComparison.OrdinalIgnoreCase)
+                ? PipelineOutputKind.File
+                : PipelineOutputKind.Directory;
         ValidateTargetKind(PrimaryPublisherName, PrimaryOutputName, primaryTargetPath, primaryKind);
 
-        _outputs.Add(
-            new OutputKey(PrimaryPublisherName, PrimaryOutputName),
-            new ResolvedPipelineOutput(
-                PrimaryPublisherName,
-                PrimaryOutputName,
-                primaryKind,
-                primaryOutputPath,
-                primaryTargetPath));
+        _primaryOutput = new ResolvedPipelineOutput(
+            PrimaryPublisherName,
+            PrimaryOutputName,
+            primaryKind,
+            primaryOutputPath,
+            primaryTargetPath,
+            isPrimary: true);
     }
 
     public string AppHostDirectory { get; }
@@ -205,7 +213,7 @@ internal sealed class PipelineOutputRegistry
         lock (_lock)
         {
             EnsurePrepared();
-            return _outputs[new OutputKey(PrimaryPublisherName, PrimaryOutputName)];
+            return _primaryOutput;
         }
     }
 
@@ -242,8 +250,10 @@ internal sealed class PipelineOutputRegistry
             EnsurePrepared();
 
             return _outputs.Values
+                .Append(_primaryOutput)
                 .OrderBy(output => output.PublisherName, StringComparer.Ordinal)
                 .ThenBy(output => output.Name, StringComparer.Ordinal)
+                .ThenByDescending(output => output.IsPrimary)
                 .ToArray();
         }
     }
@@ -280,7 +290,8 @@ internal sealed class PipelineOutputRegistry
             definition.Name,
             definition.Kind,
             outputPath,
-            targetPath);
+            targetPath,
+            isPrimary: false);
 
         if (_outputs.TryGetValue(key, out var existing))
         {
@@ -322,7 +333,7 @@ internal sealed class PipelineOutputRegistry
 
     private void ValidateExclusiveOwnership()
     {
-        var outputs = _outputs.Values.ToArray();
+        var outputs = _outputs.Values.Append(_primaryOutput).ToArray();
         for (var i = 0; i < outputs.Length; i++)
         {
             for (var j = i + 1; j < outputs.Length; j++)
@@ -361,14 +372,14 @@ internal sealed class PipelineOutputRegistry
         out ResolvedPipelineOutput primary,
         out ResolvedPipelineOutput named)
     {
-        if (IsPrimaryOutput(first))
+        if (first.IsPrimary)
         {
             primary = first;
             named = second;
             return true;
         }
 
-        if (IsPrimaryOutput(second))
+        if (second.IsPrimary)
         {
             primary = second;
             named = first;
@@ -378,11 +389,6 @@ internal sealed class PipelineOutputRegistry
         primary = first;
         named = second;
         return false;
-    }
-
-    private static bool IsPrimaryOutput(ResolvedPipelineOutput output)
-    {
-        return output.PublisherName == PrimaryPublisherName && output.Name == PrimaryOutputName;
     }
 
     private static bool PathsOverlap(string first, string second)
