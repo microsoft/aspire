@@ -194,20 +194,23 @@ public sealed partial class SqliteTelemetryRepository
 
             if (!_cachedScopesByName.TryGetValue(incomingScope.Name, out var cachedScope))
             {
-                var existing = connection.QuerySingleOrDefault<ScopeRecord>("""
-                    SELECT scope_id AS ScopeId, scope_name AS ScopeName, scope_version AS ScopeVersion
-                    FROM telemetry_scopes
-                    WHERE scope_name = @ScopeName;
+                var existingRecords = connection.Query<CachedScopeRecord>("""
+                    SELECT
+                        s.scope_id AS ScopeId,
+                        s.scope_name AS ScopeName,
+                        s.scope_version AS ScopeVersion,
+                        a.attribute_key AS AttributeKey,
+                        a.attribute_value AS AttributeValue
+                    FROM telemetry_scopes s
+                    LEFT JOIN telemetry_scope_attributes a ON a.scope_id = s.scope_id
+                    WHERE s.scope_name = @ScopeName
+                    ORDER BY a.ordinal;
                     """, new { ScopeName = incomingScope.Name }, transaction);
-                if (existing is not null)
+                if (existingRecords.FirstOrDefault() is { } existing)
                 {
-                    var attributes = connection.Query<AttributeRecord>("""
-                        SELECT attribute_key AS AttributeKey, attribute_value AS AttributeValue
-                        FROM telemetry_scope_attributes
-                        WHERE scope_id = @ScopeId
-                        ORDER BY ordinal;
-                        """, new { existing.ScopeId }, transaction)
-                        .Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue))
+                    var attributes = existingRecords
+                        .Where(record => record.AttributeKey is not null)
+                        .Select(record => KeyValuePair.Create(record.AttributeKey!, record.AttributeValue!))
                         .ToArray();
                     cachedScope = GetOrAddCachedScope(existing.ScopeId, existing.ScopeName, existing.ScopeVersion, attributes);
                 }
@@ -807,6 +810,15 @@ public sealed partial class SqliteTelemetryRepository
         public required int TelemetryType { get; init; }
         public required string ScopeName { get; init; }
         public required string ScopeVersion { get; init; }
+    }
+
+    private sealed class CachedScopeRecord
+    {
+        public required long ScopeId { get; init; }
+        public required string ScopeName { get; init; }
+        public required string ScopeVersion { get; init; }
+        public string? AttributeKey { get; init; }
+        public string? AttributeValue { get; init; }
     }
 
     private sealed class CachedScopeAttributeRecord

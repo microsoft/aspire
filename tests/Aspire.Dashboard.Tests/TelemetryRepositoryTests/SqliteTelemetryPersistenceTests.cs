@@ -426,6 +426,44 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
+    public void Scopes_ReopenAndReusePersistedScopesWithAndWithoutAttributes()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        var attributedScope = CreateScope(name: "AttributedScope", attributes: [KeyValuePair.Create("scope-key", "scope-value")]);
+        var emptyScope = CreateScope(name: "EmptyScope");
+
+        for (var iteration = 0; iteration < 2; iteration++)
+        {
+            using var repository = CreateRepository(workspace.Path);
+            var addContext = new AddContext();
+            repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+            {
+                new ResourceLogs
+                {
+                    Resource = CreateResource(),
+                    ScopeLogs =
+                    {
+                        new ScopeLogs { Scope = attributedScope, LogRecords = { CreateLogRecord() } },
+                        new ScopeLogs { Scope = emptyScope, LogRecords = { CreateLogRecord() } }
+                    }
+                }
+            });
+            Assert.Equal(0, addContext.FailureCount);
+        }
+
+        using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_scopes;";
+        Assert.Equal(2L, command.ExecuteScalar());
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_scope_attributes;";
+        Assert.Equal(1L, command.ExecuteScalar());
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_logs;";
+        Assert.Equal(4L, command.ExecuteScalar());
+    }
+
+    [Fact]
     public void ResourceViews_EquivalentAttributesShareNormalizedRows()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
