@@ -19,6 +19,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// See: https://github.com/radius-project/radius/blob/main/eng/design-notes/extensibility/2025-08-container-resource-type.md
 /// </remarks>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class RadiusContainerConstruct : ProvisionableResource
 {
     private readonly string _containerName;

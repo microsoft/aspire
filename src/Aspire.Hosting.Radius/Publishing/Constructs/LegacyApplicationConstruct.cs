@@ -16,6 +16,7 @@ namespace Aspire.Hosting.Radius.Publishing.Constructs;
 /// resources that still use the legacy fallback path.
 /// </summary>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport]
 public sealed class LegacyApplicationConstruct : ProvisionableResource
 {
     private BicepValue<string>? _name;

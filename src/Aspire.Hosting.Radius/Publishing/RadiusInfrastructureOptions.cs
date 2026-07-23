@@ -21,6 +21,7 @@ namespace Aspire.Hosting.Radius.Publishing;
 /// shape across releases of <c>Aspire.Hosting.Radius</c>.
 /// </remarks>
 [Experimental("ASPIRERADIUS004", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+[AspireExport(ExposeProperties = true)]
 public sealed class RadiusInfrastructureOptions
 {
     /// <summary>
