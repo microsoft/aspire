@@ -324,6 +324,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             var projectDir = Path.Combine(workspace.WorkspaceRoot.FullName, projectName);
             var appHostDir = Path.Combine(projectDir, $"{projectName}.AppHost");
             var appHostFilePath = Path.Combine(appHostDir, "AppHost.cs");
+            var webProgramFilePath = Path.Combine(projectDir, $"{projectName}.Web", "Program.cs");
 
             output.WriteLine($"Step 16: Modifying AppHost.cs at: {appHostFilePath}");
             var content = File.ReadAllText(appHostFilePath);
@@ -359,6 +360,39 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
 
             File.WriteAllText(appHostFilePath, content);
             output.WriteLine("Modified AppHost.cs with AddRadiusEnvironment + WithContainerImage");
+
+            output.WriteLine($"Step 16b: Adding Radius diagnostics endpoints to Web Program.cs at: {webProgramFilePath}");
+            var webProgram = File.ReadAllText(webProgramFilePath);
+            if (!webProgram.Contains("using Microsoft.AspNetCore.OutputCaching;"))
+            {
+                webProgram = "using Microsoft.AspNetCore.OutputCaching;\n" + webProgram;
+            }
+
+            webProgram = webProgram.Replace(
+                "app.MapRazorComponents<App>()",
+                """
+                app.MapGet("/radius-diagnostics/apiservice", async (WeatherApiClient weatherApi, CancellationToken cancellationToken) =>
+                {
+                    var forecasts = await weatherApi.GetWeatherAsync(cancellationToken: cancellationToken);
+                    return Results.Ok(new { count = forecasts.Length });
+                });
+
+                app.MapGet("/radius-diagnostics/cache", async (IOutputCacheStore cacheStore, CancellationToken cancellationToken) =>
+                {
+                    var key = $"radius-diagnostics:{Guid.NewGuid():N}";
+                    var payload = new byte[] { 1, 2, 3, 4 };
+
+                    await cacheStore.SetAsync(key, payload, tags: null, validFor: TimeSpan.FromMinutes(1), cancellationToken);
+                    var cached = await cacheStore.GetAsync(key, cancellationToken);
+
+                    return cached is { Length: 4 } ? Results.Ok("OK") : Results.Problem("Redis output cache round-trip failed.");
+                });
+
+                app.MapRazorComponents<App>()
+                """);
+
+            File.WriteAllText(webProgramFilePath, webProgram);
+            output.WriteLine("Modified Web Program.cs with direct apiservice and Redis output-cache diagnostics");
 
             // ===== PHASE 4: Build and push the container images to ACR =====
 
@@ -480,10 +514,10 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
 
-            // Port-forward directly to the Deployment. Radius does not synthesize a Kubernetes
-            // Service for Radius.Compute/containers workloads (only recipe-backed resources such as
-            // the Redis cache get one), so there is no Service to target. kubectl port-forward
-            // resolves a ready pod in the Deployment; 8080 is the container port Aspire assigns to
+            // Port-forward directly to the Deployment. Even though the Radius container recipe
+            // creates a ClusterIP Service for each container that declares ports (asserted in
+            // Step 29), port-forwarding to the Deployment reaches a ready pod directly without
+            // depending on Service endpoint readiness. 8080 is the container port Aspire assigns to
             // published containers (ASPNETCORE_HTTP_PORTS=8080).
             output.WriteLine("Step 26: Verifying apiservice endpoint via port-forward...");
             await auto.TypeAsync($"kubectl port-forward -n {appNamespace} deployment/apiservice 18080:8080 &");
@@ -493,17 +527,24 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            // Verify the webfrontend container serves HTTP by probing its home page.
+            // Verify the webfrontend container serves HTTP by probing its home page, then verify
+            // the Redis output-cache connection and the direct webfrontend -> apiservice call
+            // through the diagnostic endpoints added above.
             //
-            // Note: we deliberately do NOT probe /weather here. That page renders forecast data
-            // fetched from the apiservice container (@inject WeatherApiClient) through the Redis
-            // output cache. On Radius that cross-service call does not resolve: Radius creates no
-            // Kubernetes Service for a Radius.Compute/containers workload, so Aspire's service
-            // discovery hostname ("apiservice") has nothing to resolve to, and `rad app graph`
-            // shows webfrontend wired only to the cache resource, not to apiservice. The home page
-            // does not depend on apiservice, so it is the reliable end-to-end signal that the
-            // second container deployed and is serving. curl retries to absorb the brief window
-            // while the port-forward and container finish coming up.
+            // The Radius resource-types-contrib Kubernetes container recipe creates a ClusterIP
+            // Service for each container that declares ports. Its service config uses:
+            //   name: '${normalizedName}-${svc.containerName}'
+            //   port: port.value.containerPort
+            //   targetPort: port.value.containerPort
+            // where normalizedName is context.resource.name and svc.containerName is the key under
+            // properties.containers. Aspire emits a single container entry keyed by the resource
+            // name, so apiservice's Service is `apiservice-apiservice` listening on the container
+            // port (8080). Aspire's Radius service discovery emits the matching address
+            //   http://apiservice-apiservice.<namespace>.svc.cluster.local:8080
+            // (see RadiusEnvironmentResource.GetHostAddressExpression / RadiusServiceDiscovery), so
+            // the webfrontend -> apiservice call and the /weather page resolve in-cluster.
+            // Source:
+            // https://github.com/radius-project/resource-types-contrib/blob/main/Compute/containers/recipes/kubernetes/bicep/kubernetes-containers.bicep
             output.WriteLine("Step 27: Verifying webfrontend home page via port-forward...");
             await auto.TypeAsync($"kubectl port-forward -n {appNamespace} deployment/webfrontend 18081:8080 &");
             await auto.EnterAsync();
@@ -512,12 +553,36 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
-            output.WriteLine("Step 28: Cleaning up port-forwards...");
+            output.WriteLine("Step 28: Verifying webfrontend -> Redis output-cache connectivity...");
+            await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/radius-diagnostics/cache -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            // Assert the recipe-created Service explicitly before asserting the app path, so a
+            // service-discovery/DNS regression is distinguishable from an application failure. Verify
+            // the full recipe contract (type == ClusterIP, port == targetPort == containerPort == 8080)
+            // so a change to any of those — not just the Service port — is caught here.
+            output.WriteLine("Step 29: Verifying the recipe created a ClusterIP Service apiservice-apiservice with port==targetPort==8080...");
+            await auto.TypeAsync($"test \"$(kubectl get svc -n {appNamespace} apiservice-apiservice -o jsonpath='{{.spec.type}}/{{.spec.ports[0].port}}/{{.spec.ports[0].targetPort}}')\" = 'ClusterIP/8080/8080'");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(30));
+
+            output.WriteLine("Step 30: Verifying direct webfrontend -> apiservice connectivity...");
+            await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/radius-diagnostics/apiservice -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            output.WriteLine("Step 31: Verifying the /weather page (webfrontend -> apiservice via Redis output cache)...");
+            await auto.TypeAsync("for i in $(seq 1 10); do sleep 3 && curl -sf http://localhost:18081/weather -o /dev/null -w '%{http_code}' && echo ' OK' && break; done");
+            await auto.EnterAsync();
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
+
+            output.WriteLine("Step 32: Cleaning up port-forwards...");
             await auto.TypeAsync("kill %1 %2 2>/dev/null; true");
             await auto.EnterAsync();
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(10));
 
-            output.WriteLine("Step 29: Exiting terminal...");
+            output.WriteLine("Step 33: Exiting terminal...");
             await auto.TypeAsync("exit");
             await auto.EnterAsync();
 

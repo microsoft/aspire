@@ -228,6 +228,14 @@ internal sealed class RadiusInfrastructureBuilder
         // 5. Container workloads always route to the UDT compute container type
         // (Radius.Compute/containers) parented to the UDT application.
         var containerConnectionTargets = new Dictionary<RadiusContainerConstruct, Dictionary<string, RadiusResourceTypeConstruct>>();
+
+        // Records the literal container ports (endpoint name -> port + protocol) that service
+        // discovery was derived from, keyed by the immutable container map key (the resource name),
+        // so a ConfigureRadiusInfrastructure callback that later changes/removes a port — or replaces
+        // or drops the whole container — can be rejected after callbacks run. Keying by the stable
+        // map key (not the construct instance) means a callback that swaps in a new construct for the
+        // same workload is still validated. See ValidatePostCallbackContainerInvariants.
+        var containerPortSnapshots = new Dictionary<string, Dictionary<string, (int Port, string Protocol)>>(StringComparer.Ordinal);
         foreach (var resource in computeResources)
         {
             var identifier = BicepPostProcessor.SanitizeIdentifier(resource.Name);
@@ -246,6 +254,12 @@ internal sealed class RadiusInfrastructureBuilder
                 identifier, resource.Name, image, appConstruct!, envConstruct, connectionTargets, env, ports);
             options.Containers.Add(containerConstruct);
             containerConnectionTargets[containerConstruct] = connectionTargets;
+            containerPortSnapshots[resource.Name] = ports.ToDictionary(
+                kv => kv.Key,
+                kv => (
+                    ((IBicepValue)kv.Value.ContainerPort).LiteralValue is int literalPort ? literalPort : -1,
+                    ((IBicepValue)kv.Value.Protocol).LiteralValue is string literalProtocol ? literalProtocol : string.Empty),
+                StringComparer.Ordinal);
         }
 
         // Emit the Bicep parameters allocated for secret/parameter-backed container env vars as
@@ -272,6 +286,14 @@ internal sealed class RadiusInfrastructureBuilder
                     tkv => tkv.Key, tkv => tkv.Value.BicepIdentifier)));
 
         RunConfigureCallbacks(options);
+
+        // Validate the post-callback container set. A ConfigureRadiusInfrastructure callback can
+        // rename containers, mutate/remove ports, add ports to a previously portless container, or
+        // replace/drop a workload entirely. Service discovery (`services__*` URLs and the recipe
+        // Service name/port) was derived from the pre-callback model, so all of these can silently
+        // break cross-container calls or emit an invalid manifest. Validate the final state and fail
+        // fast on any detectable divergence.
+        ValidatePostCallbackContainerInvariants(options, containerPortSnapshots);
 
         // 7. Rewire `.id` cross-references for targets whose BicepIdentifier
         // was changed by a callback; leave everything else (including callback
@@ -883,12 +905,27 @@ internal sealed class RadiusInfrastructureBuilder
             return ports;
         }
 
+        var seenPorts = new HashSet<(int ContainerPort, string Protocol)>();
         foreach (var endpoint in endpoints)
         {
-            // Prefer the target (in-container) port; fall back to the declared host port. In
-            // publish mode neither may be allocated yet, in which case there is nothing to emit.
-            var portValue = endpoint.TargetPort ?? endpoint.Port;
-            if (portValue is not int containerPort)
+            // Use the shared service-port resolver so the container port emitted here matches the
+            // Service port the recipe exposes and the port the environment puts in service-discovery
+            // URLs (RadiusServiceDiscovery). A null result means this endpoint contributes no port
+            // (e.g. the synthetic default HTTPS endpoint), so the recipe creates no Service for it.
+            if (RadiusServiceDiscovery.ResolveServicePort(resource, endpoint.Name) is not int containerPort)
+            {
+                continue;
+            }
+
+            var protocol = endpoint.Protocol == ProtocolType.Udp ? "UDP" : "TCP";
+
+            // Deduplicate by (container port, protocol), matching the Kubernetes publisher's ToService
+            // dedup. Multiple endpoints can resolve to the same container port (e.g. an explicit
+            // portless HTTP and HTTPS endpoint on a project both default to 8080), and the recipe would
+            // otherwise emit two Kubernetes Service ports with the same (port, protocol), which the
+            // provider rejects. The first endpoint wins; the others still resolve to the same port in
+            // their service-discovery URLs, so nothing is lost. See: https://github.com/microsoft/aspire/issues/14029
+            if (!seenPorts.Add((containerPort, protocol)))
             {
                 continue;
             }
@@ -896,7 +933,7 @@ internal sealed class RadiusInfrastructureBuilder
             var port = new ContainerPortConstruct
             {
                 ContainerPort = containerPort,
-                Protocol = endpoint.Protocol == ProtocolType.Udp ? "UDP" : "TCP",
+                Protocol = protocol,
             };
             ports[endpoint.Name] = port;
         }
@@ -1218,6 +1255,212 @@ internal sealed class RadiusInfrastructureBuilder
         foreach (var callback in callbacks)
         {
             callback.Configure(options);
+        }
+    }
+
+    // A Kubernetes Service name must be a valid RFC 1123 DNS label of at most 63 characters:
+    // https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#dns-label-names
+    // The Radius recipe names the Service `{resource}-{resource}` (RadiusServiceDiscovery), so a
+    // resource name longer than 31 characters overflows the limit even though Aspire itself allows
+    // names up to ModelName.DefaultMaxLength (64).
+    private const int MaxKubernetesServiceNameLength = 63;
+
+    // Validates the final (post-callback) container set. Aspire emits service discovery
+    // (`services__*` URLs and the recipe Service name/port) from the pre-callback model, so a
+    // ConfigureRadiusInfrastructure callback that renames a container, changes/removes a port,
+    // adds a port to a previously portless container, or replaces/drops a workload can silently
+    // break cross-container calls or emit an invalid manifest. Fail fast on any detectable
+    // divergence. Only literal values are validated; a non-literal (Bicep-expression) name or port
+    // cannot be reconciled with the fixed literal service-discovery value, so it is rejected too.
+    private static void ValidatePostCallbackContainerInvariants(
+        RadiusInfrastructureOptions options,
+        IReadOnlyDictionary<string, Dictionary<string, (int Port, string Protocol)>> portSnapshots)
+    {
+        // Index the final containers by their immutable map key (the resource name, fixed at
+        // construction). Keying by the map key rather than the construct instance means a callback
+        // that swapped in a new construct for the same workload is still matched to its baseline.
+        var containersByMapKey = new Dictionary<string, RadiusContainerConstruct>(StringComparer.Ordinal);
+        foreach (var container in options.Containers)
+        {
+            containersByMapKey[container.ContainerMapKey] = container;
+        }
+
+        foreach (var (mapKey, snapshot) in portSnapshots)
+        {
+            // A portless container has no Service and no `services__*` value can address it, so
+            // removing it in a callback is harmless — skip the preservation check for empty
+            // snapshots so the invariant does not needlessly reject valid customization callbacks.
+            if (snapshot.Count == 0)
+            {
+                continue;
+            }
+
+            // The workload service discovery was emitted for must still be present under the same
+            // map key. A callback that removed it — or replaced it with a differently keyed
+            // container — leaves consumers pointing at a Service that is no longer produced.
+            if (!containersByMapKey.TryGetValue(mapKey, out var container))
+            {
+                throw new InvalidOperationException(
+                    $"A ConfigureRadiusInfrastructure callback removed or replaced container '{mapKey}'. Aspire " +
+                    $"service discovery already emitted 'services__*' variables that address it, so dropping the " +
+                    $"workload would break cross-container calls. Keep the container to keep service discovery consistent.");
+            }
+
+            // Only containers that had service ports pre-callback have a Service (`{name}-{name}`)
+            // that `services__*` addresses, so the name/map-key equality is only required for them.
+            // A portless baseline container or one added entirely by the callback has no service-
+            // discovery contract — Radius permits its top-level name to differ from the map key — so
+            // gating this check on a non-empty snapshot keeps the customization escape hatch open.
+            ValidateContainerNameMatchesMapKey(container);
+
+            foreach (var (portName, expected) in snapshot)
+            {
+                if (!container.Ports.TryGetValue(portName, out var portValue) || portValue.Value is not { } port)
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback removed port '{portName}' from container " +
+                        $"'{mapKey}'. Aspire service discovery already emitted this port ({expected.Port}) into " +
+                        $"consumer 'services__*' variables, so removing it would break cross-container calls. " +
+                        $"Remove the port change to keep service discovery consistent.");
+                }
+
+                // Reject a non-literal port/protocol: service discovery is a fixed literal, so a
+                // callback that swaps in a Bicep expression could evaluate to a different value at
+                // deploy time, reintroducing exactly the mismatch this guard prevents. An
+                // expression-backed BicepValue<int> reports a default LiteralValue of 0 (not null),
+                // so a non-null Expression is the reliable "non-literal" signal, not the LiteralValue.
+                var portValueBicep = (IBicepValue)port.ContainerPort;
+                if (portValueBicep.Expression is not null || portValueBicep.LiteralValue is not int literalPort)
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback replaced port '{portName}' on container " +
+                        $"'{mapKey}' with a non-literal Bicep expression. Aspire service discovery already emitted " +
+                        $"the literal port {expected.Port} into consumer 'services__*' variables and cannot follow a " +
+                        $"computed port, so a computed containerPort is not supported. Remove the port change.");
+                }
+
+                var protocolValueBicep = (IBicepValue)port.Protocol;
+                if (protocolValueBicep.Expression is not null || protocolValueBicep.LiteralValue is not string literalProtocol)
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback replaced the protocol of port '{portName}' on " +
+                        $"container '{mapKey}' with a non-literal Bicep expression. Aspire service discovery assumes " +
+                        $"the literal protocol '{expected.Protocol}', so a computed protocol is not supported. Remove " +
+                        $"the protocol change.");
+                }
+
+                if (literalPort != expected.Port || !string.Equals(literalProtocol, expected.Protocol, StringComparison.Ordinal))
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback changed port '{portName}' on container " +
+                        $"'{mapKey}' from {expected.Port}/{expected.Protocol} to {literalPort}/{literalProtocol}. " +
+                        $"Aspire service discovery already emitted {expected.Port}/{expected.Protocol} into consumer " +
+                        $"'services__*' variables, so this would break cross-container calls. Remove the port change.");
+                }
+            }
+        }
+
+        // Validate the FINAL container set. A callback can add the first port to a previously
+        // portless container, add a new container, or add a second endpoint. Once a container
+        // declares ports the recipe creates a Service, so re-check the two things the recipe cares
+        // about on the post-callback state: the Service name fits the Kubernetes limit, and the
+        // container's ports are unique by (containerPort, protocol).
+        foreach (var container in options.Containers)
+        {
+            if (container.Ports.Count == 0)
+            {
+                continue;
+            }
+
+            ValidateServiceNameWithinKubernetesLimit(container);
+
+            // The pre-callback `seenPorts` dedup in ResolvePorts only covers the baseline ports. A
+            // callback can add a second endpoint (e.g. `http2`) that resolves to the same
+            // (containerPort, protocol) as a preserved one, which would make the recipe emit
+            // duplicate Kubernetes Service ports — exactly what the baseline dedup prevents. Re-run
+            // the dedup on the FINAL literal ports so a callback can't reintroduce the collision.
+            var seenPorts = new HashSet<(int ContainerPort, string Protocol)>();
+            foreach (var (portName, portValue) in container.Ports)
+            {
+                if (portValue.Value is not { } port)
+                {
+                    continue;
+                }
+
+                // Only literal ports can collide deterministically; non-literal (expression-backed)
+                // ports on callback-added containers are the customization's own responsibility and
+                // can't be compared here.
+                if (((IBicepValue)port.ContainerPort).LiteralValue is not int literalPort ||
+                    ((IBicepValue)port.Protocol).LiteralValue is not string literalProtocol)
+                {
+                    continue;
+                }
+
+                if (!seenPorts.Add((literalPort, literalProtocol)))
+                {
+                    throw new InvalidOperationException(
+                        $"A ConfigureRadiusInfrastructure callback left container '{container.ContainerMapKey}' with " +
+                        $"more than one port on {literalPort}/{literalProtocol} (for example port '{portName}'). The " +
+                        $"Radius container recipe creates one Kubernetes Service port per declared port, so duplicate " +
+                        $"(containerPort, protocol) pairs would emit conflicting Service ports. Remove the duplicate port.");
+                }
+            }
+        }
+    }
+
+    // Ensures a container's top-level `name:` still equals its `properties.containers` map key. The
+    // default name is a literal (the resource name); a callback that changes it to a mismatched
+    // literal, or replaces it with a non-literal Bicep expression we cannot compare, throws.
+    //
+    // NOTE: this is an *Aspire* service-discovery limitation, not a Radius v2 schema requirement.
+    // Radius itself permits a container resource whose map keys (e.g. `frontend`, `sidecar`) differ
+    // from the top-level name; Aspire derives `services__*` values from the original resource name,
+    // so a rename would make the emitted address diverge from the deployed Service.
+    private static void ValidateContainerNameMatchesMapKey(RadiusContainerConstruct container)
+    {
+        var name = (IBicepValue)container.ContainerName;
+
+        // An expression-backed BicepValue reports a default LiteralValue (null for string), but to
+        // stay consistent with the port guard we treat any non-null Expression as the non-literal
+        // signal.
+        if (name.Expression is not null || name.LiteralValue is not string literalName)
+        {
+            throw new InvalidOperationException(
+                $"A ConfigureRadiusInfrastructure callback replaced container '{container.ContainerMapKey}' name " +
+                $"with a non-literal Bicep expression. The Aspire Radius publisher derives service discovery from " +
+                $"the original container name, so it must stay the literal resource name '{container.ContainerMapKey}' " +
+                $"(this is an Aspire limitation, not a Radius schema requirement). Remove the rename to keep the " +
+                $"emitted 'services__*' values addressing the deployed Service.");
+        }
+
+        if (!string.Equals(literalName, container.ContainerMapKey, StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException(
+                $"A ConfigureRadiusInfrastructure callback renamed container '{container.ContainerMapKey}' to " +
+                $"'{literalName}'. The Aspire Radius publisher derives service discovery from the original container " +
+                $"name, so renaming it makes the emitted 'services__*' values point at a Service that is no longer " +
+                $"produced (this is an Aspire limitation, not a Radius schema requirement). Remove the rename to keep " +
+                $"cross-container calls working.");
+        }
+    }
+
+    private static void ValidateServiceNameWithinKubernetesLimit(RadiusContainerConstruct container)
+    {
+        // The recipe names the Service `${normalizedName}-${containerName}` = `{top-level name}-
+        // {map key}`. For a baseline container the name-equality guard forces name == map key, so
+        // this is `{name}-{name}`; for a callback-added/portless container the name may legitimately
+        // differ, so compute the actual Service name from the literal top-level name when available.
+        var mapKey = container.ContainerMapKey;
+        var topLevelName = ((IBicepValue)container.ContainerName).LiteralValue is string literalName ? literalName : mapKey;
+        var serviceName = RadiusServiceDiscovery.GetServiceName(topLevelName, mapKey);
+        if (serviceName.Length > MaxKubernetesServiceNameLength)
+        {
+            throw new InvalidOperationException(
+                $"The Radius container recipe creates a Kubernetes Service named '{serviceName}' for resource " +
+                $"'{mapKey}', but that is {serviceName.Length} characters — longer than the " +
+                $"{MaxKubernetesServiceNameLength}-character limit for a Kubernetes Service name (an RFC 1123 DNS " +
+                $"label). Shorten the resource name to at most {(MaxKubernetesServiceNameLength - 1) / 2} characters " +
+                $"so the doubled '{{name}}-{{name}}' Service name stays within the limit.");
         }
     }
 
