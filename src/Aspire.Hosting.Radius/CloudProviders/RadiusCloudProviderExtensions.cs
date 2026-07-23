@@ -36,7 +36,7 @@ public static class RadiusCloudProviderExtensions
     // builder interface, which Aspire's ATS exporter (ASPIREEXPORT008) doesn't
     // know how to render. The interface is part of the public C# API surface;
     // the export is suppressed only for the ATS catalog.
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "The credential-selection callback exposes the in-flight provider builder interface, which the ATS exporter cannot render (ASPIREEXPORT008).")]
     [Experimental("ASPIRERADIUS003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<RadiusEnvironmentResource> WithAzureProvider(
         this IResourceBuilder<RadiusEnvironmentResource> builder,
@@ -77,7 +77,7 @@ public static class RadiusCloudProviderExtensions
     /// <returns>The same builder for chaining.</returns>
     /// <exception cref="ArgumentException">Validation failed on inputs.</exception>
     /// <exception cref="InvalidOperationException">The callback did not select a credential (ASPIRERADIUS010).</exception>
-    [AspireExportIgnore]
+    [AspireExportIgnore(Reason = "The credential-selection callback exposes the in-flight provider builder interface, which the ATS exporter cannot render (ASPIREEXPORT008).")]
     [Experimental("ASPIRERADIUS003", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     public static IResourceBuilder<RadiusEnvironmentResource> WithAwsProvider(
         this IResourceBuilder<RadiusEnvironmentResource> builder,

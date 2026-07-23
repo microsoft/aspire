@@ -22,6 +22,7 @@
   <ItemGroup>
     <ProjectReference Include="..\Aspire.Hosting\Aspire.Hosting.csproj" />
     <PackageReference Include="Azure.Provisioning" />
+    <PackageReference Include="YamlDotNet" />
   </ItemGroup>
 
   <ItemGroup>

@@ -147,6 +147,78 @@ are supplied to `rad deploy` separately, not by this credential-registration pat
 See the [Radius cloud providers documentation](https://docs.radapp.io/guides/deploy/environments/cloud-providers/)
 for an end-to-end walkthrough.
 
+## Production & platform features
+
+The features below are power/enterprise capabilities for platform teams. They are opt-in and not
+needed for a standard single-app deploy — reach for them when your topology demands it.
+
+### Recipe parameters
+
+Flow platform values into the [Radius recipes](https://docs.radapp.io/guides/recipes/) that
+provision your backing resources with `WithRecipeParameters`. Parameters can be set environment-wide
+(applied to every recipe in the environment) or scoped to a specific Radius resource type
+(resource-type-scoped values win on key collision):
+
+```csharp
+var radius = builder.AddRadiusEnvironment("radius")
+    // Environment-wide: applied to every recipe.
+    .WithRecipeParameters(p => p["region"] = "eastus")
+    // Scoped to one resource type; overrides the environment-wide value on collision.
+    .WithRecipeParameters("Radius.Data/redisCaches", p => p["sku"] = "Premium");
+```
+
+- **Type fidelity** — numbers, booleans, arrays, and objects are emitted with their Bicep types
+  (a `6379` stays a number, not `'6379'`).
+- **Aspire parameters flow as `@secure()` params, never literals** — binding an
+  `AddParameter(..., secret: true)` value emits a valueless secure Bicep `param` and passes the
+  resolved value at deploy time (`rad deploy --parameters`), so no secret lands in the artifact.
+- **Provider references** — reuse a configured cloud provider's scope without re-declaring it, e.g.
+  `p["region"] = RadiusProviderReference.AwsRegion`. Referencing a provider that is not configured
+  fails at publish with a message naming the missing provider.
+- A parameter scoped to a resource type with no emitted recipe is ignored with a warning; the
+  publish still succeeds.
+
+### Secret management
+
+> **Experimental** — the secret-store APIs are gated by `ASPIRERADIUS006`. Suppress the
+> diagnostic (`#pragma warning disable ASPIRERADIUS006`) to opt in.
+
+Declare a Radius secret store (`Applications.Core/secretStores`) and populate it in exactly one
+of three ways:
+
+```csharp
+#pragma warning disable ASPIRERADIUS006
+
+// Inline — Radius-created from Aspire secret parameters (@secure() params, redacted at deploy).
+var user = builder.AddParameter("db-user", secret: true);
+var pass = builder.AddParameter("db-pass", secret: true);
+builder.AddRadiusSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication)
+       .WithData(d => { d.Add("username", user); d.Add("password", pass); });
+
+// For a single key there is a convenience overload:
+//   builder.AddRadiusSecretStore("api", RadiusSecretStoreType.Generic).WithData("api-key", apiKey);
+
+// Reference an existing cluster Secret (external operator / hand-applied).
+radius.WithSecretStore("tls-cert", RadiusSecretStoreType.Certificate, s =>
+    s.WithExistingSecret("app/tls-cert", "tls.crt", "tls.key"));
+
+// GitOps sealed secrets — the encrypted manifest is applied before rad deploy and awaited.
+radius.WithSecretStore("db-creds", RadiusSecretStoreType.BasicAuthentication, s =>
+    s.WithSealedSecret("./secrets/db-creds.sealed.yaml", "username", "password"));
+```
+
+- **Scope is implied by the API form**: `builder.AddRadiusSecretStore(...)` is application-scoped
+  (`properties.application`); `radius.WithSecretStore(...)` is environment-scoped
+  (`properties.environment`).
+- **Encoding** defaults to `base64` for `certificate` stores and `raw` otherwise.
+- **Sealed secrets** require `kubectl` on `PATH` and the Bitnami Sealed Secrets controller in the
+  target cluster; the integration applies the already-encrypted manifest (it never runs
+  `kubeseal`) and polls for the materialized `Secret` (default 120s, overridable via
+  `WithMaterializationTimeout`, which applies to sealed stores only — `ASPIRERADIUS062`).
+- **Consume** a store from `recipeConfig` auth / `envSecrets` via
+  `WithBicepRegistryAuthentication` / `WithTerraformGitAuthentication` /
+  `WithRecipeEnvironmentSecret`, referenced by the store's `.id`.
+
 ## Reference
 
 ### Supported resources
@@ -166,6 +238,7 @@ The package uses the `ASPIRERADIUS` diagnostic prefix for two mechanisms: compil
 |------|-----------|-------------|
 | `ASPIRERADIUS003` | Experimental gate on the cloud-provider surface (`WithAzureProvider` / `WithAwsProvider` and their credential callbacks) | `[Experimental]` warning (suppressible), documented at `https://aka.ms/aspire/diagnostics/<id>` |
 | `ASPIRERADIUS004` | Experimental gate on the `ConfigureRadiusInfrastructure` escape hatch and its construct types | `[Experimental]` warning (suppressible) |
+| `ASPIRERADIUS006` | Experimental gate on the secret-store surface (`AddRadiusSecretStore` / `WithSecretStore` and their population/consumer callbacks) | `[Experimental]` warning (suppressible) |
 | `ASPIRERADIUS057` | Experimental gate on `WithContainerImage` | `[Experimental]` warning (suppressible) |
 
 Runtime validation codes:
@@ -174,12 +247,15 @@ Runtime validation codes:
 |------|------|---------|
 | `ASPIRERADIUS010` | Provider config | A cloud-provider credential callback did not select a credential. |
 | `ASPIRERADIUS011` | Provider config | Conflicting cloud-provider credentials across environments sharing a Radius installation. |
+| `ASPIRERADIUS028` | Publish | Two recipe parameters bound to distinct Aspire parameters whose names sanitize to the same Bicep identifier. Rename one so they produce distinct identifiers. |
+| `ASPIRERADIUS040`–`ASPIRERADIUS052`, `ASPIRERADIUS055`, `ASPIRERADIUS058`–`ASPIRERADIUS059`, `ASPIRERADIUS061`–`ASPIRERADIUS068` | Secret-store (`AddRadiusSecretStore` / `WithSecretStore`) validation, publish, and deploy | Thrown `ArgumentException` (call site, e.g. empty/invalid name or key) / `InvalidOperationException` (fail-fast validation gate, publish, or deploy). Key codes: `041` (declare exactly one population mode — the zero-mode case), `044` (`WithSealedSecret` manifest missing/unreadable, malformed, ambiguous/duplicate-key, plaintext-capable, or not a single encrypted Bitnami `SealedSecret`), `045` (`kubectl` not on `PATH`), `046` (`WithExistingSecret` reference is not a valid `[namespace/]name` — each segment must be a DNS-1123 label/subdomain), `051` (a secret-store consumer is incompatible with the referenced store — e.g. Bicep-registry auth requires a `basicAuthentication` (username/password) store, and Terraform Git PAT auth requires a store that declares a `pat` key), `052` (a key-specific `envSecrets` consumer references a key a non-empty declared key set does not contain), `058` (the sealed `Secret` did not materialize before deploy: the Sealed Secrets controller never reported `Synced` for the applied `SealedSecret` generation — the controller must have status updates enabled, i.e. not `--update-status=false` / Helm `updateStatus: false`), `059` (the active `rad` workspace's Kubernetes context could not be resolved; publish/deploy fails closed rather than applying the `SealedSecret` to `kubectl`'s ambient context — configure the active `rad` workspace or set the `ASPIRE_RADIUS_KUBE_CONTEXT` override), `061` (the materialized sealed `Secret` is missing a declared key), `062` (`WithMaterializationTimeout` was set on a store that is not populated with `WithSealedSecret`), `063` (a `WithSealedSecret` manifest embeds a plaintext `kind: Secret` inside a `last-applied-configuration` annotation), `064` (a key-specific `envSecrets` consumer references a store that declares no keys), `065` (a secret store's population was declared more than once — repeated or cross-mode `WithData`/`WithExistingSecret`/`WithSealedSecret`), `066` (a bounded `kubectl` apply/verify operation exceeded the store's materialization budget and was cancelled), `067` (a secret data key is not a valid Kubernetes Secret key — only alphanumeric characters, `-`, `_`, or `.`, at most 253 characters, and not `.`/`..`), `068` (an application-scoped store was declared but the model contains no Radius environment to emit and deploy it — add one with `AddRadiusEnvironment`). Note: `056` (Bicep identifier collision) and `057` (`WithContainerImage` experimental) are separate diagnostics documented in their own rows, and codes `053`/`054`/`060` are retired. |
 | `ASPIRERADIUS056` | Publish | Two emitted constructs map to the same Bicep identifier (e.g. a resource named `app` or `recipepack` colliding with a synthesized construct, or two resource names that sanitize to the same identifier such as `my-x` and `my.x`). Bicep symbols share one flat namespace; rename the conflicting resource. |
 
 ### Known limitations
 
 * For `ASPIRERADIUS011`, AWS access-key credential conflicts are compared by the Aspire parameter name that supplies the access-key ID, not by the resolved access-key value. Two environments that use different parameter names for the same key can be flagged as a false conflict, while the same parameter name with different values is not flagged.
-* Recipe customization, multiple Radius resource groups, secret stores, and cloud-managed resources are not part of this release; they are planned for follow-up releases.
+* Application-scoped sealed secret stores are applied by every Radius environment. A benign concurrent re-apply of the same manifest (for example, two environments sharing one store) is tolerated: the wait syncs against the latest live `SealedSecret` generation and verifies the declared keys materialize. It does not, however, compare the live `SealedSecret`'s encrypted values against the manifest this deployment applied, so a concurrent writer that replaces the encrypted values while preserving the same key names (only possible if a distinct manifest collides on the same namespace/name) would not be detected.
+* Recipe customization (per-instance recipes via `PublishAsRadiusResource`), multiple Radius resource groups, and cloud-managed resources are not part of this release; they are planned for follow-up releases.
 
 ## Additional documentation
 
