@@ -160,6 +160,107 @@ public class AzureVirtualNetworkExtensionsTests
     }
 
     [Fact]
+    public void WithServiceDelegation_AddsAnnotationWithServiceNameAsName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation("Microsoft.App/environments");
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_WithExplicitName_SetsNameAndServiceName()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation("Microsoft.App/environments", name: "ContainerAppsDelegation");
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("ContainerAppsDelegation", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithContainerInstanceDelegation_DelegatesToContainerGroups()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithContainerInstanceDelegation();
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().SingleOrDefault();
+        Assert.NotNull(delegationAnnotation);
+        Assert.Equal("Microsoft.ContainerInstance/containerGroups", delegationAnnotation.ServiceName);
+        Assert.Equal("Microsoft.ContainerInstance/containerGroups", delegationAnnotation.Name);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_CalledMultipleTimes_KeepsOnlyLastDelegation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithServiceDelegation("Microsoft.Sql/managedInstances")
+            .WithServiceDelegation("Microsoft.Web/serverFarms", name: "WebDelegation");
+
+        var delegationAnnotation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().Single();
+        Assert.Equal("WebDelegation", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_CollapsesPreexistingDelegations()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23")
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("First", "Microsoft.Sql/managedInstances"))
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("Second", "Microsoft.NetApp/volumes"));
+
+        // Two directly-appended delegation annotations would make Replace's SingleOrDefault throw, so
+        // WithServiceDelegation must collapse them to a single delegation before applying the new one.
+        subnet.WithServiceDelegation("Microsoft.App/environments");
+
+        var delegationAnnotation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.Name);
+        Assert.Equal("Microsoft.App/environments", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithServiceDelegation_WithEmptyName_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
+
+        Assert.Throws<ArgumentException>(() => subnet.WithServiceDelegation("Microsoft.App/environments", name: ""));
+    }
+
+    [Fact]
+    public void WithServiceDelegation_WithEmptyServiceName_Throws()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("mysubnet", "10.0.0.0/23");
+
+        Assert.Throws<ArgumentException>(() => subnet.WithServiceDelegation(""));
+    }
+
+    [Fact]
     public void WithDelegatedSubnet_AddsAnnotationsToAppServiceEnvironment()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
@@ -212,6 +313,25 @@ public class AzureVirtualNetworkExtensionsTests
 
         Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
         var delegationAnnotation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
+    }
+
+    [Fact]
+    public void WithDelegatedSubnet_LastMatchingServiceDelegationCollapsesOlderConflicts()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var subnet = vnet.AddSubnet("app-service-subnet", "10.0.0.0/24")
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("ContainerApps", "Microsoft.App/environments"))
+            .WithAnnotation(new AzureSubnetServiceDelegationAnnotation("AppService", "microsoft.web/serverfarms"));
+
+        var environment = builder.AddAzureAppServiceEnvironment("env")
+            .WithDelegatedSubnet(subnet);
+
+        Assert.Single(environment.Resource.Annotations.OfType<DelegatedSubnetAnnotation>());
+        var delegationAnnotation = Assert.Single(subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.Name);
         Assert.Equal("Microsoft.Web/serverFarms", delegationAnnotation.ServiceName);
     }
 

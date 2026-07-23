@@ -169,6 +169,38 @@ public class AzureSqlDeploymentScriptTests
         await VerifyAllAzureBicep(builder);
     }
 
+    [Fact]
+    public async Task SqlWithPrivateEndpoint_UserDelegatedAdminScriptSubnet_KeepsSingleAciDelegation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
+        builder.AddAzureContainerAppEnvironment("env");
+
+        var vnet = builder.AddAzureVirtualNetwork("myvnet");
+        var peSubnet = vnet.AddSubnet("pesubnet", "10.0.1.0/24");
+
+        // The user supplies their own admin deployment-script subnet and pre-delegates it to a
+        // different service. The admin deployment script requires the subnet be delegated to ACI, so
+        // the delegation must be replaced (not appended). Otherwise the subnet would carry two
+        // AzureSubnetServiceDelegationAnnotations, which later makes WithServiceDelegation throw.
+        var aciSubnet = vnet.AddSubnet("acisubnet", "10.0.2.0/29")
+            .WithServiceDelegation("Microsoft.Netapp/volumes");
+
+        var sqlServer = builder.AddAzureSqlServer("sql");
+        var db = sqlServer.AddDatabase("db");
+
+        peSubnet.AddPrivateEndpoint(sqlServer);
+        sqlServer.WithAdminDeploymentScriptSubnet(aciSubnet);
+
+        builder.AddProject<Project>("api", launchProfileName: null)
+            .WithReference(db);
+
+        using var app = builder.Build();
+        await ExecuteBeforeStartHooksAsync(app, default);
+
+        var delegation = Assert.Single(aciSubnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>());
+        Assert.Equal("Microsoft.ContainerInstance/containerGroups", delegation.ServiceName);
+    }
+
     private sealed class Project : IProjectMetadata
     {
         public string ProjectPath => "project";

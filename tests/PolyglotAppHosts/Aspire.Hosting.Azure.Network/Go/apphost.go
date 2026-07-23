@@ -31,6 +31,21 @@ func main() {
 		SubnetName: aspire.StringPtr("parameter-subnet-name"),
 	})
 
+	delegationVnet := builder.AddAzureVirtualNetwork("vnet-delegation", &aspire.AddAzureVirtualNetworkOptions{
+		AddressPrefix: aspire.StringPtr("10.2.0.0/16"),
+	})
+
+	aciSubnet := delegationVnet.AddSubnet("aci-subnet", "10.2.0.0/23", nil)
+	aciSubnet.WithContainerInstanceDelegation()
+
+	appEnvSubnet := delegationVnet.AddSubnet("app-subnet", "10.2.2.0/23", nil)
+	appEnvSubnet.WithServiceDelegation("Microsoft.App/environments", nil)
+
+	namedDelegationSubnet := delegationVnet.AddSubnet("named-subnet", "10.2.4.0/23", nil)
+	namedDelegationSubnet.WithServiceDelegation("Microsoft.App/environments", &aspire.WithServiceDelegationOptions{
+		Name: aspire.StringPtr("app-delegation"),
+	})
+
 	perimeter := builder.AddNetworkSecurityPerimeter("data-boundary")
 	perimeter.WithAccessRule(&aspire.AzureNspAccessRule{
 		Name:            "allow-corp-network",

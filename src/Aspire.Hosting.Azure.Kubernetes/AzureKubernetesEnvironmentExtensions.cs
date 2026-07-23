@@ -429,36 +429,27 @@ public static class AzureKubernetesEnvironmentExtensions
         // Delegate the subnet to AGC. AKS node-pool subnets are non-delegated, so this
         // delegation only applies to user-supplied ALB subnets.
         //
-        // AzureSubnetResource emits a single delegation in its provisioning entity and
-        // honors only the LAST AzureSubnetServiceDelegationAnnotation on the subnet
-        // (last write wins). A naive `HasAnnotationOfType<...>()` short-circuit would
-        // therefore silently swallow our AGC delegation if the caller had already
-        // delegated the subnet to something else (e.g. Microsoft.NetApp/volumes), and
-        // the deployment would later fail with an opaque AGC association error.
+        // AzureSubnetResource emits a single delegation in its provisioning entity and honors
+        // only the last AzureSubnetServiceDelegationAnnotation on the subnet. The public annotation
+        // lets callers append several directly, so read the last one (last-write-wins) rather than
+        // assuming a single annotation — SingleOrDefault would throw when duplicates exist.
         //
-        // Instead, only skip when the most recent delegation already targets
-        // trafficControllers (so multiple AddLoadBalancer calls sharing a subnet stay
-        // idempotent). Otherwise, append our annotation so it ends up last and AGC is
-        // the delegation actually emitted.
-        var existingDelegations = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().ToList();
-        var lastDelegation = existingDelegations.Count > 0 ? existingDelegations[^1] : null;
-        string? displacedDelegationServiceName = null;
-        if (lastDelegation is null
-            || !string.Equals(lastDelegation.ServiceName, "Microsoft.ServiceNetworking/trafficControllers", StringComparison.Ordinal))
-        {
-            // Capture the displaced delegation (if any) so the LB pipeline step can warn
-            // the user at deploy time that their explicit delegation was silently overridden.
-            // We can't log here because no ILogger is available during model construction;
-            // the resource's apply-alb-crd pipeline step has access to context.Logger.
-            if (lastDelegation is not null)
-            {
-                displacedDelegationServiceName = lastDelegation.ServiceName;
-            }
+        // If the caller had already delegated the subnet to something else (e.g.
+        // Microsoft.NetApp/volumes), AGC's required trafficControllers delegation displaces it.
+        // Capture the displaced service name first so the LB pipeline step can warn the user at
+        // deploy time that their explicit delegation was overridden. We can't log here because no
+        // ILogger is available during model construction; the resource's apply-alb-crd pipeline
+        // step has access to context.Logger. WithServiceDelegation below collapses any duplicates.
+        var existingDelegation = subnet.Resource.Annotations.OfType<AzureSubnetServiceDelegationAnnotation>().LastOrDefault();
+        var displacedDelegationServiceName =
+            existingDelegation is not null
+            && !string.Equals(existingDelegation.ServiceName, "Microsoft.ServiceNetworking/trafficControllers", StringComparison.OrdinalIgnoreCase)
+                ? existingDelegation.ServiceName
+                : null;
 
-            subnet.WithAnnotation(new AzureSubnetServiceDelegationAnnotation(
-                "Microsoft.ServiceNetworking/trafficControllers",
-                "Microsoft.ServiceNetworking/trafficControllers"));
-        }
+        // Route through WithServiceDelegation so repeated AddLoadBalancer calls sharing a subnet
+        // stay idempotent and any existing delegations are collapsed to a single annotation.
+        subnet.WithServiceDelegation("Microsoft.ServiceNetworking/trafficControllers");
 
         var lb = new AzureKubernetesLoadBalancerResource(
             name,
