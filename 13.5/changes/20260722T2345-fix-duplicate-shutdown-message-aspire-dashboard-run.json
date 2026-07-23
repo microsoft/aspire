@@ -1,0 +1,19 @@
+{
+  "area": "CLI",
+  "areaEmoji": "💻",
+  "backport": false,
+  "breaking": false,
+  "changeType": "Bug fixes",
+  "communityContributors": [],
+  "description": "Stopping the standalone dashboard with Ctrl+C previously displayed two shutdown messages. The CLI now emits a single, correctly punctuated shutdown line.",
+  "docsPrs": [],
+  "docsRequired": false,
+  "emoji": "🛑",
+  "firstMergedAt": "2026-07-22T23:45:56Z",
+  "lastMergedAt": "2026-07-22T23:45:56Z",
+  "name": "Fix duplicate shutdown message for aspire dashboard run",
+  "owner": "JamesNK",
+  "prs": [
+    18827
+  ]
+}

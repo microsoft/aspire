@@ -1,0 +1,9 @@
+{
+  "author": "edmondshtogu",
+  "comment": "Documents a CommunityToolkit integration (k3s), not a core Aspire product feature — no matching changelog entry in microsoft/aspire",
+  "mergedAt": "2026-07-22T15:03:13Z",
+  "number": 1371,
+  "runDate": "2026-07-23T00:22:14Z",
+  "status": "excluded",
+  "title": "docs: add k3s integration documentation"
+}

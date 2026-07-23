@@ -1,0 +1,9 @@
+{
+  "author": "JamesNK",
+  "comment": "Bug fix: duplicate shutdown message when stopping aspire dashboard run",
+  "mergedAt": "2026-07-22T23:45:56Z",
+  "number": 18827,
+  "runDate": "2026-07-23T00:22:14Z",
+  "status": "included",
+  "title": "Fix duplicate dashboard stopping message"
+}
