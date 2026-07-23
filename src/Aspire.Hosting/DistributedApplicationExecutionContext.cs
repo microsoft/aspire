@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -48,12 +50,22 @@ public class DistributedApplicationExecutionContext
     public DistributedApplicationExecutionContext(DistributedApplicationExecutionContextOptions options) : this(options.Operation, options.PublisherName ?? "manifest")
     {
         _options = options;
+#pragma warning disable ASPIREWATCH001 // RunSubMode is experimental; core populates it from the options.
+        RunSubMode = options.Operation == DistributedApplicationOperation.Run ? options.RunSubMode : RunSubMode.Normal;
+#pragma warning restore ASPIREWATCH001
     }
 
     /// <summary>
     /// The operation currently being performed by the AppHost.
     /// </summary>
     public DistributedApplicationOperation Operation { get; }
+
+    /// <summary>
+    /// The run sub-mode the AppHost is running under. Only meaningful when <see cref="Operation"/> is
+    /// <see cref="DistributedApplicationOperation.Run"/>; otherwise <see cref="RunSubMode.Normal"/>.
+    /// </summary>
+    [Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public RunSubMode RunSubMode { get; }
 
     /// <summary>
     /// The <see cref="IServiceProvider"/> for the AppHost.

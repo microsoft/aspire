@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics.CodeAnalysis;
+
 namespace Aspire.Hosting;
 
 /// <summary>
@@ -54,4 +56,11 @@ public class DistributedApplicationExecutionContextOptions
     /// The name of the publisher if running in publish mode.
     /// </summary>
     public string? PublisherName { get; }
+
+    /// <summary>
+    /// The run sub-mode the AppHost is running under. Only meaningful when <see cref="Operation"/> is
+    /// <see cref="DistributedApplicationOperation.Run"/>; defaults to <see cref="RunSubMode.Normal"/>.
+    /// </summary>
+    [Experimental("ASPIREWATCH001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
+    public RunSubMode RunSubMode { get; init; } = RunSubMode.Normal;
 }

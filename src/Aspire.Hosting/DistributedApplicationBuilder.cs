@@ -8,6 +8,7 @@
 #pragma warning disable ASPIRECONTAINERRUNTIME001
 #pragma warning disable ASPIREFILESYSTEM001
 #pragma warning disable ASPIREUSERSECRETS001
+#pragma warning disable ASPIREWATCH001
 
 using System.Diagnostics;
 using System.Reflection;
@@ -141,7 +142,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
             return _innerBuilder.Configuration["Publishing:Publisher"] switch
             {
                 { } publisher => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Publish, publisher),
-                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run)
+                _ => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunSubMode = ParseRunSubMode() }
             };
         }
 
@@ -154,10 +155,20 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
 
         return operation switch
         {
-            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(operation),
+            DistributedApplicationOperation.Run => new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { RunSubMode = ParseRunSubMode() },
             DistributedApplicationOperation.Publish => new DistributedApplicationExecutionContextOptions(operation, _innerBuilder.Configuration["Publishing:Publisher"] ?? "manifest"),
             _ => throw new DistributedApplicationException("Invalid operation specified. Valid operations are 'publish' or 'run'.")
         };
+    }
+
+    private RunSubMode ParseRunSubMode()
+    {
+        // Match only the declared enum names, case-insensitively. Enum.TryParse is intentionally avoided
+        // because it also succeeds for inputs that are not declared members, which would bypass the
+        // documented unknown-value -> Normal fallback and leak an unsupported sub-mode to integrations.
+        return string.Equals(_innerBuilder.Configuration["AppHost:RunSubMode"], nameof(RunSubMode.Watch), StringComparison.OrdinalIgnoreCase)
+            ? RunSubMode.Watch
+            : RunSubMode.Normal;
     }
 
     /// <summary>
