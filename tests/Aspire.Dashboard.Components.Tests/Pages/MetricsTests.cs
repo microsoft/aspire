@@ -31,6 +31,21 @@ public partial class MetricsTests : DashboardTestContext
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public void SignalActions_UseTelemetryRepositoryReadOnlyState(bool telemetryRepositoryIsReadOnly, bool dashboardClientIsReadOnly)
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        FluentUISetupHelpers.ConfigureTelemetryRepository(this, telemetryRepositoryIsReadOnly, _ => { });
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isReadOnly: dashboardClientIsReadOnly));
+
+        var cut = RenderComponent<Metrics>(builder => builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        Assert.Equal(telemetryRepositoryIsReadOnly, cut.FindComponent<PauseIncomingDataSwitch>().Instance.Disabled);
+        Assert.Equal(telemetryRepositoryIsReadOnly, cut.FindComponent<ClearSignalsButton>().FindComponent<AspireMenuButton>().Instance.Disabled);
+    }
+
     [Fact]
     public void ChangeResource_MeterAndInstrumentOnNewResource_InstrumentSet()
     {
