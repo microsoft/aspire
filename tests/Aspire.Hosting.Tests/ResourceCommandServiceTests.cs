@@ -1672,6 +1672,56 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_WithProgressOptions_ReturnsCanceledWhenCommandHandlesProgressCancellation()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var commandStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "cancelable-command",
+                displayName: "Cancelable Command",
+                executeCommand: async e =>
+                {
+                    commandStarted.SetResult();
+
+                    try
+                    {
+                        await Task.Delay(Timeout.Infinite, e.CancellationToken);
+                    }
+                    catch (OperationCanceledException) when (e.CancellationToken.IsCancellationRequested)
+                    {
+                        return CommandResults.Success("Cleanup completed.");
+                    }
+
+                    return CommandResults.Success();
+                },
+                commandOptions: new CommandOptions
+                {
+                    Progress = new CommandProgressOptions { Message = "Processing..." }
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync("myResource", "cancelable-command");
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.Equal(InteractionType.Progress, interaction.Type);
+        await commandStarted.Task.DefaultTimeout();
+
+        interaction.CompletionTcs.SetResult(InteractionResult.Cancel<bool>());
+
+        var result = await resultTask.DefaultTimeout();
+
+        Assert.False(result.Success);
+        Assert.True(result.Canceled);
+        Assert.Null(result.Message);
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_WithProgressOptions_SkipsProgressWhenNotAvailable()
     {
         using var builder = CreateBuilder();
