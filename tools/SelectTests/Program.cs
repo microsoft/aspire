@@ -727,6 +727,14 @@ internal static class Selection
             sb.AppendLine();
         }
 
+        // Surface the kill switch near the top of every comment: when the reduced selection looks wrong
+        // (a missing trigger-map rule, an unexpected skip), adding the `run-full-ci` label is the
+        // one-step escape hatch back to the full matrix. A GitHub `[!TIP]` alert renders as a colored,
+        // boxed callout so it can't be missed when skimming past the selected subset.
+        sb.AppendLine("> [!TIP]");
+        sb.AppendLine("> 🏃 **Want the full CI?** Add the **`run-full-ci`** label to this PR to unconditionally run the full test matrix and all jobs.");
+        sb.AppendLine();
+
         if (result.SelectsAll)
         {
             sb.AppendLine(CultureInfo.InvariantCulture, $"**Runs the full test matrix + all jobs (ALL)** — {result.EscalationReason}");
