@@ -320,4 +320,96 @@ public class ServiceBusPublicApiTests
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
     }
+
+    [Fact]
+    public void WithSqlServerContainerShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<AzureServiceBusEmulatorResource> builder = null!;
+        Action<IResourceBuilder<SqlServerServerResource>> configureContainer = (_) => { };
+
+        var action = () => builder.WithSqlServerContainer(configureContainer);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithSqlServerContainerShouldThrowWhenConfigureContainerIsNull()
+    {
+        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        var builder = testBuilder.AddAzureServiceBus("service-bus");
+        Action<IResourceBuilder<SqlServerServerResource>> configureContainer = null!;
+
+        var action = () => builder.RunAsEmulator(configure => configure.WithSqlServerContainer(configureContainer));
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(configureContainer), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithSqlServerShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<AzureServiceBusEmulatorResource> builder = null!;
+        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        var sqlServer = testBuilder.AddSqlServer("sql");
+
+        var action = () => builder.WithSqlServer(sqlServer);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithSqlServerShouldThrowWhenSqlServerIsNull()
+    {
+        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        var builder = testBuilder.AddAzureServiceBus("service-bus");
+        IResourceBuilder<SqlServerServerResource> sqlServer = null!;
+
+        var action = () => builder.RunAsEmulator(configure => configure.WithSqlServer(sqlServer));
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(sqlServer), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithSqlServerConnectionShouldThrowWhenBuilderIsNull()
+    {
+        IResourceBuilder<AzureServiceBusEmulatorResource> builder = null!;
+        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        var sqlServer = testBuilder.AddSqlServer("sql");
+
+        var action = () => builder.WithSqlServerConnection(sqlServer.Resource.PrimaryEndpoint, sqlServer.Resource.PasswordParameter);
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(builder), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithSqlServerConnectionShouldThrowWhenSqlServerEndpointIsNull()
+    {
+        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        var builder = testBuilder.AddAzureServiceBus("service-bus");
+        var sqlServer = testBuilder.AddSqlServer("sql");
+        EndpointReference sqlServerEndpoint = null!;
+
+        var action = () => builder.RunAsEmulator(configure => configure.WithSqlServerConnection(sqlServerEndpoint, sqlServer.Resource.PasswordParameter));
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(sqlServerEndpoint), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithSqlServerConnectionShouldThrowWhenSaPasswordParameterIsNull()
+    {
+        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        var builder = testBuilder.AddAzureServiceBus("service-bus");
+        var sqlServer = testBuilder.AddSqlServer("sql");
+        ParameterResource saPasswordParameter = null!;
+
+        var action = () => builder.RunAsEmulator(configure => configure.WithSqlServerConnection(sqlServer.Resource.PrimaryEndpoint, saPasswordParameter));
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(saPasswordParameter), exception.ParamName);
+    }
 }

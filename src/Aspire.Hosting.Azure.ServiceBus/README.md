@@ -53,6 +53,41 @@ const myService = await builder.addNodeApp("myService", "../my-service", "server
                        .withReference(serviceBus);
 ```
 
+### Emulator usage
+
+Aspire supports using the Azure Service Bus emulator. To use the emulator, add the following to your AppHost project:
+
+```csharp
+// AppHost
+var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator();
+```
+
+When the AppHost starts up, a local container running the Azure Service Bus emulator will be started. By default it is accompanied by a SQL Server container that the emulator uses to store its state, unless an existing SQL Server resource is provided with `WithSqlServer` (see below).
+
+The SQL Server container can be customized using the regular SQL Server integration APIs, for instance to persist its state in a data volume or use a specific container name:
+
+```csharp
+// AppHost
+var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(emulator => emulator
+    .WithSqlServerContainer(sql => sql
+        .WithDataVolume()
+        .WithContainerName("myproject-servicebus-sql")));
+```
+
+Alternatively, the emulator can reuse an existing SQL Server resource instead of creating a dedicated container:
+
+```csharp
+// AppHost
+var sql = builder.AddSqlServer("sql");
+
+var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(emulator => emulator
+    .WithSqlServer(sql));
+```
+
+For SQL Server instances that are not modeled as a SQL Server resource, the lower-level `WithSqlServerConnection(endpoint, saPasswordParameter)` overload accepts an endpoint and administrator password directly. The endpoint is resolved in the context of the emulator's container network, so it can point at a containerized SQL Server as well as one hosted by an executable or project resource.
+
+> NOTE: `WithSqlServerContainer` and `WithSqlServer`/`WithSqlServerConnection` are mutually exclusive and throw an exception when combined.
+
 ## Connection Properties
 
 When you reference Azure Service Bus resources using `WithReference`, the following connection properties are made available to the consuming project:
