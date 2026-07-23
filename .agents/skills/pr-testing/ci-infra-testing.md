@@ -702,8 +702,34 @@ and the must-not-skip validation bar.
 |----------|----------------------|--------------------------------|
 | **Internal build** `eng/pipelines/azure-pipelines.yml` | def **1602**, `dnceng/internal` mirror | Most `eng/pipelines/**`, `eng/common/**`, signing/packaging/version/asset-manifest changes. **This is the default target** — run it via the `azdo-internal` skill. |
 | **Unofficial** `azure-pipelines-unofficial.yml` | dev/unofficial build | Changes scoped to that pipeline. |
-| **Release** `release-publish-nuget.yml` | separate definition; consumes def-1602 artifacts | Publish / NuGet / installer-promotion logic. Side-effecting — read the skill's dry-run caveats. |
+| **Release** `release-publish-nuget.yml` | separate definition (`microsoft-aspire-Release-To-NuGet`, *not* def 1602); consumes def-1602 artifacts | Publish / NuGet / npm / installer-promotion logic. Side-effecting — see **Testing a release-pipeline change** below. |
 | **Public / Helix** `azure-pipelines-public.yml` | weekly + `/azp run aspire-tests` | Helix test routing / test execution. Different pipeline, different breakage patterns — see `docs/ci/azdo-public-pipeline.md`; out of scope for the internal skill. |
+
+## Testing a release-pipeline change (`release-publish-nuget.yml`)
+
+The release pipeline is a **separate definition** (`microsoft-aspire-Release-To-NuGet`, *not* def 1602) that consumes a def-1602 build via a `resources.pipelines: aspire-build` input. Two traps make it unlike a normal infra change:
+
+- **It never compiles on a GitHub PR.** A YAML/template error fails the pipeline *before any stage runs* — yet it passes every GitHub check **and** the offline `Infrastructure.Tests`, because AzDO doesn't compile it on a PR. Real example: a literal `${{ … }}` token inside an *inlined PowerShell script block* — even in a comment or a string — is evaluated by the AzDO template engine, not treated as script text. `${{ parameters.* }}` resolves to the parameters object and fails compilation with `Unable to convert from Object to String`. **Always compile-check first** (see `azdo-internal` → `previewRun`): it's instant and queues no build.
+- **It is side-effecting.** Validate only under `DryRun=true`, and audit that the flag actually makes the run read-only end-to-end (below).
+
+**Loop for a release-pipeline change:**
+
+1. **Compile-check with `previewRun`** — on the PR branch *pushed to the mirror* (`previewRun` resolves repo/template refs from the mirror, so the branch must be there). Confirm the base compiles and the PR does too; a compile failure here is a blocking finding. → `azdo-internal`.
+2. **Pick a source build to consume** — a recent def-1602 run *on the release branch* that produced the artifacts your change touches. Verify they're present (`az pipelines runs artifact list`). A release run is only meaningful against real upstream artifacts.
+3. **Run with `DryRun=true`, pinned to that source build.** Pinning a pipeline-resource version needs the REST `runs` API (`az pipelines run` can't do it) — recipe in `azdo-internal`. Set the `Skip*` flags to scope the run to the stages your change touches.
+4. **Validate the change took effect** from the timeline + logs (green ≠ validated — see below) and confirm the DryRun audit held.
+
+**DryRun read-only audit** — before trusting a dry run, confirm every side-effecting step is gated so `DryRun=true` is a no-op:
+
+| Side-effect | Expected gate under `DryRun=true` |
+|---|---|
+| NuGet push (`1ES.PublishNuget@1`), npm ESRP publish (`MicroBuild.Publish.yml`) | compile-time `${{ if and(eq(parameters.DryRun, false), …) }}` — step not emitted |
+| darc channel promotion, `gh release upload`, WinGet submit | runtime `if ($dryRun) { skip / exit 0 }` |
+| GitHub tag / release / merge-PR / baseline-PR | gated inside `release-github-tasks.yml` on `dry_run` |
+
+⚠️ **Known gap ([microsoft/aspire#18129](https://github.com/microsoft/aspire/issues/18129)):** the **`GitHubTasks` stage is gated by `Skip*`, not `DryRun`.** With `SkipGitHubTasks=false` (default), a dry run *still* mints a bot token and dispatches a real `release-github-tasks.yml` Actions run (which then honors `dry_run` internally and creates nothing durable, but is a visible external reach). For a focused, fully-read-only validation set **`SkipGitHubTasks=true`**. Until #18129 is fixed, treat "DryRun ⇒ read-only" as true *only* with `SkipGitHubTasks=true`.
+
+**Review rule:** every side-effecting step in the release pipeline must be a no-op under `DryRun=true`, including the GitHub Tasks dispatch — see `.github/instructions/release-pipeline.instructions.md`.
 
 ## The loop (handed off to `azdo-internal`)
 
@@ -746,9 +772,10 @@ change must produce the **same artifact set** as the baseline. What is
   def-1602's build via a `resources.pipelines:` (`aspire-build`) input. If your
   change alters what a stage produces (artifact name, contents, layout) or
   reorders/removes a stage, confirm every downstream `dependsOn`/`download` still
-  resolves — and that the **release** pipeline, which you can't run from a feature
-  branch, still finds the artifacts it expects (validate its `download` inputs and
-  the produced names statically, and flag for a maintainer run).
+  resolves — and that the **release** pipeline still finds the artifacts it
+  expects. Validate its `download` inputs and the produced names statically, then
+  confirm with a `DryRun=true` release run pinned to that source build (see
+  *Testing a release-pipeline change* above).
 - **Distinguish a real break from an expected contributor-branch skip.** Publish /
   BAR / release stages are gated on `main`/`release` and **will** skip on an
   `<alias>/` branch — that's by design, not a regression. Branch-gated variable

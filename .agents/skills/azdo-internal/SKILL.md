@@ -30,9 +30,10 @@ The Aspire repo (`microsoft/aspire` on GitHub) has an internal mirror at `dnceng
 | Pipeline | Definition ID | YAML | Purpose |
 |----------|--------------|------|---------|
 | **microsoft-aspire** (main) | 1602 | `eng/pipelines/azure-pipelines.yml` | Official internal build (PR + CI) |
-| **microsoft-aspire unofficial** | *(discover — see note)* | `eng/pipelines/azure-pipelines-unofficial.yml` | Unofficial/dev builds |
+| **microsoft-aspire-unofficial** | 1601 | `eng/pipelines/azure-pipelines-unofficial.yml` | Unofficial/dev builds |
+| **microsoft-aspire-Release-To-NuGet** | 1600 | `eng/pipelines/release-publish-nuget.yml` | Release: NuGet/npm publish, channel promotion, installer (WinGet/Homebrew), GitHub release tasks. Consumes a def-1602 build via `resources.pipelines: aspire-build`. **Side-effecting — run only with `DryRun=true`** (see *Validating publish/release-only changes safely*). |
 
-> The definition ID for the unofficial pipeline isn't hardcoded here because it can change. Discover it with:
+> Definition IDs are stable — a pipeline keeps its ID for life. The only way one changes is if the pipeline is deleted and recreated (which assigns a new ID). If a build won't start or targets the wrong pipeline, re-verify with:
 >
 > ```bash
 > az pipelines list --organization https://dev.azure.com/dnceng --project internal \
@@ -102,6 +103,54 @@ az pipelines run \
 
 The command returns JSON with the build details including `id` (build ID) and `url`.
 
+### Compile-check without queuing a build (`previewRun`)
+
+For a **YAML/template change**, validate that the pipeline still *compiles* before spending a real build — this is instant and queues nothing. AzDO compiles a pipeline on every run, but it never compiles on a GitHub PR, so a template error can pass all GitHub checks and only surface at run time (e.g. a literal `${{ … }}` inside an inlined PowerShell script block — even in a comment — is evaluated by the template engine and can fail with `Unable to convert from Object to String`).
+
+`previewRun` requires the branch to be on the **mirror** (it resolves repo/template refs from there), so push first. Then:
+
+```bash
+cat > /tmp/preview.json <<'EOF'
+{ "previewRun": true,
+  "resources": { "repositories": { "self": { "refName": "refs/heads/<your-alias>/<branch>" } } } }
+EOF
+
+az devops invoke --area pipelines --resource runs \
+  --route-parameters project=internal pipelineId=<DEF_ID> \
+  --api-version 7.1 --http-method POST --in-file /tmp/preview.json \
+  --organization https://dev.azure.com/dnceng -o json
+```
+
+Exit 0 + a `finalYaml` field ⇒ compiles. A non-zero exit prints the exact `file (Line: N, Col: C)` of the error. Compare base vs. PR branch to confirm the PR (not a pre-existing issue) introduced any failure, and bisect by neutralizing suspect lines on a throwaway branch.
+
+> **api-version quirk:** use `--api-version 7.1`. Passing `7.1-preview.1` trips an `az` parsing bug (`could not convert string to float: '7.1.1'`).
+
+### Run a pipeline that consumes another pipeline's artifacts (pin the source build)
+
+The release pipeline consumes a def-1602 build via `resources.pipelines: aspire-build`. To run it against a **specific** upstream build you must pin that resource — `az pipelines run` **cannot** pin a pipeline-resource version, so use the REST `runs` API. Pick a source build whose artifacts your change touches (verify with `az pipelines runs artifact list --run-id <SRC_BUILD_ID>`), and pass its **run name** (e.g. `20260610.6`), not its numeric id:
+
+```bash
+cat > /tmp/release-run.json <<'EOF'
+{
+  "resources": {
+    "repositories": { "self": { "refName": "refs/heads/<your-alias>/<branch>" } },
+    "pipelines": { "aspire-build": { "version": "<SOURCE_BUILD_RUN_NAME>" } }
+  },
+  "templateParameters": {
+    "DryRun": "true",
+    "SkipGitHubTasks": "true"
+  }
+}
+EOF
+
+az devops invoke --area pipelines --resource runs \
+  --route-parameters project=internal pipelineId=1600 \
+  --api-version 7.1 --http-method POST --in-file /tmp/release-run.json \
+  --organization https://dev.azure.com/dnceng -o json
+```
+
+Set the other `Skip*` parameters to scope the run to the stages your change touches. **Always pass `DryRun=true`** for the release pipeline (see below).
+
 ## Pipeline structure
 
 Don't rely on a snapshot here — the stages, job conditions, and variables change. Read the current definition from the repo:
@@ -168,7 +217,7 @@ There is **no** `az pipelines watch` command. For a long build, don't poll in a 
 
 Some stages only run on `main`/`release/*` and will be skipped or fail on a `<your-alias>/...` branch, so they can't be exercised this way:
 
-- **Publish / release stages** (NuGet push, WinGet/Homebrew PR submission) run in the release pipeline, not on feature-branch CI.
+- **Real-publish steps** (NuGet push, npm ESRP publish, WinGet/Homebrew PR submission) only run when `DryRun=false`, which you must never set on a personal branch. But the **release pipeline itself *can* be run on a personal branch** under `DryRun=true` — the publish steps are compile-excluded or runtime-skipped, and the surrounding validation/dry-run path (artifact download, version checks, dry-run package listing) runs for real. Pin a source build and validate that path (next section).
 - Steps that read the `publish-build-assets` variable group fail on non-`main`/non-`release/*` branches — by Arcade convention that group is only pulled for non-PR official branches. A feature-branch build legitimately can't access it.
 
 When validating pipeline changes, confirm up front whether the path you're testing is even reachable from a personal branch; if not, validate the *mechanism* safely (next section) rather than running it for real on a release branch.
@@ -177,22 +226,20 @@ When validating pipeline changes, confirm up front whether the path you're testi
 
 When a change only runs on `main`/`release/*` (publish, NuGet push, WinGet/Homebrew PR submission, release notifications), validate the mechanism **without real side effects**. Never let a publishing or PR-submitting step run live during validation. In order of preference:
 
-**1. Run the release pipeline with `DryRun=true`.** The release/publish pipeline (`eng/pipelines/release-publish-nuget.yml`) exposes a `DryRun` runtime parameter that **defaults to `false` (live)** — so you must pass it explicitly:
+**0. Compile-check first with `previewRun`** (see *Triggering the Pipeline*). For any YAML/template change this is the cheapest gate and catches the whole class of compile errors that GitHub PR CI never sees. Do this before spending a real build.
 
-```bash
-az pipelines run --id <RELEASE_PIPELINE_ID> \
-  --organization https://dev.azure.com/dnceng --project internal \
-  --branch <your-alias>/<branch> \
-  --parameters DryRun=true
-```
+**1. Run the release pipeline with `DryRun=true`, pinned to a source build.** The release/publish pipeline (`eng/pipelines/release-publish-nuget.yml`) exposes a `DryRun` runtime parameter that **defaults to `false` (live)** — so you must pass it explicitly, and you must pin the `aspire-build` source build via the REST `runs` API (`az pipelines run` can't pin a resource version — see *Run a pipeline that consumes another pipeline's artifacts* above for the recipe).
 
-ESRP sign/publish, the `gh release` upload (`publish-release-cli-assets.ps1`), and the WinGet/npm publish steps are all gated on this flag, so the path runs end-to-end without pushing anything.
+ESRP sign/publish, npm publish (compile-excluded under `DryRun=true`), the `gh release` upload (`publish-release-cli-assets.ps1`, runtime `-DryRun`), darc channel promotion, and WinGet submit are all gated on this flag, so the path runs end-to-end without pushing anything.
+
+⚠️ **`DryRun` is not fully end-to-end read-only today.** The `GitHubTasks` stage is gated by `SkipGitHubTasks`, **not** by `DryRun` — so with `SkipGitHubTasks=false` (default), even a dry run mints a bot token and dispatches a real `release-github-tasks.yml` Actions run (which honors `dry_run` internally, creating nothing durable, but is still an external reach). **Set `SkipGitHubTasks=true` for a focused, fully read-only validation.** Tracked by [microsoft/aspire#18129](https://github.com/microsoft/aspire/issues/18129).
 
 **Always verify dry-run actually engaged** — don't assume it. The scripts print it; grep the job log for:
 
 ```
 DryRun: True        # publish-release-cli-assets.ps1
 Dry Run: true       # release-publish-nuget.yml
+=== DRY RUN - No npm packages were actually published ===   # npm dry-run listing
 ```
 
 If you don't see it, treat the step as having run live. (A malformed `-DryRun` argument has silently bound positionally before and run live against the wrong target — confirm from the log, don't trust the intent.)
