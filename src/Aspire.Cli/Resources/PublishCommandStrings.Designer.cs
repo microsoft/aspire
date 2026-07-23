@@ -140,5 +140,185 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("SelectAPublisher", resourceCulture);
             }
         }
+
+        public static string VerificationFailed {
+            get {
+                return ResourceManager.GetString("VerificationFailed", resourceCulture);
+            }
+        }
+
+        public static string VerificationSucceeded {
+            get {
+                return ResourceManager.GetString("VerificationSucceeded", resourceCulture);
+            }
+        }
+
+        public static string VerifyAppHostDirectoryChanged {
+            get {
+                return ResourceManager.GetString("VerifyAppHostDirectoryChanged", resourceCulture);
+            }
+        }
+
+        public static string VerifyAppHostDirectoryUnavailable {
+            get {
+                return ResourceManager.GetString("VerifyAppHostDirectoryUnavailable", resourceCulture);
+            }
+        }
+
+        public static string VerifyDestinationLinkEscape {
+            get {
+                return ResourceManager.GetString("VerifyDestinationLinkEscape", resourceCulture);
+            }
+        }
+
+        public static string VerifyDestinationOutsideRepository {
+            get {
+                return ResourceManager.GetString("VerifyDestinationOutsideRepository", resourceCulture);
+            }
+        }
+
+        public static string VerifyDuplicateOutputs {
+            get {
+                return ResourceManager.GetString("VerifyDuplicateOutputs", resourceCulture);
+            }
+        }
+
+        public static string VerifyFinalStateUnavailable {
+            get {
+                return ResourceManager.GetString("VerifyFinalStateUnavailable", resourceCulture);
+            }
+        }
+
+        public static string VerifyGitQueryFailed {
+            get {
+                return ResourceManager.GetString("VerifyGitQueryFailed", resourceCulture);
+            }
+        }
+
+        public static string VerifyGitUnavailable {
+            get {
+                return ResourceManager.GetString("VerifyGitUnavailable", resourceCulture);
+            }
+        }
+
+        public static string VerifyHostingIncompatible {
+            get {
+                return ResourceManager.GetString("VerifyHostingIncompatible", resourceCulture);
+            }
+        }
+
+        public static string VerifyInvalidDestinationPath {
+            get {
+                return ResourceManager.GetString("VerifyInvalidDestinationPath", resourceCulture);
+            }
+        }
+
+        public static string VerifyLinkedOutputPath {
+            get {
+                return ResourceManager.GetString("VerifyLinkedOutputPath", resourceCulture);
+            }
+        }
+
+        public static string VerifyListStepsNotSupported {
+            get {
+                return ResourceManager.GetString("VerifyListStepsNotSupported", resourceCulture);
+            }
+        }
+
+        public static string VerifyMissingFilesHeader {
+            get {
+                return ResourceManager.GetString("VerifyMissingFilesHeader", resourceCulture);
+            }
+        }
+
+        public static string VerifyNestedRepository {
+            get {
+                return ResourceManager.GetString("VerifyNestedRepository", resourceCulture);
+            }
+        }
+
+        public static string VerifyOptionDescription {
+            get {
+                return ResourceManager.GetString("VerifyOptionDescription", resourceCulture);
+            }
+        }
+
+        public static string VerifyOrphanedFilesHeader {
+            get {
+                return ResourceManager.GetString("VerifyOrphanedFilesHeader", resourceCulture);
+            }
+        }
+
+        public static string VerifyOutputPlanChanged {
+            get {
+                return ResourceManager.GetString("VerifyOutputPlanChanged", resourceCulture);
+            }
+        }
+
+        public static string VerifyOutputKindMismatch {
+            get {
+                return ResourceManager.GetString("VerifyOutputKindMismatch", resourceCulture);
+            }
+        }
+
+        public static string VerifyOutputChangedDuringShutdown {
+            get {
+                return ResourceManager.GetString("VerifyOutputChangedDuringShutdown", resourceCulture);
+            }
+        }
+
+        public static string VerifyOverlappingOutputs {
+            get {
+                return ResourceManager.GetString("VerifyOverlappingOutputs", resourceCulture);
+            }
+        }
+
+        public static string VerifyPrimaryOutputMismatch {
+            get {
+                return ResourceManager.GetString("VerifyPrimaryOutputMismatch", resourceCulture);
+            }
+        }
+
+        public static string VerifyRegenerateCommand {
+            get {
+                return ResourceManager.GetString("VerifyRegenerateCommand", resourceCulture);
+            }
+        }
+
+        public static string VerifyStagingCleanupFailed {
+            get {
+                return ResourceManager.GetString("VerifyStagingCleanupFailed", resourceCulture);
+            }
+        }
+
+        public static string VerifyStaleFilesHeader {
+            get {
+                return ResourceManager.GetString("VerifyStaleFilesHeader", resourceCulture);
+            }
+        }
+
+        public static string VerifyUnexpectedOutputState {
+            get {
+                return ResourceManager.GetString("VerifyUnexpectedOutputState", resourceCulture);
+            }
+        }
+
+        public static string VerifyUnknownOutputKind {
+            get {
+                return ResourceManager.GetString("VerifyUnknownOutputKind", resourceCulture);
+            }
+        }
+
+        public static string VerifyUnsupportedSteps {
+            get {
+                return ResourceManager.GetString("VerifyUnsupportedSteps", resourceCulture);
+            }
+        }
+
+        public static string VerifyWritablePathOutsideStaging {
+            get {
+                return ResourceManager.GetString("VerifyWritablePathOutsideStaging", resourceCulture);
+            }
+        }
     }
 }

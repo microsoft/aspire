@@ -16,12 +16,12 @@ internal interface IGitRepository
     Task<DirectoryInfo?> GetRootAsync(CancellationToken cancellationToken);
 
     /// <summary>
-    /// Gets the root directory of the Git repository containing the specified directory, if one exists.
+    /// Gets the root directory of the Git repository containing the specified directory.
     /// </summary>
-    /// <param name="searchRoot">The directory from which to search for a Git repository.</param>
+    /// <param name="startDirectory">The directory from which repository discovery starts.</param>
     /// <param name="cancellationToken">A token to cancel the operation.</param>
-    /// <returns>The root directory of the Git repository, or null if the directory is not in a Git repository or Git is not installed.</returns>
-    Task<DirectoryInfo?> GetRootAsync(DirectoryInfo searchRoot, CancellationToken cancellationToken);
+    /// <returns>The root directory of the Git repository, or null if no repository can be resolved.</returns>
+    Task<DirectoryInfo?> GetRootAsync(DirectoryInfo startDirectory, CancellationToken cancellationToken);
 
     /// <summary>
     /// Gets the set of files that git considers part of the repository within the specified
@@ -44,4 +44,31 @@ internal interface IGitRepository
     /// pointing at a sub-directory that differs from the current working directory).
     /// </remarks>
     Task<IReadOnlySet<string>?> GetIncludedFilesAsync(DirectoryInfo searchRoot, CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets tracked files plus untracked, non-ignored files under all specified paths.
+    /// </summary>
+    /// <param name="repositoryRoot">The explicit Git repository root.</param>
+    /// <param name="searchPaths">Absolute file or directory paths to include in the batched query.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>A set of absolute included paths, or <c>null</c> when Git execution fails.</returns>
+    Task<IReadOnlySet<string>?> GetIncludedFilesAsync(
+        DirectoryInfo repositoryRoot,
+        IReadOnlyList<string> searchPaths,
+        CancellationToken cancellationToken);
+
+    /// <summary>
+    /// Gets the specified absent candidate paths that Git would ignore.
+    /// </summary>
+    /// <param name="repositoryRoot">The explicit Git repository root.</param>
+    /// <param name="candidatePaths">Absolute candidate paths to evaluate in one operation.</param>
+    /// <param name="cancellationToken">A token to cancel the operation.</param>
+    /// <returns>
+    /// The ignored absolute paths. An empty set means Git successfully determined that no candidates
+    /// are ignored; <c>null</c> means Git execution failed.
+    /// </returns>
+    Task<IReadOnlySet<string>?> GetIgnoredFilesAsync(
+        DirectoryInfo repositoryRoot,
+        IReadOnlyList<string> candidatePaths,
+        CancellationToken cancellationToken);
 }

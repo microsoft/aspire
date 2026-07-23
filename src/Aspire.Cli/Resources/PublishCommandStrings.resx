@@ -144,4 +144,94 @@
   <data name="NoBuildArgumentDescription" xml:space="preserve">
     <value>Do not build or restore the project before running</value>
   </data>
+  <data name="VerificationFailed" xml:space="preserve">
+    <value>Published output verification failed.</value>
+  </data>
+  <data name="VerificationSucceeded" xml:space="preserve">
+    <value>Published output is up to date.</value>
+  </data>
+  <data name="VerifyAppHostDirectoryChanged" xml:space="preserve">
+    <value>The AppHost output plan reported a different AppHost directory.</value>
+  </data>
+  <data name="VerifyAppHostDirectoryUnavailable" xml:space="preserve">
+    <value>The AppHost project directory could not be resolved.</value>
+  </data>
+  <data name="VerifyDestinationLinkEscape" xml:space="preserve">
+    <value>A publish destination escapes the Git repository through a symbolic link or junction.</value>
+  </data>
+  <data name="VerifyDestinationOutsideRepository" xml:space="preserve">
+    <value>All publish destinations must be inside the AppHost Git repository.</value>
+  </data>
+  <data name="VerifyDuplicateOutputs" xml:space="preserve">
+    <value>The AppHost output plan contains duplicate output identities.</value>
+  </data>
+  <data name="VerifyFinalStateUnavailable" xml:space="preserve">
+    <value>The final AppHost output state was not available for reconciliation.</value>
+  </data>
+  <data name="VerifyGitQueryFailed" xml:space="preserve">
+    <value>Git could not evaluate the files included in the publish destinations.</value>
+  </data>
+  <data name="VerifyGitUnavailable" xml:space="preserve">
+    <value>Publish verification requires the AppHost to be inside an available Git repository.</value>
+  </data>
+  <data name="VerifyHostingIncompatible" xml:space="preserve">
+    <value>The AppHost does not support publish verification. Update the AppHost to a newer version of Aspire.</value>
+  </data>
+  <data name="VerifyInvalidDestinationPath" xml:space="preserve">
+    <value>A publish destination path could not be resolved safely.</value>
+  </data>
+  <data name="VerifyLinkedOutputPath" xml:space="preserve">
+    <value>Publish verification does not support symbolic links or junctions inside output trees.</value>
+  </data>
+  <data name="VerifyListStepsNotSupported" xml:space="preserve">
+    <value>The --verify and --list-steps options cannot be used together.</value>
+  </data>
+  <data name="VerifyMissingFilesHeader" xml:space="preserve">
+    <value>Missing files in '{0}':</value>
+  </data>
+  <data name="VerifyNestedRepository" xml:space="preserve">
+    <value>Publish destinations cannot contain or be inside nested Git repositories or submodules.</value>
+  </data>
+  <data name="VerifyOptionDescription" xml:space="preserve">
+    <value>Verify generated artifacts match the Git-included output without modifying it</value>
+  </data>
+  <data name="VerifyOrphanedFilesHeader" xml:space="preserve">
+    <value>Orphaned files in '{0}':</value>
+  </data>
+  <data name="VerifyOutputPlanChanged" xml:space="preserve">
+    <value>The AppHost output plan changed after execution was authorized.</value>
+  </data>
+  <data name="VerifyOutputKindMismatch" xml:space="preserve">
+    <value>A publish output path does not match its declared file or directory kind.</value>
+  </data>
+  <data name="VerifyOutputChangedDuringShutdown" xml:space="preserve">
+    <value>Published output changed after the AppHost reported completion.</value>
+  </data>
+  <data name="VerifyOverlappingOutputs" xml:space="preserve">
+    <value>The AppHost output plan contains overlapping destinations or staging paths.</value>
+  </data>
+  <data name="VerifyPrimaryOutputMismatch" xml:space="preserve">
+    <value>The AppHost output plan does not contain the expected staged primary output.</value>
+  </data>
+  <data name="VerifyRegenerateCommand" xml:space="preserve">
+    <value>Regenerate with: {0}</value>
+  </data>
+  <data name="VerifyStagingCleanupFailed" xml:space="preserve">
+    <value>The temporary publish verification directory could not be removed.</value>
+  </data>
+  <data name="VerifyStaleFilesHeader" xml:space="preserve">
+    <value>Stale files in '{0}':</value>
+  </data>
+  <data name="VerifyUnexpectedOutputState" xml:space="preserve">
+    <value>The AppHost reported an unexpected output-plan state: {0}.</value>
+  </data>
+  <data name="VerifyUnknownOutputKind" xml:space="preserve">
+    <value>The AppHost reported an unsupported output kind: {0}.</value>
+  </data>
+  <data name="VerifyUnsupportedSteps" xml:space="preserve">
+    <value>These selected pipeline steps do not support output relocation: {0}.</value>
+  </data>
+  <data name="VerifyWritablePathOutsideStaging" xml:space="preserve">
+    <value>The AppHost output plan contains a writable path outside the verification staging directory.</value>
+  </data>
 </root>
