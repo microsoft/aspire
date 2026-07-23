@@ -1,0 +1,22 @@
+﻿FROM denoland/deno:2 AS build
+
+ENV DENO_DIR=/deno-dir
+
+WORKDIR /app
+COPY . .
+
+RUN deno cache --config deno.json --lock custom.lock --node-modules-dir=auto --unstable-sloppy-imports --frozen main.ts
+
+FROM denoland/deno:2 AS runtime
+
+ENV DENO_DIR=/deno-dir
+
+WORKDIR /app
+COPY --from=build /app /app
+COPY --from=build /deno-dir /deno-dir
+
+ENV NODE_ENV=production
+
+USER deno
+
+ENTRYPOINT ["deno","task","--config","deno.json","--lock","custom.lock","--node-modules-dir=auto","--unstable-sloppy-imports","start"]

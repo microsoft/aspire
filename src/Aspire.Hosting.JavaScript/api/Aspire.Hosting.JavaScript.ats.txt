@@ -3,6 +3,7 @@
 
 # Handle Types
 Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.BunAppResource [ExposeProperties]
+Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.DenoAppResource [ExposeProperties]
 Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource [ExposeProperties]
 Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NextJsAppResource [ExposeProperties]
 Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NodeAppResource [ExposeProperties]
@@ -10,6 +11,7 @@ Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.ViteAppResource [ExposePrope
 
 # Capabilities
 Aspire.Hosting.JavaScript/addBunApp(name: string, appDirectory: string, scriptPath: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.BunAppResource
+Aspire.Hosting.JavaScript/addDenoApp(name: string, appDirectory: string, scriptPath: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.DenoAppResource
 Aspire.Hosting.JavaScript/addJavaScriptApp(name: string, appDirectory: string, runScriptName?: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/addNextJsApp(name: string, appDirectory: string, runScriptName?: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NextJsAppResource
 Aspire.Hosting.JavaScript/addNodeApp(name: string, appDirectory: string, scriptPath: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.NodeAppResource
@@ -21,6 +23,7 @@ Aspire.Hosting.JavaScript/publishAsStaticWebsite(apiPath?: string, apiTarget?: A
 Aspire.Hosting.JavaScript/withBrowserDebugger(browser?: string) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/withBuildScript(scriptName: string, args?: string[]) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/withBun(install?: boolean, installArgs?: string[]) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
+Aspire.Hosting.JavaScript/withDeno(install?: boolean, installArgs?: string[]) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/withNpm(install?: boolean, installCommand?: string, installArgs?: string[]) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/withPnpm(install?: boolean, installArgs?: string[]) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource
 Aspire.Hosting.JavaScript/withRunScript(scriptName: string, args?: string[]) -> Aspire.Hosting.JavaScript/Aspire.Hosting.JavaScript.JavaScriptAppResource

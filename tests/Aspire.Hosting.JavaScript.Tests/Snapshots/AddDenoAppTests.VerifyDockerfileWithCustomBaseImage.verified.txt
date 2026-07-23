@@ -1,0 +1,22 @@
+﻿FROM denoland/deno:2.1-alpine AS build
+
+ENV DENO_DIR=/deno-dir
+
+WORKDIR /app
+COPY . .
+
+RUN deno cache main.ts
+
+FROM denoland/deno:2.1-distroless AS runtime
+
+ENV DENO_DIR=/deno-dir
+
+WORKDIR /app
+COPY --from=build /app /app
+COPY --from=build /deno-dir /deno-dir
+
+ENV NODE_ENV=production
+
+USER deno
+
+ENTRYPOINT ["deno","run","-A","main.ts"]
