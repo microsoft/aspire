@@ -1,0 +1,69 @@
+@namespace Aspire.Dashboard.Components
+@using Aspire.Dashboard.Utils
+@using Microsoft.JSInterop
+@implements IAsyncDisposable
+@inject IJSRuntime JS
+
+@if (!string.IsNullOrWhiteSpace(Anchor) && !string.IsNullOrWhiteSpace(Text))
+{
+    <FluentTooltip Anchor="@Anchor" AriaLabel="@Text" Delay="0" UseTooltipService="false" role="tooltip" aria-label="@Text">
+        @Text
+    </FluentTooltip>
+}
+
+@code {
+    private const string JsModulePath = "./Components/Controls/AspireTooltip.razor.js";
+
+    private IJSObjectReference? _jsModule;
+    private bool _focusListenerInitialized;
+    private string? _initializedAnchor;
+
+    [Parameter, EditorRequired]
+    public required string Anchor { get; set; }
+
+    [Parameter, EditorRequired]
+    public required string Text { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!string.IsNullOrWhiteSpace(Anchor) && !string.IsNullOrWhiteSpace(Text))
+        {
+            _jsModule ??= await JS.InvokeAsync<IJSObjectReference>("import", JsModulePath);
+
+            if (_initializedAnchor != Anchor)
+            {
+                if (_focusListenerInitialized && _initializedAnchor is not null)
+                {
+                    await _jsModule.InvokeVoidAsync("disposeAspireTooltip", _initializedAnchor);
+                }
+
+                _focusListenerInitialized = await _jsModule.InvokeAsync<bool>("initializeAspireTooltip", Anchor);
+                _initializedAnchor = _focusListenerInitialized ? Anchor : null;
+            }
+        }
+    }
+
+    public async ValueTask DisposeAsync()
+    {
+        if (_jsModule is not null)
+        {
+            if (_focusListenerInitialized)
+            {
+                try
+                {
+                    await _jsModule.InvokeVoidAsync("disposeAspireTooltip", _initializedAnchor ?? Anchor);
+                }
+                catch (JSDisconnectedException)
+                {
+                    // The browser may already be gone when the component is disposed.
+                }
+                catch (OperationCanceledException)
+                {
+                    // The browser may already be gone when the component is disposed.
+                }
+            }
+
+            await JSInteropHelpers.SafeDisposeAsync(_jsModule);
+        }
+    }
+}

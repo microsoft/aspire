@@ -105,6 +105,10 @@ public partial class GridValue
     private readonly Icon _maskIcon = new Icons.Regular.Size16.EyeOff();
     private readonly Icon _unmaskIcon = new Icons.Regular.Size16.Eye();
     private readonly string _cellTextId = $"celltext-{Guid.NewGuid():N}";
+    private readonly string _openTextVisualizerButtonId = $"open-text-visualizer-{Guid.NewGuid():N}";
+    private readonly string _maskButtonId = $"grid-value-mask-{Guid.NewGuid():N}";
+    private string? _activeTooltipAnchor;
+    private string? _activeTooltipText;
     private string? _value;
     private string? _formattedValue;
     private Dictionary<string, object>? _componentParameters;
@@ -151,6 +155,10 @@ public partial class GridValue
     private async Task ToggleMaskStateAsync()
     {
         IsMasked = !IsMasked;
+        if (_activeTooltipAnchor == _maskButtonId)
+        {
+            _activeTooltipText = GetMaskButtonTooltip();
+        }
 
         await IsMaskedChanged.InvokeAsync(IsMasked);
     }
@@ -182,5 +190,22 @@ public partial class GridValue
         _componentParameters["HighlightText"] = HighlightText ?? string.Empty;
 
         return _componentParameters;
+    }
+
+    private string GetMaskButtonTooltip() => (IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)]).Value;
+
+    private void ShowTooltip(string anchor, string text)
+    {
+        _activeTooltipAnchor = anchor;
+        _activeTooltipText = text;
+    }
+
+    private void HideTooltip(string anchor)
+    {
+        if (_activeTooltipAnchor == anchor)
+        {
+            _activeTooltipAnchor = null;
+            _activeTooltipText = null;
+        }
     }
 }

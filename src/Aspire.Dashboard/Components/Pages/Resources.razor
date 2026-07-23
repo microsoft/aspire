@@ -11,6 +11,7 @@
 
 @{
     var showDetailsView = PageViewModel.SelectedResource is not null;
+    var resourceFilterTooltip = (NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)]).Value;
 }
 
 <div class="page-content-container">
@@ -37,8 +38,8 @@
                               Appearance="@(NoFiltersSet ? Appearance.Stealth : Appearance.Accent)"
                               IconEnd="@(new Icons.Regular.Size20.Filter())"
                               @onclick="() => _isFilterPopupVisible = !_isFilterPopupVisible"
-                              Title="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])"
-                              aria-label="@(NoFiltersSet ? Loc[nameof(Dashboard.Resources.Resources.ResourcesNotFiltered)] : Loc[nameof(Dashboard.Resources.Resources.ResourcesFiltered)])" />
+                              aria-label="@resourceFilterTooltip" />
+                <AspireTooltip Anchor="resourceFilterButton" Text="@resourceFilterTooltip" />
 
                 @if (HasViewOptionsMenu())
                 {
@@ -47,6 +48,7 @@
                                       Items="@_resourcesMenuItems"
                                       RestoreFocusOnItemClick="true"
                                       Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)]"
+                                      UseTooltip="true"
                                       slot="end" />
                 }
             }
@@ -239,24 +241,32 @@
                                     <svg class="resource-graph">
                                     </svg>
                                     <div class="resource-graph-controls">
+                                        @{
+                                            var zoomInTooltip = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)].Value;
+                                            var zoomOutTooltip = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)].Value;
+                                            var resetTooltip = Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)].Value;
+                                        }
                                         <FluentButton Appearance="Appearance.Stealth"
+                                                      Id="resourcesGraphZoomInButton"
                                                       Class="graph-zoom-in"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]"
-                                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomInButton)]">
+                                                      aria-label="@zoomInTooltip">
                                             <FluentIcon Value="new Icons.Regular.Size24.ZoomIn()" Color="Color.Accent" />
                                         </FluentButton>
+                                        <AspireTooltip Anchor="resourcesGraphZoomInButton" Text="@zoomInTooltip" />
                                         <FluentButton Appearance="Appearance.Stealth"
+                                                      Id="resourcesGraphZoomOutButton"
                                                       Class="graph-zoom-out"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]"
-                                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphZoomOutButton)]">
+                                                      aria-label="@zoomOutTooltip">
                                             <FluentIcon Value="new Icons.Regular.Size24.ZoomOut()" Color="Color.Accent" />
                                         </FluentButton>
+                                        <AspireTooltip Anchor="resourcesGraphZoomOutButton" Text="@zoomOutTooltip" />
                                         <FluentButton Appearance="Appearance.Stealth"
+                                                      Id="resourcesGraphResetButton"
                                                       Class="graph-reset"
-                                                      Title="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]"
-                                                      aria-label="@Loc[nameof(Dashboard.Resources.Resources.ResourcesGraphResetButton)]">
+                                                      aria-label="@resetTooltip">
                                             <FluentIcon Value="new Icons.Regular.Size24.ArrowReset()" Color="Color.Accent" />
                                         </FluentButton>
+                                        <AspireTooltip Anchor="resourcesGraphResetButton" Text="@resetTooltip" />
                                     </div>
                                 </div>
                             }

@@ -16,8 +16,10 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Diagnostics.HealthChecks;
+using Microsoft.Extensions.Localization;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Xunit;
+using ResourcesDialogs = Aspire.Dashboard.Resources.Dialogs;
 
 namespace Aspire.Dashboard.Components.Tests.Controls;
 
@@ -397,6 +399,44 @@ public class ResourceDetailsTests : DashboardTestContext
     }
 
     [Fact]
+    public void Render_ActionControlsProvideKeyboardAccessibleTooltips()
+    {
+        ResourceSetupHelpers.SetupResourceDetails(this);
+
+        var resource = ModelTestHelpers.CreateResource(
+            "app1",
+            environment: new List<EnvironmentVariableViewModel>
+            {
+                new EnvironmentVariableViewModel("envvar1", "value!", fromSpec: true)
+            }.ToImmutableArray());
+
+        var cut = RenderComponent<ResourceDetails>(builder =>
+        {
+            builder.Add(p => p.ShowSpecOnlyToggle, true);
+            builder.Add(p => p.Resource, resource);
+            builder.Add(p => p.ResourceByName, new ConcurrentDictionary<string, ResourceViewModel>([new KeyValuePair<string, ResourceViewModel>(resource.Name, resource)]));
+        });
+
+        var resourcesLoc = Services.GetRequiredService<IStringLocalizer<Dashboard.Resources.Resources>>();
+        var controlsLoc = Services.GetRequiredService<IStringLocalizer<ControlsStrings>>();
+        var dialogsLoc = Services.GetRequiredService<IStringLocalizer<ResourcesDialogs>>();
+
+        AssertTooltip(cut, resourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)].Value);
+
+        var maskButton = cut.Find($"fluent-button[aria-label='{controlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)].Value}']");
+        maskButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, controlsLoc[nameof(ControlsStrings.GridValueMaskShowValue)].Value);
+
+        var openTextVisualizerButton = cut.Find($"fluent-button[aria-label='{dialogsLoc[nameof(ResourcesDialogs.OpenInTextVisualizer)].Value}']");
+        openTextVisualizerButton.TriggerEvent("onfocusin", new FocusEventArgs());
+        AssertTooltip(cut, dialogsLoc[nameof(ResourcesDialogs.OpenInTextVisualizer)].Value);
+
+        Assert.Null(cut.Find($"fluent-button[aria-label='{resourcesLoc[nameof(Dashboard.Resources.Resources.ResourcesChangeViewOptions)].Value}']").GetAttribute("title"));
+        Assert.Null(maskButton.GetAttribute("title"));
+        Assert.Null(openTextVisualizerButton.GetAttribute("title"));
+    }
+
+    [Fact]
     public void Render_NotStartedStateDescription_ShowsDescription()
     {
         ResourceSetupHelpers.SetupResourceDetails(this);
@@ -611,6 +651,11 @@ public class ResourceDetailsTests : DashboardTestContext
     private static int ProducerDefinedDisplaySortOrder(int producerSortOrder)
     {
         return KnownResourcePropertySortOrder.ConnectionString + 1 + producerSortOrder;
+    }
+
+    private static void AssertTooltip(IRenderedFragment cut, string text)
+    {
+        Assert.Contains(cut.FindComponents<AspireTooltip>(), tooltip => tooltip.Instance.Text == text);
     }
 
     [Fact]

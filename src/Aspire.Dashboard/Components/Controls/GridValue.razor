@@ -50,7 +50,12 @@
 
         <span class="defaultHidden">
             <FluentButton Appearance="Appearance.Lightweight"
+                          Id="@_openTextVisualizerButtonId"
                           Disabled="@(ValueToVisualize is null && Value is null)"
+                          @onfocusin="@(() => ShowTooltip(_openTextVisualizerButtonId, DialogsLoc[nameof(Dialogs.OpenInTextVisualizer)].Value))"
+                          @onfocusout="@(() => HideTooltip(_openTextVisualizerButtonId))"
+                          @onmouseenter="@(() => ShowTooltip(_openTextVisualizerButtonId, DialogsLoc[nameof(Dialogs.OpenInTextVisualizer)].Value))"
+                          @onmouseleave="@(() => HideTooltip(_openTextVisualizerButtonId))"
                           OnClick="OpenTextVisualizerAsync"
                           aria-label="@DialogsLoc[nameof(Dialogs.OpenInTextVisualizer)]">
                 <FluentIcon Icon="Icons.Regular.Size16.SlideSearch" />
@@ -64,13 +69,23 @@
 
         @if (EnableMasking)
         {
+            var maskButtonTooltip = GetMaskButtonTooltip();
+
             <FluentButton Appearance="Appearance.Lightweight"
+                          Id="@_maskButtonId"
                           IconEnd="@(IsMasked ? _unmaskIcon : _maskIcon)"
-                          Title="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
+                          @onfocusin="@(() => ShowTooltip(_maskButtonId, maskButtonTooltip))"
+                          @onfocusout="@(() => HideTooltip(_maskButtonId))"
+                          @onmouseenter="@(() => ShowTooltip(_maskButtonId, maskButtonTooltip))"
+                          @onmouseleave="@(() => HideTooltip(_maskButtonId))"
                           OnClick="ToggleMaskStateAsync"
-                          aria-label="@(IsMasked ? Loc[nameof(ControlsStrings.GridValueMaskShowValue)] : Loc[nameof(ControlsStrings.GridValueMaskHideValue)])"
+                          aria-label="@maskButtonTooltip"
                           Class="grid-value-mask-button" />
         }
 
     </div>
+    @if (!string.IsNullOrWhiteSpace(_activeTooltipAnchor) && !string.IsNullOrWhiteSpace(_activeTooltipText))
+    {
+        <AspireTooltip Anchor="@_activeTooltipAnchor" Text="@_activeTooltipText" />
+    }
 </div>

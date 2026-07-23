@@ -2,6 +2,11 @@
 @using Aspire.Dashboard.Resources
 @inject IStringLocalizer<ControlsStrings> Loc
 
+@{
+    var toggleOrientationTooltip = (Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)]).Value;
+    var closeViewTooltip = Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)].Value;
+}
+
 <div class="details-container">
     <header style="height: auto;">
         @if (DetailsTitle is not null)
@@ -16,14 +21,17 @@
             @if (ViewportInformation.IsDesktop)
             {
                 <FluentButton Appearance="Appearance.Stealth"
+                              Id="@_toggleOrientationButtonId"
                               IconEnd="@(Orientation == Orientation.Horizontal ? _splitHorizontalIcon : _splitVerticalIcon)"
                               OnClick="HandleToggleOrientation"
-                              Title="@(Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)])"
-                              aria-label="@(Orientation == Orientation.Horizontal ? Loc[nameof(ControlsStrings.SummaryDetailsViewSplitHorizontal)] : Loc[nameof(ControlsStrings.SummaryDetailsViewSplitVertical)])"/>
+                              aria-label="@toggleOrientationTooltip"/>
+                <AspireTooltip Anchor="@_toggleOrientationButtonId" Text="@toggleOrientationTooltip" />
             }
 
             <FluentButton Appearance="Appearance.Stealth" BackgroundColor="@(ViewportInformation.IsDesktop ? null : "rgba(0, 0, 0, 0)")" IconEnd="@(new Icons.Regular.Size16.Dismiss())"
-                          OnClick="HandleDismissAsync" Title="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]" aria-label="@Loc[nameof(ControlsStrings.SummaryDetailsViewCloseView)]"/>
+                          Id="@_closeButtonId"
+                          OnClick="HandleDismissAsync" aria-label="@closeViewTooltip"/>
+            <AspireTooltip Anchor="@_closeButtonId" Text="@closeViewTooltip" />
         </div>
     </header>
     @Details
@@ -32,6 +40,8 @@
 @code {
     private readonly Icon _splitHorizontalIcon = new Icons.Regular.Size16.SplitHorizontal();
     private readonly Icon _splitVerticalIcon = new Icons.Regular.Size16.SplitVertical();
+    private readonly string _toggleOrientationButtonId = $"details-toggle-orientation-{Guid.NewGuid():N}";
+    private readonly string _closeButtonId = $"details-close-{Guid.NewGuid():N}";
 
     [Parameter]
     public string? DetailsTitle { get; set; }

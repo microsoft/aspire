@@ -7,16 +7,29 @@
 
 @if (!string.IsNullOrWhiteSpace(ExceptionText))
 {
+    var exceptionDetailsTooltip = Loc[nameof(ControlsStrings.ExceptionDetailsTitle)].Value;
     <FluentButton Appearance="Appearance.Lightweight"
+                  Id="@_exceptionDetailsButtonId"
                   OnClick="OnExceptionDetailsClickedAsync"
-                  Title="@Loc[nameof(ControlsStrings.ExceptionDetailsTitle)]"
+                  @onfocusin="@(() => ShowTooltip(exceptionDetailsTooltip))"
+                  @onfocusout="HideTooltip"
+                  @onmouseenter="@(() => ShowTooltip(exceptionDetailsTooltip))"
+                  @onmouseleave="HideTooltip"
+                  aria-label="@exceptionDetailsTooltip"
                   Class="exception-details-button">
         <FluentIcon Icon="Icons.Filled.Size16.DocumentError"
                     Color="Color.Accent" />
     </FluentButton>
+    @if (!string.IsNullOrWhiteSpace(_activeTooltipText))
+    {
+        <AspireTooltip Anchor="@_exceptionDetailsButtonId" Text="@_activeTooltipText" />
+    }
 }
 
 @code {
+    private readonly string _exceptionDetailsButtonId = $"exception-details-{Guid.NewGuid():N}";
+    private string? _activeTooltipText;
+
     [Parameter, EditorRequired]
     public required string ExceptionText { get; set; }
 
@@ -31,5 +44,15 @@
             ValueDescription = Loc[nameof(ControlsStrings.ExceptionDetailsTitle)],
             Value = ExceptionText
         });
+    }
+
+    private void ShowTooltip(string text)
+    {
+        _activeTooltipText = text;
+    }
+
+    private void HideTooltip()
+    {
+        _activeTooltipText = null;
     }
 }

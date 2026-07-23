@@ -144,6 +144,13 @@ internal static class FluentUISetupHelpers
         comboboxModule.SetupVoid("setControlAttribute", _ => true);
     }
 
+    public static void SetupAspireTooltip(TestContext context)
+    {
+        var tooltipModule = context.JSInterop.SetupModule("./Components/Controls/AspireTooltip.razor.js");
+        tooltipModule.Setup<bool>("initializeAspireTooltip", _ => true);
+        tooltipModule.SetupVoid("disposeAspireTooltip", _ => true);
+    }
+
     public static void AddCommonDashboardServices(
         TestContext context,
         ILocalStorage? localStorage = null,
@@ -178,6 +185,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
+        SetupAspireTooltip(context);
     }
 
     public static void SetupFluentUIComponents(TestContext context)
