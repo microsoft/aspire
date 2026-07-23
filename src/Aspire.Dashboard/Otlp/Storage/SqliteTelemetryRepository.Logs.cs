@@ -801,13 +801,6 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record PendingLog(long ResourceId, long ResourceViewId, long ScopeId, OtlpLogEntry Log);
 
-    private sealed class ScopeRecord
-    {
-        public required long ScopeId { get; init; }
-        public required string ScopeName { get; init; }
-        public required string ScopeVersion { get; init; }
-    }
-
     private class AttributeRecord
     {
         public required string AttributeKey { get; init; }
