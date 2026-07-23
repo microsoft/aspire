@@ -119,6 +119,355 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
+    public void UpdateResources_ChildResourceRunning_UpdatesParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var child = CreateReplicaChild(parent, "syndule-api--0000007", "Scaled to zero");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(
+                ResourceViewModelChangeType.Upsert,
+                CreateReplicaChild(parent, "syndule-api--0000007", "Running"))
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_InitialReplicaRunning_UpdatesParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var child = CreateReplicaChild(parent, "syndule-api--0000007", "Running");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_ChildResourceDeleted_RestoresParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var child = CreateReplicaChild(parent, "syndule-api--0000007", "Running");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+        });
+
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(ResourceViewModelChangeType.Delete, child)
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Scaled to zero", updatedParent.State);
+            Assert.Null(updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_ReplicaHealthChanged_UpdatesParentHealthStatus()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var child = CreateReplicaChild(
+            parent,
+            "syndule-api--0000007",
+            "Running",
+            ImmutableArray.Create(new HealthReportViewModel("Ready", HealthStatus.Healthy, "Ready", null)));
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal(HealthStatus.Healthy, updatedParent.HealthStatus);
+        });
+
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(
+                ResourceViewModelChangeType.Upsert,
+                CreateReplicaChild(
+                    parent,
+                    "syndule-api--0000007",
+                    "Running",
+                    ImmutableArray.Create(new HealthReportViewModel("Ready", HealthStatus.Unhealthy, "Not ready", null))))
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+            Assert.Equal(HealthStatus.Unhealthy, updatedParent.HealthStatus);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_MultipleRunningReplicas_UsesLeastHealthyReplicaForParentHealth()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var healthyChild = CreateReplicaChild(
+            parent,
+            "syndule-api--0000001",
+            "Running",
+            ImmutableArray.Create(new HealthReportViewModel("Ready", HealthStatus.Healthy, "Ready", null)));
+        var unhealthyChild = CreateReplicaChild(
+            parent,
+            "syndule-api--0000002",
+            "Running",
+            ImmutableArray.Create(new HealthReportViewModel("Ready", HealthStatus.Unhealthy, "Not ready", null)));
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, healthyChild, unhealthyChild], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Running", updatedParent.State);
+            Assert.Equal(KnownResourceState.Running, updatedParent.KnownState);
+            Assert.Equal(HealthStatus.Unhealthy, updatedParent.HealthStatus);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_ChildResourceWithDifferentDisplayName_DoesNotUpdateParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("worker", "Project", "Scaled to zero", null);
+        var child = CreateChild(parent, "worker-sidecar", "Running", displayName: "worker-sidecar");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, child], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Scaled to zero", updatedParent.State);
+            Assert.Null(updatedParent.KnownState);
+        });
+
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(
+                ResourceViewModelChangeType.Upsert,
+                CreateChild(parent, "worker-sidecar", "Starting", displayName: "worker-sidecar"))
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Scaled to zero", updatedParent.State);
+            Assert.Null(updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_TransitoryReplica_BeatsUnhealthyOrFailedReplicaForParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var unhealthyChild = CreateReplicaChild(parent, "syndule-api--0000001", "RuntimeUnhealthy");
+        var startingChild = CreateReplicaChild(parent, "syndule-api--0000002", "Starting");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, unhealthyChild, startingChild], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            // Transitory states (Starting) take priority over unhealthy/failed-to-start states,
+            // matching the original Running -> transitory -> unhealthy/failed -> any-state cascade.
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("Starting", updatedParent.State);
+            Assert.Equal(KnownResourceState.Starting, updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_UnhealthyOrFailedReplica_BeatsOtherKnownStateReplicaForParentState()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var exitedChild = CreateReplicaChild(parent, "syndule-api--0000001", "Exited");
+        var failedChild = CreateReplicaChild(parent, "syndule-api--0000002", "FailedToStart");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, exitedChild, failedChild], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            // FailedToStart is in the unhealthy/failed-to-start tier, which beats the "any other
+            // known state" fallback tier that Exited falls into.
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("FailedToStart", updatedParent.State);
+            Assert.Equal(KnownResourceState.FailedToStart, updatedParent.KnownState);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_RunningReplicasWithEqualHealth_TieBrokenByLowestReplicaIndex()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        // Both replicas have no health reports, so both default to Healthy: the tie must be broken by
+        // replica index, not by insertion or dictionary iteration order.
+        var higherIndexChild = CreateReplicaChild(parent, "syndule-api--0000002", "Running", replicaIndex: 1, stateStyle: "from-replica-1");
+        var lowerIndexChild = CreateReplicaChild(parent, "syndule-api--0000001", "Running", replicaIndex: 0, stateStyle: "from-replica-0");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, higherIndexChild, lowerIndexChild], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("from-replica-0", updatedParent.StateStyle);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_RunningReplicasWithEqualHealthAndReplicaIndex_TieBrokenByName()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parent = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        // Same health (both default to Healthy with no reports) and the same replica index: the final
+        // tie-break is resource name using StringComparers.ResourceName (ordinal, case-insensitive).
+        var childB = CreateReplicaChild(parent, "syndule-api--b", "Running", stateStyle: "from-child-b");
+        var childA = CreateReplicaChild(parent, "syndule-api--a", "Running", stateStyle: "from-child-a");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parent, childB, childA], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParent = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parent.Name);
+            Assert.Equal("from-child-a", updatedParent.StateStyle);
+        });
+    }
+
+    [Fact]
+    public void UpdateResources_MultipleParentsInSameBatch_EachTracksItsOwnReplicaChildrenIndependently()
+    {
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        var parentA = CreateResource("syndule-api", "Azure Container App", "Scaled to zero", null);
+        var parentB = CreateResource("syndule-worker", "Azure Container App", "Scaled to zero", null);
+        var childA = CreateReplicaChild(parentA, "syndule-api--0000001", "Scaled to zero");
+        var childB = CreateReplicaChild(parentB, "syndule-worker--0000001", "Scaled to zero");
+
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var dashboardClient = new TestDashboardClient(isEnabled: true, initialResources: [parentA, parentB, childA, childB], resourceChannelProvider: () => channel);
+        ResourceSetupHelpers.SetupResourcesPage(this, viewport, dashboardClient);
+
+        var cut = RenderComponent<Components.Pages.Resources>(builder =>
+        {
+            builder.AddCascadingValue(viewport);
+        });
+
+        // A single batch flips childA to Running and childB to RuntimeUnhealthy: verifies the
+        // per-batch parent-name -> children lookup groups each parent's replicas correctly and doesn't
+        // let one parent's children affect another parent's computed state.
+        channel.Writer.TryWrite([
+            new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, CreateReplicaChild(parentA, "syndule-api--0000001", "Running")),
+            new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, CreateReplicaChild(parentB, "syndule-worker--0000001", "RuntimeUnhealthy")),
+        ]);
+
+        cut.WaitForAssertion(() =>
+        {
+            var updatedParentA = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parentA.Name);
+            Assert.Equal("Running", updatedParentA.State);
+            Assert.Equal(KnownResourceState.Running, updatedParentA.KnownState);
+
+            var updatedParentB = Assert.Single(cut.Instance.GetFilteredResources(), r => r.Name == parentB.Name);
+            Assert.Equal("RuntimeUnhealthy", updatedParentB.State);
+            Assert.Equal(KnownResourceState.RuntimeUnhealthy, updatedParentB.KnownState);
+        });
+    }
+
+    [Fact]
     public void FilterResources()
     {
         // Arrange
@@ -502,7 +851,8 @@ public partial class ResourcesTests : DashboardTestContext
         bool isHidden = false,
         string? stateStyle = null,
         ImmutableDictionary<string, ResourcePropertyViewModel>? properties = null,
-        int? replicaIndex = null)
+        int? replicaIndex = null,
+        string? displayName = null)
     {
         return new ResourceViewModel
         {
@@ -510,7 +860,7 @@ public partial class ResourcesTests : DashboardTestContext
             ResourceType = type,
             State = state,
             KnownState = state is not null && Enum.TryParse<KnownResourceState>(state, out var knownState) ? knownState : null,
-            DisplayName = name,
+            DisplayName = displayName ?? name,
             Uid = name,
             ReplicaIndex = replicaIndex ?? 0,
             HealthReports = healthReports ?? [],
@@ -527,6 +877,39 @@ public partial class ResourcesTests : DashboardTestContext
             Commands = [],
             IsHidden = isHidden,
         };
+    }
+
+    private static ResourceViewModel CreateReplicaChild(ResourceViewModel parent, string childName, string? state, ImmutableArray<HealthReportViewModel>? healthReports = null, int? replicaIndex = null, string? stateStyle = null)
+    {
+        return CreateChild(parent, childName, state, parent.DisplayName, healthReports, replicaIndex, stateStyle);
+    }
+
+    private static ResourceViewModel CreateChild(ResourceViewModel parent, string childName, string? state, string displayName, ImmutableArray<HealthReportViewModel>? healthReports = null, int? replicaIndex = null, string? stateStyle = null)
+    {
+        return CreateResource(
+            childName,
+            parent.ResourceType,
+            state,
+            healthReports,
+            stateStyle: stateStyle,
+            replicaIndex: replicaIndex,
+            displayName: displayName,
+            properties: new Dictionary<string, ResourcePropertyViewModel>
+            {
+                [KnownProperties.Resource.ParentName] = CreateParentNameProperty(parent.Name)
+            }.ToImmutableDictionary());
+    }
+
+    private static ResourcePropertyViewModel CreateParentNameProperty(string parentName)
+    {
+        return new ResourcePropertyViewModel(
+            KnownProperties.Resource.ParentName,
+            ProtobufValue.ForString(parentName),
+            isValueSensitive: false,
+            knownProperty: null,
+            sortOrder: 0,
+            displayName: null,
+            isHighlighted: false);
     }
 
     private static void AddErrorLog(TelemetryRepository repository, string resourceName)

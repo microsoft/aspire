@@ -14,6 +14,7 @@ using Aspire.Dashboard.Utils;
 using Aspire.Hosting.Utils;
 using Humanizer;
 using Microsoft.AspNetCore.Components;
+using Microsoft.Extensions.Diagnostics.HealthChecks;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.JSInterop;
@@ -104,6 +105,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
     private readonly CancellationTokenSource _cts = new();
     private readonly ConcurrentDictionary<string, ResourceViewModel> _resourceByName = new(StringComparers.ResourceName);
+    private readonly ConcurrentDictionary<string, ResourceViewModel> _sourceResourceByName = new(StringComparers.ResourceName);
     private readonly HashSet<string> _collapsedResourceNames = new(StringComparers.ResourceName);
     private readonly TaskCompletionSource _loadingTcs = new(TaskCreationOptions.RunContinuationsAsynchronously);
     private bool _isFilterPopupVisible;
@@ -264,6 +266,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 var added = UpdateFromResource(resource);
                 Debug.Assert(added, "Should not receive duplicate resources in initial snapshot data.");
             }
+            UpdateParentReplicaStates();
 
             UpdateMaxHighlightedCount();
             await _dataGrid.SafeRefreshDataAsync();
@@ -274,6 +277,11 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                 await foreach (var changes in subscription.WithCancellation(_cts.Token).ConfigureAwait(false))
                 {
                     var selectedResourceHasChanged = false;
+                    var resourcesMayAffectParentReplicaState = false;
+
+                    bool IsResourceTypeVisible(string type) => !PageViewModel.ResourceTypesToVisibility.TryGetValue(type, out var value) || value;
+                    bool IsStateVisible(string state) => !PageViewModel.ResourceStatesToVisibility.TryGetValue(state, out var value) || value;
+                    bool IsHealthStatusVisible(string healthStatus) => !PageViewModel.ResourceHealthStatusesToVisibility.TryGetValue(healthStatus, out var value) || value;
 
                     foreach (var (changeType, resource) in changes)
                     {
@@ -284,21 +292,30 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
                                 // The new type/state/health status should be visible if it's either
                                 // 1) new, or
                                 // 2) previously visible
-                                t => !PageViewModel.ResourceTypesToVisibility.TryGetValue(t, out var value) || value,
-                                s => !PageViewModel.ResourceStatesToVisibility.TryGetValue(s, out var value) || value,
-                                s => !PageViewModel.ResourceHealthStatusesToVisibility.TryGetValue(s, out var value) || value);
+                                IsResourceTypeVisible,
+                                IsStateVisible,
+                                IsHealthStatusVisible);
 
                             if (string.Equals(PageViewModel.SelectedResource?.Name, resource.Name, StringComparisons.ResourceName))
                             {
                                 PageViewModel.SelectedResource = resource;
                                 selectedResourceHasChanged = true;
                             }
+
+                            resourcesMayAffectParentReplicaState = true;
                         }
                         else if (changeType == ResourceViewModelChangeType.Delete)
                         {
                             var removed = _resourceByName.TryRemove(resource.Name, out _);
+                            _sourceResourceByName.TryRemove(resource.Name, out _);
                             Debug.Assert(removed, "Cannot remove unknown resource.");
+                            resourcesMayAffectParentReplicaState = true;
                         }
+                    }
+
+                    if (resourcesMayAffectParentReplicaState)
+                    {
+                        selectedResourceHasChanged |= UpdateParentReplicaStates(IsResourceTypeVisible, IsStateVisible, IsHealthStatusVisible);
                     }
 
                     UpdateMaxHighlightedCount();
@@ -318,7 +335,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         }
     }
 
-    private bool UpdateFromResource(ResourceViewModel resource)
+    private bool UpdateFromResource(ResourceViewModel resource, bool updateSource = true)
     {
         var preselectedHiddenResourceTypes = HiddenTypes?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
         var preselectedHiddenResourceStates = HiddenStates?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
@@ -328,12 +345,18 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
             resource,
             type => preselectedHiddenResourceTypes is null || !preselectedHiddenResourceTypes.Contains(type),
             state => preselectedHiddenResourceStates is null || !preselectedHiddenResourceStates.Contains(state),
-            healthStatus => preselectedHiddenResourceHealthStates is null || !preselectedHiddenResourceHealthStates.Contains(healthStatus));
+            healthStatus => preselectedHiddenResourceHealthStates is null || !preselectedHiddenResourceHealthStates.Contains(healthStatus),
+            updateSource);
     }
 
-    private bool UpdateFromResource(ResourceViewModel resource, Func<string, bool> resourceTypeVisible, Func<string, bool> stateVisible, Func<string, bool> healthStatusVisible)
+    private bool UpdateFromResource(ResourceViewModel resource, Func<string, bool> resourceTypeVisible, Func<string, bool> stateVisible, Func<string, bool> healthStatusVisible, bool updateSource = true)
     {
-        // This is ok from threadsafty perspective because we are the only thread that's modifying resources.
+        // This is ok from thread-safety perspective because we are the only thread that's modifying resources.
+        if (updateSource)
+        {
+            _sourceResourceByName[resource.Name] = resource;
+        }
+
         bool added;
         if (_resourceByName.TryGetValue(resource.Name, out _))
         {
@@ -357,6 +380,125 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         UpdateMenuButtons();
 
         return added;
+    }
+
+    private bool UpdateParentReplicaStates()
+    {
+        var preselectedHiddenResourceTypes = HiddenTypes?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
+        var preselectedHiddenResourceStates = HiddenStates?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
+        var preselectedHiddenResourceHealthStates = HiddenHealthStates?.Split(' ').Select(StringUtils.Unescape).ToHashSet();
+
+        return UpdateParentReplicaStates(
+            type => preselectedHiddenResourceTypes is null || !preselectedHiddenResourceTypes.Contains(type),
+            state => preselectedHiddenResourceStates is null || !preselectedHiddenResourceStates.Contains(state),
+            healthStatus => preselectedHiddenResourceHealthStates is null || !preselectedHiddenResourceHealthStates.Contains(healthStatus));
+    }
+
+    private bool UpdateParentReplicaStates(Func<string, bool> resourceTypeVisible, Func<string, bool> stateVisible, Func<string, bool> healthStatusVisible)
+    {
+        var selectedResourceHasChanged = false;
+
+        // Group replica children by their declared parent name once per batch instead of rescanning
+        // every resource for each candidate parent. This keeps recomputation close to O(n) instead of
+        // O(n^2) when there are many resources.
+        var childrenByParentName = _sourceResourceByName.Values
+            .Where(r => r.GetResourcePropertyValue(KnownProperties.Resource.ParentName) is { Length: > 0 })
+            .ToLookup(r => r.GetResourcePropertyValue(KnownProperties.Resource.ParentName)!, StringComparers.ResourceName);
+
+        // The dictionary isn't mutated while this loop runs: this method is only ever called with
+        // updateSource: false below, so it's safe to enumerate .Values directly without a defensive copy.
+        foreach (var parent in _sourceResourceByName.Values)
+        {
+            var stateSource = GetReplicaStateSource(parent, childrenByParentName);
+            var updatedParent = stateSource is not null ? parent.WithStateFrom(stateSource) : parent;
+
+            if (!_resourceByName.TryGetValue(parent.Name, out var displayedParent) ||
+                (string.Equals(displayedParent.State, updatedParent.State, StringComparison.Ordinal) &&
+                displayedParent.KnownState == updatedParent.KnownState &&
+                string.Equals(displayedParent.StateStyle, updatedParent.StateStyle, StringComparison.Ordinal) &&
+                displayedParent.StartTimeStamp == updatedParent.StartTimeStamp &&
+                displayedParent.StopTimeStamp == updatedParent.StopTimeStamp &&
+                displayedParent.HealthStatus == updatedParent.HealthStatus &&
+                displayedParent.HealthReports.SequenceEqual(updatedParent.HealthReports)))
+            {
+                continue;
+            }
+
+            UpdateFromResource(updatedParent, resourceTypeVisible, stateVisible, healthStatusVisible, updateSource: false);
+
+            if (string.Equals(PageViewModel.SelectedResource?.Name, updatedParent.Name, StringComparisons.ResourceName))
+            {
+                PageViewModel.SelectedResource = updatedParent;
+                selectedResourceHasChanged = true;
+            }
+        }
+
+        return selectedResourceHasChanged;
+    }
+
+    private static ResourceViewModel? GetReplicaStateSource(ResourceViewModel parent, ILookup<string, ResourceViewModel> childrenByParentName)
+    {
+        ResourceViewModel? best = null;
+        var bestTier = int.MaxValue;
+
+        foreach (var child in childrenByParentName[parent.Name])
+        {
+            if (ReferenceEquals(child, parent) || !IsReplicaChild(parent, child))
+            {
+                continue;
+            }
+
+            var tier = GetReplicaPriorityTier(child);
+            if (tier is null)
+            {
+                continue;
+            }
+
+            // Lower tier number wins outright; within the same tier the worst health, then the lowest
+            // replica index, then name order wins. This single pass replaces four separate Where/OrderBy
+            // scans but must preserve their exact priority and deterministic tie-break semantics.
+            if (tier < bestTier || (tier == bestTier && CompareReplicaRelevance(child, best!) < 0))
+            {
+                best = child;
+                bestTier = tier.Value;
+            }
+        }
+
+        return best;
+
+        // Running replicas always win over transitory (starting/building/waiting/stopping), which win
+        // over unhealthy/failed-to-start, which win over any other known state. Replicas with no state
+        // at all never contribute to the parent's displayed state.
+        static int? GetReplicaPriorityTier(ResourceViewModel r) => r switch
+        {
+            _ when r.IsRunningState() => 0,
+            _ when r.IsUnusableTransitoryState() => 1,
+            _ when r.IsRuntimeUnhealthy() || r.IsFailedToStart() => 2,
+            _ when !r.HasNoState() => 3,
+            _ => null
+        };
+
+        static int CompareReplicaRelevance(ResourceViewModel a, ResourceViewModel b)
+        {
+            var healthComparison = (a.HealthStatus ?? HealthStatus.Unhealthy).CompareTo(b.HealthStatus ?? HealthStatus.Unhealthy);
+            if (healthComparison != 0)
+            {
+                return healthComparison;
+            }
+
+            var replicaIndexComparison = a.ReplicaIndex.CompareTo(b.ReplicaIndex);
+            return replicaIndexComparison != 0
+                ? replicaIndexComparison
+                : StringComparers.ResourceName.Compare(a.Name, b.Name);
+        }
+    }
+
+    private static bool IsReplicaChild(ResourceViewModel parent, ResourceViewModel child)
+    {
+        // Replica child rows are modeled as nested resources with the same display name as the parent.
+        // Ordinary child relationships can have independent lifetimes and shouldn't affect parent state.
+        return string.Equals(child.GetResourcePropertyValue(KnownProperties.Resource.ParentName), parent.Name, StringComparisons.ResourceName) &&
+            string.Equals(child.DisplayName, parent.DisplayName, StringComparisons.ResourceName);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -573,7 +715,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
         // If filters were saved in page state, resource filters now need to be recomputed since the URL has changed.
         foreach (var resourceViewModel in _resourceByName)
         {
-            UpdateFromResource(resourceViewModel.Value);
+            UpdateFromResource(resourceViewModel.Value, updateSource: false);
         }
 
         if (ResourceName is not null)
