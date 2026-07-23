@@ -1,19 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { dayMs, personalPickActions } from "./constants.mjs";
+import { dayMs, personalPickActions, reviewDebtSignalLabel } from "./constants.mjs";
 import {
   actorIdentityKey,
   computeCommunityItems,
   computeFocusExclusionItems,
   computeFocusItems,
   createAttentionBuckets,
+  createAttentionSignals,
   createDeveloperPullRequestCounts,
   createFocusIssueBuckets,
   createForMeItems,
   createIssueSignals,
   filterCheckFailureRules,
   isChecksFailing,
+  isReviewDebt,
   shouldHideFromSharedPullRequestLists,
   visibleCheckState,
 } from "./model.mjs";
@@ -140,6 +142,105 @@ test("computeFocusItems keeps the highest-priority lane per PR and excludes CI-f
   assert.equal(focus[0].pullRequest.number, 10);
   // Lower focusBucketRank wins: Ready to merge (2) beats Needs review (4).
   assert.equal(focus[0].bucketLabel, "Ready to merge");
+});
+
+test("computeFocusItems keys focus identity by host so same-slug PRs on different hosts stay distinct", () => {
+  // The loader aggregates accounts across github.com and GHES/EMU, where the same owner/repo slug and
+  // PR number can both exist as two different PRs. Without the host in the focus identity, byPr would
+  // collapse them into a single card (and a disqualifying bucket on one host would block the other).
+  const comPr = makePr({ number: 500, url: "https://github.com/microsoft/aspire/pull/500", updatedAt: isoAgo(dayMs) });
+  const ghePr = makePr({ number: 500, url: "https://ghe.example.com/microsoft/aspire/pull/500", updatedAt: isoAgo(dayMs) });
+
+  const focus = computeFocusItems([bucketWith("Needs review", comPr, ghePr)]);
+
+  const urls = focus.map((i) => i.pullRequest.url).sort();
+  assert.deepEqual(urls, [
+    "https://ghe.example.com/microsoft/aspire/pull/500",
+    "https://github.com/microsoft/aspire/pull/500",
+  ]);
+});
+
+test("computeFocusItems retains review-debt PRs through the full createAttentionBuckets pipeline", () => {
+  // Fresh unreviewed PR: comfortably within the focus window.
+  const fresh = makePr({ number: 40, updatedAt: isoAgo(dayMs) });
+  // Unreviewed and untouched for 20 days: still lands in "Needs review" but is aged past the 14d
+  // focus limit, so it only survives because isReviewDebt() retains it.
+  const needsReviewDebt = makePr({ number: 41, updatedAt: isoAgo(20 * dayMs) });
+  // Reviewed once, then gone quiet for 20 days with no newer commit: its ONLY bucket is "Stalled"
+  // (normally excluded from focus), yet oldFirstSignal() flags it "review debt". It must still
+  // reach the queue through the real createAttentionBuckets() -> computeFocusItems() path so the
+  // "Address review" action stays reachable.
+  const stalledDebt = makePr({
+    number: 42,
+    updatedAt: isoAgo(20 * dayMs),
+    lastCommitAt: isoAgo(21 * dayMs),
+    review: { state: "reviewed", reviewerCount: 1, commentedReviewCount: 1, lastReviewedAt: isoAgo(20 * dayMs) },
+  });
+  // Reviewed and idle for only 10 days: stalled but NOT review debt, so the Stalled gate keeps it
+  // out of focus (guards against re-flooding the queue with every idle PR).
+  const stalledFresh = makePr({
+    number: 43,
+    updatedAt: isoAgo(10 * dayMs),
+    lastCommitAt: isoAgo(11 * dayMs),
+    review: { state: "reviewed", reviewerCount: 1, commentedReviewCount: 1, lastReviewedAt: isoAgo(10 * dayMs) },
+  });
+
+  // Approved but untouched for 20 days: it lands in "Approved but aging" (a focus-eligible lane),
+  // but an approving review already exists, so it is NOT review debt. It must drop out of focus
+  // past the 14d window rather than being mislabeled "review debt" / offered "Address review"
+  // instead of its land-approval action.
+  const approvedAging = makePr({
+    number: 44,
+    updatedAt: isoAgo(20 * dayMs),
+    lastCommitAt: isoAgo(21 * dayMs),
+    review: { state: "approved", approvalCount: 1, reviewerCount: 1, lastApprovedAt: isoAgo(20 * dayMs), lastReviewedAt: isoAgo(20 * dayMs) },
+  });
+
+  const buckets = createAttentionBuckets([fresh, needsReviewDebt, stalledDebt, stalledFresh, approvedAging]);
+  const focus = computeFocusItems(buckets);
+
+  assert.deepEqual(focus.map((i) => i.pullRequest.number).sort((a, b) => a - b), [40, 41, 42]);
+  // The Stalled-only debt PR is surfaced on its sole lane.
+  assert.equal(focus.find((i) => i.pullRequest.number === 42).bucketLabel, "Stalled");
+  // The approved-but-aging PR is excluded: it is aged past the window and no longer review debt.
+  assert.equal(focus.find((i) => i.pullRequest.number === 44), undefined);
+});
+
+test("isReviewDebt survives display-signal truncation that a pill-derived flag would drop", () => {
+  // Regression guard for the review-debt derivation in github.mjs focusCards: the "review debt"
+  // pill is emitted last by createAttentionSignals, so a PR stacked with higher-priority danger
+  // pills (regression + merge conflicts + release base + CI failing + unresolved) pushes it past the
+  // 4-signal card cap. Deriving reviewDebt from those truncated display pills silently loses it and
+  // drops the PR from the review-debt spillover, hiding "Address review". The shared predicate does not.
+  const debtWithDangerPills = makePr({
+    number: 50,
+    updatedAt: isoAgo(20 * dayMs),
+    mergeableState: "dirty",
+    baseRef: "release/9.6",
+    labels: ["regression"],
+    checks: { state: "failure", failureCount: 2 },
+    review: { unresolvedThreadCount: 3 },
+  });
+
+  assert.equal(isReviewDebt(debtWithDangerPills), true);
+
+  // signalsFor() caps card pills via createAttentionSignals(...).slice(0, limit) (limit 4); mirror
+  // that truncation here to prove the review-debt pill is exactly what falls off the end.
+  const displayedPills = createAttentionSignals({ pullRequest: debtWithDangerPills })
+    .slice(0, 4)
+    .map((s) => s.label);
+  assert.ok(
+    !displayedPills.includes(reviewDebtSignalLabel),
+    `expected review-debt pill to be truncated out of ${JSON.stringify(displayedPills)}`,
+  );
+
+  // Approved + fresh PRs are never review debt, so the predicate cannot false-positive.
+  const approvedFresh = makePr({
+    number: 51,
+    updatedAt: isoAgo(dayMs),
+    review: { state: "approved", approvalCount: 1, lastApprovedAt: isoAgo(dayMs) },
+  });
+  assert.equal(isReviewDebt(approvedFresh), false);
 });
 
 test("computeCommunityItems includes active external contributors and excludes team, bots, and aged-out PRs", () => {

@@ -17,6 +17,7 @@ export const HTML = `<!doctype html>
     <link rel="stylesheet" href="styles.css" />
   </head>
   <body>
+    <div id="loadbar" class="loadbar" aria-hidden="true"></div>
     <div id="app" class="app" aria-busy="true">
       <div class="topbar">
         <span class="brand"><span class="mark"><svg viewBox="0 0 32 32" fill="none" aria-hidden="true"><path d="M3.5 30C1.57 30 0 28.43 0 26.5C0 25.871 0.166 25.259 0.48 24.729L8.818 10.287L8.852 10.236L12.968 3.099C13.593 2.019 14.754 1.349 16 1.349C17.246 1.349 18.407 2.019 19.031 3.098L31.531 24.749C31.833 25.258 31.999 25.87 31.999 26.499C31.999 28.429 30.429 29.999 28.499 29.999L3.5 30Z" fill="#512BD4"/><path d="M25.33 18H16.99L16 16.28L13.13 11.31C13 11.09 12.82 10.9 12.58 10.77C11.87 10.35 10.95 10.6 10.53 11.32L14.7 4.10001C14.96 3.65001 15.44 3.35001 16 3.35001C16.56 3.35001 17.04 3.65001 17.3 4.10001L21.45 11.29L21.46 11.31L21.48 11.34L25.33 18Z" fill="#7455DD"/><path d="M30 26.5C30 27.33 29.33 28 28.5 28H20.17C21 28 21.67 27.33 21.67 26.5C21.67 26.23 21.59 25.97 21.47 25.75L17.3 18.53L16.99 18H25.33L29.8 25.75C29.93 25.97 30 26.23 30 26.5Z" fill="#9780E5"/><path d="M21.67 26.5C21.67 27.33 21 28 20.17 28H11.83C12.66 28 13.33 27.33 13.33 26.5C13.33 26.23 13.26 25.97 13.13 25.75C13.13 25.74 13.12 25.73 13.11 25.72L11.79 23.57L8.82004 18.72C8.55004 18.28 8.07004 18 7.54004 18H16.99L17.3 18.53L17.427 18.75L21.47 25.75C21.59 25.97 21.67 26.23 21.67 26.5Z" fill="#B9AAEE"/><path d="M13.33 26.5C13.33 27.33 12.66 28 11.83 28H3.5C2.67 28 2 27.33 2 26.5C2 26.23 2.07 25.97 2.2 25.75L6.24 18.75C6.51 18.29 7.01 18 7.54 18C8.07 18 8.55 18.28 8.82 18.72L11.79 23.57L13.11 25.72C13.12 25.73 13.13 25.74 13.13 25.75C13.26 25.97 13.33 26.23 13.33 26.5Z" fill="#DCD5F6"/><path d="M16.99 18H7.53999C7.00999 18 6.50999 18.29 6.23999 18.75L6.66999 18L10.49 11.39L10.53 11.33V11.32C10.95 10.6 11.87 10.35 12.58 10.77C12.82 10.9 13 11.09 13.13 11.31L16 16.28L16.99 18Z" fill="#9780E5"/></svg></span>Aspire Team App</span>
@@ -50,23 +51,26 @@ export const HTML = `<!doctype html>
 export const STYLES = `
 :root {
   color-scheme: light dark;
-  --bg: var(--background-color-default, #ffffff);
+  /* Primer primitive first, then the canvas host's older vars, then a hex floor.
+     https://primer.style/foundations/primitives/color */
+  --bg: var(--bgColor-default, var(--background-color-default, #ffffff));
   --surface: color-mix(in srgb, var(--bg), var(--fg) 5%);
   --surface-2: color-mix(in srgb, var(--bg), var(--fg) 7%);
   --surface-3: color-mix(in srgb, var(--bg), var(--fg) 10%);
   --card: color-mix(in srgb, var(--bg), var(--fg) 4%);
   --card-hover: color-mix(in srgb, var(--bg), var(--fg) 8%);
   --head-hover: color-mix(in srgb, var(--fg) 8%, transparent);
-  --fg: var(--text-color-default, #1f2328);
-  --muted: var(--text-color-muted, #656d76);
-  --border: var(--border-color-default, #d0d7de);
+  --fg: var(--fgColor-default, var(--text-color-default, #1f2328));
+  --muted: var(--fgColor-muted, var(--text-color-muted, #656d76));
+  --border: var(--borderColor-default, var(--border-color-default, #d0d7de));
   --border-soft: color-mix(in srgb, var(--border), transparent 35%);
   --border-strong: color-mix(in srgb, var(--border), var(--fg) 22%);
-  --focus: var(--color-focus-outline, #0969da);
-  --white: var(--color-white, #fff);
+  --focus: var(--focus-outlineColor, var(--color-focus-outline, #0969da));
+  --white: var(--fgColor-onEmphasis, var(--color-white, #fff));
 
-  /* Brand purple - reserved for the brand mark, PR identity, and the loading accent */
-  --accent: var(--true-color-purple, #8250df);
+  /* Brand purple - reserved for the brand mark, PR identity, and the loading accent.
+     Maps to Primer's "done" (purple) role. */
+  --accent: var(--fgColor-done, var(--true-color-purple, #8250df));
   --accent-strong: color-mix(in srgb, var(--accent), var(--fg) 18%);
   --accent-2: color-mix(in srgb, var(--accent), var(--blue) 22%);
   --purple: var(--accent);
@@ -78,11 +82,17 @@ export const STYLES = `
   --green-fg: #ffffff;
 
   /* Informational blue - links, identifiers, toggles, focus */
-  --blue: var(--true-color-blue, #0969da);
+  --blue: var(--fgColor-accent, var(--true-color-blue, #0969da));
 
-  --success: var(--true-color-green, #1a7f37);
-  --warning: var(--true-color-yellow, #9a6700);
-  --danger: var(--true-color-red, #cf222e);
+  --success: var(--fgColor-success, var(--true-color-green, #1a7f37));
+  --warning: var(--fgColor-attention, var(--true-color-yellow, #9a6700));
+  --danger: var(--fgColor-danger, var(--true-color-red, #cf222e));
+
+  /* Primer floating-overlay shadow for popovers/menus; neutral (not a colored glow).
+     https://primer.style/foundations/primitives/box-shadow */
+  --shadow-floating: var(--shadow-floating-small,
+    0 0 0 1px color-mix(in srgb, var(--border) 55%, transparent),
+    0 8px 24px color-mix(in srgb, var(--fg) 16%, transparent));
 
   --font: var(--font-sans, "Segoe UI", -apple-system, BlinkMacSystemFont, sans-serif);
   --mono: var(--font-mono, "Cascadia Code", "SFMono-Regular", Consolas, monospace);
@@ -108,21 +118,17 @@ button { font-family: inherit; cursor: pointer; }
 
 .app { display: flex; flex-direction: column; min-height: 100%; position: relative; }
 
-/* Top loading bar shown during refreshes (skeleton handles first load).
-   A deliberate left-to-right paint-stroke fill, not a rushed shimmer. */
-.app.loading::after {
-  content: ""; position: fixed; left: 0; top: 0; height: 2px; width: 100%; z-index: 50;
-  transform-origin: left center; transform: scaleX(0);
-  background: linear-gradient(90deg, color-mix(in srgb, var(--accent-2) 65%, transparent), var(--accent) 72%, var(--accent-2));
-  box-shadow: 0 0 8px color-mix(in srgb, var(--accent) 45%, transparent);
-  animation: paintfill 2.6s cubic-bezier(.62, .03, .2, 1) infinite;
+/* Deterministic top load bar: its width tracks fetch progress (done/total) driven by the
+   SSE 'progress' events, so it advances and completes instead of looping forever. It lives
+   OUTSIDE #app so it survives full re-renders; the skeleton still covers the very first
+   load. https://primer.style/foundations/primitives/color for the accent tokens. */
+.loadbar {
+  position: fixed; left: 0; top: 0; height: 2px; width: 0; z-index: 60;
+  background: linear-gradient(90deg, var(--accent-2), var(--accent));
+  opacity: 0; pointer-events: none;
+  transition: width .18s ease, opacity .25s ease;
 }
-@keyframes paintfill {
-  0%   { transform: scaleX(0);   opacity: .9; }
-  70%  { transform: scaleX(.92); opacity: 1; }
-  88%  { transform: scaleX(1);   opacity: 1; }
-  100% { transform: scaleX(1);   opacity: 0; }
-}
+.loadbar.active { opacity: 1; }
 
 /* Header */
 .topbar {
@@ -329,6 +335,48 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
   break-inside: avoid; -webkit-column-break-inside: avoid; margin-bottom: 12px;
 }
 .card:hover { border-color: var(--border-strong); background: var(--card-hover); }
+.card-main { display: flex; flex-direction: column; gap: 8px; }
+.card-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.card-btn {
+  display: inline-flex; align-items: center; gap: 5px;
+  font: inherit; font-size: 11.5px; font-weight: 600; line-height: 1;
+  padding: 5px 10px; border-radius: 7px; cursor: pointer;
+  color: var(--fg); background: var(--surface-3); border: 1px solid var(--border);
+  transition: border-color .15s, background .15s, opacity .15s;
+}
+.card-btn:hover { border-color: var(--border-strong); background: var(--card-hover); }
+.card-btn:disabled, .card-btn.busy { opacity: .6; cursor: default; }
+.card-btn.done { color: var(--success); border-color: color-mix(in srgb, var(--success) 48%, transparent); background: color-mix(in srgb, var(--success) 12%, transparent); }
+.card-btn.failed { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 48%, transparent); background: color-mix(in srgb, var(--danger) 12%, transparent); }
+.card-btn .cb-ico { display: inline-flex; }
+.card-btn .cb-ico svg { width: 13px; height: 13px; }
+/* Split button: main action + caret that opens a "where to run" menu. */
+.cb-split { position: relative; display: inline-flex; align-items: stretch; }
+.cb-split .cb-main { border-top-right-radius: 0; border-bottom-right-radius: 0; }
+/* A GHES/EMU card has a single target (no caret), so its lone main button keeps full radius. */
+.cb-split .cb-main:only-child { border-top-right-radius: 7px; border-bottom-right-radius: 7px; }
+.cb-split .cb-caret { border-top-left-radius: 0; border-bottom-left-radius: 0; border-left: none; padding: 5px 5px; }
+.cb-split .cb-caret svg { width: 12px; height: 12px; transition: transform .18s ease; }
+.cb-split .cb-caret[aria-expanded="true"] { background: var(--card-hover); border-color: var(--border-strong); }
+.cb-split .cb-caret[aria-expanded="true"] svg { transform: rotate(180deg); }
+.cb-menu {
+  position: fixed; top: 0; left: 0; z-index: 1000; min-width: 214px;
+  display: flex; flex-direction: column; gap: 2px; padding: 5px;
+  background: var(--bg); border: 1px solid var(--border-strong); border-radius: 9px;
+  box-shadow: var(--shadow-floating);
+}
+.cb-menu[hidden] { display: none; }
+.cb-menu-item {
+  display: flex; align-items: center; gap: 9px; width: 100%; text-align: left;
+  font: inherit; padding: 7px 9px; border-radius: 6px; border: none; cursor: pointer;
+  color: var(--fg); background: transparent;
+}
+.cb-menu-item:hover { background: var(--card-hover); }
+.cb-menu-item .cb-mi-ico { display: inline-flex; color: var(--muted); flex: none; }
+.cb-menu-item .cb-mi-ico svg { width: 14px; height: 14px; }
+.cb-mi-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.cb-mi-label { font-size: 12px; font-weight: 600; line-height: 1.2; }
+.cb-mi-sub { font-size: 10.5px; font-weight: 400; color: var(--muted); line-height: 1.25; }
 .card-top { display: flex; align-items: flex-start; gap: 8px; min-width: 0; }
 .card-title { font-weight: 600; font-size: 13px; line-height: 1.35; color: var(--fg); min-width: 0; overflow-wrap: anywhere; word-break: break-word; }
 .card-title:hover { color: var(--blue); }
@@ -637,7 +685,7 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 
 @media (prefers-reduced-motion: reduce) {
   .view, .view.back { animation: none; }
-  .app.loading::after { animation: none; transform: scaleX(1); opacity: .55; }
+  .loadbar { transition: opacity .25s ease; }
   .sk::after { animation: none; }
   .iconbtn.spin svg, .rescan-btn.spin svg { animation: none; }
   .caret, .acct-detail, .notif-card, .card, .lane-body, .lane-caret, .repo-row, .repo-acts, .repo-err, .repo-ico { transition: none; }
@@ -665,19 +713,60 @@ button.brand:focus-visible { outline: 2px solid var(--focus); outline-offset: 1p
 
 export const APP_JS = String.raw`
 const app = document.getElementById("app");
+// Deterministic top progress bar element (lives outside #app so re-renders don't drop it).
+const loadbar = document.getElementById("loadbar");
 let state = null;
 let prefs = null;
 let view = "queue";       // queue | settings | accounts | notifications
 let keysBound = false;
+let cbMenuBound = false;
 let prevRank = 0;
 let refreshing = false;
+// Count of overlapping withRefresh() calls in flight. The refresh button stays clickable and
+// mode/account mutations also route through withRefresh, so several can run at once over one
+// shared refreshing flag and one progress bar. We wind the shared UI down only when the LAST
+// one settles (count returns to 0), never when whichever finishes first does.
+let refreshInFlight = 0;
+// Monotonic id assigned to each withRefresh() call in start order. Overlapping refreshes can
+// reject out of order, and unlike the success path (gated by the server-assigned seq) a rejection
+// carries no seq to order it. The catch gates on this so only the latest-started refresh may
+// publish its failure: an older refresh that rejects after a newer one started must not paint a
+// failure banner over the newer valid state (or over the newer refresh still settling).
+let refreshGen = 0;
 let rescanning = false;
 let loadError = null;
+// A dashboard pushed over SSE while the user is on a form-bearing view (accounts editor,
+// settings, etc.) is stashed here and applied when they return to the queue, so a
+// background refresh never clobbers an in-progress edit.
+let pendingState = null;
+// Monotonic revision of the snapshot currently applied. fetchedAt is a wall-clock display
+// timestamp and is unsafe as a stream key: a partial and the final can share a millisecond,
+// and snapshots can arrive out of order. The server stamps a strictly increasing seq on
+// every partial/final; we apply only strictly-newer ones. -1 so the first real snapshot (0+)
+// always applies.
+let lastAppliedSeq = -1;
+// Record the revision of whatever snapshot was just assigned to state. Call at every point
+// that adopts a server snapshot so later SSE pushes are ordered against it.
+function adoptAppliedRev() {
+  if (state && typeof state.seq === "number") lastAppliedSeq = state.seq;
+}
 const expanded = new Set(); // account ids whose detail (sources + repos) is expanded
 const collapsedLanes = new Set(); // lane ids the user collapsed (survives re-render + SSE)
 const draftReposByAcct = {}; // account id -> working copy of that account's watched repos
 const editingByAcct = {};    // account id -> index of the repo row being inline-edited, or -1
 const repoSaveSeqByAcct = {}; // account id -> latest repository save request number
+
+// Card actions whose POST to /api/agent/action is still in flight, keyed by (action kind, PR)
+// so a split can be tracked independently of its owning card's DOM node. The in-DOM busy state
+// on the button is not enough on its own: a streamed 'state' event re-renders the card and hands
+// back a fresh, enabled button mid-request, which a second click would use to re-queue the same
+// agent action. cardActionBtn consults this set so the replacement split re-renders already
+// disabled, and onCardAction clears the key once the request settles (matching the existing
+// design where a later SSE refresh restores the default label).
+const inflightActions = new Set();
+function actionKey(kind, prUrl, prRepo, prNumber) {
+  return String(kind) + "@" + (prUrl || (String(prRepo) + "#" + String(prNumber)));
+}
 
 const RANK = { queue: 0, notifications: 1, accounts: 1, settings: 1, filters: 1 };
 
@@ -697,6 +786,7 @@ const ICONS = {
   alert: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>',
   eye: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>',
   merge: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M6 21V9a9 9 0 0 0 9 9"/></svg>',
+  pulse: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>',
   xcircle: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M15 9l-6 6"/><path d="M9 9l6 6"/></svg>',
   chat: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>',
   pr: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="18" r="3"/><circle cx="6" cy="6" r="3"/><path d="M13 6h3a2 2 0 0 1 2 2v7"/><line x1="6" y1="9" x2="6" y2="21"/></svg>',
@@ -769,32 +859,152 @@ async function readJson(res) {
 }
 
 async function load() {
+  // Capture the applied revision at request start. GET /api/state may be served stale-while-
+  // revalidate and can still be in flight when an SSE 'state' event (applyPushedState) applies a
+  // newer snapshot. If the GET then fails, publishing its error would paint a failure banner over
+  // that newer valid state. Suppress the failure when a newer revision was applied after this
+  // request started (the withRefresh catch gates the same class of race with its refreshGen id).
+  const startSeq = lastAppliedSeq;
   try {
     const res = await fetch("api/state");
     const data = await readJson(res);
-    state = data.dashboard; prefs = data.prefs; loadError = null;
+    // GET /api/state may be served stale-while-revalidate, so a cached seq N can settle after the
+    // background stream already delivered seq N+1. Apply this response only when it is legacy (no seq)
+    // or strictly newer than what we've already applied, so a late stale load can't roll
+    // state/lastAppliedSeq backward. Mirrors the withRefresh/applyPushedState gate.
+    const seq = data.dashboard && data.dashboard.seq;
+    if (typeof seq !== "number" || seq > lastAppliedSeq) {
+      state = data.dashboard; prefs = data.prefs; loadError = null;
+      adoptAppliedRev();
+    }
   } catch (e) {
-    loadError = String((e && e.message) || e);
+    // Only publish this failure if no newer revision was applied while the GET was pending. A late
+    // failure from a superseded request must not clobber the newer valid state (or its banner).
+    if (lastAppliedSeq === startSeq) {
+      loadError = String((e && e.message) || e);
+    }
   }
   render();
 }
 
+// Handle the SSE 'refresh' nudge. Every mutation streams the fresh dashboard over the 'state' event
+// (which applyPushedState stashes into pendingState while off the queue) and then fires this legacy
+// 'refresh'. Re-pulling here unconditionally would call load() -> render() even while a form-bearing
+// view (Accounts/Settings/Filters) is open, discarding the user's uncommitted text. Mirror
+// applyPushedState's guard and only act on the nudge while the queue is showing; the paired 'state'
+// push already stashed the latest snapshot, which goView() applies on return to the queue.
+function onSseRefresh() {
+  if (view === "queue") { load(); }
+}
+
 async function withRefresh(fn) {
-  refreshing = true; setLoading(true);
+  const myGen = ++refreshGen;
+  refreshInFlight++;
+  refreshing = true; setLoading(true); beginProgress();
   try {
     const data = await fn();
-    if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; loadError = null; }
+    if (data && data.dashboard) {
+      // Overlapping refreshes can resolve out of order: an older forced load may finish client-side
+      // after a newer one. Apply this response only when it is legacy (no seq) or strictly newer than
+      // what we've already applied, so a late older response can't roll state/lastAppliedSeq backward
+      // (which would show stale data and corrupt later seq gates). Mirrors applyPushedState's gate.
+      const seq = data.dashboard.seq;
+      if (typeof seq !== "number" || seq > lastAppliedSeq) {
+        state = data.dashboard; prefs = data.prefs; loadError = null;
+        adoptAppliedRev();
+      }
+    }
   } catch (e) {
-    loadError = String((e && e.message) || e);
+    // Publish this failure only if no newer refresh has started since. A late rejection from an
+    // older overlapping refresh must not clobber the newer operation's state/banner — the success
+    // path is seq-gated for the same reason, but rejections carry no seq, so gate on refreshGen.
+    if (myGen === refreshGen) {
+      loadError = String((e && e.message) || e);
+    }
   } finally {
-    refreshing = false; render();
+    refreshInFlight--;
+    // Only the last overlapping refresh winds down the shared UI. If an earlier one finished
+    // this while a later forced load is still running, we must NOT clear refreshing or fade
+    // the bar out from under it — just re-render to show whatever data this call applied.
+    // The SSE 'progress' stream is the normal bar driver (setProgress -> endProgress at
+    // done>=total); ending here is the backstop for when it never delivers a terminal event
+    // (SSE disconnected, or this refresh joined a background compute started with
+    // progress:false, which emits no progress events).
+    if (refreshInFlight === 0) { refreshing = false; endProgress(); }
+    render();
   }
 }
 
 function setLoading(on) {
-  app.classList.toggle("loading", on);
   const rb = document.getElementById("refresh-btn");
   if (rb) rb.classList.toggle("spin", on);
+}
+
+/* ---- deterministic progress bar ----
+   Driven by SSE 'progress' events ({ done, total }). beginProgress shows a small sliver
+   for instant feedback; setProgress advances the fill; endProgress completes to 100% then
+   fades. All are no-ops when #loadbar is absent (e.g. the render test harness). */
+let progFadeTimer = null;
+let progResetTimer = null;
+function beginProgress() {
+  if (!loadbar) return;
+  if (progFadeTimer) { clearTimeout(progFadeTimer); progFadeTimer = null; }
+  if (progResetTimer) { clearTimeout(progResetTimer); progResetTimer = null; }
+  loadbar.classList.add("active");
+  const w = parseFloat(loadbar.style.width) || 0;
+  // Start (or restart from a faded-out state) with a visible sliver.
+  if (w <= 0 || w >= 100) loadbar.style.width = "8%";
+}
+function setProgress(done, total) {
+  if (!loadbar) return;
+  beginProgress();
+  const pct = total > 0 ? Math.max(8, Math.min(100, Math.round((done / total) * 100))) : 8;
+  loadbar.style.width = pct + "%";
+  // Only fade on a terminal tick when this is the last in-flight refresh. Forced computes are
+  // serialized server-side, so when two withRefresh() calls overlap the FIRST compute emits its
+  // done>=total tick while the second is still fetching; fading here would bypass the counter's
+  // "last operation settles" invariant and flicker the bar back on at the second compute's first
+  // tick. withRefresh's finally (endProgress at refreshInFlight === 0) remains the backstop.
+  if (total > 0 && done >= total && refreshInFlight <= 1) { endProgress(); }
+}
+function endProgress() {
+  if (!loadbar) return;
+  // Clear any in-flight fade/reset timers so a second call (SSE completion followed by the
+  // withRefresh finally backstop, or vice versa) can't leave a dangling timer that fires a
+  // duplicate fade after the bar has already reset.
+  if (progFadeTimer) { clearTimeout(progFadeTimer); progFadeTimer = null; }
+  if (progResetTimer) { clearTimeout(progResetTimer); progResetTimer = null; }
+  loadbar.style.width = "100%";
+  // Fill to 100%, hold briefly, fade out, then reset width so the next cycle grows from
+  // the left again rather than snapping back visibly.
+  progFadeTimer = setTimeout(() => {
+    loadbar.classList.remove("active");
+    progResetTimer = setTimeout(() => { loadbar.style.width = "0"; }, 260);
+  }, 220);
+}
+
+// Apply a dashboard pushed over SSE. Guarded so background updates never disrupt an active
+// edit: while off the queue we stash it (applied on return); duplicate final snapshots are
+// dropped; and scroll position is preserved across the re-render.
+function applyPushedState(payload) {
+  if (!payload || !payload.dashboard) return;
+  if (view !== "queue") { pendingState = payload; return; }
+  const seq = payload.dashboard.seq;
+  if (typeof seq === "number" && seq <= lastAppliedSeq) {
+    // Stale or duplicate: an older/out-of-order partial, or the final we already applied via
+    // the triggering request's response. Reject outright — do not overwrite the newer state
+    // we already show (a duplicate carries identical content, a stale one carries older data).
+    return;
+  }
+  applyState(payload);
+}
+function applyState(payload) {
+  const scroller = document.scrollingElement;
+  const top = scroller ? scroller.scrollTop : 0;
+  state = payload.dashboard; prefs = payload.prefs; loadError = null;
+  adoptAppliedRev();
+  render();
+  if (top && scroller) scroller.scrollTop = top;
 }
 
 async function postJSON(path, body) {
@@ -806,6 +1016,162 @@ const refresh = () => withRefresh(() => postJSON("api/refresh"));
 const setMode = (mode) => { if (state && state.mode === mode) return; goView("queue", false); return withRefresh(() => postJSON("api/mode", { mode })); };
 const toggleAccountActive = (id, active) => withRefresh(() => postJSON("api/account/toggle", { id, active }));
 
+// Card action split button (Test / Review / Resolve conflicts / Address review). Posts
+// the PR descriptor plus a routing target to the loopback server, which hands a prompt
+// to the main session. 'split' is the .cb-split container (which carries the data-*);
+// 'target' is "new-session" (default) or "current-session". We give inline feedback on
+// the main button and deliberately do NOT re-render — the action changes the
+// conversation, not the dashboard, and a re-render would drop the confirmation. A later
+// SSE refresh naturally restores the default label.
+async function onCardAction(split, target) {
+  const mainBtn = split.querySelector(".cb-main") || split;
+  const caret = split.querySelector(".cb-caret");
+  if (mainBtn.classList.contains("busy") || mainBtn.classList.contains("done")) return;
+  const d = split.dataset;
+  const t = target || "new-session";
+  // Guard across re-renders too: if a streamed 'state' event replaced this card while an
+  // earlier click's POST was still pending, the fresh button carries no .busy class, but the
+  // pending key still does — so refuse to double-queue the same action (see inflightActions).
+  const key = actionKey(d.kind, d.prUrl, d.prRepo, d.prNumber);
+  if (inflightActions.has(key)) return;
+  const body = {
+    kind: d.kind,
+    target: t,
+    pr: {
+      url: d.prUrl,
+      number: Number(d.prNumber),
+      repository: d.prRepo,
+      title: d.prTitle,
+      author: d.prAuthor,
+    },
+  };
+  // If a prior attempt failed, the button was re-enabled immediately but still shows the failure
+  // label under a pending ~3.2s restore timer (see the catch below). A retry that lands inside that
+  // window would otherwise (a) inherit the .failed styling, (b) capture the failure HTML as its
+  // "original" so a later restore reverts to the wrong text, and (c) have its own outcome label
+  // clobbered when the stale timer fires mid-flight. Cancel that timer and restore the default label
+  // now so this attempt starts from a clean slate.
+  if (mainBtn._cbRestore) {
+    clearTimeout(mainBtn._cbRestore.timer);
+    mainBtn.classList.remove("failed");
+    mainBtn.innerHTML = mainBtn._cbRestore.original;
+    mainBtn._cbRestore = null;
+  }
+  const original = mainBtn.innerHTML;
+  mainBtn.classList.add("busy");
+  mainBtn.disabled = true;
+  if (caret) caret.disabled = true;
+  inflightActions.add(key);
+  try {
+    const res = await postJSON("api/agent/action", body);
+    mainBtn.classList.remove("busy");
+    mainBtn.classList.add("done");
+    if (caret) caret.classList.add("done");
+    // Label truthfully: if the agent was mid-task the prompt is queued behind it, so
+    // don't claim it already started. Otherwise reflect where it's headed — a new
+    // session in the PR's repo, or this very session. Use the server's EFFECTIVE target
+    // (res.target), not the requested one: a GHES card degrades new-session to
+    // current-session server-side, so the requested 't' can overstate what actually ran.
+    const effTarget = (res && res.target) || t;
+    const label = res && res.queued
+      ? "Queued \u2014 starts after current task"
+      : (effTarget === "current-session" ? "Running in this session" : (d.doneLabel || "Requested"));
+    mainBtn.innerHTML = '<span class="cb-ico">' + ICONS.check + '</span><span class="cb-label">' + esc(label) + "</span>";
+  } catch (e) {
+    mainBtn.classList.remove("busy");
+    mainBtn.classList.add("failed");
+    mainBtn.disabled = false;
+    if (caret) caret.disabled = false;
+    mainBtn.innerHTML = '<span class="cb-ico">' + ICONS.x + '</span><span class="cb-label">' + esc(String((e && e.message) || "Failed")) + "</span>";
+    // Restore the original label after a beat so the user can retry. Track the timer + original on
+    // the element so a retry landing inside this window can cancel it (see the top of this function)
+    // instead of letting a stale timer overwrite the retry's outcome label.
+    mainBtn._cbRestore = {
+      original,
+      timer: setTimeout(() => { mainBtn.classList.remove("failed"); mainBtn.innerHTML = original; mainBtn._cbRestore = null; }, 3200),
+    };
+  } finally {
+    // Clear the pending key once the request settles. The button keeps its own done/failed
+    // state; a subsequent SSE re-render restores the default (now re-enabled) button.
+    inflightActions.delete(key);
+    // If an SSE 'state' event re-rendered this card mid-request, our done/failed feedback landed on
+    // the now-detached old nodes, and the visible replacement was rendered disabled while the key was
+    // still pending. Re-render so it reflects the just-cleared inflight state instead of staying stuck
+    // disabled until the next SSE refresh. When the split is still connected we keep the deliberate
+    // no-re-render behavior above so the inline confirmation survives.
+    //
+    // Only recover while the queue is showing. A split also goes disconnected when the user opens
+    // Accounts/Settings/Filters mid-request; those views have no replacement action button to unlock,
+    // and an unconditional render() there would rebuild the open form and discard text the user has
+    // not committed yet. goView() re-renders the queue when they navigate back, so nothing stays stuck.
+    if (!split.isConnected && view === "queue") { render(); }
+  }
+}
+
+// Close any open card-action dropdown and reset its caret. Called on outside click, Esc,
+// scroll, resize, and whenever an action fires.
+function closeCbMenus() {
+  document.querySelectorAll(".cb-menu").forEach((m) => {
+    // Menus are portaled to <body> while open (see openCbMenu). Return the menu to its
+    // owning split so it is torn down with the card on the next re-render instead of
+    // leaking as a detached <body> orphan; drop it outright if the split is already gone.
+    if (m.parentElement === document.body) {
+      const owner = m.__ownerSplit;
+      if (owner && owner.isConnected) owner.appendChild(m);
+      else m.remove();
+    }
+    m.hidden = true;
+  });
+  document.querySelectorAll('.cb-caret[aria-expanded="true"]').forEach((c) => c.setAttribute("aria-expanded", "false"));
+}
+
+// Open a split-button dropdown as a viewport-fixed overlay. The menu is portaled to <body>
+// before positioning: the .view element runs a forward-filling keyframe animation
+// (animation-fill-mode: both) whose frames include a transform, and a filling transform
+// animation establishes a containing block for position:fixed descendants in Blink/WebKit.
+// Left inside .view, the menu's fixed coordinates resolve against .view (which starts below
+// the sticky topbar) rather than the viewport, dropping the menu ~1 topbar-height below the
+// button. Anchoring it to <body> (which has no transformed ancestor) restores viewport-
+// relative fixed positioning. We measure the caret and menu, left-align the menu under the
+// split, then flip up/right when it would spill past the viewport.
+function openCbMenu(split, caret, menu) {
+  const splitRect = split.getBoundingClientRect();
+  const caretRect = caret.getBoundingClientRect();
+  // Portal to <body> so no transformed/filtered ancestor governs the fixed menu. Remember
+  // the owning split so closeCbMenus can restore it.
+  menu.__ownerSplit = split;
+  document.body.appendChild(menu);
+  // Reveal off-paint so offsetWidth/Height are measurable before we place it.
+  menu.hidden = false;
+  menu.style.visibility = "hidden";
+  const mw = menu.offsetWidth;
+  const mh = menu.offsetHeight;
+  const pad = 8;
+  const vw = document.documentElement.clientWidth || window.innerWidth;
+  const vh = document.documentElement.clientHeight || window.innerHeight;
+
+  let left = splitRect.left;
+  if (left + mw > vw - pad) left = vw - mw - pad;
+  if (left < pad) left = pad;
+
+  // Prefer below the caret; flip above when it would overflow the bottom and there is
+  // more room up top.
+  let top = caretRect.bottom + 5;
+  if (top + mh > vh - pad && caretRect.top - mh - 5 > pad) top = caretRect.top - mh - 5;
+
+  menu.style.left = Math.round(left) + "px";
+  menu.style.top = Math.round(top) + "px";
+  menu.style.visibility = "";
+  caret.setAttribute("aria-expanded", "true");
+  // Move focus into the menu so keyboard users land on the choices (the menu was portaled to
+  // the end of <body>, so a bare Tab would otherwise skip past it in document order). Remember
+  // the caret so Escape/Tab can restore focus to it when the menu closes (see the keydown
+  // handler wired in render()).
+  menu.__ownerCaret = caret;
+  const firstItem = menu.querySelector(".cb-menu-item");
+  if (firstItem && typeof firstItem.focus === "function") firstItem.focus();
+}
+
 // Persist one account's repos without a full refresh/broadcast (the editor owns
 // the DOM and a re-render would interrupt typing). The editor is optimistic, so a
 // failed save reverts to the previous draft and shows the API error beside the row.
@@ -815,7 +1181,14 @@ function persistAccountRepos(id, previousRepos) {
   repoSaveSeqByAcct[id] = seq;
   return postJSON("api/account/repos", { id, repos }).then((data) => {
     if (repoSaveSeqByAcct[id] !== seq) return data;
-    if (data && data.dashboard) { state = data.dashboard; prefs = data.prefs; }
+    // Gate the adoption on seq like every other response path (load/withRefresh/SSE/goView): a save
+    // that resolves after a newer refresh or pushed snapshot already applied must not roll state
+    // (and lastAppliedSeq via adoptAppliedRev) backward. The repoSaveSeqByAcct guard above only
+    // orders saves for this account against each other, not against those lastAppliedSeq-keyed paths.
+    if (data && data.dashboard) {
+      const dseq = data.dashboard.seq;
+      if (typeof dseq !== "number" || dseq > lastAppliedSeq) { state = data.dashboard; prefs = data.prefs; adoptAppliedRev(); }
+    }
     repoErr(id, "");
     return data;
   }).catch((e) => {
@@ -850,7 +1223,15 @@ async function rescanAccounts() {
   try {
     const res = await fetch("api/accounts");
     const data = await readJson(res);
-    state = data.dashboard; prefs = data.prefs; loadError = null;
+    // Gate on seq like every other response path: if a newer refresh/SSE snapshot applied while this
+    // rescan was in flight, adopting it would roll state (and lastAppliedSeq) backward. When it is the
+    // newest, adoptAppliedRev() also advances the revision so a delayed lower-seq SSE partial from an
+    // earlier recompute can't be accepted after this /api/accounts response and roll the queue back.
+    const dseq = data.dashboard && data.dashboard.seq;
+    if (typeof dseq !== "number" || dseq > lastAppliedSeq) {
+      state = data.dashboard; prefs = data.prefs; loadError = null;
+      adoptAppliedRev();
+    }
   } catch (e) {
     loadError = String((e && e.message) || e);
   } finally { rescanning = false; render(); }
@@ -870,6 +1251,19 @@ function goView(next, forward) {
   if (view === "accounts" && next !== "accounts") { for (const k in editingByAcct) editingByAcct[k] = -1; }
   prevRank = RANK[view] || 0;
   view = next;
+  // Returning to the queue is the moment to fold in any dashboard that streamed in while
+  // the user was editing a form on another view.
+  if (next === "queue" && pendingState) {
+    const payload = pendingState; pendingState = null;
+    // The stash can be older than a POST response (repo save, prefs) that advanced lastAppliedSeq
+    // while the user was on the form: fold it in only when it is strictly newer than what we
+    // already show, mirroring applyPushedState's gate. (No seq → legacy payload, apply as before.)
+    const seq = payload.dashboard && payload.dashboard.seq;
+    if (typeof seq !== "number" || seq > lastAppliedSeq) {
+      state = payload.dashboard; prefs = payload.prefs;
+      adoptAppliedRev();
+    }
+  }
   render(forward === undefined ? undefined : forward);
 }
 
@@ -877,9 +1271,225 @@ function goView(next, forward) {
 
 function pill(s) { return '<span class="pill ' + (s.tone || "muted") + '">' + esc(s.label) + "</span>"; }
 
-function prCard(item) {
+// Encode the PR descriptor onto the split container as data-* attributes so the click
+// handler can post it back to /api/agent/action without another lookup. The whole card
+// body is a link, so buttons live in a sibling row (not nested in the <a>, which is
+// invalid). The main button opens a new session in the PR's repo; the caret opens a menu
+// to run the same action in the current session instead.
+function cardActionBtn(pr, a) {
+  const data =
+    ' data-kind="' + esc(a.kind) + '"' +
+    ' data-done-label="' + esc(a.done || "Requested") + '"' +
+    ' data-pr-url="' + esc(pr.url || "") + '"' +
+    ' data-pr-number="' + esc(pr.number) + '"' +
+    ' data-pr-repo="' + esc(pr.repository || "") + '"' +
+    ' data-pr-title="' + esc(pr.title || "") + '"' +
+    ' data-pr-author="' + esc(pr.author || "") + '"';
+  const icon = a.icon ? '<span class="cb-ico">' + a.icon + "</span>" : "";
+  // If a click's POST is still in flight when this card re-renders (e.g. from a streamed
+  // 'state' event), keep the replacement split disabled so it can't re-queue the same action.
+  const inflight = inflightActions.has(actionKey(a.kind, pr.url || "", pr.repository || "", pr.number));
+  const busyCls = inflight ? " busy" : "";
+  const disabledAttr = inflight ? " disabled" : "";
+  // open_pr_session can only target github.com, so the server degrades a new-session action on a
+  // GHES/EMU (non-dotcom) PR to the current session. Detect that here from the server-resolved PR
+  // url and don't advertise "Open in new session" for those cards: render a single current-session
+  // button so enterprise users see the honest behavior up front instead of discovering it on click.
+  const isDotcom = /^https:\/\/github\.com\//i.test(pr.url || "");
+  const mainTarget = isDotcom ? "new-session" : "current-session";
+  // aria-live="polite" turns the main button into a live region: onCardAction rewrites its label
+  // in place to "Queued\u2026", "Running\u2026", or an error, but the button is disabled while the
+  // request runs so focus may move away. Announcing politely surfaces that async result to screen
+  // readers even after the button loses focus. A full re-render swaps in a fresh element with its
+  // initial label, which does not announce, so only the in-place status updates are spoken.
+  const mainBtn = '<button type="button" class="card-btn cb-main' + busyCls + '" data-target="' + mainTarget + '" aria-live="polite"' + disabledAttr + '>' +
+    icon + '<span class="cb-label">' + esc(a.label) + "</span></button>";
+  // A GHES/EMU card has only the current-session target, so render the lone main button with no
+  // caret or menu — there is nothing to choose and no unsupported option to mislead with.
+  if (!isDotcom) {
+    return '<div class="cb-split"' + data + '>' + mainBtn + "</div>";
+  }
+  return '<div class="cb-split"' + data + '>' +
+    mainBtn +
+    '<button type="button" class="card-btn cb-caret" aria-haspopup="true" aria-expanded="false"' +
+      ' title="Choose where to run" aria-label="Choose where to run ' + esc(a.label) + '"' + disabledAttr + '>' +
+      ICONS.chev + "</button>" +
+    '<div class="cb-menu" role="menu" hidden>' +
+      cbMenuItem("new-session", ICONS.layers, "Open in new session", "In the PR\u2019s repo") +
+      cbMenuItem("current-session", ICONS.chat, "Run in current session", "Here, in this conversation") +
+    "</div>" +
+  "</div>";
+}
+
+function cbMenuItem(target, icon, label, sub) {
+  return '<button type="button" class="cb-menu-item" role="menuitem" tabindex="-1" data-target="' + esc(target) + '">' +
+    '<span class="cb-mi-ico">' + icon + "</span>" +
+    '<span class="cb-mi-text"><span class="cb-mi-label">' + esc(label) + "</span>" +
+    '<span class="cb-mi-sub">' + esc(sub) + "</span></span></button>";
+}
+
+// Shared action-button descriptors, so a given agent action's label, confirmation text, and
+// icon stay identical wherever it is offered. "Resolve" and "Address feedback" are the same
+// underlying agent action (address-feedback): both work the unresolved review threads and
+// resolve them; they differ only in the surface wording (a signal pill vs. a lane).
+var CARD_ACTIONS = {
+  test: { kind: "test", label: "Test", done: "Testing requested", icon: ICONS.check },
+  review: { kind: "review", label: "Review", done: "Review requested", icon: ICONS.eye },
+  resolveConflicts: { kind: "resolve-conflicts", label: "Resolve conflicts", done: "Sent to agent", icon: ICONS.merge },
+  reviewDebt: { kind: "review-debt", label: "Address review", done: "Sent to agent", icon: ICONS.eye },
+  fixCi: { kind: "fix-ci", label: "Evaluate CI failures", done: "Sent to agent", icon: ICONS.pulse },
+  discussReview: { kind: "discuss-review", label: "Discuss review", done: "Sent to agent", icon: ICONS.chat },
+  addressFeedback: { kind: "address-feedback", label: "Address feedback", done: "Sent to agent", icon: ICONS.check },
+  resolveFeedback: { kind: "address-feedback", label: "Resolve", done: "Sent to agent", icon: ICONS.check },
+};
+
+// Combine several action lists into one, first-wins by kind, so a card that qualifies for the
+// same underlying action twice (e.g. an "Unresolved feedback" lane card that also carries the
+// "N unresolved" signal) shows a single button. Returns null when nothing applies, matching the
+// "no actions" contract the card renderers expect.
+function mergeActions() {
+  var out = [], seen = {};
+  for (var i = 0; i < arguments.length; i++) {
+    var list = arguments[i];
+    if (!list) continue;
+    for (var j = 0; j < list.length; j++) {
+      var a = list[j];
+      if (!a || seen[a.kind]) continue;
+      seen[a.kind] = true;
+      out.push(a);
+    }
+  }
+  return out.length ? out : null;
+}
+
+// Signal-driven actions available on ANY card, keyed off the danger pills the model attaches.
+// Wherever a card shows one of these signals it also offers the matching action, so e.g. every
+// card with a "merge conflicts" pill gets a Resolve conflicts button and every card with a
+// "review debt" pill gets Address review. This is layered onto every surface by mergeActions, so a
+// labelled card never renders without its button. Signal labels come from model.mjs and vary by
+// surface:
+//   * conflicts            -> "merge conflicts"
+//   * CI failing           -> "CI failing[ \u00b7 N checks]"
+//   * unresolved feedback  -> "{n} unresolved" (createAttentionSignals), "Unresolved feedback"
+//                             (the bucket / focus-exclusion reason label), "{n} unresolved thread"
+//                             (reviewSignal), or the "resolve feedback" action pill
+//   * review debt          -> the serialized reviewDebt flag (isReviewDebtItem), with the
+//                             "review debt" pill (constants.mjs reviewDebtSignalLabel) as fallback
+//   * re-review            -> "re-review" (actionSignal)
+// The review-oriented pills ("review debt" / "re-review") are surfaced on every card regardless of
+// ownership: the user asked that a labelled card always carry its action, and a self-review of your
+// own aged PR before others weigh in is still useful.
+function signalActions(item) {
+  // Only app-computed semantic signals authorize actions. Skip raw GitHub label pills (kind
+  // "repo-label", set in model.mjs): a repo can define a label literally named "merge conflicts",
+  // "re-review", or "3 unresolved", and matching that presentation text would expose a destructive
+  // action the PR's structured state does not actually warrant.
+  var sigs = ((item && item.signals) || []).filter(function (s) { return s && s.kind !== "repo-label"; });
+  function hasSig(re) { return sigs.some(function (s) { return s && re.test(s.label || ""); }); }
+  var out = [];
+  if (hasSig(/conflict/i)) out.push(CARD_ACTIONS.resolveConflicts);
+  if (hasSig(/^CI failing/i)) out.push(CARD_ACTIONS.fixCi);
+  if (hasSig(/unresolved|resolve feedback/i)) out.push(CARD_ACTIONS.resolveFeedback);
+  // Detect review debt via isReviewDebtItem (the serialized reviewDebt flag OR the pill), not the
+  // pill alone: signalsFor caps a card at four pills and oldFirstSignal() emits "review debt" last,
+  // so a stacked card (release + regression + CI + ...) can lose the visible pill yet still be debt.
+  // Keying off the flag keeps Address review + Discuss review on every review-debt card.
+  if (isReviewDebtItem(item)) { out.push(CARD_ACTIONS.reviewDebt); out.push(CARD_ACTIONS.discussReview); }
+  if (hasSig(/^re-review$/i)) out.push(CARD_ACTIONS.review);
+  return out;
+}
+
+// Which action buttons a "Needs attention" or "Your PRs outside" card gets. A review-debt card
+// (aged without an approving review) offers Address review (a fresh review) plus Discuss review
+// (talk through existing feedback) — on every card carrying the debt, including your own, so a
+// review-debt card is never actionless. Focus cards carry a reviewDebt flag (isReviewDebtItem)
+// because signalsFor truncates the displayed pills, so the debt is detected even when the "review
+// debt" pill is not among the visible signals. For your own PR, changes requested takes precedence:
+// the ball is in your court, so those cards offer Address feedback + Discuss review (mirroring the
+// "Respond here" For You pick). Someone else's non-debt PR offers Test + Review. Signal-driven
+// actions (conflicts, CI, unresolved) are layered on for every card, since fixing those is the
+// author's job.
+function focusCardActions(item) {
+  var pr = (item && item.pr) || {};
+  var ctx = [];
+  var sig = signalActions(item);
+  if (pr.isMine) {
+    if (isAuthorResponseItem(item)) {
+      ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+      // Changes requested takes precedence over review debt on your own PR: you respond, you don't
+      // start a review of your own aged PR. signalActions now layers review-debt off the serialized
+      // flag (an aged, non-approved PR is debt even with changes requested), so drop just that action
+      // here to keep the precedence. Conflict / CI / unresolved signals still layer normally.
+      sig = sig.filter(function (a) { return a.kind !== CARD_ACTIONS.reviewDebt.kind; });
+    } else if (isReviewDebtItem(item)) {
+      ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
+    }
+  } else if (isReviewDebtItem(item)) {
+    ctx = [CARD_ACTIONS.reviewDebt, CARD_ACTIONS.discussReview];
+  } else {
+    ctx = [CARD_ACTIONS.test, CARD_ACTIONS.review];
+  }
+  return mergeActions(ctx, sig);
+}
+
+// "For you" picks that carry an actionable label get an interactive split button. The pick's
+// action label maps to the matching agent action; "Respond here" (your PR has feedback waiting)
+// offers Address feedback + Discuss review. Signal-driven actions are layered on, so a pick that
+// also carries a problem signal (conflicts/CI/unresolved) still surfaces it, deduped by kind.
+function forYouCardActions(item) {
+  var action = item && item.action;
+  var ctx = [];
+  if (action === "Resolve conflicts") ctx = [CARD_ACTIONS.resolveConflicts];
+  else if (action === "Fix CI") ctx = [CARD_ACTIONS.fixCi];
+  else if (action === "Review this") ctx = [CARD_ACTIONS.review];
+  else if (action === "Respond here") ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+  return mergeActions(ctx, signalActions(item));
+}
+
+// Which action buttons a breakdown-lane card gets, keyed on the lane's signal bucket. Review/Test
+// only make sense for a PR the viewer would review, so they are withheld on the viewer's own PRs.
+// The "Merge conflicts" lane is covered by signalActions alone: createAttentionSignals hoists that
+// pill right after the action signal so it always survives signalsFor's top-4 cap. The "CI failing"
+// pill is NOT hoisted, so on a stacked PR (release + regression + base) it can be pushed past the
+// top 4 and dropped, leaving signalActions with no CI pill to key off. So the CI lane is mapped
+// explicitly here (like "Unresolved feedback"); fixing CI is the author's job, so it is offered on
+// your own PRs too rather than gated on !isMine.
+function laneCardActions(lane, item) {
+  var pr = (item && item.pr) || {};
+  var label = lane && lane.label;
+  var ctx = [];
+  if (label === "Needs review") {
+    ctx = pr.isMine ? [] : [CARD_ACTIONS.test, CARD_ACTIONS.review];
+  } else if (label === "Re-review needed" || label === "Review started" || label === "Quick wins") {
+    ctx = pr.isMine ? [] : [CARD_ACTIONS.review];
+  } else if (label === "Unresolved feedback") {
+    ctx = [CARD_ACTIONS.addressFeedback, CARD_ACTIONS.discussReview];
+  } else if (label === "CI failing") {
+    ctx = [CARD_ACTIONS.fixCi];
+  }
+  return mergeActions(ctx, signalActions(item));
+}
+
+function isReviewDebtItem(item) {
+  if (!item) return false;
+  if (item.reviewDebt) return true;
+  // Fall back to the pill only for an app-computed signal, never a raw GitHub label named "review
+  // debt" (kind "repo-label"), so a label can't spoof the Address review / Discuss review actions.
+  return (item.signals || []).some((s) => s && s.kind !== "repo-label" && s.label === "review debt");
+}
+
+// Your own PR is "author response" when a reviewer requested changes (pr.review.state), or when the
+// "Your PRs outside Needs attention" lane tagged the card with the "Author response" exclusion pill.
+// Either way the ball is in your court, so focusCardActions offers Address feedback + Discuss review.
+function isAuthorResponseItem(item) {
+  var pr = (item && item.pr) || {};
+  if (pr.review && pr.review.state === "changes_requested") return true;
+  return ((item && item.signals) || []).some((s) => s && /^Author response$/i.test(s.label || ""));
+}
+
+function prCard(item, actions) {
   const pr = item.pr;
-  return '<a class="card" href="' + esc(pr.url) + '" target="_blank" rel="noreferrer">' +
+  const main = '<a class="card-main" href="' + esc(pr.url) + '" target="_blank" rel="noreferrer">' +
     '<div class="card-top"><div class="card-title">' + esc(pr.title) + "</div></div>" +
     '<div class="card-sub">' +
       avatarTag(pr.authorAvatarUrl, pr.author, "avatar", 36) +
@@ -889,6 +1499,10 @@ function prCard(item) {
     (item.reason ? '<div class="reason">' + esc(item.reason) + "</div>" : "") +
     ((item.signals && item.signals.length) ? '<div class="pills">' + item.signals.map(pill).join("") + "</div>" : "") +
   "</a>";
+  const acts = (actions && actions.length)
+    ? '<div class="card-actions">' + actions.map((a) => cardActionBtn(pr, a)).join("") + "</div>"
+    : "";
+  return '<div class="card">' + main + acts + "</div>";
 }
 
 function issueCard(item) {
@@ -918,7 +1532,7 @@ function laneIcon(lane) {
 }
 
 function laneHtml(lane) {
-  const items = (lane.items || []).map((it) => (it.pr ? prCard(it) : issueCard(it))).join("");
+  const items = (lane.items || []).map((it) => (it.pr ? prCard(it, laneCardActions(lane, it)) : issueCard(it))).join("");
   const tone = lane.tone || "muted";
   const repos = new Set((lane.items || []).map((it) => (it.pr || it.issue || {}).repository).filter(Boolean));
   const repoLabel = repos.size + (repos.size === 1 ? " repo" : " repos");
@@ -1009,10 +1623,15 @@ function collapsibleSect(opts) {
 function queuePanel(opts) {
   const items = opts.items || [];
   const n = items.length;
-  const capped = typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
+  // exactCount: the shown items are not a prefix of the source list (e.g. the focus lane keeps
+  // review-debt cards that spill past the cap), so "top N of total" would be false — higher-ranked
+  // cards were skipped. Report the honest shown count instead; the uncapped total still shows in
+  // the header summary badge.
+  const capped = !opts.exactCount && typeof opts.cappedTotal === "number" && opts.cappedTotal > n;
   const metric = capped ? "top " + n + " of " + opts.cappedTotal : n + " shown";
+  const cardActions = typeof opts.cardActions === "function" ? opts.cardActions : null;
   const body = n
-    ? '<div class="grid">' + items.map((it) => (it.pr ? prCard(it) : issueCard(it))).join("") + "</div>"
+    ? '<div class="grid">' + items.map((it) => (it.pr ? prCard(it, cardActions ? cardActions(it) : null) : issueCard(it))).join("") + "</div>"
     : '<div class="lane-empty">' + esc(opts.emptyText || "Nothing here right now.") + "</div>";
   const collapsed = collapsedLanes.has(opts.id);
   return '<section class="qpanel collapsible' + (collapsed ? " collapsed" : "") + '" data-q="' + esc(opts.id) + '">' +
@@ -1040,6 +1659,7 @@ function reviewBoardHtml() {
       id: "for-you", title: "For you", tone: "accent", icon: ICONS.sparkle,
       subtitle: "Your highest-leverage actions across every repo, pulled to the top of the queue.",
       items: att.forMe.slice(0, 6), cappedTotal: att.forMe.length,
+      cardActions: forYouCardActions,
     });
   }
 
@@ -1047,7 +1667,8 @@ function reviewBoardHtml() {
   html += queuePanel({
     id: "needs-attention", title: "Needs attention", tone: "danger", icon: ICONS.alertSm,
     subtitle: "One actionable row per PR with fresh activity, waiting on a review or a merge.",
-    items: att.focus || [], cappedTotal: att.focusTotal,
+    items: att.focus || [], cappedTotal: att.focusTotal, exactCount: !!att.focusMixed,
+    cardActions: focusCardActions,
     emptyText: "Nothing is waiting on a reviewer right now \u00b7 anything blocked sits in the breakdown below.",
   });
 
@@ -1057,6 +1678,7 @@ function reviewBoardHtml() {
     id: "outside-focus", title: "Your PRs outside Needs attention", tone: "info", icon: ICONS.pr,
     subtitle: "Open non-draft PRs you authored that do not currently qualify for the focused queue.",
     items: (att.focusExclusions || []).slice(0, 10), cappedTotal: (att.focusExclusions || []).length,
+    cardActions: focusCardActions,
     emptyText: "None right now \u00b7 every open PR you authored is already in the queue or still in draft.",
   });
 
@@ -1071,7 +1693,7 @@ function reviewBoardHtml() {
       count: att.community.length,
       note: "external contributors \u00b7 " + repos.size + (repos.size === 1 ? " repo" : " repos"),
       subtitle: "Recently active external-contributor PRs, tracked apart from the core-team queue.",
-      body: '<div class="grid">' + att.community.map((it) => (it.pr ? prCard(it) : issueCard(it))).join("") + "</div>",
+      body: '<div class="grid">' + att.community.map((it) => (it.pr ? prCard(it, signalActions(it)) : issueCard(it))).join("") + "</div>",
     });
   }
 
@@ -1422,7 +2044,9 @@ function authPicker() {
 
 function render(forward) {
   app.removeAttribute("aria-busy");
-
+  // Drop any split-button menu we portaled to <body> before rebuilding the subtree, so an
+  // open menu never survives a re-render as a detached orphan carrying stale click handlers.
+  document.querySelectorAll("body > .cb-menu").forEach((m) => m.remove());
   if (loadError && !state) {
     app.innerHTML = topbarShell() +
       '<div class="state"><div class="ico">' + ICONS.alert + '</div><h2>Could not load</h2><p>' + esc(loadError) +
@@ -1450,7 +2074,6 @@ function render(forward) {
       '<button class="errbar-x" id="load-errbar-dismiss" type="button" title="Dismiss" aria-label="Dismiss">' + ICONS.x + "</button></div>"
     : "";
   app.innerHTML = topbarHtml() + banner + '<div class="viewport"><div class="view ' + dir + '">' + inner + "</div></div>";
-  app.classList.toggle("loading", refreshing);
   if (banner) {
     const bx = document.getElementById("load-errbar-dismiss");
     if (bx) bx.addEventListener("click", function () { loadError = null; render(); });
@@ -1748,6 +2371,66 @@ function wire() {
 
   document.querySelectorAll(".dismiss").forEach((b) =>
     b.addEventListener("click", (e) => { e.preventDefault(); e.stopPropagation(); dismissNotif(b.dataset.dismiss, b.closest(".notif-card")); }));
+
+  // Card action split buttons live in a sibling row of the card link, so stop the click
+  // from bubbling to any surrounding handler and never navigate. The main button runs the
+  // action at its own data-target: "new-session" for a github.com PR, or "current-session"
+  // for a GHES/EMU PR that can't open a sub-session (see cardActionBtn). The caret, present
+  // only on github.com cards, toggles a menu to pick new vs current session.
+  document.querySelectorAll(".cb-split").forEach((split) => {
+    const main = split.querySelector(".cb-main");
+    const caret = split.querySelector(".cb-caret");
+    const menu = split.querySelector(".cb-menu");
+    if (main) main.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      closeCbMenus();
+      onCardAction(split, main.dataset.target || "new-session");
+    });
+    if (caret && menu) caret.addEventListener("click", (e) => {
+      e.preventDefault(); e.stopPropagation();
+      const wasOpen = !menu.hidden;
+      closeCbMenus();
+      if (!wasOpen) openCbMenu(split, caret, menu);
+    });
+    // Menu keyboard model (ARIA menu-button pattern): the items use roving tabindex (-1) and are
+    // driven from here. Arrow keys move between choices, Home/End jump to the ends. Escape closes
+    // the menu and returns focus to the caret. Tab must NOT be trapped: it closes the menu and
+    // re-anchors focus on the in-flow caret (so focus never lands in the portaled-away <body>),
+    // but does not preventDefault, so the browser's native Tab then advances focus to the next
+    // element per the pattern. Enter/Space activate natively (buttons).
+    if (caret && menu) menu.addEventListener("keydown", (e) => {
+      const items = Array.prototype.slice.call(menu.querySelectorAll(".cb-menu-item"));
+      if (!items.length) return;
+      const i = items.indexOf(document.activeElement);
+      if (e.key === "ArrowDown") { e.preventDefault(); items[(i + 1 + items.length) % items.length].focus(); }
+      else if (e.key === "ArrowUp") { e.preventDefault(); items[(i - 1 + items.length) % items.length].focus(); }
+      else if (e.key === "Home") { e.preventDefault(); items[0].focus(); }
+      else if (e.key === "End") { e.preventDefault(); items[items.length - 1].focus(); }
+      else if (e.key === "Escape") { e.preventDefault(); closeCbMenus(); caret.focus(); }
+      else if (e.key === "Tab") { closeCbMenus(); caret.focus(); }
+    });
+    split.querySelectorAll(".cb-menu-item").forEach((mi) =>
+      mi.addEventListener("click", (e) => {
+        e.preventDefault(); e.stopPropagation();
+        closeCbMenus();
+        onCardAction(split, mi.dataset.target);
+      }));
+  });
+  // Dismiss any open action menu on an outside click or Escape. Bound once so re-renders
+  // don't stack handlers; the caret/main/menu handlers stopPropagation, so this only
+  // fires for clicks elsewhere.
+  if (!cbMenuBound) {
+    cbMenuBound = true;
+    document.addEventListener("click", () => closeCbMenus());
+    document.addEventListener("keydown", (e) => { if (e.key === "Escape") closeCbMenus(); });
+    // A fixed menu doesn't track the caret once the page scrolls or the window resizes,
+    // so dismiss rather than let it drift away from its button. Capture-phase scroll on
+    // the document catches scrolling inside any nested container, not just the window.
+    document.addEventListener("scroll", () => closeCbMenus(), true);
+    if (typeof window !== "undefined" && window.addEventListener) {
+      window.addEventListener("resize", () => closeCbMenus());
+    }
+  }
   const da = document.getElementById("dismiss-all"); if (da) da.addEventListener("click", dismissAll);
   const r1 = document.getElementById("restore-notifs"); if (r1) r1.addEventListener("click", restoreNotifs);
   const r2 = document.getElementById("restore-notifs2"); if (r2) r2.addEventListener("click", restoreNotifs);
@@ -1786,9 +2469,20 @@ function wireAccounts() {
   });
 }
 
+// Live updates over Server-Sent Events. 'progress' drives the deterministic top bar as
+// repos are fetched; 'state' streams partial and final dashboards (applied straight into
+// the UI, guarded against clobbering an active edit); 'refresh' is a legacy nudge kept for
+// back-compat that re-pulls /api/state, guarded (via onSseRefresh) to the queue view so it
+// can't rebuild an open form and discard uncommitted text.
 try {
   const es = new EventSource("events");
-  es.addEventListener("refresh", () => load());
+  es.addEventListener("progress", (e) => {
+    try { const p = JSON.parse(e.data); setProgress(p.done, p.total); } catch {}
+  });
+  es.addEventListener("state", (e) => {
+    try { applyPushedState(JSON.parse(e.data)); } catch {}
+  });
+  es.addEventListener("refresh", onSseRefresh);
 } catch {}
 
 load();

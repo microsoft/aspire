@@ -7,7 +7,7 @@
 // github.mjs; durable preferences in state.mjs.
 
 import { joinSession, createCanvas, CanvasError } from "@github/copilot-sdk/extension";
-import { startInstance, stopInstance, forceRefresh, getDashboard, rescanAccounts, toggleAccount, setReposFor } from "./server.mjs";
+import { startInstance, stopInstance, forceRefresh, getDashboard, rescanAccounts, toggleAccount, setReposFor, setAgentSend } from "./server.mjs";
 import { loadPrefs, savePrefs } from "./state.mjs";
 import { accountId } from "./accounts.mjs";
 
@@ -160,4 +160,52 @@ const session = await joinSession({
       },
     }),
   ],
+});
+
+// Bridge card action buttons (Test / Review / Resolve conflicts / Address review) to
+// the main session.
+//
+// Track whether the main session is mid-turn so a click can tell the user, truthfully,
+// whether their request starts now or queues behind the current task. The agent goes
+// busy at the start of an assistant turn and idle when the session settles. This is the
+// only honest signal available: an extension cannot spawn an independent sub-session
+// (that is an agent tool), so a queued prompt genuinely waits for the current turn.
+let agentBusy = false;
+// Sends that have entered setAgentSend but not yet reached session.send(). Incremented
+// synchronously before the first await so two card clicks that arrive close together can't
+// both read agentBusy===false while suspended in session.log() and each claim "starting now".
+let sendsInFlight = 0;
+session.on("assistant.turn_start", () => { agentBusy = true; });
+session.on("session.idle", () => { agentBusy = false; });
+
+// The loopback server builds the prompt plus a short log line and calls this to
+// (1) drop a visible breadcrumb on the session timeline and (2) post the prompt as a
+// user turn, so the agent opens the PR sub-session or does the interactive work. We
+// snapshot the busy flag *before* sending — session.send queues behind an in-flight
+// turn rather than interrupting it — and return it so the button labels itself
+// "Queued …" vs "Sent" instead of always claiming success.
+setAgentSend(async ({ prompt, log }) => {
+  // Decide queued/starting *synchronously* here, before any await. agentBusy alone races:
+  // when two actions fire nearly together, both suspend in the session.log() await below
+  // before either calls session.send(), so both would read agentBusy===false. Also treat a
+  // send already in flight as outstanding work the next click queues behind.
+  const queued = agentBusy || sendsInFlight > 0;
+  sendsInFlight++;
+  try {
+    if (log) {
+      // The breadcrumb is best-effort: a session.log() failure must NOT block session.send(),
+      // which carries the user's actual request. We still await it (so the breadcrumb, when it
+      // succeeds, lands before the queued/started prompt) but swallow any error and fall through
+      // to the send rather than rejecting the whole bridge and 500ing without queueing anything.
+      try {
+        await session.log(`Aspire Team App \u2014 ${log} (${queued ? "queued; starts after the current task" : "starting now"})`);
+      } catch {
+        // ignore — the timeline breadcrumb is cosmetic; the send below is what matters.
+      }
+    }
+    const messageId = await session.send({ prompt });
+    return { messageId, queued };
+  } finally {
+    sendsInFlight--;
+  }
 });
