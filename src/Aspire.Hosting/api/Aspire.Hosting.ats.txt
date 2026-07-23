@@ -236,8 +236,9 @@ Aspire.Hosting/Aspire.Hosting.Ats.CreateInteractionInputOptions # Optional confi
   Description?: string # Gets or sets the description for the input.
   Disabled?: boolean # Gets or sets a value indicating whether the input is disabled.
   EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description is rendered as Markdown.
+  FileFilter?: string # Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute.
   Label?: string # Gets or sets the label for the input. Defaults to the input name when not specified.
-  MaxFileSize?: number # Gets or sets the maximum file size in bytes for file chooser inputs.
+  MaxFileSize?: number # Gets or sets the maximum file size in bytes for file inputs.
   MaxLength?: number # Gets or sets the maximum length for text inputs.
   Placeholder?: string # Gets or sets the placeholder text for the input.
   Required?: boolean # Gets or sets a value indicating whether the input is required.
@@ -324,6 +325,7 @@ Aspire.Hosting/Aspire.Hosting.InteractionInput # Represents an input for an inte
   Description?: string # Gets or sets the description for the input.
   Disabled: boolean # Gets or sets a value indicating whether a custom choice is allowed. Only used by `Choice` inputs.
   EnableDescriptionMarkdown?: boolean # Gets or sets a value indicating whether the description should be rendered as Markdown. Setting this to `true` allows a description to contain Markdown elements such as links, text decoration and lists.
+  FileFilter?: string # Gets or sets the file type filter for `File` inputs. Uses the same format as the HTML `accept` attribute, e.g. `".pem,.pfx,.crt"` or `"image/*"`. When set, the file picker restricts selectable files and the CLI validates that chosen files match.
   InputType: enum:Aspire.Hosting.InputType # Gets or sets the type of the input.
   Label?: string # Gets or sets the label for the input. If not specified, the name will be used as the label.
   MaxFileSize?: number # Gets or sets the maximum file size in bytes for `File` inputs. If not specified, the server applies the configured upload limit (default 100 MB). When specified, the value is capped at the server-side upload limit.

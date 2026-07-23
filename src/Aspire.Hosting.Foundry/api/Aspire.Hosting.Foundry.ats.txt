@@ -33,29 +33,30 @@ Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentOptions # Options that 
   EnvironmentVariables?: Aspire.Hosting/Dict<string,string> # Environment variables to set on the hosted agent container at runtime. Entries with the same key as an existing environment variable overwrite it.
   Memory?: number # Memory allocation for each hosted agent instance, in GiB. Must be between 1 and 7 in increments of 0.5 and equal to twice the CPU value. When not set, the hosted agent default memory allocation is used.
   Metadata?: Aspire.Hosting/Dict<string,string> # Additional metadata key/value pairs to attach to the hosted agent definition. Entries with the same key as an existing metadata entry overwrite it.
-  Protocols?: Aspire.Hosting/List<Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentProtocolVersion> # Protocol versions that the hosted agent container supports for ingress communication. When not set, the hosted agent default responses protocol is used.
-Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentProtocolVersion # A protocol and version supported by a Microsoft Foundry hosted agent container.
-  Protocol: string # The protocol name, such as `responses` or `invocations`.
-  Version: string # The protocol version, such as `1.0.0`.
 
 # Enum Types
+enum:Aspire.Hosting.Foundry.HostedAgentProtocol = Responses | Invocations
 enum:Aspire.Hosting.FoundryRole = CognitiveServicesOpenAIContributor | CognitiveServicesOpenAIUser | CognitiveServicesUser
 
 # Exported Values
-FoundryModels.Anthropic.ClaudeHaiku45: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-haiku-4-5","Version":"20251001","Format":"Anthropic"}
+FoundryModels.Anthropic.ClaudeFable5: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-fable-5","Version":"1","Format":"Anthropic"}
+FoundryModels.Anthropic.ClaudeHaiku45: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-haiku-4-5","Version":"2","Format":"Anthropic"}
+FoundryModels.Anthropic.ClaudeMythos5: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-mythos-5","Version":"1","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeMythosPreview: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-mythos-preview","Version":"1","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeOpus41: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-1","Version":"20250805","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeOpus45: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-5","Version":"20251101","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeOpus46: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-6","Version":"1","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeOpus47: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-7","Version":"1","Format":"Anthropic"}
-FoundryModels.Anthropic.ClaudeOpus48: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-8","Version":"1","Format":"Anthropic"}
+FoundryModels.Anthropic.ClaudeOpus48: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-opus-4-8","Version":"2","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeSonnet45: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-sonnet-4-5","Version":"20250929","Format":"Anthropic"}
 FoundryModels.Anthropic.ClaudeSonnet46: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-sonnet-4-6","Version":"1","Format":"Anthropic"}
+FoundryModels.Anthropic.ClaudeSonnet5: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"claude-sonnet-5","Version":"2","Format":"Anthropic"}
 FoundryModels.BlackForestLabs.Flux11Pro: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"FLUX-1.1-pro","Version":"1","Format":"Black Forest Labs"}
 FoundryModels.BlackForestLabs.Flux1KontextPro: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"FLUX.1-Kontext-pro","Version":"1","Format":"Black Forest Labs"}
 FoundryModels.BlackForestLabs.Flux2Flex: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"FLUX.2-flex","Version":"1","Format":"Black Forest Labs"}
 FoundryModels.BlackForestLabs.Flux2Pro: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"FLUX.2-pro","Version":"1","Format":"Black Forest Labs"}
 FoundryModels.Cohere.CohereCommandA: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"cohere-command-a","Version":"4","Format":"Cohere"}
+FoundryModels.Cohere.CohereCommandAPlus052026: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Cohere-command-a-plus-05-2026","Version":"1","Format":"Cohere"}
 FoundryModels.Cohere.CohereEmbedV3English: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Cohere-embed-v3-english","Version":"1","Format":"Cohere"}
 FoundryModels.Cohere.CohereEmbedV3Multilingual: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Cohere-embed-v3-multilingual","Version":"1","Format":"Cohere"}
 FoundryModels.Cohere.CohereRerankV40Fast: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Cohere-rerank-v4.0-fast","Version":"2","Format":"Cohere"}
@@ -64,6 +65,7 @@ FoundryModels.Cohere.EmbedV40: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Fou
 FoundryModels.DeepSeek.DeepSeekR1: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-R1","Version":"1","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekR10528: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-R1-0528","Version":"1","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekV30324: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V3-0324","Version":"1","Format":"DeepSeek"}
+FoundryModels.DeepSeek.DeepSeekV31: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V3.1","Version":"1","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekV32: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V3.2","Version":"1","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekV32Speciale: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V3.2-Speciale","Version":"1","Format":"DeepSeek"}
 FoundryModels.DeepSeek.DeepSeekV4Flash: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"DeepSeek-V4-Flash","Version":"2026-04-23","Format":"DeepSeek"}
@@ -75,9 +77,11 @@ FoundryModels.Local.GptOss20b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Fou
 FoundryModels.Local.Ministral33bInstruct2512: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"ministral-3-3b-instruct-2512","Version":"1","Format":"Microsoft"}
 FoundryModels.Local.Mistral7bV02: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-7b-v0.2","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.MistralNemo12bInstruct: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-nemo-12b-instruct","Version":"1","Format":"Microsoft"}
-FoundryModels.Local.NemotronSpeechStreamingEn06b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"nemotron-speech-streaming-en-0.6b","Version":"3","Format":"Microsoft"}
+FoundryModels.Local.Nemotron35AsrStreaming06b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"nemotron-3.5-asr-streaming-0.6b","Version":"2","Format":"Microsoft"}
+FoundryModels.Local.NemotronSpeechStreamingEn06b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"nemotron-speech-streaming-en-0.6b","Version":"1","Format":"Microsoft"}
 FoundryModels.Local.NemotronSpeechStreamingEs06b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"nemotron-speech-streaming-es-0.6b","Version":"1","Format":"Microsoft"}
 FoundryModels.Local.Olmo37bInstruct: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"olmo-3-7b-instruct","Version":"1","Format":"Microsoft"}
+FoundryModels.Local.ParakeetTdt06bV2: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"parakeet-tdt-0.6b-v2","Version":"1","Format":"Microsoft"}
 FoundryModels.Local.Phi35Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"phi-3.5-mini","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.Phi3Mini128k: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"phi-3-mini-128k","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.Phi3Mini4k: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"phi-3-mini-4k","Version":"2","Format":"Microsoft"}
@@ -91,6 +95,7 @@ FoundryModels.Local.Qwen257b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Foun
 FoundryModels.Local.Qwen25Coder05b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen2.5-coder-0.5b","Version":"4","Format":"Microsoft"}
 FoundryModels.Local.Qwen25Coder14b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen2.5-coder-14b","Version":"4","Format":"Microsoft"}
 FoundryModels.Local.Qwen25Coder15b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen2.5-coder-1.5b","Version":"4","Format":"Microsoft"}
+FoundryModels.Local.Qwen25Coder3b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen2.5-coder-3b","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.Qwen25Coder7b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen2.5-coder-7b","Version":"4","Format":"Microsoft"}
 FoundryModels.Local.Qwen306b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3-0.6b","Version":"2","Format":"Microsoft"}
 FoundryModels.Local.Qwen314b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"qwen3-14b","Version":"2","Format":"Microsoft"}
@@ -110,7 +115,8 @@ FoundryModels.Local.Qwen3Vl8bInstruct: Aspire.Hosting.Foundry/Aspire.Hosting.Fou
 FoundryModels.Local.Smollm33b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"smollm3-3b","Version":"1","Format":"Microsoft"}
 FoundryModels.Meta.Llama3211BVisionInstruct: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Llama-3.2-11B-Vision-Instruct","Version":"6","Format":"Meta"}
 FoundryModels.Meta.Llama3290BVisionInstruct: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Llama-3.2-90B-Vision-Instruct","Version":"5","Format":"Meta"}
-FoundryModels.Meta.Llama4Maverick17B128EInstructFP8: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Llama-4-Maverick-17B-128E-Instruct-FP8","Version":"3","Format":"Meta"}
+FoundryModels.Meta.Llama3370BInstruct: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Llama-3.3-70B-Instruct","Version":"10","Format":"Meta"}
+FoundryModels.Meta.Llama4Maverick17B128EInstructFP8: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Llama-4-Maverick-17B-128E-Instruct-FP8","Version":"4","Format":"Meta"}
 FoundryModels.Meta.Llama4Scout17B16EInstruct: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Llama-4-Scout-17B-16E-Instruct","Version":"4","Format":"Meta"}
 FoundryModels.Meta.MetaLlama31405BInstruct: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Meta-Llama-3.1-405B-Instruct","Version":"1","Format":"Meta"}
 FoundryModels.Meta.MetaLlama318BInstruct: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Meta-Llama-3.1-8B-Instruct","Version":"6","Format":"Meta"}
@@ -150,11 +156,12 @@ FoundryModels.MistralAI.MistralDocumentAi2505: Aspire.Hosting.Foundry/Aspire.Hos
 FoundryModels.MistralAI.MistralDocumentAi2512: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-document-ai-2512","Version":"1","Format":"Mistral AI"}
 FoundryModels.MistralAI.MistralLarge3: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"Mistral-Large-3","Version":"1","Format":"Mistral AI"}
 FoundryModels.MistralAI.MistralMedium2505: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-medium-2505","Version":"1","Format":"Mistral AI"}
+FoundryModels.MistralAI.MistralMedium35: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-medium-3-5","Version":"1","Format":"Mistral AI"}
+FoundryModels.MistralAI.MistralOcr40: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-ocr-4-0","Version":"1","Format":"Mistral AI"}
 FoundryModels.MistralAI.MistralSmall2503: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"mistral-small-2503","Version":"1","Format":"Mistral AI"}
 FoundryModels.OpenAI.CodexMini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"codex-mini","Version":"2025-05-16","Format":"OpenAI"}
 FoundryModels.OpenAI.ComputerUsePreview: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"computer-use-preview","Version":"2025-03-11","Format":"OpenAI"}
 FoundryModels.OpenAI.Davinci002: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"davinci-002","Version":"3","Format":"OpenAI"}
-FoundryModels.OpenAI.Gpt35Turbo16k: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-35-turbo-16k","Version":"0613","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt41: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-4.1","Version":"2025-04-14","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt41Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-4.1-mini","Version":"2025-04-14","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt41Nano: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-4.1-nano","Version":"2025-04-14","Format":"OpenAI"}
@@ -180,6 +187,9 @@ FoundryModels.OpenAI.Gpt54Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Fo
 FoundryModels.OpenAI.Gpt54Nano: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.4-nano","Version":"2026-03-17","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt54Pro: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.4-pro","Version":"2026-03-05","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt55: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.5","Version":"2026-04-24","Format":"OpenAI"}
+FoundryModels.OpenAI.Gpt56Luna: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.6-luna","Version":"2026-07-09","Format":"OpenAI"}
+FoundryModels.OpenAI.Gpt56Sol: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.6-sol","Version":"2026-07-09","Format":"OpenAI"}
+FoundryModels.OpenAI.Gpt56Terra: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5.6-terra","Version":"2026-07-09","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt5Chat: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5-chat","Version":"2025-10-03","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt5Codex: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5-codex","Version":"2025-09-15","Format":"OpenAI"}
 FoundryModels.OpenAI.Gpt5Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-5-mini","Version":"2025-08-07","Format":"OpenAI"}
@@ -188,8 +198,7 @@ FoundryModels.OpenAI.Gpt5Pro: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Foun
 FoundryModels.OpenAI.GptAudio: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-audio","Version":"2025-08-28","Format":"OpenAI"}
 FoundryModels.OpenAI.GptAudio15: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-audio-1.5","Version":"2026-02-23","Format":"OpenAI"}
 FoundryModels.OpenAI.GptAudioMini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-audio-mini","Version":"2025-10-06","Format":"OpenAI"}
-FoundryModels.OpenAI.GptChatLatest: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-chat-latest","Version":"2026-05-28","Format":"OpenAI"}
-FoundryModels.OpenAI.GptImage1: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-image-1","Version":"2025-04-15","Format":"OpenAI"}
+FoundryModels.OpenAI.GptChatLatest: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-chat-latest","Version":"2026-06-24","Format":"OpenAI"}
 FoundryModels.OpenAI.GptImage15: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-image-1.5","Version":"2025-12-16","Format":"OpenAI"}
 FoundryModels.OpenAI.GptImage1Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-image-1-mini","Version":"2025-10-06","Format":"OpenAI"}
 FoundryModels.OpenAI.GptImage2: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-image-2","Version":"2026-04-21","Format":"OpenAI"}
@@ -198,6 +207,8 @@ FoundryModels.OpenAI.GptOss20b: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.Fo
 FoundryModels.OpenAI.GptRealtime: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime","Version":"2025-08-28","Format":"OpenAI"}
 FoundryModels.OpenAI.GptRealtime15: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-1.5","Version":"2026-02-23","Format":"OpenAI"}
 FoundryModels.OpenAI.GptRealtime2: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-2","Version":"2026-05-07","Format":"OpenAI"}
+FoundryModels.OpenAI.GptRealtime21: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-2.1","Version":"2026-07-07","Format":"OpenAI"}
+FoundryModels.OpenAI.GptRealtime21Mini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-2.1-mini","Version":"2026-07-07","Format":"OpenAI"}
 FoundryModels.OpenAI.GptRealtimeMini: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-mini","Version":"2025-12-15","Format":"OpenAI"}
 FoundryModels.OpenAI.GptRealtimeTranslate: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-translate","Version":"2026-05-07","Format":"OpenAI"}
 FoundryModels.OpenAI.GptRealtimeWhisper: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.FoundryModel = {"Name":"gpt-realtime-whisper","Version":"2026-05-07","Format":"OpenAI"}
@@ -250,7 +261,7 @@ Aspire.Hosting.Foundry/addSearchConnection(search: Aspire.Hosting.Azure.Search/A
 Aspire.Hosting.Foundry/addSharePointTool(name: string, projectConnectionIds: string[]) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.SharePointToolResource
 Aspire.Hosting.Foundry/addStorageConnection(storage: Aspire.Hosting.Azure.Storage/Aspire.Hosting.Azure.AzureStorageResource) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectConnectionResource
 Aspire.Hosting.Foundry/addWebSearchTool(name: string) -> Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.WebSearchToolResource
-Aspire.Hosting.Foundry/asHostedAgent(project: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource, options?: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
+Aspire.Hosting.Foundry/asHostedAgent(project: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzureCognitiveServicesProjectResource, protocol: enum:Aspire.Hosting.Foundry.HostedAgentProtocol, protocolVersion: string, options?: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.HostedAgentOptions) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.IResourceWithEndpoints
 Aspire.Hosting.Foundry/AzurePromptAgentResource.connectionStringExpression(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzurePromptAgentResource) -> Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpression
 Aspire.Hosting.Foundry/AzurePromptAgentResource.description(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzurePromptAgentResource) -> string
 Aspire.Hosting.Foundry/AzurePromptAgentResource.instructions(context: Aspire.Hosting.Foundry/Aspire.Hosting.Foundry.AzurePromptAgentResource) -> string

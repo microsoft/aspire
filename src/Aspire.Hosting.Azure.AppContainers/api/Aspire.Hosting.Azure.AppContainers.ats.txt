@@ -23,3 +23,4 @@ Aspire.Hosting.Azure.AppContainers/withAzureLogAnalyticsWorkspace(workspaceBuild
 Aspire.Hosting.Azure.AppContainers/withCompactResourceNaming() -> Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.AzureContainerAppEnvironmentResource
 Aspire.Hosting.Azure.AppContainers/withDashboard(enable?: boolean) -> Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.AzureContainerAppEnvironmentResource
 Aspire.Hosting.Azure.AppContainers/withHttpsUpgrade(upgrade?: boolean) -> Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.AzureContainerAppEnvironmentResource
+Aspire.Hosting.Azure.AppContainers/withUniqueResourceNaming() -> Aspire.Hosting.Azure.AppContainers/Aspire.Hosting.Azure.AppContainers.AzureContainerAppEnvironmentResource
