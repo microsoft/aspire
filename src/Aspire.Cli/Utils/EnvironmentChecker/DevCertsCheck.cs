@@ -1,15 +1,14 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.ComponentModel;
-using System.Diagnostics;
-using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Security.Cryptography;
 using System.Security.Cryptography.X509Certificates;
+using System.Text;
 using System.Text.Json.Nodes;
 using System.Text.RegularExpressions;
 using Aspire.Cli.Certificates;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Resources;
 using Microsoft.AspNetCore.Certificates.Generation;
 using Microsoft.Extensions.Logging;
@@ -19,7 +18,7 @@ namespace Aspire.Cli.Utils.EnvironmentChecker;
 /// <summary>
 /// Checks if the HTTPS development certificate is trusted and detects multiple certificates.
 /// </summary>
-internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateToolRunner certificateToolRunner, IEnvironment environment) : IEnvironmentCheck
+internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateToolRunner certificateToolRunner, IEnvironment environment, IProcessExecutionFactory processExecutionFactory) : IEnvironmentCheck
 {
     internal const string CheckName = "dev-certs";
     internal const string VersionCheckName = "dev-certs-version";
@@ -36,28 +35,28 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     private static readonly string s_installOpenSslCleanAndTrustFixCommand = string.Format(CultureInfo.InvariantCulture, DoctorCommandStrings.DevCertsInstallOpenSslCleanAndTrustFixFormat, "openssl", "aspire certs clean", "aspire certs trust");
     private static readonly Regex s_openSslHashFileNameRegex = new("^[0-9a-fA-F]{8}\\.\\d+$", RegexOptions.CultureInvariant);
 
-    public Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
+    public async Task<IReadOnlyList<EnvironmentCheckResult>> CheckAsync(CancellationToken cancellationToken = default)
     {
         try
         {
             var trustResult = certificateToolRunner.CheckHttpCertificate();
             var results = EvaluateCertificateResults(trustResult.Certificates, environment);
-            AddLinuxOpenSslCertificateCacheWarnings(results, trustResult.Certificates, environment, cancellationToken);
+            await AddLinuxOpenSslCertificateCacheWarningsAsync(results, trustResult.Certificates, environment, cancellationToken).ConfigureAwait(false);
             AddLinuxCertificateToolWarnings(results, environment);
 
-            return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>(results);
+            return results;
         }
         catch (Exception ex)
         {
             logger.LogDebug(ex, "Error checking dev-certs");
-            return Task.FromResult<IReadOnlyList<EnvironmentCheckResult>>([new EnvironmentCheckResult
+            return [new EnvironmentCheckResult
             {
                 Category = EnvironmentCheckCategories.Environment,
                 Name = CheckName,
                 Status = EnvironmentCheckStatus.Warning,
                 Message = "Unable to check HTTPS development certificate",
                 Details = ex.Message
-            }]);
+            }];
         }
     }
 
@@ -216,7 +215,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         return results;
     }
 
-    private static void AddLinuxOpenSslCertificateCacheWarnings(List<EnvironmentCheckResult> results, IReadOnlyList<DevCertInfo> certInfos, IEnvironment environment, CancellationToken cancellationToken)
+    private async Task AddLinuxOpenSslCertificateCacheWarningsAsync(List<EnvironmentCheckResult> results, IReadOnlyList<DevCertInfo> certInfos, IEnvironment environment, CancellationToken cancellationToken)
     {
         if (!environment.IsLinux())
         {
@@ -233,7 +232,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         var environmentVariables = GetEnvironmentVariables(environment);
         PathLookupHelper.TryResolveExecutablePath(OpenSslCommand, out var openSslPath, environmentVariables);
 
-        var cacheStatus = EvaluateOpenSslCertificateCache(trustPath, currentCertificates, openSslPath, cancellationToken);
+        var cacheStatus = await EvaluateOpenSslCertificateCacheAsync(trustPath, currentCertificates, openSslPath, cancellationToken).ConfigureAwait(false);
         if (cacheStatus is null)
         {
             return;
@@ -264,7 +263,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
             .ThenBy(c => c.Thumbprint, StringComparer.OrdinalIgnoreCase);
     }
 
-    private static OpenSslCertificateCacheStatus? EvaluateOpenSslCertificateCache(string trustPath, IReadOnlyList<DevCertInfo> currentCertificates, string? openSslPath, CancellationToken cancellationToken)
+    private async Task<OpenSslCertificateCacheStatus?> EvaluateOpenSslCertificateCacheAsync(string trustPath, IReadOnlyList<DevCertInfo> currentCertificates, string? openSslPath, CancellationToken cancellationToken)
     {
         var fix = GetOpenSslCertificateCacheFix(openSslPath);
 
@@ -309,7 +308,7 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
                     mismatchedThumbprints.Add(certificate.Thumbprint!);
                 }
                 else if (certificate.TrustLevel != CertificateManager.TrustLevel.None &&
-                    !HasOpenSslHashEntry(trustPath, certificateFile, cachedCertificate, openSslPath, cancellationToken))
+                    !await HasOpenSslHashEntryAsync(trustPath, certificateFile, cachedCertificate, openSslPath, cancellationToken).ConfigureAwait(false))
                 {
                     missingHashLinkThumbprints.Add(certificate.Thumbprint!);
                 }
@@ -358,11 +357,12 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
     private static string GetOpenSslCertificateCacheFix(string? openSslPath) =>
         openSslPath is null ? s_installOpenSslCleanAndTrustFixCommand : s_cleanAndTrustFixCommand;
 
-    private static bool HasOpenSslHashEntry(string trustPath, string certificateFile, X509Certificate2 certificate, string? openSslPath, CancellationToken cancellationToken)
+    private async Task<bool> HasOpenSslHashEntryAsync(string trustPath, string certificateFile, X509Certificate2 certificate, string? openSslPath, CancellationToken cancellationToken)
     {
         if (openSslPath is not null)
         {
-            return TryGetOpenSslHash(openSslPath, certificateFile, cancellationToken, out var hash) &&
+            var (success, hash) = await TryGetOpenSslHashAsync(openSslPath, certificateFile, cancellationToken).ConfigureAwait(false);
+            return success &&
                 HasMatchingHashEntry(trustPath, hash, certificate);
         }
 
@@ -407,75 +407,65 @@ internal sealed class DevCertsCheck(ILogger<DevCertsCheck> logger, ICertificateT
         }
     }
 
-    private static bool TryGetOpenSslHash(string openSslPath, string certificateFile, CancellationToken cancellationToken, [NotNullWhen(true)] out string? hash)
+    private async Task<(bool Success, string Hash)> TryGetOpenSslHashAsync(string openSslPath, string certificateFile, CancellationToken cancellationToken)
     {
-        hash = null;
+        var stdout = new StringBuilder();
+        var workingDirectory = Path.GetDirectoryName(certificateFile) is { } directory
+            ? new DirectoryInfo(directory)
+            : new DirectoryInfo(Directory.GetCurrentDirectory());
+        await using var process = processExecutionFactory.CreateExecution(
+            openSslPath,
+            ["x509", "-hash", "-noout", "-in", certificateFile],
+            env: null,
+            workingDirectory,
+            new ProcessInvocationOptions
+            {
+                SuppressLogging = true,
+                StandardOutputCallback = line => stdout.AppendLine(line),
+                StandardErrorCallback = _ => { },
+            });
+        var started = false;
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(s_openSslHashTimeout);
 
-        var processInfo = new ProcessStartInfo(openSslPath)
-        {
-            RedirectStandardOutput = true,
-            RedirectStandardError = true
-        };
-        processInfo.ArgumentList.Add("x509");
-        processInfo.ArgumentList.Add("-hash");
-        processInfo.ArgumentList.Add("-noout");
-        processInfo.ArgumentList.Add("-in");
-        processInfo.ArgumentList.Add(certificateFile);
-
-        Process? process = null;
         try
         {
-            process = Process.Start(processInfo);
-            // Read both redirected streams concurrently to avoid deadlock if openssl fills a pipe
-            // while the process is still running.
-            var stdoutTask = process!.StandardOutput.ReadToEndAsync();
-            var stderrTask = process.StandardError.ReadToEndAsync();
-
-            using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-            timeoutCts.CancelAfter(s_openSslHashTimeout);
-
-            try
+            started = await process.StartAsync(timeoutCts.Token).ConfigureAwait(false);
+            if (!started)
             {
-                process.WaitForExitAsync(timeoutCts.Token).GetAwaiter().GetResult();
+                return (false, "");
             }
-            catch (OperationCanceledException)
+
+            var exitCode = await process.WaitForExitAsync(timeoutCts.Token).ConfigureAwait(false);
+            if (exitCode != 0)
+            {
+                return (false, "");
+            }
+
+            var hash = stdout.ToString().Trim();
+            return hash.Length > 0 ? (true, hash) : (false, "");
+        }
+        catch (Exception ex) when (ex is OperationCanceledException or IOException or InvalidOperationException)
+        {
+            if (started)
             {
                 TryKillProcess(process);
-                return false;
             }
 
-            var stdout = stdoutTask.GetAwaiter().GetResult();
-            _ = stderrTask.GetAwaiter().GetResult();
-
-            if (process.ExitCode != 0)
-            {
-                return false;
-            }
-
-            hash = stdout.Trim();
-            return hash.Length > 0;
-        }
-        catch (Exception ex) when (ex is Win32Exception or IOException or InvalidOperationException)
-        {
-            return false;
-        }
-        finally
-        {
-            process?.Dispose();
+            return (false, "");
         }
     }
 
-    private static void TryKillProcess(Process process)
+    private static void TryKillProcess(IProcessExecution process)
     {
         try
         {
             if (!process.HasExited)
             {
                 process.Kill(entireProcessTree: true);
-                process.WaitForExit(milliseconds: 1000);
             }
         }
-        catch (Exception ex) when (ex is InvalidOperationException or Win32Exception)
+        catch (InvalidOperationException)
         {
         }
     }

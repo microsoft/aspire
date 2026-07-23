@@ -54,6 +54,15 @@ public class DevCertsCheckTests
         return X509CertificateLoader.LoadCertificate(certificate.Export(X509ContentType.Cert));
     }
 
+    private static DevCertsCheck CreateCheck(TestCertificateToolRunner toolRunner, IEnvironment environment, TestProcessExecutionFactory? processExecutionFactory = null) =>
+        new(NullLogger<DevCertsCheck>.Instance, toolRunner, environment, processExecutionFactory ?? CreateOpenSslProcessExecutionFactory());
+
+    private static TestProcessExecutionFactory CreateOpenSslProcessExecutionFactory(string hash = "12345678") =>
+        new()
+        {
+            AsyncAttemptCallback = (_, _, _) => Task.FromResult((0, (string?)hash))
+        };
+
     private static string CreateCertUtil(DirectoryInfo directory)
     {
         var certUtilPath = Path.Combine(directory.FullName, CertificateHelpers.CertUtilCommand);
@@ -90,21 +99,6 @@ public class DevCertsCheckTests
                 exit 1
                 """;
         File.WriteAllText(openSslPath, contents);
-        if (!OperatingSystem.IsWindows())
-        {
-            File.SetUnixFileMode(openSslPath, UnixFileMode.UserRead | UnixFileMode.UserExecute);
-        }
-
-        return openSslPath;
-    }
-
-    private static string CreateOpenSslThatWaits(DirectoryInfo directory)
-    {
-        var openSslPath = Path.Combine(directory.FullName, "openssl");
-        File.WriteAllText(openSslPath, """
-            #!/bin/sh
-            sleep 30
-            """);
         if (!OperatingSystem.IsWindows())
         {
             File.SetUnixFileMode(openSslPath, UnixFileMode.UserRead | UnixFileMode.UserExecute);
@@ -348,7 +342,7 @@ public class DevCertsCheckTests
         {
             ["PATH"] = Path.Combine(AppContext.BaseDirectory, Guid.NewGuid().ToString("N"))
         });
-        var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+        var check = CreateCheck(toolRunner, environment);
 
         var results = await check.CheckAsync();
 
@@ -383,7 +377,7 @@ public class DevCertsCheckTests
             {
                 ["PATH"] = tempDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -430,7 +424,7 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -474,7 +468,7 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -502,7 +496,7 @@ public class DevCertsCheckTests
         try
         {
             CreateCertUtil(tempDirectory);
-            CreateOpenSslThatWaits(tempDirectory);
+            CreateOpenSsl(tempDirectory, "12345678");
             var trustDirectory = Directory.CreateDirectory(Path.Combine(tempDirectory.FullName, "trust"));
             File.WriteAllText(Path.Combine(trustDirectory.FullName, GetOpenSslCertificateFileName(certificate)), certificate.ExportCertificatePem());
 
@@ -524,8 +518,15 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
-            await cancellationTokenSource.CancelAsync();
+            var processExecutionFactory = new TestProcessExecutionFactory
+            {
+                AsyncAttemptCallback = async (_, _, cancellationToken) =>
+                {
+                    await Task.Delay(TimeSpan.FromSeconds(30), cancellationToken);
+                    return (0, (string?)"12345678");
+                }
+            };
+            var check = CreateCheck(toolRunner, environment, processExecutionFactory);
 
             var results = await check.CheckAsync(cancellationTokenSource.Token);
 
@@ -533,6 +534,9 @@ public class DevCertsCheckTests
             Assert.Equal(EnvironmentCheckStatus.Warning, cacheResult.Status);
             Assert.Contains(certificate.Thumbprint, cacheResult.Details);
             Assert.Contains("subject-hash", cacheResult.Details);
+            var processExecution = Assert.IsType<TestProcessExecution>(Assert.Single(processExecutionFactory.CreatedExecutions));
+            Assert.Equal(1, processExecution.KillCount);
+            Assert.True(processExecution.KilledEntireProcessTree);
         }
         finally
         {
@@ -570,7 +574,7 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -615,7 +619,7 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -659,7 +663,7 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -705,7 +709,7 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -751,7 +755,7 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -797,7 +801,7 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -840,7 +844,7 @@ public class DevCertsCheckTests
                 ["PATH"] = tempDirectory.FullName,
                 [CertificateHelpers.DevCertsOpenSslCertDirEnvVar] = trustDirectory.FullName
             });
-            var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+            var check = CreateCheck(toolRunner, environment);
 
             var results = await check.CheckAsync();
 
@@ -875,7 +879,7 @@ public class DevCertsCheckTests
         {
             ["PATH"] = Path.Combine(AppContext.BaseDirectory, Guid.NewGuid().ToString("N"))
         });
-        var check = new DevCertsCheck(NullLogger<DevCertsCheck>.Instance, toolRunner, environment);
+        var check = CreateCheck(toolRunner, environment);
 
         var results = await check.CheckAsync();
 
