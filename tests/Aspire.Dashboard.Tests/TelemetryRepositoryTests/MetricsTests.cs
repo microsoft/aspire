@@ -1130,6 +1130,76 @@ public class MetricsTests
     }
 
     [Fact]
+    public void AddMetrics_HistogramBucketCountLengthChanges_DataPointRejected()
+    {
+        // Arrange
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        var histogramMetric = new Metric
+        {
+            Name = "test",
+            Histogram = new Histogram
+            {
+                AggregationTemporality = AggregationTemporality.Cumulative,
+                DataPoints =
+                {
+                    new HistogramDataPoint
+                    {
+                        Count = 6,
+                        ExplicitBounds = { 1, 2 },
+                        BucketCounts = { 1, 2, 3 },
+                        TimeUnixNano = DateTimeToUnixNanoseconds(s_testTime.AddMinutes(1))
+                    },
+                    new HistogramDataPoint
+                    {
+                        Count = 10,
+                        ExplicitBounds = { 1, 2, 3 },
+                        BucketCounts = { 1, 2, 3, 4 },
+                        TimeUnixNano = DateTimeToUnixNanoseconds(s_testTime.AddMinutes(2))
+                    }
+                }
+            }
+        };
+
+        // Act
+        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics = { histogramMetric }
+                    }
+                }
+            }
+        });
+
+        // Assert
+        Assert.Equal(1, addContext.SuccessCount);
+        Assert.Equal(1, addContext.FailureCount);
+
+        var instrument = repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey("TestService", "TestId"),
+            MeterName = "test-meter",
+            InstrumentName = "test",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+
+        Assert.NotNull(instrument);
+        var dimension = Assert.Single(instrument.Dimensions);
+var histogramValue = Assert.IsType<HistogramValue>(Assert.Single(dimension.Values));
+        Assert.Equal([1UL, 2UL, 3UL], histogramValue.Values);
+        Assert.Equal([1d, 2d], histogramValue.ExplicitBounds);
+        Assert.Equal(6UL, histogramValue.Count);
+    }
+
+    [Fact]
     public void AddMetrics_OverflowDimension()
     {
         // Arrange
