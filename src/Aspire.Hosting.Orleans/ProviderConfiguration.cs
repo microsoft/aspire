@@ -8,9 +8,11 @@ namespace Aspire.Hosting.Orleans;
 /// <summary>
 /// Configuration for an Orleans provider.
 /// </summary>
-internal sealed class ProviderConfiguration(string providerType, string? serviceKey = null, IResourceBuilder<IResourceWithConnectionString>? resource = null) : IProviderConfiguration
+internal sealed class ProviderConfiguration(string providerType, string? serviceKey = null, string? invariant = null, IResourceBuilder<IResourceWithConnectionString>? resource = null) : IProviderConfiguration
 {
+    private const string AdoNetProviderType = "AdoNet";
     private readonly string _providerType = ValidateProviderType(providerType);
+    private readonly string? _invariant = providerType.Equals(AdoNetProviderType, StringComparison.Ordinal) ? ValidateInvariant(invariant) : null;
 
     private static string GetProviderType(IResourceBuilder<IResourceWithConnectionString> resourceBuilder)
     {
@@ -32,6 +34,21 @@ internal sealed class ProviderConfiguration(string providerType, string? service
         return providerType;
     }
 
+    private static string ValidateInvariant(string? invariant)
+    {
+        if (invariant is null)
+        {
+            throw new ArgumentNullException(nameof(invariant), "Orleans ADO.NET providers require an invariant. Configure it by calling WithOrleansAdoNetInvariant on the resource builder.");
+        }
+
+        if (string.IsNullOrWhiteSpace(invariant))
+        {
+            throw new ArgumentException("Orleans ADO.NET providers require an invariant. Configure it by calling WithOrleansAdoNetInvariant on the resource builder.", nameof(invariant));
+        }
+
+        return invariant;
+    }
+
     private static string ValidateProviderType(string providerType)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(providerType);
@@ -48,8 +65,14 @@ internal sealed class ProviderConfiguration(string providerType, string? service
     {
         var serviceKey = resourceBuilder.Resource.Name;
         var providerType = GetProviderType(resourceBuilder);
+        string? invariant = null;
 
-        return new(providerType, serviceKey, resourceBuilder);
+        if (resourceBuilder.Resource.TryGetAnnotationsOfType<OrleansAdoNetInvariantAnnotation>(out var annotations))
+        {
+            invariant = annotations.FirstOrDefault()?.Invariant;
+        }
+
+        return new(providerType, serviceKey, invariant, resourceBuilder);
     }
 
     /// <summary>
@@ -64,7 +87,17 @@ internal sealed class ProviderConfiguration(string providerType, string? service
         resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__ProviderType", _providerType);
         if (!string.IsNullOrEmpty(serviceKey))
         {
-            resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__ServiceKey", serviceKey);
+            // The ADO.NET providers use ConnectionName instead of ServiceKey.
+            var key = _providerType.Equals(AdoNetProviderType, StringComparison.Ordinal)
+                ? "ConnectionName"
+                : "ServiceKey";
+
+            resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__{key}", serviceKey);
+        }
+
+        if (!string.IsNullOrEmpty(_invariant))
+        {
+            resourceBuilder.WithEnvironment($"Orleans__{envVarPrefix}__Invariant", _invariant);
         }
 
         if (resource is not null)
