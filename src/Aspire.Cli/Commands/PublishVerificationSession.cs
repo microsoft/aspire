@@ -16,8 +16,6 @@ namespace Aspire.Cli.Commands;
 internal sealed class PublishVerificationSession : IPipelineExecutionSession
 {
     private const string PipelineOutputsCapability = "pipeline-outputs.v1";
-    private const string PrimaryPublisherName = "aspire";
-    private const string PrimaryOutputName = "primary";
     private const string PreparedState = "Prepared";
     private const string SucceededState = "Succeeded";
 
@@ -313,11 +311,12 @@ internal sealed class PublishVerificationSession : IPipelineExecutionSession
 
         var outputs = plan.Outputs
             .Select(ParseOutput)
-            .OrderBy(output => output.PublisherName, StringComparer.Ordinal)
+            .OrderByDescending(output => output.IsPrimary)
+            .ThenBy(output => output.PublisherName, StringComparer.Ordinal)
             .ThenBy(output => output.Name, StringComparer.Ordinal)
             .ToArray();
         var primaryOutputs = outputs
-            .Where(output => output.PublisherName == PrimaryPublisherName && output.Name == PrimaryOutputName)
+            .Where(output => output.IsPrimary)
             .ToArray();
         if (primaryOutputs.Length != 1 ||
             !PublishVerificationPathSafety.PathEquals(primaryOutputs[0].OutputPath, OutputPath) ||
@@ -326,7 +325,7 @@ internal sealed class PublishVerificationSession : IPipelineExecutionSession
             throw new PublishVerificationException(PublishCommandStrings.VerifyPrimaryOutputMismatch);
         }
 
-        if (outputs.Select(output => (output.PublisherName, output.Name)).Distinct().Count() != outputs.Length)
+        if (outputs.Select(output => (output.IsPrimary, output.PublisherName, output.Name)).Distinct().Count() != outputs.Length)
         {
             throw new PublishVerificationException(PublishCommandStrings.VerifyDuplicateOutputs);
         }
@@ -373,6 +372,7 @@ internal sealed class PublishVerificationSession : IPipelineExecutionSession
         };
 
         return new PublishVerificationOutput(
+            output.IsPrimary,
             output.PublisherName,
             output.Name,
             kind,
@@ -404,6 +404,7 @@ internal sealed class PublishVerificationSession : IPipelineExecutionSession
             var actual = finalOutputs[index];
             if (expected.PublisherName != actual.PublisherName ||
                 expected.Name != actual.Name ||
+                expected.IsPrimary != actual.IsPrimary ||
                 expected.Kind != actual.Kind ||
                 !PublishVerificationPathSafety.PathEquals(expected.OutputPath, actual.OutputPath) ||
                 !PublishVerificationPathSafety.PathEquals(expected.LogicalTargetPath, actual.LogicalTargetPath))
@@ -430,6 +431,7 @@ internal sealed class PublishVerificationSession : IPipelineExecutionSession
             var actualOutput = actual[outputIndex];
             if (expectedOutput.Output.PublisherName != actualOutput.Output.PublisherName ||
                 expectedOutput.Output.Name != actualOutput.Output.Name ||
+                expectedOutput.Output.IsPrimary != actualOutput.Output.IsPrimary ||
                 expectedOutput.Files.Count != actualOutput.Files.Count)
             {
                 return false;
@@ -558,6 +560,7 @@ internal enum PublishVerificationOutputKind
 }
 
 internal sealed record PublishVerificationOutput(
+    bool IsPrimary,
     string PublisherName,
     string Name,
     PublishVerificationOutputKind Kind,

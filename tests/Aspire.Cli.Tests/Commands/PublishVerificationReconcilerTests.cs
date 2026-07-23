@@ -142,7 +142,7 @@ public class PublishVerificationReconcilerTests(ITestOutputHelper outputHelper)
 
         var normalized = comparer.NormalizeText(text);
 
-        Assert.Equal(3, CountOccurrences(normalized, "aspire-output://publisher/nested"));
+        Assert.Equal(3, CountOccurrences(normalized, "aspire-output://named/publisher/nested"));
         Assert.DoesNotContain(staged, normalized, StringComparison.OrdinalIgnoreCase);
         Assert.DoesNotContain(nested, normalized, StringComparison.OrdinalIgnoreCase);
     }
@@ -189,6 +189,7 @@ public class PublishVerificationReconcilerTests(ITestOutputHelper outputHelper)
         string name = "output")
     {
         return new PublishVerificationOutput(
+            false,
             "publisher",
             name,
             PublishVerificationOutputKind.Directory,
