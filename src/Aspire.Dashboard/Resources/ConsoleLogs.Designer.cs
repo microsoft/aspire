@@ -74,13 +74,13 @@ namespace Aspire.Dashboard.Resources {
                 return ResourceManager.GetString("ConsoleLogsNoLogsFound", resourceCulture);
             }
         }
-        
+
         public static string ConsoleLogsNoLogsMatchFilter {
             get {
                 return ResourceManager.GetString("ConsoleLogsNoLogsMatchFilter", resourceCulture);
             }
         }
-        
+
         public static string ConsoleLogsTextFilter {
             get {
                 return ResourceManager.GetString("ConsoleLogsTextFilter", resourceCulture);
@@ -126,6 +126,18 @@ namespace Aspire.Dashboard.Resources {
         public static string DownloadLogs {
             get {
                 return ResourceManager.GetString("DownloadLogs", resourceCulture);
+            }
+        }
+
+        public static string DownloadLogsAsText {
+            get {
+                return ResourceManager.GetString("DownloadLogsAsText", resourceCulture);
+            }
+        }
+
+        public static string DownloadLogsAsCsv {
+            get {
+                return ResourceManager.GetString("DownloadLogsAsCsv", resourceCulture);
             }
         }
         

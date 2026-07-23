@@ -646,12 +646,30 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         else
         {
             // Console-view items: preserved from the original menu.
+            var isDownloadLogsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll;
+
             _logsMenuItems.Add(new()
             {
-                IsDisabled = PageViewModel.SelectedResource is null && !_isSubscribedToAll,
-                OnClick = DownloadLogsAsync,
+                IsDisabled = isDownloadLogsDisabled,
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogs)],
-                Icon = new Icons.Regular.Size16.ArrowDownload()
+                Icon = new Icons.Regular.Size16.ArrowDownload(),
+                NestedMenuItems =
+                [
+                    new()
+                    {
+                        IsDisabled = isDownloadLogsDisabled,
+                        OnClick = DownloadTextLogsAsync,
+                        Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogsAsText)],
+                        Icon = new Icons.Regular.Size16.DocumentText()
+                    },
+                    new()
+                    {
+                        IsDisabled = isDownloadLogsDisabled,
+                        OnClick = DownloadCsvLogsAsync,
+                        Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.DownloadLogsAsCsv)],
+                        Icon = new Icons.Regular.Size16.DocumentTable()
+                    }
+                ]
             });
 
             _logsMenuItems.Add(new()
@@ -1137,26 +1155,49 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
     }
 
-    private async Task DownloadLogsAsync()
+    private async Task DownloadTextLogsAsync()
     {
+        // Snapshot the entries under the lock, then serialize outside of it. Serializing while
+        // holding _updateLogsLock would block live log ingestion (which shares the lock) for the
+        // duration of the export, which can be significant for a large configured log buffer.
+        var entries = GetLogEntriesSnapshot();
+
         // Write all log entry content to a stream as UTF8 chars. Strip control sequences from log lines.
         var stream = new MemoryStream();
-        lock (_updateLogsLock)
-        {
-            LogEntrySerializer.WriteLogEntriesToStream(_logEntries.GetEntries(), stream);
-        }
+        LogEntrySerializer.WriteLogEntriesToStream(entries, stream);
         stream.Seek(0, SeekOrigin.Begin);
 
-        await JS.DownloadFileAsync(GetFileName(), stream);
+        await JS.DownloadFileAsync(GetFileName("txt"), stream);
     }
 
-    private string GetFileName()
+    private async Task DownloadCsvLogsAsync()
+    {
+        // Snapshot the entries under the lock, then serialize outside of it (see DownloadTextLogsAsync).
+        var entries = GetLogEntriesSnapshot();
+
+        // Write all log entries to a stream as CSV with Resource, Timestamp and Message columns.
+        var stream = new MemoryStream();
+        LogEntrySerializer.WriteLogEntriesToCsvStream(entries, stream);
+        stream.Seek(0, SeekOrigin.Begin);
+
+        await JS.DownloadFileAsync(GetFileName("csv"), stream);
+    }
+
+    private List<LogEntry> GetLogEntriesSnapshot()
+    {
+        lock (_updateLogsLock)
+        {
+            return _logEntries.GetEntries().ToList();
+        }
+    }
+
+    private string GetFileName(string extension)
     {
         var fileNamePrefix = _isSubscribedToAll
             ? "AllResources"
             : string.Join("_", PageViewModel.SelectedResource.Id!.InstanceId!.Split(Path.GetInvalidFileNameChars()));
 
-        return $"{fileNamePrefix}-{TimeProvider.GetLocalNow().ToString("yyyyMMddhhmmss", CultureInfo.InvariantCulture)}.txt";
+        return $"{fileNamePrefix}-{TimeProvider.GetLocalNow().ToString("yyyyMMddHHmmss", CultureInfo.InvariantCulture)}.{extension}";
     }
 
     private async Task ClearConsoleLogs(ResourceKey? key)
