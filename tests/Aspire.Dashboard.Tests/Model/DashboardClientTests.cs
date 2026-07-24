@@ -817,7 +817,7 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
             Options.Create(options),
             new MockKnownPropertyLookup(),
             new TestStringLocalizer<DashboardResources>(),
-            resourceRepositoryWriter: resourceRepositoryWriter);
+            resourceRepositoryWriter: resourceRepositoryWriter ?? new RecordingResourceRepositoryWriter());
     }
 
     public void Dispose()

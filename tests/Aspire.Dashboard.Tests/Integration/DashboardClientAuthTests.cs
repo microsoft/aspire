@@ -134,6 +134,7 @@ public sealed class DashboardClientAuthTests
             dashboardOptions: Options.Create(options),
             knownPropertyLookup: new MockKnownPropertyLookup(),
             loc: new Aspire.Dashboard.Tests.TestStringLocalizer<Dashboard.Resources.Resources>(),
+            resourceRepositoryWriter: new NoopResourceRepositoryWriter(),
             configureHttpHandler: handler => handler.SslOptions.RemoteCertificateValidationCallback = (sender, cert, chain, sslPolicyErrors) => true);
 
         var iClient = (IDashboardClient)client;
@@ -141,6 +142,14 @@ public sealed class DashboardClientAuthTests
         await iClient.WhenConnected;
 
         return client;
+    }
+
+    private sealed class NoopResourceRepositoryWriter : IResourceRepositoryWriter
+    {
+        public Task ReplaceResourcesAsync(IReadOnlyList<Resource> resources) => Task.CompletedTask;
+        public Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes) => Task.CompletedTask;
+        public Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines) => Task.CompletedTask;
+        public Task MarkConsoleLogsLoadedAsync(string resourceName) => Task.CompletedTask;
     }
 
     private sealed class ResourceServiceServer(WebApplication serverApp, TestCalls testCalls) : IAsyncDisposable

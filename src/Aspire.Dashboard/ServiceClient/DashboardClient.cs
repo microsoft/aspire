@@ -68,7 +68,7 @@ internal sealed class DashboardClient : IDashboardClient
     private readonly DashboardOptions _dashboardOptions;
     private readonly IStringLocalizer<DashboardResources> _loc;
     private readonly ILogger<DashboardClient> _logger;
-    private readonly IResourceRepositoryWriter? _resourceRepositoryWriter;
+    private readonly IResourceRepositoryWriter _resourceRepositoryWriter;
 
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
     private ImmutableHashSet<Channel<WatchInteractionsResponseUpdate>> _outgoingInteractionChannels = [];
@@ -99,8 +99,8 @@ internal sealed class DashboardClient : IDashboardClient
         IOptions<DashboardOptions> dashboardOptions,
         IKnownPropertyLookup knownPropertyLookup,
         IStringLocalizer<DashboardResources> loc,
-        Action<SocketsHttpHandler>? configureHttpHandler = null,
-        IResourceRepositoryWriter? resourceRepositoryWriter = null)
+        IResourceRepositoryWriter resourceRepositoryWriter,
+        Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
         _activitySource = activitySource.ActivitySource;
         _loggerFactory = loggerFactory;
@@ -655,11 +655,11 @@ internal sealed class DashboardClient : IDashboardClient
                 }
             }
 
-            if (_resourceRepositoryWriter is not null && response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
+            if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
             {
                 await _resourceRepositoryWriter.ReplaceResourcesAsync(response.InitialData.Resources).ConfigureAwait(false);
             }
-            else if (_resourceRepositoryWriter is not null && response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
+            else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
             {
                 await _resourceRepositoryWriter.ApplyChangesAsync(response.Changes.Value).ConfigureAwait(false);
             }
@@ -953,10 +953,7 @@ internal sealed class DashboardClient : IDashboardClient
             {
                 await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
                 {
-                    if (_resourceRepositoryWriter is not null)
-                    {
-                        await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
-                    }
+                    await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(CreateLogLines(response.LogLines));
                 }
@@ -990,10 +987,7 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
         {
-            if (_resourceRepositoryWriter is not null)
-            {
-                await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
-            }
+            await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
             yield return CreateLogLines(response.LogLines);
         }
     }
@@ -1008,10 +1002,7 @@ internal sealed class DashboardClient : IDashboardClient
             }
         }
 
-        if (_resourceRepositoryWriter is not null)
-        {
-            await _resourceRepositoryWriter.MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
-        }
+        await _resourceRepositoryWriter.MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
     }
 
     private static ResourceLogLine[] CreateLogLines(IList<ConsoleLogLine> logLines)

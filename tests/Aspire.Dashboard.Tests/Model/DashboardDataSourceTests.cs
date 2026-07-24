@@ -679,7 +679,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             new ConfigurationManager(),
             options,
             new MockKnownPropertyLookup(),
-            new TestStringLocalizer<Resources.Resources>());
+            new TestStringLocalizer<Resources.Resources>(),
+            currentResourceRepository);
         IDashboardClient selectedClient = new SelectedDashboardClient(currentClient, dataSource);
         var connectionStateChangedCount = 0;
         selectedClient.ConnectionStateChanged += _ => connectionStateChangedCount++;
