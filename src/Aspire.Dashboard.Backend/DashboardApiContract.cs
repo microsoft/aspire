@@ -18,6 +18,9 @@ internal static class DashboardApiContract
     public const string TracesCapability = "traces";
     public const string TraceStreamCapability = "traces-live";
     public const string TraceClearCapability = "traces-clear";
+    public const string MetricsCapability = "metrics";
+    public const string MetricSeriesCapability = "metrics-series";
+    public const string MetricClearCapability = "metrics-clear";
     public const string ConsoleLogsCapability = "console-logs";
     public const string ConsoleLogStreamCapability = "console-logs-live";
     public const string InteractionsCapability = "interactions";
@@ -194,6 +197,66 @@ internal sealed record DashboardTraceStreamRequest(
     string? TraceId,
     bool? HasError,
     string? Search);
+
+internal sealed record DashboardMetricSummary(
+    string Name,
+    string Description,
+    string Unit,
+    string ResourceName,
+    string MeterName,
+    string Kind,
+    double? LastValue,
+    ulong PointCount);
+
+internal sealed record DashboardMetricSeriesResponse(
+    string Name,
+    string ResourceName,
+    string MeterName,
+    string Unit,
+    string Kind,
+    double[] TimestampsMs,
+    double[]? Values,
+    double[]? P50,
+    double[]? P90,
+    double[]? P99,
+    double[]? Sum,
+    double[]? BucketBounds,
+    DashboardMetricBucketSeries[]? Buckets,
+    DashboardMetricDimensionFilter[] DimensionFilters,
+    DashboardMetricDimensionSeries[] Dimensions,
+    DashboardMetricExemplar[] Exemplars,
+    bool HasOverflow,
+    bool ShowCount,
+    string? HistogramMode);
+
+internal sealed record DashboardMetricDimensionFilter(
+    string Name,
+    string?[] Values);
+
+internal sealed record DashboardMetricDimensionSeries(
+    DashboardMetricAttribute[] Attributes,
+    double[] TimestampsMs,
+    double[]? Values,
+    double[]? P50,
+    double[]? P90,
+    double[]? P99,
+    double[]? Sum,
+    DashboardMetricBucketSeries[]? Buckets);
+
+internal sealed record DashboardMetricBucketSeries(
+    double? UpperBound,
+    double[] Values);
+
+internal sealed record DashboardMetricExemplar(
+    double TimestampMs,
+    double Value,
+    string TraceId,
+    string SpanId,
+    DashboardMetricAttribute[] Attributes);
+
+internal sealed record DashboardMetricAttribute(
+    string Key,
+    string Value);
 
 internal sealed record DashboardConsoleLogLine(
     long LineNumber,

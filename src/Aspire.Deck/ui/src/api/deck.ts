@@ -300,18 +300,32 @@ export function getTelemetrySummary(): Promise<TelemetrySummary> {
         nativeBackend.hasCapability("structured-logs-live"),
         nativeBackend.hasCapability("traces"),
         nativeBackend.hasCapability("traces-live"),
-      ]).then(async ([hasLogBacklog, hasLogLive, hasTraceBacklog, hasTraceLive]) => {
+        nativeBackend.hasCapability("metrics"),
+        nativeBackend.hasCapability("metrics-series"),
+        nativeBackend.hasCapability("metrics-clear"),
+      ]).then(async ([
+        hasLogBacklog,
+        hasLogLive,
+        hasTraceBacklog,
+        hasTraceLive,
+        hasMetrics,
+        hasMetricSeries,
+        hasMetricClear,
+      ]) => {
         const useNativeLogs = hasLogBacklog && hasLogLive;
         const useNativeTraces = hasTraceBacklog && hasTraceLive;
-        const [legacy, logs, traces] = await Promise.all([
-          httpBackend.getTelemetrySummary(!useNativeLogs, !useNativeTraces),
+        const useNativeMetrics = hasMetrics && hasMetricSeries && hasMetricClear;
+        const [legacy, logs, traces, metrics] = await Promise.all([
+          httpBackend.getTelemetrySummary(!useNativeLogs, !useNativeTraces, !useNativeMetrics),
           useNativeLogs ? nativeBackend.getStructuredLogs() : Promise.resolve(null),
           useNativeTraces ? nativeBackend.getTraces() : Promise.resolve(null),
+          useNativeMetrics ? nativeBackend.getMetrics() : Promise.resolve(null),
         ]);
         return {
           ...legacy,
           ...(logs ?? {}),
           ...(traces ?? {}),
+          ...(metrics ?? {}),
         };
       });
     }
@@ -362,6 +376,17 @@ export function clearMetrics(resourceName: string | null): Promise<void> {
     return invoke<void>("deck_clear_metrics", { resourceName });
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      return Promise.all([
+        nativeBackend.hasCapability("metrics"),
+        nativeBackend.hasCapability("metrics-series"),
+        nativeBackend.hasCapability("metrics-clear"),
+      ]).then(([hasMetrics, hasSeries, hasClear]) => (
+        hasMetrics && hasSeries && hasClear
+          ? nativeBackend.clearMetrics(resourceName)
+          : httpBackend.clearMetrics(resourceName)
+      ));
+    }
     return httpBackend.clearMetrics(resourceName);
   }
   mockBackend.clearMetrics(resourceName);
@@ -380,6 +405,17 @@ export function getMetricSeries(query: MetricSeriesQuery): Promise<MetricSeriesR
     });
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      return Promise.all([
+        nativeBackend.hasCapability("metrics"),
+        nativeBackend.hasCapability("metrics-series"),
+        nativeBackend.hasCapability("metrics-clear"),
+      ]).then(([hasMetrics, hasSeries, hasClear]) => (
+        hasMetrics && hasSeries && hasClear
+          ? nativeBackend.getMetricSeries(query)
+          : httpBackend.getMetricSeries(query)
+      ));
+    }
     return httpBackend.getMetricSeries(query);
   }
   return Promise.resolve(mockBackend.getMetricSeries(query));
@@ -504,20 +540,25 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
       let unsubscribeLegacy: Unsubscribe | null = null;
       let unsubscribeStructuredLogs: Unsubscribe | null = null;
       let unsubscribeTraces: Unsubscribe | null = null;
+      let unsubscribeMetrics: Unsubscribe | null = null;
       let legacySummary: TelemetrySummary | null = null;
       let structuredLogs: Pick<TelemetrySummary, "logCount" | "recentLogs"> | null = null;
       let traces: Pick<TelemetrySummary, "spanCount" | "recentSpans"> | null = null;
+      let metrics: Pick<TelemetrySummary, "metricCount" | "metrics"> | null = null;
       let useNativeLogs = false;
       let useNativeTraces = false;
+      let useNativeMetrics = false;
       const publish = (): void => {
         if (!cancelled
             && legacySummary !== null
             && (!useNativeLogs || structuredLogs !== null)
-            && (!useNativeTraces || traces !== null)) {
+            && (!useNativeTraces || traces !== null)
+            && (!useNativeMetrics || metrics !== null)) {
           cb({
             ...legacySummary,
             ...(structuredLogs ?? {}),
             ...(traces ?? {}),
+            ...(metrics ?? {}),
           });
         }
       };
@@ -527,15 +568,27 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
         nativeBackend.hasCapability("structured-logs-live"),
         nativeBackend.hasCapability("traces"),
         nativeBackend.hasCapability("traces-live"),
-      ]).then(([hasLogBacklog, hasLogLive, hasTraceBacklog, hasTraceLive]) => {
+        nativeBackend.hasCapability("metrics"),
+        nativeBackend.hasCapability("metrics-series"),
+        nativeBackend.hasCapability("metrics-clear"),
+      ]).then(([
+        hasLogBacklog,
+        hasLogLive,
+        hasTraceBacklog,
+        hasTraceLive,
+        hasMetrics,
+        hasMetricSeries,
+        hasMetricClear,
+      ]) => {
         if (cancelled) return;
         useNativeLogs = hasLogBacklog && hasLogLive;
         useNativeTraces = hasTraceBacklog && hasTraceLive;
+        useNativeMetrics = hasMetrics && hasMetricSeries && hasMetricClear;
 
         unsubscribeLegacy = httpBackend.onTelemetry((summary) => {
           legacySummary = summary;
           publish();
-        }, !useNativeLogs, !useNativeTraces);
+        }, !useNativeLogs, !useNativeTraces, !useNativeMetrics);
         if (useNativeLogs) {
           unsubscribeStructuredLogs = nativeBackend.subscribeStructuredLogs((logs) => {
             structuredLogs = logs;
@@ -548,6 +601,12 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
             publish();
           });
         }
+        if (useNativeMetrics) {
+          unsubscribeMetrics = nativeBackend.subscribeMetrics((metricSummary) => {
+            metrics = metricSummary;
+            publish();
+          });
+        }
       }).catch(() => {
         if (!cancelled) unsubscribeLegacy = httpBackend.onTelemetry(cb);
       });
@@ -556,6 +615,7 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
         unsubscribeLegacy?.();
         unsubscribeStructuredLogs?.();
         unsubscribeTraces?.();
+        unsubscribeMetrics?.();
       };
     }
     return httpBackend.onTelemetry(cb);

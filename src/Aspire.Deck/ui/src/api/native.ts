@@ -19,6 +19,9 @@ import type {
   CommandResponse,
   ExecuteCommandArgs,
   InteractionInfo,
+  MetricSeriesQuery,
+  MetricSeriesResponse,
+  MetricSummary,
   Resource,
   ResourcesEvent,
   LogRecordSummary,
@@ -42,6 +45,9 @@ const structuredLogStreamCapability = "structured-logs-live";
 const tracesCapability = "traces";
 const traceStreamCapability = "traces-live";
 const traceClearCapability = "traces-clear";
+const metricsCapability = "metrics";
+const metricSeriesCapability = "metrics-series";
+const metricClearCapability = "metrics-clear";
 const consoleLogsCapability = "console-logs";
 const consoleLogStreamCapability = "console-logs-live";
 const interactionsCapability = "interactions";
@@ -58,6 +64,10 @@ const traceKeys = new Map<string, true>();
 const traceRestartListeners = new Set<() => void>();
 let traces: NativeTraces = { spanCount: 0, recentSpans: [] };
 let traceGeneration = 0;
+const metricListeners = new Set<(metrics: NativeMetrics) => void>();
+let metricSummary: NativeMetrics = { metricCount: 0, metrics: [] };
+let metricRefreshPromise: Promise<void> | null = null;
+let metricPollTimer: number | undefined;
 
 interface NativeStructuredLogs {
   logCount: number;
@@ -67,6 +77,56 @@ interface NativeStructuredLogs {
 interface NativeTraces {
   spanCount: number;
   recentSpans: SpanSummary[];
+}
+
+interface NativeMetrics {
+  metricCount: number;
+  metrics: MetricSummary[];
+}
+
+function isMetricSummary(value: unknown): value is MetricSummary {
+  if (typeof value !== "object" || value === null) return false;
+  const summary = value as Partial<MetricSummary>;
+  return typeof summary.name === "string"
+    && (typeof summary.description === "string" || summary.description == null)
+    && (typeof summary.meterName === "string" || summary.meterName == null)
+    && (typeof summary.unit === "string" || summary.unit === null)
+    && (typeof summary.resourceName === "string" || summary.resourceName === null)
+    && (summary.kind === "gauge"
+      || summary.kind === "counter"
+      || summary.kind === "upDownCounter"
+      || summary.kind === "histogram")
+    && (typeof summary.lastValue === "number" || summary.lastValue === null)
+    && typeof summary.pointCount === "number"
+    && Number.isFinite(summary.pointCount)
+    && summary.pointCount >= 0;
+}
+
+function isNumberArray(value: unknown): value is number[] {
+  return Array.isArray(value) && value.every((item) => typeof item === "number" && Number.isFinite(item));
+}
+
+function isMetricSeriesResponse(value: unknown): value is MetricSeriesResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const series = value as Partial<MetricSeriesResponse>;
+  return typeof series.name === "string"
+    && (typeof series.meterName === "string" || series.meterName == null)
+    && (typeof series.resourceName === "string" || series.resourceName === null)
+    && (typeof series.unit === "string" || series.unit === null)
+    && (series.kind === "gauge"
+      || series.kind === "counter"
+      || series.kind === "upDownCounter"
+      || series.kind === "histogram")
+    && isNumberArray(series.timestampsMs)
+    // The versioned payload deliberately mirrors the dashboard metric DTOs. Arrays
+    // that do not apply to the selected instrument or histogram mode are serialized
+    // as null rather than omitted, so both shapes are valid on the wire.
+    && (series.values == null || isNumberArray(series.values))
+    && (series.p50 == null || isNumberArray(series.p50))
+    && (series.p90 == null || isNumberArray(series.p90))
+    && (series.p99 == null || isNumberArray(series.p99))
+    && (series.sum == null || isNumberArray(series.sum))
+    && (series.bucketBounds == null || isNumberArray(series.bucketBounds));
 }
 
 function compareNewestFirst(left: LogRecordSummary, right: LogRecordSummary): number {
@@ -173,6 +233,39 @@ async function refreshTraces(): Promise<void> {
 async function getTraces(): Promise<NativeTraces> {
   await refreshTraces();
   return traces;
+}
+
+function notifyMetrics(): void {
+  for (const listener of metricListeners) listener(metricSummary);
+}
+
+function refreshMetrics(): Promise<void> {
+  if (metricRefreshPromise !== null) return metricRefreshPromise;
+
+  const refresh = getNegotiatedVersion()
+    .then((version) => requestJson(`${version.basePath}/metrics`))
+    .then((value) => {
+      if (!Array.isArray(value) || !value.every(isMetricSummary)) {
+        throw new Error("Dashboard API metric summaries returned an incompatible payload.");
+      }
+      const summaries = value;
+      metricSummary = {
+        metricCount: summaries.reduce((total, metric) => total + metric.pointCount, 0),
+        metrics: summaries,
+      };
+      notifyMetrics();
+    });
+  metricRefreshPromise = refresh;
+  const clearRefresh = (): void => {
+    if (metricRefreshPromise === refresh) metricRefreshPromise = null;
+  };
+  void refresh.then(clearRefresh, clearRefresh);
+  return refresh;
+}
+
+async function getMetrics(): Promise<NativeMetrics> {
+  await refreshMetrics();
+  return metricSummary;
 }
 
 function appendTraceEvent(event: DashboardTraceEvent, generation: number): void {
@@ -761,6 +854,23 @@ function subscribeTraces(callback: (traces: NativeTraces) => void): () => void {
   };
 }
 
+function subscribeMetrics(callback: (metrics: NativeMetrics) => void): () => void {
+  metricListeners.add(callback);
+  callback(metricSummary);
+  void refreshMetrics().catch(() => undefined);
+  if (metricPollTimer === undefined) {
+    metricPollTimer = window.setInterval(() => void refreshMetrics().catch(() => undefined), 1_500);
+  }
+
+  return () => {
+    metricListeners.delete(callback);
+    if (metricListeners.size === 0 && metricPollTimer !== undefined) {
+      window.clearInterval(metricPollTimer);
+      metricPollTimer = undefined;
+    }
+  };
+}
+
 async function clearTraces(resourceName: string | null): Promise<void> {
   const version = await getNegotiatedVersion();
   if (!version.capabilities.includes(tracesCapability)
@@ -780,6 +890,70 @@ async function clearTraces(resourceName: string | null): Promise<void> {
   } finally {
     for (const restart of traceRestartListeners) restart();
   }
+}
+
+async function clearMetrics(resourceName: string | null): Promise<void> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(metricsCapability)
+      || !version.capabilities.includes(metricSeriesCapability)
+      || !version.capabilities.includes(metricClearCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise metric clearing.");
+  }
+
+  const resourceQuery = resourceName === null ? "" : `?resource=${encodeURIComponent(resourceName)}`;
+  await deleteNoContent(`${version.basePath}/metrics${resourceQuery}`);
+  const preClearRefresh = metricRefreshPromise;
+  if (preClearRefresh !== null) {
+    await preClearRefresh.catch(() => undefined);
+  }
+  await refreshMetrics();
+}
+
+async function getMetricSeries(query: MetricSeriesQuery): Promise<MetricSeriesResponse | null> {
+  if (!query.resourceName || !query.meterName) {
+    return null;
+  }
+
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(metricsCapability)
+      || !version.capabilities.includes(metricSeriesCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise metric series.");
+  }
+
+  const search = new URLSearchParams({
+    resource: query.resourceName,
+    meter: query.meterName,
+    instrument: query.name,
+    windowSeconds: String(query.windowSeconds ?? 300),
+    maxPoints: String(query.maxPoints ?? 400),
+    showCount: String(query.showCount ?? false),
+    histogramMode: query.histogramMode ?? (query.showCount ? "count" : "percentiles"),
+  });
+  for (const [name, values] of Object.entries(query.dimensions ?? {})) {
+    if (values.length === 0) {
+      search.append(`dimension.${name}`, "x:");
+    }
+    for (const value of values) {
+      search.append(`dimension.${name}`, value === null ? "n:" : `s:${value}`);
+    }
+  }
+
+  const response = await fetch(`${version.basePath}/metrics/series?${search}`, {
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  });
+  if (response.status === 404) {
+    return null;
+  }
+  if (!response.ok) {
+    throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
+  }
+  const series = await response.json() as unknown;
+  if (!isMetricSeriesResponse(series)) {
+    throw new Error("Dashboard API metric series returned an incompatible payload.");
+  }
+  return series;
 }
 
 function subscribeConsoleLogs(
@@ -872,6 +1046,7 @@ export const nativeBackend = {
   subscribeResources,
   subscribeStructuredLogs,
   subscribeTraces,
+  subscribeMetrics,
   subscribeConsoleLogs,
   subscribeInteractions,
   respondInteraction,
@@ -880,4 +1055,8 @@ export const nativeBackend = {
   getTraces,
   refreshTraces,
   clearTraces,
+  getMetrics,
+  refreshMetrics,
+  clearMetrics,
+  getMetricSeries,
 };

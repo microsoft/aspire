@@ -123,7 +123,7 @@ test.afterEach(async ({ page }) => {
     : errors;
   if (allowNavigationAbort.has(page)) {
     unexpected = unexpected.filter((error) =>
-      !/^request: GET .*\/api\/deck\/(?:telemetry\/(?:(?:logs|spans)\?follow=true|metrics(?:\/series\?.*)?)|interactions|resources(?:\/[^/]+\/console-logs)?) \(net::ERR_ABORTED\)$/.test(error));
+      !/^request: GET .*\/(?:api\/deck\/(?:telemetry\/(?:(?:logs|spans)\?follow=true|metrics(?:\/series\?.*)?)|interactions|resources(?:\/[^/]+\/console-logs)?)|api\/dashboard\/v1\/(?:traces\?.*|metrics\/series\?.*)) \(net::ERR_ABORTED\)$/.test(error));
   }
   expect(unexpected, "Unexpected browser errors").toEqual([]);
 });

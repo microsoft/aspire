@@ -150,17 +150,17 @@
 | TRACE-GENAI-001 | traces | `/traces/detail/{traceId}` | trace-genai | covered | TRACE-GENAI-001 | GenAI spans and traces open the dedicated GenAI visualizer. |
 | TRACE-EXPLAIN-001 | traces | `/traces` | explain-errors | covered | TRACE-EXPLAIN-001 | Explain errors summarizes current failed traces through the assistant. |
 | TRACE-SESSION-001 | traces | `/traces` | trace-session | covered | TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001 | Resource, type, filters, and selection are deep-linkable and restorable. |
-| METRIC-RESOURCE-001 | metrics | `/metrics` | metrics | covered | METRIC-RESOURCE-001; METRIC-SESSION-001 | Metrics require and preserve a selected telemetry resource. |
+| METRIC-RESOURCE-001 | metrics | `/metrics` | metrics | covered | METRIC-RESOURCE-001; METRIC-SESSION-001; AOT-CONTRACT-001 | Metrics require and preserve a selected telemetry resource. |
 | METRIC-TREE-001 | metrics | `/metrics` | metrics | covered | METRIC-TREE-001 | Meters and instruments render in a hierarchical selector. |
 | METRIC-METADATA-001 | metrics | `/metrics` | metrics | covered | METRIC-METADATA-001 | Instrument name, description, displayed unit, histogram mode, and containing meter are visible. |
 | METRIC-DURATION-001 | metrics | `/metrics` | metrics | covered | METRIC-RANGE-001; METRIC-SESSION-001 | One minute through twelve hour duration presets update the query window. |
 | METRIC-PAUSE-001 | metrics | `/metrics` | metrics | covered | METRIC-PAUSE-001; METRIC-SESSION-001 | Incoming metrics can be paused and resumed. |
-| METRIC-CLEAR-001 | metrics | `/metrics` | metrics | covered | METRIC-CLEAR-001; DeckApiTests.DeleteMetrics_ClearsSelectedOrAllResources | Metric data can be cleared for the selected resource or all resources. |
+| METRIC-CLEAR-001 | metrics | `/metrics` | metrics | covered | METRIC-CLEAR-001; AOT-CONTRACT-001; DeckApiTests.DeleteMetrics_ClearsSelectedOrAllResources | Metric data can be cleared for the selected resource or all resources. |
 | METRIC-CHART-001 | metrics | `/metrics` | metrics | covered | METRIC-CHART-001; METRIC-CURSOR-001; METRIC-ZOOM-001 | Instrument samples render as an interactive time-series chart. |
 | METRIC-TABLE-001 | metrics | `/metrics` | metrics | covered | METRIC-TABLE-001; METRIC-SESSION-001 | Metric data can switch between chart and table representations. |
-| METRIC-DIMENSIONS-001 | metrics | `/metrics` | metrics | covered | METRIC-DIMENSIONS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries | Dimension filters and multiple attribute series are discoverable and selectable. |
-| METRIC-HISTOGRAM-001 | metrics | `/metrics` | metrics | covered | METRIC-HISTOGRAM-001; HTTP-METRICS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries; ChartDataCalculatorTests.TryCalculateHistogramAggregatePoint_ReturnsCumulativeDeltas | Histogram count and percentile views preserve aggregation semantics. |
-| METRIC-EXEMPLARS-001 | metrics | `/metrics` | metrics | covered | METRIC-EXEMPLARS-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries | Metric exemplars expose values, timestamps, attributes, and related trace navigation. |
+| METRIC-DIMENSIONS-001 | metrics | `/metrics` | metrics | covered | METRIC-DIMENSIONS-001; AOT-CONTRACT-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries | Dimension filters and multiple attribute series are discoverable and selectable. |
+| METRIC-HISTOGRAM-001 | metrics | `/metrics` | metrics | covered | METRIC-HISTOGRAM-001; HTTP-METRICS-001; AOT-CONTRACT-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries; ChartDataCalculatorTests.TryCalculateHistogramAggregatePoint_ReturnsCumulativeDeltas | Histogram count and percentile views preserve aggregation semantics. |
+| METRIC-EXEMPLARS-001 | metrics | `/metrics` | metrics | covered | METRIC-EXEMPLARS-001; AOT-CONTRACT-001; DeckApiTests.GetMetrics_ReturnsSummariesAndSeries | Metric exemplars expose values, timestamps, attributes, and related trace navigation. |
 | METRIC-CURSOR-001 | metrics | `/metrics` | metrics | covered | METRIC-CURSOR-001 | Hovering charts exposes aligned timestamp and series values. |
 | METRIC-ZOOM-001 | metrics | `/metrics` | N/A (React enhancement) | covered | METRIC-ZOOM-001 | Dragging to zoom preserves inspection state and pauses live updates. |
 | METRIC-ROUTES-001 | metrics | `/metrics/resource/{resource}?meter={meter}&instrument={instrument}` | metrics | covered | METRIC-ROUTES-001; METRIC-SESSION-001 | Resource, meter, instrument, duration, and view are deep-linkable. |

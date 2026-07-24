@@ -680,6 +680,210 @@ test(`${features("AOT-CONTRACT-001", "HTTP-TRACES-001", "HTTP-TRACE-CLEAR-001")}
   expect(legacySpanRequests).toBe(0);
 });
 
+test(`${features("AOT-CONTRACT-001", "HTTP-METRICS-001", "HTTP-METRIC-CLEAR-001")} owns metric polling, exact series queries, and clear through versioned AOT routes`, async ({ page }) => {
+  allowMetricSeriesAbort.add(page);
+  let summaries = [
+    {
+      name: "http.server.request.duration",
+      description: "Server request duration.",
+      unit: "ms",
+      resourceName: "stress-api",
+      meterName: "OpenTelemetry.Instrumentation.AspNetCore",
+      kind: "histogram",
+      lastValue: 42,
+      pointCount: 3,
+    },
+    {
+      name: "worker.jobs",
+      description: "Completed jobs.",
+      unit: "{job}",
+      resourceName: "stress-worker",
+      meterName: "Stress.Worker",
+      kind: "counter",
+      lastValue: 7,
+      pointCount: 3,
+    },
+  ];
+  const seriesRequests: URLSearchParams[] = [];
+  const clearRequests: Array<string | null> = [];
+  let summaryRequests = 0;
+  let legacyMetricRequests = 0;
+
+  await page.route("**/api/deck/telemetry/metrics*", async (route) => {
+    legacyMetricRequests++;
+    await route.fulfill({ json: [] });
+  });
+  await page.route("**/api/dashboard", async (route) => route.fulfill({
+    json: {
+      product: "Aspire.Dashboard",
+      versions: [{
+        version: 1,
+        basePath: "/api/dashboard/v1",
+        capabilities: [
+          "configuration",
+          "resources",
+          "metrics",
+          "metrics-series",
+          "metrics-clear",
+        ],
+      }],
+    },
+  }));
+  await page.route("**/api/dashboard/v1/config", async (route) => route.fulfill({
+    json: { applicationName: "Stress AOT", dashboardVersion: "13.5.0-aot", runtimeVersion: ".NET 10.0.0" },
+  }));
+  await page.route("**/api/dashboard/v1/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/dashboard/v1/metrics/series?*", async (route) => {
+    const url = new URL(route.request().url());
+    seriesRequests.push(url.searchParams);
+    const histogramMode = url.searchParams.get("histogramMode") ?? "percentiles";
+    const now = Date.now();
+    await route.fulfill({
+      json: url.searchParams.get("instrument") === "http.server.request.duration"
+        ? {
+            name: "http.server.request.duration",
+            resourceName: "stress-api",
+            meterName: "OpenTelemetry.Instrumentation.AspNetCore",
+            unit: "ms",
+            kind: "histogram",
+            timestampsMs: [now - 2_000, now - 1_000, now],
+            values: null,
+            sum: null,
+            bucketBounds: null,
+            buckets: null,
+            histogramMode,
+            ...(histogramMode === "count" ? { values: [3, 4, 5], showCount: true } : {}),
+            ...(histogramMode === "sum" ? { sum: [90, 120, 150] } : {}),
+            ...(histogramMode === "buckets" ? {
+              bucketBounds: [25, 50],
+              buckets: [
+                { upperBound: 25, values: [1, 2, 2] },
+                { upperBound: 50, values: [2, 1, 2] },
+                { upperBound: null, values: [0, 1, 1] },
+              ],
+            } : {}),
+            ...(histogramMode === "percentiles" ? {
+              p50: [30, 35, 40],
+              p90: [45, 50, 55],
+              p99: [60, 65, 70],
+            } : {}),
+            dimensionFilters: [{ name: "http.method", values: ["GET", "", null] }],
+            dimensions: [{
+              attributes: [{ key: "http.method", value: "GET" }],
+              timestampsMs: [now - 2_000, now - 1_000, now],
+              values: null,
+              p50: [30, 35, 40],
+              p90: [45, 50, 55],
+              p99: [60, 65, 70],
+              sum: null,
+              buckets: null,
+            }],
+            exemplars: [{
+              timestampMs: now - 500,
+              value: 37,
+              traceId: "11111111111111111111111111111111",
+              spanId: "2222222222222222",
+              attributes: [{ key: "http.method", value: "POST" }],
+            }],
+            hasOverflow: true,
+            showCount: histogramMode === "count",
+          }
+        : {
+            name: "worker.jobs",
+            resourceName: "stress-worker",
+            meterName: "Stress.Worker",
+            unit: "{job}",
+            kind: "counter",
+            timestampsMs: [now - 2_000, now - 1_000, now],
+            values: [1, 2, 3],
+            dimensionFilters: [],
+            dimensions: [],
+            exemplars: [],
+            hasOverflow: false,
+            showCount: false,
+            histogramMode: null,
+        },
+    });
+  });
+  await page.route("**/api/dashboard/v1/metrics?*", async (route) => {
+    const resourceName = new URL(route.request().url()).searchParams.get("resource");
+    clearRequests.push(resourceName);
+    summaries = resourceName === null
+      ? []
+      : summaries.filter((summary) => summary.resourceName !== resourceName);
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/api/dashboard/v1/metrics", async (route) => {
+    const request = route.request();
+    if (request.method() === "DELETE") {
+      const resourceName = new URL(request.url()).searchParams.get("resource");
+      clearRequests.push(resourceName);
+      summaries = resourceName === null
+        ? []
+        : summaries.filter((summary) => summary.resourceName !== resourceName);
+      await route.fulfill({ status: 204 });
+      return;
+    }
+
+    summaryRequests++;
+    await route.fulfill({ json: summaries });
+  });
+
+  await page.goto("/metrics?backend=aot");
+
+  const metrics = page.getByRole("main").getByRole("region", { name: "Metrics" });
+  await expect(metrics.getByRole("combobox", { name: "Resource" })).toHaveValue("stress-api");
+  await expect(metrics.locator(".metric-chart canvas")).toBeVisible();
+  await expect.poll(() => seriesRequests.length).toBeGreaterThan(0);
+  expect(seriesRequests[0]!.get("resource")).toBe("stress-api");
+  expect(seriesRequests[0]!.get("meter")).toBe("OpenTelemetry.Instrumentation.AspNetCore");
+  expect(seriesRequests[0]!.get("instrument")).toBe("http.server.request.duration");
+  expect(seriesRequests[0]!.get("windowSeconds")).toBe("300");
+  expect(seriesRequests[0]!.get("maxPoints")).toBe("600");
+  expect(seriesRequests[0]!.get("histogramMode")).toBe("percentiles");
+  await expect(metrics.getByRole("status")).toContainText("Some metric dimensions exceeded the dashboard limit.");
+  await expect(metrics.getByRole("region", { name: "Metric exemplars" })).toContainText("http.method=POST");
+
+  const dimensions = metrics.getByRole("region", { name: "Metric dimension filters" });
+  await dimensions.getByText("http.method", { exact: true }).click();
+  await expect(dimensions.getByRole("checkbox", { name: "(empty)" })).toBeChecked();
+  await expect(dimensions.getByRole("checkbox", { name: "(unset)" })).toBeChecked();
+  await dimensions.getByRole("checkbox", { name: "GET" }).uncheck();
+  await expect.poll(() => seriesRequests.some((request) => (
+    request.getAll("dimension.http.method").join(",") === "s:,n:"
+  ))).toBe(true);
+  await dimensions.getByRole("checkbox", { name: "(empty)" }).uncheck();
+  await expect.poll(() => seriesRequests.some((request) => (
+    request.getAll("dimension.http.method").join(",") === "n:"
+  ))).toBe(true);
+  await dimensions.getByRole("checkbox", { name: "(unset)" }).uncheck();
+  await expect.poll(() => seriesRequests.some((request) => (
+    request.getAll("dimension.http.method").join(",") === "x:"
+  ))).toBe(true);
+  await dimensions.getByText("http.method", { exact: true }).click();
+
+  const aggregation = metrics.getByRole("group", { name: "Histogram aggregation" });
+  for (const mode of ["Count", "Sum", "Buckets"] as const) {
+    await aggregation.getByRole("button", { name: mode }).click();
+    await expect.poll(() => seriesRequests.some((request) => (
+      request.get("histogramMode") === mode.toLowerCase()
+    ))).toBe(true);
+  }
+
+  await metrics.getByRole("button", { name: "Clear metrics" }).click();
+  await page.getByRole("menuitem", { name: "Clear stress-api" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared metrics for stress-api.");
+  await expect(metrics.getByRole("combobox", { name: "Resource" })).toHaveValue("stress-worker");
+  await metrics.getByRole("button", { name: "Clear metrics" }).click();
+  await page.getByRole("menuitem", { name: "Clear all resources" }).click();
+  await expect(page.getByRole("status")).toHaveText("Cleared all metrics.");
+  await expect(metrics).toContainText("No metric resources");
+
+  expect(summaryRequests).toBeGreaterThan(1);
+  expect(clearRequests).toEqual(["stress-api", null]);
+  expect(legacyMetricRequests).toBe(0);
+});
+
 test(`${features("AOT-CONTRACT-001")} streams and deduplicates AOT resource console backlog and live output`, async ({ page }) => {
   let sendConsoleBatch: ((lines: Array<{ lineNumber: number; text: string; isStdErr: boolean }>) => void) | null = null;
   await page.route("**/api/dashboard", async (route) => route.fulfill({

@@ -26,6 +26,7 @@ internal static class DashboardBackendApplication
         builder.Services.TryAddSingleton<IDashboardInteractionService>(services => services.GetRequiredService<DashboardInteractionService>());
         builder.Services.TryAddSingleton<IDashboardStructuredLogSource, DashboardStructuredLogProxy>();
         builder.Services.TryAddSingleton<IDashboardTraceSource, DashboardTraceProxy>();
+        builder.Services.TryAddSingleton<IDashboardMetricSource, DashboardMetricProxy>();
         builder.Services.TryAddSingleton<IDashboardConsoleLogSource, DashboardConsoleLogProxy>();
         builder.Services.TryAddSingleton<IDashboardLegacyApiProxy, DashboardLegacyApiProxy>();
         builder.Services.TryAddSingleton<IDashboardFrontendAssetProvider, EmbeddedDashboardFrontendAssetProvider>();
@@ -59,6 +60,9 @@ internal static class DashboardBackendApplication
                             DashboardApiContract.TracesCapability,
                             DashboardApiContract.TraceStreamCapability,
                             DashboardApiContract.TraceClearCapability,
+                            DashboardApiContract.MetricsCapability,
+                            DashboardApiContract.MetricSeriesCapability,
+                            DashboardApiContract.MetricClearCapability,
                             DashboardApiContract.ConsoleLogsCapability,
                             DashboardApiContract.ConsoleLogStreamCapability,
                             DashboardApiContract.InteractionsCapability
@@ -169,6 +173,72 @@ internal static class DashboardBackendApplication
                 return cleared ? Results.NoContent() : Results.NotFound();
             }
             catch (DashboardTraceServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
+        app.MapGet($"{DashboardApiContract.VersionOneBasePath}/metrics", async (
+            HttpContext context,
+            IDashboardMetricSource metricSource) =>
+        {
+            try
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                var summaries = await metricSource.GetSummariesAsync(
+                    DashboardRequestCredentials.From(context.Request),
+                    context.RequestAborted).ConfigureAwait(false);
+                return Results.Json(
+                    summaries,
+                    DashboardBackendJsonSerializerContext.Default.DashboardMetricSummaryArray);
+            }
+            catch (DashboardMetricServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
+        app.MapGet($"{DashboardApiContract.VersionOneBasePath}/metrics/series", async (
+            HttpContext context,
+            IDashboardMetricSource metricSource) =>
+        {
+            if (!TryCreateMetricSeriesQuery(context.Request.Query, out var query))
+            {
+                return Results.BadRequest();
+            }
+
+            try
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                var series = await metricSource.GetSeriesAsync(
+                    query,
+                    DashboardRequestCredentials.From(context.Request),
+                    context.RequestAborted).ConfigureAwait(false);
+                return series is null
+                    ? Results.NotFound()
+                    : Results.Json(
+                        series,
+                        DashboardBackendJsonSerializerContext.Default.DashboardMetricSeriesResponse);
+            }
+            catch (DashboardMetricServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
+        app.MapDelete($"{DashboardApiContract.VersionOneBasePath}/metrics", async (
+            HttpContext context,
+            IDashboardMetricSource metricSource) =>
+        {
+            try
+            {
+                var cleared = await metricSource.ClearAsync(
+                    GetSingleQueryValue(context.Request.Query, "resource"),
+                    DashboardRequestCredentials.From(context.Request),
+                    context.RequestAborted).ConfigureAwait(false);
+                return cleared ? Results.NoContent() : Results.NotFound();
+            }
+            catch (DashboardMetricServiceUnavailableException ex)
             {
                 return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
@@ -308,6 +378,146 @@ internal static class DashboardBackendApplication
             return value.Count > 0 && !string.IsNullOrWhiteSpace(value[0])
                 ? value[0]
                 : null;
+        }
+
+        static bool TryCreateMetricSeriesQuery(
+            IQueryCollection values,
+            out DashboardMetricSeriesQuery query)
+        {
+            var resourceName = GetSingleQueryValue(values, "resource");
+            var meterName = GetSingleQueryValue(values, "meter");
+            var instrumentName = GetSingleQueryValue(values, "instrument");
+            if (resourceName is null || meterName is null || instrumentName is null)
+            {
+                query = default!;
+                return false;
+            }
+
+            if (!TryParseOptionalInt(values, "windowSeconds", out var windowSeconds)
+                || !TryParseOptionalInt(values, "maxPoints", out var maxPoints)
+                || !TryParseOptionalBool(values, "showCount", out var showCount))
+            {
+                query = default!;
+                return false;
+            }
+
+            var histogramMode = GetSingleQueryValue(values, "histogramMode");
+            if (histogramMode is not null
+                && histogramMode is not ("percentiles" or "count" or "sum" or "buckets"))
+            {
+                query = default!;
+                return false;
+            }
+
+            var dimensions = new Dictionary<string, string?[]>(StringComparer.Ordinal);
+            foreach (var (name, encodedValues) in values)
+            {
+                const string Prefix = "dimension.";
+                if (!name.StartsWith(Prefix, StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                var dimensionName = name[Prefix.Length..];
+                if (string.IsNullOrWhiteSpace(dimensionName)
+                    || !TryDecodeDimensionValues(encodedValues, out var dimensionValues))
+                {
+                    query = default!;
+                    return false;
+                }
+                dimensions.Add(dimensionName, dimensionValues);
+            }
+
+            query = new DashboardMetricSeriesQuery(
+                resourceName,
+                meterName,
+                instrumentName,
+                windowSeconds,
+                maxPoints,
+                showCount,
+                histogramMode,
+                dimensions);
+            return true;
+        }
+
+        static bool TryParseOptionalInt(
+            IQueryCollection values,
+            string name,
+            out int? result)
+        {
+            var text = GetSingleQueryValue(values, name);
+            if (text is null)
+            {
+                result = null;
+                return true;
+            }
+
+            if (!int.TryParse(
+                text,
+                System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture,
+                out var parsed))
+            {
+                result = null;
+                return false;
+            }
+
+            result = parsed;
+            return true;
+        }
+
+        static bool TryParseOptionalBool(
+            IQueryCollection values,
+            string name,
+            out bool? result)
+        {
+            var text = GetSingleQueryValue(values, name);
+            if (text is null)
+            {
+                result = null;
+                return true;
+            }
+
+            if (!bool.TryParse(text, out var parsed))
+            {
+                result = null;
+                return false;
+            }
+
+            result = parsed;
+            return true;
+        }
+
+        static bool TryDecodeDimensionValues(
+            Microsoft.Extensions.Primitives.StringValues encodedValues,
+            out string?[] values)
+        {
+            if (encodedValues.Count is 1 && encodedValues[0] is "x:")
+            {
+                values = [];
+                return true;
+            }
+
+            values = new string?[encodedValues.Count];
+            for (var i = 0; i < encodedValues.Count; i++)
+            {
+                var value = encodedValues[i];
+                if (value is "n:")
+                {
+                    values[i] = null;
+                }
+                else if (value?.StartsWith("s:", StringComparison.Ordinal) is true)
+                {
+                    values[i] = value[2..];
+                }
+                else
+                {
+                    values = [];
+                    return false;
+                }
+            }
+
+            return true;
         }
     }
 }

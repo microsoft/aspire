@@ -34,7 +34,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"traces\",\"traces-live\",\"traces-clear\",\"console-logs\",\"console-logs-live\",\"interactions\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"interactions\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -1178,6 +1178,185 @@ public class DashboardBackendApplicationTests
     }
 
     [Fact]
+    public async Task GetMetrics_ReturnsSourceGeneratedSummariesAndForwardsCredentials()
+    {
+        var source = new TestMetricSource(
+            [
+                new DashboardMetricSummary(
+                    "http.server.request.duration",
+                    "Server request duration.",
+                    "ms",
+                    "api",
+                    "OpenTelemetry.Instrumentation.AspNetCore",
+                    "histogram",
+                    42,
+                    17)
+            ],
+            series: null);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardMetricSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(HttpMethod.Get, "/api/dashboard/v1/metrics");
+        request.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer dashboard-token");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal(
+            "[{\"name\":\"http.server.request.duration\",\"description\":\"Server request duration.\",\"unit\":\"ms\",\"resourceName\":\"api\",\"meterName\":\"OpenTelemetry.Instrumentation.AspNetCore\",\"kind\":\"histogram\",\"lastValue\":42,\"pointCount\":17}]",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(".Aspire.Dashboard=browser-session", source.Credentials?.Cookie);
+        Assert.Equal("Bearer dashboard-token", source.Credentials?.Authorization);
+    }
+
+    [Fact]
+    public async Task GetMetricSeries_PreservesDimensionsHistogramAndExemplars()
+    {
+        var source = new TestMetricSource(
+            [],
+            new DashboardMetricSeriesResponse(
+                "http.server.request.duration",
+                "api",
+                "OpenTelemetry.Instrumentation.AspNetCore",
+                "ms",
+                "histogram",
+                [1000, 2000],
+                null,
+                null,
+                null,
+                null,
+                [30, 40],
+                [25, 50],
+                [
+                    new DashboardMetricBucketSeries(25, [1, 2]),
+                    new DashboardMetricBucketSeries(null, [0, 1])
+                ],
+                [
+                    new DashboardMetricDimensionFilter("http.method", ["GET", null]),
+                    new DashboardMetricDimensionFilter("route", [])
+                ],
+                [
+                    new DashboardMetricDimensionSeries(
+                        [new DashboardMetricAttribute("http.method", "GET")],
+                        [1000, 2000],
+                        null,
+                        null,
+                        null,
+                        null,
+                        [30, 40],
+                        [new DashboardMetricBucketSeries(null, [1, 1])])
+                ],
+                [
+                    new DashboardMetricExemplar(
+                        1500,
+                        37,
+                        "11111111111111111111111111111111",
+                        "2222222222222222",
+                        [new DashboardMetricAttribute("request.id", "abc")])
+                ],
+                true,
+                false,
+                "buckets"));
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardMetricSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/api/dashboard/v1/metrics/series?resource=api&meter=OpenTelemetry.Instrumentation.AspNetCore"
+            + "&instrument=http.server.request.duration&windowSeconds=60&maxPoints=20&showCount=false"
+            + "&histogramMode=buckets&dimension.http.method=s%3AGET&dimension.http.method=n%3A"
+            + "&dimension.route=x%3A");
+        request.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        using var document = JsonDocument.Parse(
+            await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken));
+        var root = document.RootElement;
+        Assert.Equal("buckets", root.GetProperty("histogramMode").GetString());
+        Assert.True(root.GetProperty("hasOverflow").GetBoolean());
+        Assert.Equal(2, root.GetProperty("bucketBounds").GetArrayLength());
+        Assert.Equal(2, root.GetProperty("buckets").GetArrayLength());
+        Assert.Equal("GET", root.GetProperty("dimensionFilters")[0].GetProperty("values")[0].GetString());
+        Assert.Equal(JsonValueKind.Null, root.GetProperty("dimensionFilters")[0].GetProperty("values")[1].ValueKind);
+        Assert.Equal("11111111111111111111111111111111", root.GetProperty("exemplars")[0].GetProperty("traceId").GetString());
+
+        Assert.NotNull(source.Query);
+        Assert.Equal("api", source.Query.ResourceName);
+        Assert.Equal("OpenTelemetry.Instrumentation.AspNetCore", source.Query.MeterName);
+        Assert.Equal("http.server.request.duration", source.Query.InstrumentName);
+        Assert.Equal(60, source.Query.WindowSeconds);
+        Assert.Equal(20, source.Query.MaxPoints);
+        Assert.False(source.Query.ShowCount);
+        Assert.Equal("buckets", source.Query.HistogramMode);
+        Assert.Collection(
+            source.Query.Dimensions["http.method"],
+            value => Assert.Equal("GET", value),
+            Assert.Null);
+        Assert.Empty(source.Query.Dimensions["route"]);
+        Assert.Equal(".Aspire.Dashboard=browser-session", source.Credentials?.Cookie);
+    }
+
+    [Theory]
+    [InlineData("/api/dashboard/v1/metrics/series")]
+    [InlineData("/api/dashboard/v1/metrics/series?resource=api&meter=m&instrument=i&windowSeconds=nope")]
+    [InlineData("/api/dashboard/v1/metrics/series?resource=api&meter=m&instrument=i&showCount=nope")]
+    [InlineData("/api/dashboard/v1/metrics/series?resource=api&meter=m&instrument=i&histogramMode=average")]
+    [InlineData("/api/dashboard/v1/metrics/series?resource=api&meter=m&instrument=i&dimension.name=invalid")]
+    public async Task GetMetricSeries_RejectsInvalidQueries(string path)
+    {
+        var source = new TestMetricSource([], series: null);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardMetricSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            path,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(source.Query);
+    }
+
+    [Fact]
+    public async Task ClearMetrics_ForwardsResourceAndCredentials()
+    {
+        var source = new TestMetricSource([], series: null);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardMetricSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            "/api/dashboard/v1/metrics?resource=api");
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer dashboard-token");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("api", source.ClearedResourceName);
+        Assert.Equal("Bearer dashboard-token", source.Credentials?.Authorization);
+    }
+
+    [Fact]
     public async Task ConsoleLogHub_StreamsResourceScopedBacklogAndLiveLines()
     {
         DashboardConsoleLogsEvent[] logEvents =
@@ -1437,6 +1616,43 @@ public class DashboardBackendApplicationTests
                 yield return traceEvent;
                 await Task.Yield();
             }
+        }
+
+        public ValueTask<bool> ClearAsync(
+            string? resourceName,
+            DashboardRequestCredentials credentials,
+            CancellationToken cancellationToken)
+        {
+            ClearedResourceName = resourceName;
+            Credentials = credentials;
+            return ValueTask.FromResult(true);
+        }
+    }
+
+    private sealed class TestMetricSource(
+        DashboardMetricSummary[] summaries,
+        DashboardMetricSeriesResponse? series) : IDashboardMetricSource
+    {
+        public DashboardMetricSeriesQuery? Query { get; private set; }
+        public DashboardRequestCredentials? Credentials { get; private set; }
+        public string? ClearedResourceName { get; private set; }
+
+        public ValueTask<DashboardMetricSummary[]> GetSummariesAsync(
+            DashboardRequestCredentials credentials,
+            CancellationToken cancellationToken)
+        {
+            Credentials = credentials;
+            return ValueTask.FromResult(summaries);
+        }
+
+        public ValueTask<DashboardMetricSeriesResponse?> GetSeriesAsync(
+            DashboardMetricSeriesQuery query,
+            DashboardRequestCredentials credentials,
+            CancellationToken cancellationToken)
+        {
+            Query = query;
+            Credentials = credentials;
+            return ValueTask.FromResult(series);
         }
 
         public ValueTask<bool> ClearAsync(

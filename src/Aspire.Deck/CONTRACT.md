@@ -33,13 +33,13 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "traces", "traces-live", "traces-clear", "console-logs", "console-logs-live", "interactions"]
+      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "interactions"]
     }
   ]
 }
 ```
 
-Version 1 currently defines twelve capabilities:
+Version 1 currently defines fifteen capabilities:
 
 | Capability | Route | Response |
 | --- | --- | --- |
@@ -52,6 +52,9 @@ Version 1 currently defines twelve capabilities:
 | `traces` | `GET {basePath}/traces` | `TraceSnapshot` |
 | `traces-live` | SignalR hub at `{basePath}/traces/live` | `TraceEvent` server stream |
 | `traces-clear` | `DELETE {basePath}/traces` | No content |
+| `metrics` | `GET {basePath}/metrics` | `MetricSummary[]` |
+| `metrics-series` | `GET {basePath}/metrics/series` | `MetricSeriesResponse` |
+| `metrics-clear` | `DELETE {basePath}/metrics` | No content |
 | `console-logs` | Capability marker for resource console output | `ConsoleLogEvent` |
 | `console-logs-live` | SignalR hub at `{basePath}/console-logs/live` | `ConsoleLogEvent` server stream |
 | `interactions` | `GET {basePath}/interactions`; `POST {basePath}/interactions/respond` | `InteractionInfo[]`; no content |
@@ -84,8 +87,8 @@ JSON resource-log tree used by the existing dashboard. The AOT host obtains the 
 loopback legacy dashboard and forwards the browser's dashboard credentials. `structured-logs-live`
 exposes `WatchStructuredLogs`; each event contains one `data` OTLP tree. React performs text,
 resource, severity, and structured-attribute filtering locally and freezes its displayed snapshot
-while paused. Metric and destructive structured-log operations remain on `/api/deck`; after a
-legacy structured-log clear, React reloads the versioned backlog.
+while paused. Destructive structured-log operations remain on `/api/deck`; after a legacy
+structured-log clear, React reloads the versioned backlog.
 
 The `traces` response contains `{ totalCount, returnedCount, data }`, where `data` is the complete
 OTLP resource-span tree needed for trace correlation, waterfall layout, span details, events, and
@@ -99,6 +102,18 @@ authoritative count on reconnect, and freezes only the displayed snapshot while 
 old stream generation, refreshes the snapshot, and opens a new watcher so buffered pre-clear spans
 cannot reappear. A server must advertise all three trace capabilities before React stops using the
 existing trace transport.
+
+The `metrics` response is the stable resource/meter/instrument summary inventory, including exact
+point counts and the latest display value. React polls it every 1.5 seconds, coalesces overlapping
+polls, stops polling when the final subscriber leaves, and resumes after transient failures.
+`metrics-series` accepts required `resource`, `meter`, and `instrument` values plus bounded
+`windowSeconds` and `maxPoints`, histogram modes (`percentiles`, `count`, `sum`, or `buckets`), and
+repeated `dimension.{name}` selections. Dimension values use `s:{value}`, `n:` for an unset
+attribute, and a sole `x:` for an explicitly empty selection. The source-generated response keeps
+aggregate and per-dimension series, bucket bounds, exemplars and trace correlation, and overflow
+state aligned with the existing metric repository. `metrics-clear` accepts an optional `resource`
+group and refreshes the authoritative summary after clearing. A server must advertise all three
+metric capabilities before React stops using the existing metric transport.
 
 `console-logs-live` exposes `WatchConsoleLogs(resourceName)`. Each subscription is resource scoped;
 the existing dashboard emits its bounded backlog first and then live batches without a handoff gap.

@@ -345,13 +345,13 @@ export interface MetricSeriesResponse {
   unit: string | null;
   kind: MetricKind;
   timestampsMs: number[];
-  values?: number[];
-  p50?: number[];
-  p90?: number[];
-  p99?: number[];
-  sum?: number[];
-  bucketBounds?: number[];
-  buckets?: MetricBucketSeries[];
+  values?: number[] | null;
+  p50?: number[] | null;
+  p90?: number[] | null;
+  p99?: number[] | null;
+  sum?: number[] | null;
+  bucketBounds?: number[] | null;
+  buckets?: MetricBucketSeries[] | null;
   dimensionFilters?: MetricDimensionFilter[];
   dimensions?: MetricDimensionSeries[];
   exemplars?: MetricExemplar[];
@@ -378,12 +378,12 @@ export interface MetricDimensionFilter {
 export interface MetricDimensionSeries {
   attributes: MetricAttribute[];
   timestampsMs: number[];
-  values?: number[];
-  p50?: number[];
-  p90?: number[];
-  p99?: number[];
-  sum?: number[];
-  buckets?: MetricBucketSeries[];
+  values?: number[] | null;
+  p50?: number[] | null;
+  p90?: number[] | null;
+  p99?: number[] | null;
+  sum?: number[] | null;
+  buckets?: MetricBucketSeries[] | null;
 }
 
 export interface MetricExemplar {
