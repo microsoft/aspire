@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.InteropServices;
+using Aspire.Shared;
 using Microsoft.AspNetCore.SignalR;
 using Microsoft.Extensions.DependencyInjection.Extensions;
 
@@ -17,6 +18,9 @@ internal static class DashboardBackendApplication
         builder.Services.TryAddSingleton<IDashboardResourceEventSource>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.TryAddSingleton<IDashboardCommandExecutor, DashboardCommandExecutor>();
         builder.Services.TryAddSingleton<IDashboardStructuredLogSource, DashboardStructuredLogProxy>();
+        builder.Services.TryAddSingleton<IDashboardConsoleLogSource, DashboardConsoleLogProxy>();
+        builder.Services.TryAddSingleton<IDashboardLegacyApiProxy, DashboardLegacyApiProxy>();
+        builder.Services.TryAddSingleton<IDashboardFrontendAssetProvider, EmbeddedDashboardFrontendAssetProvider>();
         builder.Services.AddHostedService(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.AddSignalR();
         builder.Services.Configure<JsonHubProtocolOptions>(options =>
@@ -42,7 +46,9 @@ internal static class DashboardBackendApplication
                             DashboardApiContract.ResourceStreamCapability,
                             DashboardApiContract.CommandsCapability,
                             DashboardApiContract.StructuredLogsCapability,
-                            DashboardApiContract.StructuredLogStreamCapability
+                            DashboardApiContract.StructuredLogStreamCapability,
+                            DashboardApiContract.ConsoleLogsCapability,
+                            DashboardApiContract.ConsoleLogStreamCapability
                         ])
                 ]);
 
@@ -55,7 +61,9 @@ internal static class DashboardBackendApplication
         {
             var configuration = new DashboardConfiguration(
                 builder.Configuration["DashboardBackend:ApplicationName"] ?? "Aspire",
-                builder.Configuration["DashboardBackend:Version"] ?? "0.0.0-dev",
+                builder.Configuration["DashboardBackend:Version"]
+                    ?? AssemblyVersionHelper.GetDisplayVersion(typeof(DashboardBackendApplication).Assembly)
+                    ?? "unknown",
                 RuntimeInformation.FrameworkDescription);
 
             return Results.Json(
@@ -83,6 +91,7 @@ internal static class DashboardBackendApplication
 
         app.MapHub<DashboardResourcesHub>(DashboardApiContract.ResourceStreamPath);
         app.MapHub<DashboardStructuredLogsHub>(DashboardApiContract.StructuredLogStreamPath);
+        app.MapHub<DashboardConsoleLogsHub>(DashboardApiContract.ConsoleLogStreamPath);
 
         app.MapGet($"{DashboardApiContract.VersionOneBasePath}/structured-logs", async (
             HttpContext context,
@@ -130,6 +139,26 @@ internal static class DashboardBackendApplication
                 return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
         });
+
+        // Parameter editing and commands that collect user input are still owned by the
+        // existing dashboard. Keep these two legacy endpoints on the AOT origin so the
+        // React fallback preserves browser credentials and same-origin request semantics.
+        app.MapGet("/api/deck/interactions", (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+            legacyApiProxy.ProxyAsync(context, "api/deck/interactions"));
+        app.MapPost("/api/deck/interactions/respond", (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+            legacyApiProxy.ProxyAsync(context, "api/deck/interactions/respond"));
+        app.MapPost("/api/deck/commands/execute", (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+            legacyApiProxy.ProxyAsync(context, "api/deck/commands/execute"));
+
+        // Keep the SPA fallback last so versioned API and SignalR routes always win. Unknown
+        // /api paths remain 404s instead of being disguised as successful HTML responses.
+        DashboardFrontendAssets.Map(app);
 
         return app;
     }

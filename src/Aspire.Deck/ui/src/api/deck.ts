@@ -33,6 +33,7 @@ import type {
   ManageDataResponse,
   TelemetrySummary,
 } from "./types";
+import { PARAMETER_RESOURCE_TYPE } from "./types";
 
 // (MetricSeriesQuery re-exported from types for callers that import from deck.)
 export type { MetricSeriesQuery } from "./types";
@@ -48,14 +49,27 @@ export function isHttpBackend(): boolean {
     return false;
   }
 
-  const backend = new URLSearchParams(window.location.search).get("backend");
+  const backend = getBackendMode();
   // AOT mode is a strangler path: capabilities not yet in the versioned contract
   // deliberately continue through the existing HTTP backend until parity is proven.
   return backend === "http" || backend === "aot";
 }
 
 export function isAotBackend(): boolean {
-  return typeof window !== "undefined" && new URLSearchParams(window.location.search).get("backend") === "aot";
+  return typeof window !== "undefined" && getBackendMode() === "aot";
+}
+
+function getBackendMode(): string | null {
+  const requested = new URLSearchParams(window.location.search).get("backend");
+  if (requested !== null) {
+    return requested;
+  }
+
+  // The Native AOT host rewrites this build-time marker when it serves index.html.
+  // Vite and Tauri keep the standalone marker, preserving their existing mock/bridge defaults.
+  return document.querySelector<HTMLMetaElement>('meta[name="aspire-dashboard-backend"]')?.content === "aot"
+    ? "aot"
+    : null;
 }
 
 // Bridges Tauri's promise-returning `listen` (which resolves to an unlisten fn)
@@ -242,16 +256,15 @@ export function onInteractions(cb: (interactions: InteractionInfo[]) => void): U
 
 // Replies to one interaction on the active AppHost. `values` maps input names to
 // string values (booleans as "true"/"false", choices as the option value).
-export function respondInteraction(interactionId: number, action: string, values: Record<string, string>): void {
+export function respondInteraction(interactionId: number, action: string, values: Record<string, string>): Promise<void> {
   if (isTauri()) {
-    void invoke("deck_respond_interaction", { interactionId, action, values });
-    return;
+    return invoke("deck_respond_interaction", { interactionId, action, values });
   }
   if (isHttpBackend()) {
-    httpBackend.respondInteraction(interactionId, action, values);
-    return;
+    return httpBackend.respondInteraction(interactionId, action, values);
   }
   mockBackend.respondInteraction(interactionId, action, values);
+  return Promise.resolve();
 }
 
 export function getTelemetrySummary(): Promise<TelemetrySummary> {
@@ -323,6 +336,12 @@ export function executeCommand(args: ExecuteCommandArgs): Promise<CommandRespons
     return invoke<CommandResponse>("deck_execute_command", { ...args });
   }
   if (isAotBackend()) {
+    // Parameter updates are interaction-backed commands. Until command interactions
+    // migrate as one capability, keep both command execution and its responses on the
+    // legacy dashboard client so one resource-service session owns the whole exchange.
+    if (args.resourceType === PARAMETER_RESOURCE_TYPE) {
+      return httpBackend.executeCommand(args);
+    }
     return nativeBackend.hasCapability("commands").then((supported) => (
       supported ? nativeBackend.executeCommand(args) : httpBackend.executeCommand(args)
     ));
@@ -350,6 +369,22 @@ export function subscribeConsoleLogs(
     };
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      let cancelled = false;
+      let unsubscribe: Unsubscribe | null = null;
+      void nativeBackend.hasCapability("console-logs-live").then((supported) => {
+        if (cancelled) return;
+        unsubscribe = supported
+          ? nativeBackend.subscribeConsoleLogs(resourceName, cb)
+          : httpBackend.subscribeConsoleLogs(resourceName, cb);
+      }).catch(() => {
+        if (!cancelled) unsubscribe = httpBackend.subscribeConsoleLogs(resourceName, cb);
+      });
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
+    }
     return httpBackend.subscribeConsoleLogs(resourceName, cb);
   }
   return mockBackend.subscribeConsoleLogs(resourceName, cb);

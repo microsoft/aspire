@@ -7,6 +7,7 @@ import {
 } from "@microsoft/signalr";
 import type {
   ConnectionStatus,
+  ConsoleLogEvent,
   DashboardApiDiscovery,
   DashboardApiVersion,
   DashboardConfiguration,
@@ -29,6 +30,8 @@ const resourceStreamCapability = "resources-live";
 const commandsCapability = "commands";
 const structuredLogsCapability = "structured-logs";
 const structuredLogStreamCapability = "structured-logs-live";
+const consoleLogsCapability = "console-logs";
+const consoleLogStreamCapability = "console-logs-live";
 const supportedVersions = new Set([1]);
 
 let negotiatedVersion: Promise<DashboardApiVersion> | null = null;
@@ -263,8 +266,10 @@ function subscribeResources(
   let retryTimer: number | undefined;
   let connection: HubConnection | null = null;
   let streamSubscription: ISubscription<ResourcesEvent> | null = null;
+  let connectionFailed = false;
 
   const reportError = (error: unknown): void => {
+    connectionFailed = true;
     reportConnection({
       target: "resourceService",
       state: "error",
@@ -303,6 +308,7 @@ function subscribeResources(
 
         receivedSnapshot = true;
         callback(event);
+        connectionFailed = false;
         reportConnection({ target: "resourceService", state: "connected" });
       },
       error: (error) => {
@@ -337,7 +343,12 @@ function subscribeResources(
     }
 
     starting = true;
-    reportConnection({ target: "resourceService", state: "connecting" });
+    // Once an attempt has failed, keep the stable error status visible while automatic
+    // retries run in the background. Alternating error/connecting every second makes the
+    // status pill pulse and looks like the disconnected dashboard is being remounted.
+    if (!connectionFailed) {
+      reportConnection({ target: "resourceService", state: "connecting" });
+    }
     try {
       if (connection === null) {
         const version = await getNegotiatedVersion();
@@ -474,6 +485,88 @@ function subscribeStructuredLogs(callback: (logs: NativeStructuredLogs) => void)
   };
 }
 
+function subscribeConsoleLogs(
+  resourceName: string,
+  callback: (event: ConsoleLogEvent) => void,
+): () => void {
+  let cancelled = false;
+  let connection: HubConnection | null = null;
+  let subscription: ISubscription<ConsoleLogEvent> | null = null;
+  let retryTimer: number | undefined;
+  let highestLineNumber = 0;
+
+  const beginStream = (): void => {
+    if (cancelled || connection?.state !== HubConnectionState.Connected) return;
+    subscription?.dispose();
+    subscription = connection.stream<ConsoleLogEvent>("WatchConsoleLogs", resourceName).subscribe({
+      next: (event) => {
+        if (cancelled || event.resourceName !== resourceName || !Array.isArray(event.lines)) {
+          return;
+        }
+
+        // A reconnect replays the resource backlog before returning to live data. Line
+        // numbers are monotonic per resource, so discard the replayed prefix while keeping
+        // the legacy endpoint's backlog-to-live order and stdout/stderr identity intact.
+        const lines = event.lines.filter((line) =>
+          Number.isInteger(line.lineNumber)
+          && line.lineNumber > highestLineNumber
+          && typeof line.text === "string"
+          && typeof line.isStdErr === "boolean");
+        if (lines.length === 0) return;
+        highestLineNumber = Math.max(highestLineNumber, ...lines.map((line) => line.lineNumber));
+        callback({ resourceName, lines });
+      },
+      error: () => {
+        subscription = null;
+        if (connection?.state === HubConnectionState.Connected) void connection.stop();
+      },
+      complete: () => {
+        subscription = null;
+        if (connection?.state === HubConnectionState.Connected) void connection.stop();
+      },
+    });
+  };
+
+  const scheduleStart = (): void => {
+    if (cancelled || retryTimer !== undefined) return;
+    retryTimer = window.setTimeout(() => {
+      retryTimer = undefined;
+      void start();
+    }, 1_000);
+  };
+
+  const start = async (): Promise<void> => {
+    try {
+      const version = await getNegotiatedVersion();
+      if (!version.capabilities.includes(consoleLogsCapability)
+          || !version.capabilities.includes(consoleLogStreamCapability)) {
+        throw new Error("Dashboard API version 1 does not advertise live console logs.");
+      }
+      if (cancelled) return;
+
+      connection = new HubConnectionBuilder()
+        .withUrl(`${version.basePath}/console-logs/live`, { withCredentials: true })
+        .withAutomaticReconnect([0, 1_000, 2_000, 5_000])
+        .configureLogging(LogLevel.None)
+        .build();
+      connection.onreconnected(beginStream);
+      connection.onclose(scheduleStart);
+      await connection.start();
+      beginStream();
+    } catch {
+      scheduleStart();
+    }
+  };
+
+  void start();
+  return () => {
+    cancelled = true;
+    if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    subscription?.dispose();
+    void connection?.stop();
+  };
+}
+
 export const nativeBackend = {
   getConfig,
   hasCapability,
@@ -481,5 +574,6 @@ export const nativeBackend = {
   executeCommand,
   subscribeResources,
   subscribeStructuredLogs,
+  subscribeConsoleLogs,
   refreshStructuredLogs,
 };

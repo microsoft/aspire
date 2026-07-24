@@ -1275,6 +1275,78 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_InteractiveDynamicDisabledArgument_IsLoadedBeforeValidation()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        var loadCount = 0;
+        var executed = false;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(name: "mycommand",
+                displayName: "My command",
+                executeCommand: _ =>
+                {
+                    executed = true;
+                    return Task.FromResult(CommandResults.Success());
+                },
+                commandOptions: new CommandOptions
+                {
+                    Arguments =
+                    [
+                        new InteractionInput
+                        {
+                            Name = "value",
+                            InputType = InputType.Text,
+                            Required = true
+                        },
+                        new InteractionInput
+                        {
+                            Name = "save",
+                            InputType = InputType.Boolean,
+                            Disabled = true,
+                            DynamicLoading = new InputLoadOptions
+                            {
+                                DependsOnInputs = ["value"],
+                                AlwaysLoadOnStart = true,
+                                LoadCallback = context =>
+                                {
+                                    loadCount++;
+                                    Assert.Equal("updated", context.AllInputs.GetString("value"));
+                                    context.Input.Value = "false";
+                                    return Task.CompletedTask;
+                                }
+                            }
+                        }
+                    ]
+                });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = false },
+            CancellationToken.None).DefaultTimeout();
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        Assert.True(interaction.Inputs.TryGetByName("value", out var valueInput));
+        valueInput.Value = "updated";
+        Assert.True(interaction.Inputs.TryGetByName("save", out var saveInput));
+        saveInput.Value = "false";
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+        var result = await resultTask;
+
+        Assert.True(result.Success);
+        Assert.True(executed);
+        Assert.Equal(1, loadCount);
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_NonInteractiveWithoutArguments_DoesNotPrompt()
     {
         using var builder = TestDistributedApplicationBuilder.Create(testOutputHelper);
@@ -1618,4 +1690,3 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
 
     }
 }
-

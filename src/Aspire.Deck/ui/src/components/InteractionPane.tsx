@@ -12,6 +12,7 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
   const [values, setValues] = useState<Record<string, string>>(() => initValues(interaction));
   const idRef = useRef(interaction.interactionId);
   const interactionRef = useRef(interaction);
+  const updateRef = useRef<Promise<void>>(Promise.resolve());
 
   // Reset local values only when a brand-new interaction arrives — not on the
   // validation updates that re-send the same interaction id with new errors.
@@ -28,8 +29,8 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
           // A changed value from an update response is authoritative. If only options,
           // validation, or disabled state changed, retain text the user is still editing.
           next[input.name] = !previousInput || input.value !== previousInput.value
-            ? input.value
-            : current[input.name] ?? input.value;
+            ? initialInputValue(input)
+            : current[input.name] ?? initialInputValue(input);
         }
         return next;
       });
@@ -37,13 +38,17 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
     interactionRef.current = interaction;
   }, [interaction]);
 
-  const close = () => respondInteraction(interaction.interactionId, "cancel", {});
+  const close = () => void respondInteraction(interaction.interactionId, "cancel", {});
 
   function setValue(name: string, value: string, updateOnChange: boolean) {
     const next = { ...values, [name]: value };
     setValues(next);
     if (updateOnChange) {
-      respondInteraction(interaction.interactionId, "update", next);
+      // Dynamic input updates and the terminal submit must reach the AppHost in order.
+      // Otherwise a quick submit can race validation while dependent inputs are still loading.
+      updateRef.current = updateRef.current
+        .catch(() => undefined)
+        .then(() => respondInteraction(interaction.interactionId, "update", next));
     }
   }
 
@@ -79,9 +84,10 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
           {isInputs ? (
             <form
               className="interaction-form"
-              onSubmit={(e) => {
+              onSubmit={async (e) => {
                 e.preventDefault();
-                respondInteraction(interaction.interactionId, "submit", values);
+                await updateRef.current.catch(() => undefined);
+                await respondInteraction(interaction.interactionId, "submit", values);
               }}
             >
               {validationErrors.length > 0 ? (
@@ -121,7 +127,7 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
                   <button
                     type="button"
                     className="btn"
-                    onClick={() => respondInteraction(interaction.interactionId, "secondary", {})}
+                    onClick={() => void respondInteraction(interaction.interactionId, "secondary", {})}
                   >
                     {interaction.secondaryButtonText || "No"}
                   </button>
@@ -129,7 +135,7 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
                 <button
                   type="button"
                   className="btn btn--primary"
-                  onClick={() => respondInteraction(interaction.interactionId, "primary", {})}
+                  onClick={() => void respondInteraction(interaction.interactionId, "primary", {})}
                 >
                   {interaction.primaryButtonText || "OK"}
                 </button>
@@ -248,7 +254,13 @@ function toIntent(intent: InteractionInfo["intent"]): "error" | "warning" | "suc
 function initValues(interaction: InteractionInfo): Record<string, string> {
   const values: Record<string, string> = {};
   for (const input of interaction.inputs) {
-    values[input.name] = input.value;
+    values[input.name] = initialInputValue(input);
   }
   return values;
+}
+
+function initialInputValue(input: InteractionInputInfo): string {
+  // Optional unchecked booleans arrive without a protobuf value. Command argument
+  // validation expects the wire-format boolean "false", not an empty string.
+  return input.inputType === "boolean" && input.value === "" ? "false" : input.value;
 }

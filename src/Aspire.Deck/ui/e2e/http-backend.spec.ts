@@ -352,6 +352,72 @@ test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes
   expect(resourceRequests).toBe(0);
 });
 
+test(`${features("AOT-CONTRACT-001")} streams and deduplicates AOT resource console backlog and live output`, async ({ page }) => {
+  let sendConsoleBatch: ((lines: Array<{ lineNumber: number; text: string; isStdErr: boolean }>) => void) | null = null;
+  await page.route("**/api/dashboard", async (route) => route.fulfill({
+    json: {
+      product: "Aspire.Dashboard",
+      versions: [{
+        version: 1,
+        basePath: "/api/dashboard/v1",
+        capabilities: ["configuration", "console-logs", "console-logs-live"],
+      }],
+    },
+  }));
+  await page.route("**/api/dashboard/v1/config", async (route) => route.fulfill({
+    json: { applicationName: "Stress AOT", dashboardVersion: "13.5.0-aot", runtimeVersion: ".NET 10.0.0" },
+  }));
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/dashboard/v1/console-logs/live/negotiate?**", async (route) => route.fulfill({
+    json: {
+      negotiateVersion: 1,
+      connectionId: "playwright-console-connection",
+      connectionToken: "playwright-console-token",
+      availableTransports: [{ transport: "WebSockets", transferFormats: ["Text", "Binary"] }],
+    },
+  }));
+  await page.routeWebSocket("**/api/dashboard/v1/console-logs/live?id=*", (webSocket) => {
+    let invocationId: string | undefined;
+    webSocket.onMessage((message) => {
+      for (const frame of message.toString().split("\x1e").filter(Boolean)) {
+        const payload = JSON.parse(frame) as { protocol?: string; type?: number; invocationId?: string; target?: string };
+        if (payload.protocol === "json") {
+          webSocket.send("{}\x1e");
+        } else if (payload.type === 4 && payload.target === "WatchConsoleLogs") {
+          invocationId = payload.invocationId;
+        }
+      }
+    });
+    sendConsoleBatch = (lines) => {
+      if (invocationId === undefined) throw new Error("The console stream has not started.");
+      webSocket.send(`${JSON.stringify({
+        type: 2,
+        invocationId,
+        item: { resourceName: resource.name, lines },
+      })}\x1e`);
+    };
+  });
+
+  await page.goto("/?backend=aot");
+  await page.getByRole("navigation").getByRole("button", { name: /^Console/ }).click();
+  await page.getByRole("main").getByRole("combobox", { name: "Resource" }).selectOption(resource.name);
+  await expect.poll(() => sendConsoleBatch !== null).toBe(true);
+  sendConsoleBatch!([
+    { lineNumber: 1, text: "AOT backlog", isStdErr: false },
+    { lineNumber: 2, text: "AOT stderr", isStdErr: true },
+  ]);
+  const consoleRegion = page.getByRole("main").getByRole("region", { name: "Console" });
+  await expect(consoleRegion).toContainText("AOT backlog");
+  await expect(consoleRegion.locator(".log-line.stderr")).toHaveCount(1);
+
+  sendConsoleBatch!([
+    { lineNumber: 2, text: "AOT stderr", isStdErr: true },
+    { lineNumber: 3, text: "AOT live", isStdErr: false },
+  ]);
+  await expect(consoleRegion).toContainText("AOT live");
+  await expect(consoleRegion.locator(".console__footer")).toContainText("3 lines");
+});
+
 test(`${features("AOT-CONTRACT-001")} replays, filters, pauses, and resumes AOT structured logs`, async ({ page }) => {
   const otlpLog = (message: string, timeUnixNano: string) => ({
     resourceLogs: [{
@@ -819,6 +885,9 @@ test(`${features("HTTP-RESOURCES-001")} distinguishes the complete resource life
 test(`${features("HTTP-FAILURE-001")} reports an unavailable HTTP backend`, async ({ page }, testInfo: TestInfo) => {
   allowUnavailableResponses.add(page);
   await page.route("**/api/deck/**", async (route) => {
+    // Keep the retry request in flight long enough to verify that the disconnected
+    // surface remains mounted while the connection state changes to "connecting".
+    await new Promise((resolve) => setTimeout(resolve, 250));
     await route.fulfill({ status: 503, body: "Dashboard backend unavailable" });
   });
 
@@ -828,6 +897,16 @@ test(`${features("HTTP-FAILURE-001")} reports an unavailable HTTP backend`, asyn
   await expect(page.getByTitle("Resources: Error")).toBeVisible();
   await expect(page.getByRole("table")).toHaveCount(0);
   await expect(page.getByText("frontend", { exact: true })).toHaveCount(0);
+  await expect(page.locator(".splash__sweep")).toHaveCSS("animation-name", "none");
+
+  await page.getByRole("main").getByRole("button", { name: "Retry" }).click();
+  await expect(page.getByRole("heading", { level: 1, name: "Can't reach the AppHost" })).toBeVisible();
+  await expect(page.getByRole("table")).toHaveCount(0);
+
+  allowNavigationAbort.add(page);
+  await page.goto("/traces?backend=http");
+  await expect(page.getByRole("heading", { level: 1, name: "Can't reach the AppHost" })).toHaveCount(0);
+  await expect(page.getByText("No traces match your filter.")).toBeVisible();
 
   const body = await page.screenshot({ animations: "disabled", fullPage: true });
   await testInfo.attach("http-backend-unavailable.png", { body, contentType: "image/png" });
@@ -1301,6 +1380,13 @@ test(`${features("HTTP-STRUCTURED-LOGS-001", "HTTP-STRUCTURED-LOG-DETAILS-001")}
   await expect(table.locator(".badge")).toHaveText(["Error", "Information"]);
   await expect(logs.locator(".page__subtitle")).toHaveText("2 total · showing 2");
   expect(structuredLogRequests).toBe(1);
+
+  await page.setViewportSize({ width: 1_000, height: 700 });
+  const toolbar = logs.getByRole("toolbar", { name: "Structured log tools" });
+  await expect.poll(() => toolbar.evaluate((element) => element.scrollWidth <= element.clientWidth)).toBe(true);
+  await expect(toolbar.getByRole("textbox", { name: "Filter messages…" })).toBeVisible();
+  await expect(toolbar.getByRole("switch", { name: "Pause incoming data" })).toBeVisible();
+  await expect(toolbar.getByRole("button", { name: "Clear structured logs" })).toBeVisible();
 
   await table.locator("tbody tr", { hasText: "Queue processing failed" }).click();
   const details = page.getByRole("dialog", { name: "Structured log entry details" });

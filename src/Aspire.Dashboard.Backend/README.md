@@ -1,13 +1,15 @@
 # Aspire Dashboard backend
 
 This project is the separately runnable ASP.NET Core Native AOT backend for the React dashboard.
+`dotnet publish` builds the React production application, stores the complete `dist` directory in
+one embedded archive, and produces an executable that serves both the UI and versioned API.
 It is intentionally additive: `Aspire.Dashboard` remains the default Blazor dashboard and continues
 to host the existing `/api/deck` transport.
 
 The backend currently implements version discovery plus the `configuration`, read-only `resources`
-snapshot, SignalR `resources-live`, resource `commands`, and read-only structured-log backlog/live
+snapshot, SignalR `resources-live`, resource `commands`, resource-scoped console backlog/live, and read-only structured-log backlog/live
 capabilities. In side-by-side mode, React reads those capabilities from this host and delegates
-traces, metrics, console logs, destructive telemetry operations, interactions, authentication,
+traces, metrics, destructive console/telemetry operations, interactions, authentication,
 and terminal traffic to the existing dashboard. A version must not advertise a
 capability until its
 complete black-box behavior passes the 157-feature parity inventory in
@@ -19,7 +21,21 @@ the existing Blazor dashboard.
 
 ## Run
 
-Bind this development-only slice to a loopback address:
+Publish and run the self-contained dashboard without a Vite server:
+
+```bash
+dotnet publish src/Aspire.Dashboard.Backend/Aspire.Dashboard.Backend.csproj -c Release
+./artifacts/bin/Aspire.Dashboard.Backend/Release/net10.0/<rid>/publish/Aspire.Dashboard.Backend
+```
+
+The root route serves the bundled React application. Hashed JavaScript and CSS assets are immutable
+for one year; `index.html` and non-hashed assets use `no-cache`. Extensionless routes fall back to
+the SPA while unknown `/api/*` routes and missing file paths remain `404`. The hosted index selects
+the same-origin Native AOT adapter automatically; `?backend=aot` is only needed with the Vite
+development server.
+
+Vite remains available for frontend development. To run the production topology with unfinished
+capabilities delegated to the existing dashboard, bind this executable to a loopback address:
 
 ```bash
 ASPNETCORE_URLS=http://127.0.0.1:18889 \
@@ -51,6 +67,8 @@ The host exposes:
 - `GET /api/dashboard/v1/structured-logs` for a read-only OTLP structured-log backlog proxied from
   the existing loopback dashboard.
 - `/api/dashboard/v1/structured-logs/live` for the SignalR `WatchStructuredLogs` server stream.
+- `/api/dashboard/v1/console-logs/live` for the SignalR `WatchConsoleLogs(resourceName)` server
+  stream. The existing dashboard supplies the resource backlog before live stdout/stderr batches.
 
 `DashboardBackend__LegacyDashboardUrl` must identify the existing dashboard's loopback base URL.
 The proxy forwards the incoming dashboard cookie or authorization header so the legacy dashboard

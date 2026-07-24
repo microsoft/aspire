@@ -151,8 +151,8 @@ export function App({
   // (which is indistinguishable from a broken/blank app).
   const resourceState = connection.resourceService;
   const showNotConnected =
-    apphosts.length === 0 ||
-    ((resourceState === "disconnected" || resourceState === "error") && resources.length === 0);
+    page === "resources"
+    && (apphosts.length === 0 || (resourceState !== "connected" && resources.length === 0));
 
   // Interactions split by surface: inputs dialogs and message boxes are blocking and
   // shown one-at-a-time in the side drawer; notifications are non-blocking and stack

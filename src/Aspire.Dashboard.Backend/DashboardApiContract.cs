@@ -15,8 +15,11 @@ internal static class DashboardApiContract
     public const string CommandsCapability = "commands";
     public const string StructuredLogsCapability = "structured-logs";
     public const string StructuredLogStreamCapability = "structured-logs-live";
+    public const string ConsoleLogsCapability = "console-logs";
+    public const string ConsoleLogStreamCapability = "console-logs-live";
     public const string ResourceStreamPath = $"{VersionOneBasePath}/resources/live";
     public const string StructuredLogStreamPath = $"{VersionOneBasePath}/structured-logs/live";
+    public const string ConsoleLogStreamPath = $"{VersionOneBasePath}/console-logs/live";
 }
 
 internal sealed record DashboardApiDiscovery(
@@ -136,3 +139,12 @@ internal sealed record DashboardStructuredLogsSnapshot(
 
 internal sealed record DashboardStructuredLogsEvent(
     System.Text.Json.JsonElement Data);
+
+internal sealed record DashboardConsoleLogLine(
+    long LineNumber,
+    string Text,
+    bool IsStdErr);
+
+internal sealed record DashboardConsoleLogsEvent(
+    string ResourceName,
+    DashboardConsoleLogLine[] Lines);

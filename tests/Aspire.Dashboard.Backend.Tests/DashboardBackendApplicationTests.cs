@@ -7,7 +7,9 @@ using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
@@ -32,7 +34,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"console-logs\",\"console-logs-live\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -107,6 +109,136 @@ public class DashboardBackendApplicationTests
         Assert.Equal("13.5.0-aot", root.GetProperty("dashboardVersion").GetString());
         Assert.StartsWith(".NET", root.GetProperty("runtimeVersion").GetString(), StringComparison.Ordinal);
         Assert.Equal(3, root.EnumerateObject().Count());
+    }
+
+    [Fact]
+    public async Task GetConfiguration_UsesProductVersionByDefault()
+    {
+        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            "/api/dashboard/v1/config",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(
+            AssemblyVersionHelper.GetDisplayVersion(typeof(DashboardBackendApplication).Assembly),
+            document.RootElement.GetProperty("dashboardVersion").GetString());
+    }
+
+    [Fact]
+    public async Task FrontendRoot_ServesHostedReactIndexWithoutCaching()
+    {
+        var assets = new TestFrontendAssetProvider(new Dictionary<string, string>
+        {
+            ["index.html"] = "<!doctype html><meta name=\"aspire-dashboard-backend\" content=\"standalone\" /><script src=\"./assets/index-AbCd1234.js\"></script><div id=\"root\"></div>"
+        });
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardFrontendAssetProvider>(assets);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync("/", TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("text/html; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        Assert.Equal("no-cache", response.Headers.CacheControl?.ToString());
+        var html = await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken);
+        Assert.Contains(
+            "<meta name=\"aspire-dashboard-backend\" content=\"aot\" />",
+            html,
+            StringComparison.Ordinal);
+        Assert.Contains("src=\"/assets/index-AbCd1234.js\"", html, StringComparison.Ordinal);
+    }
+
+    [Fact]
+    public async Task FrontendAssets_UseContentTypesAndImmutableCachingForHashedFiles()
+    {
+        var assets = new TestFrontendAssetProvider(new Dictionary<string, string>
+        {
+            ["assets/index-AbCd1234.js"] = "export const dashboard = true;"
+        });
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardFrontendAssetProvider>(assets);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            "/assets/index-AbCd1234.js",
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("text/javascript; charset=utf-8", response.Content.Headers.ContentType?.ToString());
+        Assert.Equal("public, max-age=31536000, immutable", response.Headers.CacheControl?.ToString());
+        Assert.Equal(
+            "export const dashboard = true;",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Theory]
+    [InlineData("/consolelogs/resource/api", HttpStatusCode.OK)]
+    [InlineData("/missing.js", HttpStatusCode.NotFound)]
+    [InlineData("/api/not-a-dashboard-route", HttpStatusCode.NotFound)]
+    public async Task FrontendFallback_OnlyHandlesSpaRoutes(string path, HttpStatusCode expectedStatus)
+    {
+        var assets = new TestFrontendAssetProvider(new Dictionary<string, string>
+        {
+            ["index.html"] = "<meta name=\"aspire-dashboard-backend\" content=\"standalone\" />"
+        });
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardFrontendAssetProvider>(assets);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(path, TestContext.Current.CancellationToken);
+
+        Assert.Equal(expectedStatus, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task Interactions_UseLegacyFallbackWithBrowserCredentials()
+    {
+        var proxy = new TestLegacyApiProxy();
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardLegacyApiProxy>(proxy);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, "/api/deck/interactions");
+        getRequest.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
+        using var getResponse = await client.SendAsync(getRequest, TestContext.Current.CancellationToken);
+
+        getResponse.EnsureSuccessStatusCode();
+        Assert.Equal("api/deck/interactions", proxy.Path);
+        Assert.Equal(".Aspire.Dashboard=browser-session", proxy.Credentials?.Cookie);
+        Assert.Equal("[]", await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+
+        using var postResponse = await client.PostAsJsonAsync(
+            "/api/deck/interactions/respond",
+            new { interactionId = 42, action = "submit", values = new { value = "updated" } },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, postResponse.StatusCode);
+        Assert.Equal("api/deck/interactions/respond", proxy.Path);
+
+        using var commandResponse = await client.PostAsJsonAsync(
+            "/api/deck/commands/execute",
+            new { resourceName = "db-connection-string", commandName = "set-parameter" },
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, commandResponse.StatusCode);
+        Assert.Equal("api/deck/commands/execute", proxy.Path);
     }
 
     [Fact]
@@ -584,11 +716,67 @@ public class DashboardBackendApplicationTests
                 .GetString());
     }
 
+    [Fact]
+    public async Task ConsoleLogHub_StreamsResourceScopedBacklogAndLiveLines()
+    {
+        DashboardConsoleLogsEvent[] logEvents =
+        [
+            new("api", [new(1, "backlog", false), new(2, "warning", true)]),
+            new("api", [new(3, "live", false)])
+        ];
+        var source = new TestConsoleLogSource(logEvents);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardConsoleLogSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var connection = new HubConnectionBuilder()
+            .WithUrl($"http://localhost{DashboardApiContract.ConsoleLogStreamPath}", options =>
+            {
+                options.HttpMessageHandlerFactory = _ => app.GetTestServer().CreateHandler();
+                options.Transports = HttpTransportType.LongPolling;
+                options.Headers.Add("Cookie", ".Aspire.Dashboard=browser-session");
+            })
+            .AddJsonProtocol(options =>
+            {
+                options.PayloadSerializerOptions.TypeInfoResolverChain.Insert(0, DashboardBackendJsonSerializerContext.Default);
+            })
+            .Build();
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var events = connection
+            .StreamAsync<DashboardConsoleLogsEvent>(
+                nameof(DashboardConsoleLogsHub.WatchConsoleLogs),
+                "api",
+                TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.True(await events.MoveNextAsync());
+        Assert.Equal("backlog", events.Current.Lines[0].Text);
+        Assert.True(events.Current.Lines[1].IsStdErr);
+        Assert.True(await events.MoveNextAsync());
+        Assert.Equal(3, Assert.Single(events.Current.Lines).LineNumber);
+        Assert.Equal("api", source.ResourceName);
+        Assert.Equal(".Aspire.Dashboard=browser-session", source.Credentials?.Cookie);
+    }
+
     private sealed class TestResourceSnapshotProvider(DashboardResource[] resources) : IDashboardResourceSnapshotProvider
     {
         public ValueTask<DashboardResource[]> GetSnapshotAsync(CancellationToken cancellationToken)
         {
             return ValueTask.FromResult(resources);
+        }
+    }
+
+    private sealed class TestFrontendAssetProvider(IReadOnlyDictionary<string, string> assets) : IDashboardFrontendAssetProvider
+    {
+        public Stream? Open(string path)
+        {
+            return assets.TryGetValue(path, out var content)
+                ? new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content))
+                : null;
         }
     }
 
@@ -643,6 +831,48 @@ public class DashboardBackendApplicationTests
                 cancellationToken.ThrowIfCancellationRequested();
                 yield return logEvent;
                 await Task.Yield();
+            }
+        }
+    }
+
+    private sealed class TestConsoleLogSource(DashboardConsoleLogsEvent[] events) : IDashboardConsoleLogSource
+    {
+        public string? ResourceName { get; private set; }
+        public DashboardRequestCredentials? Credentials { get; private set; }
+
+        public async IAsyncEnumerable<DashboardConsoleLogsEvent> WatchAsync(
+            string resourceName,
+            DashboardRequestCredentials credentials,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            ResourceName = resourceName;
+            Credentials = credentials;
+            foreach (var logEvent in events)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return logEvent;
+                await Task.Yield();
+            }
+        }
+    }
+
+    private sealed class TestLegacyApiProxy : IDashboardLegacyApiProxy
+    {
+        public string? Path { get; private set; }
+        public DashboardRequestCredentials? Credentials { get; private set; }
+
+        public async Task ProxyAsync(HttpContext context, string path)
+        {
+            Path = path;
+            Credentials = DashboardRequestCredentials.From(context.Request);
+            if (HttpMethods.IsGet(context.Request.Method))
+            {
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync("[]", context.RequestAborted);
+            }
+            else
+            {
+                context.Response.StatusCode = StatusCodes.Status204NoContent;
             }
         }
     }
