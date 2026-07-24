@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES004
 #pragma warning disable ASPIREDOTNETTOOL
 
 using Aspire.Hosting.ApplicationModel;
@@ -244,6 +245,7 @@ public static class EFResourceBuilderExtensions
                 Name = scriptStepName!,
                 Description = $"Generate EF Core migration SQL script for {migrationResource.Name}",
                 Resource = migrationResource,
+                SupportsOutputPathRelocation = true,
                 DependsOnSteps = scriptDependsOn,
                 RequiredBySteps = [WellKnownPipelineSteps.Publish],
                 Action = stepContext => ExecutePublishPipelineOperationAsync(
@@ -288,6 +290,7 @@ public static class EFResourceBuilderExtensions
                 Name = bundleStepName!,
                 Description = $"Generate EF Core migration bundle for {migrationResource.Name}",
                 Resource = migrationResource,
+                SupportsOutputPathRelocation = true,
                 DependsOnSteps = bundleDependsOn,
                 RequiredBySteps = requiredBy,
                 Action = stepContext => ExecutePublishPipelineOperationAsync(
@@ -356,9 +359,6 @@ public static class EFResourceBuilderExtensions
         Func<EFCoreOperationExecutor, string?, Task<EFOperationResult>> executeOperation)
     {
         var logger = stepContext.Logger;
-#pragma warning disable ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
-        var pipelineOutputService = stepContext.Services.GetRequiredService<IPipelineOutputService>();
-#pragma warning restore ASPIREPIPELINES004 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
 
         using var executor = new EFCoreOperationExecutor(
             migrationResource.ProjectResource,
@@ -369,7 +369,7 @@ public static class EFResourceBuilderExtensions
             stepContext.Services,
             migrationResource.ToolResource);
 
-        var outputDir = Path.Combine(pipelineOutputService.GetOutputDirectory(), "efmigrations");
+        var outputDir = Path.Combine(stepContext.Outputs.PrimaryOutput.OutputPath, "efmigrations");
         Directory.CreateDirectory(outputDir);
 
         logger.LogInformation("Generating {Operation} for '{ResourceName}'...", operationName, migrationResource.Name);

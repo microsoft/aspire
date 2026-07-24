@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREPIPELINES001
+#pragma warning disable ASPIREPIPELINES004
 
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
@@ -51,6 +52,31 @@ public class PipelineStep
     /// Gets or initializes the list of tags that categorize this step.
     /// </summary>
     public List<string> Tags { get; init; } = [];
+
+    /// <summary>
+    /// Gets or initializes the named outputs produced by this step.
+    /// </summary>
+    /// <remarks>
+    /// Pipeline actions must resolve these definitions through
+    /// <see cref="PipelineStepContext.Outputs"/> and write only to the returned output path.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Publisher output declarations are currently available to .NET pipeline-step authors only.")]
+    public IReadOnlyList<PipelineOutputDefinition> Outputs { get; init; } = [];
+
+    /// <summary>
+    /// Gets or initializes a value indicating whether every persistent output produced by this step
+    /// supports relocation.
+    /// </summary>
+    /// <remarks>
+    /// Set this to <see langword="true"/> only when the step writes no persistent output, or when all
+    /// persistent writes use the primary pipeline output or an output declared in <see cref="Outputs"/>.
+    /// Verification rejects selected steps that do not opt in before any pipeline action executes.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "Publisher output relocation is currently available to .NET pipeline-step authors only.")]
+    public bool SupportsOutputPathRelocation { get; init; }
+
+    // Built-in steps can use this when relocation support depends on the resolved primary output shape.
+    internal Func<ResolvedPipelineOutput, bool>? OutputPathRelocationSupportEvaluator { get; init; }
 
     /// <summary>
     /// Gets or initializes the resource that this step is associated with, if any.
@@ -112,7 +138,8 @@ public class PipelineStep
     /// <summary>
     /// Creates a shallow clone of this step with fresh copies of its
     /// <see cref="DependsOnSteps"/>, <see cref="RequiredBySteps"/>, and
-    /// <see cref="Tags"/> lists. Used by <see cref="DistributedApplicationPipeline"/>
+    /// <see cref="Tags"/> lists and its <see cref="Outputs"/> collection.
+    /// Used by <see cref="DistributedApplicationPipeline"/>
     /// when isolating step-graph mutations during a phase such as BeforeStart.
     /// </summary>
     internal PipelineStep Clone()
@@ -125,6 +152,9 @@ public class PipelineStep
             DependsOnSteps = [.. DependsOnSteps],
             RequiredBySteps = [.. RequiredBySteps],
             Tags = [.. Tags],
+            Outputs = [.. Outputs],
+            SupportsOutputPathRelocation = SupportsOutputPathRelocation,
+            OutputPathRelocationSupportEvaluator = OutputPathRelocationSupportEvaluator,
             Resource = Resource,
         };
     }

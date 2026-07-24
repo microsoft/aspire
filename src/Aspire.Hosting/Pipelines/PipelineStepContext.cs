@@ -1,6 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+#pragma warning disable ASPIREPIPELINES004
+
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
@@ -30,6 +32,12 @@ public sealed class PipelineStepContext
     /// The <see cref="IReportingStep"/> instance that can be used to create tasks and manage the publishing process for this step.
     /// </value>
     public required IReportingStep ReportingStep { get; init; }
+
+    /// <summary>
+    /// Gets the resolver for outputs declared by the current pipeline step.
+    /// </summary>
+    [AspireExportIgnore(Reason = "Publisher output resolution is currently available to .NET pipeline-step authors only.")]
+    public IPipelineOutputResolver Outputs { get; internal init; } = UnavailablePipelineOutputResolver.Instance;
 
     /// <summary>
     /// Gets the distributed application model to be deployed.

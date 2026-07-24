@@ -177,4 +177,46 @@ public class BackchannelJsonSerializerContextTests
         Assert.Equal("peer-1", replica.Peers[0].PeerId);
         Assert.Equal("viewer-1", replica.Peers[0].DisplayName);
     }
+
+    [Fact]
+    public void PipelineOutputPlan_RoundTripsThroughSerializer()
+    {
+        var options = BackchannelJsonSerializerContext.CreateJsonSerializerOptions();
+        var response = new GetPipelineOutputsResponse
+        {
+            AppHostDirectory = @"C:\repo\src\AppHost",
+            State = "Prepared",
+            Steps =
+            [
+                new PipelineOutputStepInfo
+                {
+                    Name = "generate-config",
+                    SupportsOutputPathRelocation = true
+                }
+            ],
+            Outputs =
+            [
+                new PipelineOutputInfo
+                {
+                    IsPrimary = false,
+                    PublisherName = "generate-config",
+                    Name = "inventory",
+                    Kind = "Directory",
+                    OutputPath = @"C:\temp\outputs\inventory",
+                    LogicalTargetPath = @"C:\repo\src\AppHost\.configgen"
+                }
+            ]
+        };
+
+        var json = JsonSerializer.Serialize(response, options);
+        var roundTripped = JsonSerializer.Deserialize<GetPipelineOutputsResponse>(json, options);
+
+        Assert.NotNull(roundTripped);
+        Assert.Equal(response.AppHostDirectory, roundTripped.AppHostDirectory);
+        Assert.Equal("generate-config", Assert.Single(roundTripped.Steps).Name);
+        Assert.False(Assert.Single(roundTripped.Outputs).IsPrimary);
+        Assert.Equal(
+            response.Outputs[0].LogicalTargetPath,
+            Assert.Single(roundTripped.Outputs).LogicalTargetPath);
+    }
 }
