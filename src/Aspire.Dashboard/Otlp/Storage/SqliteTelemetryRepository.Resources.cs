@@ -26,9 +26,9 @@ public sealed partial class SqliteTelemetryRepository
             : GetResources(includeUninstrumentedPeers).Where(resource => resource.ResourceKey == key).ToList();
     }
 
-    private void DeleteTelemetryResourceFromDatabase(ResourceKey resourceKey)
+    private async Task DeleteTelemetryResourceFromDatabaseAsync(ResourceKey resourceKey)
     {
-        lock (_writeLock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();

@@ -750,22 +750,26 @@ public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : I
         public List<(string ResourceName, IReadOnlyList<ConsoleLogLine> LogLines)> ConsoleLogs { get; } = [];
         public List<string> LoadedConsoleLogs { get; } = [];
 
-        public void ReplaceResources(IReadOnlyList<Resource> resources)
+        public Task ReplaceResourcesAsync(IReadOnlyList<Resource> resources)
         {
+            return Task.CompletedTask;
         }
 
-        public void ApplyChanges(IReadOnlyList<WatchResourcesChange> changes)
+        public Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes)
         {
+            return Task.CompletedTask;
         }
 
-        public void MarkConsoleLogsLoaded(string resourceName)
+        public Task MarkConsoleLogsLoadedAsync(string resourceName)
         {
             LoadedConsoleLogs.Add(resourceName);
+            return Task.CompletedTask;
         }
 
-        public void AddConsoleLogs(string resourceName, IReadOnlyList<ConsoleLogLine> logLines)
+        public Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines)
         {
             ConsoleLogs.Add((resourceName, logLines));
+            return Task.CompletedTask;
         }
     }
 

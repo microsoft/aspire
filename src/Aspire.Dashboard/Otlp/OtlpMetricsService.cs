@@ -20,10 +20,10 @@ public sealed class OtlpMetricsService
         _telemetryRepositoryWriter = telemetryRepositoryWriter;
     }
 
-    public ExportMetricsServiceResponse Export(ExportMetricsServiceRequest request)
+    public async Task<ExportMetricsServiceResponse> ExportAsync(ExportMetricsServiceRequest request)
     {
         var addContext = new AddContext();
-        _telemetryRepositoryWriter.AddMetrics(addContext, request.ResourceMetrics);
+        await _telemetryRepositoryWriter.AddMetricsAsync(addContext, request.ResourceMetrics).ConfigureAwait(false);
 
         _logger.LogDebug("Processed metrics export. Success count: {SuccessCount}, failure count: {FailureCount}", addContext.SuccessCount, addContext.FailureCount);
 

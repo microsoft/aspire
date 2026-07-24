@@ -26,9 +26,9 @@ public sealed partial class SqliteTelemetryRepository
 
     private readonly MetricIngestionState _metricIngestionState = new();
 
-    private void AddMetricsToDatabase(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
+    private async Task AddMetricsToDatabaseAsync(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
     {
-        lock (_writeLock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
             _metricIngestionState.DimensionsToTrim.Clear();
             _metricIngestionState.PendingDimensions.Clear();
@@ -248,15 +248,17 @@ public sealed partial class SqliteTelemetryRepository
     {
         try
         {
-            if (point.BucketCounts.Count > 0 && point.ExplicitBounds.Count == 0)
-            {
-                throw new InvalidOperationException("Histogram data point has bucket counts without any explicit bounds.");
-            }
+            OtlpHelpers.ValidateHistogramDataPoint(point);
             var dimension = GetOrAddMetricDimension(connection, transaction, instrumentId, scope, point.Attributes, ingestionState);
             var pendingLatest = dimension.PendingPoint;
             var latest = dimension.LatestPoint;
             var latestPointType = pendingLatest?.PointType ?? latest?.PointType;
             var latestEndTimeTicks = pendingLatest?.EndTimeTicks ?? latest?.EndTimeTicks;
+            var latestBucketCountLength = pendingLatest?.HistogramBucketCounts?.Length ?? latest?.HistogramBucketCountLength;
+            if (latestPointType == HistogramPointType && latestBucketCountLength != point.BucketCounts.Count)
+            {
+                throw new InvalidOperationException("Histogram data point bucket count length changed.");
+            }
             var histogramCount = checked((long)point.Count);
             var sameCount = latestPointType == HistogramPointType &&
                 (pendingLatest?.HistogramCount ?? latest?.HistogramCount) == histogramCount;
@@ -346,7 +348,7 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         // Keep one INSERT statement and RETURNING result set per point inside a single command. This preserves
-        // deterministic point-to-ID mapping for histogram and exemplar rows without a round trip per point.
+        // deterministic point-to-ID mapping for exemplar rows without a round trip per point.
         foreach (var points in pointBatch.Inserts.Chunk(MaxMetricPointBatchSize))
         {
             var insertSql = new StringBuilder();
@@ -357,10 +359,10 @@ public sealed partial class SqliteTelemetryRepository
                 insertSql.Append(CultureInfo.InvariantCulture, $$"""
                     INSERT INTO telemetry_metric_points (
                         dimension_id, point_type, start_time_ticks, end_time_ticks, repeat_count,
-                        integer_value, double_value, histogram_sum, histogram_count, flags)
+                        integer_value, double_value, histogram_sum, histogram_count, bucket_counts, explicit_bounds, flags)
                     VALUES (
                         @DimensionId{{i}}, @PointType{{i}}, @StartTimeTicks{{i}}, @EndTimeTicks{{i}}, @RepeatCount{{i}},
-                        @IntegerValue{{i}}, @DoubleValue{{i}}, @HistogramSum{{i}}, @HistogramCount{{i}}, @Flags{{i}})
+                        @IntegerValue{{i}}, @DoubleValue{{i}}, @HistogramSum{{i}}, @HistogramCount{{i}}, @BucketCounts{{i}}, @ExplicitBounds{{i}}, @Flags{{i}})
                     RETURNING point_id;
                     """);
                 insertParameters.Add($"DimensionId{i}", point.Dimension.DimensionId);
@@ -372,6 +374,8 @@ public sealed partial class SqliteTelemetryRepository
                 insertParameters.Add($"DoubleValue{i}", point.DoubleValue);
                 insertParameters.Add($"HistogramSum{i}", point.HistogramSum);
                 insertParameters.Add($"HistogramCount{i}", point.HistogramCount);
+                insertParameters.Add($"BucketCounts{i}", point.HistogramBucketCounts is not null ? PackInt64Values(point.HistogramBucketCounts) : null);
+                insertParameters.Add($"ExplicitBounds{i}", point.HistogramExplicitBounds is not null ? PackDoubleValues(point.HistogramExplicitBounds) : null);
                 insertParameters.Add($"Flags{i}", point.Flags);
             }
 
@@ -382,8 +386,6 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
 
-        InsertHistogramBucketCounts(connection, transaction, pointBatch.Inserts);
-        InsertHistogramExplicitBounds(connection, transaction, pointBatch.Inserts);
         foreach (var point in pointBatch.Inserts)
         {
             QueueMetricExemplars(pointBatch, point.PointId, point.Exemplars);
@@ -403,59 +405,12 @@ public sealed partial class SqliteTelemetryRepository
                     EndTimeTicks = point.EndTimeTicks,
                     IntegerValue = point.IntegerValue,
                     DoubleValue = point.DoubleValue,
-                    HistogramCount = point.HistogramCount
+                    HistogramCount = point.HistogramCount,
+                    HistogramBucketCountLength = point.HistogramBucketCounts?.Length
                 };
                 point.Dimension.PendingPoint = null;
             }
         }
-    }
-
-    private static void InsertHistogramBucketCounts(
-        SqliteConnection connection,
-        IDbTransaction transaction,
-        List<PendingMetricPoint> points)
-    {
-        var bucketCounts = points
-            .Where(point => point.HistogramBucketCounts is { Length: > 0 })
-            .SelectMany(point => point.HistogramBucketCounts!.Select((bucketCount, ordinal) => new PendingHistogramBucketCount(point.PointId, ordinal, bucketCount)))
-            .ToArray();
-        SqliteBatchInsert.BatchInsertRows(
-            connection,
-            transaction,
-            bucketCounts,
-            MaxMetricPointBatchSize,
-            "telemetry_metric_histogram_bucket_counts",
-            ["point_id", "ordinal", "bucket_count"],
-            static (row, parameters) =>
-            {
-                parameters[0].Value = row.PointId;
-                parameters[1].Value = row.Ordinal;
-                parameters[2].Value = row.BucketCount;
-            });
-    }
-
-    private static void InsertHistogramExplicitBounds(
-        SqliteConnection connection,
-        IDbTransaction transaction,
-        List<PendingMetricPoint> points)
-    {
-        var explicitBounds = points
-            .Where(point => point.HistogramExplicitBounds is { Length: > 0 })
-            .SelectMany(point => point.HistogramExplicitBounds!.Select((explicitBound, ordinal) => new PendingHistogramExplicitBound(point.PointId, ordinal, explicitBound)))
-            .ToArray();
-        SqliteBatchInsert.BatchInsertRows(
-            connection,
-            transaction,
-            explicitBounds,
-            MaxMetricPointBatchSize,
-            "telemetry_metric_histogram_explicit_bounds",
-            ["point_id", "ordinal", "explicit_bound"],
-            static (row, parameters) =>
-            {
-                parameters[0].Value = row.PointId;
-                parameters[1].Value = row.Ordinal;
-                parameters[2].Value = row.ExplicitBound;
-            });
     }
 
     private MetricDimensionState GetOrAddMetricDimension(
@@ -484,7 +439,8 @@ public sealed partial class SqliteTelemetryRepository
                     p.end_time_ticks AS EndTimeTicks,
                     p.integer_value AS IntegerValue,
                     p.double_value AS DoubleValue,
-                    p.histogram_count AS HistogramCount
+                    p.histogram_count AS HistogramCount,
+                    p.bucket_counts AS HistogramBucketCounts
                 FROM telemetry_metric_dimensions d
                 LEFT JOIN telemetry_metric_dimension_attributes a ON a.dimension_id = d.dimension_id
                 LEFT JOIN telemetry_metric_points p ON p.point_id = (
@@ -516,7 +472,8 @@ public sealed partial class SqliteTelemetryRepository
                                 EndTimeTicks = first.EndTimeTicks!.Value,
                                 IntegerValue = first.IntegerValue,
                                 DoubleValue = first.DoubleValue,
-                                HistogramCount = first.HistogramCount
+                                HistogramCount = first.HistogramCount,
+                                HistogramBucketCountLength = first.HistogramBucketCounts?.Length / sizeof(long)
                             }
                             : null
                     };
@@ -655,6 +612,56 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
+    private static byte[] PackInt64Values(ReadOnlySpan<long> values)
+    {
+        var bytes = new byte[checked(values.Length * sizeof(long))];
+        for (var i = 0; i < values.Length; i++)
+        {
+            BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(i * sizeof(long)), values[i]);
+        }
+        return bytes;
+    }
+
+    private static byte[] PackDoubleValues(ReadOnlySpan<double> values)
+    {
+        var bytes = new byte[checked(values.Length * sizeof(double))];
+        for (var i = 0; i < values.Length; i++)
+        {
+            BinaryPrimitives.WriteInt64LittleEndian(bytes.AsSpan(i * sizeof(double)), BitConverter.DoubleToInt64Bits(values[i]));
+        }
+        return bytes;
+    }
+
+    private static ulong[] UnpackUInt64Values(ReadOnlySpan<byte> bytes)
+    {
+        ValidatePackedValueLength(bytes);
+        var values = new ulong[bytes.Length / sizeof(long)];
+        for (var i = 0; i < values.Length; i++)
+        {
+            values[i] = checked((ulong)BinaryPrimitives.ReadInt64LittleEndian(bytes[(i * sizeof(long))..]));
+        }
+        return values;
+    }
+
+    private static double[] UnpackDoubleValues(ReadOnlySpan<byte> bytes)
+    {
+        ValidatePackedValueLength(bytes);
+        var values = new double[bytes.Length / sizeof(double)];
+        for (var i = 0; i < values.Length; i++)
+        {
+            values[i] = BitConverter.Int64BitsToDouble(BinaryPrimitives.ReadInt64LittleEndian(bytes[(i * sizeof(double))..]));
+        }
+        return values;
+    }
+
+    private static void ValidatePackedValueLength(ReadOnlySpan<byte> bytes)
+    {
+        if (bytes.Length % sizeof(long) != 0)
+        {
+            throw new InvalidOperationException("Packed histogram data length must be a multiple of 8 bytes.");
+        }
+    }
+
     private void QueueMetricExemplars(MetricPointBatch pointBatch, long pointId, IEnumerable<Exemplar> exemplars)
     {
         foreach (var exemplar in exemplars)
@@ -763,7 +770,7 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private void ClearSelectedMetricsFromDatabase(Dictionary<string, HashSet<AspireDataType>> selectedResources)
+    private async Task ClearSelectedMetricsFromDatabaseAsync(Dictionary<string, HashSet<AspireDataType>> selectedResources)
     {
         using var connection = _database.OpenConnection();
         foreach (var resource in connection.Query<TelemetryResourceRecord>("SELECT resource_name AS ResourceName, instance_id AS InstanceId FROM telemetry_resources;"))
@@ -771,14 +778,14 @@ public sealed partial class SqliteTelemetryRepository
             var key = new ResourceKey(resource.ResourceName, resource.InstanceId);
             if (selectedResources.TryGetValue(key.GetCompositeName(), out var dataTypes) && dataTypes.Contains(AspireDataType.Metrics) && !dataTypes.Contains(AspireDataType.Resource))
             {
-                ClearMetricsFromDatabase(key);
+                await ClearMetricsFromDatabaseAsync(key).ConfigureAwait(false);
             }
         }
     }
 
-    private void ClearMetricsFromDatabase(ResourceKey? resourceKey)
+    private async Task ClearMetricsFromDatabaseAsync(ResourceKey? resourceKey)
     {
-        lock (_writeLock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
@@ -918,10 +925,6 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed record PendingMetricExemplarAttribute(long ExemplarId, int Ordinal, string Key, string Value);
 
-    private sealed record PendingHistogramBucketCount(long PointId, int Ordinal, long BucketCount);
-
-    private sealed record PendingHistogramExplicitBound(long PointId, int Ordinal, double ExplicitBound);
-
     private sealed class InsertedMetricExemplarRecord
     {
         public required long ExemplarId { get; init; }
@@ -968,6 +971,7 @@ public sealed partial class SqliteTelemetryRepository
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
         public long? HistogramCount { get; init; }
+        public byte[]? HistogramBucketCounts { get; init; }
     }
 
     private class MetricPointRecord
@@ -978,5 +982,6 @@ public sealed partial class SqliteTelemetryRepository
         public long? IntegerValue { get; init; }
         public double? DoubleValue { get; init; }
         public long? HistogramCount { get; init; }
+        public int? HistogramBucketCountLength { get; init; }
     }
 }

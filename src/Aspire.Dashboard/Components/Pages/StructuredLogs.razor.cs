@@ -567,8 +567,7 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     private Task ClearStructureLogs(ResourceKey? key)
     {
-        TelemetryRepositoryWriter.ClearStructuredLogs(key);
-        return Task.CompletedTask;
+        return TelemetryRepositoryWriter.ClearStructuredLogsAsync(key);
     }
 
     public class StructuredLogsPageViewModel

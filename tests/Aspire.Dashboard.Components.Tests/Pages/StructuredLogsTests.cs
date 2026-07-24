@@ -31,13 +31,13 @@ namespace Aspire.Dashboard.Components.Tests.Pages;
 public partial class StructuredLogsTests : DashboardTestContext
 {
     [Fact]
-    public void Render_ResourceInstanceHasDashes_AppKeyResolvedCorrectly()
+    public async Task Render_ResourceInstanceHasDashes_AppKeyResolvedCorrectly()
     {
         // Arrange
         SetupStructureLogsServices();
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -258,7 +258,7 @@ public partial class StructuredLogsTests : DashboardTestContext
     [Theory]
     [InlineData(false, 1)]
     [InlineData(true, 0)]
-    public void Render_AtLogLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
+    public async Task Render_AtLogLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
     {
         var messageCount = 0;
         var messageService = new TestMessageService(_ =>
@@ -274,7 +274,7 @@ public partial class StructuredLogsTests : DashboardTestContext
             TelemetryLimits = { MaxLogCount = 1 }
         }));
 
-        FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {

@@ -56,6 +56,14 @@ public static partial class OtlpHelpers
         };
     }
 
+    internal static void ValidateHistogramDataPoint(HistogramDataPoint point)
+    {
+        if (point.BucketCounts.Count > 0 && point.ExplicitBounds.Count == 0)
+        {
+            throw new InvalidOperationException("Histogram data point has bucket counts without any explicit bounds.");
+        }
+    }
+
     public static ResourceKey GetResourceKey(this Resource resource)
     {
         string? serviceName = null;

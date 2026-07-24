@@ -20,10 +20,10 @@ public sealed partial class SqliteTelemetryRepository
     private const int MaxLogBatchSize = 50;
     private const int MaxLogAttributeBatchSize = 200;
 
-    private List<OtlpLogEntry> AddLogsToDatabase(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
+    private async Task<List<OtlpLogEntry>> AddLogsToDatabaseAsync(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
     {
         var addedLogs = new List<OtlpLogEntry>();
-        lock (_writeLock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
@@ -730,7 +730,7 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private void ClearSelectedLogsFromDatabase(Dictionary<string, HashSet<AspireDataType>> selectedResources)
+    private async Task ClearSelectedLogsFromDatabaseAsync(Dictionary<string, HashSet<AspireDataType>> selectedResources)
     {
         EnsureWritable();
         using var connection = _database.OpenConnection();
@@ -748,18 +748,18 @@ public sealed partial class SqliteTelemetryRepository
 
             if (dataTypes.Contains(AspireDataType.Resource))
             {
-                DeleteTelemetryResourceFromDatabase(key);
+                await DeleteTelemetryResourceFromDatabaseAsync(key).ConfigureAwait(false);
             }
             else if (dataTypes.Contains(AspireDataType.StructuredLogs))
             {
-                ClearStructuredLogsFromDatabase(key);
+                await ClearStructuredLogsFromDatabaseAsync(key).ConfigureAwait(false);
             }
         }
     }
 
-    private void ClearStructuredLogsFromDatabase(ResourceKey? resourceKey)
+    private async Task ClearStructuredLogsFromDatabaseAsync(ResourceKey? resourceKey)
     {
-        lock (_writeLock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();

@@ -395,8 +395,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private Task ClearTraces(ResourceKey? key)
     {
-        TelemetryRepositoryWriter.ClearTraces(key);
-        return Task.CompletedTask;
+        return TelemetryRepositoryWriter.ClearTracesAsync(key);
     }
 
     private List<MenuButtonItem> GetFilterMenuItems()

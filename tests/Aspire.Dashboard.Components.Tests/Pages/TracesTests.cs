@@ -58,7 +58,7 @@ public class TracesTests : DashboardTestContext
     [Theory]
     [InlineData(false, 1)]
     [InlineData(true, 0)]
-    public void Render_AtTraceLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
+    public async Task Render_AtTraceLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
     {
         var messageCount = 0;
         var messageService = new TestMessageService(_ =>
@@ -75,7 +75,7 @@ public class TracesTests : DashboardTestContext
         }));
 
         var timestamp = DateTime.UnixEpoch;
-        FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {

@@ -20,10 +20,10 @@ public sealed class OtlpTraceService
         _telemetryRepositoryWriter = telemetryRepositoryWriter;
     }
 
-    public ExportTraceServiceResponse Export(ExportTraceServiceRequest request)
+    public async Task<ExportTraceServiceResponse> ExportAsync(ExportTraceServiceRequest request)
     {
         var addContext = new AddContext();
-        _telemetryRepositoryWriter.AddTraces(addContext, request.ResourceSpans);
+        await _telemetryRepositoryWriter.AddTracesAsync(addContext, request.ResourceSpans).ConfigureAwait(false);
 
         _logger.LogDebug("Processed trace export. Success count: {SuccessCount}, failure count: {FailureCount}", addContext.SuccessCount, addContext.FailureCount);
 

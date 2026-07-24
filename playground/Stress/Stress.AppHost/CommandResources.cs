@@ -909,6 +909,13 @@ internal static class CommandResources
         serviceBuilder.WithHttpCommand("/genai-evaluations", "Gen AI evaluations", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/log-formatting", "Log formatting", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
         serviceBuilder.WithHttpCommand("/big-nested-trace", "Big nested trace", commandOptions: new() { Method = HttpMethod.Get, IconName = "ContentViewGalleryLightning" });
+        serviceBuilder.WithHttpCommand("/large-telemetry", "Generate large telemetry data", commandOptions: new()
+        {
+            Method = HttpMethod.Post,
+            HttpClientName = "large-telemetry",
+            IconName = "DatabaseLightning",
+            ConfirmationMessage = "Generate a large telemetry workload. This operation can take several minutes and consume significant disk space."
+        });
     }
 
     private static void AddTelemetryCommands(IDistributedApplicationBuilder builder, IResourceBuilder<ProjectResource> telemetryBuilder)

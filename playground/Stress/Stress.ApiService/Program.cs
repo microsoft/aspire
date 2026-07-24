@@ -31,6 +31,7 @@ builder.Services.AddOpenTelemetry()
 
     });
 builder.Services.AddSingleton<TestMetrics>();
+builder.Services.AddSingleton<LargeTelemetryGenerator>();
 
 var app = builder.Build();
 
@@ -42,6 +43,14 @@ app.Lifetime.ApplicationStarted.Register(() =>
 });
 
 app.MapGet("/", () => "Hello world");
+
+app.MapPost("/large-telemetry", async (LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
+{
+  var generated = await generator.TryGenerateAsync(cancellationToken);
+  return generated
+    ? Results.Ok()
+    : Results.Conflict("Large telemetry generation is already running.");
+});
 
 app.MapGet("/write-console", () =>
 {

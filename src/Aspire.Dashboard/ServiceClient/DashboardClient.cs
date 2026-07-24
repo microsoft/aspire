@@ -654,13 +654,13 @@ internal sealed class DashboardClient : IDashboardClient
                 }
             }
 
-            if (response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
+            if (_resourceRepositoryWriter is not null && response.KindCase == WatchResourcesUpdate.KindOneofCase.InitialData)
             {
-                _resourceRepositoryWriter?.ReplaceResources(response.InitialData.Resources);
+                await _resourceRepositoryWriter.ReplaceResourcesAsync(response.InitialData.Resources).ConfigureAwait(false);
             }
-            else if (response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
+            else if (_resourceRepositoryWriter is not null && response.KindCase == WatchResourcesUpdate.KindOneofCase.Changes)
             {
-                _resourceRepositoryWriter?.ApplyChanges(response.Changes.Value);
+                await _resourceRepositoryWriter.ApplyChangesAsync(response.Changes.Value).ConfigureAwait(false);
             }
 
             // Update connection state outside the lock to avoid potential deadlocks
@@ -931,7 +931,7 @@ internal sealed class DashboardClient : IDashboardClient
         // historical runs can omit logs for resources that were never viewed or exported. The historical
         // Console Logs page checks this capture state and displays a notice when logs aren't available.
         // See https://github.com/microsoft/aspire/issues/18823.
-        MarkConsoleLogsLoaded(resourceName);
+        await MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
 
         // It's ok to dispose CTS with using because this method exits after it is finished being used.
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
@@ -952,7 +952,10 @@ internal sealed class DashboardClient : IDashboardClient
             {
                 await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
                 {
-                    _resourceRepositoryWriter?.AddConsoleLogs(resourceName, response.LogLines);
+                    if (_resourceRepositoryWriter is not null)
+                    {
+                        await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
+                    }
                     // Channel is unbound so TryWrite always succeeds.
                     channel.Writer.TryWrite(CreateLogLines(response.LogLines));
                 }
@@ -975,7 +978,7 @@ internal sealed class DashboardClient : IDashboardClient
     {
         EnsureInitialized();
 
-        MarkConsoleLogsLoaded(resourceName);
+        await MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
 
         using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
 
@@ -986,12 +989,15 @@ internal sealed class DashboardClient : IDashboardClient
 
         await foreach (var response in call.ResponseStream.ReadAllAsync(cancellationToken: combinedTokens.Token).ConfigureAwait(false))
         {
-            _resourceRepositoryWriter?.AddConsoleLogs(resourceName, response.LogLines);
+            if (_resourceRepositoryWriter is not null)
+            {
+                await _resourceRepositoryWriter.AddConsoleLogsAsync(resourceName, response.LogLines).ConfigureAwait(false);
+            }
             yield return CreateLogLines(response.LogLines);
         }
     }
 
-    private void MarkConsoleLogsLoaded(string resourceName)
+    private async Task MarkConsoleLogsLoadedAsync(string resourceName)
     {
         lock (_lock)
         {
@@ -1001,7 +1007,10 @@ internal sealed class DashboardClient : IDashboardClient
             }
         }
 
-        _resourceRepositoryWriter?.MarkConsoleLogsLoaded(resourceName);
+        if (_resourceRepositoryWriter is not null)
+        {
+            await _resourceRepositoryWriter.MarkConsoleLogsLoadedAsync(resourceName).ConfigureAwait(false);
+        }
     }
 
     private static ResourceLogLine[] CreateLogLines(IList<ConsoleLogLine> logLines)

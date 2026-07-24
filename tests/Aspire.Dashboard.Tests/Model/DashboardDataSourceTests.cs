@@ -590,7 +590,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         {
             historicalRunId = historicalRunStore.RunId;
             using var telemetryRepository = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
-            telemetryRepository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+            await telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
             {
                 new ResourceLogs
                 {
@@ -606,7 +606,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
                 }
             });
             using var resourceRepository = CreateResourceRepository(historicalRunStore.DatabasePath);
-            ((IResourceRepositoryWriter)resourceRepository).ReplaceResources([new Resource
+            await ((IResourceRepositoryWriter)resourceRepository).ReplaceResourcesAsync([new Resource
             {
                 Name = "api",
                 DisplayName = "API",

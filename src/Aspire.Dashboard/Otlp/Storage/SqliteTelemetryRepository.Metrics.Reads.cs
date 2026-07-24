@@ -120,7 +120,6 @@ public sealed partial class SqliteTelemetryRepository
         var dimensions = MaterializeMetricDimensions(
             connection,
             instruments.Select(instrument => instrument.InstrumentId).ToArray(),
-            instruments[0].Summary.Type == OtlpInstrumentType.Histogram,
             request.StartTime,
             request.EndTime,
             request.DimensionFilters,
@@ -159,7 +158,6 @@ public sealed partial class SqliteTelemetryRepository
     private List<DimensionScope> MaterializeMetricDimensions(
         SqliteConnection connection,
         IReadOnlyList<long> instrumentIds,
-        bool isHistogram,
         DateTime? startTime,
         DateTime? endTime,
         IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters,
@@ -237,15 +235,14 @@ public sealed partial class SqliteTelemetryRepository
                 p.integer_value AS IntegerValue,
                 p.double_value AS DoubleValue,
                 p.histogram_sum AS HistogramSum,
-                p.histogram_count AS HistogramCount
+                p.histogram_count AS HistogramCount,
+                stored.bucket_counts AS BucketCounts,
+                stored.explicit_bounds AS ExplicitBounds
             FROM rolled_up_metric_points p
+            JOIN telemetry_metric_points stored ON stored.point_id = p.point_id
             ORDER BY p.dimension_id, p.start_time_ticks, p.point_id;
             """, queryParameters).AsList();
         var points = pointRecords.ToLookup(record => record.DimensionId);
-        var (bucketCounts, explicitBounds) = isHistogram
-            ? MaterializeMetricHistogramData(connection, pointRecords.Select(point => point.PointId).ToArray())
-            : (Array.Empty<MetricHistogramBucketRecord>().ToLookup(record => record.PointId),
-                Array.Empty<MetricHistogramBoundRecord>().ToLookup(record => record.PointId));
         var exemplars = includeExemplars
             ? MaterializeMetricExemplars(
                 connection,
@@ -266,13 +263,7 @@ public sealed partial class SqliteTelemetryRepository
                 {
                     LongPointType => new MetricValue<long>(point.IntegerValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
                     DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
-                    HistogramPointType => new HistogramValue(
-                        bucketCounts[point.PointId].Select(bucket => checked((ulong)bucket.BucketCount)).ToArray(),
-                        point.HistogramSum!.Value,
-                        checked((ulong)point.HistogramCount!.Value),
-                        new DateTime(point.StartTimeTicks, DateTimeKind.Utc),
-                        new DateTime(point.EndTimeTicks, DateTimeKind.Utc),
-                        explicitBounds[point.PointId].Select(bound => bound.ExplicitBound).ToArray()),
+                    HistogramPointType => CreateHistogramValue(point),
                     _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
                 };
                 if (point.PointType != HistogramPointType)
@@ -355,33 +346,13 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private static (ILookup<long, MetricHistogramBucketRecord> BucketCounts, ILookup<long, MetricHistogramBoundRecord> ExplicitBounds) MaterializeMetricHistogramData(
-        SqliteConnection connection,
-        IReadOnlyList<long> pointIds)
-    {
-        var bucketCounts = new List<MetricHistogramBucketRecord>();
-        var explicitBounds = new List<MetricHistogramBoundRecord>();
-        foreach (var pointIdBatch in pointIds.Chunk(MaxMetricReadBatchSize))
-        {
-            using var reader = connection.QueryMultiple("""
-                SELECT point_id AS PointId, bucket_count AS BucketCount
-                FROM telemetry_metric_histogram_bucket_counts
-                WHERE point_id IN @PointIds
-                ORDER BY point_id, ordinal;
-
-                SELECT point_id AS PointId, explicit_bound AS ExplicitBound
-                FROM telemetry_metric_histogram_explicit_bounds
-                WHERE point_id IN @PointIds
-                ORDER BY point_id, ordinal;
-                """, new { PointIds = pointIdBatch });
-            bucketCounts.AddRange(reader.Read<MetricHistogramBucketRecord>());
-            explicitBounds.AddRange(reader.Read<MetricHistogramBoundRecord>());
-        }
-
-        return (
-            bucketCounts.ToLookup(record => record.PointId),
-            explicitBounds.ToLookup(record => record.PointId));
-    }
+    private static HistogramValue CreateHistogramValue(MetricPointDataRecord point) => new(
+        UnpackUInt64Values(point.BucketCounts!),
+        point.HistogramSum!.Value,
+        checked((ulong)point.HistogramCount!.Value),
+        new DateTime(point.StartTimeTicks, DateTimeKind.Utc),
+        new DateTime(point.EndTimeTicks, DateTimeKind.Utc),
+        UnpackDoubleValues(point.ExplicitBounds!));
 
     private static ILookup<long, MetricsExemplar> MaterializeMetricExemplars(
         SqliteConnection connection,
@@ -467,6 +438,8 @@ public sealed partial class SqliteTelemetryRepository
         public required long StartTimeTicks { get; init; }
         public required long RepeatCount { get; init; }
         public double? HistogramSum { get; init; }
+        public byte[]? BucketCounts { get; init; }
+        public byte[]? ExplicitBounds { get; init; }
     }
 
     private sealed class MetricDimensionAttributeRecord
@@ -474,18 +447,6 @@ public sealed partial class SqliteTelemetryRepository
         public required long DimensionId { get; init; }
         public string? AttributeKey { get; init; }
         public string? AttributeValue { get; init; }
-    }
-
-    private sealed class MetricHistogramBucketRecord
-    {
-        public required long PointId { get; init; }
-        public required long BucketCount { get; init; }
-    }
-
-    private sealed class MetricHistogramBoundRecord
-    {
-        public required long PointId { get; init; }
-        public required double ExplicitBound { get; init; }
     }
 
     private sealed class MetricExemplarRecord

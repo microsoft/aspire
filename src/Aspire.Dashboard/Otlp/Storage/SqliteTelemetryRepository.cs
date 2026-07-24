@@ -24,7 +24,6 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     private readonly IReadOnlyList<IOutgoingPeerResolver> _outgoingPeerResolvers;
     private readonly List<IDisposable> _outgoingPeerSubscriptions = [];
     private readonly bool _ownsDatabase;
-    private readonly object _writeLock = new();
     private int _disposed;
 
     private static string CreateContainsLikePattern(string value) => $"%{EscapeLikePattern(value)}%";
@@ -76,18 +75,17 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
             database.InitializeSchema();
             foreach (var resolver in _outgoingPeerResolvers)
             {
-                _outgoingPeerSubscriptions.Add(resolver.OnPeerChanges(() =>
+                _outgoingPeerSubscriptions.Add(resolver.OnPeerChanges(async () =>
                 {
-                    RecalculateUninstrumentedPeers();
+                    await RecalculateUninstrumentedPeersAsync().ConfigureAwait(false);
                     NotifyPeersChanged();
-                    return Task.CompletedTask;
                 }));
             }
         }
 
     }
 
-    public void AddLogs(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
+    public async Task AddLogsAsync(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
     {
         if (_pauseManager.AreStructuredLogsPaused(out _))
         {
@@ -98,11 +96,11 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         EnsureWritable();
         try
         {
-            NotifyLogsAdded(AddLogsToDatabase(context, resourceLogs));
+            NotifyLogsAdded(await AddLogsToDatabaseAsync(context, resourceLogs).ConfigureAwait(false));
         }
         catch
         {
-            lock (_writeLock)
+            using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
             {
                 ClearIngestionCaches();
             }
@@ -110,7 +108,7 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         }
     }
 
-    public void AddMetrics(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
+    public async Task AddMetricsAsync(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
     {
         if (_pauseManager.AreMetricsPaused(out _))
         {
@@ -120,14 +118,14 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
 
         EnsureWritable();
         var successCount = context.SuccessCount;
-        AddMetricsToDatabase(context, resourceMetrics);
+        await AddMetricsToDatabaseAsync(context, resourceMetrics).ConfigureAwait(false);
         if (context.SuccessCount > successCount)
         {
             NotifyMetricsAdded();
         }
     }
 
-    public void AddTraces(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
+    public async Task AddTracesAsync(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
     {
         if (_pauseManager.AreTracesPaused(out _))
         {
@@ -138,11 +136,11 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         EnsureWritable();
         try
         {
-            NotifySpansAdded(AddTracesToDatabase(context, resourceSpans));
+            NotifySpansAdded(await AddTracesToDatabaseAsync(context, resourceSpans).ConfigureAwait(false));
         }
         catch
         {
-            lock (_writeLock)
+            using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
             {
                 ClearIngestionCaches();
             }
@@ -172,12 +170,12 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     public OtlpInstrumentData? GetInstrument(GetInstrumentRequest request) => GetInstrumentFromDatabase(request);
     public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName) =>
         GetInstrumentLatestEndTimeFromDatabase(resourceKey, meterName, instrumentName);
-    public void ClearSelectedSignals(Dictionary<string, HashSet<AspireDataType>> selectedResources)
+    public async Task ClearSelectedSignalsAsync(Dictionary<string, HashSet<AspireDataType>> selectedResources)
     {
         EnsureWritable();
-        ClearSelectedLogsFromDatabase(selectedResources);
-        ClearSelectedTracesFromDatabase(selectedResources);
-        ClearSelectedMetricsFromDatabase(selectedResources);
+        await ClearSelectedLogsFromDatabaseAsync(selectedResources).ConfigureAwait(false);
+        await ClearSelectedTracesFromDatabaseAsync(selectedResources).ConfigureAwait(false);
+        await ClearSelectedMetricsFromDatabaseAsync(selectedResources).ConfigureAwait(false);
         ClearUnviewedErrorCounts(selectedResources);
         RaiseSubscriptionChanged(_logSubscriptions);
         RaiseSubscriptionChanged(_tracesSubscriptions);
@@ -185,27 +183,27 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
         RaiseSubscriptionChanged(_resourceSubscriptions);
     }
 
-    public void ClearTraces(ResourceKey? resourceKey = null)
+    public async Task ClearTracesAsync(ResourceKey? resourceKey = null)
     {
         EnsureWritable();
-        ClearTracesFromDatabase(resourceKey);
+        await ClearTracesFromDatabaseAsync(resourceKey).ConfigureAwait(false);
         RaiseSubscriptionChanged(_tracesSubscriptions);
         RaiseSubscriptionChanged(_resourceSubscriptions);
     }
 
-    public void ClearStructuredLogs(ResourceKey? resourceKey = null)
+    public async Task ClearStructuredLogsAsync(ResourceKey? resourceKey = null)
     {
         EnsureWritable();
-        ClearStructuredLogsFromDatabase(resourceKey);
+        await ClearStructuredLogsFromDatabaseAsync(resourceKey).ConfigureAwait(false);
         ClearUnviewedErrorCounts(resourceKey);
         RaiseSubscriptionChanged(_logSubscriptions);
         RaiseSubscriptionChanged(_resourceSubscriptions);
     }
 
-    public void ClearMetrics(ResourceKey? resourceKey = null)
+    public async Task ClearMetricsAsync(ResourceKey? resourceKey = null)
     {
         EnsureWritable();
-        ClearMetricsFromDatabase(resourceKey);
+        await ClearMetricsFromDatabaseAsync(resourceKey).ConfigureAwait(false);
         RaiseSubscriptionChanged(_metricsSubscriptions);
         RaiseSubscriptionChanged(_resourceSubscriptions);
     }

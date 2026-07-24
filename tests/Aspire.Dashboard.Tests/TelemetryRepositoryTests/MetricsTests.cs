@@ -23,14 +23,14 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void AddMetrics()
+    public async Task AddMetrics()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -109,7 +109,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddMetrics_MeterAttributeLimits_LimitsApplied()
+    public async Task AddMetrics_MeterAttributeLimits_LimitsApplied()
     {
         // Arrange
         var repository = CreateRepository(maxAttributeCount: 5, maxAttributeLength: 16);
@@ -126,7 +126,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -203,7 +203,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddMetrics_MetricAttributeLimits_LimitsApplied()
+    public async Task AddMetrics_MetricAttributeLimits_LimitsApplied()
     {
         // Arrange
         var repository = CreateRepository(maxAttributeCount: 5, maxAttributeLength: 16);
@@ -222,7 +222,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -288,14 +288,14 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetInstrument()
+    public async Task GetInstrument()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -390,11 +390,11 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetInstrument_StaggeredDimensionChanges_ReturnsCurrentValues()
+    public async Task GetInstrument_StaggeredDimensionChanges_ReturnsCurrentValues()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -448,10 +448,10 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetInstrumentLatestEndTime()
+    public async Task GetInstrumentLatestEndTime()
     {
         var repository = CreateRepository();
-        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -498,14 +498,14 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddMetrics_Capacity_ValuesRemoved()
+    public async Task AddMetrics_Capacity_ValuesRemoved()
     {
         // Arrange
         var repository = CreateRepository(maxMetricsCount: 3);
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -577,14 +577,14 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetMetrics_MultipleInstances()
+    public async Task GetMetrics_MultipleInstances()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -685,13 +685,13 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void RemoveMetrics_All()
+    public async Task RemoveMetrics_All()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -744,7 +744,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.AsWriter().ClearMetrics();
+        await repository.AsWriter().ClearMetricsAsync();
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -760,13 +760,13 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void RemoveMetrics_SelectedResource()
+    public async Task RemoveMetrics_SelectedResource()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -819,7 +819,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.AsWriter().ClearMetrics(new ResourceKey("resource1", "456"));
+        await repository.AsWriter().ClearMetricsAsync(new ResourceKey("resource1", "456"));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -910,13 +910,13 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void RemoveMetrics_MultipleSelectedResources()
+    public async Task RemoveMetrics_MultipleSelectedResources()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -969,7 +969,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.AsWriter().ClearMetrics(new ResourceKey("resource1", null));
+        await repository.AsWriter().ClearMetricsAsync(new ResourceKey("resource1", null));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1050,7 +1050,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddMetrics_InvalidInstrument()
+    public async Task AddMetrics_InvalidInstrument()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1058,7 +1058,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
         var addContext = new AddContext();
 
         // Act
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -1094,7 +1094,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddMetrics_InvalidHistogramDataPoints()
+    public async Task AddMetrics_InvalidHistogramDataPoints()
     {
         // Arrange
         var repository = CreateRepository();
@@ -1140,7 +1140,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             }
         };
 
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -1181,9 +1181,8 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddMetrics_HistogramBucketCountLengthChanges_DataPointRejected()
+    public async Task AddMetrics_HistogramBucketCountLengthChanges_DataPointRejected()
     {
-        // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
         var histogramMetric = new Metric
@@ -1212,8 +1211,7 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             }
         };
 
-        // Act
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -1229,7 +1227,6 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             }
         });
 
-        // Assert
         Assert.Equal(1, addContext.SuccessCount);
         Assert.Equal(1, addContext.FailureCount);
 
@@ -1251,14 +1248,14 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddMetrics_OverflowDimension()
+    public async Task AddMetrics_OverflowDimension()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -1314,14 +1311,14 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddMetrics_NoScope()
+    public async Task AddMetrics_NoScope()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -1376,10 +1373,10 @@ public sealed class SqliteMetricsTests : MetricsTests
     protected override bool UseSqlite => true;
 
     [Fact]
-    public void GetInstrument_PopulateExemplarAttributesFalse_SkipsAttributes()
+    public async Task GetInstrument_PopulateExemplarAttributesFalse_SkipsAttributes()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
-        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             CreateResourceMetrics(CreateSumMetric(
                 metricName: "test",
@@ -1411,10 +1408,10 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void GetInstrument_WithoutTimeRange_SkipsMetricPointQueries()
+    public async Task GetInstrument_WithoutTimeRange_SkipsMetricPointQueries()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
-        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             CreateResourceMetrics(CreateSumMetric("test", s_queryTestTime.AddMinutes(1)))
         });
@@ -1437,14 +1434,14 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void GetInstrument_StaggeredDimensionChanges_ReturnsDimensionTimelines()
+    public async Task GetInstrument_StaggeredDimensionChanges_ReturnsDimensionTimelines()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
 
         for (var minute = 1; minute <= 3; minute++)
         {
-            repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+            await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
             {
                 new ResourceMetrics
                 {
@@ -1487,14 +1484,14 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void GetHistogram_StaggeredDimensionChanges_ReturnsDimensionTimelines()
+    public async Task GetHistogram_StaggeredDimensionChanges_ReturnsDimensionTimelines()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
 
         for (var minute = 1; minute <= 3; minute++)
         {
-            repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+            await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
             {
                 new ResourceMetrics
                 {
@@ -1567,11 +1564,11 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void GetInstrument_DimensionCursor_ReturnsExtendedLatestPoint()
+    public async Task GetInstrument_DimensionCursor_ReturnsExtendedLatestPoint()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -1607,7 +1604,7 @@ public sealed class SqliteMetricsTests : MetricsTests
         var initialDimension = Assert.Single(initialInstrument!.Dimensions);
         var initialValue = Assert.IsType<MetricValue<long>>(Assert.Single(initialDimension.Values));
 
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -1657,11 +1654,11 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void GetInstrument_DataPointInterval_RollsUpNumericValuesAndExemplars()
+    public async Task GetInstrument_DataPointInterval_RollsUpNumericValuesAndExemplars()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -1706,14 +1703,14 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void GetInstrument_IncrementalRollup_RecomputesCompleteLatestBucket()
+    public async Task GetInstrument_IncrementalRollup_RecomputesCompleteLatestBucket()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
-        AddMetric(s_queryTestTime.AddSeconds(1), 5);
-        AddMetric(s_queryTestTime.AddSeconds(5), 5);
-        AddMetric(s_queryTestTime.AddSeconds(10), 3);
-        AddMetric(s_queryTestTime.AddMinutes(2), 3);
+        await AddMetric(s_queryTestTime.AddSeconds(1), 5);
+        await AddMetric(s_queryTestTime.AddSeconds(5), 5);
+        await AddMetric(s_queryTestTime.AddSeconds(10), 3);
+        await AddMetric(s_queryTestTime.AddMinutes(2), 3);
 
         var resource = Assert.Single(repository.GetResources());
         var initialInstrument = GetInstrument([]);
@@ -1732,9 +1729,9 @@ public sealed class SqliteMetricsTests : MetricsTests
         Assert.Equal(initialValue.Start, refreshedValue.Start);
         Assert.Equal(initialValue.End, refreshedValue.End);
 
-        void AddMetric(DateTime startTime, int value)
+        async Task AddMetric(DateTime startTime, int value)
         {
-            repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+            await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
             {
                 new ResourceMetrics
                 {
@@ -1767,7 +1764,7 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void GetHistogram_DataPointInterval_ReturnsLatestCoherentSnapshot()
+    public async Task GetHistogram_DataPointInterval_ReturnsLatestCoherentSnapshot()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
@@ -1791,7 +1788,7 @@ public sealed class SqliteMetricsTests : MetricsTests
             }
             metrics.Add(metric);
         }
-        repository.AsWriter().AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -1827,7 +1824,7 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void AddMetrics_ReusesInstrumentAndDimensionLookupsWithinBatch()
+    public async Task AddMetrics_ReusesInstrumentAndDimensionLookupsWithinBatch()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
         var activities = new ConcurrentQueue<Activity>();
@@ -1835,7 +1832,7 @@ public sealed class SqliteMetricsTests : MetricsTests
         using var parent = new Activity("metric ingestion test").Start();
 
         var context = new AddContext();
-        repository.AsWriter().AddMetrics(context, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(context, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -1869,7 +1866,7 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void AddMetrics_LargeHistogramAndDimensionAttributeBatchesRoundTrip()
+    public async Task AddMetrics_LargeHistogramAndDimensionAttributeBatchesRoundTrip()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
         var histogram = CreateHistogramMetric(metricName: "histogram", startTime: s_queryTestTime.AddMinutes(1));
@@ -1890,7 +1887,7 @@ public sealed class SqliteMetricsTests : MetricsTests
             .Select(index => KeyValuePair.Create($"key-{index}", $"second-{index}"))
             .ToArray();
         var context = new AddContext();
-        repository.AsWriter().AddMetrics(context, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(context, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -1950,10 +1947,10 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void AddMetrics_BatchesAndDeduplicatesExemplars()
+    public async Task AddMetrics_BatchesAndDeduplicatesExemplars()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
-        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             CreateResourceMetrics(CreateSumMetric(
                 metricName: "test",
@@ -1966,7 +1963,7 @@ public sealed class SqliteMetricsTests : MetricsTests
         using var parent = new Activity("metric exemplar test").Start();
 
         var context = new AddContext();
-        repository.AsWriter().AddMetrics(context, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(context, new RepeatedField<ResourceMetrics>
         {
             CreateResourceMetrics(CreateSumMetric(
                 metricName: "test",
@@ -2005,10 +2002,10 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void AddMetrics_UpdateOnlyBatch_DoesNotTrimMetricPoints()
+    public async Task AddMetrics_UpdateOnlyBatch_DoesNotTrimMetricPoints()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
-        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             CreateResourceMetrics(CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(1), value: 1))
         });
@@ -2016,7 +2013,7 @@ public sealed class SqliteMetricsTests : MetricsTests
         using var listener = ActivityListenerHelper.Create(repository.SqlActivitySource, onActivityStopped: activities.Enqueue);
         using var parent = new Activity("metric update test").Start();
 
-        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -2066,18 +2063,18 @@ public sealed class SqliteMetricsTests : MetricsTests
     }
 
     [Fact]
-    public void ClearMetrics_InvalidatesMetricIngestionCache()
+    public async Task ClearMetrics_InvalidatesMetricIngestionCache()
     {
         var repository = CreateRepository();
-        repository.AsWriter().AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             CreateResourceMetrics(CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(1), value: 1))
         });
 
-        repository.AsWriter().ClearMetrics();
+        await repository.AsWriter().ClearMetricsAsync();
 
         var context = new AddContext();
-        repository.AsWriter().AddMetrics(context, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(context, new RepeatedField<ResourceMetrics>
         {
             CreateResourceMetrics(CreateSumMetric(metricName: "test", startTime: s_queryTestTime.AddMinutes(2), value: 2))
         });

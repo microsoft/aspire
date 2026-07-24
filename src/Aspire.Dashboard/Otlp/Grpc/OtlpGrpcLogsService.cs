@@ -22,6 +22,6 @@ public class OtlpGrpcLogsService : LogsService.LogsServiceBase
 
     public override Task<ExportLogsServiceResponse> Export(ExportLogsServiceRequest request, ServerCallContext context)
     {
-        return Task.FromResult(_logsService.Export(request));
+        return _logsService.ExportAsync(request);
     }
 }

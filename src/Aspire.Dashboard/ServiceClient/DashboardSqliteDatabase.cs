@@ -4,6 +4,7 @@
 using Dapper;
 using System.Data;
 using System.Diagnostics;
+using Aspire.Dashboard.Utils;
 using Microsoft.Data.Sqlite;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -15,13 +16,12 @@ public sealed class DashboardSqliteDatabase : IDisposable
 {
     private const string SchemaResourcePrefix = "Aspire.Dashboard.ServiceClient.DatabaseSchema.";
 
-    internal const int SchemaVersion = 13;
+    internal const int SchemaVersion = 15;
 
     private static readonly Lazy<IReadOnlyList<string>> s_schemaScripts = new(LoadSchemaScripts);
 
     private readonly string _connectionString;
     private readonly ActivitySource _activitySource = new(TracingSqliteConnection.ActivitySourceName);
-    private readonly object _schemaLock = new();
     private bool _schemaInitialized;
 
     /// <summary>
@@ -62,6 +62,11 @@ public sealed class DashboardSqliteDatabase : IDisposable
     public bool IsReadOnly { get; }
 
     internal ActivitySource ActivitySource => _activitySource;
+
+    /// <summary>
+    /// Gets the lock that serializes writes to this database.
+    /// </summary>
+    internal AsyncLock WriteLock { get; } = new();
 
     /// <summary>
     /// Determines whether a dashboard database uses the current schema version.
@@ -120,7 +125,7 @@ public sealed class DashboardSqliteDatabase : IDisposable
     {
         EnsureWritable("Historical dashboard data is read-only.");
 
-        lock (_schemaLock)
+        using (WriteLock.Lock())
         {
             if (_schemaInitialized)
             {

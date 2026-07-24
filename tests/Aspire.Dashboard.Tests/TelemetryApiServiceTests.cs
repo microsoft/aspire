@@ -23,7 +23,7 @@ public class TelemetryApiServiceTests
     public async Task FollowSpansAsync_StreamsAllSpans()
     {
         var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
-        AddSpans(repository, count: 5);
+        await AddSpans(repository, count: 5);
 
         var service = CreateService(repository);
 
@@ -44,7 +44,7 @@ public class TelemetryApiServiceTests
     public async Task FollowLogsAsync_StreamsAllLogs()
     {
         var repository = CreateRepository(subscriptionMinExecuteInterval: TimeSpan.Zero);
-        AddLogs(repository, ["log1", "log2", "log3", "log4", "log5"]);
+        await AddLogs(repository, ["log1", "log2", "log3", "log4", "log5"]);
 
         var service = CreateService(repository);
 
@@ -65,10 +65,10 @@ public class TelemetryApiServiceTests
     [InlineData(false, 1)]
     [InlineData(true, 1)]
     [InlineData(null, 2)]
-    public void GetTraces_HasErrorFilter_ReturnsExpectedTraces(bool? hasError, int expectedCount)
+    public async Task GetTraces_HasErrorFilter_ReturnsExpectedTraces(bool? hasError, int expectedCount)
     {
         var repository = CreateRepository();
-        AddTracesWithStatus(repository);
+        await AddTracesWithStatus(repository);
 
         var service = CreateService(repository);
 
@@ -82,7 +82,7 @@ public class TelemetryApiServiceTests
     public async Task FollowSpansAsync_WithInvalidResourceName_ReturnsNoSpans()
     {
         var repository = CreateRepository();
-        AddSpans(repository, count: 1);
+        await AddSpans(repository, count: 1);
 
         var service = CreateService(repository);
 
@@ -105,7 +105,7 @@ public class TelemetryApiServiceTests
     public async Task FollowLogsAsync_WithInvalidResourceName_ReturnsNoLogs()
     {
         var repository = CreateRepository();
-        AddLogs(repository, ["log1"]);
+        await AddLogs(repository, ["log1"]);
 
         var service = CreateService(repository);
 
@@ -129,12 +129,12 @@ public class TelemetryApiServiceTests
     [InlineData("7472616", true)] // shortened (7 char) prefix
     [InlineData("747261", false)] // too short
     [InlineData("nonexistent", false)]
-    public void GetTrace_VariousTraceIds_ReturnsExpectedResult(string lookupId, bool expectFound)
+    public async Task GetTrace_VariousTraceIds_ReturnsExpectedResult(string lookupId, bool expectFound)
     {
         var repository = CreateRepository();
         var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
 
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: traceId, spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
         ]);
 
@@ -159,7 +159,7 @@ public class TelemetryApiServiceTests
         var repository = CreateRepository();
         var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
 
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: traceId, spanId: "matching-span", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)),
             CreateSpan(traceId: "other-trace", spanId: "other-span", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3))
         ]);
@@ -179,12 +179,12 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetTrace_ReturnsAllSpansForTrace()
+    public async Task GetTrace_ReturnsAllSpansForTrace()
     {
         var repository = CreateRepository();
         var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
 
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: traceId, spanId: "short-span", startTime: s_testTime, endTime: s_testTime.AddMilliseconds(49)),
             CreateSpan(traceId: traceId, spanId: "long-span", startTime: s_testTime.AddSeconds(1), endTime: s_testTime.AddSeconds(1).AddMilliseconds(50))
         ]);
@@ -199,10 +199,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetTraces_WithLimit_ReturnsMostRecentTraces()
+    public async Task GetTraces_WithLimit_ReturnsMostRecentTraces()
     {
         var repository = CreateRepository();
-        AddSpans(repository, count: 3, startMinuteSpacing: 10);
+        await AddSpans(repository, count: 3, startMinuteSpacing: 10);
 
         var service = CreateService(repository);
 
@@ -219,10 +219,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetTraces_WithLimitAndDurationSearchFilter_ReturnsMostRecentMatchingTraces()
+    public async Task GetTraces_WithLimitAndDurationSearchFilter_ReturnsMostRecentMatchingTraces()
     {
         var repository = CreateRepository();
-        AddSpans(repository, count: 3, startMinuteSpacing: 10);
+        await AddSpans(repository, count: 3, startMinuteSpacing: 10);
 
         var service = CreateService(repository);
 
@@ -240,13 +240,13 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetTraces_WithDurationSearchFilter_FiltersShortSpans()
+    public async Task GetTraces_WithDurationSearchFilter_FiltersShortSpans()
     {
         var repository = CreateRepository();
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "short-trace", spanId: "short-trace-span", startTime: s_testTime, endTime: s_testTime.AddMilliseconds(49))
         ]);
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "mixed-trace", spanId: "mixed-short-span", startTime: s_testTime.AddSeconds(1), endTime: s_testTime.AddSeconds(1).AddMilliseconds(49)),
             CreateSpan(traceId: "mixed-trace", spanId: "mixed-long-span", startTime: s_testTime.AddSeconds(2), endTime: s_testTime.AddSeconds(2).AddMilliseconds(50))
         ]);
@@ -268,10 +268,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetTraces_WithHasErrorAndDurationSearchFilter_ReturnsAllSpansFromMatchingTraces()
+    public async Task GetTraces_WithHasErrorAndDurationSearchFilter_ReturnsAllSpansFromMatchingTraces()
     {
         var repository = CreateRepository();
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(
                 traceId: "mixed-trace",
                 spanId: "short-error-span",
@@ -304,10 +304,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetLogs_WithLimit_ReturnsMostRecentLogs()
+    public async Task GetLogs_WithLimit_ReturnsMostRecentLogs()
     {
         var repository = CreateRepository();
-        AddLogs(repository, ["old-log", "mid-log", "new-log"]);
+        await AddLogs(repository, ["old-log", "mid-log", "new-log"]);
 
         var service = CreateService(repository);
 
@@ -324,7 +324,7 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetLogs_LargeLimit_ReturnsAllLogs()
+    public async Task GetLogs_LargeLimit_ReturnsAllLogs()
     {
         const int totalLogs = 20_000;
         var repository = CreateRepository(maxLogCount: totalLogs);
@@ -335,7 +335,7 @@ public class TelemetryApiServiceTests
             logRecords.Add(CreateLogRecord(time: s_testTime.AddMilliseconds(i), message: $"log{i}", severity: SeverityNumber.Info));
         }
 
-        AddLogsToRepository(repository, logRecords);
+        await AddLogsToRepository(repository, logRecords);
 
         var service = CreateService(repository);
 
@@ -349,10 +349,10 @@ public class TelemetryApiServiceTests
     [Theory]
     [InlineData("Connection", 2)]
     [InlineData("nonexistent", 0)]
-    public void GetLogs_WithSearch_FiltersLogsByMessage(string search, int expectedCount)
+    public async Task GetLogs_WithSearch_FiltersLogsByMessage(string search, int expectedCount)
     {
         var repository = CreateRepository();
-        AddLogs(repository, ["Connection established", "Request received", "Connection closed"]);
+        await AddLogs(repository, ["Connection established", "Request received", "Connection closed"]);
 
         var service = CreateService(repository);
 
@@ -363,11 +363,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetLogs_WithSearch_IsCaseInsensitive()
+    public async Task GetLogs_WithSearch_IsCaseInsensitive()
     {
         var repository = CreateRepository();
-        AddLogs(repository, ["UPPERCASE warning detected"]);
-        AddLogs(repository, ["Normal log"]);
+        await AddLogs(repository, ["UPPERCASE warning detected"]);
+        await AddLogs(repository, ["Normal log"]);
 
         var service = CreateService(repository);
 
@@ -378,10 +378,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetLogs_WithSearch_MatchesAttributes()
+    public async Task GetLogs_WithSearch_MatchesAttributes()
     {
         var repository = CreateRepository();
-        AddLogsToRepository(repository, [
+        await AddLogsToRepository(repository, [
             CreateLogRecord(time: s_testTime, message: "log1", severity: SeverityNumber.Info,
                 attributes: [new KeyValuePair<string, string>("http.url", "/api/products")]),
             CreateLogRecord(time: s_testTime.AddMinutes(1), message: "log2", severity: SeverityNumber.Info,
@@ -399,15 +399,15 @@ public class TelemetryApiServiceTests
     [Theory]
     [InlineData("span1", 1)]
     [InlineData("nonexistent-xyz", 0)]
-    public void GetTraces_WithSearch_FiltersTraces(string search, int expectedCount)
+    public async Task GetTraces_WithSearch_FiltersTraces(string search, int expectedCount)
     {
         var repository = CreateRepository();
 
         // Each trace needs a separate AddTraces call to get distinct trace IDs in the repository
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1))
         ]);
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "trace2", spanId: "span2", startTime: s_testTime.AddMinutes(10), endTime: s_testTime.AddMinutes(11))
         ]);
 
@@ -427,10 +427,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithAttributeFilter_FiltersSpans()
+    public async Task GetSpans_WithAttributeFilter_FiltersSpans()
     {
         var repository = CreateRepository();
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1),
                 attributes: [new KeyValuePair<string, string>("http.method", "GET")]),
             CreateSpan(traceId: "trace1", spanId: "span2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3),
@@ -450,14 +450,14 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetTraces_WithAttributeFilter_FiltersTraces()
+    public async Task GetTraces_WithAttributeFilter_FiltersTraces()
     {
         var repository = CreateRepository();
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "trace1", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1),
                 attributes: [new KeyValuePair<string, string>("http.method", "GET")])
         ]);
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "trace2", spanId: "span2", startTime: s_testTime.AddMinutes(10), endTime: s_testTime.AddMinutes(11),
                 attributes: [new KeyValuePair<string, string>("http.method", "POST")])
         ]);
@@ -475,10 +475,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetLogs_WithAttributeFilter_FiltersLogs()
+    public async Task GetLogs_WithAttributeFilter_FiltersLogs()
     {
         var repository = CreateRepository();
-        AddLogsToRepository(repository, [
+        await AddLogsToRepository(repository, [
             CreateLogRecord(time: s_testTime, message: "log1", severity: SeverityNumber.Info,
                 attributes: [new KeyValuePair<string, string>("http.method", "GET")]),
             CreateLogRecord(time: s_testTime.AddMinutes(1), message: "log2", severity: SeverityNumber.Info,
@@ -494,10 +494,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithDurationRangeFilter_ReturnsSpansInRange()
+    public async Task GetSpans_WithDurationRangeFilter_ReturnsSpansInRange()
     {
         var repository = CreateRepository();
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "trace1", spanId: "short-span", startTime: s_testTime, endTime: s_testTime.AddMilliseconds(30)),
             CreateSpan(traceId: "trace1", spanId: "mid-span", startTime: s_testTime.AddSeconds(1), endTime: s_testTime.AddSeconds(1).AddMilliseconds(75)),
             CreateSpan(traceId: "trace1", spanId: "long-span", startTime: s_testTime.AddSeconds(2), endTime: s_testTime.AddSeconds(2).AddMilliseconds(200))
@@ -517,10 +517,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetLogs_WithUrlSearch_MatchesExactScheme()
+    public async Task GetLogs_WithUrlSearch_MatchesExactScheme()
     {
         var repository = CreateRepository();
-        AddLogs(repository, [
+        await AddLogs(repository, [
             "Request to http://www.contoso.com/api completed",
             "Request to https://www.contoso.com/api completed",
             "No URL in this message"
@@ -536,11 +536,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithTimestampGreaterThan_FiltersCorrectly()
+    public async Task GetSpans_WithTimestampGreaterThan_FiltersCorrectly()
     {
         var repository = CreateRepository();
         // Spans at s_testTime+1min, +2min, +3min
-        AddSpans(repository, count: 3);
+        await AddSpans(repository, count: 3);
 
         var service = CreateService(repository);
 
@@ -553,11 +553,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithTimestampLessThan_FiltersCorrectly()
+    public async Task GetSpans_WithTimestampLessThan_FiltersCorrectly()
     {
         var repository = CreateRepository();
         // Spans at s_testTime+1min, +2min, +3min
-        AddSpans(repository, count: 3);
+        await AddSpans(repository, count: 3);
 
         var service = CreateService(repository);
 
@@ -570,11 +570,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithTimestampGreaterThanOrEqual_FiltersCorrectly()
+    public async Task GetSpans_WithTimestampGreaterThanOrEqual_FiltersCorrectly()
     {
         var repository = CreateRepository();
         // Spans at s_testTime+1min, +2min, +3min
-        AddSpans(repository, count: 3);
+        await AddSpans(repository, count: 3);
 
         var service = CreateService(repository);
 
@@ -587,11 +587,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetLogs_WithTimestampGreaterThan_FiltersCorrectly()
+    public async Task GetLogs_WithTimestampGreaterThan_FiltersCorrectly()
     {
         var repository = CreateRepository();
         // Logs at s_testTime, +1min, +2min
-        AddLogs(repository, ["log1", "log2", "log3"]);
+        await AddLogs(repository, ["log1", "log2", "log3"]);
 
         var service = CreateService(repository);
 
@@ -604,10 +604,10 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithTimestampInvalidDate_ReturnsNoResults()
+    public async Task GetSpans_WithTimestampInvalidDate_ReturnsNoResults()
     {
         var repository = CreateRepository();
-        AddSpans(repository, count: 3);
+        await AddSpans(repository, count: 3);
 
         var service = CreateService(repository);
 
@@ -619,11 +619,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithTimestampUtcSuffix_TreatedAsUtc()
+    public async Task GetSpans_WithTimestampUtcSuffix_TreatedAsUtc()
     {
         var repository = CreateRepository();
         // Spans at s_testTime+1min, +2min, +3min (s_testTime is 1970-01-01T00:00:00Z)
-        AddSpans(repository, count: 3);
+        await AddSpans(repository, count: 3);
 
         var service = CreateService(repository);
 
@@ -636,11 +636,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithTimestampNoTimezone_TreatedAsLocalTime()
+    public async Task GetSpans_WithTimestampNoTimezone_TreatedAsLocalTime()
     {
         var repository = CreateRepository();
         // Spans at s_testTime+1min, +2min, +3min (s_testTime is 1970-01-01T00:00:00Z)
-        AddSpans(repository, count: 3);
+        await AddSpans(repository, count: 3);
 
         var service = CreateService(repository);
 
@@ -657,11 +657,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithTimestampOffset_AdjustedToUtc()
+    public async Task GetSpans_WithTimestampOffset_AdjustedToUtc()
     {
         var repository = CreateRepository();
         // Spans at s_testTime+1min, +2min, +3min (s_testTime is 1970-01-01T00:00:00Z)
-        AddSpans(repository, count: 3);
+        await AddSpans(repository, count: 3);
 
         var service = CreateService(repository);
 
@@ -674,14 +674,14 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithTimestampDateOnly_FiltersCorrectly()
+    public async Task GetSpans_WithTimestampDateOnly_FiltersCorrectly()
     {
         var repository = CreateRepository();
         // Create spans on two different days: 1970-01-01 and 1970-01-02
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "trace1", spanId: "span1", startTime: new DateTime(1970, 1, 1, 12, 0, 0, DateTimeKind.Utc), endTime: new DateTime(1970, 1, 1, 12, 1, 0, DateTimeKind.Utc))
         ]);
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "trace2", spanId: "span2", startTime: new DateTime(1970, 1, 2, 12, 0, 0, DateTimeKind.Utc), endTime: new DateTime(1970, 1, 2, 12, 1, 0, DateTimeKind.Utc))
         ]);
 
@@ -699,11 +699,11 @@ public class TelemetryApiServiceTests
     /// Adds spans with sequential trace/span IDs to the repository. Each span is added in a separate
     /// AddTraces call so that it gets its own trace entry.
     /// </summary>
-    private static void AddSpans(InMemoryTelemetryRepository repository, int count, int startMinuteSpacing = 1)
+    private static async Task AddSpans(InMemoryTelemetryRepository repository, int count, int startMinuteSpacing = 1)
     {
         for (var i = 1; i <= count; i++)
         {
-            AddSpansToRepository(repository, [
+            await AddSpansToRepository(repository, [
                 CreateSpan(traceId: $"trace{i}", spanId: $"span{i}", startTime: s_testTime.AddMinutes(i * startMinuteSpacing), endTime: s_testTime.AddMinutes(i * startMinuteSpacing + 1))
             ]);
         }
@@ -712,9 +712,9 @@ public class TelemetryApiServiceTests
     /// <summary>
     /// Adds a batch of spans (as raw Span objects) to the repository under a single resource.
     /// </summary>
-    private static void AddSpansToRepository(InMemoryTelemetryRepository repository, IEnumerable<Span> spans)
+    private static async Task AddSpansToRepository(InMemoryTelemetryRepository repository, IEnumerable<Span> spans)
     {
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -734,12 +734,12 @@ public class TelemetryApiServiceTests
     /// <summary>
     /// Adds two traces (separate trace IDs) with OK and Error status for hasError filter tests.
     /// </summary>
-    private static void AddTracesWithStatus(InMemoryTelemetryRepository repository)
+    private static async Task AddTracesWithStatus(InMemoryTelemetryRepository repository)
     {
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "ok-trace", spanId: "span1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1), status: new Status { Code = Status.Types.StatusCode.Ok })
         ]);
-        AddSpansToRepository(repository, [
+        await AddSpansToRepository(repository, [
             CreateSpan(traceId: "error-trace", spanId: "span2", startTime: s_testTime.AddMinutes(2), endTime: s_testTime.AddMinutes(3), status: new Status { Code = Status.Types.StatusCode.Error })
         ]);
     }
@@ -747,7 +747,7 @@ public class TelemetryApiServiceTests
     /// <summary>
     /// Adds log entries with the specified messages to the repository.
     /// </summary>
-    private static void AddLogs(InMemoryTelemetryRepository repository, string[] messages, SeverityNumber severity = SeverityNumber.Info)
+    private static async Task AddLogs(InMemoryTelemetryRepository repository, string[] messages, SeverityNumber severity = SeverityNumber.Info)
     {
         var logRecords = new RepeatedField<LogRecord>();
         for (var i = 0; i < messages.Length; i++)
@@ -755,15 +755,15 @@ public class TelemetryApiServiceTests
             logRecords.Add(CreateLogRecord(time: s_testTime.AddMinutes(i), message: messages[i], severity: severity));
         }
 
-        AddLogsToRepository(repository, logRecords);
+        await AddLogsToRepository(repository, logRecords);
     }
 
     /// <summary>
     /// Adds a batch of raw LogRecord objects to the repository under a single resource.
     /// </summary>
-    private static void AddLogsToRepository(InMemoryTelemetryRepository repository, RepeatedField<LogRecord> logRecords)
+    private static async Task AddLogsToRepository(InMemoryTelemetryRepository repository, RepeatedField<LogRecord> logRecords)
     {
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -810,7 +810,7 @@ public class TelemetryApiServiceTests
         Assert.False(moveNextTask.IsCompleted);
 
         // Now add spans for the resource - this should unblock the stream.
-        AddSpans(repository, count: 1);
+        await AddSpans(repository, count: 1);
 
         Assert.True(await moveNextTask.DefaultTimeout());
         Assert.NotNull(enumerator.Current);
@@ -832,7 +832,7 @@ public class TelemetryApiServiceTests
         Assert.False(moveNextTask.IsCompleted);
 
         // Now add logs for the resource - this should unblock the stream.
-        AddLogs(repository, ["hello"]);
+        await AddLogs(repository, ["hello"]);
 
         Assert.True(await moveNextTask.DefaultTimeout());
         Assert.NotNull(enumerator.Current);
@@ -852,7 +852,7 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithReplicatedResourceName_DoesNotThrow()
+    public async Task GetSpans_WithReplicatedResourceName_DoesNotThrow()
     {
         // When multiple replicas share the same base ResourceName, the resource resolver
         // must not throw InvalidOperationException from SingleOrDefault. It should treat
@@ -860,7 +860,7 @@ public class TelemetryApiServiceTests
         var repository = CreateRepository();
 
         // Add two replicas of the same service with different instance IDs.
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -868,7 +868,7 @@ public class TelemetryApiServiceTests
                 ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "s1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
             }
         });
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -885,13 +885,13 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithCompositeResourceKey_ResolvesReplica()
+    public async Task GetSpans_WithCompositeResourceKey_ResolvesReplica()
     {
         // When the caller uses the composite ResourceKey string (e.g. "myapp-replica-1"),
         // the resolver should find the exact replica.
         var repository = CreateRepository();
 
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -899,7 +899,7 @@ public class TelemetryApiServiceTests
                 ScopeSpans = { new ScopeSpans { Scope = CreateScope(), Spans = { CreateSpan(traceId: "t1", spanId: "s1", startTime: s_testTime, endTime: s_testTime.AddMinutes(1)) } } }
             }
         });
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -921,11 +921,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithResourceNameMatchingCompositeResourceKey_ReturnsNull()
+    public async Task GetSpans_WithResourceNameMatchingCompositeResourceKey_ReturnsNull()
     {
         var repository = CreateRepository();
 
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -947,11 +947,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithAmbiguousCompositeResourceKey_ReturnsNull()
+    public async Task GetSpans_WithAmbiguousCompositeResourceKey_ReturnsNull()
     {
         var repository = CreateRepository();
 
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -973,11 +973,11 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithBaseResourceNameAndMixedInstanceIds_ReturnsNull()
+    public async Task GetSpans_WithBaseResourceNameAndMixedInstanceIds_ReturnsNull()
     {
         var repository = CreateRepository();
 
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -999,12 +999,12 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithUniqueResourceName_ResolvesDirectly()
+    public async Task GetSpans_WithUniqueResourceName_ResolvesDirectly()
     {
         // When only one resource matches the base name, it should resolve directly.
         var repository = CreateRepository();
 
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -1022,12 +1022,12 @@ public class TelemetryApiServiceTests
     }
 
     [Fact]
-    public void GetSpans_WithDifferentCaseResourceName_ResolvesCaseInsensitively()
+    public async Task GetSpans_WithDifferentCaseResourceName_ResolvesCaseInsensitively()
     {
         // Resource names are case-insensitive throughout the dashboard.
         var repository = CreateRepository();
 
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {

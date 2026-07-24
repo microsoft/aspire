@@ -513,14 +513,14 @@ public partial class ResourcesTests : DashboardTestContext
     }
 
     [Fact]
-    public void UnreadLogErrorsBadge_StopsKeyboardPropagation()
+    public async Task UnreadLogErrorsBadge_StopsKeyboardPropagation()
     {
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         FluentUISetupHelpers.SetupFluentUIComponents(this);
         FluentUISetupHelpers.SetupFluentAnchor(this);
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        AddErrorLog(telemetryRepository, resourceName: "Resource1");
+        await AddErrorLog(telemetryRepository, resourceName: "Resource1");
         var unviewedErrorCounts = telemetryRepository.GetResourceUnviewedErrorLogsCount();
         var resourceKey = Assert.Single(unviewedErrorCounts.Keys);
         var resource = CreateResource(resourceKey.GetCompositeName(), "Type1", "Running", null);
@@ -571,7 +571,7 @@ public partial class ResourcesTests : DashboardTestContext
         };
     }
 
-    private static void AddErrorLog(SqliteTelemetryRepository repository, string resourceName)
+    private static async Task AddErrorLog(SqliteTelemetryRepository repository, string resourceName)
     {
         var addContext = new AddContext();
         var logs = new RepeatedField<ResourceLogs>();
@@ -594,7 +594,7 @@ public partial class ResourcesTests : DashboardTestContext
             }
         });
 
-        repository.AddLogs(addContext, logs);
+        await repository.AddLogsAsync(addContext, logs);
 
         Assert.Equal(0, addContext.FailureCount);
     }
