@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from "react";
+import { getTerminalWebSocketUrl, isHttpBackend } from "../api/deck";
 import { Button, NamedIcon, Select } from "../toolkit";
 
 interface TerminalToolbarState {
@@ -54,9 +55,9 @@ export function InteractiveTerminal({ resourceName, replicaIndex }: { resourceNa
   const hostRef = useRef<HTMLDivElement | null>(null);
   const moduleRef = useRef<TerminalModule | null>(null);
   const terminalIdRef = useRef(0);
+  const terminalUrlRef = useRef<string | null>(null);
   const [state, setState] = useState(initialState);
-  const isMock = new URLSearchParams(window.location.search).get("backend") !== "http";
-  const wsUrl = `${window.location.protocol === "https:" ? "wss" : "ws"}://${window.location.host}/api/terminal?resource=${encodeURIComponent(resourceName)}&replica=${replicaIndex}`;
+  const isMock = !isHttpBackend();
 
   useEffect(() => {
     if (isMock) {
@@ -71,7 +72,11 @@ export function InteractiveTerminal({ resourceName, replicaIndex }: { resourceNa
       },
     };
     const load = async () => {
-      // This module is served by the dashboard rather than bundled by Vite.
+      const wsUrl = await getTerminalWebSocketUrl(resourceName, replicaIndex);
+      if (disposed || wsUrl === null) return;
+      terminalUrlRef.current = wsUrl;
+      // This module is shared with the legacy dashboard because it is the HMP1
+      // protocol client. The AOT publish bundles and serves the same static asset.
       const modulePath = "/Components/Controls/TerminalView.razor.js";
       const terminalModule = await import(/* @vite-ignore */ modulePath) as TerminalModule;
       if (disposed || hostRef.current === null) return;
@@ -83,9 +88,10 @@ export function InteractiveTerminal({ resourceName, replicaIndex }: { resourceNa
       disposed = true;
       if (terminalIdRef.current !== 0) moduleRef.current?.disposeTerminal(terminalIdRef.current);
       terminalIdRef.current = 0;
+      terminalUrlRef.current = null;
       moduleRef.current = null;
     };
-  }, [isMock, wsUrl]);
+  }, [isMock, resourceName, replicaIndex]);
 
   const takeControl = () => {
     if (isMock) {
@@ -97,8 +103,8 @@ export function InteractiveTerminal({ resourceName, replicaIndex }: { resourceNa
   const releaseControl = () => {
     if (isMock) {
       setState((current) => ({ ...current, status: "viewer", isPrimary: false, canTakeControl: true, fontControlsEnabled: false, sizeSelectEnabled: false }));
-    } else {
-      moduleRef.current?.reconnectTerminal(terminalIdRef.current, wsUrl);
+    } else if (terminalUrlRef.current !== null) {
+      moduleRef.current?.reconnectTerminal(terminalIdRef.current, terminalUrlRef.current);
     }
   };
   const setFontSize = (fontPx: number) => {

@@ -51,6 +51,7 @@ const metricSeriesCapability = "metrics-series";
 const metricClearCapability = "metrics-clear";
 const consoleLogsCapability = "console-logs";
 const consoleLogStreamCapability = "console-logs-live";
+const terminalCapability = "terminal";
 const interactionsCapability = "interactions";
 const maximumStructuredLogDedupeKeys = 10_000;
 const maximumTraceDedupeKeys = 10_000;
@@ -436,6 +437,20 @@ function getConfig(): Promise<DeckConfig> {
 
 async function hasCapability(capability: string): Promise<boolean> {
   return (await getNegotiatedVersion()).capabilities.includes(capability);
+}
+
+async function getTerminalWebSocketUrl(resourceName: string, replicaIndex: number): Promise<string | null> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(terminalCapability)) {
+    return null;
+  }
+
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const query = new URLSearchParams({
+    resource: resourceName,
+    replica: replicaIndex.toString(),
+  });
+  return `${protocol}//${window.location.host}${version.basePath}/terminal?${query}`;
 }
 
 async function listResources(): Promise<Resource[]> {
@@ -1106,6 +1121,7 @@ function subscribeConsoleLogs(
 export const nativeBackend = {
   getConfig,
   hasCapability,
+  getTerminalWebSocketUrl,
   listResources,
   executeCommand,
   subscribeResources,

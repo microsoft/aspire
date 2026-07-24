@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
@@ -26,11 +27,12 @@ internal sealed class DashboardResourceServiceUnavailableException(string messag
 internal sealed class DashboardResourceSnapshotService(
     IDashboardResourceServiceConnection resourceServiceConnection,
     IConfiguration configuration,
-    ILogger<DashboardResourceSnapshotService> logger) : BackgroundService, IDashboardResourceSnapshotProvider, IDashboardResourceEventSource
+    ILogger<DashboardResourceSnapshotService> logger) : BackgroundService, IDashboardResourceSnapshotProvider, IDashboardResourceEventSource, ITerminalConnectionResolver
 {
     private const string InitialSnapshotTimeoutKey = "DashboardBackend:InitialSnapshotTimeout";
     private const int ProducerDefinedPropertySortOrderStart = 7;
     private const int SubscriberBufferCapacity = 32;
+    private const string TerminalConsumerUdsPathProperty = "terminal.consumerUdsPath";
 
     private static readonly Dictionary<string, (string DisplayName, int SortOrder)> s_knownProperties = new(StringComparer.OrdinalIgnoreCase)
     {
@@ -44,6 +46,7 @@ internal sealed class DashboardResourceSnapshotService(
     };
 
     private readonly Dictionary<string, DashboardResource> _resources = new(StringComparer.OrdinalIgnoreCase);
+    private readonly Dictionary<string, DashboardTerminalEndpoint> _terminalEndpoints = new(StringComparer.OrdinalIgnoreCase);
     private readonly HashSet<ChannelWriter<DashboardResourcesEvent>> _subscribers = [];
     private readonly object _lock = new();
     private readonly TaskCompletionSource<bool> _initialStateAvailable = new(TaskCreationOptions.RunContinuationsAsynchronously);
@@ -98,6 +101,44 @@ internal sealed class DashboardResourceSnapshotService(
                 _subscribers.Remove(channel.Writer);
                 channel.Writer.TryComplete();
             }
+        }
+    }
+
+    public async Task<Stream?> ConnectAsync(
+        string resourceName,
+        int replicaIndex,
+        CancellationToken cancellationToken)
+    {
+        string? consumerUdsPath;
+        lock (_lock)
+        {
+            consumerUdsPath = _terminalEndpoints.Values
+                .FirstOrDefault(endpoint =>
+                    endpoint.ReplicaIndex == replicaIndex
+                    && string.Equals(endpoint.DisplayName, resourceName, StringComparison.Ordinal))
+                ?.ConsumerUdsPath;
+        }
+
+        if (consumerUdsPath is null)
+        {
+            return null;
+        }
+
+        // The socket path comes only from the authenticated AppHost resource stream.
+        // The browser never supplies a path, so it cannot coerce the dashboard into
+        // connecting to an arbitrary local endpoint.
+        var socket = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+        try
+        {
+            await socket.ConnectAsync(
+                new UnixDomainSocketEndPoint(consumerUdsPath),
+                cancellationToken).ConfigureAwait(false);
+            return new NetworkStream(socket, ownsSocket: true);
+        }
+        catch
+        {
+            socket.Dispose();
+            throw;
         }
     }
 
@@ -186,9 +227,10 @@ internal sealed class DashboardResourceSnapshotService(
             if (update.KindCase is WatchResourcesUpdate.KindOneofCase.InitialData)
             {
                 _resources.Clear();
+                _terminalEndpoints.Clear();
                 foreach (var resource in update.InitialData.Resources)
                 {
-                    _resources[resource.Name] = Map(resource);
+                    UpsertResourceLocked(resource);
                 }
 
                 _hasInitialSnapshot = true;
@@ -206,13 +248,13 @@ internal sealed class DashboardResourceSnapshotService(
                 {
                     if (change.KindCase is WatchResourcesChange.KindOneofCase.Upsert)
                     {
-                        var resource = Map(change.Upsert);
-                        _resources[resource.Name] = resource;
+                        var resource = UpsertResourceLocked(change.Upsert);
                         upserts.Add(resource);
                     }
                     else if (change.KindCase is WatchResourcesChange.KindOneofCase.Delete)
                     {
                         _resources.Remove(change.Delete.ResourceName);
+                        _terminalEndpoints.Remove(change.Delete.ResourceName);
                         deletes.Add(change.Delete.ResourceName);
                     }
                 }
@@ -270,9 +312,38 @@ internal sealed class DashboardResourceSnapshotService(
         }
     }
 
+    private DashboardResource UpsertResourceLocked(ProtoResource resource)
+    {
+        var mappedResource = Map(resource);
+        _resources[resource.Name] = mappedResource;
+
+        if (mappedResource.HasTerminal
+            && mappedResource.TerminalReplicaIndex is int replicaIndex
+            && TryGetPropertyString(resource, TerminalConsumerUdsPathProperty, out var consumerUdsPath)
+            && !string.IsNullOrWhiteSpace(consumerUdsPath))
+        {
+            _terminalEndpoints[resource.Name] = new DashboardTerminalEndpoint(
+                resource.DisplayName,
+                replicaIndex,
+                consumerUdsPath);
+        }
+        else
+        {
+            _terminalEndpoints.Remove(resource.Name);
+        }
+
+        return mappedResource;
+    }
+
     internal static DashboardResource Map(ProtoResource resource)
     {
         var properties = resource.Properties
+            // The path is required by the server-side terminal resolver but must never
+            // appear in a browser payload, even as a masked sensitive property.
+            .Where(property => !string.Equals(
+                property.Name,
+                TerminalConsumerUdsPathProperty,
+                StringComparison.OrdinalIgnoreCase))
             .Select(MapProperty)
             .OrderBy(property => property.SortOrder)
             .ThenBy(property => property.Name, StringComparer.Ordinal)
@@ -425,4 +496,9 @@ internal sealed class DashboardResourceSnapshotService(
         ResourceCommandState.Hidden => "hidden",
         _ => throw new InvalidOperationException($"Unexpected {nameof(ResourceCommandState)} value: {state}.")
     };
+
+    private sealed record DashboardTerminalEndpoint(
+        string DisplayName,
+        int ReplicaIndex,
+        string ConsumerUdsPath);
 }

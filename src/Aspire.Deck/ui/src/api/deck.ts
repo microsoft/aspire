@@ -445,6 +445,24 @@ export function executeCommand(args: ExecuteCommandArgs): Promise<CommandRespons
   return Promise.resolve(mockBackend.executeCommand(args));
 }
 
+export async function getTerminalWebSocketUrl(
+  resourceName: string,
+  replicaIndex: number,
+): Promise<string | null> {
+  const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+  const legacyUrl = `${protocol}//${window.location.host}/api/terminal?resource=${encodeURIComponent(resourceName)}&replica=${replicaIndex}`;
+  if (isAotBackend()) {
+    // Older AOT hosts did not advertise terminal ownership. Preserve their React
+    // bundle compatibility by using the legacy route only when capability
+    // discovery explicitly says the versioned terminal is unavailable.
+    return await nativeBackend.getTerminalWebSocketUrl(resourceName, replicaIndex) ?? legacyUrl;
+  }
+  if (isHttpBackend()) {
+    return legacyUrl;
+  }
+  return null;
+}
+
 export function subscribeConsoleLogs(
   resourceName: string,
   cb: (event: ConsoleLogEvent) => void,
@@ -465,9 +483,12 @@ export function subscribeConsoleLogs(
     if (isAotBackend()) {
       let cancelled = false;
       let unsubscribe: Unsubscribe | null = null;
-      void nativeBackend.hasCapability("console-logs-live").then((supported) => {
+      void Promise.all([
+        nativeBackend.hasCapability("console-logs"),
+        nativeBackend.hasCapability("console-logs-live"),
+      ]).then((support) => {
         if (cancelled) return;
-        unsubscribe = supported
+        unsubscribe = support.every(Boolean)
           ? nativeBackend.subscribeConsoleLogs(resourceName, cb)
           : httpBackend.subscribeConsoleLogs(resourceName, cb);
       }).catch(() => {

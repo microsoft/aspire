@@ -24,11 +24,13 @@ internal static class DashboardApiContract
     public const string MetricClearCapability = "metrics-clear";
     public const string ConsoleLogsCapability = "console-logs";
     public const string ConsoleLogStreamCapability = "console-logs-live";
+    public const string TerminalCapability = "terminal";
     public const string InteractionsCapability = "interactions";
     public const string ResourceStreamPath = $"{VersionOneBasePath}/resources/live";
     public const string StructuredLogStreamPath = $"{VersionOneBasePath}/structured-logs/live";
     public const string TraceStreamPath = $"{VersionOneBasePath}/traces/live";
     public const string ConsoleLogStreamPath = $"{VersionOneBasePath}/console-logs/live";
+    public const string TerminalPath = $"{VersionOneBasePath}/terminal";
 }
 
 internal sealed record DashboardApiDiscovery(

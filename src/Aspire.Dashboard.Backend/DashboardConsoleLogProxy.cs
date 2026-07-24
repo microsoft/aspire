@@ -14,10 +14,17 @@ internal interface IDashboardConsoleLogSource
         CancellationToken cancellationToken);
 }
 
+internal sealed class DashboardConsoleLogServiceUnavailableException(string message, Exception? innerException = null)
+    : Exception(message, innerException);
+
 internal sealed class DashboardConsoleLogProxy(IConfiguration configuration) : IDashboardConsoleLogSource
 {
     private const string LegacyDashboardUrlKey = "DashboardBackend:LegacyDashboardUrl";
-    private static readonly HttpClient s_client = new(new SocketsHttpHandler { UseCookies = false });
+    private static readonly HttpClient s_client = new(new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false
+    });
 
     public async IAsyncEnumerable<DashboardConsoleLogsEvent> WatchAsync(
         string resourceName,
@@ -41,7 +48,11 @@ internal sealed class DashboardConsoleLogProxy(IConfiguration configuration) : I
             request,
             HttpCompletionOption.ResponseHeadersRead,
             cancellationToken).ConfigureAwait(false);
-        response.EnsureSuccessStatusCode();
+        if (!response.IsSuccessStatusCode)
+        {
+            throw new DashboardConsoleLogServiceUnavailableException(
+                $"The existing dashboard console-log stream returned HTTP {(int)response.StatusCode}.");
+        }
         using var content = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
         using var reader = new StreamReader(content);
 
@@ -50,19 +61,45 @@ internal sealed class DashboardConsoleLogProxy(IConfiguration configuration) : I
         //   {"resourceName":"api","lines":[{"lineNumber":1,"text":"started","isStdErr":false}]}
         // ReadLineAsync retains an incomplete final record until its newline arrives, so a
         // transport read boundary can never expose a partial JSON event.
-        while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
+        while (true)
         {
+            string? line;
+            try
+            {
+                line = await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+            }
+            catch (IOException ex)
+            {
+                throw new DashboardConsoleLogServiceUnavailableException(
+                    "The existing dashboard console-log stream disconnected.",
+                    ex);
+            }
+            if (line is null)
+            {
+                yield break;
+            }
             if (string.IsNullOrWhiteSpace(line))
             {
                 continue;
             }
 
-            var logEvent = JsonSerializer.Deserialize(
-                line,
-                DashboardBackendJsonSerializerContext.Default.DashboardConsoleLogsEvent);
+            DashboardConsoleLogsEvent? logEvent;
+            try
+            {
+                logEvent = JsonSerializer.Deserialize(
+                    line,
+                    DashboardBackendJsonSerializerContext.Default.DashboardConsoleLogsEvent);
+            }
+            catch (JsonException ex)
+            {
+                throw new DashboardConsoleLogServiceUnavailableException(
+                    "The existing dashboard returned an incompatible console-log event.",
+                    ex);
+            }
             if (logEvent is null || !string.Equals(logEvent.ResourceName, resourceName, StringComparison.Ordinal))
             {
-                throw new InvalidDataException("The legacy dashboard returned an incompatible console-log event.");
+                throw new DashboardConsoleLogServiceUnavailableException(
+                    "The existing dashboard returned an incompatible console-log event.");
             }
 
             yield return logEvent;

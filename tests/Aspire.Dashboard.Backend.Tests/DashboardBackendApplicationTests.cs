@@ -34,7 +34,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"interactions\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"terminal\",\"interactions\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -742,6 +742,12 @@ public class DashboardBackendApplicationTests
         });
         resource.Properties.Add(new ResourceProperty
         {
+            Name = "terminal.consumerUdsPath",
+            Value = Value.ForString("/tmp/private-terminal.sock"),
+            IsSensitive = true
+        });
+        resource.Properties.Add(new ResourceProperty
+        {
             Name = "resource.state",
             Value = Value.ForString("Running")
         });
@@ -791,6 +797,119 @@ public class DashboardBackendApplicationTests
             },
             property => Assert.Equal("terminal.enabled", property.Name),
             property => Assert.Equal("terminal.replicaIndex", property.Name));
+    }
+
+    [Fact]
+    public async Task ResourceSnapshot_ResolvesTerminalFromAuthoritativeSessionWithoutExposingSocketPath()
+    {
+        var temporaryDirectory = Directory.CreateTempSubdirectory("aspire-terminal-");
+        var socketPath = Path.Combine(temporaryDirectory.FullName, "hmp.sock");
+        try
+        {
+            using var listener = new Socket(AddressFamily.Unix, SocketType.Stream, ProtocolType.Unspecified);
+            listener.Bind(new UnixDomainSocketEndPoint(socketPath));
+            listener.Listen();
+
+            var service = new DashboardResourceSnapshotService(
+                new TestResourceServiceConnection(),
+                new ConfigurationBuilder().Build(),
+                NullLogger<DashboardResourceSnapshotService>.Instance);
+            var update = new WatchResourcesUpdate
+            {
+                InitialData = new InitialResourceData()
+            };
+            var resource = new ProtoResource
+            {
+                Name = "shell-abc123",
+                DisplayName = "shell",
+                ResourceType = "Executable",
+                Uid = "resource-terminal"
+            };
+            resource.Properties.Add(new ResourceProperty
+            {
+                Name = "terminal.enabled",
+                Value = Value.ForString("true")
+            });
+            resource.Properties.Add(new ResourceProperty
+            {
+                Name = "terminal.replicaIndex",
+                Value = Value.ForString("0")
+            });
+            resource.Properties.Add(new ResourceProperty
+            {
+                Name = "terminal.consumerUdsPath",
+                Value = Value.ForString(socketPath),
+                IsSensitive = true
+            });
+            update.InitialData.Resources.Add(resource);
+            service.ApplyUpdate(update);
+
+            var acceptTask = listener.AcceptAsync(TestContext.Current.CancellationToken);
+            await using var upstream = await service.ConnectAsync(
+                "shell",
+                0,
+                TestContext.Current.CancellationToken);
+            using var accepted = await acceptTask;
+
+            Assert.NotNull(upstream);
+            Assert.True(accepted.Connected);
+            var browserResource = Assert.Single(await service.GetSnapshotAsync(TestContext.Current.CancellationToken));
+            Assert.True(browserResource.HasTerminal);
+            Assert.Collection(
+                browserResource.Properties,
+                property => Assert.Equal("terminal.enabled", property.Name),
+                property => Assert.Equal("terminal.replicaIndex", property.Name));
+            Assert.Null(await service.ConnectAsync("shell", 1, TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            temporaryDirectory.Delete(recursive: true);
+        }
+    }
+
+    [Fact]
+    public async Task TerminalEndpoint_RejectsMissingOriginBeforeResolvingResource()
+    {
+        var resolver = new TestTerminalConnectionResolver();
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<ITerminalConnectionResolver>(resolver);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        var client = app.GetTestServer().CreateWebSocketClient();
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await client.ConnectAsync(
+                new Uri("ws://localhost/api/dashboard/v1/terminal?resource=shell&replica=0"),
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("403", exception.Message, StringComparison.Ordinal);
+        Assert.False(resolver.ResolveCalled);
+    }
+
+    [Fact]
+    public async Task TerminalEndpoint_SameOriginResolvesResourceServerSide()
+    {
+        var resolver = new TestTerminalConnectionResolver();
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<ITerminalConnectionResolver>(resolver);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        var client = app.GetTestServer().CreateWebSocketClient();
+        client.ConfigureRequest = request => request.Headers.Origin = "http://localhost";
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(async () =>
+            await client.ConnectAsync(
+                new Uri("ws://localhost/api/dashboard/v1/terminal?resource=shell&replica=2"),
+                TestContext.Current.CancellationToken));
+
+        Assert.Contains("404", exception.Message, StringComparison.Ordinal);
+        Assert.True(resolver.ResolveCalled);
+        Assert.Equal("shell", resolver.ResourceName);
+        Assert.Equal(2, resolver.ReplicaIndex);
     }
 
     [Fact]
@@ -1725,6 +1844,24 @@ public class DashboardBackendApplicationTests
                 yield return logEvent;
                 await Task.Yield();
             }
+        }
+    }
+
+    private sealed class TestTerminalConnectionResolver : ITerminalConnectionResolver
+    {
+        public bool ResolveCalled { get; private set; }
+        public string? ResourceName { get; private set; }
+        public int ReplicaIndex { get; private set; }
+
+        public Task<Stream?> ConnectAsync(
+            string resourceName,
+            int replicaIndex,
+            CancellationToken cancellationToken)
+        {
+            ResolveCalled = true;
+            ResourceName = resourceName;
+            ReplicaIndex = replicaIndex;
+            return Task.FromResult<Stream?>(null);
         }
     }
 

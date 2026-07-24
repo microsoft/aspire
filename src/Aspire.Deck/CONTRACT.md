@@ -33,13 +33,13 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "structured-logs-clear", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "interactions"]
+      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "structured-logs-clear", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "terminal", "interactions"]
     }
   ]
 }
 ```
 
-Version 1 currently defines sixteen capabilities:
+Version 1 currently defines seventeen capabilities:
 
 | Capability | Route | Response |
 | --- | --- | --- |
@@ -58,6 +58,7 @@ Version 1 currently defines sixteen capabilities:
 | `metrics-clear` | `DELETE {basePath}/metrics` | No content |
 | `console-logs` | Capability marker for resource console output | `ConsoleLogEvent` |
 | `console-logs-live` | SignalR hub at `{basePath}/console-logs/live` | `ConsoleLogEvent` server stream |
+| `terminal` | WebSocket at `{basePath}/terminal?resource={displayName}&replica={index}` | Binary HMP1 frames |
 | `interactions` | `GET {basePath}/interactions`; `POST {basePath}/interactions/respond` | `InteractionInfo[]`; no content |
 
 ```ts
@@ -124,6 +125,16 @@ the existing dashboard emits its bounded backlog first and then live batches wit
 Each line preserves its monotonic resource line number and stdout/stderr identity. On reconnect,
 React drops replayed line numbers, and a server that does not advertise both console capabilities
 continues to use the existing `/api/deck` NDJSON stream.
+
+The `terminal` WebSocket is a byte-level bridge to the HMP1 producer identified by the requested
+resource display name and non-negative replica index. The browser cannot provide a filesystem
+path: the backend resolves the AppHost-provided `terminal.consumerUdsPath` from the same bounded,
+authoritative resource snapshot used by the UI, keeps it server-side, and omits it from resource
+JSON. The endpoint requires a same-origin WebSocket `Origin`, preserves HMP1 input, resize,
+take-control, role-change, state-replay, and reconnect frames verbatim, and closes a slow or ended
+peer without unbounded buffering. The AOT frontend archive includes the terminal module, HMP1
+client, xterm runtime, and font. React uses the legacy `/api/terminal` route only when capability
+discovery explicitly reports that an older AOT backend does not own `terminal`.
 
 For `resources-live`, React connects with the SignalR JSON hub protocol and invokes the streaming
 hub method `WatchResources`. The first stream item is always an authoritative `snapshot`; later

@@ -52,12 +52,17 @@ export default defineConfig({
             rewriteWsOrigin: true,
           },
           "/Components/Controls/TerminalView.razor.js": {
-            target: dashboardUrl,
+            target: aotDashboardUrl ?? dashboardUrl,
             changeOrigin: true,
             secure: false,
           },
           "/js": {
-            target: dashboardUrl,
+            target: aotDashboardUrl ?? dashboardUrl,
+            changeOrigin: true,
+            secure: false,
+          },
+          "/fonts": {
+            target: aotDashboardUrl ?? dashboardUrl,
             changeOrigin: true,
             secure: false,
           },

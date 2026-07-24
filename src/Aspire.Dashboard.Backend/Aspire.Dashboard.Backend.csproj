@@ -7,6 +7,7 @@
     <PublishAot>true</PublishAot>
     <IsAotCompatible>true</IsAotCompatible>
     <InvariantGlobalization>true</InvariantGlobalization>
+    <DefineConstants>$(DefineConstants);ASPIRE_DASHBOARD_BACKEND</DefineConstants>
     <DashboardFrontendDirectory>$(MSBuildProjectDirectory)/../Aspire.Deck/ui</DashboardFrontendDirectory>
     <DashboardFrontendArchive>$(IntermediateOutputPath)dashboard-frontend.zip</DashboardFrontendArchive>
   </PropertyGroup>
@@ -15,11 +16,40 @@
     <EmbeddedResource Include="$(DashboardFrontendArchive)" LogicalName="DashboardFrontend.zip" />
   </ItemGroup>
 
+  <ItemGroup>
+    <!-- Reuse the terminal client shipped by the legacy dashboard while both hosts coexist.
+         The files are copied into the React distribution before it is embedded so the AOT
+         executable serves the complete browser client without requesting legacy assets. -->
+    <DashboardTerminalAsset Include="..\Aspire.Dashboard\Components\Controls\TerminalView.razor.js">
+      <RelativePath>Components/Controls/TerminalView.razor.js</RelativePath>
+    </DashboardTerminalAsset>
+    <DashboardTerminalAsset Include="..\Aspire.Dashboard\wwwroot\js\hmp1-client.js">
+      <RelativePath>js/hmp1-client.js</RelativePath>
+    </DashboardTerminalAsset>
+    <DashboardTerminalAsset Include="..\Aspire.Dashboard\wwwroot\js\xterm\addon-fit.min.js">
+      <RelativePath>js/xterm/addon-fit.min.js</RelativePath>
+    </DashboardTerminalAsset>
+    <DashboardTerminalAsset Include="..\Aspire.Dashboard\wwwroot\js\xterm\xterm.min.css">
+      <RelativePath>js/xterm/xterm.min.css</RelativePath>
+    </DashboardTerminalAsset>
+    <DashboardTerminalAsset Include="..\Aspire.Dashboard\wwwroot\js\xterm\xterm.min.js">
+      <RelativePath>js/xterm/xterm.min.js</RelativePath>
+    </DashboardTerminalAsset>
+    <DashboardTerminalAsset Include="..\Aspire.Dashboard\wwwroot\fonts\cascadia-mono-nf\CascadiaMonoNF.woff2">
+      <RelativePath>fonts/cascadia-mono-nf/CascadiaMonoNF.woff2</RelativePath>
+    </DashboardTerminalAsset>
+    <DashboardTerminalAsset Include="..\Aspire.Dashboard\wwwroot\fonts\cascadia-mono-nf\LICENSE.txt">
+      <RelativePath>fonts/cascadia-mono-nf/LICENSE.txt</RelativePath>
+    </DashboardTerminalAsset>
+  </ItemGroup>
+
   <!-- The production dashboard is one Native AOT executable. Build the React application before
        compilation so every generated asset becomes an assembly resource in the published binary. -->
   <Target Name="BuildDashboardFrontend" BeforeTargets="PrepareForBuild" Condition="'$(_IsPublishing)' == 'true'">
     <Exec Command="npm ci --no-audit --no-fund" WorkingDirectory="$(DashboardFrontendDirectory)" Condition="'$(SkipDashboardFrontendBuild)' != 'true'" />
     <Exec Command="npm run build" WorkingDirectory="$(DashboardFrontendDirectory)" Condition="'$(SkipDashboardFrontendBuild)' != 'true'" />
+    <Copy SourceFiles="@(DashboardTerminalAsset)"
+          DestinationFiles="@(DashboardTerminalAsset->'$(DashboardFrontendDirectory)/dist/%(RelativePath)')" />
     <MakeDir Directories="$([System.IO.Path]::GetDirectoryName('$(DashboardFrontendArchive)'))" />
     <ZipDirectory SourceDirectory="$(DashboardFrontendDirectory)/dist"
                   DestinationFile="$(DashboardFrontendArchive)"
@@ -29,6 +59,10 @@
   <ItemGroup>
     <InternalsVisibleTo Include="Aspire.Dashboard.Backend.Tests" />
     <Compile Include="$(SharedDir)AssemblyVersionHelper.cs" Link="AssemblyVersionHelper.cs" />
+    <!-- The byte-level HMP1 bridge is transport code shared with the legacy dashboard.
+         Compile the same implementation into the standalone host so fixes cannot drift. -->
+    <Compile Include="..\Aspire.Dashboard\Terminal\TerminalWebSocketProxy.cs"
+             Link="Terminal\TerminalWebSocketProxy.cs" />
   </ItemGroup>
 
   <ItemGroup>

@@ -21,6 +21,7 @@ internal static class DashboardBackendApplication
         builder.Services.TryAddSingleton<DashboardResourceSnapshotService>();
         builder.Services.TryAddSingleton<IDashboardResourceSnapshotProvider>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.TryAddSingleton<IDashboardResourceEventSource>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
+        builder.Services.TryAddSingleton<ITerminalConnectionResolver>(services => services.GetRequiredService<DashboardResourceSnapshotService>());
         builder.Services.TryAddSingleton<IDashboardCommandExecutor, DashboardCommandExecutor>();
         builder.Services.TryAddSingleton<DashboardInteractionService>();
         builder.Services.TryAddSingleton<IDashboardInteractionService>(services => services.GetRequiredService<DashboardInteractionService>());
@@ -41,6 +42,7 @@ internal static class DashboardBackendApplication
 
         var app = builder.Build();
         app.UseDashboardDevelopmentAccessPolicy();
+        app.UseWebSockets();
 
         app.MapGet(DashboardApiContract.DiscoveryPath, () =>
         {
@@ -66,6 +68,7 @@ internal static class DashboardBackendApplication
                             DashboardApiContract.MetricClearCapability,
                             DashboardApiContract.ConsoleLogsCapability,
                             DashboardApiContract.ConsoleLogStreamCapability,
+                            DashboardApiContract.TerminalCapability,
                             DashboardApiContract.InteractionsCapability
                         ])
                 ]);
@@ -111,6 +114,7 @@ internal static class DashboardBackendApplication
         app.MapHub<DashboardStructuredLogsHub>(DashboardApiContract.StructuredLogStreamPath);
         app.MapHub<DashboardTracesHub>(DashboardApiContract.TraceStreamPath);
         app.MapHub<DashboardConsoleLogsHub>(DashboardApiContract.ConsoleLogStreamPath);
+        app.MapTerminalWebSocket();
 
         app.MapGet($"{DashboardApiContract.VersionOneBasePath}/structured-logs", async (
             HttpContext context,

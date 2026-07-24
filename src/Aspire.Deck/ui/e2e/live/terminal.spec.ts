@@ -7,20 +7,27 @@ interface TerminalResource {
 }
 
 const dashboardBrowserToken = process.env.ASPIRE_DASHBOARD_BROWSER_TOKEN;
+const dashboardBackend = process.env.ASPIRE_DASHBOARD_BACKEND ?? "http";
 const browserErrors = new WeakMap<Page, string[]>();
+const terminalWebSockets = new WeakMap<Page, string[]>();
 
 test.beforeEach(async ({ page }) => {
   const errors: string[] = [];
   browserErrors.set(page, errors);
+  const webSockets: string[] = [];
+  terminalWebSockets.set(page, webSockets);
   page.on("console", (message) => {
     if (message.type() === "error") errors.push(`console: ${message.text()}`);
   });
   page.on("pageerror", (error) => errors.push(`page: ${error.message}`));
+  page.on("websocket", (webSocket) => {
+    if (webSocket.url().includes("/terminal?")) webSockets.push(webSocket.url());
+  });
 
   if (dashboardBrowserToken) {
     await page.goto(`/login?t=${encodeURIComponent(dashboardBrowserToken)}`);
   }
-  await page.goto("/?backend=http");
+  await page.goto(`/?backend=${dashboardBackend}`);
   await expect(page.getByTitle("Resources: Connected")).toBeVisible({ timeout: 30_000 });
 });
 
@@ -30,7 +37,9 @@ test.afterEach(async ({ page }) => {
 
 test("[TERMINAL-LIVE-001] controls a live HMP terminal through the React dashboard", async ({ page }) => {
   const resources = await page.evaluate(async () => {
-    const response = await fetch("/api/deck/resources", { cache: "no-store", credentials: "same-origin" });
+    const backend = new URLSearchParams(window.location.search).get("backend");
+    const path = backend === "aot" ? "/api/dashboard/v1/resources" : "/api/deck/resources";
+    const response = await fetch(path, { cache: "no-store", credentials: "same-origin" });
     if (!response.ok) throw new Error(`Resource request failed with ${response.status}.`);
     return await response.json();
   }) as TerminalResource[];
@@ -43,6 +52,11 @@ test("[TERMINAL-LIVE-001] controls a live HMP terminal through the React dashboa
   const terminal = page.getByLabel(`${terminalResource.displayName} terminal`);
   await expect(terminal.getByRole("button", { name: "Take control" })).toBeEnabled({ timeout: 30_000 });
   await expect(terminal.getByLabel("Terminal dimensions")).not.toHaveText("0 × 0");
+  const webSockets = terminalWebSockets.get(page) ?? [];
+  expect(webSockets.length).toBeGreaterThan(0);
+  expect(new Set(webSockets.map((url) => new URL(url).pathname))).toEqual(new Set([
+    dashboardBackend === "aot" ? "/api/dashboard/v1/terminal" : "/api/terminal",
+  ]));
 
   await terminal.getByRole("button", { name: "Take control" }).click();
   await expect(terminal.getByText("In control", { exact: true })).toBeVisible();

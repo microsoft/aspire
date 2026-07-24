@@ -9,13 +9,12 @@ to host the existing `/api/deck` transport.
 The backend currently implements version discovery plus the `configuration`, read-only `resources`
 snapshot, SignalR `resources-live`, resource `commands`, resource-scoped console backlog/live,
 structured-log backlog/live/clear, trace backlog/live/filter/clear, metric summary/series/clear,
-and versioned interaction polling/response capabilities.
+versioned interaction polling/response, and direct interactive terminal capabilities.
 Resources, commands, and interactions use one long-lived AppHost resource-service connection.
 Interaction state and response traffic are bounded, and the backend restores an optimistically
 removed prompt when delivery fails so the user can retry. In side-by-side mode, React reads those
-capabilities from this host and delegates remaining console operations, authentication, and
-terminal traffic to the existing dashboard. A version must not
-advertise a capability until its
+capabilities from this host and delegates remaining authentication and data-management operations
+to the existing dashboard. A version must not advertise a capability until its
 complete black-box behavior passes the 157-feature parity inventory in
 `src/Aspire.Deck/ui/e2e/parity`.
 
@@ -86,6 +85,11 @@ The host exposes:
 - `DELETE /api/dashboard/v1/metrics` to clear all metrics or an optional `resource` group.
 - `/api/dashboard/v1/console-logs/live` for the SignalR `WatchConsoleLogs(resourceName)` server
   stream. The existing dashboard supplies the resource backlog before live stdout/stderr batches.
+- `/api/dashboard/v1/terminal` for an HMP1 WebSocket bridged directly to the AppHost-provided
+  terminal consumer socket. The browser supplies only display name and replica index; the
+  authoritative resource-service session resolves the socket path server-side, and that sensitive
+  path is omitted from resource JSON. The published executable also bundles the shared terminal,
+  xterm, and font assets so this capability does not request files from the legacy dashboard.
 - `GET /api/dashboard/v1/interactions` and `POST /api/dashboard/v1/interactions/respond` for
   command inputs, validation updates, message boxes, and notifications owned directly through the
   shared AppHost resource-service session.
@@ -93,7 +97,8 @@ The host exposes:
 `DashboardBackend__LegacyDashboardUrl` must identify the existing dashboard's loopback base URL.
 Telemetry and console proxies forward the incoming dashboard cookie or authorization header so the
 legacy dashboard continues to own authentication and OTLP storage for unfinished capabilities
-during this migration slice. Command and interaction routes do not use the legacy proxy.
+during this migration slice. Command, interaction, resource, and terminal routes do not use the
+legacy proxy.
 
 All HTTP and SignalR JSON uses camel-case names and an explicit `JsonSerializerContext`. New
 contract payloads must be registered with source generation so Native AOT never depends on

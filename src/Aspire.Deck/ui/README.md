@@ -206,6 +206,17 @@ ASPIRE_DASHBOARD_BROWSER_TOKEN=<token> \
   npm exec -- playwright test --config=playwright.terminal.config.ts
 ```
 
+Run the same HMP control, resize, and reconnect assertions through the versioned Native AOT
+WebSocket after starting the AOT host against the Terminals AppHost resource service:
+
+```bash
+ASPIRE_DASHBOARD_URL=<legacy-dashboard-url> \
+ASPIRE_DASHBOARD_AOT_URL=<aot-dashboard-url> \
+ASPIRE_DASHBOARD_BACKEND=aot \
+ASPIRE_DASHBOARD_BROWSER_TOKEN=<token> \
+  npm exec -- playwright test --config=playwright.terminal.config.ts
+```
+
 The migration parity ledger in `e2e/parity/dashboard-parity-features.ts` is derived from the
 legacy dashboard and Stress AppHost rather than from the React implementation. It records every
 known behavior, its legacy route and black-box scenario, current React status, and existing test
