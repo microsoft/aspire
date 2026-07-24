@@ -107,4 +107,38 @@ public class PlotlyChartTests : DashboardTestContext
                 });
             });
     }
+
+    [Fact]
+    public async Task UpdateDataAsync_SubscriptionRemovedDuringUpdate_CompletesSuccessfully()
+    {
+        var model = new InstrumentViewModel();
+        var firstSubscriptionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var continueFirstSubscription = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var secondSubscriptionCalled = false;
+
+        async Task FirstSubscription()
+        {
+            firstSubscriptionStarted.SetResult();
+            await continueFirstSubscription.Task;
+        }
+
+        Task SecondSubscription()
+        {
+            secondSubscriptionCalled = true;
+            return Task.CompletedTask;
+        }
+
+        model.AddDataUpdateSubscription(FirstSubscription);
+        model.AddDataUpdateSubscription(SecondSubscription);
+
+        var updateTask = model.UpdateDataAsync(null!, []);
+        await firstSubscriptionStarted.Task;
+
+        model.RemoveDataUpdateSubscription(SecondSubscription);
+        continueFirstSubscription.SetResult();
+
+        await updateTask;
+
+        Assert.True(secondSubscriptionCalled);
+    }
 }

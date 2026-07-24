@@ -25,7 +25,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
     public const int LargeTraceSpanCount = 50_000;
     public const int StructuredLogCount = 100_000;
     public const int ConsoleLogCount = 100_000;
-    public const int MetricDurationSeconds = 24 * 60 * 60;
+    public const int MetricDurationHours = 24;
     public const int MetricDimensionCount = 5;
 
     private const int TraceBatchSize = 1_000;
@@ -35,8 +35,14 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
     private static readonly double[] s_histogramValues = [5, 25, 75, 150];
     private readonly SemaphoreSlim _runLock = new(1, 1);
 
-    public async Task<bool> TryGenerateAsync(CancellationToken cancellationToken)
+    public async Task<bool> TryGenerateAsync(LargeTelemetryGenerationOptions options, CancellationToken cancellationToken)
     {
+        ArgumentNullException.ThrowIfNull(options);
+        if (options.GetValidationError() is { } validationError)
+        {
+            throw new ArgumentException(validationError, nameof(options));
+        }
+
         if (!await _runLock.WaitAsync(0, cancellationToken))
         {
             return false;
@@ -48,35 +54,58 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
                 ?? throw new InvalidOperationException("OTEL_EXPORTER_OTLP_ENDPOINT is required.");
             using var channel = GrpcChannel.ForAddress(endpoint);
             var metadata = CreateMetadata(configuration["OTEL_EXPORTER_OTLP_HEADERS"]);
-            var traceClient = new TraceService.TraceServiceClient(channel);
-            var logsClient = new LogsService.LogsServiceClient(channel);
-            var metricsClient = new MetricsService.MetricsServiceClient(channel);
 
-            logger.LogInformation("Generating {TraceCount} traces with {SpansPerTrace} spans each.", TraceCount, SpansPerTrace);
-            await ExportTracesAsync(traceClient, metadata, cancellationToken);
-
-            logger.LogInformation("Generating one trace with {SpanCount} spans.", LargeTraceSpanCount);
-            await ExportLargeTraceAsync(traceClient, metadata, cancellationToken);
-
-            logger.LogInformation("Generating {LogCount} structured logs.", StructuredLogCount);
-            await ExportStructuredLogsAsync(logsClient, metadata, cancellationToken);
-
-            logger.LogInformation("Writing {LogCount} console logs through ILogger.", ConsoleLogCount);
-            for (var logIndex = 0; logIndex < ConsoleLogCount; logIndex++)
+            if (options.GenerateTraces)
             {
-                logger.LogInformation("Large console log {LogIndex}.", logIndex + 1);
-                if ((logIndex + 1) % LogBatchSize == 0)
+                logger.LogInformation("Generating {TraceCount} traces with {SpansPerTrace} spans each.", options.TraceCount, options.SpansPerTrace);
+                var traceClient = new TraceService.TraceServiceClient(channel);
+                await ExportTracesAsync(traceClient, metadata, options.TraceCount, options.SpansPerTrace, cancellationToken);
+            }
+
+            if (options.GenerateLargeTrace)
+            {
+                logger.LogInformation("Generating one trace with {SpanCount} spans.", options.LargeTraceSpanCount);
+                var traceClient = new TraceService.TraceServiceClient(channel);
+                await ExportLargeTraceAsync(traceClient, metadata, options.LargeTraceSpanCount, cancellationToken);
+            }
+
+            if (options.GenerateStructuredLogs)
+            {
+                logger.LogInformation("Generating {LogCount} structured logs.", options.StructuredLogCount);
+                var logsClient = new LogsService.LogsServiceClient(channel);
+                await ExportStructuredLogsAsync(logsClient, metadata, options.StructuredLogCount, cancellationToken);
+            }
+
+            if (options.GenerateConsoleLogs)
+            {
+                logger.LogInformation("Writing {LogCount} console logs through ILogger.", options.ConsoleLogCount);
+                for (var logIndex = 0; logIndex < options.ConsoleLogCount; logIndex++)
                 {
-                    await Task.Yield();
-                    cancellationToken.ThrowIfCancellationRequested();
+                    logger.LogInformation("Large console log {LogIndex}.", logIndex + 1);
+                    if ((logIndex + 1) % LogBatchSize == 0)
+                    {
+                        await Task.Yield();
+                        cancellationToken.ThrowIfCancellationRequested();
+                    }
                 }
             }
 
-            logger.LogInformation(
-                "Generating {DurationSeconds} seconds of counter and histogram data across {DimensionCount} dimensions.",
-                MetricDurationSeconds,
-                MetricDimensionCount);
-            await ExportMetricsAsync(metricsClient, metadata, cancellationToken);
+            if (options.GenerateMetrics)
+            {
+                logger.LogInformation(
+                    "Generating {DurationHours} hours of counter and histogram data across {DimensionCount} dimensions.",
+                    options.MetricDurationHours,
+                    options.MetricDimensionCount);
+                var metricsClient = new MetricsService.MetricsServiceClient(channel);
+                await ExportMetricsAsync(
+                    metricsClient,
+                    metadata,
+                    options.MetricDurationHours,
+                    options.MetricDimensionCount,
+                    Math.Max(options.TraceCount, 1),
+                    Math.Max(options.SpansPerTrace, 1),
+                    cancellationToken);
+            }
 
             logger.LogInformation("Large telemetry generation completed.");
             return true;
@@ -90,19 +119,21 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
     private static async Task ExportTracesAsync(
         TraceService.TraceServiceClient client,
         Metadata metadata,
+        int totalTraceCount,
+        int spansPerTrace,
         CancellationToken cancellationToken)
     {
         var finalTraceTime = DateTime.UtcNow;
-        for (var firstTraceIndex = 0; firstTraceIndex < TraceCount; firstTraceIndex += TraceBatchSize)
+        for (var firstTraceIndex = 0; firstTraceIndex < totalTraceCount; firstTraceIndex += TraceBatchSize)
         {
             var scopeSpans = CreateScopeSpans("LargeTelemetry.ManyTraces");
-            var traceCount = Math.Min(TraceBatchSize, TraceCount - firstTraceIndex);
+            var traceCount = Math.Min(TraceBatchSize, totalTraceCount - firstTraceIndex);
             for (var traceOffset = 0; traceOffset < traceCount; traceOffset++)
             {
                 var traceIndex = firstTraceIndex + traceOffset;
                 var traceId = CreateTraceId(discriminator: 1, traceIndex + 1);
-                var traceStart = finalTraceTime.AddMilliseconds(traceIndex - TraceCount);
-                for (var spanIndex = 0; spanIndex < SpansPerTrace; spanIndex++)
+                var traceStart = finalTraceTime.AddMilliseconds(traceIndex - totalTraceCount);
+                for (var spanIndex = 0; spanIndex < spansPerTrace; spanIndex++)
                 {
                     var isRoot = spanIndex == 0;
                     scopeSpans.Spans.Add(CreateSpan(
@@ -111,7 +142,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
                         isRoot ? ByteString.Empty : CreateSpanId(1),
                         $"GET /stress/page/{spanIndex + 1}",
                         traceStart.AddMilliseconds(spanIndex),
-                        isRoot ? traceStart.AddMilliseconds(SpansPerTrace) : traceStart.AddMilliseconds(spanIndex + 1)));
+                        isRoot ? traceStart.AddMilliseconds(spansPerTrace) : traceStart.AddMilliseconds(spanIndex + 1)));
                 }
             }
 
@@ -122,14 +153,15 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
     private static async Task ExportLargeTraceAsync(
         TraceService.TraceServiceClient client,
         Metadata metadata,
+        int totalSpanCount,
         CancellationToken cancellationToken)
     {
         var traceId = CreateTraceId(discriminator: 2, value: 1);
         var traceStart = DateTime.UtcNow.AddMinutes(-1);
-        for (var firstSpanIndex = 0; firstSpanIndex < LargeTraceSpanCount; firstSpanIndex += LargeTraceBatchSize)
+        for (var firstSpanIndex = 0; firstSpanIndex < totalSpanCount; firstSpanIndex += LargeTraceBatchSize)
         {
             var scopeSpans = CreateScopeSpans("LargeTelemetry.LargeTrace");
-            var spanCount = Math.Min(LargeTraceBatchSize, LargeTraceSpanCount - firstSpanIndex);
+            var spanCount = Math.Min(LargeTraceBatchSize, totalSpanCount - firstSpanIndex);
             for (var spanOffset = 0; spanOffset < spanCount; spanOffset++)
             {
                 var spanIndex = firstSpanIndex + spanOffset;
@@ -140,7 +172,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
                     isRoot ? ByteString.Empty : CreateSpanId(1),
                     $"large-trace-span-{spanIndex + 1}",
                     traceStart.AddTicks(spanIndex * 10L),
-                    isRoot ? traceStart.AddTicks(LargeTraceSpanCount * 10L) : traceStart.AddTicks((spanIndex + 1L) * 10L)));
+                        isRoot ? traceStart.AddTicks(totalSpanCount * 10L) : traceStart.AddTicks((spanIndex + 1L) * 10L)));
             }
 
             await ExportTraceBatchAsync(client, metadata, scopeSpans, cancellationToken);
@@ -176,20 +208,21 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
     private static async Task ExportStructuredLogsAsync(
         LogsService.LogsServiceClient client,
         Metadata metadata,
+        int totalLogCount,
         CancellationToken cancellationToken)
     {
         var finalLogTime = DateTime.UtcNow;
-        for (var firstLogIndex = 0; firstLogIndex < StructuredLogCount; firstLogIndex += LogBatchSize)
+        for (var firstLogIndex = 0; firstLogIndex < totalLogCount; firstLogIndex += LogBatchSize)
         {
             var scopeLogs = new ScopeLogs
             {
                 Scope = new InstrumentationScope { Name = "LargeTelemetry.StructuredLogs" }
             };
-            var logCount = Math.Min(LogBatchSize, StructuredLogCount - firstLogIndex);
+            var logCount = Math.Min(LogBatchSize, totalLogCount - firstLogIndex);
             for (var logOffset = 0; logOffset < logCount; logOffset++)
             {
                 var logIndex = firstLogIndex + logOffset;
-                var timestamp = DateTimeToUnixNanoseconds(finalLogTime.AddMilliseconds(logIndex - StructuredLogCount));
+                var timestamp = DateTimeToUnixNanoseconds(finalLogTime.AddMilliseconds(logIndex - totalLogCount));
                 scopeLogs.LogRecords.Add(new LogRecord
                 {
                     TimeUnixNano = timestamp,
@@ -228,15 +261,20 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
     private static async Task ExportMetricsAsync(
         MetricsService.MetricsServiceClient client,
         Metadata metadata,
+        int durationHours,
+        int dimensionCount,
+        int exemplarTraceCount,
+        int exemplarSpansPerTrace,
         CancellationToken cancellationToken)
     {
-        var startTime = DateTime.UtcNow.AddDays(-1);
-        for (var firstSecond = 0; firstSecond < MetricDurationSeconds; firstSecond += MetricSecondsPerBatch)
+        var durationSeconds = checked(durationHours * 60 * 60);
+        var startTime = DateTime.UtcNow.AddSeconds(-durationSeconds);
+        for (var firstSecond = 0; firstSecond < durationSeconds; firstSecond += MetricSecondsPerBatch)
         {
             var counter = new Metric
             {
                 Name = "large.telemetry.counter",
-                Description = "One day of one-second counter data.",
+                Description = "One-second counter data.",
                 Unit = "requests",
                 Sum = new Sum
                 {
@@ -247,7 +285,7 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
             var histogram = new Metric
             {
                 Name = "large.telemetry.histogram",
-                Description = "One day of one-second histogram data with exemplars.",
+                Description = "One-second histogram data with exemplars.",
                 Unit = "ms",
                 Histogram = new Histogram
                 {
@@ -255,13 +293,13 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
                 }
             };
 
-            var secondCount = Math.Min(MetricSecondsPerBatch, MetricDurationSeconds - firstSecond);
+            var secondCount = Math.Min(MetricSecondsPerBatch, durationSeconds - firstSecond);
             for (var secondOffset = 0; secondOffset < secondCount; secondOffset++)
             {
                 var secondIndex = firstSecond + secondOffset;
                 var pointTime = startTime.AddSeconds(secondIndex + 1L);
                 var timestamp = DateTimeToUnixNanoseconds(pointTime);
-                for (var dimensionIndex = 0; dimensionIndex < MetricDimensionCount; dimensionIndex++)
+                for (var dimensionIndex = 0; dimensionIndex < dimensionCount; dimensionIndex++)
                 {
                     var dimension = new KeyValue
                     {
@@ -291,8 +329,8 @@ public sealed class LargeTelemetryGenerator(ILogger<LargeTelemetryGenerator> log
                             {
                                 TimeUnixNano = timestamp,
                                 AsDouble = s_histogramValues[observationIndex],
-                                TraceId = CreateTraceId(discriminator: 1, (secondIndex % TraceCount) + 1),
-                                SpanId = CreateSpanId((dimensionIndex % SpansPerTrace) + 1)
+                                TraceId = CreateTraceId(discriminator: 1, (secondIndex % exemplarTraceCount) + 1),
+                                SpanId = CreateSpanId((dimensionIndex % exemplarSpansPerTrace) + 1)
                             }
                         }
                     };

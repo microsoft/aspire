@@ -70,7 +70,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
         // Copy the token so there is no chance it is accessed on CTS after it is disposed.
         CancellationToken = _cts.Token;
         _currentDataStartTime = GetCurrentDataTime(out _);
-        InstrumentViewModel.DataUpdateSubscriptions.Add(OnInstrumentDataUpdate);
+        InstrumentViewModel.AddDataUpdateSubscription(OnInstrumentDataUpdate);
     }
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
@@ -127,7 +127,7 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
     private Task OnInstrumentDataUpdate()
     {
-        return InvokeAsync(StateHasChanged);
+        return CancellationToken.IsCancellationRequested ? Task.CompletedTask : InvokeAsync(StateHasChanged);
     }
 
     private string FormatTooltip(string name, double yValue, DateTimeOffset xValue)
@@ -272,8 +272,8 @@ public abstract class ChartBase : ComponentBase, IAsyncDisposable
 
     protected virtual ValueTask DisposeAsync(bool disposing)
     {
-        InstrumentViewModel.DataUpdateSubscriptions.Remove(OnInstrumentDataUpdate);
         _cts.Cancel();
+        InstrumentViewModel.RemoveDataUpdateSubscription(OnInstrumentDataUpdate);
         _cts.Dispose();
         return ValueTask.CompletedTask;
     }

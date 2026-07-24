@@ -44,9 +44,14 @@ app.Lifetime.ApplicationStarted.Register(() =>
 
 app.MapGet("/", () => "Hello world");
 
-app.MapPost("/large-telemetry", async (LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
+app.MapPost("/large-telemetry", async (LargeTelemetryGenerationOptions options, LargeTelemetryGenerator generator, CancellationToken cancellationToken) =>
 {
-  var generated = await generator.TryGenerateAsync(cancellationToken);
+  if (options.GetValidationError() is { } validationError)
+  {
+    return Results.BadRequest(validationError);
+  }
+
+  var generated = await generator.TryGenerateAsync(options, cancellationToken);
   return generated
     ? Results.Ok()
     : Results.Conflict("Large telemetry generation is already running.");
