@@ -48,29 +48,29 @@ public static class OtlpHttpEndpointsBuilder
             group = group.RequireCors(CorsPolicyName);
         }
 
-        group.MapPost("logs", static (MessageBindable<ExportLogsServiceRequest> request, OtlpLogsService service) =>
+        group.MapPost("logs", static async (MessageBindable<ExportLogsServiceRequest> request, OtlpLogsService service) =>
         {
             if (request.Message is null)
             {
                 return Results.Empty;
             }
-            return OtlpResult.Response(service.Export(request.Message), request.RequestContentType);
+            return OtlpResult.Response(await service.ExportAsync(request.Message).ConfigureAwait(false), request.RequestContentType);
         });
-        group.MapPost("traces", static (MessageBindable<ExportTraceServiceRequest> request, OtlpTraceService service) =>
+        group.MapPost("traces", static async (MessageBindable<ExportTraceServiceRequest> request, OtlpTraceService service) =>
         {
             if (request.Message is null)
             {
                 return Results.Empty;
             }
-            return OtlpResult.Response(service.Export(request.Message), request.RequestContentType);
+            return OtlpResult.Response(await service.ExportAsync(request.Message).ConfigureAwait(false), request.RequestContentType);
         });
-        group.MapPost("metrics", (MessageBindable<ExportMetricsServiceRequest> request, OtlpMetricsService service) =>
+        group.MapPost("metrics", static async (MessageBindable<ExportMetricsServiceRequest> request, OtlpMetricsService service) =>
         {
             if (request.Message is null)
             {
                 return Results.Empty;
             }
-            return OtlpResult.Response(service.Export(request.Message), request.RequestContentType);
+            return OtlpResult.Response(await service.ExportAsync(request.Message).ConfigureAwait(false), request.RequestContentType);
         });
     }
 

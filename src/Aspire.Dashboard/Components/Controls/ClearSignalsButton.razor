@@ -9,4 +9,5 @@
                   Items="@_clearMenuItems"
                   ButtonAppearance="Appearance.Neutral"
                   ButtonClass="clear-button"
+                  Disabled="@TelemetryRepository.IsReadOnly"
                   Title="@Loc[nameof(ControlsStrings.ClearSignalsButtonTitle)]" />

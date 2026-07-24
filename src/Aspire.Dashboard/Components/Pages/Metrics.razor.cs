@@ -60,7 +60,12 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required ILogger<Metrics> Logger { get; init; }
@@ -176,7 +181,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
     private void UpdateInstruments(MetricsViewModel viewModel)
     {
         var selectedInstance = viewModel.SelectedResource.Id?.GetResourceKey();
-        viewModel.Instruments = selectedInstance != null ? TelemetryRepository.GetInstrumentsSummaries(selectedInstance.Value) : null;
+        viewModel.Instruments = selectedInstance != null ? TelemetryRepository.GetInstrumentSummaries(selectedInstance.Value) : null;
     }
 
     private void UpdateResources()
@@ -236,8 +241,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
 
     private Task ClearMetrics(ResourceKey? key)
     {
-        TelemetryRepository.ClearMetrics(key);
-        return Task.CompletedTask;
+        return TelemetryRepositoryWriter.ClearMetricsAsync(key);
     }
 
     private Task HandleSelectedDurationChangedAsync()
@@ -330,7 +334,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
                 if (selectedResourceKey != null)
                 {
                     // If there are more instruments than before then update the UI.
-                    var instruments = TelemetryRepository.GetInstrumentsSummaries(selectedResourceKey.Value);
+                    var instruments = TelemetryRepository.GetInstrumentSummaries(selectedResourceKey.Value);
 
                     if (PageViewModel.Instruments is null || instruments.Count != PageViewModel.Instruments.Count)
                     {

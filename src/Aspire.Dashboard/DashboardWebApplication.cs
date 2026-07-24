@@ -40,6 +40,7 @@ using Microsoft.Extensions.DependencyInjection.Extensions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.IdentityModel.Protocols.OpenIdConnect;
+using OpenTelemetry.Trace;
 using OpenIdConnectOptions = Microsoft.AspNetCore.Authentication.OpenIdConnect.OpenIdConnectOptions;
 
 namespace Aspire.Dashboard;
@@ -64,6 +65,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
     private const string DashboardAuthCookieName = ".Aspire.Dashboard.Auth";
     private const string DashboardHttpAuthCookieName = ".Aspire.Dashboard.Auth.Http";
     private const string DashboardAntiForgeryCookieName = ".Aspire.Dashboard.Antiforgery";
+    private const string OtlpExporterEndpointConfigurationKey = "OTEL_EXPORTER_OTLP_ENDPOINT";
     private readonly WebApplication _app;
     private readonly ILogger<DashboardWebApplication> _logger;
     private readonly IOptionsMonitor<DashboardOptions> _dashboardOptionsMonitor;
@@ -152,6 +154,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Silently ignore and allow anti-forgery to automatically create a new valid cookie.
         builder.Logging.AddFilter("Microsoft.AspNetCore.Antiforgery.DefaultAntiforgery", LogLevel.None);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
+        builder.Logging.AddFilter("Microsoft.Extensions.Localization", LogLevel.Information);
         builder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.None);
 #else
 
@@ -165,6 +168,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Logging.AddFilter("Aspire.Dashboard.Authentication", LogLevel.Information);
         builder.Logging.AddFilter("Aspire.Dashboard.Otlp", LogLevel.Information);
         builder.Logging.AddFilter("Microsoft", LogLevel.Information);
+        builder.Logging.AddFilter("Microsoft.Extensions.Localization", LogLevel.Information);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Cors", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Hosting.Diagnostics", LogLevel.Warning);
         builder.Logging.AddFilter("Microsoft.AspNetCore.Routing.EndpointMiddleware", LogLevel.Warning);
@@ -277,7 +281,15 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         }
 
         // Data from the server.
-        builder.Services.TryAddSingleton<IDashboardClient, DashboardClient>();
+        builder.Services.TryAddSingleton<DashboardActivitySource>();
+        builder.Services.TryAddSingleton<DashboardClient>();
+        // Interactions must remain connected to the live AppHost while historical data is selected, so resolve this
+        // keyed service from DashboardClient rather than the scoped SelectedDashboardClient.
+        builder.Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey,
+            (services, _) => services.GetRequiredService<DashboardClient>());
+        builder.Services.AddScoped<DashboardDataSource>();
+        builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
+        builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();
 
         builder.Services.TryAddSingleton<INotificationService, NotificationService>();
         builder.Services.TryAddSingleton(TimeProvider.System);
@@ -291,10 +303,31 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.TryAddSingleton<IDashboardTelemetrySender, DashboardTelemetrySender>();
         builder.Services.AddSingleton<ILoggerProvider, TelemetryLoggerProvider>();
         builder.Services.AddSingleton<ITelemetryErrorRecorder, TelemetryErrorRecorder>();
+        if (!string.IsNullOrWhiteSpace(builder.Configuration[OtlpExporterEndpointConfigurationKey]))
+        {
+            builder.Services.AddOpenTelemetry()
+                .WithTracing(tracing => tracing
+                    .AddAspNetCoreInstrumentation()
+                    .AddSource(DashboardActivitySource.ActivitySourceName)
+                    .AddSource(TracingSqliteConnection.ActivitySourceName)
+                    .AddOtlpExporter());
+        }
 
         // OTLP services.
         builder.Services.AddGrpc();
-        builder.Services.AddSingleton<TelemetryRepository>();
+        builder.Services.AddSingleton<DashboardRunStore>();
+        builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
+        builder.Services.AddSingleton(services => new DashboardSqliteDatabase(
+            services.GetRequiredService<DashboardRunStore>().DatabasePath));
+        builder.Services.AddSingleton<IRepositoryFactory>(services => new RepositoryFactory(services));
+        builder.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<IRepositoryFactory>()
+            .CreateTelemetryRepository(services.GetRequiredService<DashboardSqliteDatabase>()));
+        builder.Services.AddSingleton<ITelemetryRepositoryWriter>(services =>
+            (ITelemetryRepositoryWriter)services.GetRequiredService<ITelemetryRepository>());
+        builder.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<IRepositoryFactory>()
+            .CreateResourceRepository(services.GetRequiredService<DashboardSqliteDatabase>()));
+        builder.Services.AddSingleton<IResourceRepositoryWriter>(services =>
+            (IResourceRepositoryWriter)services.GetRequiredService<IResourceRepository>());
         builder.Services.AddTransient<StructuredLogsViewModel>();
 
         builder.Services.AddTransient<OtlpLogsService>();
@@ -305,7 +338,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddSingleton<TelemetryApiService>();
 
         builder.Services.AddTransient<TracesViewModel>();
-        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, ResourceOutgoingPeerResolver>());
+        builder.Services.AddSingleton<IOutgoingPeerResolver, ResourceOutgoingPeerResolver>();
+        builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, DashboardSqliteOutgoingPeerResolver>());
         builder.Services.TryAddEnumerable(ServiceDescriptor.Singleton<IOutgoingPeerResolver, BrowserLinkOutgoingPeerResolver>());
 
         builder.Services.AddFluentUIComponents();
@@ -333,7 +367,8 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // resource snapshot stream. Default impl looks up by display name and
         // replica index in IDashboardClient and connects to the consumer UDS
         // path the AppHost stamped onto the snapshot.
-        builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver, Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver>();
+        builder.Services.TryAddSingleton<Aspire.Dashboard.Terminal.ITerminalConnectionResolver>(services =>
+            new Aspire.Dashboard.Terminal.DefaultTerminalConnectionResolver(services.GetRequiredService<DashboardClient>()));
 
         builder.Services.AddScoped<DimensionManager>();
         builder.Services.AddScoped<DashboardDialogService>();
@@ -441,7 +476,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         {
             if (context.Request.Path.Equals(TargetLocationInterceptor.ResourcesPath, StringComparisons.UrlPath))
             {
-                var client = context.RequestServices.GetRequiredService<IDashboardClient>();
+                var client = context.RequestServices.GetRequiredService<DashboardClient>();
                 if (!client.IsEnabled)
                 {
                     context.Response.Redirect(TargetLocationInterceptor.StructuredLogsPath);

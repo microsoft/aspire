@@ -81,7 +81,9 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     public required ISessionStorage SessionStorage { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required ILogger<ConsoleLogs> Logger { get; init; }
@@ -187,6 +189,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     private bool _isTimestampUtc;
     private bool _noWrapLogs;
     private bool _showNoLogsMessage;
+    private bool _consoleLogsWereLoaded = true;
     private string _logFilter = string.Empty;
     public ConsoleLogsViewModel PageViewModel { get; set; } = null!;
     private IDisposable? _consoleLogsFiltersChangedSubscription;
@@ -254,7 +257,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
                 return;
             }
 
-            var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_resourceSubscriptionToken);
+            var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_resourceSubscriptionToken);
 
             Logger.LogDebug("Received initial resource snapshot with {ResourceCount} resources.", snapshot.Length);
 
@@ -493,9 +496,12 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // hosting messages (WaitFor, startup failures) are visible immediately
         // on selection. The user picks Terminal explicitly from the ⋯ menu.
         _activeView = ConsoleLogsView.Console;
+        var selectedResource = selectedResourceName is not null
+            ? _resourceByName.GetValueOrDefault(selectedResourceName)
+            : null;
 
-        if (!isAllSelected && selectedResourceName is not null &&
-            _resourceByName.TryGetValue(selectedResourceName, out var selectedResource) &&
+        if (!DashboardClient.IsReadOnly &&
+            !isAllSelected && selectedResource is not null &&
             selectedResource.HasTerminal() &&
             selectedResource.TryGetTerminalReplicaInfo(out var replicaIndex, out _))
         {
@@ -523,6 +529,8 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         }
         ResetNoLogsMessage();
 
+        _consoleLogsWereLoaded = !DashboardClient.IsReadOnly || WereConsoleLogsLoaded(isAllSelected, selectedResource);
+
         await InvokeAsync(_logViewerRef.SafeRefreshDataAsync);
 
         if (isAllSelected)
@@ -531,11 +539,11 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
             _isSubscribedToAll = true;
             await SubscribeToAllResourcesAsync();
         }
-        else if (selectedResourceName is not null && _resourceByName.TryGetValue(selectedResourceName, out var resource))
+        else if (selectedResource is not null)
         {
             // Subscribe to single resource
             _isSubscribedToAll = false;
-            await SubscribeToSingleResourceAsync(resource);
+            await SubscribeToSingleResourceAsync(selectedResource);
         }
         else
         {
@@ -555,6 +563,22 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // that has no WithTerminal(), and be missing on the reverse switch.
         UpdateMenuButtons();
     }
+
+    private bool WereConsoleLogsLoaded(bool isAllSelected, ResourceViewModel? selectedResource)
+    {
+        if (isAllSelected)
+        {
+            return _resourceByName.Values
+                .Where(resource => !resource.IsResourceHidden(_showHiddenResources))
+                .Any(resource => resource.ConsoleLogsLoaded);
+        }
+
+        return selectedResource?.ConsoleLogsLoaded == true;
+    }
+
+    private string GetNoLogsMessage() => _consoleLogsWereLoaded
+        ? Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNoLogsFound)]
+        : Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsNotCapturedForRun)];
 
     private bool IsAllSelected()
     {

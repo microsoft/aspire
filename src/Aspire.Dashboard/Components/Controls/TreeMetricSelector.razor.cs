@@ -19,7 +19,9 @@ public partial class TreeMetricSelector
     public bool IncludeLabel { get; set; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     public void OnResourceChanged()
     {

@@ -1,0 +1,13 @@
+<div class="application-run-select">
+    <AspireMenuButton Text="@SelectedRunText"
+                      Title="@RunSelectAriaLabel"
+                      IconStart="@(new Icons.Filled.Size12.Circle())"
+                      IconStartClass="application-run-status"
+                      IconStartColor="@(SelectedRunIsCurrent ? Color.Success : Color.Warning)"
+                      Items="@_menuItems"
+                      OnOpening="@LoadRuns"
+                      ButtonAppearance="Appearance.Stealth"
+                      ButtonClass="application-run-select-button"
+                      HideIcon="true"
+                      RestoreFocusOnItemClick="true" />
+</div>

@@ -45,7 +45,9 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
     [Inject]
     public required NavigationManager NavigationManager { get; init; }
     [Inject]
@@ -256,7 +258,7 @@ public partial class Resources : ComponentBase, IComponentWithTelemetry, IAsyncD
 
         async Task SubscribeResourcesAsync()
         {
-            var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_cts.Token);
+            var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
 
             // Apply snapshot.
             foreach (var resource in snapshot)

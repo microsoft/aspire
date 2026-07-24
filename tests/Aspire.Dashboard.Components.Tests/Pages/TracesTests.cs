@@ -4,13 +4,20 @@
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Model;
 using Bunit;
+using Google.Protobuf.Collections;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
+using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Components.Tests.Pages;
 
@@ -48,6 +55,49 @@ public class TracesTests : DashboardTestContext
         });
     }
 
+    [Theory]
+    [InlineData(false, 1)]
+    [InlineData(true, 0)]
+    public async Task Render_AtTraceLimit_LimitMessageOnlyDisplayedForLiveRun(bool isReadOnly, int expectedMessageCount)
+    {
+        var messageCount = 0;
+        var messageService = new TestMessageService(_ =>
+        {
+            messageCount++;
+            return Task.FromResult(new Message());
+        });
+
+        SetupTracesServices();
+        Services.AddSingleton<IMessageService>(messageService);
+        Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions
+        {
+            TelemetryLimits = { MaxTraceCount = 1 }
+        }));
+
+        var timestamp = DateTime.UnixEpoch;
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, isReadOnly, telemetryRepository => telemetryRepository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan(traceId: "trace", spanId: "span", startTime: timestamp, endTime: timestamp.AddSeconds(1)) }
+                    }
+                }
+            }
+        }));
+
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        Services.GetRequiredService<DimensionManager>().InvokeOnViewportInformationChanged(viewport);
+        RenderComponent<Traces>(builder => builder.AddCascadingValue(viewport));
+
+        Assert.Equal(expectedMessageCount, messageCount);
+    }
+
     private void SetupTracesServices()
     {
         FluentUISetupHelpers.SetupFluentOverflow(this);
@@ -67,6 +117,6 @@ public class TracesTests : DashboardTestContext
 
         FluentUISetupHelpers.AddCommonDashboardServices(this);
         Services.AddSingleton<ILogger<Traces>>(NullLogger<Traces>.Instance);
-        Services.AddSingleton<TracesViewModel>();
+        Services.AddTransient<TracesViewModel>();
     }
 }

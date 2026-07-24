@@ -33,6 +33,18 @@ namespace Aspire.Dashboard.Tests.Integration;
 public class StartupTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
+    public async Task Construction_ValidatesServiceDescriptorsAndScopes()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(
+            testOutputHelper,
+            preConfigureBuilder: builder => builder.WebHost.UseDefaultServiceProvider(options =>
+            {
+                options.ValidateOnBuild = true;
+                options.ValidateScopes = true;
+            }));
+    }
+
+    [Fact]
     public async Task EndPointAccessors_AppStarted_EndPointPortsAssigned()
     {
         // Arrange

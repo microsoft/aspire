@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 
 namespace Aspire.Dashboard.Model.Otlp;
 
@@ -153,14 +154,14 @@ public sealed class SpanWaterfallViewModel
 
     private readonly record struct SpanWaterfallViewModelState(SpanWaterfallViewModel? Parent, int Depth, bool Hidden);
 
-    public sealed record TraceDetailState(IOutgoingPeerResolver[] OutgoingPeerResolvers, List<string> CollapsedSpanIds, List<OtlpResource> AllResources);
+    public sealed record TraceDetailState(List<string> CollapsedSpanIds, List<OtlpResource> AllResources);
 
     public static string GetTitle(OtlpSpan span, List<OtlpResource> allResources)
     {
         return $"{OtlpResource.GetResourceName(span.Source, allResources)}: {span.GetDisplaySummary()}";
     }
 
-    public static List<SpanWaterfallViewModel> Create(OtlpTrace trace, List<OtlpLogEntry> logs, TraceDetailState state)
+    public static List<SpanWaterfallViewModel> Create(OtlpTrace trace, List<LogSummary> logs, TraceDetailState state)
     {
         var orderedSpans = new List<SpanWaterfallViewModel>();
         var groupedLogs = logs.GroupBy(l => l.SpanId).ToDictionary(l => l.Key, g => g.ToList());
@@ -179,7 +180,7 @@ public sealed class SpanWaterfallViewModel
 
         return orderedSpans;
 
-        static SpanWaterfallViewModel CreateViewModel(OtlpSpan span, int depth, bool hidden, TraceDetailState state, List<OtlpLogEntry>? spanLogs, ref int currentSpanLogIndex)
+        static SpanWaterfallViewModel CreateViewModel(OtlpSpan span, int depth, bool hidden, TraceDetailState state, List<LogSummary>? spanLogs, ref int currentSpanLogIndex)
         {
             var traceStart = span.Trace.FirstSpan.StartTime;
             var relativeStart = span.StartTime - traceStart;
@@ -195,7 +196,7 @@ public sealed class SpanWaterfallViewModel
             // A span may indicate a call to another service but the service isn't instrumented.
             var hasPeerService = OtlpHelpers.GetPeerAddress(span.Attributes) != null;
             var isUninstrumentedPeer = hasPeerService && span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer && !span.GetChildSpans().Any();
-            var uninstrumentedPeer = isUninstrumentedPeer ? ResolveUninstrumentedPeerName(span, state.OutgoingPeerResolvers, state.AllResources) : null;
+            var uninstrumentedPeer = isUninstrumentedPeer ? ResolveUninstrumentedPeerName(span, state.AllResources) : null;
 
             var spanLogVms = new List<SpanLogEntryViewModel>();
             if (spanLogs != null)
@@ -248,7 +249,7 @@ public sealed class SpanWaterfallViewModel
         }
     }
 
-    private static string? ResolveUninstrumentedPeerName(OtlpSpan span, IOutgoingPeerResolver[] outgoingPeerResolvers, List<OtlpResource> allResources)
+    private static string? ResolveUninstrumentedPeerName(OtlpSpan span, List<OtlpResource> allResources)
     {
         if (span.UninstrumentedPeer != null)
         {
@@ -256,16 +257,6 @@ public sealed class SpanWaterfallViewModel
             // We are matching an address to replicas which share the same address. There isn't a way to know exactly which replica was called. The first replica instance will be chosen.
             // This shouldn't be a big issue because typically project replicas will have OTEL setup, and so a child span is recorded.
             return OtlpHelpers.GetResourceName(span.UninstrumentedPeer, allResources);
-        }
-
-        // Attempt to resolve uninstrumented peer to a friendly name from the span.
-        // This should only match non-resource returning resolves such as Browser Link.
-        foreach (var resolver in outgoingPeerResolvers)
-        {
-            if (resolver.TryResolvePeer(span.Attributes, out var name, out _))
-            {
-                return name;
-            }
         }
 
         // Fallback to the peer address.

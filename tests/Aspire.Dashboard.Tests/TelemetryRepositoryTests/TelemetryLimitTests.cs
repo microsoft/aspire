@@ -12,19 +12,19 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class TelemetryLimitTests
+public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void AddTraces_ExceedsResourceLimit_ReportsFailure()
+    public async Task AddTraces_ExceedsResourceLimit_ReportsFailure()
     {
         var repository = CreateRepository(maxResourceCount: 3);
 
         for (var i = 0; i < 3; i++)
         {
             var addContext = new AddContext();
-            repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+            await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
                 {
@@ -46,7 +46,7 @@ public class TelemetryLimitTests
 
         // Adding a 4th resource should fail.
         var failContext = new AddContext();
-        repository.AddTraces(failContext, new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(failContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -68,7 +68,7 @@ public class TelemetryLimitTests
     }
 
     [Fact]
-    public void AddTraces_ExistingResourceAfterLimitReached_Succeeds()
+    public async Task AddTraces_ExistingResourceAfterLimitReached_Succeeds()
     {
         var repository = CreateRepository(maxResourceCount: 2);
 
@@ -76,7 +76,7 @@ public class TelemetryLimitTests
         for (var i = 0; i < 2; i++)
         {
             var addContext = new AddContext();
-            repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+            await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
                 {
@@ -96,7 +96,7 @@ public class TelemetryLimitTests
 
         // Adding data for an existing resource should still succeed.
         var successContext = new AddContext();
-        repository.AddTraces(successContext, new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(successContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -117,19 +117,19 @@ public class TelemetryLimitTests
     }
 
     [Fact]
-    public void AddMetrics_ExceedsInstrumentLimit_ReportsFailure()
+    public async Task AddMetrics_ExceedsInstrumentLimit_ReportsFailure()
     {
         var repository = CreateRepository();
 
         // Fill instruments up to the limit.
         var metrics = new RepeatedField<Metric>();
-        for (var i = 0; i < TelemetryRepository.MaxInstrumentCount; i++)
+        for (var i = 0; i < InMemoryTelemetryRepository.MaxInstrumentCount; i++)
         {
             metrics.Add(CreateSumMetric(metricName: $"metric{i}", startTime: s_testTime.AddMinutes(1)));
         }
 
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -148,12 +148,12 @@ public class TelemetryLimitTests
         Assert.Equal(0, addContext.FailureCount);
 
         var resources = repository.GetResources();
-        var instruments = repository.GetInstrumentsSummaries(resources[0].ResourceKey);
-        Assert.Equal(TelemetryRepository.MaxInstrumentCount, instruments.Count);
+        var instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
+        Assert.Equal(InMemoryTelemetryRepository.MaxInstrumentCount, instruments.Count);
 
         // Adding one more instrument should fail.
         var failContext = new AddContext();
-        repository.AddMetrics(failContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(failContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -172,18 +172,18 @@ public class TelemetryLimitTests
         Assert.Equal(1, failContext.FailureCount);
         Assert.Equal(0, failContext.SuccessCount);
 
-        instruments = repository.GetInstrumentsSummaries(resources[0].ResourceKey);
-        Assert.Equal(TelemetryRepository.MaxInstrumentCount, instruments.Count);
+        instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
+        Assert.Equal(InMemoryTelemetryRepository.MaxInstrumentCount, instruments.Count);
     }
 
     [Fact]
-    public void AddLogs_ExceedsResourceLimit_FailureCountIsLogRecordCount()
+    public async Task AddLogs_ExceedsResourceLimit_FailureCountIsLogRecordCount()
     {
         var repository = CreateRepository(maxResourceCount: 1);
 
         // Fill the single resource slot.
         var setupContext = new AddContext();
-        repository.AddLogs(setupContext, new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(setupContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -203,7 +203,7 @@ public class TelemetryLimitTests
         // Attempt to add logs for a new resource with multiple scopes and records.
         // FailureCount must equal total log records, not number of scopes.
         var failContext = new AddContext();
-        repository.AddLogs(failContext, new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(failContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -238,13 +238,13 @@ public class TelemetryLimitTests
     }
 
     [Fact]
-    public void AddMetrics_ExceedsResourceLimit_FailureCountIsDataPointCount()
+    public async Task AddMetrics_ExceedsResourceLimit_FailureCountIsDataPointCount()
     {
         var repository = CreateRepository(maxResourceCount: 1);
 
         // Fill the single resource slot.
         var setupContext = new AddContext();
-        repository.AddMetrics(setupContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(setupContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -264,7 +264,7 @@ public class TelemetryLimitTests
         // Attempt to add metrics for a new resource with multiple scopes and metrics.
         // FailureCount must equal total data points, not number of metrics.
         var failContext = new AddContext();
-        repository.AddMetrics(failContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(failContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -300,13 +300,13 @@ public class TelemetryLimitTests
     }
 
     [Fact]
-    public void AddTraces_ExceedsResourceLimit_FailureCountIsSpanCount()
+    public async Task AddTraces_ExceedsResourceLimit_FailureCountIsSpanCount()
     {
         var repository = CreateRepository(maxResourceCount: 1);
 
         // Fill the single resource slot.
         var setupContext = new AddContext();
-        repository.AddTraces(setupContext, new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(setupContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -326,7 +326,7 @@ public class TelemetryLimitTests
         // Attempt to add traces for a new resource with multiple scopes and spans.
         // FailureCount must equal total spans, not number of scopes.
         var failContext = new AddContext();
-        repository.AddTraces(failContext, new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(failContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -359,14 +359,14 @@ public class TelemetryLimitTests
     }
 
     [Fact]
-    public void AddLogs_ExceedsScopeLimit_ReportsFailure()
+    public async Task AddLogs_ExceedsScopeLimit_ReportsFailure()
     {
         var repository = CreateRepository();
 
         // Fill scopes up to the limit.
         var scopeLogs = new RepeatedField<ResourceLogs>();
         var rl = new ResourceLogs { Resource = CreateResource() };
-        for (var i = 0; i < TelemetryRepository.MaxScopeCount; i++)
+        for (var i = 0; i < InMemoryTelemetryRepository.MaxScopeCount; i++)
         {
             rl.ScopeLogs.Add(new ScopeLogs
             {
@@ -377,12 +377,12 @@ public class TelemetryLimitTests
         scopeLogs.Add(rl);
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, scopeLogs);
+        await repository.AsWriter().AddLogsAsync(addContext, scopeLogs);
         Assert.Equal(0, addContext.FailureCount);
 
         // Adding one more scope should fail.
         var failContext = new AddContext();
-        repository.AddLogs(failContext, new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(failContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -408,13 +408,13 @@ public class TelemetryLimitTests
     }
 
     [Fact]
-    public void AddTraces_ExceedsScopeLimit_ReportsFailure()
+    public async Task AddTraces_ExceedsScopeLimit_ReportsFailure()
     {
         var repository = CreateRepository();
 
         // Fill scopes up to the limit.
         var rs = new ResourceSpans { Resource = CreateResource() };
-        for (var i = 0; i < TelemetryRepository.MaxScopeCount; i++)
+        for (var i = 0; i < InMemoryTelemetryRepository.MaxScopeCount; i++)
         {
             rs.ScopeSpans.Add(new ScopeSpans
             {
@@ -424,12 +424,12 @@ public class TelemetryLimitTests
         }
 
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans> { rs });
+        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans> { rs });
         Assert.Equal(0, addContext.FailureCount);
 
         // Adding one more scope should fail.
         var failContext = new AddContext();
-        repository.AddTraces(failContext, new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(failContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -454,13 +454,13 @@ public class TelemetryLimitTests
     }
 
     [Fact]
-    public void AddMetrics_ExceedsScopeLimit_ReportsFailure()
+    public async Task AddMetrics_ExceedsScopeLimit_ReportsFailure()
     {
         var repository = CreateRepository();
 
         // Fill scopes up to the limit.
         var rm = new ResourceMetrics { Resource = CreateResource() };
-        for (var i = 0; i < TelemetryRepository.MaxScopeCount; i++)
+        for (var i = 0; i < InMemoryTelemetryRepository.MaxScopeCount; i++)
         {
             rm.ScopeMetrics.Add(new ScopeMetrics
             {
@@ -470,12 +470,12 @@ public class TelemetryLimitTests
         }
 
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics> { rm });
+        await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics> { rm });
         Assert.Equal(0, addContext.FailureCount);
 
         // Adding one more scope should fail. Each metric has 1 data point.
         var failContext = new AddContext();
-        repository.AddMetrics(failContext, new RepeatedField<ResourceMetrics>
+        await repository.AsWriter().AddMetricsAsync(failContext, new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -499,4 +499,14 @@ public class TelemetryLimitTests
         Assert.Equal(2, failContext.FailureCount);
         Assert.Equal(0, failContext.SuccessCount);
     }
+}
+
+public sealed class InMemoryTelemetryLimitTests : TelemetryLimitTests
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteTelemetryLimitTests : TelemetryLimitTests
+{
+    protected override bool UseSqlite => true;
 }

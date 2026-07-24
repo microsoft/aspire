@@ -1,0 +1,189 @@
+// Licensed to the .NET Foundation under one or more agreements.
+// The .NET Foundation licenses this file to you under the MIT license.
+
+using System.Collections.Concurrent;
+using System.Data.Common;
+using System.Diagnostics;
+using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Tests;
+using Dapper;
+using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
+using Xunit;
+
+namespace Aspire.Dashboard.Tests.Model;
+
+public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHelper) : IDisposable
+{
+    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
+
+    [Fact]
+    public void InitializeSchema_HistogramValuesUseBlobStorage()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        database.InitializeSchema();
+        using var connection = database.OpenConnection();
+
+        var histogramCountColumnType = connection.QuerySingle<string>("SELECT type FROM pragma_table_info('telemetry_metric_points') WHERE name = 'histogram_count';");
+        var histogramColumnTypes = connection.Query<(string Name, string Type)>("SELECT name, type FROM pragma_table_info('telemetry_metric_points') WHERE name IN ('bucket_counts', 'explicit_bounds') ORDER BY name;");
+
+        Assert.Equal("INTEGER", histogramCountColumnType);
+        Assert.Collection(
+            histogramColumnTypes,
+            column => Assert.Equal(("bucket_counts", "BLOB"), column),
+            column => Assert.Equal(("explicit_bounds", "BLOB"), column));
+        Assert.Equal(0, connection.QuerySingle<int>("SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name = 'telemetry_metric_histograms';"));
+    }
+
+    [Fact]
+    public async Task RepositoryWrites_ShareDatabaseWriteLock()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        using var telemetryRepository = new SqliteTelemetryRepository(
+            database,
+            NullLoggerFactory.Instance,
+            Options.Create(new DashboardOptions()),
+            new PauseManager(),
+            []);
+        using var resourceRepository = new SqliteResourceRepository(database, new MockKnownPropertyLookup(), NullLoggerFactory.Instance);
+
+        Task telemetryWriteTask;
+        Task resourceWriteTask;
+        using (await database.WriteLock.LockAsync())
+        {
+            telemetryWriteTask = ((ITelemetryRepositoryWriter)telemetryRepository).ClearMetricsAsync();
+            resourceWriteTask = ((IResourceRepositoryWriter)resourceRepository).ReplaceResourcesAsync([]);
+
+            Assert.False(telemetryWriteTask.IsCompleted);
+            Assert.False(resourceWriteTask.IsCompleted);
+        }
+
+        await Task.WhenAll(telemetryWriteTask, resourceWriteTask);
+    }
+
+    [Fact]
+    public async Task DapperQuery_CreatesActivityWithQueryInformation()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
+        using var connection = database.OpenConnection();
+        var query = $"-- {Guid.NewGuid():N}{Environment.NewLine}SELECT 42;";
+
+        var result = await connection.QuerySingleAsync<int>(query);
+
+        Assert.Equal(42, result);
+        var activity = Assert.Single(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+        Assert.Equal(TracingSqliteConnection.ActivitySourceName, activity.Source.Name);
+        Assert.Equal("SELECT sqlite", activity.OperationName);
+        Assert.Equal(ActivityKind.Client, activity.Kind);
+        Assert.Equal("sqlite", activity.GetTagItem("db.system.name"));
+        Assert.Equal("dashboard.db", activity.GetTagItem(OtlpSpan.PeerServiceAttributeKey));
+        Assert.Equal("dashboard.db", activity.GetTagItem("db.namespace"));
+        Assert.Equal("SELECT", activity.GetTagItem("db.operation.name"));
+        Assert.Equal(ActivityStatusCode.Unset, activity.Status);
+    }
+
+    [Fact]
+    public void DapperFailure_SetsActivityErrorInformation()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
+        using var connection = database.OpenConnection();
+        var query = $"SELECT * FROM missing_{Guid.NewGuid():N};";
+
+        var exception = Assert.Throws<SqliteException>(() => connection.Query(query));
+
+        var activity = Assert.Single(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+        Assert.Equal(ActivityStatusCode.Error, activity.Status);
+        Assert.Equal(exception.Message, activity.StatusDescription);
+        Assert.Equal(typeof(SqliteException).FullName, activity.GetTagItem("error.type"));
+    }
+
+    [Fact]
+    public void DataReader_ActivityStopsWhenReaderIsDisposed()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
+        using DbConnection connection = database.OpenConnection();
+        using var command = connection.CreateCommand();
+        var query = $"SELECT '{Guid.NewGuid():N}';";
+        command.CommandText = query;
+
+        var reader = command.ExecuteReader();
+
+        Assert.DoesNotContain(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+        Assert.True(reader.Read());
+        reader.Dispose();
+        Assert.Single(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+    }
+
+    [Fact]
+    public void DapperQueryMultiple_ActivitySpansAllResultSets()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
+        using var connection = database.OpenConnection();
+        var query = $"SELECT '{Guid.NewGuid():N}'; SELECT '{Guid.NewGuid():N}';";
+
+        using (var results = connection.QueryMultiple(query))
+        {
+            Assert.DoesNotContain(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+            Assert.NotEmpty(results.ReadSingle<string>());
+            Assert.DoesNotContain(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+            Assert.NotEmpty(results.ReadSingle<string>());
+        }
+
+        Assert.Single(activities, activity => Equals(activity.GetTagItem("db.query.text"), query));
+    }
+
+    [Fact]
+    public void CommitTransaction_CreatesActivityWithDatabaseInformation()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(database.ActivitySource, onActivityStopped: activities.Enqueue);
+        using var connection = database.OpenConnection();
+        using var transaction = connection.BeginTransaction();
+
+        connection.Execute("SELECT 1;", transaction: transaction);
+        transaction.Commit();
+
+        var activity = Assert.Single(activities, activity => Equals(activity.GetTagItem("db.query.text"), "COMMIT;"));
+        Assert.Equal("COMMIT sqlite", activity.OperationName);
+        Assert.Equal(ActivityKind.Client, activity.Kind);
+        Assert.Equal("sqlite", activity.GetTagItem("db.system.name"));
+        Assert.Equal("dashboard.db", activity.GetTagItem(OtlpSpan.PeerServiceAttributeKey));
+        Assert.Equal("dashboard.db", activity.GetTagItem("db.namespace"));
+        Assert.Equal("COMMIT", activity.GetTagItem("db.operation.name"));
+    }
+
+    [Fact]
+    public void ActivityListener_DoesNotCaptureOtherDatabaseActivities()
+    {
+        using var observedDatabase = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "observed.db"), pooling: false);
+        using var otherDatabase = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "other.db"), pooling: false);
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(observedDatabase.ActivitySource, onActivityStopped: activities.Enqueue);
+        using var observedConnection = observedDatabase.OpenConnection();
+        using var otherConnection = otherDatabase.OpenConnection();
+
+        observedConnection.QuerySingle<int>("SELECT 1;");
+        otherConnection.QuerySingle<int>("SELECT 2;");
+
+        Assert.Single(activities, activity => Equals(activity.GetTagItem("db.query.text"), "SELECT 1;"));
+        Assert.DoesNotContain(activities, activity => Equals(activity.GetTagItem("db.query.text"), "SELECT 2;"));
+    }
+
+    public void Dispose()
+    {
+        _workspace.Dispose();
+    }
+}

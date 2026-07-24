@@ -42,7 +42,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private bool _resourceChanged;
     private string _filter = string.Empty;
     private AspirePageContentLayout? _contentLayout;
-    private FluentDataGrid<OtlpTrace> _dataGrid = null!;
+    private FluentDataGrid<TraceSummary> _dataGrid = null!;
     private GridColumnManager _manager = null!;
 
     private ColumnResizeLabels _resizeLabels = ColumnResizeLabels.Default;
@@ -56,7 +56,12 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     public string? ResourceName { get; set; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required TracesViewModel TracesViewModel { get; init; }
@@ -105,7 +110,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     [SupplyParameterFromQuery(Name = "filters")]
     public string? SerializedFilters { get; set; }
 
-    private string GetNameTooltip(OtlpTrace trace)
+    private string GetNameTooltip(TraceSummary trace)
     {
         var tooltip = string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.Traces.TracesFullName)], trace.FullName);
         tooltip += Environment.NewLine + string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.Traces.TracesTraceId)], trace.TraceId);
@@ -113,7 +118,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         return tooltip;
     }
 
-    private string GetSpansTooltip(OrderedResource resourceSpans)
+    private string GetSpansTooltip(TraceResourceSummary resourceSpans)
     {
         var count = resourceSpans.TotalSpans;
         var errorCount = resourceSpans.ErroredSpans;
@@ -128,26 +133,29 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         return tooltip;
     }
 
-    private async ValueTask<GridItemsProviderResult<OtlpTrace>> GetData(GridItemsProviderRequest<OtlpTrace> request)
+    private async ValueTask<GridItemsProviderResult<TraceSummary>> GetData(GridItemsProviderRequest<TraceSummary> request)
     {
         TracesViewModel.StartIndex = request.StartIndex;
         TracesViewModel.Count = request.Count ?? DashboardUIHelpers.DefaultDataGridResultCount;
         var traces = TracesViewModel.GetTraces();
 
-        if (traces.IsFull && !TelemetryRepository.HasDisplayedMaxTraceLimitMessage)
+        if (!TelemetryRepository.IsReadOnly)
         {
-            TelemetryRepository.MaxTraceLimitMessage = await DashboardUIHelpers.DisplayMaxLimitMessageAsync(
-                MessageService,
-                Loc[nameof(Dashboard.Resources.Traces.MessageExceededLimitTitle)],
-                string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.Traces.MessageExceededLimitBody)], DashboardOptions.Value.TelemetryLimits.MaxTraceCount),
-                () => TelemetryRepository.MaxTraceLimitMessage = null);
+            if (traces.IsFull && !TelemetryRepository.HasDisplayedMaxTraceLimitMessage)
+            {
+                TelemetryRepository.MaxTraceLimitMessage = await DashboardUIHelpers.DisplayMaxLimitMessageAsync(
+                    MessageService,
+                    Loc[nameof(Dashboard.Resources.Traces.MessageExceededLimitTitle)],
+                    string.Format(CultureInfo.InvariantCulture, Loc[nameof(Dashboard.Resources.Traces.MessageExceededLimitBody)], DashboardOptions.Value.TelemetryLimits.MaxTraceCount),
+                    () => TelemetryRepository.MaxTraceLimitMessage = null);
 
-            TelemetryRepository.HasDisplayedMaxTraceLimitMessage = true;
-        }
-        else if (!traces.IsFull && TelemetryRepository.MaxTraceLimitMessage is { } message)
-        {
-            // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
-            message.Close();
+                TelemetryRepository.HasDisplayedMaxTraceLimitMessage = true;
+            }
+            else if (!traces.IsFull && TelemetryRepository.MaxTraceLimitMessage is { } message)
+            {
+                // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
+                message.Close();
+            }
         }
 
         // Updating the total item count as a field doesn't work because it isn't updated with the grid.
@@ -240,11 +248,10 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     }
 
     private string GetResourceName(OtlpResource app) => OtlpHelpers.GetResourceName(app, _resources);
-    private string GetResourceName(OtlpResourceView app) => OtlpHelpers.GetResourceName(app.Resource, _resources);
 
-    private static string GetRowClass(OtlpTrace entry)
+    private static string GetRowClass(TraceSummary entry)
     {
-        if (entry.Spans.Any(span => span.Status == OtlpSpanStatusCode.Error))
+        if (entry.HasError)
         {
             return "trace-row-error";
         }
@@ -256,7 +263,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     {
         // Check to see whether max item count should be set on every render.
         // This is required because the data grid's virtualize component can be recreated on data change.
-        if (_dataGrid != null && FluentDataGridHelper<OtlpTrace>.TrySetMaxItemCount(_dataGrid, 10_000))
+        if (_dataGrid != null && FluentDataGridHelper<TraceSummary>.TrySetMaxItemCount(_dataGrid, 10_000))
         {
             StateHasChanged();
         }
@@ -388,8 +395,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     private Task ClearTraces(ResourceKey? key)
     {
-        TelemetryRepository.ClearTraces(key);
-        return Task.CompletedTask;
+        return TelemetryRepositoryWriter.ClearTracesAsync(key);
     }
 
     private List<MenuButtonItem> GetFilterMenuItems()
@@ -403,21 +409,14 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             dialogsLoc: DialogsLoc);
     }
 
-    private static bool HasGenAISpans(OtlpTrace trace)
+    private async Task OnGenAIClickedAsync(TraceSummary summary)
     {
-        foreach (var span in trace.Spans)
+        var trace = TelemetryRepository.GetTrace(summary.TraceId);
+        if (trace is null)
         {
-            if (GenAIHelpers.HasGenAIAttribute(span.Attributes))
-            {
-                return true;
-            }
+            return;
         }
 
-        return false;
-    }
-
-    private async Task OnGenAIClickedAsync(OtlpTrace trace)
-    {
         var firstSpan = trace.Spans.FirstOrDefault(s => GenAIHelpers.HasGenAIAttribute(s.Attributes));
         if (firstSpan == null)
         {

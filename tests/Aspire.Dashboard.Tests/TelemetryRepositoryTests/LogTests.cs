@@ -7,16 +7,18 @@ using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Integration;
+using Aspire.Dashboard.Utils;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
 using OpenTelemetry.Proto.Logs.V1;
+using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class LogTests
+public abstract class LogTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
@@ -28,14 +30,14 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs()
+    public async Task AddLogs()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -91,14 +93,231 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_NoBody_EmptyMessage()
+    public async Task GetLogSummaries_ReturnsPageData()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "frontend", instanceId: "frontend-1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans =
+                        {
+                            CreateSpan(
+                                traceId: "trace",
+                                spanId: "span",
+                                startTime: s_testTime,
+                                endTime: s_testTime.AddMinutes(1),
+                                attributes: [KeyValuePair.Create("gen_ai.provider.name", "test")])
+                        }
+                    }
+                }
+            }
+        });
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "frontend", instanceId: "frontend-1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(
+                                time: s_testTime.AddMinutes(1),
+                                message: "direct",
+                                severity: SeverityNumber.Warn,
+                                traceId: "direct-trace",
+                                spanId: "direct-span",
+                                attributes:
+                                [
+                                    KeyValuePair.Create("custom", "match"),
+                                    KeyValuePair.Create("exception.stacktrace", "stack trace"),
+                                    KeyValuePair.Create("exception.message", "ignored message"),
+                                    KeyValuePair.Create("gen_ai.system", "test")
+                                ]),
+                            CreateLogRecord(
+                                time: s_testTime.AddMinutes(2),
+                                message: "linked",
+                                severity: SeverityNumber.Error,
+                                traceId: "trace",
+                                spanId: "span",
+                                attributes:
+                                [
+                                    KeyValuePair.Create("custom", "other"),
+                                    KeyValuePair.Create("exception.type", "TestException"),
+                                    KeyValuePair.Create("exception.message", "test message")
+                                ]),
+                            CreateLogRecord(
+                                time: s_testTime.AddMinutes(3),
+                                message: "ordinary",
+                                traceId: "ordinary-trace",
+                                spanId: "ordinary-span",
+                                attributes:
+                                [
+                                    KeyValuePair.Create("custom", "other"),
+                                    KeyValuePair.Create("gen_ai.system", string.Empty),
+                                    KeyValuePair.Create("gen_ai.provider.name", "ignored fallback")
+                                ])
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var context = new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        };
+        var summaries = repository.GetLogSummaries(context);
+        var logs = repository.GetLogs(context);
+
+        Assert.Equal(logs.TotalItemCount, summaries.TotalItemCount);
+        Assert.Equal(logs.IsFull, summaries.IsFull);
+        Assert.Collection(summaries.Items,
+            summary =>
+            {
+                var log = logs.Items[0];
+                Assert.Equal(log.InternalId, summary.InternalId);
+                Assert.Equal(log.TimeStamp, summary.TimeStamp);
+                Assert.Equal(log.Severity, summary.Severity);
+                Assert.Equal(log.Message, summary.Message);
+                Assert.Equal(log.TraceId, summary.TraceId);
+                Assert.Equal(log.SpanId, summary.SpanId);
+                Assert.Equal(new ResourceKey("frontend", "frontend-1"), summary.Resource.ResourceKey);
+                Assert.Equal("stack trace", summary.ExceptionText);
+                Assert.True(summary.HasGenAI);
+            },
+            summary =>
+            {
+                Assert.Equal("linked", summary.Message);
+                Assert.Equal("TestException: test message", summary.ExceptionText);
+                Assert.True(summary.HasGenAI);
+            },
+            summary =>
+            {
+                Assert.Equal("ordinary", summary.Message);
+                Assert.Null(summary.ExceptionText);
+                Assert.False(summary.HasGenAI);
+            });
+
+        var filtered = repository.GetLogSummaries(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = "custom",
+                    Condition = FilterCondition.Equals,
+                    Value = "match"
+                }
+            ]
+        });
+        Assert.Equal("direct", Assert.Single(filtered.Items).Message);
+        Assert.Equal(1, filtered.TotalItemCount);
+
+        var emptyPage = repository.GetLogSummaries(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 10,
+            Count = 10,
+            Filters = []
+        });
+        Assert.Empty(emptyPage.Items);
+        Assert.Equal(3, emptyPage.TotalItemCount);
+
+        var emptyLogsPage = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 10,
+            Count = 10,
+            Filters = []
+        });
+        Assert.Empty(emptyLogsPage.Items);
+        Assert.Equal(3, emptyLogsPage.TotalItemCount);
+    }
+
+    [Fact]
+    public async Task GetLogsFieldValues_AllFieldsMatchMaterializedLogs()
+    {
+        var repository = CreateRepository();
+        var addContext = new AddContext();
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime, message: "Message", attributes: [KeyValuePair.Create("custom", "Value")], severity: SeverityNumber.Info, eventName: "Event"),
+                            CreateLogRecord(time: s_testTime, message: "message", attributes: [KeyValuePair.Create("custom", "value")], severity: SeverityNumber.Info2)
+                        }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, addContext.FailureCount);
+
+        var logs = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = 10,
+            Filters = []
+        }).Items;
+
+        foreach (var field in KnownStructuredLogFields.AllFields
+            .Except([KnownStructuredLogFields.TimestampField])
+            .Append(KnownStructuredLogFields.LevelField)
+            .Append("custom"))
+        {
+            var expected = logs
+                .Select(log => OtlpLogEntry.GetFieldValue(log, field))
+                .Where(value => value is not null)
+                .GroupBy(value => value!, StringComparers.OtlpAttribute)
+                .ToDictionary(group => group.Key, group => group.Count(), StringComparers.OtlpAttribute);
+            var actual = repository.GetLogsFieldValues(field);
+            Assert.True(expected.Count == actual.Count, $"Field '{field}' expected {expected.Count} values but found {actual.Count}.");
+            foreach (var (value, count) in expected)
+            {
+                Assert.True(actual.TryGetValue(value, out var actualCount), $"Field '{field}' is missing value '{value}'.");
+                Assert.True(count == actualCount, $"Field '{field}' value '{value}' expected count {count} but found {actualCount}.");
+            }
+        }
+
+        Assert.Empty(repository.GetLogsFieldValues(KnownStructuredLogFields.TimestampField));
+    }
+
+    [Fact]
+    public async Task AddLogs_NoBody_EmptyMessage()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -132,14 +351,14 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_MultipleOutOfOrder()
+    public async Task AddLogs_MultipleOutOfOrder()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -194,14 +413,14 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_Error_UnviewedCount()
+    public async Task AddLogs_Error_UnviewedCount()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -269,7 +488,7 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_Error_UnviewedCount_WithReadSubscriptionAll()
+    public async Task AddLogs_Error_UnviewedCount_WithReadSubscriptionAll()
     {
         // Arrange
         var repository = CreateRepository();
@@ -277,7 +496,7 @@ public class LogTests
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -321,7 +540,7 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_Error_UnviewedCount_WithReadSubscriptionOneApp()
+    public async Task AddLogs_Error_UnviewedCount_WithReadSubscriptionOneApp()
     {
         // Arrange
         var repository = CreateRepository();
@@ -329,7 +548,7 @@ public class LogTests
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -374,7 +593,7 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_Error_UnviewedCount_WithNonReadSubscription()
+    public async Task AddLogs_Error_UnviewedCount_WithNonReadSubscription()
     {
         // Arrange
         var repository = CreateRepository();
@@ -382,7 +601,7 @@ public class LogTests
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -457,7 +676,7 @@ public class LogTests
 
         // Act 1
         var addContext1 = new AddContext();
-        repository.AddLogs(addContext1, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext1, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -494,7 +713,7 @@ public class LogTests
         });
 
         var addContext2 = new AddContext();
-        repository.AddLogs(addContext2, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext2, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -527,7 +746,7 @@ public class LogTests
     }
 
     [Fact]
-    public void Unsubscribe()
+    public async Task Unsubscribe()
     {
         // Arrange
         var repository = CreateRepository();
@@ -542,7 +761,7 @@ public class LogTests
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -583,10 +802,10 @@ public class LogTests
         Task task;
         using (ExecutionContext.SuppressFlow())
         {
-            task = Task.Run(() =>
+            task = Task.Run(async () =>
             {
                 var addContext = new AddContext();
-                repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+                await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
                 {
                     new ResourceLogs
                     {
@@ -612,7 +831,7 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_AttributeLimits_LimitsApplied()
+    public async Task AddLogs_AttributeLimits_LimitsApplied()
     {
         // Arrange
         var repository = CreateRepository(maxAttributeCount: 5, maxAttributeLength: 16);
@@ -630,7 +849,7 @@ public class LogTests
         }
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -702,7 +921,7 @@ public class LogTests
     public async Task Subscription_MultipleUpdates_MinExecuteIntervalApplied()
     {
         // Arrange
-        var minExecuteInterval = TimeSpan.FromMilliseconds(500);
+        var minExecuteInterval = CallbackThrottler.DefaultMinExecuteInterval;
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
         var logger = loggerFactory.CreateLogger(nameof(LogTests));
         var repository = CreateRepository(subscriptionMinExecuteInterval: minExecuteInterval, loggerFactory: loggerFactory);
@@ -728,7 +947,7 @@ public class LogTests
         // Act
         var addContext = new AddContext();
         logger.LogInformation("Writing log 1");
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -750,7 +969,7 @@ public class LogTests
         logger.LogInformation("Received log 1 callback");
 
         logger.LogInformation("Writing log 2");
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -776,14 +995,14 @@ public class LogTests
     }
 
     [Fact]
-    public void FilterLogs_With_Message_Returns_CorrectLog()
+    public async Task FilterLogs_With_Message_Returns_CorrectLog()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -818,19 +1037,59 @@ public class LogTests
             ResourceKeys = [resourceKey],
             StartIndex = 0,
             Count = 1,
-            Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = "message" }]
+            Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = "MESSAGE" }]
         }).Items);
     }
 
+    [Theory]
+    [InlineData("%")]
+    [InlineData("_")]
+    [InlineData("!")]
+    public async Task FilterLogs_WithLikeMetacharacter_TreatsValueAsLiteral(string fragment)
+    {
+        var repository = CreateRepository();
+        var expectedMessage = $"matches-{fragment}-literal";
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(instanceId: "1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(time: s_testTime.AddMinutes(1), message: expectedMessage),
+                            CreateLogRecord(time: s_testTime.AddMinutes(2), message: "matches-x-literal")
+                        }
+                    }
+                }
+            }
+        });
+
+        var result = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKeys = [repository.GetResources().Single().ResourceKey],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = fragment }]
+        });
+
+        var log = Assert.Single(result.Items);
+        Assert.Equal(expectedMessage, log.Message);
+    }
+
     [Fact]
-    public void FilterLogs_With_EventName_Returns_CorrectLog()
+    public async Task FilterLogs_With_EventName_Returns_CorrectLog()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -870,14 +1129,14 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_MultipleResources_SameInstanceId_CreateMultipleResources()
+    public async Task AddLogs_MultipleResources_SameInstanceId_CreateMultipleResources()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -969,14 +1228,14 @@ public class LogTests
     }
 
     [Fact]
-    public void GetLogs_MultipleInstances()
+    public async Task GetLogs_MultipleInstances()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1058,13 +1317,13 @@ public class LogTests
     }
 
     [Fact]
-    public void RemoveLogs_All()
+    public async Task RemoveLogs_All()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1105,7 +1364,7 @@ public class LogTests
         });
 
         // Act
-        repository.ClearStructuredLogs();
+        await repository.AsWriter().ClearStructuredLogsAsync();
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1123,13 +1382,13 @@ public class LogTests
     }
 
     [Fact]
-    public void RemoveLogs_SelectedResource()
+    public async Task RemoveLogs_SelectedResource()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1170,7 +1429,7 @@ public class LogTests
         });
 
         // Act
-        repository.ClearStructuredLogs(new ResourceKey("resource1", "123"));
+        await repository.AsWriter().ClearStructuredLogsAsync(new ResourceKey("resource1", "123"));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1197,13 +1456,13 @@ public class LogTests
     }
 
     [Fact]
-    public void RemoveLogs_MultipleSelectedResources()
+    public async Task RemoveLogs_MultipleSelectedResources()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1244,7 +1503,7 @@ public class LogTests
         });
 
         // Act
-        repository.ClearStructuredLogs(new ResourceKey("resource1", null));
+        await repository.AsWriter().ClearStructuredLogsAsync(new ResourceKey("resource1", null));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1263,14 +1522,14 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_ObservedUnixTimeNanos()
+    public async Task AddLogs_ObservedUnixTimeNanos()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1304,14 +1563,14 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_EventName_FromLogRecordField()
+    public async Task AddLogs_EventName_FromLogRecordField()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1345,14 +1604,14 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_EventName_FromLegacyAttribute()
+    public async Task AddLogs_EventName_FromLegacyAttribute()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1388,14 +1647,14 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_EventName_FieldTakesPrecedenceOverAttribute()
+    public async Task AddLogs_EventName_FieldTakesPrecedenceOverAttribute()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1430,14 +1689,14 @@ public class LogTests
     }
 
     [Fact]
-    public void AddLogs_EventName_NullWhenNotSet()
+    public async Task AddLogs_EventName_NullWhenNotSet()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1471,11 +1730,11 @@ public class LogTests
     }
 
     [Fact]
-    public void GetLogs_DisabledFiltersAreIgnored()
+    public async Task GetLogs_DisabledFiltersAreIgnored()
     {
         var repository = CreateRepository();
 
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1525,5 +1784,144 @@ public class LogTests
         // The disabled filter should be ignored — only the enabled "matching" filter applies
         Assert.Single(logs.Items);
         Assert.Equal("matching log", logs.Items[0].Message);
+    }
+}
+
+public sealed class InMemoryLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
+{
+    protected override bool UseSqlite => true;
+
+    [Fact]
+    public async Task GetLogSummaries_MoreThanSqliteVariableLimit_ReturnsTraceDisplayData()
+    {
+        const int logCount = 1_100;
+        var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        var logRecords = new RepeatedField<LogRecord>();
+        for (var index = 0; index < logCount; index++)
+        {
+            logRecords.Add(CreateLogRecord(
+                time: testTime.AddTicks(index + 1),
+                message: $"Message {index}",
+                severity: index == 0 ? SeverityNumber.Error : SeverityNumber.Info,
+                attributes: [],
+                traceId: "large-trace",
+                spanId: "large-span",
+                eventName: $"Event {index}"));
+        }
+
+        var context = new AddContext();
+        await repository.AsWriter().AddLogsAsync(context, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { logRecords }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, context.FailureCount);
+
+        var logs = repository.GetLogSummaries(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownStructuredLogFields.TraceIdField,
+                    Condition = FilterCondition.Equals,
+                    Value = logRecords[0].TraceId.ToHexString()
+                }
+            ]
+        }).Items;
+
+        Assert.Equal(logCount, logs.Count);
+        var first = logs[0];
+        Assert.Equal(testTime.AddTicks(1), first.TimeStamp);
+        Assert.Equal(LogLevel.Error, first.Severity);
+        Assert.Equal("Message 0", first.Message);
+        Assert.Equal(logRecords[0].SpanId.ToHexString(), first.SpanId);
+        Assert.Equal("TestLogger", first.ScopeName);
+        Assert.Equal("Event 0", first.EventName);
+        Assert.True(first.IsError);
+        Assert.Equal("Message 1099", logs[^1].Message);
+    }
+
+    [Fact]
+    public async Task AddLogs_LargeAttributeBatchesRoundTripAcrossResources()
+    {
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        var context = new AddContext();
+        var attributes = Enumerable.Range(0, 128)
+            .Select(index => KeyValuePair.Create($"key-{index}", $"value-{index}"))
+            .ToArray();
+        await repository.AsWriter().AddLogsAsync(context, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "app-one"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "one", attributes: attributes),
+                            CreateLogRecord(message: "two", attributes: attributes)
+                        }
+                    }
+                }
+            },
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "app-two"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords =
+                        {
+                            CreateLogRecord(message: "three", attributes: attributes),
+                            CreateLogRecord(message: "four", attributes: attributes)
+                        }
+                    }
+                }
+            }
+        });
+
+        Assert.Equal(4, context.SuccessCount);
+        Assert.Equal(0, context.FailureCount);
+
+        AssertResourceLogs("app-one", ["one", "two"]);
+        AssertResourceLogs("app-two", ["three", "four"]);
+
+        void AssertResourceLogs(string resourceName, string[] expectedMessages)
+        {
+            var logs = repository.GetLogs(new GetLogsContext
+            {
+                ResourceKeys = [new ResourceKey(resourceName, null)],
+                StartIndex = 0,
+                Count = 10,
+                Filters = []
+            }).Items;
+            Assert.Equal(expectedMessages.Order(), logs.Select(log => log.Message).Order());
+            Assert.All(logs, log => Assert.Equal(attributes, log.Attributes));
+        }
     }
 }

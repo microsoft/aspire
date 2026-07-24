@@ -43,6 +43,51 @@ public sealed class DashboardOptionsTests
 
         Assert.Null(result.FailureMessage);
         Assert.True(result.Succeeded);
+        Assert.Equal(DashboardPersistenceMode.None, GetValidOptions().Data.PersistenceMode);
+    }
+
+    [Fact]
+    public void PostConfigure_MapsDashboardRunStorageEnvironmentAliases()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardApplicationName.EnvVarName] = "My Dashboard",
+                [DashboardConfigNames.DashboardDataDirectoryName.EnvVarName] = "/data/.aspire/dashboard",
+                [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = "resume"
+            })
+            .Build();
+        var options = new DashboardOptions
+        {
+            ApplicationName = "Section Name",
+            Data = new DashboardDataOptions { Directory = "/section/path" }
+        };
+
+        new PostConfigureDashboardOptions(configuration).PostConfigure(null, options);
+
+        Assert.Equal("My Dashboard", options.ApplicationName);
+        Assert.Equal("/data/.aspire/dashboard", options.Data.Directory);
+        Assert.Equal(DashboardPersistenceMode.Resume, options.Data.PersistenceMode);
+    }
+
+    [Fact]
+    public void PostConfigure_InvalidDashboardPersistenceMode_IsInvalid()
+    {
+        var configuration = new ConfigurationBuilder()
+            .AddInMemoryCollection(new Dictionary<string, string?>
+            {
+                [DashboardConfigNames.DashboardPersistenceModeName.EnvVarName] = "invalid"
+            })
+            .Build();
+        var options = GetValidOptions();
+
+        new PostConfigureDashboardOptions(configuration).PostConfigure(null, options);
+        var result = new ValidateDashboardOptions().Validate(null, options);
+
+        Assert.False(result.Succeeded);
+        Assert.Equal(
+            "Failed to parse dashboard persistence mode 'invalid'. Possible values: None, Run, Resume.",
+            result.FailureMessage);
     }
 
     #region Frontend options

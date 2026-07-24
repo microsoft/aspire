@@ -41,7 +41,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             dialogService: dialogService,
             span: CreateOtlpSpan(resource, trace, scope, spanId: "abc", parentSpanId: null, startDate: s_testTime),
             selectedLogEntryId: null,
-            telemetryRepository: Services.GetRequiredService<TelemetryRepository>(),
+            telemetryRepository: Services.GetRequiredService<SqliteTelemetryRepository>(),
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: [],
             getContextGenAISpans: () => []
@@ -107,7 +107,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
             dialogService: dialogService,
             span: span,
             selectedLogEntryId: null,
-            telemetryRepository: Services.GetRequiredService<TelemetryRepository>(),
+            telemetryRepository: Services.GetRequiredService<SqliteTelemetryRepository>(),
             errorRecorder: new TestTelemetryErrorRecorder(),
             resources: [],
             getContextGenAISpans: () => []
@@ -129,8 +129,8 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var span = CreateOtlpSpan(resource, trace, scope, spanId: GetHexId("abc"), parentSpanId: null, startDate: s_testTime);
 
         var cut = SetUpDialog(out var dialogService);
-        var repository = Services.GetRequiredService<TelemetryRepository>();
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -177,11 +177,11 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
     {
         // Arrange - Setup dialog infrastructure and repository
         var cut = SetUpDialog(out var dialogService);
-        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         
         // Add initial trace to repository for the dialog to display
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -228,7 +228,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var originalContent = instance.Content;
 
         // Act - Add a DIFFERENT trace to the repository
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -260,11 +260,11 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
     {
         // Arrange - Setup dialog infrastructure and repository
         var cut = SetUpDialog(out var dialogService);
-        var repository = Services.GetRequiredService<TelemetryRepository>();
+        var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
         
         // Add initial trace to repository for the dialog to display
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -325,7 +325,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var originalContent = instance.Content;
 
         // Act - Add a new span to the SAME trace that the dialog is displaying
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {

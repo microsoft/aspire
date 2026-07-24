@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.IO.Compression;
 using System.Text.Json;
 using Aspire.Dashboard.Configuration;
@@ -17,9 +18,10 @@ namespace Aspire.Dashboard.Model;
 /// </summary>
 public sealed class TelemetryImportService
 {
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly ITelemetryRepositoryWriter _telemetryRepositoryWriter;
     private readonly IOptionsMonitor<DashboardOptions> _options;
     private readonly ILogger<TelemetryImportService> _logger;
+    private readonly ActivitySource _activitySource;
 
     /// <summary>
     /// Gets a value indicating whether import is enabled.
@@ -29,14 +31,20 @@ public sealed class TelemetryImportService
     /// <summary>
     /// Initializes a new instance of the <see cref="TelemetryImportService"/> class.
     /// </summary>
-    /// <param name="telemetryRepository">The telemetry repository.</param>
+    /// <param name="telemetryRepositoryWriter">The telemetry repository writer.</param>
     /// <param name="options">The dashboard options.</param>
     /// <param name="logger">The logger.</param>
-    public TelemetryImportService(TelemetryRepository telemetryRepository, IOptionsMonitor<DashboardOptions> options, ILogger<TelemetryImportService> logger)
+    /// <param name="activitySource">The dashboard activity source.</param>
+    public TelemetryImportService(
+        ITelemetryRepositoryWriter telemetryRepositoryWriter,
+        IOptionsMonitor<DashboardOptions> options,
+        ILogger<TelemetryImportService> logger,
+        DashboardActivitySource activitySource)
     {
-        _telemetryRepository = telemetryRepository;
+        _telemetryRepositoryWriter = telemetryRepositoryWriter;
         _options = options;
         _logger = logger;
+        _activitySource = activitySource.ActivitySource;
     }
 
     /// <summary>
@@ -49,6 +57,8 @@ public sealed class TelemetryImportService
     /// <exception cref="InvalidOperationException">Thrown when import is disabled.</exception>
     public async Task ImportAsync(string fileName, Stream stream, CancellationToken cancellationToken)
     {
+        using var activity = _activitySource.StartActivity("Import telemetry data", ActivityKind.Internal);
+
         if (!IsImportEnabled)
         {
             throw new InvalidOperationException("Import is disabled.");
@@ -134,21 +144,21 @@ public sealed class TelemetryImportService
 
         if (telemetryData.ResourceLogs is { Length: > 0 })
         {
-            ImportLogs(telemetryData.ResourceLogs);
+            await ImportLogsAsync(telemetryData.ResourceLogs).ConfigureAwait(false);
             _logger.LogDebug("Imported logs from {FileName}", fileName);
             imported = true;
         }
 
         if (telemetryData.ResourceSpans is { Length: > 0 })
         {
-            ImportTraces(telemetryData.ResourceSpans);
+            await ImportTracesAsync(telemetryData.ResourceSpans).ConfigureAwait(false);
             _logger.LogDebug("Imported traces from {FileName}", fileName);
             imported = true;
         }
 
         if (telemetryData.ResourceMetrics is { Length: > 0 })
         {
-            ImportMetrics(telemetryData.ResourceMetrics);
+            await ImportMetricsAsync(telemetryData.ResourceMetrics).ConfigureAwait(false);
             _logger.LogDebug("Imported metrics from {FileName}", fileName);
             imported = true;
         }
@@ -159,35 +169,35 @@ public sealed class TelemetryImportService
         }
     }
 
-    private void ImportLogs(OtlpResourceLogsJson[] resourceLogs)
+    private async Task ImportLogsAsync(OtlpResourceLogsJson[] resourceLogs)
     {
         var exportRequest = new OtlpExportLogsServiceRequestJson { ResourceLogs = resourceLogs };
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        _telemetryRepository.AddLogs(addContext, protobufRequest.ResourceLogs);
+        await _telemetryRepositoryWriter.AddLogsAsync(addContext, protobufRequest.ResourceLogs).ConfigureAwait(false);
 
         _logger.LogDebug("Imported logs: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }
 
-    private void ImportTraces(OtlpResourceSpansJson[] resourceSpans)
+    private async Task ImportTracesAsync(OtlpResourceSpansJson[] resourceSpans)
     {
         var exportRequest = new OtlpExportTraceServiceRequestJson { ResourceSpans = resourceSpans };
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        _telemetryRepository.AddTraces(addContext, protobufRequest.ResourceSpans);
+        await _telemetryRepositoryWriter.AddTracesAsync(addContext, protobufRequest.ResourceSpans).ConfigureAwait(false);
 
         _logger.LogDebug("Imported traces: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }
 
-    private void ImportMetrics(OtlpResourceMetricsJson[] resourceMetrics)
+    private async Task ImportMetricsAsync(OtlpResourceMetricsJson[] resourceMetrics)
     {
         var exportRequest = new OtlpExportMetricsServiceRequestJson { ResourceMetrics = resourceMetrics };
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        _telemetryRepository.AddMetrics(addContext, protobufRequest.ResourceMetrics);
+        await _telemetryRepositoryWriter.AddMetricsAsync(addContext, protobufRequest.ResourceMetrics).ConfigureAwait(false);
 
         _logger.LogDebug("Imported metrics: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }

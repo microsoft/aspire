@@ -1,6 +1,7 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Diagnostics;
 using System.Globalization;
 using System.IO.Compression;
 using System.Text;
@@ -10,6 +11,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Otlp.Serialization;
+using Aspire.Tests;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.Logging.Abstractions;
 using OpenTelemetry.Proto.Logs.V1;
@@ -23,11 +25,29 @@ public sealed class TelemetryImportServiceTests
 {
     private static readonly DateTime s_testTime = new(2024, 1, 15, 10, 30, 0, DateTimeKind.Utc);
 
-    private static TelemetryImportService CreateImportService(TelemetryRepository repository, bool disableImport = false)
+    private static TelemetryImportService CreateImportService(InMemoryTelemetryRepository repository, bool disableImport = false, DashboardActivitySource? activitySource = null)
     {
         var options = new DashboardOptions { UI = new UIOptions { DisableImport = disableImport } };
         var optionsMonitor = new TestOptionsMonitor<DashboardOptions>(options);
-        return new TelemetryImportService(repository, optionsMonitor, NullLogger<TelemetryImportService>.Instance);
+        return new TelemetryImportService(repository, optionsMonitor, NullLogger<TelemetryImportService>.Instance, activitySource ?? new DashboardActivitySource());
+    }
+
+    [Fact]
+    public async Task ImportAsync_CreatesActivity()
+    {
+        var repository = CreateRepository();
+        using var activitySource = new DashboardActivitySource();
+        var service = CreateImportService(repository, activitySource: activitySource);
+        var activities = new List<Activity>();
+        using var listener = ActivityListenerHelper.Create(activitySource.ActivitySource, onActivityStopped: activities.Add);
+        var stream = new MemoryStream(Encoding.UTF8.GetBytes(CreateLogsJson("TestService", "instance-1", "Test log message")));
+
+        await service.ImportAsync("logs.json", stream, CancellationToken.None);
+
+        var activity = Assert.Single(activities);
+        Assert.Equal(DashboardActivitySource.ActivitySourceName, activity.Source.Name);
+        Assert.Equal("Import telemetry data", activity.OperationName);
+        Assert.Equal(ActivityKind.Internal, activity.Kind);
     }
 
     [Fact]
@@ -111,7 +131,7 @@ public sealed class TelemetryImportServiceTests
         var resources = repository.GetResources();
         Assert.Single(resources);
 
-        var instruments = resources[0].GetInstrumentsSummary();
+        var instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
         Assert.Single(instruments);
         Assert.Equal("test.metric", instruments[0].Name);
     }
@@ -269,7 +289,7 @@ public sealed class TelemetryImportServiceTests
         var sourceRepository = CreateRepository();
         var addContext = new AddContext();
 
-        sourceRepository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await sourceRepository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -320,7 +340,7 @@ public sealed class TelemetryImportServiceTests
         var sourceRepository = CreateRepository();
         var addContext = new AddContext();
 
-        sourceRepository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await sourceRepository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -381,7 +401,7 @@ public sealed class TelemetryImportServiceTests
         var sourceRepository = CreateRepository();
         var addContext = new AddContext();
 
-        sourceRepository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await sourceRepository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -401,7 +421,7 @@ public sealed class TelemetryImportServiceTests
         var traces = sourceRepository.GetTraces(GetTracesRequest.ForResourceKey(resources[0].ResourceKey));
 
         // Export
-        var exportedJson = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items, []);
+        var exportedJson = TelemetryExportService.ConvertTracesToOtlpJson(traces.PagedResult.Items);
         var jsonString = JsonSerializer.Serialize(exportedJson, OtlpJsonSerializerContext.DefaultOptions);
 
         // Import

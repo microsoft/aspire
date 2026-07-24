@@ -14,8 +14,10 @@ using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Utils;
 using Google.Protobuf.Collections;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
+using OpenTelemetry.Proto.Common.V1;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Resource.V1;
@@ -24,21 +26,22 @@ using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
-public sealed partial class TelemetryRepository : IDisposable
+public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, ITelemetryRepositoryWriter
 {
-    internal const int MaxResourceViewCount = 10_000;
-    internal const int MaxInstrumentCount = 10_000;
-    internal const int MaxScopeCount = 10_000;
-    internal const int MaxDimensionCount = 10_000;
-    internal const int MaxKnownAttributeValueCount = 10_000;
-    internal const int MaxKnownAttributeValuesPerKey = 10_000;
+    internal const int MaxResourceViewCount = TelemetryRepositoryLimits.MaxResourceViewCount;
+    internal const int MaxInstrumentCount = TelemetryRepositoryLimits.MaxInstrumentCount;
+    internal const int MaxScopeCount = TelemetryRepositoryLimits.MaxScopeCount;
+    internal const int MaxDimensionCount = TelemetryRepositoryLimits.MaxDimensionCount;
+    internal const int MaxKnownAttributeValueCount = TelemetryRepositoryLimits.MaxKnownAttributeValueCount;
+    internal const int MaxKnownAttributeValuesPerKey = TelemetryRepositoryLimits.MaxKnownAttributeValuesPerKey;
 
     private readonly PauseManager _pauseManager;
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
     private readonly ILogger _logger;
+    private bool _isReadOnly;
 
     private readonly object _lock = new();
-    internal TimeSpan _subscriptionMinExecuteInterval = TimeSpan.FromMilliseconds(100);
+    internal TimeSpan _subscriptionMinExecuteInterval = CallbackThrottler.DefaultMinExecuteInterval;
 
     private readonly List<Subscription> _resourceSubscriptions = new();
     private readonly List<Subscription> _logSubscriptions = new();
@@ -50,7 +53,7 @@ public sealed partial class TelemetryRepository : IDisposable
     private List<SpanWatcher>? _spanWatchers;
     private List<LogWatcher>? _logWatchers;
 
-    private readonly ConcurrentDictionary<ResourceKey, OtlpResource> _resources = new();
+    private readonly ConcurrentDictionary<ResourceKey, ResourceEntry> _resources = new();
 
     private readonly ReaderWriterLockSlim _logsLock = new();
     // Bounded by MaxScopeCount. Cleared when all logs are cleared.
@@ -72,6 +75,8 @@ public sealed partial class TelemetryRepository : IDisposable
     private readonly List<IDisposable> _peerResolverSubscriptions = new();
     internal readonly OtlpContext _otlpContext;
 
+    public bool IsReadOnly => _isReadOnly;
+
     public bool HasDisplayedMaxLogLimitMessage { get; set; }
     public Message? MaxLogLimitMessage { get; set; }
 
@@ -82,9 +87,19 @@ public sealed partial class TelemetryRepository : IDisposable
     internal List<OtlpSpanLink> SpanLinks => _spanLinks;
     internal List<Subscription> TracesSubscriptions => _tracesSubscriptions;
 
-    public TelemetryRepository(ILoggerFactory loggerFactory, IOptions<DashboardOptions> dashboardOptions, PauseManager pauseManager, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+    internal void MakeReadOnly() => _isReadOnly = true;
+
+    private void ThrowIfReadOnly()
     {
-        _logger = loggerFactory.CreateLogger(typeof(TelemetryRepository));
+        if (_isReadOnly)
+        {
+            throw new InvalidOperationException("Historical telemetry is read-only.");
+        }
+    }
+
+    public InMemoryTelemetryRepository(ILoggerFactory loggerFactory, IOptions<DashboardOptions> dashboardOptions, PauseManager pauseManager, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+    {
+        _logger = loggerFactory.CreateLogger(typeof(InMemoryTelemetryRepository));
         _otlpContext = new OtlpContext
         {
             Logger = _logger,
@@ -126,7 +141,7 @@ public sealed partial class TelemetryRepository : IDisposable
 
     private List<OtlpResource> GetResourcesCore(bool includeUninstrumentedPeers, string? name)
     {
-        IEnumerable<OtlpResource> results = _resources.Values;
+        IEnumerable<OtlpResource> results = _resources.Values.Select(entry => entry.Resource);
         if (!includeUninstrumentedPeers)
         {
             results = results.Where(a => !a.UninstrumentedPeer);
@@ -146,7 +161,7 @@ public sealed partial class TelemetryRepository : IDisposable
         {
             if (kvp.Key.EqualsCompositeName(compositeName))
             {
-                return kvp.Value;
+                return kvp.Value.Resource;
             }
         }
 
@@ -160,8 +175,7 @@ public sealed partial class TelemetryRepository : IDisposable
             throw new InvalidOperationException($"{nameof(ResourceKey)} must have an instance ID.");
         }
 
-        _resources.TryGetValue(key, out var resource);
-        return resource;
+        return _resources.TryGetValue(key, out var entry) ? entry.Resource : null;
     }
 
     public List<OtlpResource> GetResources(ResourceKey key, bool includeUninstrumentedPeers = false)
@@ -180,6 +194,20 @@ public sealed partial class TelemetryRepository : IDisposable
         return [resource];
     }
 
+    private List<ResourceEntry> GetResourceEntries(ResourceKey key, bool includeUninstrumentedPeers = false)
+    {
+        IEnumerable<ResourceEntry> entries = key.InstanceId is null
+            ? _resources.Values.Where(entry => string.Equals(entry.Resource.ResourceName, key.Name, StringComparisons.ResourceName))
+            : _resources.TryGetValue(key, out var entry) ? [entry] : [];
+
+        if (!includeUninstrumentedPeers)
+        {
+            entries = entries.Where(entry => !entry.Resource.UninstrumentedPeer);
+        }
+
+        return entries.ToList();
+    }
+
     public Dictionary<ResourceKey, int> GetResourceUnviewedErrorLogsCount()
     {
         _logsLock.EnterReadLock();
@@ -194,7 +222,7 @@ public sealed partial class TelemetryRepository : IDisposable
         }
     }
 
-    internal void MarkViewedErrorLogs(ResourceKey? key)
+    public void MarkViewedErrorLogs(ResourceKey? key)
     {
         _logsLock.EnterWriteLock();
 
@@ -226,28 +254,30 @@ public sealed partial class TelemetryRepository : IDisposable
         }
     }
 
-    private OtlpResourceView GetOrAddResourceView(Resource resource)
+    private OtlpResourceView GetOrAddResourceView(Resource resource) => GetOrAddResourceView(resource, out _);
+
+    private OtlpResourceView GetOrAddResourceView(Resource resource, out ResourceEntry resourceEntry)
     {
         ArgumentNullException.ThrowIfNull(resource);
 
         var key = resource.GetResourceKey();
 
-        var (otlpResource, isNew) = GetOrAddResource(key, uninstrumentedPeer: false);
+        (resourceEntry, var isNew) = GetOrAddResourceEntry(key, uninstrumentedPeer: false);
         if (isNew)
         {
             RaiseSubscriptionChanged(_resourceSubscriptions);
         }
 
-        return otlpResource.GetView(resource.Attributes);
+        return resourceEntry.Resource.GetView(resource.Attributes);
     }
 
-    private (OtlpResource Resource, bool IsNew) GetOrAddResource(ResourceKey key, bool uninstrumentedPeer)
+    private (ResourceEntry Entry, bool IsNew) GetOrAddResourceEntry(ResourceKey key, bool uninstrumentedPeer)
     {
         // Fast path.
-        if (_resources.TryGetValue(key, out var resource))
+        if (_resources.TryGetValue(key, out var entry))
         {
-            resource.SetUninstrumentedPeer(uninstrumentedPeer);
-            return (Resource: resource, IsNew: false);
+            entry.Resource.SetUninstrumentedPeer(uninstrumentedPeer);
+            return (Entry: entry, IsNew: false);
         }
 
         // Check resource limit before adding a new resource.
@@ -261,20 +291,20 @@ public sealed partial class TelemetryRepository : IDisposable
         // Slower get or add path.
         // This GetOrAdd allocates a closure, so we avoid it if possible.
         var newResource = false;
-        resource = _resources.GetOrAdd(key, _ =>
+        entry = _resources.GetOrAdd(key, _ =>
         {
             newResource = true;
-            return new OtlpResource(key.Name, key.InstanceId, uninstrumentedPeer, _otlpContext);
+            return new ResourceEntry(new OtlpResource(key.Name, key.InstanceId, uninstrumentedPeer, _otlpContext));
         });
         if (!newResource)
         {
-            resource.SetUninstrumentedPeer(uninstrumentedPeer);
+            entry.Resource.SetUninstrumentedPeer(uninstrumentedPeer);
         }
         else
         {
             _logger.LogTrace("New resource added: {ResourceKey}", key);
         }
-        return (Resource: resource, IsNew: newResource);
+        return (Entry: entry, IsNew: newResource);
     }
 
     public Subscription OnNewResources(Func<Task> callback)
@@ -306,7 +336,7 @@ public sealed partial class TelemetryRepository : IDisposable
             {
                 subscriptions.Remove(subscription!);
             }
-        }, ExecutionContext.Capture(), this);
+        }, ExecutionContext.Capture(), _logger, _subscriptionMinExecuteInterval);
 
         lock (_lock)
         {
@@ -327,12 +357,14 @@ public sealed partial class TelemetryRepository : IDisposable
         }
     }
 
-    public void AddLogs(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
+    public Task AddLogsAsync(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
     {
+        ThrowIfReadOnly();
+
         if (_pauseManager.AreStructuredLogsPaused(out _))
         {
             _logger.LogTrace("{Count} incoming structured log(s) ignored because of an active pause.", resourceLogs.Count);
-            return;
+            return Task.CompletedTask;
         }
 
         foreach (var rl in resourceLogs)
@@ -354,6 +386,7 @@ public sealed partial class TelemetryRepository : IDisposable
         }
 
         RaiseSubscriptionChanged(_logSubscriptions);
+        return Task.CompletedTask;
     }
 
     public void AddLogsCore(AddContext context, OtlpResourceView resourceView, RepeatedField<ScopeLogs> scopeLogs)
@@ -482,6 +515,31 @@ public sealed partial class TelemetryRepository : IDisposable
         {
             _logsLock.ExitReadLock();
         }
+    }
+
+    public PagedResult<LogSummary> GetLogSummaries(GetLogsContext context)
+    {
+        var result = GetLogs(context);
+        return new PagedResult<LogSummary>
+        {
+            Items = result.Items.Select(log => new LogSummary
+            {
+                InternalId = log.InternalId,
+                TimeStamp = log.TimeStamp,
+                Severity = log.Severity,
+                Message = log.Message,
+                SpanId = log.SpanId,
+                TraceId = log.TraceId,
+                ScopeName = log.Scope.Name,
+                EventName = OtlpHelpers.GetEventName(log),
+                Resource = log.ResourceView.Resource,
+                ExceptionText = OtlpLogEntry.GetExceptionText(log),
+                HasGenAI = global::Aspire.Dashboard.Model.GenAI.GenAIHelpers.HasGenAIAttribute(log.Attributes) ||
+                    GetSpan(log.TraceId, log.SpanId) is { } span && global::Aspire.Dashboard.Model.GenAI.GenAIHelpers.HasGenAIAttribute(span.Attributes)
+            }).ToList(),
+            TotalItemCount = result.TotalItemCount,
+            IsFull = result.IsFull
+        };
     }
 
     public OtlpLogEntry? GetLog(long logId)
@@ -711,6 +769,36 @@ public sealed partial class TelemetryRepository : IDisposable
         {
             _tracesLock.ExitReadLock();
         }
+    }
+
+    public GetTraceSummariesResponse GetTraceSummaries(GetTracesRequest context)
+    {
+        var result = GetTraces(context);
+        return new GetTraceSummariesResponse
+        {
+            PagedResult = new PagedResult<TraceSummary>
+            {
+                Items = result.PagedResult.Items.Select(trace => new TraceSummary
+                {
+                    TraceId = trace.TraceId,
+                    FullName = trace.FullName,
+                    StartTime = trace.FirstSpan.StartTime,
+                    Duration = trace.Duration,
+                    RootResource = trace.RootOrFirstSpan.Source.Resource,
+                    Resources = TraceHelpers.GetOrderedResources(trace).Select(resource => new TraceResourceSummary
+                    {
+                        Resource = resource.Resource,
+                        TotalSpans = resource.TotalSpans,
+                        ErroredSpans = resource.ErroredSpans
+                    }).ToList(),
+                    HasError = trace.Spans.Any(span => span.Status == OtlpSpanStatusCode.Error),
+                    HasGenAI = trace.Spans.Any(span => global::Aspire.Dashboard.Model.GenAI.GenAIHelpers.HasGenAIAttribute(span.Attributes))
+                }).ToList(),
+                TotalItemCount = result.PagedResult.TotalItemCount,
+                IsFull = result.PagedResult.IsFull
+            },
+            MaxDuration = result.MaxDuration
+        };
     }
 
     public GetSpansResponse GetSpans(GetSpansRequest context)
@@ -1309,8 +1397,10 @@ public sealed partial class TelemetryRepository : IDisposable
     /// Clears selected telemetry signals for specified resources.
     /// </summary>
     /// <param name="selectedResources">Dictionary mapping resource names to the data types to clear.</param>
-    public void ClearSelectedSignals(Dictionary<string, HashSet<AspireDataType>> selectedResources)
+    public Task ClearSelectedSignalsAsync(Dictionary<string, HashSet<AspireDataType>> selectedResources)
     {
+        ThrowIfReadOnly();
+
         var allOtlpResources = GetResources();
 
         foreach (var otlpResource in allOtlpResources)
@@ -1353,10 +1443,20 @@ public sealed partial class TelemetryRepository : IDisposable
             // Always remove everything if the resource is being removed.
             return dataTypes.Contains(dataType) || dataTypes.Contains(AspireDataType.Resource);
         }
+
+        return Task.CompletedTask;
     }
 
-    public void ClearTraces(ResourceKey? resourceKey = null)
+    public Task ClearTracesAsync(ResourceKey? resourceKey = null)
     {
+        ClearTraces(resourceKey);
+        return Task.CompletedTask;
+    }
+
+    private void ClearTraces(ResourceKey? resourceKey)
+    {
+        ThrowIfReadOnly();
+
         List<OtlpResource>? resources = null;
         if (resourceKey.HasValue)
         {
@@ -1376,7 +1476,7 @@ public sealed partial class TelemetryRepository : IDisposable
 
                 foreach (var resource in _resources.Values)
                 {
-                    SetResourceHasTraces(resource, false);
+                    SetResourceHasTraces(resource.Resource, false);
                 }
             }
             else
@@ -1417,8 +1517,16 @@ public sealed partial class TelemetryRepository : IDisposable
         RaiseSubscriptionChanged(_tracesSubscriptions);
     }
 
-    public void ClearStructuredLogs(ResourceKey? resourceKey = null)
+    public Task ClearStructuredLogsAsync(ResourceKey? resourceKey = null)
     {
+        ClearStructuredLogs(resourceKey);
+        return Task.CompletedTask;
+    }
+
+    private void ClearStructuredLogs(ResourceKey? resourceKey)
+    {
+        ThrowIfReadOnly();
+
         List<OtlpResource>? resources = null;
         if (resourceKey.HasValue)
         {
@@ -1438,7 +1546,7 @@ public sealed partial class TelemetryRepository : IDisposable
 
                 foreach (var resource in _resources.Values)
                 {
-                    SetResourceHasLogs(resource, false);
+                    SetResourceHasLogs(resource.Resource, false);
                 }
 
                 _resourceUnviewedErrorLogs.Clear();
@@ -1479,22 +1587,39 @@ public sealed partial class TelemetryRepository : IDisposable
         }
     }
 
-    public void ClearMetrics(ResourceKey? resourceKey = null)
+    public Task ClearMetricsAsync(ResourceKey? resourceKey = null)
     {
-        List<OtlpResource> resources;
+        ClearMetrics(resourceKey);
+        return Task.CompletedTask;
+    }
+
+    private void ClearMetrics(ResourceKey? resourceKey)
+    {
+        ThrowIfReadOnly();
+
+        List<ResourceEntry> resources;
         if (resourceKey.HasValue)
         {
-            resources = GetResources(resourceKey.Value);
+            resources = GetResourceEntries(resourceKey.Value);
         }
         else
         {
             resources = _resources.Values.ToList();
         }
 
-        foreach (var resource in resources)
+        foreach (var entry in resources)
         {
-            resource.ClearMetrics();
-            SetResourceHasMetrics(resource, false);
+            entry.MetricsLock.EnterWriteLock();
+            try
+            {
+                entry.Instruments.Clear();
+                entry.Meters.Clear();
+            }
+            finally
+            {
+                entry.MetricsLock.ExitWriteLock();
+            }
+            SetResourceHasMetrics(entry.Resource, false);
         }
 
         RaiseSubscriptionChanged(_metricsSubscriptions);
@@ -1516,9 +1641,13 @@ public sealed partial class TelemetryRepository : IDisposable
 
     public Dictionary<string, int> GetLogsFieldValues(string attributeName)
     {
-        _logsLock.EnterReadLock();
-
         var attributesValues = new Dictionary<string, int>(StringComparers.OtlpAttribute);
+        if (attributeName == KnownStructuredLogFields.TimestampField)
+        {
+            return attributesValues;
+        }
+
+        _logsLock.EnterReadLock();
 
         try
         {
@@ -1634,41 +1763,205 @@ public sealed partial class TelemetryRepository : IDisposable
         }
     }
 
-    public void AddMetrics(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
+    public Task AddMetricsAsync(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
     {
+        ThrowIfReadOnly();
+
         if (_pauseManager.AreMetricsPaused(out _))
         {
             _logger.LogTrace("{Count} incoming metric(s) ignored because of an active pause.", resourceMetrics.Count);
-            return;
+            return Task.CompletedTask;
         }
 
         foreach (var rm in resourceMetrics)
         {
             OtlpResourceView resourceView;
+            ResourceEntry resourceEntry;
             try
             {
-                resourceView = GetOrAddResourceView(rm.Resource);
+                resourceView = GetOrAddResourceView(rm.Resource, out resourceEntry);
             }
             catch (Exception ex)
             {
-                context.FailureCount += rm.ScopeMetrics.Sum(sm => sm.Metrics.Sum(OtlpResource.GetMetricDataPointCount));
+                context.FailureCount += rm.ScopeMetrics.Sum(sm => sm.Metrics.Sum(OtlpHelpers.GetMetricDataPointCount));
                 _otlpContext.Logger.LogInformation(ex, "Error adding resource.");
                 continue;
             }
 
-            resourceView.Resource.AddMetrics(context, rm.ScopeMetrics);
+            AddMetrics(resourceEntry, resourceView, context, rm.ScopeMetrics);
             SetResourceHasMetrics(resourceView.Resource, true);
         }
 
         RaiseSubscriptionChanged(_metricsSubscriptions);
+        return Task.CompletedTask;
     }
 
-    public void AddTraces(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
+    private void AddMetrics(ResourceEntry resourceEntry, OtlpResourceView resourceView, AddContext context, RepeatedField<ScopeMetrics> scopeMetrics)
     {
+        resourceEntry.MetricsLock.EnterWriteLock();
+
+        try
+        {
+            // Temporary attributes array to use when adding metrics to the instruments.
+            KeyValuePair<string, string>[]? tempAttributes = null;
+
+            foreach (var scopeMetric in scopeMetrics)
+            {
+                if (!OtlpHelpers.TryGetOrAddScope(resourceEntry.Meters, scopeMetric.Scope, _otlpContext, TelemetryType.Metrics, out var scope))
+                {
+                    context.FailureCount += scopeMetric.Metrics.Sum(OtlpHelpers.GetMetricDataPointCount);
+                    continue;
+                }
+
+                foreach (var metric in scopeMetric.Metrics)
+                {
+                    InMemoryInstrument instrument;
+
+                    try
+                    {
+                        if (string.IsNullOrEmpty(metric.Name))
+                        {
+                            throw new InvalidOperationException("Instrument name is required.");
+                        }
+
+                        var instrumentKey = new OtlpInstrumentKey(scope.Name, metric.Name);
+                        if (resourceEntry.Instruments.TryGetValue(instrumentKey, out var existingInstrument))
+                        {
+                            instrument = existingInstrument;
+                        }
+                        else if (resourceEntry.Instruments.Count < TelemetryRepositoryLimits.MaxInstrumentCount)
+                        {
+                            instrument = new InMemoryInstrument
+                            {
+                                Summary = new OtlpInstrumentSummary
+                                {
+                                    Name = metric.Name,
+                                    Description = metric.Description,
+                                    Unit = metric.Unit,
+                                    Type = MapMetricType(metric.DataCase),
+                                    AggregationTemporality = MapAggregationTemporality(metric),
+                                    Parent = scope,
+                                    ResourceView = resourceView
+                                },
+                                Context = _otlpContext
+                            };
+
+                            resourceEntry.Instruments.Add(instrumentKey, instrument);
+                            _otlpContext.Logger.LogTrace("Added metric instrument '{InstrumentName}' for scope '{ScopeName}'.", instrument.Summary.Name, scope.Name);
+                        }
+                        else
+                        {
+                            throw new InvalidOperationException($"Instrument limit of {TelemetryRepositoryLimits.MaxInstrumentCount} reached. Instrument '{metric.Name}' will not be added.");
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        // If we can't create the instrument then all data points for it are failures.
+                        context.FailureCount += OtlpHelpers.GetMetricDataPointCount(metric);
+                        _otlpContext.Logger.LogInformation(ex, "Error adding metric instrument {MetricName}.", metric.Name);
+                        continue;
+                    }
+
+                    AddMetrics(instrument, metric, context, ref tempAttributes);
+                }
+            }
+        }
+        finally
+        {
+            resourceEntry.MetricsLock.ExitWriteLock();
+        }
+    }
+
+    private void AddMetrics(InMemoryInstrument instrument, Metric metric, AddContext context, ref KeyValuePair<string, string>[]? tempAttributes)
+    {
+        switch (metric.DataCase)
+        {
+            case Metric.DataOneofCase.Gauge:
+                foreach (var dataPoint in metric.Gauge.DataPoints)
+                {
+                    try
+                    {
+                        instrument.FindScope(dataPoint.Attributes, ref tempAttributes).AddPointValue(dataPoint, _otlpContext);
+                        context.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        context.FailureCount++;
+                        _otlpContext.Logger.LogInformation(ex, "Error adding metric.");
+                    }
+                }
+                break;
+            case Metric.DataOneofCase.Sum:
+                foreach (var dataPoint in metric.Sum.DataPoints)
+                {
+                    try
+                    {
+                        instrument.FindScope(dataPoint.Attributes, ref tempAttributes).AddPointValue(dataPoint, _otlpContext);
+                        context.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        context.FailureCount++;
+                        _otlpContext.Logger.LogInformation(ex, "Error adding metric.");
+                    }
+                }
+                break;
+            case Metric.DataOneofCase.Histogram:
+                foreach (var dataPoint in metric.Histogram.DataPoints)
+                {
+                    try
+                    {
+                        instrument.FindScope(dataPoint.Attributes, ref tempAttributes).AddHistogramValue(dataPoint, _otlpContext);
+                        context.SuccessCount++;
+                    }
+                    catch (Exception ex)
+                    {
+                        context.FailureCount++;
+                        _otlpContext.Logger.LogInformation(ex, "Error adding metric.");
+                    }
+                }
+                break;
+            case Metric.DataOneofCase.Summary:
+                context.FailureCount += metric.Summary.DataPoints.Count;
+                _otlpContext.Logger.LogInformation("Error adding summary metrics. Summary is not supported.");
+                break;
+            case Metric.DataOneofCase.ExponentialHistogram:
+                context.FailureCount += metric.ExponentialHistogram.DataPoints.Count;
+                _otlpContext.Logger.LogInformation("Error adding exponential histogram metrics. Exponential histogram is not supported.");
+                break;
+        }
+    }
+
+    private static OtlpInstrumentType MapMetricType(Metric.DataOneofCase data)
+    {
+        return data switch
+        {
+            Metric.DataOneofCase.Gauge => OtlpInstrumentType.Gauge,
+            Metric.DataOneofCase.Sum => OtlpInstrumentType.Sum,
+            Metric.DataOneofCase.Histogram => OtlpInstrumentType.Histogram,
+            _ => OtlpInstrumentType.Unsupported
+        };
+    }
+
+    private static OtlpAggregationTemporality MapAggregationTemporality(Metric metric)
+    {
+        return metric.DataCase switch
+        {
+            Metric.DataOneofCase.Sum => (OtlpAggregationTemporality)metric.Sum.AggregationTemporality,
+            Metric.DataOneofCase.Histogram => (OtlpAggregationTemporality)metric.Histogram.AggregationTemporality,
+            Metric.DataOneofCase.ExponentialHistogram => (OtlpAggregationTemporality)metric.ExponentialHistogram.AggregationTemporality,
+            _ => OtlpAggregationTemporality.Unspecified
+        };
+    }
+
+    public Task AddTracesAsync(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
+    {
+        ThrowIfReadOnly();
+
         if (_pauseManager.AreTracesPaused(out _))
         {
             _logger.LogTrace("{Count} incoming trace(s) ignored because of an active pause.", resourceSpans.Count);
-            return;
+            return Task.CompletedTask;
         }
 
         foreach (var rs in resourceSpans)
@@ -1690,6 +1983,7 @@ public sealed partial class TelemetryRepository : IDisposable
         }
 
         RaiseSubscriptionChanged(_tracesSubscriptions);
+        return Task.CompletedTask;
     }
 
     private static OtlpSpanStatusCode ConvertStatus(Status? status)
@@ -1705,18 +1999,7 @@ public sealed partial class TelemetryRepository : IDisposable
 
     internal static OtlpSpanKind ConvertSpanKind(SpanKind? kind)
     {
-        return kind switch
-        {
-            // Unspecified to Internal is intentional.
-            // "Implementations MAY assume SpanKind to be INTERNAL when receiving UNSPECIFIED."
-            SpanKind.Unspecified => OtlpSpanKind.Internal,
-            SpanKind.Internal => OtlpSpanKind.Internal,
-            SpanKind.Client => OtlpSpanKind.Client,
-            SpanKind.Server => OtlpSpanKind.Server,
-            SpanKind.Producer => OtlpSpanKind.Producer,
-            SpanKind.Consumer => OtlpSpanKind.Consumer,
-            _ => OtlpSpanKind.Unspecified
-        };
+        return OtlpHelpers.ConvertSpanKind(kind);
     }
 
     internal void AddTracesCore(AddContext context, OtlpResourceView resourceView, RepeatedField<ScopeSpans> scopeSpans)
@@ -1776,7 +2059,7 @@ public sealed partial class TelemetryRepository : IDisposable
                             linkedSpan?.BackLinks.Add(link);
                         }
 
-                        // Traces are sorted by the start time of the first span.
+                        // Traces are sorted by the start time of the first span, then by trace ID.
                         // We need to ensure traces are in the correct order if we're:
                         // 1. Adding a new trace.
                         // 2. The first span of the trace has changed.
@@ -1786,7 +2069,7 @@ public sealed partial class TelemetryRepository : IDisposable
                             for (var i = _traces.Count - 1; i >= 0; i--)
                             {
                                 var currentTrace = _traces[i];
-                                if (trace.FirstSpan.StartTime > currentTrace.FirstSpan.StartTime)
+                                if (CompareTraceOrder(trace, currentTrace) > 0)
                                 {
                                     _traces.Insert(i + 1, trace);
                                     added = true;
@@ -1808,7 +2091,7 @@ public sealed partial class TelemetryRepository : IDisposable
                                 for (var i = index - 1; i >= 0; i--)
                                 {
                                     var currentTrace = _traces[i];
-                                    if (trace.FirstSpan.StartTime > currentTrace.FirstSpan.StartTime)
+                                    if (CompareTraceOrder(trace, currentTrace) > 0)
                                     {
                                         var insertPosition = i + 1;
                                         if (index != insertPosition)
@@ -1893,25 +2176,15 @@ public sealed partial class TelemetryRepository : IDisposable
         }
     }
 
+    private static int CompareTraceOrder(OtlpTrace left, OtlpTrace right)
+    {
+        var timestampComparison = left.FirstSpan.StartTime.CompareTo(right.FirstSpan.StartTime);
+        return timestampComparison != 0 ? timestampComparison : string.CompareOrdinal(left.TraceId, right.TraceId);
+    }
+
     public OtlpResource? GetPeerResource(OtlpSpan span)
     {
-        var peer = ResolveUninstrumentedPeerResource(span, _outgoingPeerResolvers);
-        if (peer == null)
-        {
-            return null;
-        }
-
-        try
-        {
-            var resourceKey = ResourceKey.Create(name: peer.DisplayName, instanceId: peer.Name);
-            var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
-            return resource;
-        }
-        catch (Exception ex)
-        {
-            _logger.LogInformation(ex, "Error adding peer resource.");
-            return null;
-        }
+        return span.UninstrumentedPeer;
     }
 
     private void CalculateTraceUninstrumentedPeers(OtlpTrace trace)
@@ -1921,11 +2194,11 @@ public sealed partial class TelemetryRepository : IDisposable
             // A span may indicate a call to another service but the service isn't instrumented.
             var hasPeerService = OtlpHelpers.GetPeerAddress(span.Attributes) != null;
             var hasUninstrumentedPeer = hasPeerService && span.Kind is OtlpSpanKind.Client or OtlpSpanKind.Producer && !span.GetChildSpans().Any();
-            var uninstrumentedPeer = hasUninstrumentedPeer ? ResolveUninstrumentedPeerResource(span, _outgoingPeerResolvers) : null;
+            var uninstrumentedPeerKey = hasUninstrumentedPeer ? ResolveUninstrumentedPeerResourceKey(span, _outgoingPeerResolvers) : null;
 
-            if (uninstrumentedPeer != null)
+            if (uninstrumentedPeerKey is { } peerKey)
             {
-                if (span.UninstrumentedPeer?.ResourceKey.EqualsCompositeName(uninstrumentedPeer.Name) ?? false)
+                if (span.UninstrumentedPeer?.ResourceKey == peerKey)
                 {
                     // Already the correct value. No changes needed.
                     continue;
@@ -1933,9 +2206,8 @@ public sealed partial class TelemetryRepository : IDisposable
 
                 try
                 {
-                    var resourceKey = ResourceKey.Create(name: uninstrumentedPeer.DisplayName, instanceId: uninstrumentedPeer.Name);
-                    var (resource, _) = GetOrAddResource(resourceKey, uninstrumentedPeer: true);
-                    trace.SetSpanUninstrumentedPeer(span, resource);
+                    var (resource, _) = GetOrAddResourceEntry(peerKey, uninstrumentedPeer: true);
+                    trace.SetSpanUninstrumentedPeer(span, resource.Resource);
                 }
                 catch (Exception ex)
                 {
@@ -1949,14 +2221,23 @@ public sealed partial class TelemetryRepository : IDisposable
         }
     }
 
-    private static ResourceViewModel? ResolveUninstrumentedPeerResource(OtlpSpan span, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+    private static ResourceKey? ResolveUninstrumentedPeerResourceKey(OtlpSpan span, IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
     {
-        // Attempt to resolve uninstrumented peer to a friendly name from the span.
         foreach (var resolver in outgoingPeerResolvers)
         {
-            if (resolver.TryResolvePeer(span.Attributes, out _, out var matchedResourced))
+            if (!resolver.TryResolvePeer(span.Attributes, out var name, out var matchedResource))
             {
-                return matchedResourced;
+                continue;
+            }
+
+            if (matchedResource is not null)
+            {
+                return ResourceKey.Create(matchedResource.DisplayName, matchedResource.Name);
+            }
+
+            if (!string.IsNullOrEmpty(name))
+            {
+                return new ResourceKey(name, InstanceId: null);
             }
         }
 
@@ -2074,87 +2355,132 @@ public sealed partial class TelemetryRepository : IDisposable
         return newSpan;
     }
 
-    public List<OtlpInstrumentSummary> GetInstrumentsSummaries(ResourceKey key)
+    public List<OtlpInstrumentSummary> GetInstrumentSummaries(ResourceKey key)
     {
-        var resources = GetResources(key);
-        if (resources.Count == 0)
+        var resources = GetResourceEntries(key);
+        var summaries = new List<OtlpInstrumentSummary>();
+        foreach (var resource in resources)
         {
-            return new List<OtlpInstrumentSummary>();
-        }
-        else if (resources.Count == 1)
-        {
-            return resources[0].GetInstrumentsSummary();
-        }
-        else
-        {
-            var allResourceSummaries = resources
-                .SelectMany(a => a.GetInstrumentsSummary())
-                .DistinctBy(s => s.GetKey())
-                .ToList();
-
-            return allResourceSummaries;
+            resource.MetricsLock.EnterReadLock();
+            try
+            {
+                summaries.AddRange(resource.Instruments.Values.Select(instrument => instrument.Summary));
+            }
+            finally
+            {
+                resource.MetricsLock.ExitReadLock();
+            }
         }
 
+        return resources.Count > 1 ? summaries.DistinctBy(summary => summary.GetKey()).ToList() : summaries;
+    }
+
+    public OtlpInstrumentSummary? GetInstrumentSummary(ResourceKey resourceKey, string meterName, string instrumentName)
+    {
+        var instrumentKey = new OtlpInstrumentKey(meterName, instrumentName);
+        foreach (var resource in GetResourceEntries(resourceKey))
+        {
+            resource.MetricsLock.EnterReadLock();
+            try
+            {
+                if (resource.Instruments.TryGetValue(instrumentKey, out var instrument))
+                {
+                    return instrument.Summary;
+                }
+            }
+            finally
+            {
+                resource.MetricsLock.ExitReadLock();
+            }
+        }
+
+        return null;
     }
 
     public OtlpInstrumentData? GetInstrument(GetInstrumentRequest request)
     {
-        var resources = GetResources(request.ResourceKey);
+        var resources = GetResourceEntries(request.ResourceKey);
+        var instrumentKey = new OtlpInstrumentKey(request.MeterName, request.InstrumentName);
         var instruments = resources
-            .Select(a => a.GetInstrument(request.MeterName, request.InstrumentName, request.StartTime, request.EndTime))
-            .OfType<OtlpInstrument>()
+            .Select(resource => CloneInstrument(resource, instrumentKey, request.StartTime, request.EndTime))
+            .OfType<InMemoryInstrument>()
             .ToList();
 
         if (instruments.Count == 0)
         {
             return null;
         }
-        else if (instruments.Count == 1)
+
+        var allKnownAttributes = new Dictionary<string, List<string?>>();
+        var matchingDimensions = new List<DimensionScope>();
+        var hasOverflow = false;
+        foreach (var instrument in instruments)
         {
-            var instrument = instruments[0];
-            return new OtlpInstrumentData
+            foreach (var knownAttributeValues in instrument.KnownAttributeValues)
             {
-                Summary = instrument.Summary,
-                KnownAttributeValues = instrument.KnownAttributeValues,
-                Dimensions = instrument.Dimensions.Values.ToList(),
-                HasOverflow = instrument.HasOverflow
-            };
-        }
-        else
-        {
-            var allDimensions = new List<DimensionScope>();
-            var allKnownAttributes = new Dictionary<string, List<string?>>();
-            var hasOverflow = false;
-
-            foreach (var instrument in instruments)
-            {
-                allDimensions.AddRange(instrument.Dimensions.Values);
-
-                foreach (var knownAttributeValues in instrument.KnownAttributeValues)
-                {
-                    ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(allKnownAttributes, knownAttributeValues.Key, out _);
-                    // Adds to dictionary if not present.
-                    if (values != null)
-                    {
-                        values = values.Union(knownAttributeValues.Value).ToList();
-                    }
-                    else
-                    {
-                        values = knownAttributeValues.Value.ToList();
-                    }
-                }
-
-                hasOverflow = hasOverflow || instrument.HasOverflow;
+                ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(allKnownAttributes, knownAttributeValues.Key, out _);
+                values = values is not null
+                    ? values.Union(knownAttributeValues.Value).ToList()
+                    : knownAttributeValues.Value.ToList();
             }
 
-            return new OtlpInstrumentData
-            {
-                Summary = instruments[0].Summary,
-                Dimensions = allDimensions,
-                KnownAttributeValues = allKnownAttributes,
-                HasOverflow = hasOverflow
-            };
+            matchingDimensions.AddRange(instrument.Dimensions.Values.Where(dimension => MatchesDimensionFilters(dimension.Attributes, request.DimensionFilters)));
+            hasOverflow = hasOverflow || instrument.HasOverflow;
         }
+
+        return new OtlpInstrumentData
+        {
+            Summary = instruments[0].Summary,
+            Dimensions = matchingDimensions,
+            KnownAttributeValues = allKnownAttributes,
+            HasOverflow = hasOverflow
+        };
+    }
+
+    private static InMemoryInstrument? CloneInstrument(ResourceEntry resource, OtlpInstrumentKey key, DateTime? valuesStart, DateTime? valuesEnd)
+    {
+        resource.MetricsLock.EnterReadLock();
+        try
+        {
+            return resource.Instruments.TryGetValue(key, out var instrument)
+                ? InMemoryInstrument.Clone(instrument, valuesStart, valuesEnd)
+                : null;
+        }
+        finally
+        {
+            resource.MetricsLock.ExitReadLock();
+        }
+    }
+
+    private static bool MatchesDimensionFilters(
+        KeyValuePair<string, string>[] attributes,
+        IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters)
+    {
+        foreach (var (key, values) in dimensionFilters)
+        {
+            if (!values.Contains(OtlpHelpers.GetValue(attributes, key)))
+            {
+                return false;
+            }
+        }
+        return true;
+    }
+
+    public DateTime? GetInstrumentLatestEndTime(ResourceKey resourceKey, string meterName, string instrumentName)
+    {
+        var instrument = GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resourceKey,
+            MeterName = meterName,
+            InstrumentName = instrumentName,
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+
+        return instrument?.Dimensions
+            .SelectMany(dimension => dimension.Values)
+            .Select(value => (DateTime?)value.End)
+            .Max();
     }
 
     private Task OnPeerChanged()
@@ -2192,5 +2518,150 @@ public sealed partial class TelemetryRepository : IDisposable
         }
 
         DisposeWatchers();
+    }
+
+    [DebuggerDisplay("Name = {Summary.Name}, Unit = {Summary.Unit}, Type = {Summary.Type}")]
+    private sealed class InMemoryInstrument
+    {
+        public required OtlpInstrumentSummary Summary { get; init; }
+        public required OtlpContext Context { get; init; }
+
+        public Dictionary<ReadOnlyMemory<KeyValuePair<string, string>>, DimensionScope> Dimensions { get; } = new(ScopeAttributesComparer.Instance);
+        public Dictionary<string, List<string?>> KnownAttributeValues { get; } = [];
+        public bool HasOverflow { get; set; }
+
+        public DimensionScope FindScope(RepeatedField<KeyValue> attributes, ref KeyValuePair<string, string>[]? tempAttributes)
+        {
+            // See https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/sdk.md#overflow-attribute
+            // Inspect attributes before they're merged with parent attributes. "otel.metric.overflow" should be the only attribute.
+            if (!HasOverflow && attributes.Count == 1 && attributes[0].Key == "otel.metric.overflow" && attributes[0].Value.GetString() == "true")
+            {
+                HasOverflow = true;
+            }
+
+            // We want to find the dimension scope that matches the attributes, but we don't want to allocate.
+            // Copy values to a temporary reusable array.
+            //
+            // A meter can have attributes. Merge these with the data point attributes when creating a dimension.
+            OtlpHelpers.CopyKeyValuePairs(attributes, Summary.Parent.Attributes, Context, out var copyCount, ref tempAttributes);
+            Array.Sort(tempAttributes, 0, copyCount, KeyValuePairComparer.Instance);
+
+            var comparableAttributes = tempAttributes.AsMemory(0, copyCount);
+
+            // Can't use CollectionsMarshal.GetValueRefOrAddDefault here because comparableAttributes is a view over mutable data.
+            // Need to add dimensions using durable attributes instance after scope is created.
+            if (!Dimensions.TryGetValue(comparableAttributes, out var dimension))
+            {
+                if (Dimensions.Count >= TelemetryRepositoryLimits.MaxDimensionCount)
+                {
+                    throw new InvalidOperationException($"Dimension limit of {TelemetryRepositoryLimits.MaxDimensionCount} reached for instrument '{Summary.Name}'.");
+                }
+
+                dimension = CreateDimensionScope(comparableAttributes);
+                Dimensions.Add(dimension.Attributes, dimension);
+            }
+            return dimension;
+        }
+
+        private DimensionScope CreateDimensionScope(Memory<KeyValuePair<string, string>> comparableAttributes)
+        {
+            var isFirst = Dimensions.Count == 0;
+            var durableAttributes = comparableAttributes.ToArray();
+            var dimension = new DimensionScope(Context.Options.MaxMetricsCount, durableAttributes);
+
+            var keys = KnownAttributeValues.Keys.Union(durableAttributes.Select(attribute => attribute.Key)).Distinct();
+            foreach (var key in keys)
+            {
+                ref var values = ref CollectionsMarshal.GetValueRefOrAddDefault(KnownAttributeValues, key, out var existed);
+                // Adds to dictionary if not present.
+                if (values is null)
+                {
+                    if (!existed && KnownAttributeValues.Count > TelemetryRepositoryLimits.MaxKnownAttributeValueCount)
+                    {
+                        // Over limit. Remove the default entry that GetValueRefOrAddDefault added.
+                        KnownAttributeValues.Remove(key);
+                        continue;
+                    }
+
+                    values = [];
+
+                    // If the key is new and there are already dimensions, add an empty value because there are dimensions without this key.
+                    if (!isFirst)
+                    {
+                        TryAddValue(values, null, TelemetryRepositoryLimits.MaxKnownAttributeValuesPerKey);
+                    }
+                }
+
+                var currentDimensionValue = OtlpHelpers.GetValue(durableAttributes, key);
+                TryAddValue(values, currentDimensionValue, TelemetryRepositoryLimits.MaxKnownAttributeValuesPerKey);
+            }
+
+            return dimension;
+
+            static void TryAddValue(List<string?> values, string? value, int maxValues)
+            {
+                if (values.Count < maxValues && !values.Contains(value))
+                {
+                    values.Add(value);
+                }
+            }
+        }
+
+        public static InMemoryInstrument Clone(InMemoryInstrument instrument, DateTime? valuesStart, DateTime? valuesEnd)
+        {
+            var newInstrument = new InMemoryInstrument
+            {
+                Summary = instrument.Summary,
+                Context = instrument.Context,
+                HasOverflow = instrument.HasOverflow
+            };
+
+            foreach (var item in instrument.KnownAttributeValues)
+            {
+                newInstrument.KnownAttributeValues.Add(item.Key, item.Value.ToList());
+            }
+            foreach (var item in instrument.Dimensions)
+            {
+                newInstrument.Dimensions.Add(item.Key, DimensionScope.Clone(item.Value, valuesStart, valuesEnd));
+            }
+
+            return newInstrument;
+        }
+
+        private sealed class ScopeAttributesComparer : IEqualityComparer<ReadOnlyMemory<KeyValuePair<string, string>>>
+        {
+            public static readonly ScopeAttributesComparer Instance = new();
+
+            public bool Equals(ReadOnlyMemory<KeyValuePair<string, string>> x, ReadOnlyMemory<KeyValuePair<string, string>> y) =>
+                x.Span.SequenceEqual(y.Span);
+
+            public int GetHashCode([DisallowNull] ReadOnlyMemory<KeyValuePair<string, string>> obj)
+            {
+                var hashcode = new HashCode();
+                foreach (var pair in obj.Span)
+                {
+                    hashcode.Add(pair.Key);
+                    hashcode.Add(pair.Value);
+                }
+                return hashcode.ToHashCode();
+            }
+        }
+
+        private sealed class KeyValuePairComparer : IComparer<KeyValuePair<string, string>>
+        {
+            public static readonly KeyValuePairComparer Instance = new();
+
+            public int Compare(KeyValuePair<string, string> x, KeyValuePair<string, string> y) =>
+                string.Compare(x.Key, y.Key, StringComparison.Ordinal);
+        }
+    }
+
+    private sealed record ResourceEntry(OtlpResource Resource)
+    {
+        public ReaderWriterLockSlim MetricsLock { get; } = new();
+        // Bounded by MaxScopeCount. Cleared when metrics are cleared.
+        public Dictionary<string, OtlpScope> Meters { get; } = [];
+        // Bounded by MaxInstrumentCount. Cleared when metrics are cleared.
+        public Dictionary<OtlpInstrumentKey, InMemoryInstrument> Instruments { get; } = [];
     }
 }

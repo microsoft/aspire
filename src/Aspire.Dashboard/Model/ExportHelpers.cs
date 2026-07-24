@@ -21,10 +21,10 @@ internal static class ExportHelpers
     /// <summary>
     /// Gets a span as a JSON export result, including associated log entries.
     /// </summary>
-    public static ExportResult GetSpanAsJson(OtlpSpan span, TelemetryRepository telemetryRepository, IOutgoingPeerResolver[] outgoingPeerResolvers)
+    public static ExportResult GetSpanAsJson(OtlpSpan span, ITelemetryRepository telemetryRepository)
     {
         var logs = telemetryRepository.GetLogsForSpan(span.TraceId, span.SpanId);
-        var json = TelemetryExportService.ConvertSpanToJson(span, outgoingPeerResolvers, logs);
+        var json = TelemetryExportService.ConvertSpanToJson(span, logs);
         var fileName = $"span-{OtlpHelpers.ToShortenedId(span.SpanId)}.json";
         return new ExportResult(json, fileName);
     }
@@ -44,10 +44,10 @@ internal static class ExportHelpers
     /// <summary>
     /// Gets all spans in a trace as a JSON export result, including associated log entries.
     /// </summary>
-    public static ExportResult GetTraceAsJson(OtlpTrace trace, TelemetryRepository telemetryRepository, IOutgoingPeerResolver[] outgoingPeerResolvers)
+    public static ExportResult GetTraceAsJson(OtlpTrace trace, ITelemetryRepository telemetryRepository)
     {
         var logs = telemetryRepository.GetLogsForTrace(trace.TraceId);
-        var json = TelemetryExportService.ConvertTraceToJson(trace, outgoingPeerResolvers, logs);
+        var json = TelemetryExportService.ConvertTraceToJson(trace, logs);
         var fileName = $"trace-{OtlpHelpers.ToShortenedId(trace.TraceId)}.json";
         return new ExportResult(json, fileName);
     }

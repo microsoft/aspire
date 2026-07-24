@@ -10,16 +10,16 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class ResourceTests
+public abstract class ResourceTests : TelemetryRepositoryTestBase
 {
     [Fact]
-    public void GetResourceByCompositeName()
+    public async Task GetResourceByCompositeName()
     {
         // Arrange
         var repository = CreateRepository();
 
-        AddResource(repository, "app2");
-        AddResource(repository, "app1");
+        await AddResource(repository, "app2");
+        await AddResource(repository, "app1");
 
         // Act 1
         var resources = repository.GetResources();
@@ -55,14 +55,14 @@ public class ResourceTests
     }
 
     [Fact]
-    public void GetResources_WithNameAndNoKey()
+    public async Task GetResources_WithNameAndNoKey()
     {
         // Arrange
         var repository = CreateRepository();
 
-        AddResource(repository, "app2");
-        AddResource(repository, "app1", instanceId: "123");
-        AddResource(repository, "app1", instanceId: "456");
+        await AddResource(repository, "app2");
+        await AddResource(repository, "app1", instanceId: "123");
+        await AddResource(repository, "app1", instanceId: "456");
 
         // Act 1
         var resources1 = repository.GetResources(new ResourceKey("app1", InstanceId: null));
@@ -93,14 +93,14 @@ public class ResourceTests
     }
 
     [Fact]
-    public void GetResources_Order()
+    public async Task GetResources_Order()
     {
         // Arrange
         var repository = CreateRepository();
 
-        AddResource(repository, "app2");
-        AddResource(repository, "app1", instanceId: "def");
-        AddResource(repository, "app1", instanceId: "abc");
+        await AddResource(repository, "app2");
+        await AddResource(repository, "app1", instanceId: "def");
+        await AddResource(repository, "app1", instanceId: "abc");
 
         // Act
         var resources = repository.GetResources();
@@ -125,15 +125,15 @@ public class ResourceTests
     }
 
     [Fact]
-    public void GetResourceName_GuidInstanceId_Shorten()
+    public async Task GetResourceName_GuidInstanceId_Shorten()
     {
         // Arrange
         var repository = CreateRepository();
         var guid1 = "19572b19-d1c0-4a51-98b4-fcc2658f73d3";
         var guid2 = "f66e2b1e-f420-4a22-a067-8dd2f6fcda86";
 
-        AddResource(repository, "app1", guid1);
-        AddResource(repository, "app1", guid2);
+        await AddResource(repository, "app1", guid1);
+        await AddResource(repository, "app1", guid2);
 
         // Act
         var resources = repository.GetResources();
@@ -147,7 +147,7 @@ public class ResourceTests
     }
 
     [Fact]
-    public void GetResourceName_Version7GuidInstanceId_ShortenedNamesDiffer()
+    public async Task GetResourceName_Version7GuidInstanceId_ShortenedNamesDiffer()
     {
         // Arrange
         var repository = CreateRepository();
@@ -156,8 +156,8 @@ public class ResourceTests
         var guid1 = "01890a5d-ac96-774b-bcce-b302099a8057";
         var guid2 = "01890a5d-ac96-7768-a3e2-34c4a0e9f6ad";
 
-        AddResource(repository, "app1", guid1);
-        AddResource(repository, "app1", guid2);
+        await AddResource(repository, "app1", guid1);
+        await AddResource(repository, "app1", guid2);
 
         // Act
         var resources = repository.GetResources();
@@ -173,10 +173,10 @@ public class ResourceTests
         Assert.Equal("app1-a0e9f6ad", instance2Name);
     }
 
-    private static void AddResource(TelemetryRepository repository, string name, string? instanceId = null)
+    private static async Task AddResource(ITelemetryRepository repository, string name, string? instanceId = null)
     {
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -186,4 +186,14 @@ public class ResourceTests
 
         Assert.Equal(0, addContext.FailureCount);
     }
+}
+
+public sealed class InMemoryResourceTests : ResourceTests
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteResourceTests : ResourceTests
+{
+    protected override bool UseSqlite => true;
 }

@@ -32,7 +32,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     private const int RootSpanDepth = 1;
 
     private readonly CancellationTokenSource _cts = new();
-    private readonly List<IDisposable> _peerChangesSubscriptions = new();
     private OtlpTrace? _trace;
     private Subscription? _tracesSubscription;
     private int _maxDepth;
@@ -64,10 +63,9 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
 
-    [Inject]
-    public required IEnumerable<IOutgoingPeerResolver> OutgoingPeerResolvers { get; init; }
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required BrowserTimeProvider TimeProvider { get; init; }
@@ -109,16 +107,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
             new GridColumn(Name: TicksColumn, DesktopWidth: "12fr", MobileWidth: "12fr"),
             new GridColumn(Name: ActionsColumn, DesktopWidth: "100px", MobileWidth: null)
         ];
-
-        foreach (var resolver in OutgoingPeerResolvers)
-        {
-            _peerChangesSubscriptions.Add(resolver.OnPeerChanges(async () =>
-            {
-                UpdateDetailViewData();
-                await InvokeAsync(StateHasChanged);
-                await InvokeAsync(_dataGrid.SafeRefreshDataAsync);
-            }));
-        }
 
         UpdateTraceActionsMenu();
 
@@ -275,10 +263,24 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         // Get logs for the trace. Note that there isn't a limit on this query so all logs are returned.
         // There is a limit on the number of logs stored by the dashboard so this is implicitly limited.
         // If there are performance issues with displaying all logs then consider adding a limit to this query.
-        var result = TelemetryRepository.GetLogsForTrace(_trace.TraceId);
+        var result = TelemetryRepository.GetLogSummaries(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownStructuredLogFields.TraceIdField,
+                    Condition = FilterCondition.Equals,
+                    Value = _trace.TraceId
+                }
+            ]
+        }).Items;
 
         Logger.LogInformation("Trace '{TraceId}' has {SpanCount} spans.", _trace.TraceId, _trace.Spans.Count);
-        PageViewModel.SpanWaterfallViewModels = SpanWaterfallViewModel.Create(_trace, result, new SpanWaterfallViewModel.TraceDetailState(OutgoingPeerResolvers.ToArray(), _collapsedSpanIds, _resources));
+        PageViewModel.SpanWaterfallViewModels = SpanWaterfallViewModel.Create(_trace, result, new SpanWaterfallViewModel.TraceDetailState(_collapsedSpanIds, _resources));
         _maxDepth = PageViewModel.SpanWaterfallViewModels.Max(s => s.Depth);
 
         var apps = new HashSet<OtlpResource>();
@@ -488,7 +490,7 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
 
     private string GetResourceName(OtlpResourceView app) => OtlpResource.GetResourceName(app, _resources);
 
-    private async Task ToggleSpanLogsAsync(OtlpLogEntry logEntry)
+    private async Task ToggleSpanLogsAsync(LogSummary logEntry)
     {
         if (PageViewModel.SelectedData?.LogEntryViewModel?.LogEntry.InternalId == logEntry.InternalId)
         {
@@ -496,10 +498,13 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
         }
         else
         {
-            PageViewModel.SelectedData = new TraceDetailSelectedDataViewModel
+            if (TelemetryRepository.GetLog(logEntry.InternalId) is { } fullLogEntry)
             {
-                LogEntryViewModel = new StructureLogsDetailsViewModel { LogEntry = logEntry }
-            };
+                PageViewModel.SelectedData = new TraceDetailSelectedDataViewModel
+                {
+                    LogEntryViewModel = new StructureLogsDetailsViewModel { LogEntry = fullLogEntry }
+                };
+            }
         }
     }
 
@@ -647,10 +652,6 @@ public partial class TraceDetail : ComponentBase, IComponentWithTelemetry, IDisp
     public void Dispose()
     {
         _cts.Cancel();
-        foreach (var subscription in _peerChangesSubscriptions)
-        {
-            subscription.Dispose();
-        }
         _tracesSubscription?.Dispose();
         TelemetryContext.Dispose();
     }

@@ -15,14 +15,10 @@ namespace Aspire.Dashboard.Api;
 /// <summary>
 /// Handles telemetry API requests, returning data in OTLP JSON format.
 /// </summary>
-internal sealed class TelemetryApiService(
-    TelemetryRepository telemetryRepository,
-    IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
+internal sealed class TelemetryApiService(ITelemetryRepository telemetryRepository)
 {
     private const int DefaultLimit = 200;
     private const int DefaultTraceLimit = 100;
-
-    private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
 
     /// <summary>
     /// Gets spans in OTLP JSON format.
@@ -67,7 +63,7 @@ internal sealed class TelemetryApiService(
             spans = spans.Skip(spans.Count - effectiveLimit).ToList();
         }
 
-        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
+        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
@@ -96,6 +92,15 @@ internal sealed class TelemetryApiService(
 
         // Convert structured search qualifiers into TelemetryFilter objects for repository-level filtering
         var traceFilters = new List<TelemetryFilter>();
+        if (hasError is not null)
+        {
+            traceFilters.Add(new FieldTelemetryFilter
+            {
+                Field = KnownTraceFields.StatusField,
+                Value = nameof(OtlpSpanStatusCode.Error),
+                Condition = hasError.Value ? FilterCondition.Equals : FilterCondition.NotEqual
+            });
+        }
         var searchTextFragments = ParseAndApplySearchFilters(search, traceFilters, AddSpanFiltersFromQualifiers, key => ResolveSpanFieldKey(key) is not null);
 
         // Get traces for all resource keys (empty list means no filter / all resources)
@@ -107,21 +112,8 @@ internal sealed class TelemetryApiService(
             Filters = traceFilters,
             TextFragments = searchTextFragments
         });
-        var allTraces = result.PagedResult.Items;
-
-        var traces = allTraces;
-
-        // Filter traces by hasError
-        if (hasError == true)
-        {
-            traces = traces.Where(t => t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
-        }
-        else if (hasError == false)
-        {
-            traces = traces.Where(t => !t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error)).ToList();
-        }
-
-        var totalCount = traces.Count;
+        var traces = result.PagedResult.Items;
+        var totalCount = result.PagedResult.TotalItemCount;
 
         // Apply limit (take from end for most recent)
         if (traces.Count > effectiveLimit)
@@ -132,7 +124,7 @@ internal sealed class TelemetryApiService(
         var spans = traces.SelectMany(t => t.Spans).ToList();
         var returnedCount = traces.Count;
 
-        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
+        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
@@ -156,7 +148,7 @@ internal sealed class TelemetryApiService(
 
         var spans = trace.Spans.ToList();
 
-        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans, _outgoingPeerResolvers);
+        var otlpData = TelemetryExportService.ConvertSpansToOtlpJson(spans);
 
         return new TelemetryApiResponse
         {
@@ -275,7 +267,7 @@ internal sealed class TelemetryApiService(
         await foreach (var span in telemetryRepository.WatchSpansAsync(watchRequest, cancellationToken).ConfigureAwait(false))
         {
             // Use compact JSON for NDJSON streaming (no indentation)
-            yield return TelemetryExportService.ConvertSpanToJson(span, _outgoingPeerResolvers, logs: null, indent: false);
+            yield return TelemetryExportService.ConvertSpanToJson(span, logs: null, indent: false);
         }
     }
 

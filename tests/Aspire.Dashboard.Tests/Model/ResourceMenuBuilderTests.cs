@@ -6,6 +6,7 @@ using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
+using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 using Aspire.Tests.Shared;
 using Aspire.Tests.Shared.DashboardModel;
@@ -35,15 +36,19 @@ public sealed class ResourceMenuBuilderTests
             dimensionManager);
     }
 
-    private ResourceMenuBuilder CreateResourceMenuBuilder(TelemetryRepository repository)
+    private ResourceMenuBuilder CreateResourceMenuBuilder(
+        InMemoryTelemetryRepository repository,
+        IDashboardClient? dashboardClient = null)
     {
+        dashboardClient ??= new TestDashboardClient();
         return new ResourceMenuBuilder(
             new TestNavigationManager(),
-            repository,
+            TestDashboardDataSource.Create(repository, dashboardClient),
             new TestStringLocalizer<ControlsStrings>(),
             new TestStringLocalizer<Resources.Resources>(),
             _iconResolver,
-            _dialogService);
+            _dialogService,
+            dashboardClient);
     }
 
     [Fact]
@@ -75,14 +80,14 @@ public sealed class ResourceMenuBuilderTests
     }
 
     [Fact]
-    public void AddMenuItems_UninstrumentedPeer_TraceItem()
+    public async Task AddMenuItems_UninstrumentedPeer_TraceItem()
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: attributes => (resource.Name, resource));
         var repository = TelemetryTestHelpers.CreateRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -127,13 +132,13 @@ public sealed class ResourceMenuBuilderTests
     }
 
     [Fact]
-    public void AddMenuItems_HasTelemetry_TelemetryItems()
+    public async Task AddMenuItems_HasTelemetry_TelemetryItems()
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
         var repository = TelemetryTestHelpers.CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -287,6 +292,47 @@ public sealed class ResourceMenuBuilderTests
             e => Assert.True(e.IsDivider),
             e => Assert.Equal("Start", e.Text),
             e => Assert.Equal("Stop", e.Text));
+    }
+
+    [Fact]
+    public void AddMenuItems_ReadOnly_DisablesResourceCommands()
+    {
+        var command = new CommandViewModel(
+            CommandViewModel.StartCommand,
+            CommandViewModelState.Enabled,
+            "Start",
+            "Start the resource.",
+            confirmationMessage: "",
+            argumentInputs: [],
+            isHighlighted: true,
+            iconName: string.Empty,
+            iconVariant: IconVariant.Regular);
+        var resource = ModelTestHelpers.CreateResource(commands: [command]);
+        var repository = TelemetryTestHelpers.CreateRepository();
+        var resourceMenuBuilder = CreateResourceMenuBuilder(
+            repository,
+            new TestDashboardClient(isReadOnly: true));
+
+        var menuItems = new List<MenuButtonItem>();
+        resourceMenuBuilder.AddMenuItems(
+            menuItems,
+            resource,
+            new Dictionary<string, ResourceViewModel>(StringComparer.OrdinalIgnoreCase) { [resource.Name] = resource },
+            EventCallback.Empty,
+            EventCallback<CommandViewModel>.Empty,
+            (_, _) => false,
+            showViewDetails: false,
+            showConsoleLogsItem: false,
+            showUrls: false);
+
+        Assert.Collection(menuItems,
+            e => Assert.Equal("Localized:ViewJson", e.Text),
+            e => Assert.True(e.IsDivider),
+            e =>
+            {
+                Assert.Equal("Start", e.Text);
+                Assert.True(e.IsDisabled);
+            });
     }
 
     [Fact]

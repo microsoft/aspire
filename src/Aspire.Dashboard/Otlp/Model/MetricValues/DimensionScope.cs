@@ -81,8 +81,13 @@ public class DimensionScope
     {
         var start = OtlpHelpers.UnixNanoSecondsToDateTime(h.StartTimeUnixNano);
         var end = OtlpHelpers.UnixNanoSecondsToDateTime(h.TimeUnixNano);
+        OtlpHelpers.ValidateHistogramDataPoint(h);
 
         var lastHistogramValue = _lastValue as HistogramValue;
+        if (lastHistogramValue is not null && lastHistogramValue.Values.Length != h.BucketCounts.Count)
+        {
+            throw new InvalidOperationException("Histogram data point bucket count length changed.");
+        }
         if (lastHistogramValue is not null && lastHistogramValue.Count == h.Count)
         {
             lastHistogramValue.End = end;
@@ -105,11 +110,6 @@ public class DimensionScope
             }
 
             var bucketCounts = h.BucketCounts.ToArray();
-            if (bucketCounts.Length > 0 && explicitBounds.Length == 0)
-            {
-                throw new InvalidOperationException("Histogram data point has bucket counts without any explicit bounds.");
-            }
-
             _lastValue = new HistogramValue(bucketCounts, h.Sum, h.Count, start, end, explicitBounds);
             AddExemplars(_lastValue, h.Exemplars, context);
             _values.Add(_lastValue);

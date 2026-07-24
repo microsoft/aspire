@@ -11,7 +11,9 @@ using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf;
 using Google.Protobuf.Collections;
 using OpenTelemetry.Proto.Common.V1;
+using OpenTelemetry.Proto.Metrics.V1;
 using OpenTelemetry.Proto.Resource.V1;
+using static OpenTelemetry.Proto.Trace.V1.Span.Types;
 
 namespace Aspire.Dashboard.Otlp.Model;
 
@@ -24,6 +26,43 @@ public static partial class OtlpHelpers
     };
 
     // Note: ShortenedIdLength is defined in the shared OtlpHelpers.cs
+
+    internal static OtlpSpanKind ConvertSpanKind(SpanKind? kind)
+    {
+        return kind switch
+        {
+            // Unspecified to Internal is intentional.
+            // "Implementations MAY assume SpanKind to be INTERNAL when receiving UNSPECIFIED."
+            SpanKind.Unspecified => OtlpSpanKind.Internal,
+            SpanKind.Internal => OtlpSpanKind.Internal,
+            SpanKind.Client => OtlpSpanKind.Client,
+            SpanKind.Server => OtlpSpanKind.Server,
+            SpanKind.Producer => OtlpSpanKind.Producer,
+            SpanKind.Consumer => OtlpSpanKind.Consumer,
+            _ => OtlpSpanKind.Unspecified
+        };
+    }
+
+    internal static int GetMetricDataPointCount(Metric metric)
+    {
+        return metric.DataCase switch
+        {
+            Metric.DataOneofCase.Gauge => metric.Gauge.DataPoints.Count,
+            Metric.DataOneofCase.Sum => metric.Sum.DataPoints.Count,
+            Metric.DataOneofCase.Histogram => metric.Histogram.DataPoints.Count,
+            Metric.DataOneofCase.Summary => metric.Summary.DataPoints.Count,
+            Metric.DataOneofCase.ExponentialHistogram => metric.ExponentialHistogram.DataPoints.Count,
+            _ => 0,
+        };
+    }
+
+    internal static void ValidateHistogramDataPoint(HistogramDataPoint point)
+    {
+        if (point.BucketCounts.Count > 0 && point.ExplicitBounds.Count == 0)
+        {
+            throw new InvalidOperationException("Histogram data point has bucket counts without any explicit bounds.");
+        }
+    }
 
     public static ResourceKey GetResourceKey(this Resource resource)
     {
@@ -471,9 +510,9 @@ public static partial class OtlpHelpers
                 return true;
             }
 
-            if (scopes.Count >= TelemetryRepository.MaxScopeCount)
+            if (scopes.Count >= TelemetryRepositoryLimits.MaxScopeCount)
             {
-                throw new InvalidOperationException($"Scope limit of {TelemetryRepository.MaxScopeCount} reached for {telemetryType}. Scope '{name}' will not be added.");
+                throw new InvalidOperationException($"Scope limit of {TelemetryRepositoryLimits.MaxScopeCount} reached for {telemetryType}. Scope '{name}' will not be added.");
             }
 
             s = (scope != null)

@@ -8,6 +8,7 @@ using Aspire.Dashboard.Otlp.Storage;
 using Google.Protobuf.Collections;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Metrics.V1;
@@ -17,12 +18,12 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public class TelemetryRepositoryTests
+public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void AddData_WhilePaused_IsDiscarded()
+    public async Task AddData_WhilePaused_IsDiscarded()
     {
         // Arrange
         var pauseManager = new PauseManager();
@@ -33,9 +34,9 @@ public class TelemetryRepositoryTests
         pauseManager.SetStructuredLogsPaused(true);
         pauseManager.SetMetricsPaused(true);
         pauseManager.SetTracesPaused(true);
-        AddLog();
-        AddMetric();
-        AddTrace();
+        await AddLog();
+        await AddMetric();
+        await AddTrace();
 
         var resourceKey = new ResourceKey("resource", "resource");
         Assert.Empty(repository.GetLogs(new GetLogsContext { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).Items);
@@ -46,19 +47,19 @@ public class TelemetryRepositoryTests
         pauseManager.SetMetricsPaused(false);
         pauseManager.SetTracesPaused(false);
 
-        AddLog();
-        AddMetric();
-        AddTrace();
+        await AddLog();
+        await AddMetric();
+        await AddTrace();
         Assert.Single(repository.GetLogs(new GetLogsContext { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).Items);
         var resource = repository.GetResource(resourceKey);
         Assert.NotNull(resource);
-        Assert.NotEmpty(resource.GetInstrumentsSummary());
+        Assert.NotEmpty(repository.GetInstrumentSummaries(resource.ResourceKey));
         Assert.Single(repository.GetTraces(new GetTracesRequest { ResourceKeys = [resourceKey], Count = 100, Filters = [], StartIndex = 0 }).PagedResult.Items);
 
-        void AddLog()
+        async Task AddLog()
         {
             var addContext = new AddContext();
-            repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+            await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
             {
                 new ResourceLogs
                 {
@@ -78,10 +79,10 @@ public class TelemetryRepositoryTests
             });
         }
 
-        void AddMetric()
+        async Task AddMetric()
         {
             var addContext = new AddContext();
-            repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>()
+            await repository.AsWriter().AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>()
             {
                 new ResourceMetrics
                 {
@@ -112,10 +113,10 @@ public class TelemetryRepositoryTests
             });
         }
 
-        void AddTrace()
+        async Task AddTrace()
         {
             var addContext = new AddContext();
-            repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+            await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
             {
                 new ResourceSpans
                 {
@@ -141,7 +142,6 @@ public class TelemetryRepositoryTests
     public void Subscription_MultipleDisposes_UnsubscribeOnce()
     {
         // Arrange
-        var telemetryRepository = CreateRepository();
         var unsubscribeCallCount = 0;
 
         var subscription = new Subscription(
@@ -151,7 +151,8 @@ public class TelemetryRepositoryTests
             callback: () => Task.CompletedTask,
             unsubscribe: () => unsubscribeCallCount++,
             executionContext: null,
-            telemetryRepository: telemetryRepository);
+            logger: NullLogger.Instance,
+            minExecuteInterval: TimeSpan.FromMilliseconds(100));
 
         // Act
         subscription.Dispose();
@@ -180,8 +181,6 @@ public class TelemetryRepositoryTests
             b.SetMinimumLevel(LogLevel.Trace);
         });
 
-        var telemetryRepository = CreateRepository(loggerFactory: factory);
-
         var subscription = new Subscription(
             name: "Test",
             resourceKey: null,
@@ -189,7 +188,8 @@ public class TelemetryRepositoryTests
             callback: () => Task.CompletedTask,
             unsubscribe: () => { },
             executionContext: null,
-            telemetryRepository: telemetryRepository);
+            logger: factory.CreateLogger("Test"),
+            minExecuteInterval: TimeSpan.FromMilliseconds(100));
 
         subscription.Dispose();
 
@@ -201,13 +201,13 @@ public class TelemetryRepositoryTests
     }
 
     [Fact]
-    public void ClearSelectedSignals_ClearsSelectedDataTypes_ForSpecificResources()
+    public async Task ClearSelectedSignals_ClearsSelectedDataTypes_ForSpecificResources()
     {
         // Arrange
         var repository = CreateRepository();
 
-        AddTestData(repository, "resource1", "123");
-        AddTestData(repository, "resource2", "456");
+        await AddTestData(repository, "resource1", "123");
+        await AddTestData(repository, "resource2", "456");
 
         // Verify unviewed error logs exist before clearing
         var unviewedBefore = repository.GetResourceUnviewedErrorLogsCount();
@@ -221,7 +221,7 @@ public class TelemetryRepositoryTests
         {
             ["resource1-123"] = [AspireDataType.StructuredLogs]
         };
-        repository.ClearSelectedSignals(selectedResources);
+        await repository.AsWriter().ClearSelectedSignalsAsync(selectedResources);
 
         // Assert - resource1 unviewed error logs cleared
         var unviewedAfter = repository.GetResourceUnviewedErrorLogsCount();
@@ -237,7 +237,7 @@ public class TelemetryRepositoryTests
         var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Equal(2, traces.PagedResult.TotalItemCount);
 
-        var resource1Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource1", "123"));
+        var resource1Metrics = repository.GetInstrumentSummaries(new ResourceKey("resource1", "123"));
         Assert.Single(resource1Metrics);
 
         // Assert - resource2 data is unaffected
@@ -249,26 +249,26 @@ public class TelemetryRepositoryTests
         var resource2Traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [resource2Key], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Single(resource2Traces.PagedResult.Items);
 
-        var resource2Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource2", "456"));
+        var resource2Metrics = repository.GetInstrumentSummaries(new ResourceKey("resource2", "456"));
         Assert.Single(resource2Metrics);
     }
 
     [Fact]
-    public void ClearSelectedSignals_OtherResourcesRemainUnaffected()
+    public async Task ClearSelectedSignals_OtherResourcesRemainUnaffected()
     {
         // Arrange
         var repository = CreateRepository();
 
-        AddTestData(repository, "resource1", "111");
-        AddTestData(repository, "resource2", "222");
-        AddTestData(repository, "resource3", "333");
+        await AddTestData(repository, "resource1", "111");
+        await AddTestData(repository, "resource2", "222");
+        await AddTestData(repository, "resource3", "333");
 
         // Act - Clear all data types for resource2 only
         var selectedResources = new Dictionary<string, HashSet<AspireDataType>>
         {
             ["resource2-222"] = [AspireDataType.StructuredLogs, AspireDataType.Traces, AspireDataType.Metrics, AspireDataType.Resource]
         };
-        repository.ClearSelectedSignals(selectedResources);
+        await repository.AsWriter().ClearSelectedSignalsAsync(selectedResources);
 
         // Assert - resource1 and resource3 data is unaffected
         var logs = repository.GetLogs(new GetLogsContext { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
@@ -280,10 +280,10 @@ public class TelemetryRepositoryTests
         var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Equal(2, traces.PagedResult.TotalItemCount);
 
-        var resource1Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource1", "111"));
+        var resource1Metrics = repository.GetInstrumentSummaries(new ResourceKey("resource1", "111"));
         Assert.Single(resource1Metrics);
 
-        var resource3Metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource3", "333"));
+        var resource3Metrics = repository.GetInstrumentSummaries(new ResourceKey("resource3", "333"));
         Assert.Single(resource3Metrics);
 
         // Assert - resource2 is removed from the repository since all data types were cleared
@@ -292,12 +292,12 @@ public class TelemetryRepositoryTests
     }
 
     [Fact]
-    public void ClearSelectedSignals_ResourceRemovedWhenAllDataTypesCleared()
+    public async Task ClearSelectedSignals_ResourceRemovedWhenAllDataTypesCleared()
     {
         // Arrange
         var repository = CreateRepository();
 
-        AddTestData(repository, "resource1", "123");
+        await AddTestData(repository, "resource1", "123");
 
         // Verify resource exists before clearing
         var resourceBefore = repository.GetResource(new ResourceKey("resource1", "123"));
@@ -308,7 +308,7 @@ public class TelemetryRepositoryTests
         {
             ["resource1-123"] = [AspireDataType.StructuredLogs, AspireDataType.Traces, AspireDataType.Metrics, AspireDataType.Resource]
         };
-        repository.ClearSelectedSignals(selectedResources);
+        await repository.AsWriter().ClearSelectedSignalsAsync(selectedResources);
 
         // Assert - Resource is removed from the repository
         var resourceAfter = repository.GetResource(new ResourceKey("resource1", "123"));
@@ -327,19 +327,19 @@ public class TelemetryRepositoryTests
     }
 
     [Fact]
-    public void ClearSelectedSignals_PartialClear_ResourceNotRemoved()
+    public async Task ClearSelectedSignals_PartialClear_ResourceNotRemoved()
     {
         // Arrange
         var repository = CreateRepository();
 
-        AddTestData(repository, "resource1", "123");
+        await AddTestData(repository, "resource1", "123");
 
         // Act - Clear only logs and traces for resource1 (not metrics)
         var selectedResources = new Dictionary<string, HashSet<AspireDataType>>
         {
             ["resource1-123"] = [AspireDataType.StructuredLogs, AspireDataType.Traces]
         };
-        repository.ClearSelectedSignals(selectedResources);
+        await repository.AsWriter().ClearSelectedSignalsAsync(selectedResources);
 
         // Assert - Resource still exists because not all data types were cleared
         var resourceAfter = repository.GetResource(new ResourceKey("resource1", "123"));
@@ -352,7 +352,7 @@ public class TelemetryRepositoryTests
         var traces = repository.GetTraces(new GetTracesRequest { ResourceKeys = [], StartIndex = 0, Count = 10, Filters = [] });
         Assert.Empty(traces.PagedResult.Items);
 
-        var metrics = repository.GetInstrumentsSummaries(new ResourceKey("resource1", "123"));
+        var metrics = repository.GetInstrumentSummaries(new ResourceKey("resource1", "123"));
         Assert.Single(metrics);
     }
 
@@ -365,7 +365,7 @@ public class TelemetryRepositoryTests
         var repository = CreateRepository();
 
         // Add initial span
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -406,10 +406,10 @@ public class TelemetryRepositoryTests
         });
 
         // Wait for initial span to be received
-        await firstSpanReceived.Task;
+        await firstSpanReceived.Task.DefaultTimeout();
 
         // Add another span while watching
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -466,7 +466,7 @@ public class TelemetryRepositoryTests
         });
 
         // Wait for watcher to start
-        await watchStarted.Task;
+        await watchStarted.Task.DefaultTimeout();
 
         // Cancel the watch
         cts.Cancel();
@@ -483,7 +483,7 @@ public class TelemetryRepositoryTests
         var repository = CreateRepository();
 
         // Add initial log
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -524,10 +524,10 @@ public class TelemetryRepositoryTests
         });
 
         // Wait for initial log to be received
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Add another log while watching
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -583,7 +583,7 @@ public class TelemetryRepositoryTests
         });
 
         // Wait for watcher to start
-        await watchStarted.Task;
+        await watchStarted.Task.DefaultTimeout();
 
         // Cancel the watch
         cts.Cancel();
@@ -600,7 +600,7 @@ public class TelemetryRepositoryTests
         var repository = CreateRepository();
 
         // Add spans with non-chronological start times across different traces
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -694,7 +694,7 @@ public class TelemetryRepositoryTests
         // Without explicit sorting, iterating trace-by-trace would yield:
         //   T=1 (trace1), T=8 (trace1), then T=3 (trace2), T=5 (trace2)
         // Correct chronological order is: T=1, T=3, T=5, T=8
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -769,7 +769,7 @@ public class TelemetryRepositoryTests
         var repository = CreateRepository();
 
         // Add spans for two different resources
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -825,13 +825,13 @@ public class TelemetryRepositoryTests
     }
 
     [Fact]
-    public void GetTraces_MultipleResourceKeys_ReturnsMatchingTracesOnly()
+    public async Task GetTraces_MultipleResourceKeys_ReturnsMatchingTracesOnly()
     {
         var repository = CreateRepository();
 
-        AddTestData(repository, "resource1", "inst1");
-        AddTestData(repository, "resource2", "inst2");
-        AddTestData(repository, "resource3", "inst3");
+        await AddTestData(repository, "resource1", "inst1");
+        await AddTestData(repository, "resource2", "inst2");
+        await AddTestData(repository, "resource3", "inst3");
 
         var key1 = new ResourceKey("resource1", "inst1");
         var key2 = new ResourceKey("resource2", "inst2");
@@ -841,18 +841,18 @@ public class TelemetryRepositoryTests
 
         // Assert - should return traces from both resource1 and resource2, but not resource3
         Assert.Collection(traces.PagedResult.Items,
-            t => AssertId("resource2-inst2", t.TraceId),
-            t => AssertId("resource1-inst1", t.TraceId));
+            t => AssertId("resource1-inst1", t.TraceId),
+            t => AssertId("resource2-inst2", t.TraceId));
     }
 
     [Fact]
-    public void GetSpans_MultipleResourceKeys_ReturnsMatchingSpansOnly()
+    public async Task GetSpans_MultipleResourceKeys_ReturnsMatchingSpansOnly()
     {
         var repository = CreateRepository();
 
-        AddTestData(repository, "service1", "inst1");
-        AddTestData(repository, "service2", "inst2");
-        AddTestData(repository, "service3", "inst3");
+        await AddTestData(repository, "service1", "inst1");
+        await AddTestData(repository, "service2", "inst2");
+        await AddTestData(repository, "service3", "inst3");
 
         // Act - query spans for service1 and service2 only
         var result = repository.GetSpans(new GetSpansRequest
@@ -865,8 +865,8 @@ public class TelemetryRepositoryTests
 
         // Assert - should return spans from service1 and service2, not service3
         Assert.Collection(result.PagedResult.Items,
-            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name),
-            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name));
+            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name),
+            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name));
     }
 
     [Fact]
@@ -874,9 +874,9 @@ public class TelemetryRepositoryTests
     {
         var repository = CreateRepository();
 
-        AddTestData(repository, "service1", "inst1");
-        AddTestData(repository, "service2", "inst2");
-        AddTestData(repository, "service3", "inst3");
+        await AddTestData(repository, "service1", "inst1");
+        await AddTestData(repository, "service2", "inst2");
+        await AddTestData(repository, "service3", "inst3");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         var receivedSpans = new List<OtlpSpan>();
@@ -896,8 +896,8 @@ public class TelemetryRepositoryTests
 
         // Assert - should receive spans from service1 and service2, not service3
         Assert.Collection(receivedSpans,
-            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name),
-            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name));
+            s => Assert.Equal("Test span. Id: service1-inst1-1", s.Name),
+            s => Assert.Equal("Test span. Id: service2-inst2-1", s.Name));
     }
 
     [Fact]
@@ -905,9 +905,9 @@ public class TelemetryRepositoryTests
     {
         var repository = CreateRepository();
 
-        AddTestData(repository, "service1", "inst1");
-        AddTestData(repository, "service2", "inst2");
-        AddTestData(repository, "service3", "inst3");
+        await AddTestData(repository, "service1", "inst1");
+        await AddTestData(repository, "service2", "inst2");
+        await AddTestData(repository, "service3", "inst3");
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(2));
         var receivedLogs = new List<OtlpLogEntry>();
@@ -949,7 +949,7 @@ public class TelemetryRepositoryTests
         };
 
         // Add an initial matching log so we know when watcher is ready
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -991,10 +991,10 @@ public class TelemetryRepositoryTests
         });
 
         // Wait for initial log to be received (proves watcher is registered)
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Add more logs - one matches filter, one doesn't
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1040,7 +1040,7 @@ public class TelemetryRepositoryTests
         };
 
         // Add an initial error log so we know when watcher is ready
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1082,10 +1082,10 @@ public class TelemetryRepositoryTests
         });
 
         // Wait for initial log to be received (proves watcher is registered)
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Add logs with different severity levels
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1122,7 +1122,7 @@ public class TelemetryRepositoryTests
         var repository = CreateRepository();
 
         // Add initial logs — one matches text fragments, one doesn't
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1169,10 +1169,10 @@ public class TelemetryRepositoryTests
         });
 
         // Wait for initial matching log to be received
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Add more logs — one matches both fragments, one matches only one
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1225,7 +1225,7 @@ public class TelemetryRepositoryTests
         };
 
         // Add a matching log
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1265,10 +1265,10 @@ public class TelemetryRepositoryTests
             }
         });
 
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Push a new matching log
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1322,7 +1322,7 @@ public class TelemetryRepositoryTests
         };
 
         // Add spans — one whose name contains "span1", one that doesn't
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -1362,10 +1362,10 @@ public class TelemetryRepositoryTests
             }
         });
 
-        await firstSpanReceived.Task;
+        await firstSpanReceived.Task.DefaultTimeout();
 
         // Push a new span that matches the enabled filter
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -1395,11 +1395,11 @@ public class TelemetryRepositoryTests
 
     #endregion
 
-    private static void AddTestData(TelemetryRepository repository, string resourceName, string instanceId)
+    private static async Task AddTestData(ITelemetryRepository repository, string resourceName, string instanceId)
     {
         var compositeName = $"{resourceName}-{instanceId}";
 
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1415,7 +1415,7 @@ public class TelemetryRepositoryTests
             }
         });
 
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1434,7 +1434,7 @@ public class TelemetryRepositoryTests
             }
         });
 
-        repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>()
+        await repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>()
         {
             new ResourceMetrics
             {
@@ -1453,4 +1453,14 @@ public class TelemetryRepositoryTests
             }
         });
     }
+}
+
+public sealed class InMemoryTelemetryRepositoryTests : TelemetryRepositoryTests
+{
+    protected override bool UseSqlite => false;
+}
+
+public sealed class SqliteTelemetryRepositoryTests : TelemetryRepositoryTests
+{
+    protected override bool UseSqlite => true;
 }

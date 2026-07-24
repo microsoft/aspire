@@ -1,12 +1,17 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using System.Web;
 using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Pages;
 using Aspire.Dashboard.Components.Resize;
 using Aspire.Dashboard.Components.Tests.Shared;
+using Aspire.Dashboard.Extensions;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Utils;
@@ -17,6 +22,7 @@ using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.FluentUI.AspNetCore.Components;
 using OpenTelemetry.Proto.Metrics.V1;
+using Aspire.Tests;
 using Xunit;
 using static Aspire.Dashboard.Components.Pages.Metrics;
 using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
@@ -28,10 +34,25 @@ public partial class MetricsTests : DashboardTestContext
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
 
-    [Fact]
-    public void ChangeResource_MeterAndInstrumentOnNewResource_InstrumentSet()
+    [Theory]
+    [InlineData(false, true)]
+    [InlineData(true, false)]
+    public async Task SignalActions_UseTelemetryRepositoryReadOnlyState(bool telemetryRepositoryIsReadOnly, bool dashboardClientIsReadOnly)
     {
-        ChangeResourceAndAssertInstrument(
+        MetricsSetupHelpers.SetupMetricsPage(this);
+        Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isReadOnly: dashboardClientIsReadOnly));
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, telemetryRepositoryIsReadOnly, _ => Task.CompletedTask);
+
+        var cut = RenderComponent<Metrics>(builder => builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
+
+        Assert.Equal(telemetryRepositoryIsReadOnly, cut.FindComponent<PauseIncomingDataSwitch>().Instance.Disabled);
+        Assert.Equal(telemetryRepositoryIsReadOnly, cut.FindComponent<ClearSignalsButton>().FindComponent<AspireMenuButton>().Instance.Disabled);
+    }
+
+    [Fact]
+    public async Task ChangeResource_MeterAndInstrumentOnNewResource_InstrumentSet()
+    {
+        await ChangeResourceAndAssertInstrument(
             app1InstrumentName: "test1",
             app2InstrumentName: "test1",
             expectedMeterNameAfterChange: "test-meter",
@@ -39,13 +60,190 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared()
+    public async Task ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared()
     {
-        ChangeResourceAndAssertInstrument(
+        await ChangeResourceAndAssertInstrument(
             app1InstrumentName: "test1",
             app2InstrumentName: "test2",
             expectedMeterNameAfterChange: null,
             expectedInstrumentNameAfterChange: null);
+    }
+
+    [Fact]
+    public async Task ChartContainer_ParametersAndActiveView_OnlyRefreshAndRenderWhenChanged()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        var metricTime = DateTime.UtcNow.AddMinutes(-1);
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(
+                                metricName: "test-instrument",
+                                startTime: metricTime,
+                                attributes: [new KeyValuePair<string, string>("http.method", "GET")])
+                        }
+                    }
+                }
+            }
+        });
+
+        var resource = telemetryRepository.GetResources().Single();
+
+        var cut = RenderComponent<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resource.ResourceKey);
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "test-instrument");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ActiveView, MetricViewKind.Graph);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.Resources, [resource]);
+            builder.Add(component => component.PauseText, null);
+        });
+        var dimensionFilters = cut.Instance.DimensionFilters;
+        var dimensionFilter = Assert.Single(dimensionFilters);
+        Assert.Equal("GET", Assert.Single(dimensionFilter.SelectedValues).Value);
+        Assert.Single(cut.FindComponents<PlotlyChart>());
+        Assert.Empty(cut.FindComponents<MetricTable>());
+
+        var activities = new ConcurrentQueue<Activity>();
+        using var listener = ActivityListenerHelper.Create(telemetryRepository.SqlActivitySource, onActivityStopped: activities.Enqueue);
+
+        cut.SetParametersAndRender(builder => builder.Add(component => component.ActiveView, MetricViewKind.Table));
+
+        Assert.Empty(cut.FindComponents<PlotlyChart>());
+        Assert.Single(cut.FindComponents<MetricTable>());
+        Assert.Empty(activities);
+
+        cut.SetParametersAndRender(builder => builder.Add(component => component.ActiveView, MetricViewKind.Graph));
+
+        Assert.Single(cut.FindComponents<PlotlyChart>());
+        Assert.Empty(cut.FindComponents<MetricTable>());
+        Assert.Empty(activities);
+
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(
+                                metricName: "test-instrument",
+                                startTime: metricTime,
+                                attributes: [new KeyValuePair<string, string>("http.method", "POST")])
+                        }
+                    }
+                }
+            }
+        });
+        activities.Clear();
+
+        cut.SetParametersAndRender(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(5)));
+
+        Assert.Empty(activities);
+
+        cut.SetParametersAndRender(builder => builder.Add(component => component.Duration, TimeSpan.FromMinutes(1)));
+
+        var updatedFilter = Assert.Single(cut.Instance.DimensionFilters);
+        Assert.NotSame(dimensionFilters, cut.Instance.DimensionFilters);
+        Assert.Collection(
+            updatedFilter.SelectedValues.Select(value => value.Value).Order(),
+            value => Assert.Equal("GET", value),
+            value => Assert.Equal("POST", value));
+
+        var chart = cut.FindComponent<PlotlyChart>();
+        var dimensions = chart.Instance.InstrumentViewModel.MatchedDimensions!;
+        Assert.Equal(2, dimensions.Count);
+        Assert.All(dimensions, dimension => Assert.Equal(1, Assert.IsType<MetricValue<long>>(Assert.Single(dimension.Values)).Value));
+        Assert.Contains(activities, activity => ((string?)activity.GetTagItem("db.query.text"))?.Contains("telemetry_metric_points", StringComparison.Ordinal) == true);
+    }
+
+    [Fact]
+    public async Task ChartContainer_TickUpdate_FetchesDataAfterInterval()
+    {
+        JSInterop.Mode = JSRuntimeMode.Loose;
+        MetricsSetupHelpers.SetupMetricsPage(this);
+
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test-instrument", startTime: DateTime.UtcNow.AddMinutes(-1))
+                        }
+                    }
+                }
+            }
+        });
+        var resource = telemetryRepository.GetResources().Single();
+
+        var activitySource = Services.GetRequiredService<DashboardActivitySource>();
+        var activityStarted = new TaskCompletionSource<(Activity Activity, long Timestamp)>(TaskCreationOptions.RunContinuationsAsynchronously);
+        var activityStopped = new TaskCompletionSource<Activity>(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = ActivityListenerHelper.Create(
+            activitySource.ActivitySource,
+            onActivityStarted: activity =>
+            {
+                if (activity.OperationName == "Update metric chart data from tick")
+                {
+                    activityStarted.TrySetResult((activity, Stopwatch.GetTimestamp()));
+                }
+            },
+            onActivityStopped: activity =>
+            {
+                if (activity.OperationName == "Update metric chart data from tick")
+                {
+                    activityStopped.TrySetResult(activity);
+                }
+            });
+
+        var renderStartedTimestamp = Stopwatch.GetTimestamp();
+        var cut = RenderComponent<ChartContainer>(builder =>
+        {
+            builder.Add(component => component.ResourceKey, resource.ResourceKey);
+            builder.Add(component => component.MeterName, "test-meter");
+            builder.Add(component => component.InstrumentName, "test-instrument");
+            builder.Add(component => component.Duration, TimeSpan.FromMinutes(5));
+            builder.Add(component => component.ActiveView, MetricViewKind.Graph);
+            builder.Add(component => component.OnViewChangedAsync, _ => Task.CompletedTask);
+            builder.Add(component => component.Resources, [resource]);
+            builder.Add(component => component.PauseText, null);
+        });
+
+        var started = await activityStarted.Task.WaitAsync(DefaultWaitTimeout);
+        var activity = await activityStopped.Task.WaitAsync(DefaultWaitTimeout);
+        var elapsed = Stopwatch.GetElapsedTime(renderStartedTimestamp, started.Timestamp);
+
+        Assert.Same(started.Activity, activity);
+        Assert.InRange(elapsed, TimeSpan.FromSeconds(1), TimeSpan.FromSeconds(5));
+        Assert.Equal(ActivityKind.Internal, activity.Kind);
+        Assert.Null(activity.ParentId);
     }
 
     [Fact]
@@ -63,8 +261,8 @@ public partial class MetricsTests : DashboardTestContext
             return ValueTask.CompletedTask;
         });
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -95,7 +293,7 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void InitialLoad_HasSessionState_RedirectUsingState()
+    public async Task InitialLoad_HasSessionState_RedirectUsingState()
     {
         // Arrange
         var testSessionStorage = new TestSessionStorage
@@ -132,8 +330,8 @@ public partial class MetricsTests : DashboardTestContext
             loadRedirect = new Uri(a.Location);
         };
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -185,13 +383,13 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void MetricsTree_MetricsAdded_TreeUpdated()
+    public async Task MetricsTree_MetricsAdded_TreeUpdated()
     {
         // Arrange
         MetricsSetupHelpers.SetupMetricsPage(this);
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -236,7 +434,7 @@ public partial class MetricsTests : DashboardTestContext
 
         // Act 2
         // New instruments added
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -280,7 +478,51 @@ public partial class MetricsTests : DashboardTestContext
         });
     }
 
-    private void ChangeResourceAndAssertInstrument(string app1InstrumentName, string app2InstrumentName, string? expectedMeterNameAfterChange, string? expectedInstrumentNameAfterChange)
+    [Fact]
+    public async Task ReadOnly_ChartEndsAtLatestMetricTime()
+    {
+        MetricsSetupHelpers.SetupMetricsPage(this);
+
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, readOnly: true, telemetryRepository => telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(name: "TestApp"),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope(name: "test-meter"),
+                        Metrics =
+                        {
+                            CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(1)),
+                            CreateSumMetric(metricName: "test-instrument", startTime: s_testTime.AddMinutes(2))
+                        }
+                    }
+                }
+            }
+        }));
+        Services.GetRequiredService<PauseManager>().SetMetricsPaused(true);
+        Services.GetRequiredService<NavigationManager>().NavigateTo(
+            DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: "test-instrument", duration: 5, view: MetricViewKind.Graph.ToString()));
+
+        var cut = RenderComponent<Metrics>(builder =>
+        {
+            builder.Add(m => m.ResourceName, "TestApp");
+            builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        var chart = cut.FindComponent<PlotlyChart>();
+        var expectedEndTime = new DateTimeOffset(s_testTime.AddMinutes(2));
+        Assert.Equal(expectedEndTime, chart.Instance.DataEndTime);
+        cut.WaitForAssertion(() =>
+        {
+            var initializeChart = Assert.Single(JSInterop.Invocations, invocation => invocation.Identifier == "initializeChart");
+            Assert.Equal(chart.Instance.TimeProvider.ToLocal(expectedEndTime), Assert.IsType<DateTime>(initializeChart.Arguments[3]));
+        });
+    }
+
+    private async Task ChangeResourceAndAssertInstrument(string app1InstrumentName, string app2InstrumentName, string? expectedMeterNameAfterChange, string? expectedInstrumentNameAfterChange)
     {
         // Arrange
         MetricsSetupHelpers.SetupMetricsPage(this);
@@ -288,8 +530,8 @@ public partial class MetricsTests : DashboardTestContext
         var navigationManager = Services.GetRequiredService<NavigationManager>();
         navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: app1InstrumentName, duration: 720, view: MetricViewKind.Table.ToString()));
 
-        var telemetryRepository = Services.GetRequiredService<TelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {

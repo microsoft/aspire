@@ -52,18 +52,18 @@ internal sealed partial class DashboardService(DashboardServiceData serviceData,
 
         return Task.FromResult(new ApplicationInformationResponse
         {
-            ApplicationName = ComputeApplicationName(applicationName),
+            ApplicationName = GetDashboardApplicationName(applicationName),
             MinDashboardVersion = MinRequiredDashboardVersion
         });
+    }
 
-        static string ComputeApplicationName(string applicationName)
+    internal static string GetDashboardApplicationName(string applicationName)
+    {
+        return ApplicationNameRegex().Match(applicationName) switch
         {
-            return ApplicationNameRegex().Match(applicationName) switch
-            {
-                Match { Success: true } match => match.Groups["name"].Value,
-                _ => applicationName
-            };
-        }
+            Match { Success: true } match => match.Groups["name"].Value,
+            _ => applicationName
+        };
     }
 
     public override async Task WatchInteractions(IAsyncStreamReader<WatchInteractionsRequestUpdate> requestStream, IServerStreamWriter<WatchInteractionsResponseUpdate> responseStream, ServerCallContext context)

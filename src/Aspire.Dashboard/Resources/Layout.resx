@@ -180,4 +180,10 @@
   <data name="MainLayoutLaunchAIAgents" xml:space="preserve">
     <value>AI agents</value>
   </data>
+  <data name="DashboardRunSelectAriaLabel" xml:space="preserve">
+    <value>Select dashboard run</value>
+  </data>
+  <data name="DashboardRunSelectCurrent" xml:space="preserve">
+    <value>Live run</value>
+  </data>
 </root>

@@ -1,16 +1,18 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Collections.Concurrent;
+using System.Diagnostics;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Utils;
 using Aspire.DashboardService.Proto.V1;
+using Aspire.Tests;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Logging.Testing;
 using Microsoft.Extensions.Options;
 using Semver;
@@ -19,27 +21,13 @@ using DashboardResources = Aspire.Dashboard.Resources.Resources;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class DashboardClientTests
+public sealed class DashboardClientTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
-    private readonly IConfiguration _configuration;
-    private readonly IOptions<DashboardOptions> _dashboardOptions;
-
-    public DashboardClientTests()
+    private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder =>
     {
-        _configuration = new ConfigurationManager();
-
-        var options = new DashboardOptions
-        {
-            ResourceServiceClient =
-            {
-                AuthMode = ResourceClientAuthMode.Unsecured,
-                Url = "http://localhost:12345"
-            }
-        };
-        options.ResourceServiceClient.TryParseOptions(out _);
-
-        _dashboardOptions = Options.Create(options);
-    }
+        builder.AddXunit(testOutputHelper, LogLevel.Trace, DateTimeOffset.UtcNow);
+        builder.SetMinimumLevel(LogLevel.Trace);
+    });
 
     [Fact]
     public async Task SubscribeResources_OnCancel_ChannelRemoved()
@@ -154,6 +142,39 @@ public sealed class DashboardClientTests
     }
 
     [Fact]
+    public async Task SubscribeConsoleLogs_ReceivesAndPersistsLogs()
+    {
+        var repositoryWriter = new RecordingResourceRepositoryWriter();
+        await using var instance = CreateResourceServiceClient(resourceRepositoryWriter: repositoryWriter);
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            ConsoleLogUpdates =
+            [
+                new WatchResourceConsoleLogsUpdate
+                {
+                    LogLines =
+                    {
+                        new ConsoleLogLine { LineNumber = 1, Text = "Hello", IsStdErr = false }
+                    }
+                }
+            ]
+        });
+
+        var batches = new List<IReadOnlyList<ResourceLogLine>>();
+        await foreach (var batch in instance.SubscribeConsoleLogs("api", CancellationToken.None))
+        {
+            batches.Add(batch);
+        }
+
+        var line = Assert.Single(Assert.Single(batches));
+        Assert.Equal(new ResourceLogLine(1, "Hello", false), line);
+        var persistedLogs = Assert.Single(repositoryWriter.ConsoleLogs);
+        Assert.Equal("api", persistedLogs.ResourceName);
+        Assert.Equal("Hello", Assert.Single(persistedLogs.LogLines).Text);
+        Assert.Equal("api", Assert.Single(repositoryWriter.LoadedConsoleLogs));
+    }
+
+    [Fact]
     public async Task SubscribeInteractions_OnCancel_ChannelRemoved()
     {
         await using var instance = CreateResourceServiceClient();
@@ -256,6 +277,62 @@ public sealed class DashboardClientTests
         IDashboardClient client = instance;
 
         Assert.Equal(DashboardConnectionState.Connecting, client.ConnectionState);
+    }
+
+    [Fact]
+    public async Task WhenConnected_AmbientActivity_DoesNotFlowToConnection()
+    {
+        await using var instance = CreateResourceServiceClient();
+        var serviceClient = new MockDashboardServiceClient();
+        instance.SetDashboardServiceClient(serviceClient);
+
+        using var activity = new Activity("request").Start();
+
+        await instance.WhenConnected.DefaultTimeout();
+
+        Assert.Null(serviceClient.ActivityOnGetApplicationInformation);
+    }
+
+    [Fact]
+    public async Task WatchResources_ResponseCreatesActivity()
+    {
+        using var activitySource = new DashboardActivitySource();
+        await using var instance = CreateResourceServiceClient(activitySource);
+        instance.SetDashboardServiceClient(new MockDashboardServiceClient
+        {
+            ResourceUpdates =
+            [
+                new WatchResourcesUpdate { InitialData = new InitialResourceData() },
+                new WatchResourcesUpdate { Changes = new WatchResourcesChanges() }
+            ]
+        });
+        var activities = new ConcurrentQueue<Activity>();
+        var activitiesReceived = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        using var listener = ActivityListenerHelper.Create(activitySource.ActivitySource, onActivityStopped: activity =>
+        {
+            activities.Enqueue(activity);
+            if (activities.Count == 2)
+            {
+                activitiesReceived.TrySetResult();
+            }
+        });
+
+        _ = instance.WhenConnected;
+        await activitiesReceived.Task.DefaultTimeout();
+        await instance.DisposeAsync().DefaultTimeout();
+
+        Assert.Collection(
+            activities,
+            activity => AssertActivity(activity, WatchResourcesUpdate.KindOneofCase.InitialData),
+            activity => AssertActivity(activity, WatchResourcesUpdate.KindOneofCase.Changes));
+
+        static void AssertActivity(Activity activity, WatchResourcesUpdate.KindOneofCase kind)
+        {
+            Assert.Equal(DashboardActivitySource.ActivitySourceName, activity.Source.Name);
+            Assert.Equal("Process resource update", activity.OperationName);
+            Assert.Equal(ActivityKind.Consumer, activity.Kind);
+            Assert.Equal(kind.ToString(), activity.GetTagItem("aspire.dashboard.resource_update.type"));
+        }
     }
 
     [Fact]
@@ -374,9 +451,9 @@ public sealed class DashboardClientTests
     public async Task ConnectWithRetry_LogsErrorWithTroubleshootingLink()
     {
         var testSink = new TestSink();
-        var loggerFactory = LoggerFactory.Create(b => b.AddProvider(new TestLoggerProvider(testSink)));
+        _loggerFactory.AddProvider(new TestLoggerProvider(testSink));
 
-        await using var instance = new DashboardClient(loggerFactory, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>());
+        await using var instance = CreateResourceServiceClient();
         instance.SetDashboardServiceClient(new MockDashboardServiceClient { FailOnGetApplicationInformation = true });
 
         IDashboardClient client = instance;
@@ -522,6 +599,20 @@ public sealed class DashboardClientTests
         public bool FailOnExecuteResourceCommand { get; init; }
         public bool CancelExecuteResourceCommandOnCallCancellation { get; init; }
         public string MinDashboardVersion { get; init; } = "";
+        public IReadOnlyList<WatchResourceConsoleLogsUpdate> ConsoleLogUpdates { get; init; } = [];
+        public IReadOnlyList<WatchResourcesUpdate> ResourceUpdates { get; init; } = [];
+        public Activity? ActivityOnGetApplicationInformation { get; private set; }
+        private int _resourceUpdatesReturned;
+
+        public override AsyncServerStreamingCall<WatchResourceConsoleLogsUpdate> WatchResourceConsoleLogs(WatchResourceConsoleLogsRequest request, CallOptions options)
+        {
+            return new AsyncServerStreamingCall<WatchResourceConsoleLogsUpdate>(
+                new AsyncStreamReader<WatchResourceConsoleLogsUpdate>(ConsoleLogUpdates),
+                Task.FromResult(new Metadata()),
+                () => Status.DefaultSuccess,
+                () => new Metadata(),
+                () => { });
+        }
 
         public override AsyncDuplexStreamingCall<WatchInteractionsRequestUpdate, WatchInteractionsResponseUpdate> WatchInteractions(CallOptions options)
         {
@@ -536,6 +627,7 @@ public sealed class DashboardClientTests
 
         public override AsyncUnaryCall<ApplicationInformationResponse> GetApplicationInformationAsync(ApplicationInformationRequest request, CallOptions options)
         {
+            ActivityOnGetApplicationInformation = Activity.Current;
             if (FailOnGetApplicationInformation)
             {
                 return new AsyncUnaryCall<ApplicationInformationResponse>(
@@ -609,7 +701,7 @@ public sealed class DashboardClientTests
         {
             var reader = FailOnWatchResources
                 ? (IAsyncStreamReader<WatchResourcesUpdate>)new FailingAsyncStreamReader<WatchResourcesUpdate>()
-                : new AsyncStreamReader<WatchResourcesUpdate>();
+                : new AsyncStreamReader<WatchResourcesUpdate>(Interlocked.Exchange(ref _resourceUpdatesReturned, 1) == 0 ? ResourceUpdates : []);
 
             return new AsyncServerStreamingCall<WatchResourcesUpdate>(
                 reader,
@@ -632,11 +724,52 @@ public sealed class DashboardClientTests
 
     private sealed class AsyncStreamReader<T> : IAsyncStreamReader<T>
     {
-        public T Current { get; } = default!;
+        private readonly Queue<T> _items;
+
+        public AsyncStreamReader(IEnumerable<T>? items = null)
+        {
+            _items = new Queue<T>(items ?? []);
+        }
+
+        public T Current { get; private set; } = default!;
 
         public Task<bool> MoveNext(CancellationToken cancellationToken)
         {
+            if (_items.TryDequeue(out var item))
+            {
+                Current = item;
+                return Task.FromResult(true);
+            }
+
             return Task.FromResult(false);
+        }
+    }
+
+    private sealed class RecordingResourceRepositoryWriter : IResourceRepositoryWriter
+    {
+        public List<(string ResourceName, IReadOnlyList<ConsoleLogLine> LogLines)> ConsoleLogs { get; } = [];
+        public List<string> LoadedConsoleLogs { get; } = [];
+
+        public Task ReplaceResourcesAsync(IReadOnlyList<Resource> resources)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes)
+        {
+            return Task.CompletedTask;
+        }
+
+        public Task MarkConsoleLogsLoadedAsync(string resourceName)
+        {
+            LoadedConsoleLogs.Add(resourceName);
+            return Task.CompletedTask;
+        }
+
+        public Task AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines)
+        {
+            ConsoleLogs.Add((resourceName, logLines));
+            return Task.CompletedTask;
         }
     }
 
@@ -655,9 +788,41 @@ public sealed class DashboardClientTests
         }
     }
 
-    private DashboardClient CreateResourceServiceClient()
+    private DashboardClient CreateResourceServiceClient(
+        DashboardActivitySource? activitySource = null,
+        IResourceRepositoryWriter? resourceRepositoryWriter = null)
     {
-        return new DashboardClient(NullLoggerFactory.Instance, _configuration, _dashboardOptions, new MockKnownPropertyLookup(), new TestStringLocalizer<DashboardResources>());
+        return CreateResourceServiceClient(_loggerFactory, activitySource, resourceRepositoryWriter);
+    }
+
+    private static DashboardClient CreateResourceServiceClient(
+        ILoggerFactory loggerFactory,
+        DashboardActivitySource? activitySource,
+        IResourceRepositoryWriter? resourceRepositoryWriter)
+    {
+        var options = new DashboardOptions
+        {
+            ResourceServiceClient =
+            {
+                AuthMode = ResourceClientAuthMode.Unsecured,
+                Url = "http://localhost:12345"
+            }
+        };
+        options.ResourceServiceClient.TryParseOptions(out _);
+
+        return new DashboardClient(
+            activitySource ?? new DashboardActivitySource(),
+            loggerFactory,
+            new ConfigurationManager(),
+            Options.Create(options),
+            new MockKnownPropertyLookup(),
+            new TestStringLocalizer<DashboardResources>(),
+            resourceRepositoryWriter: resourceRepositoryWriter);
+    }
+
+    public void Dispose()
+    {
+        _loggerFactory.Dispose();
     }
 
     private static CommandViewModel CreateCommand()

@@ -30,7 +30,12 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
     public required NavigationManager NavigationManager { get; init; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
+    [Inject]
+    public required ITelemetryRepositoryWriter TelemetryRepositoryWriter { get; init; }
 
     [Inject]
     public required IDashboardClient DashboardClient { get; init; }
@@ -150,7 +155,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
 
     private async Task SubscribeResourcesAsync()
     {
-        var (snapshot, subscription) = await DashboardClient.SubscribeResourcesAsync(_cts.Token);
+        var (snapshot, subscription) = await DataSource.ResourceRepository.SubscribeResourcesAsync(_cts.Token);
 
         // Apply snapshot.
         foreach (var resource in snapshot)
@@ -552,7 +557,7 @@ public partial class ManageDataDialog : IDialogContentComponent, IAsyncDisposabl
             var selectedResources = GetSelectedResourcesAndDataTypes();
 
             // Clear telemetry signals via repository
-            TelemetryRepository.ClearSelectedSignals(selectedResources);
+            await TelemetryRepositoryWriter.ClearSelectedSignalsAsync(selectedResources);
 
             // Handle console logs filtering separately (not stored in TelemetryRepository)
             // Console logs are only available when the dashboard client is enabled

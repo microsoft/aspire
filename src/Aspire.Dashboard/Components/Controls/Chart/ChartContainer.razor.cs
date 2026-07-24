@@ -2,10 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Collections.Immutable;
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
-using Aspire.Dashboard.Otlp.Model.MetricValues;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Microsoft.AspNetCore.Components;
@@ -15,12 +15,18 @@ namespace Aspire.Dashboard.Components;
 
 public partial class ChartContainer : ComponentBase, IAsyncDisposable
 {
+    private static readonly TimeSpan s_chartUpdateInterval = TimeSpan.FromSeconds(0.2);
+    private static readonly TimeSpan s_dataFetchInterval = TimeSpan.FromSeconds(1);
+
     private OtlpInstrumentData? _instrument;
     private PeriodicTimer? _tickTimer;
     private Task? _tickTask;
     private IDisposable? _themeChangedSubscription;
-    private int _renderedDimensionsCount;
     private readonly InstrumentViewModel _instrumentViewModel = new InstrumentViewModel();
+    private (ResourceKey ResourceKey, string MeterName, string InstrumentName)? _dataEndTimeKey;
+    private (ResourceKey ResourceKey, string MeterName, string InstrumentName, TimeSpan Duration)? _instrumentRequestKey;
+    private DateTimeOffset? _dataEndTime;
+    private long _lastDataFetchTimestamp;
 
     [Parameter, EditorRequired]
     public required ResourceKey ResourceKey { get; set; }
@@ -47,7 +53,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     public required string? PauseText { get; set; }
 
     [Inject]
-    public required TelemetryRepository TelemetryRepository { get; init; }
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
 
     [Inject]
     public required ILogger<ChartContainer> Logger { get; init; }
@@ -58,6 +66,9 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     [Inject]
     public required PauseManager PauseManager { get; init; }
 
+    [Inject]
+    public required DashboardActivitySource DashboardActivitySource { get; init; }
+
     public ImmutableList<DimensionFilterViewModel> DimensionFilters { get; set; } = [];
     public string? PreviousMeterName { get; set; }
     public string? PreviousInstrumentName { get; set; }
@@ -66,9 +77,15 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
     {
         await ThemeManager.EnsureInitializedAsync();
 
-        // Update the graph every 200ms. This displays the latest data and moves time forward.
-        _tickTimer = new PeriodicTimer(TimeSpan.FromSeconds(0.2));
-        _tickTask = Task.Run(UpdateDataAsync);
+        if (!TelemetryRepository.IsReadOnly)
+        {
+            // Update the graph every 200ms. This displays the latest data and moves time forward.
+            _tickTimer = new PeriodicTimer(s_chartUpdateInterval);
+            using (ExecutionContext.SuppressFlow())
+            {
+                _tickTask = Task.Run(UpdateDataAsync);
+            }
+        }
         _themeChangedSubscription = ThemeManager.OnThemeChanged(async () =>
         {
             _instrumentViewModel.Theme = ThemeManager.EffectiveTheme;
@@ -93,28 +110,36 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         var timer = _tickTimer;
         while (await timer!.WaitForNextTickAsync())
         {
-            _instrument = GetInstrument();
+            var lastDataFetchTimestamp = Volatile.Read(ref _lastDataFetchTimestamp);
+            if (lastDataFetchTimestamp == 0 || Stopwatch.GetElapsedTime(lastDataFetchTimestamp) >= s_dataFetchInterval)
+            {
+                using var activity = DashboardActivitySource.ActivitySource.StartActivity("Update metric chart data from tick");
+
+                _instrument = GetInstrument(useIncrementalCache: true);
+
+                if (_instrument is not null && HaveDimensionFilterValuesChanged(_instrument))
+                {
+                    await InvokeAsync(() =>
+                    {
+                        UpdateDimensionFilters(hasInstrumentChanged: false);
+                        StateHasChanged();
+                    });
+                }
+            }
+
             if (_instrument == null || PauseManager.AreMetricsPaused(out _))
             {
                 continue;
             }
 
-            if (_instrument.Dimensions.Count > _renderedDimensionsCount)
-            {
-                // Re-render the entire control if the number of dimensions has changed.
-                _renderedDimensionsCount = _instrument.Dimensions.Count;
-                await InvokeAsync(StateHasChanged);
-            }
-            else
-            {
-                await UpdateInstrumentDataAsync(_instrument);
-            }
+            await UpdateInstrumentDataAsync(_instrument);
         }
     }
 
     public async Task DimensionValuesChangedAsync(DimensionFilterViewModel dimensionViewModel)
     {
-        if (_instrument == null)
+        _instrument = GetInstrument(useIncrementalCache: false);
+        if (_instrument is null)
         {
             return;
         }
@@ -124,47 +149,37 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
 
     private async Task UpdateInstrumentDataAsync(OtlpInstrumentData instrument)
     {
-        var matchedDimensions = instrument.Dimensions.Where(MatchDimension).ToList();
-
         // Only update data in plotly
-        await _instrumentViewModel.UpdateDataAsync(instrument.Summary, matchedDimensions);
+        await _instrumentViewModel.UpdateDataAsync(instrument.Summary, instrument.Dimensions);
     }
 
-    private bool MatchDimension(DimensionScope dimension)
+    private async Task ShowCountChangedAsync(bool showCount)
     {
-        foreach (var dimensionFilter in DimensionFilters)
+        if (_instrumentViewModel.ShowCount == showCount)
         {
-            if (!MatchFilter(dimension.Attributes, dimensionFilter))
-            {
-                return false;
-            }
-        }
-        return true;
-    }
-
-    private static bool MatchFilter(KeyValuePair<string, string>[] attributes, DimensionFilterViewModel filter)
-    {
-        // No filter selected.
-        if (filter.SelectedValues.Count == 0)
-        {
-            return false;
+            return;
         }
 
-        var value = OtlpHelpers.GetValue(attributes, filter.Name);
-        foreach (var item in filter.SelectedValues)
+        _instrumentViewModel.ShowCount = showCount;
+        if (_instrument is not null)
         {
-            if (item.Value == value)
-            {
-                return true;
-            }
+            await UpdateInstrumentDataAsync(_instrument);
         }
-
-        return false;
     }
 
     protected override async Task OnParametersSetAsync()
     {
-        _instrument = GetInstrument();
+        var requestKey = (ResourceKey, MeterName, InstrumentName, Duration);
+        if (_instrumentRequestKey != requestKey)
+        {
+            _instrumentRequestKey = requestKey;
+            await RefreshChartAsync();
+        }
+    }
+
+    private async Task RefreshChartAsync()
+    {
+        _instrument = GetInstrument(useIncrementalCache: false);
 
         if (_instrument == null)
         {
@@ -175,40 +190,83 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         PreviousMeterName = MeterName;
         PreviousInstrumentName = InstrumentName;
 
-        // Replace filters collection on change. Filters can be accessed from a background task so it is immutable for thread safety.
-        DimensionFilters = ImmutableList.Create(CollectionsMarshal.AsSpan(CreateUpdatedFilters(hasInstrumentChanged)));
+        UpdateDimensionFilters(hasInstrumentChanged);
 
         await UpdateInstrumentDataAsync(_instrument);
     }
 
-    private OtlpInstrumentData? GetInstrument()
+    private OtlpInstrumentData? GetInstrument(bool useIncrementalCache)
     {
-        // When paused, use the paused time to keep the data window stable.
-        // This ensures filter changes while paused still show the same data.
-        var endDate = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : DateTime.UtcNow;
-        // Get more data than is being displayed. Histogram graph uses some historical data to calculate bucket counts.
-        // It's ok to get more data than is needed here. An additional date filter is applied when building chart values.
-        var startDate = endDate.Subtract(Duration + TimeSpan.FromSeconds(30));
-
-        var instrument = TelemetryRepository.GetInstrument(new GetInstrumentRequest
-        {
-            ResourceKey = ResourceKey,
-            MeterName = MeterName,
-            InstrumentName = InstrumentName,
-            StartTime = startDate,
-            EndTime = endDate,
-        });
-
-        if (instrument == null)
+        var instrumentSummary = TelemetryRepository.GetInstrumentSummary(ResourceKey, MeterName, InstrumentName);
+        if (instrumentSummary is null)
         {
             Logger.LogDebug(
                 "Unable to find instrument. ResourceKey: {ResourceKey}, MeterName: {MeterName}, InstrumentName: {InstrumentName}",
                 ResourceKey,
                 MeterName,
                 InstrumentName);
+            return null;
         }
 
-        return instrument;
+        DateTime endDate;
+        if (TelemetryRepository.IsReadOnly)
+        {
+            EnsureDataEndTime();
+            endDate = _dataEndTime?.UtcDateTime ?? DateTime.UtcNow;
+        }
+        else
+        {
+            // When paused, use the paused time to keep the data window stable.
+            // This ensures filter changes while paused still show the same data.
+            endDate = PauseManager.AreMetricsPaused(out var pausedAt) ? pausedAt.Value : DateTime.UtcNow;
+        }
+
+        var dataPointInterval = MetricDataPointInterval.Get(Duration);
+        var includeExemplars = instrumentSummary.Type == OtlpInstrumentType.Histogram;
+
+        // Histogram graphs need one preceding rollup to calculate bucket count changes at the beginning of the chart.
+        var historyDuration = TimeSpan.FromTicks(Math.Max(TimeSpan.FromSeconds(30).Ticks, dataPointInterval.Ticks));
+        var startDate = endDate.Subtract(Duration + historyDuration);
+        var cursors = useIncrementalCache && _instrument is not null
+            ? MetricInstrumentDataCache.CreateCursors(_instrument, historyDuration, dataPointInterval)
+            : [];
+
+        var refreshedInstrument = TelemetryRepository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = ResourceKey,
+            MeterName = MeterName,
+            InstrumentName = InstrumentName,
+            StartTime = startDate,
+            EndTime = endDate,
+            DataPointInterval = dataPointInterval,
+            IncludeExemplars = includeExemplars,
+            PopulateExemplarAttributes = false,
+            DimensionCursors = cursors,
+            DimensionFilters = DimensionFilters
+                .Where(filter => filter.AreAllValuesSelected is not true)
+                .ToDictionary(
+                filter => filter.Name,
+                filter => (IReadOnlyList<string?>)filter.SelectedValues.Select(value => value.Value).ToArray())
+        });
+        Debug.Assert(refreshedInstrument is not null);
+        Volatile.Write(ref _lastDataFetchTimestamp, Stopwatch.GetTimestamp());
+
+        return _instrument is not null && cursors.Count > 0
+            ? MetricInstrumentDataCache.Merge(_instrument, refreshedInstrument, cursors, startDate)
+            : refreshedInstrument;
+    }
+
+    private void EnsureDataEndTime()
+    {
+        var key = (ResourceKey, MeterName, InstrumentName);
+        if (_dataEndTimeKey == key)
+        {
+            return;
+        }
+
+        var latestEndTime = TelemetryRepository.GetInstrumentLatestEndTime(ResourceKey, MeterName, InstrumentName);
+        _dataEndTime = latestEndTime is not null ? new DateTimeOffset(latestEndTime.Value) : null;
+        _dataEndTimeKey = key;
     }
 
     private List<DimensionFilterViewModel> CreateUpdatedFilters(bool hasInstrumentChanged)
@@ -282,6 +340,74 @@ public partial class ChartContainer : ComponentBase, IAsyncDisposable
         }
 
         return filters;
+    }
+
+    private bool UpdateDimensionFilters(bool hasInstrumentChanged)
+    {
+        var updatedFilters = ImmutableList.Create(CollectionsMarshal.AsSpan(CreateUpdatedFilters(hasInstrumentChanged)));
+        if (HaveSameDimensionFilterContent(DimensionFilters, updatedFilters))
+        {
+            return false;
+        }
+
+        // Filters can be accessed from a background task, so replace the immutable collection atomically.
+        DimensionFilters = updatedFilters;
+        return true;
+    }
+
+    private bool HaveDimensionFilterValuesChanged(OtlpInstrumentData instrument)
+    {
+        if (instrument.KnownAttributeValues.Count != DimensionFilters.Count)
+        {
+            return true;
+        }
+
+        var index = 0;
+        foreach (var attribute in instrument.KnownAttributeValues.OrderBy(attribute => attribute.Key))
+        {
+            var filter = DimensionFilters[index++];
+            if (filter.Name != attribute.Key ||
+                !filter.Values.Select(value => value.Value).SequenceEqual(attribute.Value))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HaveSameDimensionFilterContent(
+        ImmutableList<DimensionFilterViewModel> currentFilters,
+        ImmutableList<DimensionFilterViewModel> updatedFilters)
+    {
+        if (currentFilters.Count != updatedFilters.Count)
+        {
+            return false;
+        }
+
+        for (var filterIndex = 0; filterIndex < currentFilters.Count; filterIndex++)
+        {
+            var currentFilter = currentFilters[filterIndex];
+            var updatedFilter = updatedFilters[filterIndex];
+            if (currentFilter.Name != updatedFilter.Name || currentFilter.Values.Count != updatedFilter.Values.Count)
+            {
+                return false;
+            }
+
+            for (var valueIndex = 0; valueIndex < currentFilter.Values.Count; valueIndex++)
+            {
+                var currentValue = currentFilter.Values[valueIndex];
+                var updatedValue = updatedFilter.Values[valueIndex];
+                if (currentValue.Text != updatedValue.Text ||
+                    currentValue.Value != updatedValue.Value ||
+                    currentFilter.SelectedValues.Contains(currentValue) != updatedFilter.SelectedValues.Contains(updatedValue))
+                {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     private Task OnTabChangeAsync(FluentTab newTab)

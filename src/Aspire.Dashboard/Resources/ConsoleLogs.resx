@@ -133,6 +133,9 @@
   <data name="ConsoleLogsNoLogsFound" xml:space="preserve">
     <value>No logs found</value>
   </data>
+  <data name="ConsoleLogsNotCapturedForRun" xml:space="preserve">
+    <value>Console logs weren't captured for this run. Console logs are only captured if this page is visited while the AppHost is running.</value>
+  </data>
   <data name="ConsoleLogsNoLogsMatchFilter" xml:space="preserve">
     <value>No logs match the filter</value>
   </data>

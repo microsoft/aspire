@@ -5,13 +5,14 @@ using System.Runtime.CompilerServices;
 using System.Threading.Channels;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
+using Microsoft.Extensions.Logging;
 
 namespace Aspire.Dashboard.Otlp.Storage;
 
 /// <summary>
 /// Partial class containing push-based streaming (watcher) functionality.
 /// </summary>
-public sealed partial class TelemetryRepository
+public sealed partial class InMemoryTelemetryRepository
 {
     // Watcher fields are defined in the main file:
     // private readonly object _watchersLock;

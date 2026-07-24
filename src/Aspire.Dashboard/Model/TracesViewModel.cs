@@ -2,27 +2,25 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Model.Otlp;
-using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
 
 namespace Aspire.Dashboard.Model;
 
 public class TracesViewModel
 {
-    private readonly TelemetryRepository _telemetryRepository;
+    private readonly DashboardDataSource _dataSource;
     private readonly List<FieldTelemetryFilter> _filters = new();
 
-    private PagedResult<OtlpTrace>? _traces;
+    private PagedResult<TraceSummary>? _traces;
     private ResourceKey? _resourceKey;
     private string _filterText = string.Empty;
     private int _startIndex;
     private int _count;
-    private bool _currentDataHasErrors;
     private SpanType? _spanType;
 
-    public TracesViewModel(TelemetryRepository telemetryRepository)
+    public TracesViewModel(DashboardDataSource dataSource)
     {
-        _telemetryRepository = telemetryRepository;
+        _dataSource = dataSource;
     }
 
     public ResourceKey? ResourceKey { get => _resourceKey; set => SetValue(ref _resourceKey, value); }
@@ -75,14 +73,14 @@ public class TracesViewModel
         _traces = null;
     }
 
-    public PagedResult<OtlpTrace> GetTraces()
+    public PagedResult<TraceSummary> GetTraces()
     {
         var traces = _traces;
         if (traces == null)
         {
             var filters = GetFilters();
 
-            var result = _telemetryRepository.GetTraces(new GetTracesRequest
+            var result = _dataSource.TelemetryRepository.GetTraceSummaries(new GetTracesRequest
             {
                 ResourceKeys = ResourceKey is { } key ? [key] : [],
                 StartIndex = StartIndex,
@@ -93,37 +91,9 @@ public class TracesViewModel
 
             traces = result.PagedResult;
             MaxDuration = result.MaxDuration;
-
-            _currentDataHasErrors = result.PagedResult.Items.Any(t => t.Spans.Any(s => s.Status == OtlpSpanStatusCode.Error));
         }
 
         return traces;
-    }
-
-    // First check if there were any errors in already available data. Avoid fetching data again.
-    public bool HasErrors() => _currentDataHasErrors || GetErrorTraces(count: 0).TotalItemCount > 0;
-
-    public PagedResult<OtlpTrace> GetErrorTraces(int count)
-    {
-        var filters = Filters.Cast<TelemetryFilter>().ToList();
-
-        if (SpanType?.Filter is { } typeFilter)
-        {
-            filters.Add(typeFilter);
-        }
-
-        filters.Add(new FieldTelemetryFilter { Field = KnownTraceFields.StatusField, Condition = FilterCondition.Equals, Value = OtlpSpanStatusCode.Error.ToString() });
-
-        var errorTraces = _telemetryRepository.GetTraces(new GetTracesRequest
-        {
-            ResourceKeys = ResourceKey is { } key ? [key] : [],
-            StartIndex = 0,
-            Count = count,
-            Filters = filters,
-            TraceNameFilterText = FilterText
-        });
-
-        return errorTraces.PagedResult;
     }
 
     private List<TelemetryFilter> GetFilters()

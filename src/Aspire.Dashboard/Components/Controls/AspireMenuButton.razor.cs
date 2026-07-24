@@ -25,6 +25,15 @@ public partial class AspireMenuButton : FluentComponentBase
     public Icon? IconStart { get; set; }
 
     [Parameter]
+    public string? IconStartClass { get; set; }
+
+    [Parameter]
+    public Color? IconStartColor { get; set; }
+
+    [Parameter]
+    public string? IconStartCustomColor { get; set; }
+
+    [Parameter]
     public Icon? Icon { get; set; }
 
     [Parameter]
@@ -51,6 +60,15 @@ public partial class AspireMenuButton : FluentComponentBase
     [Parameter]
     public bool HideIcon { get; set; }
 
+    [Parameter]
+    public bool Disabled { get; set; }
+
+    /// <summary>
+    /// Gets or sets the callback invoked immediately before the menu is opened.
+    /// </summary>
+    [Parameter]
+    public EventCallback OnOpening { get; set; }
+
     /// <summary>
     /// Gets or sets a value indicating whether focus should return to this menu button after a menu item is clicked.
     /// </summary>
@@ -64,19 +82,30 @@ public partial class AspireMenuButton : FluentComponentBase
     protected override void OnParametersSet()
     {
         _icon = Icon ?? s_defaultIcon;
+        UpdateItems();
+    }
 
+    private void UpdateItems()
+    {
         if (Items != null && !_items.SequenceEqual(Items))
         {
             _items = Items.ToArray();
-
-            // Disabled if there are no actionable items
-            _disabled = !_items.Any(i => !i.IsDivider);
         }
+
+        _disabled = Disabled || (!OnOpening.HasDelegate && !_items.Any(i => !i.IsDivider));
     }
 
-    private void ToggleMenu()
+    private async Task ToggleMenuAsync()
     {
-        _visible = !_visible;
+        if (_visible)
+        {
+            _visible = false;
+            return;
+        }
+
+        await OnOpening.InvokeAsync();
+        UpdateItems();
+        _visible = true;
     }
 
     private void OnKeyDown(KeyboardEventArgs args)

@@ -8,6 +8,9 @@ namespace Aspire.Dashboard.Utils;
 [DebuggerDisplay("Name = {Name}")]
 public sealed class CallbackThrottler
 {
+    // This interval balances responsiveness with the performance cost of repeatedly executing callbacks.
+    public static readonly TimeSpan DefaultMinExecuteInterval = TimeSpan.FromMilliseconds(500);
+
     private readonly SemaphoreSlim _lock = new SemaphoreSlim(1, 1);
     private DateTime? _lastExecute;
 
@@ -89,7 +92,7 @@ public sealed class CallbackThrottler
         }
     }
 
-    private async Task ExecuteAsync()
+    public async Task ExecuteAsync()
     {
         // Try to queue the subscription callback.
         // If another caller is already in the queue then exit without calling the callback.

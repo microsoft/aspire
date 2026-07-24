@@ -9,6 +9,11 @@ namespace Aspire.Dashboard.Components.Controls;
 
 public partial class SignalsActionsDisplay
 {
+    [Inject]
+    public required DashboardDataSource DataSource { get; init; }
+
+    public ITelemetryRepository TelemetryRepository => DataSource.TelemetryRepository;
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 

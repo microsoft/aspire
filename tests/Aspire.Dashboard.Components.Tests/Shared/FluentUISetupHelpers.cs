@@ -7,11 +7,14 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.BrowserStorage;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.ServiceClient;
 using Aspire.Dashboard.Tests.Shared;
 using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
+using Aspire.Tests.Utils;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 
@@ -144,26 +147,70 @@ internal static class FluentUISetupHelpers
         comboboxModule.SetupVoid("setControlAttribute", _ => true);
     }
 
+    public static async Task ConfigureTelemetryRepository(
+        TestContext context,
+        bool readOnly,
+        Func<ITelemetryRepositoryWriter, Task> seed)
+    {
+        context.Services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly));
+
+        var databasePath = Path.Combine(context.Services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
+        var loggerFactory = context.Services.GetRequiredService<ILoggerFactory>();
+        var options = context.Services.GetRequiredService<IOptions<DashboardOptions>>();
+        var outgoingPeerResolvers = context.Services.GetServices<IOutgoingPeerResolver>();
+
+        using var writer = new SqliteTelemetryRepository(databasePath, loggerFactory, options, new PauseManager(), outgoingPeerResolvers);
+        await seed(writer);
+    }
+
     public static void AddCommonDashboardServices(
         TestContext context,
         ILocalStorage? localStorage = null,
         ISessionStorage? sessionStorage = null,
         ThemeManager? themeManager = null,
         IMessageService? messageService = null,
-        BrowserTimeProvider? browserTimeProvider = null)
+        BrowserTimeProvider? browserTimeProvider = null,
+        IDashboardRunStore? dashboardRunStore = null)
     {
         context.Services.AddLocalization();
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
-        context.Services.AddSingleton<TelemetryRepository>();
+        context.Services.AddSingleton(_ => TemporaryWorkspace.Create(
+            global::Xunit.TestContext.Current.TestOutputHelper ?? throw new InvalidOperationException("An active test output helper is required.")));
+        context.Services.AddSingleton<SqliteTelemetryRepository>(services =>
+        {
+            var databasePath = Path.Combine(services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
+            var loggerFactory = services.GetRequiredService<ILoggerFactory>();
+            var options = services.GetRequiredService<IOptions<DashboardOptions>>();
+            var pauseManager = services.GetRequiredService<PauseManager>();
+            var outgoingPeerResolvers = services.GetServices<IOutgoingPeerResolver>();
+            var configuration = services.GetService<TelemetryRepositoryConfiguration>();
+
+            return new SqliteTelemetryRepository(
+                databasePath,
+                loggerFactory,
+                options,
+                pauseManager,
+                outgoingPeerResolvers,
+                readOnly: configuration?.ReadOnly == true);
+        });
+        context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<SqliteTelemetryRepository>());
+        context.Services.AddSingleton<ITelemetryRepositoryWriter>(services => services.GetRequiredService<SqliteTelemetryRepository>());
         context.Services.AddSingleton<PauseManager>();
         context.Services.AddSingleton<IDialogService, DialogService>();
         context.Services.AddSingleton<ILocalStorage>(localStorage ?? new TestLocalStorage());
         context.Services.AddSingleton<ISessionStorage>(sessionStorage ?? new TestSessionStorage());
+        context.Services.AddSingleton<IDashboardRunStore>(dashboardRunStore ?? new TestDashboardRunStore());
+        context.Services.AddSingleton<IDashboardRunSelection, TestDashboardRunSelection>();
+        context.Services.AddSingleton<IDashboardClient, TestDashboardClient>();
+        context.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<IDashboardClient>());
+        context.Services.AddSingleton<IRepositoryFactory, TestRepositoryFactory>();
+        context.Services.AddScoped<DashboardDataSource>();
         context.Services.AddSingleton<ShortcutManager>();
         context.Services.AddSingleton<LibraryConfiguration>();
         context.Services.AddSingleton<IKeyCodeService, KeyCodeService>();
         context.Services.AddSingleton<IMessageService>(messageService ?? new MessageService());
         context.Services.AddSingleton<DashboardTelemetryService>();
+        context.Services.AddSingleton<DashboardActivitySource>();
         context.Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         context.Services.AddSingleton<ComponentTelemetryContextProvider>();
         context.Services.AddSingleton<ITelemetryErrorRecorder, TestTelemetryErrorRecorder>();
@@ -178,6 +225,59 @@ internal static class FluentUISetupHelpers
         context.Services.AddScoped<SpanMenuBuilder>();
         context.Services.AddScoped<TraceMenuBuilder>();
         context.Services.AddSingleton<IOptions<DashboardOptions>>(Options.Create(new DashboardOptions()));
+    }
+
+    internal sealed class TestDashboardRunStore(
+        IReadOnlyList<DashboardRunDescriptor>? runs = null,
+        bool supportsRunSelection = true) : IDashboardRunStore
+    {
+        private readonly IReadOnlyList<DashboardRunDescriptor> _runs = runs ??
+            [
+                new(
+                RunId: "current",
+                SchemaVersion: DashboardRunStore.SchemaVersion,
+                StartedAtUtc: DateTimeOffset.UnixEpoch,
+                EndedAtUtc: null,
+                CleanShutdown: false,
+                ApplicationName: "TestApp",
+                DatabasePath: string.Empty,
+                IsCurrent: true)
+            ];
+
+        public int GetRunsCallCount { get; private set; }
+
+        public IReadOnlyList<DashboardRunDescriptor> GetRuns()
+        {
+            GetRunsCallCount++;
+            return _runs;
+        }
+
+        public IDisposable? TryAcquireRunLease(DashboardRunDescriptor run) => null;
+
+        public bool SupportsRunSelection => supportsRunSelection;
+    }
+
+    internal sealed class TestDashboardRunSelection(IDashboardRunStore runStore) : IDashboardRunSelection
+    {
+        public DashboardRunDescriptor SelectedRun { get; private set; } = runStore.GetRuns().Single(run => run.IsCurrent);
+
+        public string? SelectedRunId { get; private set; }
+
+        public void SelectRun(string? runId)
+        {
+            var runs = runStore.GetRuns();
+            SelectedRun = runs.FirstOrDefault(run => string.Equals(run.RunId, runId, StringComparison.Ordinal))
+                ?? runs.Single(run => run.IsCurrent);
+            SelectedRunId = SelectedRun.IsCurrent ? null : SelectedRun.RunId;
+        }
+    }
+
+    private sealed class TestRepositoryFactory(
+        ITelemetryRepository telemetryRepository,
+        IDashboardClient dashboardClient) : IRepositoryFactory
+    {
+        public ITelemetryRepository CreateTelemetryRepository(DashboardSqliteDatabase database) => telemetryRepository;
+        public IResourceRepository CreateResourceRepository(DashboardSqliteDatabase database) => dashboardClient;
     }
 
     public static void SetupFluentUIComponents(TestContext context)
@@ -208,4 +308,6 @@ internal static class FluentUISetupHelpers
             builder.CloseComponent();
         });
     }
+
+    private sealed record TelemetryRepositoryConfiguration(bool ReadOnly);
 }

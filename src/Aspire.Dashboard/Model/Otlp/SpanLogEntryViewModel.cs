@@ -2,7 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Diagnostics;
-using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 
 namespace Aspire.Dashboard.Model.Otlp;
 
@@ -10,6 +10,6 @@ namespace Aspire.Dashboard.Model.Otlp;
 public sealed class SpanLogEntryViewModel
 {
     public required int Index { get; init; }
-    public required OtlpLogEntry LogEntry { get; init; }
+    public required LogSummary LogEntry { get; init; }
     public required double LeftOffset { get; init; }
 }
