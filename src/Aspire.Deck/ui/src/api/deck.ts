@@ -249,6 +249,22 @@ export function onInteractions(cb: (interactions: InteractionInfo[]) => void): U
     return bridgeListen<InteractionInfo[]>("deck://interactions", cb);
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      let cancelled = false;
+      let unsubscribe: Unsubscribe | null = null;
+      void nativeBackend.hasCapability("interactions").then((supported) => {
+        if (cancelled) return;
+        unsubscribe = supported
+          ? nativeBackend.subscribeInteractions(cb)
+          : httpBackend.onInteractions(cb);
+      }).catch(() => {
+        if (!cancelled) unsubscribe = httpBackend.onInteractions(cb);
+      });
+      return () => {
+        cancelled = true;
+        unsubscribe?.();
+      };
+    }
     return httpBackend.onInteractions(cb);
   }
   return mockBackend.onInteractions(cb);
@@ -261,6 +277,13 @@ export function respondInteraction(interactionId: number, action: string, values
     return invoke("deck_respond_interaction", { interactionId, action, values });
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      return nativeBackend.hasCapability("interactions").then((supported) => (
+        supported
+          ? nativeBackend.respondInteraction(interactionId, action, values)
+          : httpBackend.respondInteraction(interactionId, action, values)
+      ));
+    }
     return httpBackend.respondInteraction(interactionId, action, values);
   }
   mockBackend.respondInteraction(interactionId, action, values);
@@ -336,9 +359,9 @@ export function executeCommand(args: ExecuteCommandArgs): Promise<CommandRespons
     return invoke<CommandResponse>("deck_execute_command", { ...args });
   }
   if (isAotBackend()) {
-    // Parameter updates are interaction-backed commands. Until command interactions
-    // migrate as one capability, keep both command execution and its responses on the
-    // legacy dashboard client so one resource-service session owns the whole exchange.
+    // Parameter updates are interaction-backed commands. The versioned interaction
+    // capability is proxy-owned for now, so keep command creation and response on the
+    // same legacy resource-service session.
     if (args.resourceType === PARAMETER_RESOURCE_TYPE) {
       return httpBackend.executeCommand(args);
     }

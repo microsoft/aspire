@@ -17,6 +17,7 @@ internal static class DashboardApiContract
     public const string StructuredLogStreamCapability = "structured-logs-live";
     public const string ConsoleLogsCapability = "console-logs";
     public const string ConsoleLogStreamCapability = "console-logs-live";
+    public const string InteractionsCapability = "interactions";
     public const string ResourceStreamPath = $"{VersionOneBasePath}/resources/live";
     public const string StructuredLogStreamPath = $"{VersionOneBasePath}/structured-logs/live";
     public const string ConsoleLogStreamPath = $"{VersionOneBasePath}/console-logs/live";

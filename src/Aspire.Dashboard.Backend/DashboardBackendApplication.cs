@@ -48,7 +48,8 @@ internal static class DashboardBackendApplication
                             DashboardApiContract.StructuredLogsCapability,
                             DashboardApiContract.StructuredLogStreamCapability,
                             DashboardApiContract.ConsoleLogsCapability,
-                            DashboardApiContract.ConsoleLogStreamCapability
+                            DashboardApiContract.ConsoleLogStreamCapability,
+                            DashboardApiContract.InteractionsCapability
                         ])
                 ]);
 
@@ -140,9 +141,20 @@ internal static class DashboardBackendApplication
             }
         });
 
-        // Parameter editing and commands that collect user input are still owned by the
-        // existing dashboard. Keep these two legacy endpoints on the AOT origin so the
-        // React fallback preserves browser credentials and same-origin request semantics.
+        // The legacy dashboard still owns the interaction watch and response session. Expose it
+        // through the versioned boundary so commands and their input flow use one negotiated
+        // contract while the AOT backend preserves browser credentials and response semantics.
+        app.MapGet($"{DashboardApiContract.VersionOneBasePath}/interactions", (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+            legacyApiProxy.ProxyAsync(context, "api/deck/interactions"));
+        app.MapPost($"{DashboardApiContract.VersionOneBasePath}/interactions/respond", (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+            legacyApiProxy.ProxyAsync(context, "api/deck/interactions/respond"));
+
+        // Keep the unversioned aliases while older React bundles can still be served beside this
+        // backend. They preserve the same credential-forwarding behavior during the transition.
         app.MapGet("/api/deck/interactions", (
             HttpContext context,
             IDashboardLegacyApiProxy legacyApiProxy) =>

@@ -16,6 +16,7 @@ import type {
   DeckConfig,
   CommandResponse,
   ExecuteCommandArgs,
+  InteractionInfo,
   Resource,
   ResourcesEvent,
   LogRecordSummary,
@@ -32,6 +33,7 @@ const structuredLogsCapability = "structured-logs";
 const structuredLogStreamCapability = "structured-logs-live";
 const consoleLogsCapability = "console-logs";
 const consoleLogStreamCapability = "console-logs-live";
+const interactionsCapability = "interactions";
 const supportedVersions = new Set([1]);
 
 let negotiatedVersion: Promise<DashboardApiVersion> | null = null;
@@ -241,6 +243,60 @@ async function executeCommand(args: ExecuteCommandArgs): Promise<CommandResponse
     resourceName: args.resourceName,
     commandName: args.commandName,
   }) as CommandResponse;
+}
+
+function subscribeInteractions(callback: (interactions: InteractionInfo[]) => void): () => void {
+  let cancelled = false;
+  let timer: number | undefined;
+
+  const poll = async (): Promise<void> => {
+    try {
+      const version = await getNegotiatedVersion();
+      if (!version.capabilities.includes(interactionsCapability)) {
+        throw new Error("Dashboard API version 1 does not advertise interactions.");
+      }
+      const payload = await requestJson(`${version.basePath}/interactions`);
+      if (!Array.isArray(payload)) {
+        throw new Error("Dashboard API interactions returned an incompatible payload.");
+      }
+      if (!cancelled) callback(payload as InteractionInfo[]);
+    } catch {
+      // Resource streaming owns the connection indicator. Retain the last interaction
+      // snapshot through a transient failure so an open input dialog is not discarded.
+    } finally {
+      if (!cancelled) timer = window.setTimeout(() => void poll(), 250);
+    }
+  };
+
+  void poll();
+  return () => {
+    cancelled = true;
+    if (timer !== undefined) window.clearTimeout(timer);
+  };
+}
+
+async function respondInteraction(
+  interactionId: number,
+  action: string,
+  values: Record<string, string>,
+): Promise<void> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(interactionsCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise interactions.");
+  }
+
+  const response = await fetch(`${version.basePath}/interactions/respond`, {
+    method: "POST",
+    credentials: "same-origin",
+    headers: {
+      Accept: "application/json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ interactionId, action, values }),
+  });
+  if (!response.ok) {
+    throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
+  }
 }
 
 function isResourcesEvent(value: unknown): value is ResourcesEvent {
@@ -575,5 +631,7 @@ export const nativeBackend = {
   subscribeResources,
   subscribeStructuredLogs,
   subscribeConsoleLogs,
+  subscribeInteractions,
+  respondInteraction,
   refreshStructuredLogs,
 };

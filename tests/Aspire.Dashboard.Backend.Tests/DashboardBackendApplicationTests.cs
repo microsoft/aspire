@@ -34,7 +34,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"console-logs\",\"console-logs-live\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"console-logs\",\"console-logs-live\",\"interactions\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -204,7 +204,7 @@ public class DashboardBackendApplicationTests
     }
 
     [Fact]
-    public async Task Interactions_UseLegacyFallbackWithBrowserCredentials()
+    public async Task VersionedInteractions_ProxyToLegacySessionWithBrowserCredentials()
     {
         var proxy = new TestLegacyApiProxy();
         await using var app = DashboardBackendApplication.Build([], builder =>
@@ -215,7 +215,7 @@ public class DashboardBackendApplicationTests
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        using var getRequest = new HttpRequestMessage(HttpMethod.Get, "/api/deck/interactions");
+        using var getRequest = new HttpRequestMessage(HttpMethod.Get, "/api/dashboard/v1/interactions");
         getRequest.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
         using var getResponse = await client.SendAsync(getRequest, TestContext.Current.CancellationToken);
 
@@ -225,7 +225,7 @@ public class DashboardBackendApplicationTests
         Assert.Equal("[]", await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         using var postResponse = await client.PostAsJsonAsync(
-            "/api/deck/interactions/respond",
+            "/api/dashboard/v1/interactions/respond",
             new { interactionId = 42, action = "submit", values = new { value = "updated" } },
             TestContext.Current.CancellationToken);
 

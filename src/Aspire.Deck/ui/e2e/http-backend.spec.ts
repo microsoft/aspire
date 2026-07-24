@@ -254,6 +254,51 @@ test(`${features("AOT-CONTRACT-001")} executes commands through the negotiated A
   expect(legacyCommandRequests).toBe(0);
 });
 
+test(`${features("AOT-CONTRACT-001")} polls interactions through the negotiated AOT capability`, async ({ page }) => {
+  let aotInteractionRequests = 0;
+  let legacyInteractionRequests = 0;
+  await page.unroute("**/api/deck/interactions");
+  await page.route("**/api/dashboard", async (route) => {
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [
+          {
+            version: 1,
+            basePath: "/api/dashboard/v1",
+            capabilities: ["configuration", "resources", "interactions"],
+          },
+        ],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    await route.fulfill({
+      json: {
+        applicationName: "Stress AOT",
+        dashboardVersion: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources", async (route) => {
+    await route.fulfill({ json: [resource] });
+  });
+  await page.route("**/api/dashboard/v1/interactions", async (route) => {
+    aotInteractionRequests++;
+    await route.fulfill({ json: [] });
+  });
+  await page.route("**/api/deck/interactions", async (route) => {
+    legacyInteractionRequests++;
+    await route.fulfill({ json: [] });
+  });
+
+  await page.goto("/?backend=aot");
+  await expect(page.getByRole("table").getByRole("row", { name: /stress-api/ })).toBeVisible();
+  await expect.poll(() => aotInteractionRequests).toBeGreaterThan(0);
+  expect(legacyInteractionRequests).toBe(0);
+});
+
 test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes over SignalR`, async ({ page }) => {
   let negotiateRequests = 0;
   let websocketConnections = 0;

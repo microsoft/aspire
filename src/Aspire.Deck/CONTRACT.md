@@ -33,13 +33,13 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "console-logs", "console-logs-live"]
+      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "console-logs", "console-logs-live", "interactions"]
     }
   ]
 }
 ```
 
-Version 1 currently defines eight capabilities:
+Version 1 currently defines nine capabilities:
 
 | Capability | Route | Response |
 | --- | --- | --- |
@@ -51,6 +51,7 @@ Version 1 currently defines eight capabilities:
 | `structured-logs-live` | SignalR hub at `{basePath}/structured-logs/live` | `StructuredLogsEvent` server stream |
 | `console-logs` | Capability marker for resource console output | `ConsoleLogEvent` |
 | `console-logs-live` | SignalR hub at `{basePath}/console-logs/live` | `ConsoleLogEvent` server stream |
+| `interactions` | `GET {basePath}/interactions`; `POST {basePath}/interactions/respond` | `InteractionInfo[]`; no content |
 
 ```ts
 export interface DashboardConfiguration {
@@ -68,7 +69,9 @@ operations remain on `/api/deck` when the `commands` capability is not advertise
 The `commands` request is `{ resourceName, commandName }`. The backend resolves the resource type
 and command from its authoritative resource snapshot before forwarding the command to the AppHost;
 unknown resources or commands return `404`, and malformed requests return `400`. Command input
-interactions and their responses remain on `/api/deck` until the interactions capability migrates.
+interactions are read and answered through the `interactions` capability. During this migration
+slice, the AOT backend forwards those requests to the existing dashboard so its resource-service
+session remains authoritative.
 
 The read-only `structured-logs` response contains `{ totalCount, data }`, where `data` is the OTLP
 JSON resource-log tree used by the existing dashboard. The AOT host obtains the backlog from the
