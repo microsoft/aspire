@@ -578,6 +578,9 @@ internal sealed class DistributedApplicationPipeline : IDistributedApplicationPi
     public async Task ExecuteAsync(PipelineContext context)
     {
         var executionPlan = await PrepareAsync(context).ConfigureAwait(false);
+        await context.Services.GetRequiredService<PipelineOutputRegistry>()
+            .WaitForExecutionAuthorizationAsync(context.CancellationToken)
+            .ConfigureAwait(false);
         await ExecuteAsync(executionPlan, context).ConfigureAwait(false);
     }
 
