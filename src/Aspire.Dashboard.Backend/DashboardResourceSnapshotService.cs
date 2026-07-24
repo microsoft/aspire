@@ -7,7 +7,6 @@ using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
 using Google.Protobuf.WellKnownTypes;
 using Grpc.Core;
-using Grpc.Net.Client;
 using ProtoResource = Aspire.DashboardService.Proto.V1.Resource;
 
 namespace Aspire.Dashboard.Backend;
@@ -25,16 +24,11 @@ internal interface IDashboardResourceEventSource
 internal sealed class DashboardResourceServiceUnavailableException(string message) : Exception(message);
 
 internal sealed class DashboardResourceSnapshotService(
+    IDashboardResourceServiceConnection resourceServiceConnection,
     IConfiguration configuration,
-    ILoggerFactory loggerFactory,
     ILogger<DashboardResourceSnapshotService> logger) : BackgroundService, IDashboardResourceSnapshotProvider, IDashboardResourceEventSource
 {
-    private const string ResourceServiceEndpointKey = "ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL";
-    private const string LegacyResourceServiceEndpointKey = "DOTNET_RESOURCE_SERVICE_ENDPOINT_URL";
-    private const string ResourceServiceAuthModeKey = "Dashboard:ResourceServiceClient:AuthMode";
-    private const string ResourceServiceApiKeyKey = "Dashboard:ResourceServiceClient:ApiKey";
     private const string InitialSnapshotTimeoutKey = "DashboardBackend:InitialSnapshotTimeout";
-    private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const int ProducerDefinedPropertySortOrderStart = 7;
     private const int SubscriberBufferCapacity = 32;
 
@@ -109,31 +103,13 @@ internal sealed class DashboardResourceSnapshotService(
 
     protected override async Task ExecuteAsync(CancellationToken stoppingToken)
     {
-        var endpoint = configuration[ResourceServiceEndpointKey] ?? configuration[LegacyResourceServiceEndpointKey];
-        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var resourceServiceUri))
+        if (!resourceServiceConnection.IsConfigured)
         {
-            ReportInitialFailure($"Configure {ResourceServiceEndpointKey} with the AppHost resource-service endpoint.");
+            ReportInitialFailure(resourceServiceConnection.UnavailableMessage);
             return;
         }
 
         var initialSnapshotTimeout = GetInitialSnapshotTimeout();
-
-        using var handler = new SocketsHttpHandler
-        {
-            EnableMultipleHttp2Connections = true,
-            KeepAlivePingDelay = TimeSpan.FromSeconds(20),
-            KeepAlivePingTimeout = TimeSpan.FromSeconds(10),
-            KeepAlivePingPolicy = HttpKeepAlivePingPolicy.WithActiveRequests
-        };
-        using var channel = GrpcChannel.ForAddress(resourceServiceUri, new GrpcChannelOptions
-        {
-            HttpHandler = handler,
-            LoggerFactory = loggerFactory,
-            ThrowOperationCanceledOnCancellation = true,
-            MaxReceiveMessageSize = 16 * 1024 * 1024
-        });
-        var client = new Aspire.DashboardService.Proto.V1.DashboardService.DashboardServiceClient(channel);
-        var headers = CreateHeaders();
         var reconnect = false;
 
         while (!stoppingToken.IsCancellationRequested)
@@ -148,11 +124,9 @@ internal sealed class DashboardResourceSnapshotService(
 
                 // The resource service sends one complete InitialData frame, followed by
                 // upsert/delete Changes frames for the lifetime of this streaming call.
-                using var call = client.WatchResources(
-                    new WatchResourcesRequest { IsReconnect = reconnect },
-                    headers,
-                    cancellationToken: callCancellation.Token);
-                await foreach (var update in call.ResponseStream.ReadAllAsync(callCancellation.Token).ConfigureAwait(false))
+                await foreach (var update in resourceServiceConnection
+                    .WatchResourcesAsync(reconnect, callCancellation.Token)
+                    .ConfigureAwait(false))
                 {
                     ApplyUpdate(update);
                     if (update.KindCase is WatchResourcesUpdate.KindOneofCase.InitialData)
@@ -191,18 +165,6 @@ internal sealed class DashboardResourceSnapshotService(
             }
 
             await Task.Delay(TimeSpan.FromSeconds(1), stoppingToken).ConfigureAwait(false);
-        }
-
-        Metadata CreateHeaders()
-        {
-            var metadata = new Metadata();
-            if (string.Equals(configuration[ResourceServiceAuthModeKey], "ApiKey", StringComparison.OrdinalIgnoreCase)
-                && configuration[ResourceServiceApiKeyKey] is { Length: > 0 } apiKey)
-            {
-                metadata.Add(ApiKeyHeaderName, apiKey);
-            }
-
-            return metadata;
         }
 
         TimeSpan GetInitialSnapshotTimeout()

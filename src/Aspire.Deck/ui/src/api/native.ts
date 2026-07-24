@@ -297,6 +297,10 @@ async function respondInteraction(
   if (!response.ok) {
     throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
   }
+
+  // Consume even an empty 204 response so Chromium finishes the request before a
+  // command result closes the interaction or a test navigates away.
+  await response.arrayBuffer();
 }
 
 function isResourcesEvent(value: unknown): value is ResourcesEvent {

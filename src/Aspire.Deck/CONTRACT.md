@@ -67,11 +67,14 @@ when a compatible server does not advertise `resources-live`; commands and other
 operations remain on `/api/deck` when the `commands` capability is not advertised.
 
 The `commands` request is `{ resourceName, commandName }`. The backend resolves the resource type
-and command from its authoritative resource snapshot before forwarding the command to the AppHost;
+and command from its authoritative resource snapshot before sending the command to the AppHost;
 unknown resources or commands return `404`, and malformed requests return `400`. Command input
-interactions are read and answered through the `interactions` capability. During this migration
-slice, the AOT backend forwards those requests to the existing dashboard so its resource-service
-session remains authoritative.
+interactions are read and answered through the `interactions` capability. Resource watching,
+command execution, and the bidirectional interaction stream share one long-lived AppHost
+resource-service channel. Responses are queued in order with a bounded buffer; terminal actions
+remove the prompt optimistically and restore it at its original position if delivery fails.
+Reconnects receive the AppHost's current pending interactions before live updates. The unversioned
+command and interaction aliases used by older React bundles enter this same direct session.
 
 The read-only `structured-logs` response contains `{ totalCount, data }`, where `data` is the OTLP
 JSON resource-log tree used by the existing dashboard. The AOT host obtains the backlog from the

@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.DashboardService.Proto.V1;
-using Grpc.Core;
-using Grpc.Net.Client;
 
 namespace Aspire.Dashboard.Backend;
 
@@ -15,9 +13,9 @@ internal interface IDashboardCommandExecutor
 }
 
 internal sealed class DashboardCommandExecutor(
-    IConfiguration configuration,
+    IDashboardResourceServiceConnection resourceServiceConnection,
     IDashboardResourceSnapshotProvider resourceSnapshotProvider,
-    ILoggerFactory loggerFactory) : IDashboardCommandExecutor
+    ILogger<DashboardCommandExecutor> logger) : IDashboardCommandExecutor
 {
     public async ValueTask<DashboardCommandResponse?> ExecuteAsync(
         DashboardExecuteCommandRequest request,
@@ -33,38 +31,23 @@ internal sealed class DashboardCommandExecutor(
             return null;
         }
 
-        var endpoint = configuration["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"]
-            ?? configuration["DOTNET_RESOURCE_SERVICE_ENDPOINT_URL"];
-        if (!Uri.TryCreate(endpoint, UriKind.Absolute, out var resourceServiceUri))
+        if (!resourceServiceConnection.IsConfigured)
         {
-            throw new DashboardResourceServiceUnavailableException(
-                "Configure ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL with the AppHost resource-service endpoint.");
+            throw new DashboardResourceServiceUnavailableException(resourceServiceConnection.UnavailableMessage);
         }
 
-        using var handler = new SocketsHttpHandler { EnableMultipleHttp2Connections = true };
-        using var channel = GrpcChannel.ForAddress(resourceServiceUri, new GrpcChannelOptions
-        {
-            HttpHandler = handler,
-            LoggerFactory = loggerFactory,
-            ThrowOperationCanceledOnCancellation = true
-        });
-        var client = new DashboardService.Proto.V1.DashboardService.DashboardServiceClient(channel);
-        var headers = new Metadata();
-        if (string.Equals(configuration["Dashboard:ResourceServiceClient:AuthMode"], "ApiKey", StringComparison.OrdinalIgnoreCase)
-            && configuration["Dashboard:ResourceServiceClient:ApiKey"] is { Length: > 0 } apiKey)
-        {
-            headers.Add("x-resource-service-api-key", apiKey);
-        }
-
-        var response = await client.ExecuteResourceCommandAsync(
+        logger.LogDebug(
+            "Executing resource command {CommandName} on {ResourceName} through the shared AppHost session.",
+            command.Name,
+            resource.Name);
+        var response = await resourceServiceConnection.ExecuteResourceCommandAsync(
             new ResourceCommandRequest
             {
                 ResourceName = resource.Name,
                 ResourceType = resource.ResourceType,
                 CommandName = command.Name
             },
-            headers,
-            cancellationToken: cancellationToken).ResponseAsync.ConfigureAwait(false);
+            cancellationToken).ConfigureAwait(false);
 
         return new DashboardCommandResponse(
             response.Kind switch

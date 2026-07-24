@@ -33,7 +33,6 @@ import type {
   ManageDataResponse,
   TelemetrySummary,
 } from "./types";
-import { PARAMETER_RESOURCE_TYPE } from "./types";
 
 // (MetricSeriesQuery re-exported from types for callers that import from deck.)
 export type { MetricSeriesQuery } from "./types";
@@ -359,12 +358,6 @@ export function executeCommand(args: ExecuteCommandArgs): Promise<CommandRespons
     return invoke<CommandResponse>("deck_execute_command", { ...args });
   }
   if (isAotBackend()) {
-    // Parameter updates are interaction-backed commands. The versioned interaction
-    // capability is proxy-owned for now, so keep command creation and response on the
-    // same legacy resource-service session.
-    if (args.resourceType === PARAMETER_RESOURCE_TYPE) {
-      return httpBackend.executeCommand(args);
-    }
     return nativeBackend.hasCapability("commands").then((supported) => (
       supported ? nativeBackend.executeCommand(args) : httpBackend.executeCommand(args)
     ));

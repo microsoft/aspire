@@ -6,10 +6,10 @@ using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
 using System.Text.Json;
+using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
-using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
@@ -204,25 +204,58 @@ public class DashboardBackendApplicationTests
     }
 
     [Fact]
-    public async Task VersionedInteractions_ProxyToLegacySessionWithBrowserCredentials()
+    public async Task VersionedAndLegacyAliases_UseDirectInteractionAndCommandServices()
     {
-        var proxy = new TestLegacyApiProxy();
+        var interaction = new DashboardInteraction(
+            42,
+            "inputsDialog",
+            "Set parameter",
+            "Provide a value.",
+            "Apply",
+            "Cancel",
+            true,
+            true,
+            false,
+            "none",
+            [
+                new DashboardInteractionInput(
+                    "value",
+                    "Value",
+                    "Enter a value",
+                    "text",
+                    true,
+                    [],
+                    "initial",
+                    [],
+                    "",
+                    false,
+                    100,
+                    false,
+                    false,
+                    true)
+            ],
+            "",
+            "");
+        var interactionService = new TestInteractionService([interaction]);
+        var commandExecutor = new TestCommandExecutor(new DashboardCommandResponse("succeeded", null, null));
         await using var app = DashboardBackendApplication.Build([], builder =>
         {
             builder.WebHost.UseTestServer();
-            builder.Services.AddSingleton<IDashboardLegacyApiProxy>(proxy);
+            builder.Services.AddSingleton<IDashboardInteractionService>(interactionService);
+            builder.Services.AddSingleton<IDashboardCommandExecutor>(commandExecutor);
         });
         await app.StartAsync(TestContext.Current.CancellationToken);
 
         using var client = app.GetTestClient();
-        using var getRequest = new HttpRequestMessage(HttpMethod.Get, "/api/dashboard/v1/interactions");
-        getRequest.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
-        using var getResponse = await client.SendAsync(getRequest, TestContext.Current.CancellationToken);
+        using var getResponse = await client.GetAsync(
+            "/api/dashboard/v1/interactions",
+            TestContext.Current.CancellationToken);
 
         getResponse.EnsureSuccessStatusCode();
-        Assert.Equal("api/deck/interactions", proxy.Path);
-        Assert.Equal(".Aspire.Dashboard=browser-session", proxy.Credentials?.Cookie);
-        Assert.Equal("[]", await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("no-store", getResponse.Headers.CacheControl?.ToString());
+        Assert.Equal(
+            "[{\"interactionId\":42,\"kind\":\"inputsDialog\",\"title\":\"Set parameter\",\"message\":\"Provide a value.\",\"primaryButtonText\":\"Apply\",\"secondaryButtonText\":\"Cancel\",\"showSecondaryButton\":true,\"showDismiss\":true,\"enableMessageMarkdown\":false,\"intent\":\"none\",\"inputs\":[{\"name\":\"value\",\"label\":\"Value\",\"placeholder\":\"Enter a value\",\"inputType\":\"text\",\"required\":true,\"options\":[],\"value\":\"initial\",\"validationErrors\":[],\"description\":\"\",\"enableDescriptionMarkdown\":false,\"maxLength\":100,\"allowCustomChoice\":false,\"disabled\":false,\"updateStateOnChange\":true}],\"linkText\":\"\",\"linkUrl\":\"\"}]",
+            await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         using var postResponse = await client.PostAsJsonAsync(
             "/api/dashboard/v1/interactions/respond",
@@ -230,15 +263,25 @@ public class DashboardBackendApplicationTests
             TestContext.Current.CancellationToken);
 
         Assert.Equal(HttpStatusCode.NoContent, postResponse.StatusCode);
-        Assert.Equal("api/deck/interactions/respond", proxy.Path);
+        Assert.Equal(42, interactionService.Request?.InteractionId);
+        Assert.Equal("submit", interactionService.Request?.Action);
+        Assert.Equal("updated", interactionService.Request?.Values?["value"]);
+
+        using var legacyGetResponse = await client.GetAsync(
+            "/api/deck/interactions",
+            TestContext.Current.CancellationToken);
+        legacyGetResponse.EnsureSuccessStatusCode();
+        Assert.Contains("\"interactionId\":42", await legacyGetResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken), StringComparison.Ordinal);
 
         using var commandResponse = await client.PostAsJsonAsync(
             "/api/deck/commands/execute",
             new { resourceName = "db-connection-string", commandName = "set-parameter" },
             TestContext.Current.CancellationToken);
 
-        Assert.Equal(HttpStatusCode.NoContent, commandResponse.StatusCode);
-        Assert.Equal("api/deck/commands/execute", proxy.Path);
+        commandResponse.EnsureSuccessStatusCode();
+        Assert.Equal(
+            new DashboardExecuteCommandRequest("db-connection-string", "set-parameter"),
+            commandExecutor.Request);
     }
 
     [Fact]
@@ -399,11 +442,248 @@ public class DashboardBackendApplicationTests
     }
 
     [Fact]
+    public async Task CommandExecutor_UsesSharedResourceServiceConnection()
+    {
+        var connection = new TestResourceServiceConnection(isConfigured: true)
+        {
+            CommandResponse = new ResourceCommandResponse
+            {
+                Kind = ResourceCommandResponseKind.Succeeded,
+                Message = "Restarted"
+            }
+        };
+        DashboardResource[] resources =
+        [
+            new DashboardResource(
+                "api",
+                "Project",
+                "API",
+                "resource-1",
+                "Running",
+                "success",
+                "Healthy",
+                null,
+                null,
+                null,
+                [],
+                [],
+                [],
+                [],
+                [new("restart", "Restart", null, null, null, "regular", false, "enabled")],
+                [],
+                false,
+                true,
+                null,
+                null,
+                false,
+                null)
+        ];
+        var executor = new DashboardCommandExecutor(
+            connection,
+            new TestResourceSnapshotProvider(resources),
+            NullLogger<DashboardCommandExecutor>.Instance);
+
+        var response = await executor.ExecuteAsync(
+            new DashboardExecuteCommandRequest("api", "restart"),
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal("succeeded", response?.Kind);
+        Assert.Equal("Restarted", response?.Message);
+        Assert.Equal("api", connection.CommandRequest?.ResourceName);
+        Assert.Equal("Project", connection.CommandRequest?.ResourceType);
+        Assert.Equal("restart", connection.CommandRequest?.CommandName);
+    }
+
+    [Fact]
+    public async Task InteractionService_PreservesOrderingUpdatesAndFailedDeliveryRetry()
+    {
+        var connection = new TestResourceServiceConnection(isConfigured: true);
+        using var service = new DashboardInteractionService(
+            connection,
+            NullLogger<DashboardInteractionService>.Instance);
+        await service.StartAsync(TestContext.Current.CancellationToken);
+
+        await connection.InteractionUpdates.Writer.WriteAsync(
+            new WatchInteractionsResponseUpdate
+            {
+                InteractionId = 7,
+                Title = "Deployment complete",
+                Notification = new InteractionNotification
+                {
+                    Intent = MessageIntent.Success,
+                    LinkText = "Open",
+                    LinkUrl = "https://example.test"
+                }
+            },
+            TestContext.Current.CancellationToken);
+        var inputs = new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 8,
+            Title = "Set parameter",
+            InputsDialog = new InteractionInputsDialog()
+        };
+        inputs.InputsDialog.InputItems.Add(new InteractionInput
+        {
+            Name = "value",
+            Label = "Value",
+            Value = "initial",
+            InputType = InputType.Text,
+            UpdateStateOnChange = true
+        });
+        await connection.InteractionUpdates.Writer.WriteAsync(
+            inputs,
+            TestContext.Current.CancellationToken);
+
+        await WaitUntilAsync(() => service.GetInteractions().Length is 2);
+        Assert.Collection(
+            service.GetInteractions(),
+            interaction =>
+            {
+                Assert.Equal(7, interaction.InteractionId);
+                Assert.Equal("notification", interaction.Kind);
+            },
+            interaction =>
+            {
+                Assert.Equal(8, interaction.InteractionId);
+                Assert.Equal("inputsDialog", interaction.Kind);
+            });
+
+        Assert.True(await service.RespondAsync(
+            new DashboardRespondInteractionRequest(
+                8,
+                "update",
+                new Dictionary<string, string> { ["value"] = "updated" }),
+            TestContext.Current.CancellationToken));
+        var updateResponse = await connection.InteractionResponses.Reader.ReadAsync(
+            TestContext.Current.CancellationToken);
+        Assert.True(updateResponse.ResponseUpdate);
+        Assert.Equal("updated", Assert.Single(updateResponse.InputsDialog.InputItems).Value);
+
+        var validationUpdate = inputs.Clone();
+        validationUpdate.InputsDialog.InputItems[0].Value = "updated";
+        validationUpdate.InputsDialog.InputItems[0].ValidationErrors.Add("Value is unavailable.");
+        await connection.InteractionUpdates.Writer.WriteAsync(
+            validationUpdate,
+            TestContext.Current.CancellationToken);
+        await WaitUntilAsync(() =>
+            service.GetInteractions().Single(interaction => interaction.InteractionId == 8)
+                .Inputs[0].ValidationErrors.Length is 1);
+        Assert.Equal(
+            "Value is unavailable.",
+            service.GetInteractions().Single(interaction => interaction.InteractionId == 8)
+                .Inputs[0].ValidationErrors[0]);
+
+        connection.FailNextInteractionResponse();
+        Assert.True(await service.RespondAsync(
+            new DashboardRespondInteractionRequest(7, "primary", null),
+            TestContext.Current.CancellationToken));
+        await WaitUntilAsync(() => service.GetInteractions().Any(interaction => interaction.InteractionId == 7));
+        Assert.Equal(
+            [7, 8],
+            service.GetInteractions().Select(interaction => interaction.InteractionId).ToArray());
+
+        Assert.True(await service.RespondAsync(
+            new DashboardRespondInteractionRequest(
+                8,
+                "submit",
+                new Dictionary<string, string> { ["value"] = "final" }),
+            TestContext.Current.CancellationToken));
+        await WaitUntilAsync(() => service.GetInteractions().All(interaction => interaction.InteractionId != 8));
+        var submitResponse = await connection.InteractionResponses.Reader.ReadAsync(
+            TestContext.Current.CancellationToken);
+        Assert.False(submitResponse.ResponseUpdate);
+        Assert.Equal("final", Assert.Single(submitResponse.InputsDialog.InputItems).Value);
+
+        await service.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task InputProducingCommand_AndResponseUseSameResourceServiceSession()
+    {
+        var connection = new TestResourceServiceConnection(isConfigured: true);
+        connection.CommandHandler = async (request, cancellationToken) =>
+        {
+            var interaction = new WatchInteractionsResponseUpdate
+            {
+                InteractionId = 19,
+                Title = "Set parameter",
+                InputsDialog = new InteractionInputsDialog()
+            };
+            interaction.InputsDialog.InputItems.Add(new InteractionInput
+            {
+                Name = "value",
+                Label = "Value",
+                InputType = InputType.SecretText,
+                Required = true
+            });
+            await connection.InteractionUpdates.Writer.WriteAsync(interaction, cancellationToken);
+
+            var response = await connection.InteractionResponses.Reader.ReadAsync(cancellationToken);
+            Assert.Equal(19, response.InteractionId);
+            Assert.Equal("new-secret", Assert.Single(response.InputsDialog.InputItems).Value);
+            return new ResourceCommandResponse { Kind = ResourceCommandResponseKind.Succeeded };
+        };
+
+        using var interactionService = new DashboardInteractionService(
+            connection,
+            NullLogger<DashboardInteractionService>.Instance);
+        await interactionService.StartAsync(TestContext.Current.CancellationToken);
+        var executor = new DashboardCommandExecutor(
+            connection,
+            new TestResourceSnapshotProvider(
+            [
+                new DashboardResource(
+                    "parameter",
+                    "Parameter",
+                    "parameter",
+                    "resource-1",
+                    "ValueMissing",
+                    "warning",
+                    null,
+                    null,
+                    null,
+                    null,
+                    [],
+                    [],
+                    [],
+                    [],
+                    [new("set-parameter", "Set value", null, null, null, "regular", false, "enabled")],
+                    [],
+                    false,
+                    true,
+                    null,
+                    null,
+                    false,
+                    null)
+            ]),
+            NullLogger<DashboardCommandExecutor>.Instance);
+
+        var commandTask = executor.ExecuteAsync(
+            new DashboardExecuteCommandRequest("parameter", "set-parameter"),
+            TestContext.Current.CancellationToken).AsTask();
+        await WaitUntilAsync(() => interactionService.GetInteractions().Length is 1);
+        var prompt = Assert.Single(interactionService.GetInteractions());
+        Assert.Equal("secretText", Assert.Single(prompt.Inputs).InputType);
+
+        Assert.True(await interactionService.RespondAsync(
+            new DashboardRespondInteractionRequest(
+                19,
+                "submit",
+                new Dictionary<string, string> { ["value"] = "new-secret" }),
+            TestContext.Current.CancellationToken));
+
+        var commandResponse = await commandTask;
+        Assert.NotNull(commandResponse);
+        Assert.Equal("succeeded", commandResponse.Kind);
+        await interactionService.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
     public async Task ResourceSnapshot_RecoversAfterInitialConnectionFailure()
     {
         var service = new DashboardResourceSnapshotService(
+            new TestResourceServiceConnection(),
             new ConfigurationBuilder().Build(),
-            NullLoggerFactory.Instance,
             NullLogger<DashboardResourceSnapshotService>.Instance);
         service.ReportInitialFailure("Unavailable");
 
@@ -517,8 +797,8 @@ public class DashboardBackendApplicationTests
     public async Task ResourceEventSource_SendsSnapshotBeforeIncrementalChanges()
     {
         var service = new DashboardResourceSnapshotService(
+            new TestResourceServiceConnection(),
             new ConfigurationBuilder().Build(),
-            NullLoggerFactory.Instance,
             NullLogger<DashboardResourceSnapshotService>.Instance);
         var initialResource = new ProtoResource
         {
@@ -770,6 +1050,21 @@ public class DashboardBackendApplicationTests
         }
     }
 
+    private static async Task WaitUntilAsync(Func<bool> condition)
+    {
+        var timeout = TimeSpan.FromSeconds(5);
+        var startedAt = DateTime.UtcNow;
+        while (!condition())
+        {
+            if (DateTime.UtcNow - startedAt > timeout)
+            {
+                throw new TimeoutException($"Condition was not met within {timeout}.");
+            }
+
+            await Task.Delay(TimeSpan.FromMilliseconds(10), TestContext.Current.CancellationToken);
+        }
+    }
+
     private sealed class TestFrontendAssetProvider(IReadOnlyDictionary<string, string> assets) : IDashboardFrontendAssetProvider
     {
         public Stream? Open(string path)
@@ -805,6 +1100,101 @@ public class DashboardBackendApplicationTests
             Request = request;
             return ValueTask.FromResult(response);
         }
+    }
+
+    private sealed class TestInteractionService(DashboardInteraction[] interactions) : IDashboardInteractionService
+    {
+        public DashboardRespondInteractionRequest? Request { get; private set; }
+
+        public DashboardInteraction[] GetInteractions() => interactions;
+
+        public ValueTask<bool> RespondAsync(
+            DashboardRespondInteractionRequest request,
+            CancellationToken cancellationToken)
+        {
+            Request = request;
+            return ValueTask.FromResult(interactions.Any(interaction => interaction.InteractionId == request.InteractionId));
+        }
+    }
+
+    private sealed class TestResourceServiceConnection(bool isConfigured = false) : IDashboardResourceServiceConnection
+    {
+        private int _failNextInteractionResponse;
+
+        public Channel<WatchResourcesUpdate> ResourceUpdates { get; } = Channel.CreateUnbounded<WatchResourcesUpdate>();
+        public Channel<WatchInteractionsResponseUpdate> InteractionUpdates { get; } = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        public Channel<WatchInteractionsRequestUpdate> InteractionResponses { get; } = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        public ResourceCommandRequest? CommandRequest { get; private set; }
+        public Func<ResourceCommandRequest, CancellationToken, ValueTask<ResourceCommandResponse>>? CommandHandler { get; set; }
+        public ResourceCommandResponse CommandResponse { get; set; } = new()
+        {
+            Kind = ResourceCommandResponseKind.Succeeded
+        };
+        public bool IsConfigured { get; } = isConfigured;
+        public string UnavailableMessage => "Test resource service is unavailable.";
+
+        public async IAsyncEnumerable<WatchResourcesUpdate> WatchResourcesAsync(
+            bool isReconnect,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            await foreach (var update in ResourceUpdates.Reader.ReadAllAsync(cancellationToken))
+            {
+                yield return update;
+            }
+        }
+
+        public ValueTask<ResourceCommandResponse> ExecuteResourceCommandAsync(
+            ResourceCommandRequest request,
+            CancellationToken cancellationToken)
+        {
+            CommandRequest = request;
+            return CommandHandler is null
+                ? ValueTask.FromResult(CommandResponse)
+                : CommandHandler(request, cancellationToken);
+        }
+
+        public async Task RunInteractionSessionAsync(
+            ChannelReader<DashboardPendingInteractionResponse> responses,
+            Func<WatchInteractionsResponseUpdate, ValueTask> onUpdate,
+            CancellationToken cancellationToken)
+        {
+            var responseTask = WriteResponsesAsync();
+            try
+            {
+                await foreach (var update in InteractionUpdates.Reader.ReadAllAsync(cancellationToken))
+                {
+                    await onUpdate(update);
+                }
+            }
+            finally
+            {
+                try
+                {
+                    await responseTask;
+                }
+                catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+                {
+                }
+            }
+
+            async Task WriteResponsesAsync()
+            {
+                await foreach (var response in responses.ReadAllAsync(cancellationToken))
+                {
+                    if (Interlocked.Exchange(ref _failNextInteractionResponse, 0) is 1)
+                    {
+                        response.MarkFailed(new IOException("Simulated interaction transport failure."));
+                    }
+                    else
+                    {
+                        await InteractionResponses.Writer.WriteAsync(response.Request, cancellationToken);
+                        response.MarkDelivered();
+                    }
+                }
+            }
+        }
+
+        public void FailNextInteractionResponse() => Interlocked.Exchange(ref _failNextInteractionResponse, 1);
     }
 
     private sealed class TestStructuredLogSource(
@@ -856,24 +1246,4 @@ public class DashboardBackendApplicationTests
         }
     }
 
-    private sealed class TestLegacyApiProxy : IDashboardLegacyApiProxy
-    {
-        public string? Path { get; private set; }
-        public DashboardRequestCredentials? Credentials { get; private set; }
-
-        public async Task ProxyAsync(HttpContext context, string path)
-        {
-            Path = path;
-            Credentials = DashboardRequestCredentials.From(context.Request);
-            if (HttpMethods.IsGet(context.Request.Method))
-            {
-                context.Response.ContentType = "application/json";
-                await context.Response.WriteAsync("[]", context.RequestAborted);
-            }
-            else
-            {
-                context.Response.StatusCode = StatusCodes.Status204NoContent;
-            }
-        }
-    }
 }

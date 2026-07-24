@@ -9,10 +9,12 @@ to host the existing `/api/deck` transport.
 The backend currently implements version discovery plus the `configuration`, read-only `resources`
 snapshot, SignalR `resources-live`, resource `commands`, resource-scoped console backlog/live,
 read-only structured-log backlog/live, and versioned interaction polling/response capabilities.
-In side-by-side mode, React reads those capabilities from this host and delegates
-traces, metrics, destructive console/telemetry operations, authentication,
-and terminal traffic to the existing dashboard. A version must not advertise a
-capability until its
+Resources, commands, and interactions use one long-lived AppHost resource-service connection.
+Interaction state and response traffic are bounded, and the backend restores an optimistically
+removed prompt when delivery fails so the user can retry. In side-by-side mode, React reads those
+capabilities from this host and delegates traces, metrics, destructive console/telemetry
+operations, authentication, and terminal traffic to the existing dashboard. A version must not
+advertise a capability until its
 complete black-box behavior passes the 157-feature parity inventory in
 `src/Aspire.Deck/ui/e2e/parity`.
 
@@ -48,8 +50,10 @@ DASHBOARD__RESOURCESERVICECLIENT__APIKEY=<apphost-resource-service-key> \
   dotnet run --project src/Aspire.Dashboard.Backend/Aspire.Dashboard.Backend.csproj
 ```
 
-Use the same resource-service endpoint, authentication mode, and API key supplied to the existing
-dashboard process. `Unsecured` authentication requires no API-key setting.
+Use the same resource-service endpoint and authentication settings supplied to the existing
+dashboard process. `Unsecured` authentication requires no API-key setting. `Certificate`
+authentication supports the existing `File` and `KeyStore` client-certificate sources under
+`Dashboard:ResourceServiceClient:ClientCertificate`.
 
 The host enforces loopback connections and loopback browser origins because this first migration
 slice does not yet own dashboard authentication. If the resource service cannot provide its first
@@ -71,11 +75,13 @@ The host exposes:
 - `/api/dashboard/v1/console-logs/live` for the SignalR `WatchConsoleLogs(resourceName)` server
   stream. The existing dashboard supplies the resource backlog before live stdout/stderr batches.
 - `GET /api/dashboard/v1/interactions` and `POST /api/dashboard/v1/interactions/respond` for
-  command inputs, message boxes, and notifications owned by the existing dashboard session.
+  command inputs, validation updates, message boxes, and notifications owned directly through the
+  shared AppHost resource-service session.
 
 `DashboardBackend__LegacyDashboardUrl` must identify the existing dashboard's loopback base URL.
-The proxy forwards the incoming dashboard cookie or authorization header so the legacy dashboard
-continues to own authentication and OTLP storage during this migration slice.
+Telemetry and console proxies forward the incoming dashboard cookie or authorization header so the
+legacy dashboard continues to own authentication and OTLP storage for unfinished capabilities
+during this migration slice. Command and interaction routes do not use the legacy proxy.
 
 All HTTP and SignalR JSON uses camel-case names and an explicit `JsonSerializerContext`. New
 contract payloads must be registered with source generation so Native AOT never depends on

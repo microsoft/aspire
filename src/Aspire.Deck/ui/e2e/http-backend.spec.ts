@@ -254,6 +254,131 @@ test(`${features("AOT-CONTRACT-001")} executes commands through the negotiated A
   expect(legacyCommandRequests).toBe(0);
 });
 
+test(`${features("AOT-CONTRACT-001")} keeps parameter commands and interactions on the negotiated AOT capability`, async ({ page }) => {
+  const parameter: Resource = {
+    ...resource,
+    name: "api-key",
+    resourceType: "Parameter",
+    displayName: "api-key",
+    uid: "api-key",
+    state: "ValueMissing",
+    stateStyle: "warning",
+    health: null,
+    properties: [],
+    commands: [{
+      name: "set-parameter",
+      displayName: "Set parameter",
+      displayDescription: "Set the parameter value.",
+      confirmationMessage: null,
+      iconName: "Edit",
+      iconVariant: "regular",
+      isHighlighted: true,
+      state: "enabled",
+    }],
+    supportsDetailedTelemetry: false,
+  };
+  const inputInteraction: InteractionInfo = {
+    interactionId: 42,
+    kind: "inputsDialog",
+    title: "Set api-key",
+    message: "Enter a value.",
+    primaryButtonText: "Set",
+    secondaryButtonText: "Cancel",
+    showSecondaryButton: true,
+    showDismiss: true,
+    enableMessageMarkdown: false,
+    intent: "none",
+    inputs: [{
+      name: "value",
+      label: "Value",
+      placeholder: "Enter value",
+      inputType: "secretText",
+      required: true,
+      options: [],
+      value: "",
+      validationErrors: [],
+      description: "",
+      enableDescriptionMarkdown: false,
+      maxLength: 0,
+      allowCustomChoice: false,
+      disabled: false,
+      updateStateOnChange: false,
+    }],
+    linkText: "",
+    linkUrl: "",
+  };
+  let interactions: InteractionInfo[] = [];
+  let aotCommandRequests = 0;
+  let aotResponseRequests = 0;
+  let legacyCommandRequests = 0;
+  let legacyResponseRequests = 0;
+  let interactionResponse: unknown;
+
+  await page.unroute("**/api/deck/interactions");
+  await page.route("**/api/dashboard", async (route) => {
+    await route.fulfill({
+      json: {
+        product: "Aspire.Dashboard",
+        versions: [{
+          version: 1,
+          basePath: "/api/dashboard/v1",
+          capabilities: ["configuration", "resources", "commands", "interactions"],
+        }],
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/config", async (route) => {
+    await route.fulfill({ json: { ...config, applicationName: "Stress AOT", dashboardVersion: "13.5.0-aot" } });
+  });
+  await page.route("**/api/dashboard/v1/resources", async (route) => {
+    await route.fulfill({ json: [parameter] });
+  });
+  await page.route("**/api/dashboard/v1/interactions", async (route) => {
+    await route.fulfill({ json: interactions });
+  });
+  await page.route("**/api/dashboard/v1/commands/execute", async (route) => {
+    aotCommandRequests++;
+    interactions = [inputInteraction];
+    await route.fulfill({ json: { kind: "succeeded", message: "Parameter set.", result: null } });
+  });
+  await page.route("**/api/dashboard/v1/interactions/respond", async (route) => {
+    aotResponseRequests++;
+    interactionResponse = route.request().postDataJSON();
+    interactions = [];
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/api/deck/commands/execute", async (route) => {
+    legacyCommandRequests++;
+    await route.fulfill({ json: { kind: "failed", message: "Legacy command used", result: null } });
+  });
+  await page.route("**/api/deck/interactions/respond", async (route) => {
+    legacyResponseRequests++;
+    await route.fulfill({ status: 204 });
+  });
+
+  await page.goto("/parameters?backend=aot&resource=api-key");
+  const details = page.getByRole("dialog", { name: "api-key" });
+  await details.getByRole("button", { name: "Set parameter", exact: true }).click();
+  const input = page.getByRole("dialog", { name: "Set api-key" });
+  await input.getByRole("textbox", { name: "Value" }).fill("stress-secret");
+  const responseCompleted = page.waitForEvent("requestfinished", (request) =>
+    request.url().endsWith("/api/dashboard/v1/interactions/respond"));
+  await input.getByRole("button", { name: "Set", exact: true }).click();
+  await responseCompleted;
+
+  await expect(input).toHaveCount(0);
+  await expect(page.getByRole("status")).toContainText("Set parameter succeeded");
+  expect(aotCommandRequests).toBe(1);
+  expect(aotResponseRequests).toBe(1);
+  expect(legacyCommandRequests).toBe(0);
+  expect(legacyResponseRequests).toBe(0);
+  expect(interactionResponse).toEqual({
+    interactionId: 42,
+    action: "submit",
+    values: { value: "stress-secret" },
+  });
+});
+
 test(`${features("AOT-CONTRACT-001")} polls interactions through the negotiated AOT capability`, async ({ page }) => {
   let aotInteractionRequests = 0;
   let legacyInteractionRequests = 0;

@@ -111,7 +111,10 @@ test.beforeEach(async ({ page }) => {
 test.afterEach(async ({ page }) => {
   const cancelInteraction = page.getByRole("dialog").getByRole("button", { name: "Cancel", exact: true });
   if (await cancelInteraction.isVisible().catch(() => false)) {
+    const responseCompleted = page.waitForEvent("requestfinished", (request) =>
+      request.url().endsWith("/interactions/respond"));
     await cancelInteraction.click();
+    await responseCompleted;
   }
 
   const errors = browserErrors.get(page) ?? [];

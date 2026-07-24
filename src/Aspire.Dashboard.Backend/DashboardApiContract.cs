@@ -134,6 +134,42 @@ internal sealed record DashboardCommandResult(
     string Format,
     bool DisplayImmediately);
 
+internal sealed record DashboardInteraction(
+    int InteractionId,
+    string Kind,
+    string Title,
+    string Message,
+    string PrimaryButtonText,
+    string SecondaryButtonText,
+    bool ShowSecondaryButton,
+    bool ShowDismiss,
+    bool EnableMessageMarkdown,
+    string Intent,
+    DashboardInteractionInput[] Inputs,
+    string LinkText,
+    string LinkUrl);
+
+internal sealed record DashboardInteractionInput(
+    string Name,
+    string Label,
+    string Placeholder,
+    string InputType,
+    bool Required,
+    string[][] Options,
+    string Value,
+    string[] ValidationErrors,
+    string Description,
+    bool EnableDescriptionMarkdown,
+    int MaxLength,
+    bool AllowCustomChoice,
+    bool Disabled,
+    bool UpdateStateOnChange);
+
+internal sealed record DashboardRespondInteractionRequest(
+    int InteractionId,
+    string Action,
+    Dictionary<string, string>? Values);
+
 internal sealed record DashboardStructuredLogsSnapshot(
     int TotalCount,
     System.Text.Json.JsonElement Data);
