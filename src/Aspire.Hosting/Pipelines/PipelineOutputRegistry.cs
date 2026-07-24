@@ -19,6 +19,8 @@ internal sealed class PipelineOutputRegistry
     internal const string PrimaryOutputName = "primary";
     internal const string StagingPathConfigurationKey = "Pipeline:Verification:StagingPath";
     internal const string TargetOutputPathConfigurationKey = "Pipeline:Verification:TargetOutputPath";
+    internal const int MaximumStagedOutputNameByteCount = 200;
+    private const int MaximumStagedOutputExtensionByteCount = 32;
 
     private readonly object _lock = new();
     private readonly IConfiguration _configuration;
@@ -162,7 +164,7 @@ internal sealed class PipelineOutputRegistry
             }
 
             var unsupportedSteps = _selectedSteps
-                .Where(step => !step.SupportsOutputPathRelocation)
+                .Where(step => !SupportsOutputPathRelocationCore(step))
                 .Select(step => step.Name)
                 .ToArray();
             if (unsupportedSteps.Length > 0)
@@ -267,6 +269,17 @@ internal sealed class PipelineOutputRegistry
         }
     }
 
+    public bool SupportsOutputPathRelocation(PipelineStep step)
+    {
+        ArgumentNullException.ThrowIfNull(step);
+
+        lock (_lock)
+        {
+            EnsurePrepared();
+            return SupportsOutputPathRelocationCore(step);
+        }
+    }
+
     private void Register(string publisherName, PipelineOutputDefinition definition)
     {
         ValidateIdentifier(publisherName, nameof(publisherName));
@@ -321,14 +334,26 @@ internal sealed class PipelineOutputRegistry
     {
         var identity = $"{publisherName}\0{definition.Name}\0{targetPath}";
         var hash = Convert.ToHexString(XxHash3.Hash(Encoding.UTF8.GetBytes(identity))).ToLowerInvariant();
-        var leafName = $"{SanitizePathSegment(publisherName)}-{SanitizePathSegment(definition.Name)}-{hash}";
-
-        if (definition.Kind == PipelineOutputKind.File)
-        {
-            leafName += Path.GetExtension(targetPath);
-        }
+        var extension = definition.Kind == PipelineOutputKind.File
+            ? TruncateToUtf8ByteCount(
+                SanitizePathSegment(Path.GetExtension(targetPath)),
+                MaximumStagedOutputExtensionByteCount)
+            : string.Empty;
+        var fixedByteCount = hash.Length + Encoding.UTF8.GetByteCount(extension) + 2;
+        var readableByteCount = MaximumStagedOutputNameByteCount - fixedByteCount;
+        var publisherByteCount = readableByteCount / 2;
+        var outputByteCount = readableByteCount - publisherByteCount;
+        var publisherSegment = TruncateToUtf8ByteCount(SanitizePathSegment(publisherName), publisherByteCount);
+        var outputSegment = TruncateToUtf8ByteCount(SanitizePathSegment(definition.Name), outputByteCount);
+        var leafName = $"{publisherSegment}-{outputSegment}-{hash}{extension}";
 
         return Path.Combine(_stagingPath!, "outputs", leafName);
+    }
+
+    private bool SupportsOutputPathRelocationCore(PipelineStep step)
+    {
+        return step.OutputPathRelocationSupportEvaluator?.Invoke(_primaryOutput)
+            ?? step.SupportsOutputPathRelocation;
     }
 
     private void ValidateExclusiveOwnership()
@@ -457,6 +482,29 @@ internal sealed class PipelineOutputRegistry
             .Select(character => invalidCharacters.Contains(character) ? '-' : character)
             .ToArray();
         return new string(characters);
+    }
+
+    private static string TruncateToUtf8ByteCount(string value, int maximumByteCount)
+    {
+        if (Encoding.UTF8.GetByteCount(value) <= maximumByteCount)
+        {
+            return value;
+        }
+
+        var builder = new StringBuilder(value.Length);
+        var byteCount = 0;
+        foreach (var rune in value.EnumerateRunes())
+        {
+            if (byteCount + rune.Utf8SequenceLength > maximumByteCount)
+            {
+                break;
+            }
+
+            builder.Append(rune.ToString());
+            byteCount += rune.Utf8SequenceLength;
+        }
+
+        return builder.ToString();
     }
 
     private void EnsurePrepared()

@@ -346,7 +346,7 @@ internal class AppHostRpcTarget(
             Steps = steps.Select(step => new PipelineOutputStepInfo
             {
                 Name = step.Name,
-                SupportsOutputPathRelocation = step.SupportsOutputPathRelocation
+                SupportsOutputPathRelocation = registry.SupportsOutputPathRelocation(step)
             }).ToArray(),
             Outputs = outputs.Select(output => new PipelineOutputInfo
             {
