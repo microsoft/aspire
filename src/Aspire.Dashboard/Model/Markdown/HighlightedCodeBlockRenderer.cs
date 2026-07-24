@@ -59,11 +59,11 @@ public class HighlightedCodeBlockRenderer : HtmlObjectRenderer<CodeBlock>
         {
             // Language is added to a CSS class name for highlightjs.
             // Fix known languages that contain invalid CSS class name characters.
-            title = info.ToLower() switch
+            title = info.ToLowerInvariant() switch
             {
                 "c#" => "csharp",
                 "c++" => "cpp",
-                _ => info.ToLower()
+                _ => info.ToLowerInvariant()
             };
 
             codeAttributes.AddClass($"language-{title}");
