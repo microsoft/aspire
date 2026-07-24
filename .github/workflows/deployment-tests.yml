@@ -387,23 +387,27 @@ jobs:
       # Ensure the target subscription has enough quota for the resources the deployment tests
       # provision. Like provider registration above, this is per-subscription setup rather than a
       # test concern: a fresh subscription starts with low quotas, so tests fail with QuotaExceeded
-      # (observed: standardDASv5Family dedicated vCPUs in westus3 with a limit of 0). For each
-      # requested quota, read the current limit via the provider-agnostic Microsoft.Quota service
-      # and only when it is below the desired value submit an increase request, so pointing the
-      # workflow at a new subscription self-heals. Best-effort and never fails the job: quota
-      # requests can route to manual review and are not guaranteed to be granted synchronously, so a
-      # still-short quota surfaces its own QuotaExceeded error in the test that needs it.
+      # (observed: a fresh subscription reports 0 dedicated vCPUs for the target compute family in
+      # westus3). For each requested quota, read the current limit via the provider-agnostic
+      # Microsoft.Quota service and only when it is below the desired value submit an increase
+      # request, so pointing the workflow at a new subscription self-heals. Best-effort and never
+      # fails the job: quota requests can route to manual review (self-service auto-approves only
+      # small increases; larger asks need a support ticket) and are not guaranteed to be granted
+      # synchronously, so a still-short quota surfaces its own QuotaExceeded error in the test that
+      # needs it. Each request is time-bounded so a request that routes to manual review — or that
+      # throttles when every matrix job hits Microsoft.Quota at once — degrades to a fast warning
+      # instead of stalling the job.
       - name: Ensure Azure quotas
         env:
           # Quotas to ensure, one per line: "provider location resourceName desiredLimit [resourceType]".
           #   provider     - resource provider that owns the quota (e.g. Microsoft.Compute, Microsoft.Network)
           #   location     - region the quota applies to; match the Azure__Location the tests deploy into
-          #   resourceName - the quota's resource name (e.g. standardDASv5Family, cores)
+          #   resourceName - the quota's resource name (e.g. StandardDsv6Family, cores)
           #   desiredLimit - both the minimum we accept and the value we request
           #   resourceType - optional; compute vCPU quotas need it (dedicated | lowPriority), omit otherwise
           # Add a line to cover a new provider, region, resource, or higher limit.
           QUOTA_TARGETS: |
-            Microsoft.Compute westus3 standardDASv5Family 250 dedicated
+            Microsoft.Compute westus3 StandardDsv6Family 200 dedicated
         run: |
           sub="$ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION"
 
@@ -447,9 +451,15 @@ jobs:
             # override) first and fall back to update (adjust an existing override). Both submit a
             # request to Microsoft.Quota that may auto-approve or route to manual review; neither is
             # allowed to fail the job.
-            if az quota create --resource-name "$name" --scope "$scope" \
+            #
+            # Bound each call with `timeout`: a request that routes to manual review (ContactSupport)
+            # can block for many minutes, and with every matrix job calling Microsoft.Quota at once
+            # they throttle each other into long backoffs. Without a bound this step has stalled whole
+            # jobs for 30+ minutes. On timeout `timeout` exits non-zero, so the `||`/else path below
+            # still records the request as not-accepted and the job continues.
+            if timeout 60 az quota create --resource-name "$name" --scope "$scope" \
                  --limit-object value="$desired" "${rt_args[@]}" --only-show-errors >/dev/null 2>&1 \
-               || az quota update --resource-name "$name" --scope "$scope" \
+               || timeout 60 az quota update --resource-name "$name" --scope "$scope" \
                  --limit-object value="$desired" "${rt_args[@]}" --only-show-errors >/dev/null 2>&1; then
               echo "  Request submitted for $provider/$name in $location (limit now: $(read_limit "$scope" "$name" || echo unknown))."
             else
