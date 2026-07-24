@@ -406,12 +406,13 @@ jobs:
           # Quotas to ensure, one per line: "provider location resourceName desiredLimit [resourceType]".
           #   provider     - resource provider that owns the quota (e.g. Microsoft.Compute, Microsoft.Network)
           #   location     - region the quota applies to; match the Azure__Location the tests deploy into
-          #   resourceName - the quota's resource name (e.g. StandardDsv6Family, cores)
+          #   resourceName - the quota's resource name (e.g. StandardDsv6Family, ManagedClusters)
           #   desiredLimit - both the minimum we accept and the value we request
           #   resourceType - optional; compute vCPU quotas need it (dedicated | lowPriority), omit otherwise
           # Add a line to cover a new provider, region, resource, or higher limit.
           QUOTA_TARGETS: |
             Microsoft.Compute westus3 StandardDsv6Family 200 dedicated
+            Microsoft.ContainerService westus3 ManagedClusters 20
         run: |
           sub="$ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION"
 
