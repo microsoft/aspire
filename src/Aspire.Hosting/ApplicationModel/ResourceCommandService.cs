@@ -347,6 +347,13 @@ public class ResourceCommandService
                     }
 
                     arguments = promptedArguments!;
+                    // The interaction service returns the final server-validated input state after applying
+                    // dynamic loading callbacks. Preserve that fact so disabled inputs with harmless retained
+                    // defaults aren't treated as unresolved submitted arguments during the final validation.
+                    loadedDynamicArgumentNames = arguments
+                        .Where(argument => argument.DynamicLoading is { } dynamicLoading && ShouldLoadDynamicCommandArgument(dynamicLoading, arguments))
+                        .Select(argument => argument.Name)
+                        .ToHashSet(StringComparers.InteractionInputName);
                 }
                 else
                 {

@@ -1289,6 +1289,78 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public async Task ExecuteCommandAsync_InteractiveDisabledDynamicArgumentWithDefaultValue_Succeeds()
+    {
+        using var builder = CreateBuilder();
+
+        var testInteractionService = new TestInteractionService();
+        builder.Services.AddSingleton<IInteractionService>(testInteractionService);
+
+        InteractionInputCollection? capturedArguments = null;
+        var custom = builder.AddResource(new CustomResource("myResource"));
+        custom.WithCommand(
+            name: "mycommand",
+            displayName: "My command",
+            executeCommand: context =>
+            {
+                capturedArguments = context.Arguments;
+                return Task.FromResult(CommandResults.Success());
+            },
+            commandOptions: new CommandOptions
+            {
+                Arguments =
+                [
+                    new InteractionInput
+                    {
+                        Name = "generateTraces",
+                        InputType = InputType.Boolean,
+                        Required = true,
+                        Value = "true"
+                    },
+                    new InteractionInput
+                    {
+                        Name = "traceCount",
+                        InputType = InputType.Number,
+                        Required = true,
+                        Value = "50000",
+                        DynamicLoading = new InputLoadOptions
+                        {
+                            DependsOnInputs = ["generateTraces"],
+                            LoadCallback = context =>
+                            {
+                                context.Input.Disabled = !context.AllInputs.GetBoolean("generateTraces");
+                                return Task.CompletedTask;
+                            }
+                        }
+                    }
+                ]
+            });
+
+        var app = builder.Build();
+        await app.StartAsync();
+
+        var resultTask = app.ResourceCommands.ExecuteCommandAsync(
+            "myResource",
+            "mycommand",
+            new ResourceCommandExecutionOptions { NonInteractive = false },
+            CancellationToken.None).DefaultTimeout();
+
+        var interaction = await testInteractionService.Interactions.Reader.ReadAsync().DefaultTimeout();
+        interaction.Inputs["generateTraces"].Value = "false";
+        interaction.Inputs["traceCount"].Disabled = true;
+        interaction.CompletionTcs.SetResult(InteractionResult.Ok(interaction.Inputs));
+
+        var result = await resultTask;
+
+        Assert.True(result.Success);
+        Assert.NotNull(capturedArguments);
+        Assert.False(capturedArguments.GetBoolean("generateTraces"));
+        Assert.Equal(50000, capturedArguments.GetInt32("traceCount"));
+        Assert.True(capturedArguments["traceCount"].Disabled);
+        Assert.Empty(capturedArguments["traceCount"].ValidationErrors);
+    }
+
+    [Fact]
     public async Task ExecuteCommandAsync_NonInteractiveWithoutArguments_DoesNotPrompt()
     {
         using var builder = CreateBuilder();
