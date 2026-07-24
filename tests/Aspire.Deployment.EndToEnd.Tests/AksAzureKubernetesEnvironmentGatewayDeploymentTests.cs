@@ -114,7 +114,7 @@ public sealed class AksAzureKubernetesEnvironmentGatewayDeploymentTests(ITestOut
             var content = File.ReadAllText(appHostFilePath);
 
             // The AGC ingress profile + ApplicationLoadBalancer + Gateway/HTTPRoute pieces that
-            // this PR adds. Inject before builder.Build().Run();. Use Standard_D2as_v5 to match
+            // this PR adds. Inject before builder.Build().Run();. Use Standard_D2s_v6 to match
             // the other AKS deployment tests' SKU/region quota story.
             const string buildRunPattern = "builder.Build().Run();";
             const string replacement = """
@@ -128,8 +128,8 @@ var albSubnet = vnet.AddSubnet("alb-public", "10.100.4.0/24");
 
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSubnet(aksSubnet)
-    .WithSystemNodePool("Standard_D2as_v5");
-aks.AddNodePool("workload", "Standard_D2as_v5", minCount: 1, maxCount: 3);
+    .WithSystemNodePool("Standard_D2s_v6");
+aks.AddNodePool("workload", "Standard_D2s_v6", minCount: 1, maxCount: 3);
 
 // AddLoadBalancer creates the AGC ApplicationLoadBalancer CR, delegates the frontend subnet
 // to Microsoft.ServiceNetworking, and (per this PR) ensures the AGC managed identity gets
@@ -180,7 +180,7 @@ builder.Build().Run();
 
             // Step 8: Set environment variables for deployment.
             // - Unset ASPIRE_PLAYGROUND to avoid conflicts.
-            // - Set Azure location to westus3 (where we have Standard_D2as_v5 capacity, matching
+            // - Set Azure location to westus3 (where we have Standard_D2s_v6 capacity, matching
             //   the rest of the AKS deployment tests).
             // - Set AZURE__RESOURCEGROUP to use our unique resource group name so the finally
             //   block can clean it up.

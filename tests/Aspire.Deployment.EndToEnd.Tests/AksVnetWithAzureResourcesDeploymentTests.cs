@@ -144,10 +144,10 @@ var peSubnet = vnet.AddSubnet("pe-subnet", "10.1.4.0/24");
 
 // AKS environment with VNet integration
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2as_v5")
+    .WithSystemNodePool("Standard_D2s_v6")
     .WithSubnet(aksSubnet);
 
-var workerPool = aks.AddNodePool("workload", "Standard_D2as_v5", 1, 3);
+var workerPool = aks.AddNodePool("workload", "Standard_D2s_v6", 1, 3);
 
 // Azure resources with Private Endpoint
 var vault = builder.AddAzureKeyVault("vault");

@@ -285,6 +285,193 @@ jobs:
           az account show --query "{subscriptionId:id, tenantId:tenantId, user:user.name}" -o table
           echo "✅ Azure authentication successful"
 
+      # Ensure the target subscription has every Azure resource provider the deployment test
+      # suite relies on. This is per-subscription setup, not a test concern: registration is a
+      # subscription-level, eventually-consistent operation, so doing it here means pointing the
+      # workflow at a fresh subscription (by swapping the deployment-testing environment secrets)
+      # self-heals instead of failing tests with "not registered for the Microsoft.X resource
+      # provider" / MissingSubscriptionRegistration. Already-registered providers are skipped, so
+      # on a warm subscription this is a fast no-op. It is intentionally best-effort and never
+      # fails the job: a test that genuinely needs a provider surfaces its own clear error.
+      - name: Register Azure resource providers
+        run: |
+          providers=(
+            Microsoft.Resources
+            Microsoft.Authorization
+            Microsoft.Quota
+            Microsoft.ManagedIdentity
+            Microsoft.ContainerInstance
+            Microsoft.OperationalInsights
+            Microsoft.Insights
+            Microsoft.App
+            Microsoft.ContainerRegistry
+            Microsoft.ContainerService
+            Microsoft.Web
+            Microsoft.Network
+            Microsoft.NetworkFunction
+            Microsoft.ServiceNetworking
+            Microsoft.Cdn
+            Microsoft.AppConfiguration
+            Microsoft.CognitiveServices
+            Microsoft.DocumentDB
+            Microsoft.EventHub
+            Microsoft.KeyVault
+            Microsoft.Kusto
+            Microsoft.DBforPostgreSQL
+            Microsoft.Cache
+            Microsoft.Search
+            Microsoft.ServiceBus
+            Microsoft.SignalRService
+            Microsoft.Sql
+            Microsoft.Storage
+          )
+
+          # Query the already-registered providers in a single call, then act only on the ones
+          # actually missing. Registration is per-subscription and idempotent, so on a warm
+          # subscription this step is a single API call with no register requests at all.
+          list_registered() {
+            az provider list --query "[?registrationState=='Registered'].namespace" -o tsv 2>/dev/null || true
+          }
+          missing_providers() {
+            # Emit the required providers not present in the registered set piped in on stdin.
+            local registered p
+            registered="$(cat)"
+            for p in "${providers[@]}"; do
+              grep -qxF "$p" <<<"$registered" || echo "$p"
+            done
+          }
+
+          # Recompute the 'missing' array from a single 'provider list' call.
+          collect_missing() {
+            missing=()
+            local line
+            while IFS= read -r line; do
+              [ -n "$line" ] && missing+=("$line")
+            done < <(list_registered | missing_providers)
+          }
+
+          collect_missing
+          if [ ${#missing[@]} -eq 0 ]; then
+            echo "✅ All ${#providers[@]} required resource providers already registered."
+            exit 0
+          fi
+
+          # az has no batch register, so this is one call per missing namespace (never more).
+          # Non-fatal: a transient failure or missing permission on one provider must not block
+          # the run; the test that needs it will surface a clear error.
+          echo "Registering ${#missing[@]} missing provider(s): ${missing[*]}"
+          for p in "${missing[@]}"; do
+            az provider register --namespace "$p" --only-show-errors >/dev/null 2>&1 \
+              || echo "⚠ could not start registration for $p (continuing)"
+          done
+
+          # Kick the registrations off, give them a short bounded head start, then continue.
+          # The bound is deliberately small. This step runs right after 'az login' and before the
+          # test, and the test's own Azure auth gate (AzureAuthenticationHelpers.IsAzureAuthAvailable,
+          # a DefaultAzureCredential.GetToken call) stops succeeding once the CI login is old enough:
+          # empirically a full 10-minute wait here pushed the test past that window and every matrix
+          # job failed with "Azure authentication not available in CI" ~16s in, before deploying.
+          # Registration is eventually consistent and keeps completing in the background, so a short
+          # head start is enough for the deploy steps that block on RP registration (e.g. the SQL
+          # admin SequencerJob deployment script); a provider still mid-registration only affects a
+          # test that actually needs it, which surfaces its own clear error. Never fail on timeout.
+          deadline=$(( SECONDS + 120 ))
+          while [ ${#missing[@]} -gt 0 ] && [ "$SECONDS" -lt "$deadline" ]; do
+            sleep 15
+            collect_missing
+          done
+
+          if [ ${#missing[@]} -gt 0 ]; then
+            echo "⚠ Providers still not registered after timeout: ${missing[*]}"
+            echo "  Continuing; a test needing one of these may fail until registration completes."
+          else
+            echo "✅ All required resource providers registered."
+          fi
+
+      # Ensure the target subscription has enough quota for the resources the deployment tests
+      # provision. Like provider registration above, this is per-subscription setup rather than a
+      # test concern: a fresh subscription starts with low quotas, so tests fail with QuotaExceeded
+      # (observed: a fresh subscription reports 0 dedicated vCPUs for the target compute family in
+      # westus3). For each requested quota, read the current limit via the provider-agnostic
+      # Microsoft.Quota service and only when it is below the desired value submit an increase
+      # request, so pointing the workflow at a new subscription self-heals. Best-effort and never
+      # fails the job: quota requests can route to manual review (self-service auto-approves only
+      # small increases; larger asks need a support ticket) and are not guaranteed to be granted
+      # synchronously, so a still-short quota surfaces its own QuotaExceeded error in the test that
+      # needs it. Each request is time-bounded so a request that routes to manual review — or that
+      # throttles when every matrix job hits Microsoft.Quota at once — degrades to a fast warning
+      # instead of stalling the job.
+      - name: Ensure Azure quotas
+        env:
+          # Quotas to ensure, one per line: "provider location resourceName desiredLimit [resourceType]".
+          #   provider     - resource provider that owns the quota (e.g. Microsoft.Compute, Microsoft.Network)
+          #   location     - region the quota applies to; match the Azure__Location the tests deploy into
+          #   resourceName - the quota's resource name (e.g. StandardDsv6Family, ManagedClusters)
+          #   desiredLimit - both the minimum we accept and the value we request
+          #   resourceType - optional; compute vCPU quotas need it (dedicated | lowPriority), omit otherwise
+          # Add a line to cover a new provider, region, resource, or higher limit.
+          QUOTA_TARGETS: |
+            Microsoft.Compute westus3 StandardDsv6Family 200 dedicated
+            Microsoft.ContainerService westus3 ManagedClusters 20
+        run: |
+          sub="$ASPIRE_DEPLOYMENT_TEST_SUBSCRIPTION"
+
+          # az quota is the provider-agnostic way to read and request quotas, so it lives in an
+          # extension. Install once up front since every check below uses it.
+          az extension add --name quota --only-show-errors >/dev/null 2>&1 || true
+
+          # Read the current effective limit for a quota (works across providers). Shape of
+          # 'az quota show':
+          #   { "name": "standardDASv5Family",
+          #     "properties": { "limit": { "value": 100 }, "unit": "Count", ... } }
+          read_limit() {
+            az quota show --resource-name "$2" --scope "$1" \
+              --query "properties.limit.value" -o tsv 2>/dev/null || true
+          }
+
+          while read -r provider location name desired resource_type; do
+            [ -z "$provider" ] && continue
+
+            scope="/subscriptions/$sub/providers/$provider/locations/$location"
+
+            limit="$(read_limit "$scope" "$name")"
+            if [ -z "$limit" ] || ! [[ "$limit" =~ ^[0-9]+$ ]]; then
+              echo "⚠ Could not read $provider/$name quota in $location (got '${limit:-}'); skipping."
+              continue
+            fi
+
+            if [ "$limit" -ge "$desired" ]; then
+              echo "✅ $provider/$name in $location: limit $limit ≥ $desired, no request needed."
+              continue
+            fi
+
+            echo "$provider/$name in $location: limit $limit < $desired; requesting increase to $desired."
+
+            # resource_type only applies to some providers (compute vCPU quotas need
+            # dedicated/lowPriority), so pass it only when the row supplies it.
+            rt_args=()
+            [ -n "$resource_type" ] && rt_args=(--resource-type "$resource_type")
+
+            # A quota override may not exist yet (only a default limit does), so try create (new
+            # override) first and fall back to update (adjust an existing override). Both submit a
+            # request to Microsoft.Quota that may auto-approve or route to manual review; neither is
+            # allowed to fail the job.
+            #
+            # Bound each call with `timeout`: a request that routes to manual review (ContactSupport)
+            # can block for many minutes, and with every matrix job calling Microsoft.Quota at once
+            # they throttle each other into long backoffs. Without a bound this step has stalled whole
+            # jobs for 30+ minutes. On timeout `timeout` exits non-zero, so the `||`/else path below
+            # still records the request as not-accepted and the job continues.
+            if timeout 60 az quota create --resource-name "$name" --scope "$scope" \
+                 --limit-object value="$desired" "${rt_args[@]}" --only-show-errors >/dev/null 2>&1 \
+               || timeout 60 az quota update --resource-name "$name" --scope "$scope" \
+                 --limit-object value="$desired" "${rt_args[@]}" --only-show-errors >/dev/null 2>&1; then
+              echo "  Request submitted for $provider/$name in $location (limit now: $(read_limit "$scope" "$name" || echo unknown))."
+            else
+              echo "⚠ Quota request for $provider/$name in $location was not accepted (may need manual approval); continuing."
+            fi
+          done <<< "$QUOTA_TARGETS"
+
       - name: Verify Docker is running
         run: |
           echo "Verifying Docker daemon..."

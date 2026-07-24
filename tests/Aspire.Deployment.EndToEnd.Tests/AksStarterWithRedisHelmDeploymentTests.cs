@@ -120,7 +120,7 @@ public sealed class AksStarterWithRedisHelmDeploymentTests(ITestOutputHelper out
                   $"--resource-group {resourceGroupName} " +
                   $"--name {clusterName} " +
                   $"--node-count 1 " +
-                  $"--node-vm-size Standard_D2s_v3 " +
+                  $"--node-vm-size Standard_D2s_v6 " +
                   $"--generate-ssh-keys " +
                   $"--attach-acr {acrName} " +
                   $"--enable-managed-identity " +

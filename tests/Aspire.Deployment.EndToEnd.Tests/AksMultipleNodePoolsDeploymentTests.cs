@@ -115,9 +115,9 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 // AKS environment with multiple node pools
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2as_v5", minCount: 1, maxCount: 2);
+    .WithSystemNodePool("Standard_D2s_v6", minCount: 1, maxCount: 2);
 
-var workerPool = aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3);
+var workerPool = aks.AddNodePool("workers", "Standard_D2s_v6", 1, 3);
 """);
 
             // Pin apiservice to the worker node pool

@@ -115,11 +115,12 @@ var builder = DistributedApplication.CreateBuilder(args);
 #pragma warning disable ASPIREAZURE003
 
 // AKS environment provisioned by Aspire (Azure Kubernetes Service).
-// Pin both the system and workload pools to DASv5 SKUs; the default workload pool
-// uses DSv5 SKUs which routinely hit vCPU quota in westus3.
+// Pin both the system and workload pools to Dsv6 SKUs; the default pool SKUs (and the
+// older Dsv3/Dasv5 families) routinely hit vCPU quota in westus3, so we standardize on
+// StandardDsv6Family, where we hold quota.
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2as_v5");
-aks.AddNodePool("workload", "Standard_D2as_v5", 1, 3);
+    .WithSystemNodePool("Standard_D2s_v6");
+aks.AddNodePool("workload", "Standard_D2s_v6", 1, 3);
 
 // Install podinfo as an external Helm chart and opt in to destroy-time uninstall.
 aks.AddHelmChart("podinfo", "oci://ghcr.io/stefanprodan/charts/podinfo", "6.7.1")
