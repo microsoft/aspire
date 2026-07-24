@@ -692,7 +692,9 @@ public partial class MainLayoutTests : DashboardTestContext
 
         Services.AddOptions();
         Services.AddSingleton<IThemeResolver, TestThemeResolver>();
-        Services.AddSingleton<IDashboardClient, TestDashboardClient>();
+        var dashboardClient = new TestDashboardClient();
+        Services.AddSingleton<IDashboardClient>(dashboardClient);
+        Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient);
         Services.AddSingleton<ITooltipService, TooltipService>();
         Services.AddSingleton<IToastService, ToastService>();
         Services.Configure<DashboardOptions>(o =>

@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS telemetry_metric_instruments (
     instrument_id INTEGER PRIMARY KEY AUTOINCREMENT,
     resource_id INTEGER NOT NULL REFERENCES telemetry_resources(resource_id) ON DELETE CASCADE,
+    resource_view_id INTEGER NOT NULL REFERENCES telemetry_resource_views(resource_view_id) ON DELETE CASCADE,
     scope_id INTEGER NOT NULL REFERENCES telemetry_scopes(scope_id),
     instrument_name TEXT NOT NULL,
     description TEXT NOT NULL,

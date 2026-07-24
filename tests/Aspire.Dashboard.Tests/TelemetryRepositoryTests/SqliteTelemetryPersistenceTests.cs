@@ -141,7 +141,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
             {
                 new ResourceMetrics
                 {
-                    Resource = CreateResource(),
+                    Resource = CreateResource(attributes: [KeyValuePair.Create("resource-key", "resource-value")]),
                     ScopeMetrics =
                     {
                         new ScopeMetrics
@@ -156,10 +156,13 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
 
         using var reopenedRepository = CreateRepository(workspace.Path, readOnly: true);
         var resource = Assert.Single(reopenedRepository.GetResources());
-        var view = Assert.Single(resource.GetViews());
+        var views = resource.GetViews().OrderBy(view => view.Properties.Length).ToArray();
+        var instrument = Assert.Single(reopenedRepository.GetInstrumentSummaries(resource.ResourceKey));
 
-        Assert.Same(resource, view.Resource);
-        Assert.Empty(view.Properties);
+        Assert.Collection(views,
+            view => Assert.Empty(view.Properties),
+            view => Assert.Equal(KeyValuePair.Create("resource-key", "resource-value"), Assert.Single(view.Properties)));
+        Assert.Same(views[1], instrument.ResourceView);
     }
 
     [Fact]

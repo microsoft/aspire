@@ -41,9 +41,11 @@ public sealed partial class SqliteTelemetryRepository
                 foreach (var resourceMetricsItem in resourceMetrics)
                 {
                     CachedResource cachedResource;
+                    CachedResourceView cachedView;
                     try
                     {
                         cachedResource = GetOrAddCachedResource(connection, transaction, resourceMetricsItem.Resource.GetResourceKey());
+                        cachedView = GetOrAddCachedResourceView(connection, transaction, cachedResource, resourceMetricsItem.Resource.Attributes);
                     }
                     catch (Exception exception)
                     {
@@ -66,10 +68,10 @@ public sealed partial class SqliteTelemetryRepository
                             continue;
                         }
 
-                        EnsureCachedInstruments(connection, transaction, cachedResource, cachedScope, scopeMetrics.Metrics);
+                        EnsureCachedInstruments(connection, transaction, cachedResource, cachedView, cachedScope, scopeMetrics.Metrics);
                         foreach (var metric in scopeMetrics.Metrics)
                         {
-                            AddMetricToDatabase(connection, transaction, context, cachedResource, cachedScope, metric, _metricIngestionState, pointBatch);
+                            AddMetricToDatabase(connection, transaction, context, cachedResource, cachedView, cachedScope, metric, _metricIngestionState, pointBatch);
                         }
                     }
 
@@ -108,6 +110,7 @@ public sealed partial class SqliteTelemetryRepository
         IDbTransaction transaction,
         AddContext context,
         CachedResource cachedResource,
+        CachedResourceView cachedView,
         CachedResourceScope cachedScope,
         Metric metric,
         MetricIngestionState ingestionState,
@@ -128,7 +131,7 @@ public sealed partial class SqliteTelemetryRepository
         CachedInstrument cachedInstrument;
         try
         {
-            cachedInstrument = GetOrAddCachedInstrument(connection, transaction, cachedResource, cachedScope, metric);
+            cachedInstrument = GetOrAddCachedInstrument(connection, transaction, cachedResource, cachedView, cachedScope, metric);
         }
         catch (Exception exception)
         {

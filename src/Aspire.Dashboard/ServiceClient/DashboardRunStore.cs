@@ -69,6 +69,8 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
         _timeProvider = timeProvider;
         var applicationName = string.IsNullOrWhiteSpace(options.Value.ApplicationName) ? "Aspire" : options.Value.ApplicationName;
         var startedAt = timeProvider.GetUtcNow();
+        // A millisecond timestamp collision is very unlikely. The exclusive run lock below also ensures that if two
+        // Dashboard instances resolve the same run ID concurrently, the second fails instead of sharing the database.
         var runId = $"{startedAt:yyyyMMddTHHmmssfffZ}";
         PersistenceMode = options.Value.Data.PersistenceMode;
 
@@ -89,16 +91,18 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
                 RunDirectory = Path.Combine(_runsDirectory, runId);
                 DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 Directory.CreateDirectory(RunDirectory);
-                _runLock = OpenRunLock(RunDirectory);
+                _runLock = OpenRequiredRunLock(
+                    RunDirectory,
+                    $"Dashboard run '{runId}' is already in use by another dashboard process.");
                 _metadataPath = Path.Combine(RunDirectory, "run.json");
                 break;
             case DashboardPersistenceMode.Resume:
-                // Resume mode uses a stable directory derived from the application name, so two dashboard instances
-                // with the same name can target the same database. Consider acquiring an exclusive process-lifetime
-                // lock here and failing the second instance at startup when it cannot acquire the lock.
                 RunDirectory = GetApplicationDirectory(options.Value.Data.Directory, applicationName);
                 DatabasePath = Path.Combine(RunDirectory, DatabaseFileName);
                 Directory.CreateDirectory(RunDirectory);
+                _runLock = OpenRequiredRunLock(
+                    RunDirectory,
+                    $"Dashboard data for application '{applicationName}' is already in use by another dashboard process. Database path: '{DatabasePath}'.");
                 if (!File.Exists(DatabasePath))
                 {
                     _logger.LogDebug("Creating dashboard database at '{DatabasePath}'.", DatabasePath);
@@ -313,6 +317,18 @@ internal sealed class DashboardRunStore : IDashboardRunStore, IDisposable
             FileShare.None,
             bufferSize: 1,
             FileOptions.DeleteOnClose);
+    }
+
+    private static FileStream OpenRequiredRunLock(string runDirectory, string errorMessage)
+    {
+        try
+        {
+            return OpenRunLock(runDirectory);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            throw new InvalidOperationException(errorMessage, exception);
+        }
     }
 
     private static FileStream? TryOpenRunLock(string runDirectory)

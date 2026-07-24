@@ -523,7 +523,10 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
         {
             new OpenTelemetry.Proto.Metrics.V1.ResourceMetrics
             {
-                Resource = CreateResource(name: "TestService", instanceId: "instance-1"),
+                Resource = CreateResource(
+                    name: "TestService",
+                    instanceId: "instance-1",
+                    attributes: [KeyValuePair.Create("service.version", "1.2.3")]),
                 ScopeMetrics =
                 {
                     new OpenTelemetry.Proto.Metrics.V1.ScopeMetrics
@@ -558,7 +561,7 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
         }
 
         // Act
-        var result = TelemetryExportService.ConvertMetricsToOtlpJson(resource, instrumentsData);
+        var result = TelemetryExportService.ConvertMetricsToOtlpJson(instrumentsData);
 
         // Assert
         Assert.NotNull(result.ResourceMetrics);
@@ -568,6 +571,7 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
         Assert.NotNull(resourceMetrics.Resource);
         Assert.NotNull(resourceMetrics.Resource.Attributes);
         Assert.Contains(resourceMetrics.Resource.Attributes, a => a.Key == OtlpResource.SERVICE_NAME && a.Value?.StringValue == "TestService");
+        Assert.Contains(resourceMetrics.Resource.Attributes, a => a.Key == "service.version" && a.Value?.StringValue == "1.2.3");
 
         Assert.NotNull(resourceMetrics.ScopeMetrics);
         Assert.Single(resourceMetrics.ScopeMetrics);
@@ -645,7 +649,7 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
         }
 
         // Act
-        var result = TelemetryExportService.ConvertMetricsToOtlpJson(resource, instrumentsData);
+        var result = TelemetryExportService.ConvertMetricsToOtlpJson(instrumentsData);
 
         // Assert
         Assert.NotNull(result.ResourceMetrics);

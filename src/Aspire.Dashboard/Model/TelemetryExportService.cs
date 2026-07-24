@@ -219,7 +219,7 @@ public sealed class TelemetryExportService
             }
 
             var resourceName = OtlpHelpers.GetResourceName(resource, resources);
-            exportArchive.Metrics[resourceName] = ConvertMetricsToOtlpJson(resource, instrumentsData);
+            exportArchive.Metrics[resourceName] = ConvertMetricsToOtlpJson(instrumentsData);
         }
     }
 
@@ -465,28 +465,23 @@ public sealed class TelemetryExportService
             }).ToArray();
     }
 
-    internal static OtlpTelemetryDataJson ConvertMetricsToOtlpJson(OtlpResource resource, List<OtlpInstrumentData> instruments)
+    internal static OtlpTelemetryDataJson ConvertMetricsToOtlpJson(List<OtlpInstrumentData> instruments)
     {
-        // Group instruments by scope
-        var instrumentsByScope = instruments.GroupBy(i => i.Summary.Parent);
-        var resourceView = resource.GetViews()[0];
-
-        var scopeMetrics = instrumentsByScope.Select(scopeGroup => new OtlpScopeMetricsJson
-        {
-            Scope = ConvertScope(scopeGroup.Key),
-            Metrics = scopeGroup.Select(ConvertInstrument).ToArray()
-        }).ToArray();
-
         return new OtlpTelemetryDataJson
         {
-            ResourceMetrics =
-            [
-                new OtlpResourceMetricsJson
+            ResourceMetrics = instruments
+                .GroupBy(instrument => instrument.Summary.ResourceView)
+                .Select(resourceGroup => new OtlpResourceMetricsJson
                 {
-                    Resource = ConvertResourceView(resourceView),
-                    ScopeMetrics = scopeMetrics
-                }
-            ]
+                    Resource = ConvertResourceView(resourceGroup.Key),
+                    ScopeMetrics = resourceGroup
+                        .GroupBy(instrument => instrument.Summary.Parent)
+                        .Select(scopeGroup => new OtlpScopeMetricsJson
+                        {
+                            Scope = ConvertScope(scopeGroup.Key),
+                            Metrics = scopeGroup.Select(ConvertInstrument).ToArray()
+                        }).ToArray()
+                }).ToArray()
         };
     }
 

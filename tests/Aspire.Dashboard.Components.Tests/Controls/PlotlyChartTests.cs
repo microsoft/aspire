@@ -56,6 +56,7 @@ public class PlotlyChartTests : DashboardTestContext
         var options = new TelemetryLimitOptions();
         var logger = NullLogger.Instance;
         var context = new OtlpContext { Options = options, Logger = logger };
+        var resource = new OtlpResource("resource", instanceId: null, uninstrumentedPeer: false, context);
         var instrumentSummary = new OtlpInstrumentSummary
         {
             Name = "Name-<b>Bold</b>",
@@ -63,7 +64,8 @@ public class PlotlyChartTests : DashboardTestContext
             Description = "Description-<b>Bold</b>",
             Parent = new OtlpScope("Parent-Name-<b>Bold</b>", string.Empty, []),
             Type = OtlpInstrumentType.Sum,
-            AggregationTemporality = OtlpAggregationTemporality.Cumulative
+            AggregationTemporality = OtlpAggregationTemporality.Cumulative,
+            ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
         };
 
         var model = new InstrumentViewModel();

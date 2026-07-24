@@ -1788,7 +1788,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                 continue;
             }
 
-            AddMetrics(resourceEntry, context, rm.ScopeMetrics);
+            AddMetrics(resourceEntry, resourceView, context, rm.ScopeMetrics);
             SetResourceHasMetrics(resourceView.Resource, true);
         }
 
@@ -1796,7 +1796,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         return Task.CompletedTask;
     }
 
-    private void AddMetrics(ResourceEntry resourceEntry, AddContext context, RepeatedField<ScopeMetrics> scopeMetrics)
+    private void AddMetrics(ResourceEntry resourceEntry, OtlpResourceView resourceView, AddContext context, RepeatedField<ScopeMetrics> scopeMetrics)
     {
         resourceEntry.MetricsLock.EnterWriteLock();
 
@@ -1840,7 +1840,8 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                                     Unit = metric.Unit,
                                     Type = MapMetricType(metric.DataCase),
                                     AggregationTemporality = MapAggregationTemporality(metric),
-                                    Parent = scope
+                                    Parent = scope,
+                                    ResourceView = resourceView
                                 },
                                 Context = _otlpContext
                             };

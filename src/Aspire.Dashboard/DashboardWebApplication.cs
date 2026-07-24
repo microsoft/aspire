@@ -283,6 +283,10 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // Data from the server.
         builder.Services.TryAddSingleton<DashboardActivitySource>();
         builder.Services.TryAddSingleton<DashboardClient>();
+        // Interactions must remain connected to the live AppHost while historical data is selected, so resolve this
+        // keyed service from DashboardClient rather than the scoped SelectedDashboardClient.
+        builder.Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey,
+            (services, _) => services.GetRequiredService<DashboardClient>());
         builder.Services.AddScoped<DashboardDataSource>();
         builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
         builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();

@@ -406,7 +406,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial span to be received
-        await firstSpanReceived.Task;
+        await firstSpanReceived.Task.DefaultTimeout();
 
         // Add another span while watching
         await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
@@ -466,7 +466,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for watcher to start
-        await watchStarted.Task;
+        await watchStarted.Task.DefaultTimeout();
 
         // Cancel the watch
         cts.Cancel();
@@ -524,7 +524,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial log to be received
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Add another log while watching
         await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -583,7 +583,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for watcher to start
-        await watchStarted.Task;
+        await watchStarted.Task.DefaultTimeout();
 
         // Cancel the watch
         cts.Cancel();
@@ -991,7 +991,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial log to be received (proves watcher is registered)
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Add more logs - one matches filter, one doesn't
         await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -1082,7 +1082,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial log to be received (proves watcher is registered)
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Add logs with different severity levels
         await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -1169,7 +1169,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
         });
 
         // Wait for initial matching log to be received
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Add more logs — one matches both fragments, one matches only one
         await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -1265,7 +1265,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        await firstLogReceived.Task;
+        await firstLogReceived.Task.DefaultTimeout();
 
         // Push a new matching log
         await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -1362,7 +1362,7 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
             }
         });
 
-        await firstSpanReceived.Task;
+        await firstSpanReceived.Task.DefaultTimeout();
 
         // Push a new span that matches the enabled filter
         await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
