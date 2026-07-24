@@ -75,6 +75,9 @@ public class PipelineStep
     [AspireExportIgnore(Reason = "Publisher output relocation is currently available to .NET pipeline-step authors only.")]
     public bool SupportsOutputPathRelocation { get; init; }
 
+    // Built-in steps can use this when relocation support depends on the resolved primary output shape.
+    internal Func<ResolvedPipelineOutput, bool>? OutputPathRelocationSupportEvaluator { get; init; }
+
     /// <summary>
     /// Gets or initializes the resource that this step is associated with, if any.
     /// </summary>
@@ -151,6 +154,7 @@ public class PipelineStep
             Tags = [.. Tags],
             Outputs = [.. Outputs],
             SupportsOutputPathRelocation = SupportsOutputPathRelocation,
+            OutputPathRelocationSupportEvaluator = OutputPathRelocationSupportEvaluator,
             Resource = Resource,
         };
     }

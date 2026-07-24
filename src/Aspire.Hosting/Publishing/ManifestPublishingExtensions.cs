@@ -29,7 +29,10 @@ internal static class ManifestPublishingExtensions
         {
             Name = WellKnownPipelineSteps.PublishManifest,
             Description = "Publishes the Aspire application model as a JSON manifest file.",
-            SupportsOutputPathRelocation = true,
+            // A legacy file target can emit Dockerfiles and Bicep modules beside the manifest.
+            // Those siblings are not represented by the single-file primary output, so only the
+            // directory form can safely participate in relocated publishing.
+            OutputPathRelocationSupportEvaluator = primaryOutput => primaryOutput.Kind == PipelineOutputKind.Directory,
             Action = async context =>
             {
                 var loggerFactory = context.Services.GetRequiredService<ILoggerFactory>();

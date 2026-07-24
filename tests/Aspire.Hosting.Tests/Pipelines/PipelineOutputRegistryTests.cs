@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIREPIPELINES004
 
+using System.Text;
 using System.Text.Json;
 using Aspire.Hosting.Backchannel;
 using Aspire.Hosting.Pipelines;
@@ -343,6 +344,46 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void Prepare_BoundsStagedOutputNamesAndRetainsHashUniqueness()
+    {
+        using var fixture = CreateRegistry(relocate: true);
+        var first = new PipelineOutputDefinition(
+            $"{new string('o', 300)}a",
+            "first.json",
+            PipelineOutputKind.File);
+        var second = new PipelineOutputDefinition(
+            $"{new string('o', 300)}b",
+            "second.json",
+            PipelineOutputKind.File);
+        var longExtension = $".{new string('\u754c', 20)}";
+        var third = new PipelineOutputDefinition(
+            "long-extension",
+            $"third{longExtension}",
+            PipelineOutputKind.File);
+        var step = CreateStep(new string('\u754c', 200), first, second, third);
+
+        fixture.Registry.Prepare([step]);
+
+        var resolver = new PipelineStepOutputResolver(fixture.Registry, step);
+        var firstFileName = Path.GetFileName(resolver.Resolve(first).OutputPath);
+        var secondFileName = Path.GetFileName(resolver.Resolve(second).OutputPath);
+        var thirdFileName = Path.GetFileName(resolver.Resolve(third).OutputPath);
+        Assert.All(
+            [firstFileName, secondFileName, thirdFileName],
+            fileName =>
+            {
+                Assert.InRange(
+                    Encoding.UTF8.GetByteCount(fileName),
+                    1,
+                    PipelineOutputRegistry.MaximumStagedOutputNameByteCount);
+            });
+        Assert.EndsWith(".json", firstFileName, StringComparison.Ordinal);
+        Assert.EndsWith(".json", secondFileName, StringComparison.Ordinal);
+        Assert.EndsWith($".{new string('\u754c', 10)}", thirdFileName, StringComparison.Ordinal);
+        Assert.NotEqual(firstFileName, secondFileName);
+    }
+
+    [Fact]
     public async Task PipelineExecutor_WaitsForAuthorizationBeforeBeforePublishAndSteps()
     {
         var bootstrapConfiguration = new ConfigurationBuilder().Build();
@@ -417,17 +458,15 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(PipelineOutputExecutionState.Succeeded, registry.GetExecutionState());
     }
 
-    [Theory]
-    [InlineData("aspire-output")]
-    [InlineData("aspire-manifest.json")]
-    public async Task ManifestPublishing_WritesOnlyToRelocatedPrimaryOutput(string primaryTargetName)
+    [Fact]
+    public async Task ManifestPublishing_WritesOnlyToRelocatedDirectoryOutput()
     {
         var bootstrapConfiguration = new ConfigurationBuilder().Build();
         using var fileSystem = new FileSystemService(bootstrapConfiguration);
         var root = fileSystem.TempDirectory.CreateTempSubdirectory("manifest-relocation-tests").Path;
         var appHostDirectory = Path.Combine(root, "repo", "src", "AppHost");
         var stagingPath = Path.Combine(root, "staging");
-        var primaryTargetPath = Path.Combine(appHostDirectory, primaryTargetName);
+        var primaryTargetPath = Path.Combine(appHostDirectory, "aspire-output");
         var primaryOutputPath = Path.Combine(stagingPath, "primary");
         Directory.CreateDirectory(appHostDirectory);
 
@@ -446,15 +485,18 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
 
         var registry = app.Services.GetRequiredService<PipelineOutputRegistry>();
         await registry.WaitForPreparationAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+        var outputPlan = await app.Services.GetRequiredService<AppHostRpcTarget>()
+            .GetPipelineOutputsAsync(cancellationToken: CancellationToken.None);
+        var manifestStep = Assert.Single(
+            outputPlan.Steps,
+            step => step.Name == WellKnownPipelineSteps.PublishManifest);
+        Assert.True(manifestStep.SupportsOutputPathRelocation);
+
         registry.AuthorizeExecution();
         await app.WaitForShutdownAsync().WaitAsync(TimeSpan.FromSeconds(10));
 
-        var generatedManifestPath = Path.GetExtension(primaryTargetPath).Equals(".json", StringComparison.OrdinalIgnoreCase)
-            ? primaryOutputPath
-            : Path.Combine(primaryOutputPath, "aspire-manifest.json");
-        var logicalManifestPath = Path.GetExtension(primaryTargetPath).Equals(".json", StringComparison.OrdinalIgnoreCase)
-            ? primaryTargetPath
-            : Path.Combine(primaryTargetPath, "aspire-manifest.json");
+        var generatedManifestPath = Path.Combine(primaryOutputPath, "aspire-manifest.json");
+        var logicalManifestPath = Path.Combine(primaryTargetPath, "aspire-manifest.json");
         var generatedDockerfilePath = Path.Combine(Path.GetDirectoryName(generatedManifestPath)!, "api.Dockerfile");
         var logicalDockerfilePath = Path.Combine(Path.GetDirectoryName(logicalManifestPath)!, "api.Dockerfile");
         Assert.True(File.Exists(generatedManifestPath));
@@ -470,6 +512,48 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
             Path.GetRelativePath(Path.GetDirectoryName(logicalManifestPath)!, appHostDirectory).Replace('\\', '/'),
             build.GetProperty("context").GetString());
         Assert.Equal(PipelineOutputExecutionState.Succeeded, registry.GetExecutionState());
+    }
+
+    [Fact]
+    public async Task ManifestPublishing_FileOutputDoesNotSupportRelocation()
+    {
+        var bootstrapConfiguration = new ConfigurationBuilder().Build();
+        using var fileSystem = new FileSystemService(bootstrapConfiguration);
+        var root = fileSystem.TempDirectory.CreateTempSubdirectory("manifest-file-relocation-tests").Path;
+        var appHostDirectory = Path.Combine(root, "repo", "src", "AppHost");
+        var stagingPath = Path.Combine(root, "staging");
+        var primaryTargetPath = Path.Combine(appHostDirectory, "aspire-manifest.json");
+        var primaryOutputPath = Path.Combine(stagingPath, "primary");
+        Directory.CreateDirectory(appHostDirectory);
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = appHostDirectory,
+            testOutputHelper,
+            "AppHost:Operation=publish",
+            $"Pipeline:Step={WellKnownPipelineSteps.PublishManifest}",
+            $"Pipeline:OutputPath={primaryOutputPath}",
+            $"{PipelineOutputRegistry.StagingPathConfigurationKey}={stagingPath}",
+            $"{PipelineOutputRegistry.TargetOutputPathConfigurationKey}={primaryTargetPath}");
+        builder.AddContainer("api", "alpine")
+            .WithDockerfileBuilder(appHostDirectory, context => context.Builder.From("alpine"));
+        using var app = builder.Build();
+        await app.StartAsync();
+
+        var registry = app.Services.GetRequiredService<PipelineOutputRegistry>();
+        await registry.WaitForPreparationAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+        var outputPlan = await app.Services.GetRequiredService<AppHostRpcTarget>()
+            .GetPipelineOutputsAsync(cancellationToken: CancellationToken.None);
+        var manifestStep = Assert.Single(
+            outputPlan.Steps,
+            step => step.Name == WellKnownPipelineSteps.PublishManifest);
+        Assert.False(manifestStep.SupportsOutputPathRelocation);
+
+        var exception = Assert.Throws<InvalidOperationException>(registry.AuthorizeExecution);
+        Assert.Contains($"'{WellKnownPipelineSteps.PublishManifest}'", exception.Message);
+        Assert.False(File.Exists(primaryTargetPath));
+        Assert.False(File.Exists(Path.Combine(appHostDirectory, "api.Dockerfile")));
+
+        await app.StopAsync();
     }
 
     [Fact]

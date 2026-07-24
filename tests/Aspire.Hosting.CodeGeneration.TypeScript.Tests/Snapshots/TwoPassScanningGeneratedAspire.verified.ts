@@ -461,7 +461,13 @@ type ProjectResourceOptionsHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Projec
 /** This event is published after the distributed application is published. */
 type AfterPublishEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Publishing.AfterPublishEvent'>;
 
-/** This event is published before the distributed application is published. */
+/**
+ * This event is published before the distributed application is published.
+ *
+ * The selected pipeline step graph and its output declarations are resolved before this event is
+ * published. Handlers can mutate model data consumed by those steps, but changes that add or
+ * reconfigure pipeline steps do not affect the current publication.
+ */
 type BeforePublishEventHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Publishing.BeforePublishEvent'>;
 
 /** Handle to IConfiguration */
@@ -2090,7 +2096,13 @@ class AfterResourcesCreatedEventPromiseImpl implements AfterResourcesCreatedEven
 // BeforePublishEvent
 // ============================================================================
 
-/** This event is published before the distributed application is published. */
+/**
+ * This event is published before the distributed application is published.
+ *
+ * The selected pipeline step graph and its output declarations are resolved before this event is
+ * published. Handlers can mutate model data consumed by those steps, but changes that add or
+ * reconfigure pipeline steps do not affect the current publication.
+ */
 export interface BeforePublishEvent {
     toJSON(): MarshalledHandle;
     /** The `IServiceProvider` for the app host. */
@@ -2110,7 +2122,13 @@ export interface BeforePublishEventPromise extends PromiseLike<BeforePublishEven
 // BeforePublishEventImpl
 // ============================================================================
 
-/** This event is published before the distributed application is published. */
+/**
+ * This event is published before the distributed application is published.
+ *
+ * The selected pipeline step graph and its output declarations are resolved before this event is
+ * published. Handlers can mutate model data consumed by those steps, but changes that add or
+ * reconfigure pipeline steps do not affect the current publication.
+ */
 class BeforePublishEventImpl implements BeforePublishEvent {
     constructor(private _handle: BeforePublishEventHandle, private _client: AspireClientRpc) {}
 
