@@ -1,0 +1,9 @@
+{
+  "author": "jasontaylordev",
+  "comment": "General RabbitMQ docs improvement (messaging frameworks section, samples links). No matching product changelog entry for this milestone.",
+  "mergedAt": "2026-07-24T17:28:49Z",
+  "number": 1394,
+  "runDate": "2026-07-24T18:30:53Z",
+  "status": "excluded",
+  "title": "Updates to \"Get started with the RabbitMQ integrations\" docs"
+}

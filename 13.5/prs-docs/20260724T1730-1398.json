@@ -1,0 +1,9 @@
+{
+  "author": "IEvangelist",
+  "comment": "CI workflow change in docs repo (forbidden-word check bypass). Not a product feature documentation.",
+  "mergedAt": "2026-07-24T17:30:56Z",
+  "number": 1398,
+  "runDate": "2026-07-24T18:30:53Z",
+  "status": "excluded",
+  "title": "ci: allow forbidden-word check bypass label"
+}
