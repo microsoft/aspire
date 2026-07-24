@@ -135,10 +135,10 @@ var builder = DistributedApplication.CreateBuilder(args);
 
 #pragma warning disable ASPIREAZURE003
 
-// AKS environment with DASv5 SKUs
+// AKS environment with Dsv6 SKUs
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2as_v5");
-aks.AddNodePool("workload", "Standard_D2as_v5", 1, 3);
+    .WithSystemNodePool("Standard_D2s_v6");
+aks.AddNodePool("workload", "Standard_D2s_v6", 1, 3);
 
 // Azure resources co-deployed alongside AKS
 var vault = builder.AddAzureKeyVault("vault");

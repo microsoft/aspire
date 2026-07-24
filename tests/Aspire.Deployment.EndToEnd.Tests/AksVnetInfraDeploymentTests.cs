@@ -106,10 +106,10 @@ var workerSubnet = vnet.AddSubnet("worker-subnet", "10.1.4.0/22");
 
 // AKS environment with VNet integration and per-pool subnets
 var aks = builder.AddAzureKubernetesEnvironment("aks")
-    .WithSystemNodePool("Standard_D2as_v5")
+    .WithSystemNodePool("Standard_D2s_v6")
     .WithSubnet(systemSubnet);
 
-aks.AddNodePool("workers", "Standard_D2as_v5", 1, 3)
+aks.AddNodePool("workers", "Standard_D2s_v6", 1, 3)
     .WithSubnet(workerSubnet);
 
 #pragma warning restore ASPIREAZURE003

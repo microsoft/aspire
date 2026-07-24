@@ -235,7 +235,7 @@ public sealed class RadiusStarterDeploymentTests(ITestOutputHelper output)
                   $"--resource-group {resourceGroupName} " +
                   $"--name {clusterName} " +
                   $"--node-count 1 " +
-                  $"--node-vm-size Standard_D2s_v3 " +
+                  $"--node-vm-size Standard_D2s_v6 " +
                   // The test never SSHes into the nodes, so configure no SSH key at all. This avoids
                   // `--generate-ssh-keys`, which would write ~/.ssh/id_rsa[.pub] on a local run and
                   // mutate the developer's SSH state (the test isolates kube/rad/docker config in

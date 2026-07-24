@@ -112,7 +112,7 @@ public sealed class KubernetesHelmChartDeploymentTests(ITestOutputHelper output)
                 $"--resource-group {resourceGroupName} " +
                 $"--name {clusterName} " +
                 $"--node-count 1 " +
-                $"--node-vm-size Standard_D2as_v5 " +
+                $"--node-vm-size Standard_D2s_v6 " +
                 $"--generate-ssh-keys " +
                 $"--attach-acr {acrName} " +
                 $"--enable-managed-identity " +

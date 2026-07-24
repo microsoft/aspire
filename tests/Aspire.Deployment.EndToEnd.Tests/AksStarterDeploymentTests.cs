@@ -113,13 +113,13 @@ public sealed class AksStarterDeploymentTests(ITestOutputHelper output)
             await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromSeconds(60));
 
             // Step 5: Create AKS cluster with ACR attached
-            // Using minimal configuration: 1 node, Standard_D2s_v3 (widely available with quota)
+            // Using minimal configuration: 1 node, Standard_D2s_v6 (widely available with quota)
             output.WriteLine("Step 5: Creating AKS cluster (this may take 10-15 minutes)...");
             await auto.TypeAsync($"az aks create " +
                   $"--resource-group {resourceGroupName} " +
                   $"--name {clusterName} " +
                   $"--node-count 1 " +
-                  $"--node-vm-size Standard_D2s_v3 " +
+                  $"--node-vm-size Standard_D2s_v6 " +
                   $"--generate-ssh-keys " +
                   $"--attach-acr {acrName} " +
                   $"--enable-managed-identity " +

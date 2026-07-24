@@ -148,8 +148,8 @@ const albSubnet = await vnet.addSubnet("alb-public", "10.100.4.0/24");
 
 const aks = await builder.addAzureKubernetesEnvironment("aks");
 await aks.withSubnet(aksSubnet);
-await aks.withSystemNodePool({ vmSize: "Standard_D2as_v5" });
-await aks.addNodePool("workload", { vmSize: "Standard_D2as_v5", minCount: 1, maxCount: 3 });
+await aks.withSystemNodePool({ vmSize: "Standard_D2s_v6" });
+await aks.addNodePool("workload", { vmSize: "Standard_D2s_v6", minCount: 1, maxCount: 3 });
 
 const publicLb = await aks.addLoadBalancer("public", albSubnet);
 

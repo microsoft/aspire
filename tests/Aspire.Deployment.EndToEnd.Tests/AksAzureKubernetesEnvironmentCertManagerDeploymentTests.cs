@@ -126,8 +126,8 @@ var albSubnet = vnet.AddSubnet("alb-public", "10.100.4.0/24");
 
 var aks = builder.AddAzureKubernetesEnvironment("aks")
     .WithSubnet(aksSubnet)
-    .WithSystemNodePool("Standard_D2as_v5");
-aks.AddNodePool("workload", "Standard_D2as_v5", minCount: 1, maxCount: 3);
+    .WithSystemNodePool("Standard_D2s_v6");
+aks.AddNodePool("workload", "Standard_D2s_v6", minCount: 1, maxCount: 3);
 
 var publicLb = aks.AddLoadBalancer("public", albSubnet);
 
