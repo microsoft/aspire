@@ -590,11 +590,13 @@ public class ResourceCommandService
 
             if (argument.Disabled)
             {
-                // Dynamic loading can leave a dependent input disabled after it has normalized a
-                // harmless default/sentinel value, such as Browser Logs using the default profile
-                // while Shared mode is off. Only report submitted values for dynamic inputs that
-                // never loaded because their dependencies were incomplete, for example
-                // priority=express without a selected item.
+                // Disabled dynamic arguments should not carry submitted values. The
+                // loadedDynamicArgumentNames set only includes arguments whose callbacks
+                // ran AND left the argument enabled, so a disabled argument will never
+                // be in the set. Report an error for any disabled dynamic argument that
+                // has a non-empty value, whether the callback never ran (incomplete
+                // dependencies) or ran but left the argument disabled (e.g. a normalized
+                // default/sentinel while a parent feature is off).
                 if (!string.IsNullOrEmpty(value) && argument.DynamicLoading is not null && loadedDynamicArgumentNames?.Contains(argument.Name) != true)
                 {
                     context.AddValidationError(argument, "Argument is disabled.");
@@ -669,7 +671,15 @@ public class ResourceCommandService
                     Services = _serviceProvider,
                     CancellationToken = cancellationToken
                 }).ConfigureAwait(false);
-                loadedArgumentNames.Add(argument.Name);
+
+                // Only track the argument as loaded if the callback left it enabled.
+                // A callback may run and leave the argument disabled with a retained
+                // value (e.g. a normalized default). Tracking such arguments as loaded
+                // would let them bypass the "Argument is disabled." validation check.
+                if (!argument.Disabled)
+                {
+                    loadedArgumentNames.Add(argument.Name);
+                }
             }
         }
 
