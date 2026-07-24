@@ -1399,6 +1399,12 @@ public partial class FoundryModel
         public static readonly FoundryModel MaiVoice2 = new() { Name = "MAI-Voice-2", Version = "2026-06-02", Format = "Microsoft" };
 
         /// <summary>
+        /// MAI-Voice-2-Flash is a text-to-speech (TTS) model built for ultra-fast, low-latency generation. It delivers high-fidelity, natural, and expressive speech across 15 languages, while being optimized for real-time responsiveness for voice agents, assistants,
+        /// </summary>
+        [AspireValue("FoundryModels")]
+        public static readonly FoundryModel MaiVoice2Flash = new() { Name = "MAI-Voice-2-Flash", Version = "2026-07-22", Format = "Microsoft" };
+
+        /// <summary>
         /// Model router is a deployable AI model that is trained to select the most suitable large language model (LLM) for a given prompt.
         /// </summary>
         [AspireValue("FoundryModels")]
