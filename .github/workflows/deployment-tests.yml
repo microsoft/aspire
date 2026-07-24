@@ -365,13 +365,17 @@ jobs:
               || echo "⚠ could not start registration for $p (continuing)"
           done
 
-          # Registration is eventually consistent and can take a few minutes on a cold
-          # subscription. Wait (bounded) so the deploy steps below don't have to block on it
-          # themselves — e.g. the SQL admin SequencerJob deployment script waits on RP
-          # registration and can otherwise time out. Re-check the whole set with one
-          # 'provider list' call per iteration rather than one 'provider show' per provider.
-          # Never fail the job on timeout.
-          deadline=$(( SECONDS + 600 ))
+          # Kick the registrations off, give them a short bounded head start, then continue.
+          # The bound is deliberately small. This step runs right after 'az login' and before the
+          # test, and the test's own Azure auth gate (AzureAuthenticationHelpers.IsAzureAuthAvailable,
+          # a DefaultAzureCredential.GetToken call) stops succeeding once the CI login is old enough:
+          # empirically a full 10-minute wait here pushed the test past that window and every matrix
+          # job failed with "Azure authentication not available in CI" ~16s in, before deploying.
+          # Registration is eventually consistent and keeps completing in the background, so a short
+          # head start is enough for the deploy steps that block on RP registration (e.g. the SQL
+          # admin SequencerJob deployment script); a provider still mid-registration only affects a
+          # test that actually needs it, which surfaces its own clear error. Never fail on timeout.
+          deadline=$(( SECONDS + 120 ))
           while [ ${#missing[@]} -gt 0 ] && [ "$SECONDS" -lt "$deadline" ]; do
             sleep 15
             collect_missing
