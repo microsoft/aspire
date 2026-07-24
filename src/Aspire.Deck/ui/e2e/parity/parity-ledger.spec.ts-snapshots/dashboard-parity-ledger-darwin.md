@@ -129,8 +129,8 @@
 | LOG-GENAI-001 | structured-logs | `/structuredlogs` | structured-log-genai | covered | LOG-GENAI-001 | GenAI log records open the dedicated GenAI visualizer. |
 | LOG-EXPLAIN-001 | structured-logs | `/structuredlogs` | explain-errors | covered | LOG-EXPLAIN-001 | Explain errors summarizes current error logs through the assistant. |
 | LOG-ROUTE-001 | structured-logs | `/structuredlogs/resource/{name}` | structured-log-session | covered | LOG-ROUTE-001 | Resource selection, filters, and selected log are deep-linkable and restorable. |
-| TRACE-LIST-001 | traces | `/traces` | traces | covered | TRACE-LIST-001; TRACE-ACTIONS-001; HTTP-TRACES-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
-| TRACE-LIVE-001 | traces | `/traces` | traces | covered | TRACE-LIVE-001; HTTP-TRACES-001; STRESS-TRACES-001 | Incoming spans update trace groups and totals without reloading the page. |
+| TRACE-LIST-001 | traces | `/traces` | traces | covered | TRACE-LIST-001; TRACE-ACTIONS-001; HTTP-TRACES-001; AOT-CONTRACT-001; STRESS-TRACES-001 | Traces render timestamp, name, span count, duration, error status, and actions. |
+| TRACE-LIVE-001 | traces | `/traces` | traces | covered | TRACE-LIVE-001; HTTP-TRACES-001; AOT-CONTRACT-001; STRESS-TRACES-001 | Incoming spans update trace groups and totals without reloading the page. |
 | TRACE-RESOURCE-001 | traces | `/traces` | traces | covered | TRACE-RESOURCE-001 | Traces filter through a grouped resource selector. |
 | TRACE-TYPE-001 | traces | `/traces` | traces | covered | TRACE-TYPE-001 | HTTP, database, messaging, RPC, GenAI, cloud, and other span types can be selected. |
 | TRACE-TEXT-FILTER-001 | traces | `/traces` | traces | covered | TRACE-FILTER-001 | Traces filter by operation, resource, and trace identifiers. |
@@ -138,7 +138,7 @@
 | TRACE-DURATION-001 | traces | `/traces` | traces | covered | TRACE-DURATION-001; HTTP-TRACES-001 | Trace and span duration is represented consistently at different scales. |
 | TRACE-ERROR-001 | traces | `/traces` | trace-details | covered | TRACE-ERROR-001; TRACE-EVENTS-001; HTTP-TRACES-001 | Failed traces and spans expose status, tags, and error styling. |
 | TRACE-PAUSE-001 | traces | `/traces` | traces | covered | TRACE-PAUSE-001 | Incoming traces can be paused and resumed. |
-| TRACE-CLEAR-001 | traces | `/traces` | traces | covered | TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001 | Trace data can be cleared for the selected resource or all resources. |
+| TRACE-CLEAR-001 | traces | `/traces` | traces | covered | TRACE-CLEAR-001; HTTP-TRACE-CLEAR-001; AOT-CONTRACT-001 | Trace data can be cleared for the selected resource or all resources. |
 | TRACE-VIRTUALIZATION-001 | traces | `/traces` | trace-virtualization | covered | HTTP-TRACE-VIRTUALIZATION-001 | Large trace inventories remain responsive through virtualization. |
 | TRACE-ACTIONS-001 | traces | `/traces` | traces | covered | TRACE-ACTIONS-001 | Per-trace actions expose detail, copy, and related telemetry navigation. |
 | TRACE-DETAIL-ROUTE-001 | traces | `/traces/detail/{traceId}` | traces | covered | TRACE-DETAIL-ROUTE-001 | A trace opens on a stable deep-linked detail route. |

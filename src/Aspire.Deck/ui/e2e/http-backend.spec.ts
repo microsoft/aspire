@@ -522,6 +522,164 @@ test(`${features("AOT-CONTRACT-001")} streams AOT resource snapshots and changes
   expect(resourceRequests).toBe(0);
 });
 
+test(`${features("AOT-CONTRACT-001", "HTTP-TRACES-001", "HTTP-TRACE-CLEAR-001")} owns trace snapshot, live dedupe, and clear through versioned AOT routes`, async ({ page }) => {
+  interface TestSpan {
+    traceId: string;
+    spanId: string;
+    name: string;
+    startTimeUnixNano: string;
+  }
+
+  const backlog: TestSpan = {
+    traceId: "11111111111111111111111111111111",
+    spanId: "1111111111111111",
+    name: "AOT backlog span",
+    startTimeUnixNano: "1783670400000000000",
+  };
+  const live: TestSpan = {
+    traceId: "22222222222222222222222222222222",
+    spanId: "2222222222222222",
+    name: "AOT live span",
+    startTimeUnixNano: "1783670401000000000",
+  };
+  let records = [backlog];
+  let sentLive = false;
+  let snapshotRequests = 0;
+  let legacySpanRequests = 0;
+  let clearRequests = 0;
+  let streamInvocations = 0;
+  let streamArguments: unknown[] | undefined;
+  const toOtlpData = (spans: TestSpan[]) => ({
+    resourceSpans: [{
+      resource: {
+        attributes: [{ key: "service.name", value: { stringValue: "stress-api" } }],
+      },
+      scopeSpans: [{
+        scope: { name: "Stress.AotTrace" },
+        spans: spans.map((span) => ({
+          ...span,
+          kind: 2,
+          endTimeUnixNano: (BigInt(span.startTimeUnixNano) + 10_000_000n).toString(),
+          status: { code: 1 },
+        })),
+      }],
+    }],
+  });
+
+  await page.unroute("**/api/deck/telemetry/spans?*");
+  await page.route("**/api/deck/telemetry/spans?*", async (route) => {
+    legacySpanRequests++;
+    await route.fulfill({ json: { totalCount: 0, returnedCount: 0, data: { resourceSpans: [] } } });
+  });
+  await page.route("**/api/dashboard", async (route) => route.fulfill({
+    json: {
+      product: "Aspire.Dashboard",
+      versions: [{
+        version: 1,
+        basePath: "/api/dashboard/v1",
+        capabilities: [
+          "configuration",
+          "resources",
+          "traces",
+          "traces-live",
+          "traces-clear",
+        ],
+      }],
+    },
+  }));
+  await page.route("**/api/dashboard/v1/config", async (route) => route.fulfill({
+    json: { applicationName: "Stress AOT", dashboardVersion: "13.5.0-aot", runtimeVersion: ".NET 10.0.0" },
+  }));
+  await page.route("**/api/dashboard/v1/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/dashboard/v1/traces?*", async (route) => {
+    snapshotRequests++;
+    const url = new URL(route.request().url());
+    expect(url.searchParams.get("limit")).toBe("10000");
+    await route.fulfill({
+      json: {
+        totalCount: records.length,
+        returnedCount: records.length,
+        data: toOtlpData(records),
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/traces", async (route) => {
+    expect(route.request().method()).toBe("DELETE");
+    clearRequests++;
+    records = [];
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/api/dashboard/v1/traces/live/negotiate?**", async (route) => route.fulfill({
+    json: {
+      negotiateVersion: 1,
+      connectionId: `playwright-trace-connection-${streamInvocations}`,
+      connectionToken: `playwright-trace-token-${streamInvocations}`,
+      availableTransports: [{ transport: "WebSockets", transferFormats: ["Text", "Binary"] }],
+    },
+  }));
+  await page.routeWebSocket("**/api/dashboard/v1/traces/live?id=*", (webSocket) => {
+    webSocket.onMessage((message) => {
+      for (const frame of message.toString().split("\x1e").filter(Boolean)) {
+        const payload = JSON.parse(frame) as {
+          protocol?: string;
+          type?: number;
+          invocationId?: string;
+          target?: string;
+          arguments?: unknown[];
+        };
+        if (payload.protocol === "json") {
+          webSocket.send("{}\x1e");
+        } else if (payload.type === 4 && payload.target === "WatchTraces") {
+          streamInvocations++;
+          streamArguments = payload.arguments;
+          for (const span of records) {
+            webSocket.send(`${JSON.stringify({
+              type: 2,
+              invocationId: payload.invocationId,
+              item: { data: toOtlpData([span]) },
+            })}\x1e`);
+          }
+          if (!sentLive && records.length > 0) {
+            sentLive = true;
+            records = [...records, live];
+            setTimeout(() => {
+              webSocket.send(`${JSON.stringify({
+                type: 2,
+                invocationId: payload.invocationId,
+                item: { data: toOtlpData([live]) },
+              })}\x1e`);
+            }, 50);
+          }
+        }
+      }
+    });
+  });
+
+  await page.goto("/traces?backend=aot");
+
+  const traces = page.getByRole("main").getByRole("region", { name: "Traces" });
+  await expect(traces.locator(".page__subtitle")).toHaveText("2 traces · 2 spans");
+  await expect(traces).toContainText("AOT backlog span");
+  await expect(traces).toContainText("AOT live span");
+  expect(streamArguments).toEqual([{
+    resourceNames: [],
+    traceId: null,
+    hasError: null,
+    search: null,
+  }]);
+  expect(snapshotRequests).toBeGreaterThan(0);
+  expect(legacySpanRequests).toBe(0);
+
+  await traces.getByRole("button", { name: "Clear traces" }).click();
+  await page.getByRole("menuitem", { name: "Clear all resources" }).click();
+
+  await expect(page.getByRole("status")).toHaveText("Cleared all traces.");
+  await expect(traces.locator(".page__subtitle")).toHaveText("0 traces · 0 spans");
+  expect(clearRequests).toBe(1);
+  expect(streamInvocations).toBeGreaterThan(1);
+  expect(legacySpanRequests).toBe(0);
+});
+
 test(`${features("AOT-CONTRACT-001")} streams and deduplicates AOT resource console backlog and live output`, async ({ page }) => {
   let sendConsoleBatch: ((lines: Array<{ lineNumber: number; text: string; isStdErr: boolean }>) => void) | null = null;
   await page.route("**/api/dashboard", async (route) => route.fulfill({

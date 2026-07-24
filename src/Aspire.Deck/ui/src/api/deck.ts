@@ -294,6 +294,27 @@ export function getTelemetrySummary(): Promise<TelemetrySummary> {
     return invoke<TelemetrySummary>("deck_get_telemetry_summary");
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      return Promise.all([
+        nativeBackend.hasCapability("structured-logs"),
+        nativeBackend.hasCapability("structured-logs-live"),
+        nativeBackend.hasCapability("traces"),
+        nativeBackend.hasCapability("traces-live"),
+      ]).then(async ([hasLogBacklog, hasLogLive, hasTraceBacklog, hasTraceLive]) => {
+        const useNativeLogs = hasLogBacklog && hasLogLive;
+        const useNativeTraces = hasTraceBacklog && hasTraceLive;
+        const [legacy, logs, traces] = await Promise.all([
+          httpBackend.getTelemetrySummary(!useNativeLogs, !useNativeTraces),
+          useNativeLogs ? nativeBackend.getStructuredLogs() : Promise.resolve(null),
+          useNativeTraces ? nativeBackend.getTraces() : Promise.resolve(null),
+        ]);
+        return {
+          ...legacy,
+          ...(logs ?? {}),
+          ...(traces ?? {}),
+        };
+      });
+    }
     return httpBackend.getTelemetrySummary();
   }
   return Promise.resolve(mockBackend.getTelemetrySummary());
@@ -319,6 +340,17 @@ export function clearTraces(resourceName: string | null): Promise<void> {
     return invoke<void>("deck_clear_traces", { resourceName });
   }
   if (isHttpBackend()) {
+    if (isAotBackend()) {
+      return Promise.all([
+        nativeBackend.hasCapability("traces"),
+        nativeBackend.hasCapability("traces-live"),
+        nativeBackend.hasCapability("traces-clear"),
+      ]).then(([hasBacklog, hasLive, hasClear]) => (
+        hasBacklog && hasLive && hasClear
+          ? nativeBackend.clearTraces(resourceName)
+          : httpBackend.clearTraces(resourceName)
+      ));
+    }
     return httpBackend.clearTraces(resourceName);
   }
   mockBackend.clearTraces(resourceName);
@@ -471,32 +503,51 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
       let cancelled = false;
       let unsubscribeLegacy: Unsubscribe | null = null;
       let unsubscribeStructuredLogs: Unsubscribe | null = null;
+      let unsubscribeTraces: Unsubscribe | null = null;
       let legacySummary: TelemetrySummary | null = null;
       let structuredLogs: Pick<TelemetrySummary, "logCount" | "recentLogs"> | null = null;
+      let traces: Pick<TelemetrySummary, "spanCount" | "recentSpans"> | null = null;
+      let useNativeLogs = false;
+      let useNativeTraces = false;
       const publish = (): void => {
-        if (!cancelled && legacySummary !== null && structuredLogs !== null) {
-          cb({ ...legacySummary, ...structuredLogs });
+        if (!cancelled
+            && legacySummary !== null
+            && (!useNativeLogs || structuredLogs !== null)
+            && (!useNativeTraces || traces !== null)) {
+          cb({
+            ...legacySummary,
+            ...(structuredLogs ?? {}),
+            ...(traces ?? {}),
+          });
         }
       };
 
       void Promise.all([
         nativeBackend.hasCapability("structured-logs"),
         nativeBackend.hasCapability("structured-logs-live"),
-      ]).then(([hasBacklog, hasLive]) => {
+        nativeBackend.hasCapability("traces"),
+        nativeBackend.hasCapability("traces-live"),
+      ]).then(([hasLogBacklog, hasLogLive, hasTraceBacklog, hasTraceLive]) => {
         if (cancelled) return;
-        if (!hasBacklog || !hasLive) {
-          unsubscribeLegacy = httpBackend.onTelemetry(cb);
-          return;
-        }
+        useNativeLogs = hasLogBacklog && hasLogLive;
+        useNativeTraces = hasTraceBacklog && hasTraceLive;
 
         unsubscribeLegacy = httpBackend.onTelemetry((summary) => {
           legacySummary = summary;
           publish();
-        }, false);
-        unsubscribeStructuredLogs = nativeBackend.subscribeStructuredLogs((logs) => {
-          structuredLogs = logs;
-          publish();
-        });
+        }, !useNativeLogs, !useNativeTraces);
+        if (useNativeLogs) {
+          unsubscribeStructuredLogs = nativeBackend.subscribeStructuredLogs((logs) => {
+            structuredLogs = logs;
+            publish();
+          });
+        }
+        if (useNativeTraces) {
+          unsubscribeTraces = nativeBackend.subscribeTraces((traceSummary) => {
+            traces = traceSummary;
+            publish();
+          });
+        }
       }).catch(() => {
         if (!cancelled) unsubscribeLegacy = httpBackend.onTelemetry(cb);
       });
@@ -504,6 +555,7 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
         cancelled = true;
         unsubscribeLegacy?.();
         unsubscribeStructuredLogs?.();
+        unsubscribeTraces?.();
       };
     }
     return httpBackend.onTelemetry(cb);

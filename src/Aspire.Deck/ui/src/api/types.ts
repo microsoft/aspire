@@ -49,6 +49,16 @@ export interface DashboardStructuredLogsEvent {
   data: OtlpTelemetryData;
 }
 
+export interface DashboardTraceSnapshot {
+  totalCount: number;
+  returnedCount: number;
+  data: OtlpTelemetryData;
+}
+
+export interface DashboardTraceEvent {
+  data: OtlpTelemetryData;
+}
+
 export interface DeckUser {
   name: string;
   username: string | null;

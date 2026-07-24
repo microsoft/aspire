@@ -57,6 +57,7 @@ let telemetrySummary: TelemetrySummary = { ...emptyTelemetry, recentLogs: [] };
 let telemetryController: AbortController | null = null;
 let telemetryStarted = false;
 let telemetryIncludesStructuredLogs = true;
+let telemetryIncludesTraces = true;
 let telemetryStopTimer: number | undefined;
 let telemetryMetricTimer: number | undefined;
 const telemetryLogKeys = new Set<string>();
@@ -500,7 +501,11 @@ function appendSpans(spans: OtlpSpanSummary[]): void {
   notifyTelemetry();
 }
 
-function summaryFromStructuredLogs(response: TelemetryApiResponse): TelemetrySummary {
+function summaryFromStructuredLogs(response: TelemetryApiResponse | null): TelemetrySummary {
+  if (response === null) {
+    return emptyTelemetry;
+  }
+
   return {
     ...emptyTelemetry,
     logCount: response.totalCount,
@@ -511,16 +516,18 @@ function summaryFromStructuredLogs(response: TelemetryApiResponse): TelemetrySum
 }
 
 function summaryFromResponses(
-  logsResponse: TelemetryApiResponse,
-  spansResponse: TelemetryApiResponse,
+  logsResponse: TelemetryApiResponse | null,
+  spansResponse: TelemetryApiResponse | null,
   metrics: MetricSummary[],
 ): TelemetrySummary {
   return {
     ...summaryFromStructuredLogs(logsResponse),
-    spanCount: spansResponse.totalCount,
-    recentSpans: getSpanSummaries(spansResponse.data)
-      .map(({ recordKey: _, ...span }) => span)
-      .sort(compareSpansNewestFirst),
+    spanCount: spansResponse?.totalCount ?? 0,
+    recentSpans: spansResponse === null
+      ? []
+      : getSpanSummaries(spansResponse.data)
+        .map(({ recordKey: _, ...span }) => span)
+        .sort(compareSpansNewestFirst),
     metricCount: metrics.reduce((total, metric) => total + metric.pointCount, 0),
     metrics,
   };
@@ -585,13 +592,14 @@ async function clearMetrics(resourceName: string | null): Promise<void> {
   await refreshMetrics();
 }
 
-function ensureTelemetryStream(includeStructuredLogs: boolean): void {
+function ensureTelemetryStream(includeStructuredLogs: boolean, includeTraces: boolean): void {
   if (telemetryStarted) {
     return;
   }
 
   telemetryStarted = true;
   telemetryIncludesStructuredLogs = includeStructuredLogs;
+  telemetryIncludesTraces = includeTraces;
   const controller = new AbortController();
   telemetryController = controller;
   if (includeStructuredLogs) {
@@ -600,10 +608,12 @@ function ensureTelemetryStream(includeStructuredLogs: boolean): void {
       // last telemetry snapshot when a live stream ends or the backend is unavailable.
     });
   }
-  void streamSpans(appendSpans, controller.signal).catch(() => {
-    // A span stream failure must not tear down structured-log updates. Resource
-    // polling owns the shared backend connection state and reports outages.
-  });
+  if (includeTraces) {
+    void streamSpans(appendSpans, controller.signal).catch(() => {
+      // A span stream failure must not tear down structured-log updates. Resource
+      // polling owns the shared backend connection state and reports outages.
+    });
+  }
   void refreshMetrics().catch(() => undefined);
   telemetryMetricTimer = window.setInterval(() => void refreshMetrics().catch(() => undefined), 1500);
 }
@@ -611,6 +621,7 @@ function ensureTelemetryStream(includeStructuredLogs: boolean): void {
 function subscribeTelemetry(
   callback: (summary: TelemetrySummary) => void,
   includeStructuredLogs = true,
+  includeTraces = true,
 ): Unsubscribe {
   if (telemetryStopTimer !== undefined) {
     window.clearTimeout(telemetryStopTimer);
@@ -619,10 +630,12 @@ function subscribeTelemetry(
 
   telemetryListeners.add(callback);
   callback(telemetrySummary);
-  if (telemetryStarted && telemetryIncludesStructuredLogs !== includeStructuredLogs) {
-    throw new Error("Dashboard telemetry subscribers requested incompatible structured-log transports.");
+  if (telemetryStarted
+      && (telemetryIncludesStructuredLogs !== includeStructuredLogs
+        || telemetryIncludesTraces !== includeTraces)) {
+    throw new Error("Dashboard telemetry subscribers requested incompatible telemetry transports.");
   }
-  ensureTelemetryStream(includeStructuredLogs);
+  ensureTelemetryStream(includeStructuredLogs, includeTraces);
 
   return () => {
     telemetryListeners.delete(callback);
@@ -698,10 +711,17 @@ export const httpBackend = {
   respondInteraction(interactionId: number, action: string, values: Record<string, string>): Promise<void> {
     return postNoContent("interactions/respond", { interactionId, action, values });
   },
-  async getTelemetrySummary(): Promise<TelemetrySummary> {
+  async getTelemetrySummary(
+    includeStructuredLogs = true,
+    includeTraces = true,
+  ): Promise<TelemetrySummary> {
     const [logsResponse, spansResponse, metrics] = await Promise.all([
-      requestJson<TelemetryApiResponse>("telemetry/logs?limit=200"),
-      requestJson<TelemetryApiResponse>("telemetry/spans?limit=200"),
+      includeStructuredLogs
+        ? requestJson<TelemetryApiResponse>("telemetry/logs?limit=200")
+        : Promise.resolve(null),
+      includeTraces
+        ? requestJson<TelemetryApiResponse>("telemetry/spans?limit=200")
+        : Promise.resolve(null),
       requestJson<MetricSummary[]>("telemetry/metrics"),
     ]);
     return summaryFromResponses(logsResponse, spansResponse, metrics);
@@ -752,7 +772,11 @@ export const httpBackend = {
   subscribeConsoleLogs,
   onResources,
   onConnection,
-  onTelemetry(callback: (summary: TelemetrySummary) => void, includeStructuredLogs = true): Unsubscribe {
-    return subscribeTelemetry(callback, includeStructuredLogs);
+  onTelemetry(
+    callback: (summary: TelemetrySummary) => void,
+    includeStructuredLogs = true,
+    includeTraces = true,
+  ): Unsubscribe {
+    return subscribeTelemetry(callback, includeStructuredLogs, includeTraces);
   },
 };

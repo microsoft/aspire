@@ -13,6 +13,8 @@ import type {
   DashboardConfiguration,
   DashboardStructuredLogsEvent,
   DashboardStructuredLogsSnapshot,
+  DashboardTraceEvent,
+  DashboardTraceSnapshot,
   DeckConfig,
   CommandResponse,
   ExecuteCommandArgs,
@@ -20,8 +22,14 @@ import type {
   Resource,
   ResourcesEvent,
   LogRecordSummary,
+  SpanSummary,
 } from "./types";
-import { getLogRecordSummaries, type OtlpLogRecordSummary } from "./otlp";
+import {
+  getLogRecordSummaries,
+  getSpanSummaries,
+  type OtlpLogRecordSummary,
+  type OtlpSpanSummary,
+} from "./otlp";
 
 const dashboardProduct = "Aspire.Dashboard";
 const discoveryPath = "/api/dashboard";
@@ -31,9 +39,13 @@ const resourceStreamCapability = "resources-live";
 const commandsCapability = "commands";
 const structuredLogsCapability = "structured-logs";
 const structuredLogStreamCapability = "structured-logs-live";
+const tracesCapability = "traces";
+const traceStreamCapability = "traces-live";
+const traceClearCapability = "traces-clear";
 const consoleLogsCapability = "console-logs";
 const consoleLogStreamCapability = "console-logs-live";
 const interactionsCapability = "interactions";
+const maximumTraceDedupeKeys = 10_000;
 const supportedVersions = new Set([1]);
 
 let negotiatedVersion: Promise<DashboardApiVersion> | null = null;
@@ -41,10 +53,20 @@ let configuration: Promise<DeckConfig> | null = null;
 const structuredLogListeners = new Set<(logs: NativeStructuredLogs) => void>();
 const structuredLogKeys = new Set<string>();
 let structuredLogs: NativeStructuredLogs = { logCount: 0, recentLogs: [] };
+const traceListeners = new Set<(traces: NativeTraces) => void>();
+const traceKeys = new Map<string, true>();
+const traceRestartListeners = new Set<() => void>();
+let traces: NativeTraces = { spanCount: 0, recentSpans: [] };
+let traceGeneration = 0;
 
 interface NativeStructuredLogs {
   logCount: number;
   recentLogs: LogRecordSummary[];
+}
+
+interface NativeTraces {
+  spanCount: number;
+  recentSpans: SpanSummary[];
 }
 
 function compareNewestFirst(left: LogRecordSummary, right: LogRecordSummary): number {
@@ -54,6 +76,13 @@ function compareNewestFirst(left: LogRecordSummary, right: LogRecordSummary): nu
   return right.timeUnixNano.localeCompare(left.timeUnixNano);
 }
 
+function compareSpansNewestFirst(left: SpanSummary, right: SpanSummary): number {
+  if (left.startUnixNano.length !== right.startUnixNano.length) {
+    return right.startUnixNano.length - left.startUnixNano.length;
+  }
+  return right.startUnixNano.localeCompare(left.startUnixNano);
+}
+
 function withoutRecordKey(log: OtlpLogRecordSummary): LogRecordSummary {
   const { recordKey: _, ...summary } = log;
   return summary;
@@ -61,6 +90,10 @@ function withoutRecordKey(log: OtlpLogRecordSummary): LogRecordSummary {
 
 function notifyStructuredLogs(): void {
   for (const listener of structuredLogListeners) listener(structuredLogs);
+}
+
+function notifyTraces(): void {
+  for (const listener of traceListeners) listener(traces);
 }
 
 async function refreshStructuredLogs(): Promise<void> {
@@ -79,6 +112,11 @@ async function refreshStructuredLogs(): Promise<void> {
   notifyStructuredLogs();
 }
 
+async function getStructuredLogs(): Promise<NativeStructuredLogs> {
+  await refreshStructuredLogs();
+  return structuredLogs;
+}
+
 function appendStructuredLogEvent(event: DashboardStructuredLogsEvent): void {
   const additions = getLogRecordSummaries(event.data).filter((log) => {
     if (structuredLogKeys.has(log.recordKey)) return false;
@@ -91,6 +129,65 @@ function appendStructuredLogEvent(event: DashboardStructuredLogsEvent): void {
     recentLogs: [...additions, ...structuredLogs.recentLogs].sort(compareNewestFirst).slice(0, 5_000),
   };
   notifyStructuredLogs();
+}
+
+function withoutSpanRecordKey(span: OtlpSpanSummary): SpanSummary {
+  const { recordKey: _, ...summary } = span;
+  return summary;
+}
+
+function rememberTraceKey(key: string): boolean {
+  if (traceKeys.has(key)) return false;
+
+  traceKeys.set(key, true);
+  if (traceKeys.size > maximumTraceDedupeKeys) {
+    const oldestKey = traceKeys.keys().next().value;
+    if (oldestKey !== undefined) traceKeys.delete(oldestKey);
+  }
+
+  return true;
+}
+
+async function refreshTraces(): Promise<void> {
+  const version = await getNegotiatedVersion();
+  const snapshot = await requestJson(`${version.basePath}/traces?limit=10000`) as DashboardTraceSnapshot;
+  if (!Number.isInteger(snapshot.totalCount)
+      || !Number.isInteger(snapshot.returnedCount)
+      || typeof snapshot.data !== "object"
+      || snapshot.data === null) {
+    throw new Error("Dashboard API trace snapshot returned an incompatible payload.");
+  }
+  const records = getSpanSummaries(snapshot.data);
+  traceKeys.clear();
+  for (const record of records) rememberTraceKey(record.recordKey);
+  traces = {
+    spanCount: snapshot.totalCount,
+    recentSpans: records
+      .map(withoutSpanRecordKey)
+      .sort(compareSpansNewestFirst)
+      .slice(0, 5_000),
+  };
+  notifyTraces();
+}
+
+async function getTraces(): Promise<NativeTraces> {
+  await refreshTraces();
+  return traces;
+}
+
+function appendTraceEvent(event: DashboardTraceEvent, generation: number): void {
+  if (generation !== traceGeneration) return;
+  const additions = getSpanSummaries(event.data)
+    .filter((span) => rememberTraceKey(span.recordKey))
+    .map(withoutSpanRecordKey);
+  if (additions.length === 0) return;
+  traces = {
+    spanCount: traces.spanCount + additions.length,
+    recentSpans: [...additions, ...traces.recentSpans]
+      .sort(compareSpansNewestFirst)
+      .slice(0, 5_000),
+  };
+  notifyTraces();
 }
 
 async function requestJson(path: string): Promise<unknown> {
@@ -119,6 +216,20 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
   }
 
   return await response.json() as unknown;
+}
+
+async function deleteNoContent(path: string): Promise<void> {
+  const response = await fetch(path, {
+    method: "DELETE",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/json" },
+  });
+  if (!response.ok) {
+    throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  await response.arrayBuffer();
 }
 
 function isVersion(value: unknown): value is DashboardApiVersion {
@@ -545,6 +656,132 @@ function subscribeStructuredLogs(callback: (logs: NativeStructuredLogs) => void)
   };
 }
 
+function subscribeTraces(callback: (traces: NativeTraces) => void): () => void {
+  let cancelled = false;
+  let starting = false;
+  let connection: HubConnection | null = null;
+  let subscription: ISubscription<DashboardTraceEvent> | null = null;
+  let retryTimer: number | undefined;
+
+  const scheduleStart = (): void => {
+    if (cancelled || retryTimer !== undefined) return;
+    retryTimer = window.setTimeout(() => {
+      retryTimer = undefined;
+      void start();
+    }, 1_000);
+  };
+
+  const beginStream = (): void => {
+    if (cancelled || connection?.state !== HubConnectionState.Connected) return;
+    subscription?.dispose();
+    const generation = traceGeneration;
+    subscription = connection.stream<DashboardTraceEvent>("WatchTraces", {
+      resourceNames: [],
+      traceId: null,
+      hasError: null,
+      search: null,
+    }).subscribe({
+      next: (event) => {
+        if (typeof event !== "object" || event === null || typeof event.data !== "object" || event.data === null) {
+          void connection?.stop();
+          return;
+        }
+        appendTraceEvent(event, generation);
+      },
+      error: () => {
+        subscription = null;
+        if (connection?.state === HubConnectionState.Connected) void connection.stop();
+      },
+      complete: () => {
+        subscription = null;
+        if (connection?.state === HubConnectionState.Connected) void connection.stop();
+      },
+    });
+  };
+
+  const start = async (): Promise<void> => {
+    if (cancelled || starting) return;
+    starting = true;
+    try {
+      const version = await getNegotiatedVersion();
+      if (!version.capabilities.includes(tracesCapability)
+          || !version.capabilities.includes(traceStreamCapability)) {
+        throw new Error("Dashboard API version 1 does not advertise live traces.");
+      }
+
+      await refreshTraces();
+      if (cancelled) return;
+
+      connection = new HubConnectionBuilder()
+        .withUrl(`${version.basePath}/traces/live`, { withCredentials: true })
+        .withAutomaticReconnect([0, 1_000, 2_000, 5_000])
+        .configureLogging(LogLevel.None)
+        .build();
+      connection.onreconnected(() => {
+        void refreshTraces().then(beginStream).catch(() => void connection?.stop());
+      });
+      connection.onclose(() => {
+        subscription = null;
+        connection = null;
+        scheduleStart();
+      });
+      await connection.start();
+      beginStream();
+    } catch {
+      connection = null;
+      scheduleStart();
+    } finally {
+      starting = false;
+    }
+  };
+
+  const restart = (): void => {
+    if (cancelled) return;
+    subscription?.dispose();
+    subscription = null;
+    const previousConnection = connection;
+    connection = null;
+    const stopped = previousConnection?.stop() ?? Promise.resolve();
+    void stopped.finally(() => {
+      if (!cancelled) void start();
+    });
+  };
+
+  traceListeners.add(callback);
+  traceRestartListeners.add(restart);
+  callback(traces);
+  void start();
+  return () => {
+    cancelled = true;
+    traceListeners.delete(callback);
+    traceRestartListeners.delete(restart);
+    if (retryTimer !== undefined) window.clearTimeout(retryTimer);
+    subscription?.dispose();
+    void connection?.stop();
+  };
+}
+
+async function clearTraces(resourceName: string | null): Promise<void> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(tracesCapability)
+      || !version.capabilities.includes(traceStreamCapability)
+      || !version.capabilities.includes(traceClearCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise trace clearing.");
+  }
+
+  const resourceQuery = resourceName === null ? "" : `?resource=${encodeURIComponent(resourceName)}`;
+  await deleteNoContent(`${version.basePath}/traces${resourceQuery}`);
+
+  // Ignore any events already buffered by the pre-clear stream. Restarting opens a new
+  // upstream watcher whose backlog reflects the authoritative post-clear repository.
+  traceGeneration++;
+  try {
+    await refreshTraces();
+  } finally {
+    for (const restart of traceRestartListeners) restart();
+  }
+}
+
 function subscribeConsoleLogs(
   resourceName: string,
   callback: (event: ConsoleLogEvent) => void,
@@ -634,8 +871,13 @@ export const nativeBackend = {
   executeCommand,
   subscribeResources,
   subscribeStructuredLogs,
+  subscribeTraces,
   subscribeConsoleLogs,
   subscribeInteractions,
   respondInteraction,
+  getStructuredLogs,
   refreshStructuredLogs,
+  getTraces,
+  refreshTraces,
+  clearTraces,
 };

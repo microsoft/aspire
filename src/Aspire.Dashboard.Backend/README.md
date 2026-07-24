@@ -8,11 +8,12 @@ to host the existing `/api/deck` transport.
 
 The backend currently implements version discovery plus the `configuration`, read-only `resources`
 snapshot, SignalR `resources-live`, resource `commands`, resource-scoped console backlog/live,
-read-only structured-log backlog/live, and versioned interaction polling/response capabilities.
+read-only structured-log backlog/live, trace backlog/live/filter/clear, and versioned interaction
+polling/response capabilities.
 Resources, commands, and interactions use one long-lived AppHost resource-service connection.
 Interaction state and response traffic are bounded, and the backend restores an optimistically
 removed prompt when delivery fails so the user can retry. In side-by-side mode, React reads those
-capabilities from this host and delegates traces, metrics, destructive console/telemetry
+capabilities from this host and delegates metrics, destructive structured-log and console
 operations, authentication, and terminal traffic to the existing dashboard. A version must not
 advertise a capability until its
 complete black-box behavior passes the 157-feature parity inventory in
@@ -72,6 +73,11 @@ The host exposes:
 - `GET /api/dashboard/v1/structured-logs` for a read-only OTLP structured-log backlog proxied from
   the existing loopback dashboard.
 - `/api/dashboard/v1/structured-logs/live` for the SignalR `WatchStructuredLogs` server stream.
+- `GET /api/dashboard/v1/traces` for filtered OTLP span snapshots, including exact totals and
+  bounded returned data.
+- `/api/dashboard/v1/traces/live` for the SignalR `WatchTraces` backlog/live server stream.
+- `DELETE /api/dashboard/v1/traces` to clear all traces or an optional `resource` group. The client
+  restarts its stream after clearing so buffered pre-clear spans cannot reappear.
 - `/api/dashboard/v1/console-logs/live` for the SignalR `WatchConsoleLogs(resourceName)` server
   stream. The existing dashboard supplies the resource backlog before live stdout/stderr batches.
 - `GET /api/dashboard/v1/interactions` and `POST /api/dashboard/v1/interactions/respond` for

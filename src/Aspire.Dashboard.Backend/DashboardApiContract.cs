@@ -15,11 +15,15 @@ internal static class DashboardApiContract
     public const string CommandsCapability = "commands";
     public const string StructuredLogsCapability = "structured-logs";
     public const string StructuredLogStreamCapability = "structured-logs-live";
+    public const string TracesCapability = "traces";
+    public const string TraceStreamCapability = "traces-live";
+    public const string TraceClearCapability = "traces-clear";
     public const string ConsoleLogsCapability = "console-logs";
     public const string ConsoleLogStreamCapability = "console-logs-live";
     public const string InteractionsCapability = "interactions";
     public const string ResourceStreamPath = $"{VersionOneBasePath}/resources/live";
     public const string StructuredLogStreamPath = $"{VersionOneBasePath}/structured-logs/live";
+    public const string TraceStreamPath = $"{VersionOneBasePath}/traces/live";
     public const string ConsoleLogStreamPath = $"{VersionOneBasePath}/console-logs/live";
 }
 
@@ -176,6 +180,20 @@ internal sealed record DashboardStructuredLogsSnapshot(
 
 internal sealed record DashboardStructuredLogsEvent(
     System.Text.Json.JsonElement Data);
+
+internal sealed record DashboardTraceSnapshot(
+    int TotalCount,
+    int ReturnedCount,
+    System.Text.Json.JsonElement Data);
+
+internal sealed record DashboardTraceEvent(
+    System.Text.Json.JsonElement Data);
+
+internal sealed record DashboardTraceStreamRequest(
+    string[] ResourceNames,
+    string? TraceId,
+    bool? HasError,
+    string? Search);
 
 internal sealed record DashboardConsoleLogLine(
     long LineNumber,

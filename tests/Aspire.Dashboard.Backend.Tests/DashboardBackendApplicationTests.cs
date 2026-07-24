@@ -34,7 +34,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"console-logs\",\"console-logs-live\",\"interactions\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"traces\",\"traces-live\",\"traces-clear\",\"console-logs\",\"console-logs-live\",\"interactions\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -997,6 +997,187 @@ public class DashboardBackendApplicationTests
     }
 
     [Fact]
+    public async Task GetTraces_ReturnsSourceGeneratedFilteredSnapshotAndForwardsCredentials()
+    {
+        var source = new TestTraceSource(
+            new DashboardTraceSnapshot(
+                12,
+                1,
+                JsonSerializer.SerializeToElement(new
+                {
+                    resourceSpans = new[]
+                    {
+                        new
+                        {
+                            scopeSpans = new[]
+                            {
+                                new
+                                {
+                                    spans = new[]
+                                    {
+                                        new { traceId = "trace-1", spanId = "span-1", name = "catalog" }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                })),
+            []);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardTraceSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Get,
+            "/api/dashboard/v1/traces?resource=api&resource=worker&traceId=abc&hasError=true&limit=25&search=status%3Aerror");
+        request.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer dashboard-token");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal("no-store", response.Headers.CacheControl?.ToString());
+        Assert.Equal(
+            "{\"totalCount\":12,\"returnedCount\":1,\"data\":{\"resourceSpans\":[{\"scopeSpans\":[{\"spans\":[{\"traceId\":\"trace-1\",\"spanId\":\"span-1\",\"name\":\"catalog\"}]}]}]}}",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.NotNull(source.Query);
+        Assert.Equal(["api", "worker"], source.Query.ResourceNames);
+        Assert.Equal("abc", source.Query.TraceId);
+        Assert.True(source.Query.HasError);
+        Assert.Equal(25, source.Query.Limit);
+        Assert.Equal("status:error", source.Query.Search);
+        Assert.Equal(".Aspire.Dashboard=browser-session", source.Credentials?.Cookie);
+        Assert.Equal("Bearer dashboard-token", source.Credentials?.Authorization);
+    }
+
+    [Theory]
+    [InlineData("/api/dashboard/v1/traces?hasError=not-a-boolean")]
+    [InlineData("/api/dashboard/v1/traces?limit=-1")]
+    [InlineData("/api/dashboard/v1/traces?limit=1.5")]
+    public async Task GetTraces_RejectsInvalidFilters(string path)
+    {
+        var source = new TestTraceSource(
+            new DashboardTraceSnapshot(0, 0, JsonSerializer.SerializeToElement(new { })),
+            []);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardTraceSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            path,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+        Assert.Null(source.Query);
+    }
+
+    [Fact]
+    public async Task ClearTraces_ForwardsResourceAndCredentials()
+    {
+        var source = new TestTraceSource(
+            new DashboardTraceSnapshot(0, 0, JsonSerializer.SerializeToElement(new { })),
+            []);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardTraceSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        using var request = new HttpRequestMessage(
+            HttpMethod.Delete,
+            "/api/dashboard/v1/traces?resource=api");
+        request.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal("api", source.ClearedResourceName);
+        Assert.Equal(".Aspire.Dashboard=browser-session", source.Credentials?.Cookie);
+    }
+
+    [Fact]
+    public async Task TraceHub_StreamsBacklogBeforeLiveWithFilters()
+    {
+        DashboardTraceEvent[] traceEvents =
+        [
+            new(JsonSerializer.SerializeToElement(new
+            {
+                resourceSpans = new[]
+                {
+                    new { scopeSpans = new[] { new { spans = new[] { new { name = "backlog" } } } } }
+                }
+            })),
+            new(JsonSerializer.SerializeToElement(new
+            {
+                resourceSpans = new[]
+                {
+                    new { scopeSpans = new[] { new { spans = new[] { new { name = "live" } } } } }
+                }
+            }))
+        ];
+        var source = new TestTraceSource(
+            new DashboardTraceSnapshot(0, 0, JsonSerializer.SerializeToElement(new { })),
+            traceEvents);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardTraceSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var connection = new HubConnectionBuilder()
+            .WithUrl($"http://localhost{DashboardApiContract.TraceStreamPath}", options =>
+            {
+                options.HttpMessageHandlerFactory = _ => app.GetTestServer().CreateHandler();
+                options.Transports = HttpTransportType.LongPolling;
+                options.Headers.Add("Cookie", ".Aspire.Dashboard=browser-session");
+            })
+            .AddJsonProtocol(options =>
+            {
+                options.PayloadSerializerOptions.TypeInfoResolverChain.Insert(0, DashboardBackendJsonSerializerContext.Default);
+            })
+            .Build();
+        await connection.StartAsync(TestContext.Current.CancellationToken);
+
+        await using var events = connection
+            .StreamAsync<DashboardTraceEvent>(
+                nameof(DashboardTracesHub.WatchTraces),
+                new DashboardTraceStreamRequest(["api"], "abc", true, "status:error"),
+                TestContext.Current.CancellationToken)
+            .GetAsyncEnumerator(TestContext.Current.CancellationToken);
+
+        Assert.True(await events.MoveNextAsync());
+        Assert.Equal(
+            "backlog",
+            events.Current.Data.GetProperty("resourceSpans")[0]
+                .GetProperty("scopeSpans")[0]
+                .GetProperty("spans")[0]
+                .GetProperty("name")
+                .GetString());
+        Assert.True(await events.MoveNextAsync());
+        Assert.Equal(
+            "live",
+            events.Current.Data.GetProperty("resourceSpans")[0]
+                .GetProperty("scopeSpans")[0]
+                .GetProperty("spans")[0]
+                .GetProperty("name")
+                .GetString());
+        Assert.NotNull(source.Query);
+        Assert.Equal(["api"], source.Query.ResourceNames);
+        Assert.Equal("abc", source.Query.TraceId);
+        Assert.True(source.Query.HasError);
+        Assert.Equal("status:error", source.Query.Search);
+        Assert.Equal(".Aspire.Dashboard=browser-session", source.Credentials?.Cookie);
+    }
+
+    [Fact]
     public async Task ConsoleLogHub_StreamsResourceScopedBacklogAndLiveLines()
     {
         DashboardConsoleLogsEvent[] logEvents =
@@ -1222,6 +1403,50 @@ public class DashboardBackendApplicationTests
                 yield return logEvent;
                 await Task.Yield();
             }
+        }
+    }
+
+    private sealed class TestTraceSource(
+        DashboardTraceSnapshot snapshot,
+        DashboardTraceEvent[] events) : IDashboardTraceSource
+    {
+        public DashboardTraceQuery? Query { get; private set; }
+        public DashboardRequestCredentials? Credentials { get; private set; }
+        public string? ClearedResourceName { get; private set; }
+
+        public ValueTask<DashboardTraceSnapshot?> GetSnapshotAsync(
+            DashboardTraceQuery query,
+            DashboardRequestCredentials credentials,
+            CancellationToken cancellationToken)
+        {
+            Query = query;
+            Credentials = credentials;
+            return ValueTask.FromResult<DashboardTraceSnapshot?>(snapshot);
+        }
+
+        public async IAsyncEnumerable<DashboardTraceEvent> WatchAsync(
+            DashboardTraceQuery query,
+            DashboardRequestCredentials credentials,
+            [EnumeratorCancellation] CancellationToken cancellationToken)
+        {
+            Query = query;
+            Credentials = credentials;
+            foreach (var traceEvent in events)
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                yield return traceEvent;
+                await Task.Yield();
+            }
+        }
+
+        public ValueTask<bool> ClearAsync(
+            string? resourceName,
+            DashboardRequestCredentials credentials,
+            CancellationToken cancellationToken)
+        {
+            ClearedResourceName = resourceName;
+            Credentials = credentials;
+            return ValueTask.FromResult(true);
         }
     }
 

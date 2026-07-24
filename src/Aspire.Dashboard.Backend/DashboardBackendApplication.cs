@@ -25,6 +25,7 @@ internal static class DashboardBackendApplication
         builder.Services.TryAddSingleton<DashboardInteractionService>();
         builder.Services.TryAddSingleton<IDashboardInteractionService>(services => services.GetRequiredService<DashboardInteractionService>());
         builder.Services.TryAddSingleton<IDashboardStructuredLogSource, DashboardStructuredLogProxy>();
+        builder.Services.TryAddSingleton<IDashboardTraceSource, DashboardTraceProxy>();
         builder.Services.TryAddSingleton<IDashboardConsoleLogSource, DashboardConsoleLogProxy>();
         builder.Services.TryAddSingleton<IDashboardLegacyApiProxy, DashboardLegacyApiProxy>();
         builder.Services.TryAddSingleton<IDashboardFrontendAssetProvider, EmbeddedDashboardFrontendAssetProvider>();
@@ -55,6 +56,9 @@ internal static class DashboardBackendApplication
                             DashboardApiContract.CommandsCapability,
                             DashboardApiContract.StructuredLogsCapability,
                             DashboardApiContract.StructuredLogStreamCapability,
+                            DashboardApiContract.TracesCapability,
+                            DashboardApiContract.TraceStreamCapability,
+                            DashboardApiContract.TraceClearCapability,
                             DashboardApiContract.ConsoleLogsCapability,
                             DashboardApiContract.ConsoleLogStreamCapability,
                             DashboardApiContract.InteractionsCapability
@@ -100,6 +104,7 @@ internal static class DashboardBackendApplication
 
         app.MapHub<DashboardResourcesHub>(DashboardApiContract.ResourceStreamPath);
         app.MapHub<DashboardStructuredLogsHub>(DashboardApiContract.StructuredLogStreamPath);
+        app.MapHub<DashboardTracesHub>(DashboardApiContract.TraceStreamPath);
         app.MapHub<DashboardConsoleLogsHub>(DashboardApiContract.ConsoleLogStreamPath);
 
         app.MapGet($"{DashboardApiContract.VersionOneBasePath}/structured-logs", async (
@@ -117,6 +122,53 @@ internal static class DashboardBackendApplication
                     DashboardBackendJsonSerializerContext.Default.DashboardStructuredLogsSnapshot);
             }
             catch (DashboardStructuredLogServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
+        app.MapGet($"{DashboardApiContract.VersionOneBasePath}/traces", async (
+            HttpContext context,
+            IDashboardTraceSource traceSource) =>
+        {
+            if (!TryCreateTraceQuery(context.Request.Query, out var query))
+            {
+                return Results.BadRequest();
+            }
+
+            try
+            {
+                context.Response.Headers.CacheControl = "no-store";
+                var snapshot = await traceSource.GetSnapshotAsync(
+                    query,
+                    DashboardRequestCredentials.From(context.Request),
+                    context.RequestAborted).ConfigureAwait(false);
+                return snapshot is null
+                    ? Results.NotFound()
+                    : Results.Json(
+                        snapshot,
+                        DashboardBackendJsonSerializerContext.Default.DashboardTraceSnapshot);
+            }
+            catch (DashboardTraceServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
+        app.MapDelete($"{DashboardApiContract.VersionOneBasePath}/traces", async (
+            HttpContext context,
+            IDashboardTraceSource traceSource) =>
+        {
+            var resourceName = GetSingleQueryValue(context.Request.Query, "resource");
+            try
+            {
+                var cleared = await traceSource.ClearAsync(
+                    resourceName,
+                    DashboardRequestCredentials.From(context.Request),
+                    context.RequestAborted).ConfigureAwait(false);
+                return cleared ? Results.NoContent() : Results.NotFound();
+            }
+            catch (DashboardTraceServiceUnavailableException ex)
             {
                 return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
             }
@@ -203,6 +255,59 @@ internal static class DashboardBackendApplication
             return await interactionService.RespondAsync(request, context.RequestAborted).ConfigureAwait(false)
                 ? Results.NoContent()
                 : Results.NotFound();
+        }
+
+        static bool TryCreateTraceQuery(
+            IQueryCollection values,
+            out DashboardTraceQuery query)
+        {
+            bool? hasError = null;
+            var hasErrorText = GetSingleQueryValue(values, "hasError");
+            if (hasErrorText is not null)
+            {
+                if (!bool.TryParse(hasErrorText, out var parsedHasError))
+                {
+                    query = default!;
+                    return false;
+                }
+                hasError = parsedHasError;
+            }
+
+            int? limit = null;
+            var limitText = GetSingleQueryValue(values, "limit");
+            if (limitText is not null)
+            {
+                if (!int.TryParse(
+                    limitText,
+                    System.Globalization.NumberStyles.None,
+                    System.Globalization.CultureInfo.InvariantCulture,
+                    out var parsedLimit)
+                    || parsedLimit < 0)
+                {
+                    query = default!;
+                    return false;
+                }
+                limit = parsedLimit;
+            }
+
+            query = new DashboardTraceQuery(
+                values["resource"]
+                    .Where(static resourceName => !string.IsNullOrWhiteSpace(resourceName))
+                    .Select(static resourceName => resourceName!)
+                    .ToArray(),
+                GetSingleQueryValue(values, "traceId"),
+                hasError,
+                limit,
+                GetSingleQueryValue(values, "search"));
+            return true;
+        }
+
+        static string? GetSingleQueryValue(IQueryCollection values, string name)
+        {
+            var value = values[name];
+            return value.Count > 0 && !string.IsNullOrWhiteSpace(value[0])
+                ? value[0]
+                : null;
         }
     }
 }
