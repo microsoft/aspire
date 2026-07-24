@@ -4,6 +4,7 @@
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Tests.Shared.Telemetry;
 using Google.Protobuf.Collections;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -106,8 +107,22 @@ public sealed class TraceDetailPageViewModelTests
         var scope = TelemetryTestHelpers.CreateOtlpScope(context);
         var span = TelemetryTestHelpers.CreateOtlpSpan(resource, trace, scope, spanId: "span1", parentSpanId: null, startDate: DateTime.UtcNow);
         var logEntry = new OtlpLogEntry(TelemetryTestHelpers.CreateLogRecord(message: "test log"), resourceView, scope, context);
+        var logSummary = new LogSummary
+        {
+            InternalId = logEntry.InternalId,
+            TimeStamp = logEntry.TimeStamp,
+            Severity = logEntry.Severity,
+            Message = logEntry.Message,
+            SpanId = logEntry.SpanId,
+            TraceId = logEntry.TraceId,
+            ScopeName = logEntry.Scope.Name,
+            EventName = logEntry.EventName,
+            Resource = resource,
+            ExceptionText = null,
+            HasGenAI = false
+        };
 
-        var spanVm = CreateSpanWaterfallViewModel(span, [new SpanLogEntryViewModel { Index = 0, LogEntry = logEntry, LeftOffset = 0 }]);
+        var spanVm = CreateSpanWaterfallViewModel(span, [new SpanLogEntryViewModel { Index = 0, LogEntry = logSummary, LeftOffset = 0 }]);
 
         var vm = new TraceDetailPageViewModel
         {

@@ -70,6 +70,8 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestService", resource.ResourceName);
                 Assert.Equal("TestId", resource.InstanceId);
             });
+        var resourceView = Assert.Single(resources[0].GetViews());
+        Assert.Empty(resourceView.Properties);
 
         var instruments = repository.GetInstrumentSummaries(resources[0].ResourceKey);
         Assert.Collection(instruments,

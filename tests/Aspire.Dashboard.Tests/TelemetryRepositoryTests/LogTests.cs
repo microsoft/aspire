@@ -241,6 +241,16 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
         Assert.Empty(emptyPage.Items);
         Assert.Equal(3, emptyPage.TotalItemCount);
+
+        var emptyLogsPage = repository.GetLogs(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 10,
+            Count = 10,
+            Filters = []
+        });
+        Assert.Empty(emptyLogsPage.Items);
+        Assert.Equal(3, emptyLogsPage.TotalItemCount);
     }
 
     [Fact]
@@ -1785,6 +1795,71 @@ public sealed class InMemoryLogTests(ITestOutputHelper testOutputHelper) : LogTe
 public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTests(testOutputHelper)
 {
     protected override bool UseSqlite => true;
+
+    [Fact]
+    public async Task GetLogSummaries_MoreThanSqliteVariableLimit_ReturnsTraceDisplayData()
+    {
+        const int logCount = 1_100;
+        var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
+        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        var logRecords = new RepeatedField<LogRecord>();
+        for (var index = 0; index < logCount; index++)
+        {
+            logRecords.Add(CreateLogRecord(
+                time: testTime.AddTicks(index + 1),
+                message: $"Message {index}",
+                severity: index == 0 ? SeverityNumber.Error : SeverityNumber.Info,
+                attributes: [],
+                traceId: "large-trace",
+                spanId: "large-span",
+                eventName: $"Event {index}"));
+        }
+
+        var context = new AddContext();
+        await repository.AsWriter().AddLogsAsync(context, new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("TestLogger"),
+                        LogRecords = { logRecords }
+                    }
+                }
+            }
+        });
+        Assert.Equal(0, context.FailureCount);
+
+        var logs = repository.GetLogSummaries(new GetLogsContext
+        {
+            ResourceKeys = [],
+            StartIndex = 0,
+            Count = int.MaxValue,
+            Filters =
+            [
+                new FieldTelemetryFilter
+                {
+                    Field = KnownStructuredLogFields.TraceIdField,
+                    Condition = FilterCondition.Equals,
+                    Value = logRecords[0].TraceId.ToHexString()
+                }
+            ]
+        }).Items;
+
+        Assert.Equal(logCount, logs.Count);
+        var first = logs[0];
+        Assert.Equal(testTime.AddTicks(1), first.TimeStamp);
+        Assert.Equal(LogLevel.Error, first.Severity);
+        Assert.Equal("Message 0", first.Message);
+        Assert.Equal(logRecords[0].SpanId.ToHexString(), first.SpanId);
+        Assert.Equal("TestLogger", first.ScopeName);
+        Assert.Equal("Event 0", first.EventName);
+        Assert.True(first.IsError);
+        Assert.Equal("Message 1099", logs[^1].Message);
+    }
 
     [Fact]
     public async Task AddLogs_LargeAttributeBatchesRoundTripAcrossResources()

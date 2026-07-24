@@ -288,13 +288,13 @@
                                                             @foreach (var item in context.SpanLogs)
                                                             {
                                                                 var buttonId = $"{context.Span.SpanId}-{item.LogEntry.InternalId}";
-                                                                var eventName = StructureLogsDetailsViewModel.GetEventName(item.LogEntry, StructuredLogsLoc);
+                                                                var eventName = item.LogEntry.EventName ?? StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)];
                                                                 var isSelected = SelectedData?.LogEntryViewModel?.LogEntry.InternalId == item.LogEntry.InternalId;
                                                                 var htmlTooltip = item.Index < 500;
                                                                 var buttonColor = item.LogEntry.IsError ? "var(--error)" : spanColor;
 
                                                                 <button id="@buttonId"
-                                                                        title="@(!htmlTooltip ? $"{eventName} - {item.LogEntry.Scope.Name}" : string.Empty)"
+                                                                        title="@(!htmlTooltip ? $"{eventName} - {item.LogEntry.ScopeName}" : string.Empty)"
                                                                         aria-label="@StructuredLogsLoc[nameof(Dashboard.Resources.StructuredLogs.StructuredLogsEntryDetails)]"
                                                                         class="@($"span-log-entry-button {(isSelected ? "span-log-entry-selected" : null)} {(item.LogEntry.IsError ? "span-log-entry-error" : null)}")"
                                                                         data-span-color="@spanColor"
@@ -311,7 +311,7 @@
                                                                 {
                                                                     <FluentTooltip Anchor="@buttonId" MaxWidth="350px">
                                                                         <div class="log-tooltip-title-container">
-                                                                            <span class="log-tooltip-title">@eventName</span> <span class="log-tooltip-subtitle">@item.LogEntry.Scope.Name</span><br />
+                                                                            <span class="log-tooltip-title">@eventName</span> <span class="log-tooltip-subtitle">@item.LogEntry.ScopeName</span><br />
                                                                         </div>
                                                                         <table class="log-tooltip-table">
                                                                             <tr>

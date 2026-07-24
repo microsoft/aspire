@@ -469,6 +469,7 @@ public sealed class TelemetryExportService
     {
         // Group instruments by scope
         var instrumentsByScope = instruments.GroupBy(i => i.Summary.Parent);
+        var resourceView = resource.GetViews()[0];
 
         var scopeMetrics = instrumentsByScope.Select(scopeGroup => new OtlpScopeMetricsJson
         {
@@ -482,7 +483,7 @@ public sealed class TelemetryExportService
             [
                 new OtlpResourceMetricsJson
                 {
-                    Resource = ConvertResourceView(resource.GetViews()[0]),
+                    Resource = ConvertResourceView(resourceView),
                     ScopeMetrics = scopeMetrics
                 }
             ]
@@ -606,19 +607,8 @@ public sealed class TelemetryExportService
 
     private static OtlpResourceJson ConvertResourceView(OtlpResourceView resourceView)
     {
-        var attributes = new List<OtlpKeyValueJson>
-        {
-            new OtlpKeyValueJson
-            {
-                Key = OtlpResource.SERVICE_NAME,
-                Value = new OtlpAnyValueJson { StringValue = resourceView.Resource.ResourceName }
-            },
-            new OtlpKeyValueJson
-            {
-                Key = OtlpResource.SERVICE_INSTANCE_ID,
-                Value = new OtlpAnyValueJson { StringValue = resourceView.Resource.InstanceId }
-            }
-        };
+        var resource = ConvertResource(resourceView.Resource);
+        var attributes = resource.Attributes!.ToList();
 
         // Include additional properties from the resource view
         foreach (var property in resourceView.Properties)
@@ -630,9 +620,27 @@ public sealed class TelemetryExportService
             });
         }
 
+        resource.Attributes = attributes.ToArray();
+        return resource;
+    }
+
+    private static OtlpResourceJson ConvertResource(OtlpResource resource)
+    {
         return new OtlpResourceJson
         {
-            Attributes = attributes.ToArray()
+            Attributes =
+            [
+                new OtlpKeyValueJson
+                {
+                    Key = OtlpResource.SERVICE_NAME,
+                    Value = new OtlpAnyValueJson { StringValue = resource.ResourceName }
+                },
+                new OtlpKeyValueJson
+                {
+                    Key = OtlpResource.SERVICE_INSTANCE_ID,
+                    Value = new OtlpAnyValueJson { StringValue = resource.InstanceId }
+                }
+            ]
         };
     }
 

@@ -3,6 +3,7 @@
 
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
+using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
 using System.Diagnostics;
 using Google.Protobuf.Collections;
@@ -151,8 +152,27 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     public PagedResult<OtlpLogEntry> GetLogs(GetLogsContext context) => GetLogsFromDatabase(context);
     public PagedResult<LogSummary> GetLogSummaries(GetLogsContext context) => GetLogSummariesFromDatabase(context);
     public OtlpLogEntry? GetLog(long logId) => GetLogFromDatabase(logId);
-    public List<OtlpLogEntry> GetLogsForSpan(string traceId, string spanId) => GetLogsForSpanFromDatabase(traceId, spanId);
-    public List<OtlpLogEntry> GetLogsForTrace(string traceId) => GetLogsForTraceFromDatabase(traceId);
+    public List<OtlpLogEntry> GetLogsForSpan(string traceId, string spanId) => GetLogs(new GetLogsContext
+    {
+        ResourceKeys = [],
+        StartIndex = 0,
+        Count = int.MaxValue,
+        Filters =
+        [
+            new FieldTelemetryFilter { Field = KnownStructuredLogFields.TraceIdField, Condition = FilterCondition.Equals, Value = traceId },
+            new FieldTelemetryFilter { Field = KnownStructuredLogFields.SpanIdField, Condition = FilterCondition.Equals, Value = spanId }
+        ]
+    }).Items;
+    public List<OtlpLogEntry> GetLogsForTrace(string traceId) => GetLogs(new GetLogsContext
+    {
+        ResourceKeys = [],
+        StartIndex = 0,
+        Count = int.MaxValue,
+        Filters =
+        [
+            new FieldTelemetryFilter { Field = KnownStructuredLogFields.TraceIdField, Condition = FilterCondition.Equals, Value = traceId }
+        ]
+    }).Items;
     public List<string> GetLogPropertyKeys(ResourceKey? resourceKey) => GetLogPropertyKeysFromDatabase(resourceKey);
     public List<string> GetTracePropertyKeys(ResourceKey? resourceKey) => GetTracePropertyKeysFromDatabase(resourceKey);
     public GetTracesResponse GetTraces(GetTracesRequest context) => GetTracesFromDatabase(context);

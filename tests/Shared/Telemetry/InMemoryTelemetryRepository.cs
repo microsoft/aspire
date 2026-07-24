@@ -530,6 +530,8 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                 Message = log.Message,
                 SpanId = log.SpanId,
                 TraceId = log.TraceId,
+                ScopeName = log.Scope.Name,
+                EventName = OtlpHelpers.GetEventName(log),
                 Resource = log.ResourceView.Resource,
                 ExceptionText = OtlpLogEntry.GetExceptionText(log),
                 HasGenAI = global::Aspire.Dashboard.Model.GenAI.GenAIHelpers.HasGenAIAttribute(log.Attributes) ||
