@@ -80,14 +80,14 @@ public sealed class ResourceMenuBuilderTests
     }
 
     [Fact]
-    public void AddMenuItems_UninstrumentedPeer_TraceItem()
+    public async Task AddMenuItems_UninstrumentedPeer_TraceItem()
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: attributes => (resource.Name, resource));
         var repository = TelemetryTestHelpers.CreateRepository(outgoingPeerResolvers: [outgoingPeerResolver]);
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -132,13 +132,13 @@ public sealed class ResourceMenuBuilderTests
     }
 
     [Fact]
-    public void AddMenuItems_HasTelemetry_TelemetryItems()
+    public async Task AddMenuItems_HasTelemetry_TelemetryItems()
     {
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc");
         var repository = TelemetryTestHelpers.CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {

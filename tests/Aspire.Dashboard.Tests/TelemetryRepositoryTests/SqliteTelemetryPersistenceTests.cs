@@ -25,7 +25,7 @@ namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutputHelper)
 {
     [Fact]
-    public void Cache_UsesCanonicalResourceViewAndScopeAcrossSignals()
+    public async Task Cache_UsesCanonicalResourceViewAndScopeAcrossSignals()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var startTime = new DateTime(2025, 4, 5, 6, 7, 8, DateTimeKind.Utc);
@@ -33,7 +33,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         var scope = CreateScope(name: "SharedScope", attributes: [KeyValuePair.Create("scope-key", "scope-value")]);
         using var repository = CreateRepository(workspace.Path);
 
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -41,7 +41,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                 ScopeLogs = { new ScopeLogs { Scope = scope, LogRecords = { CreateLogRecord() } } }
             }
         });
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -56,7 +56,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                 }
             }
         });
-        repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -78,13 +78,13 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void Cache_HydratesPersistedMetadataOnce()
+    public async Task Cache_HydratesPersistedMetadataOnce()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var startTime = new DateTime(2025, 4, 5, 6, 7, 8, DateTimeKind.Utc);
         using (var repository = CreateRepository(workspace.Path))
         {
-            repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+            await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
             {
                 new ResourceLogs
                 {
@@ -92,7 +92,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                     ScopeLogs = { new ScopeLogs { Scope = CreateScope("TestScope"), LogRecords = { CreateLogRecord() } } }
                 }
             });
-            repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+            await repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
             {
                 new ResourceMetrics
                 {
@@ -121,14 +121,14 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void Logs_ReopenFromNormalizedRowsWithStableIds()
+    public async Task Logs_ReopenFromNormalizedRowsWithStableIds()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
         long logId;
         using (var repository = CreateRepository(workspace.Path))
         {
-            repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+            await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
             {
                 new ResourceLogs
                 {
@@ -167,7 +167,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void Traces_ReopenFromNormalizedRowsWithStableEventIds()
+    public async Task Traces_ReopenFromNormalizedRowsWithStableEventIds()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
@@ -181,7 +181,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         Guid eventId;
         using (var repository = CreateRepository(workspace.Path))
         {
-            repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+            await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
                 {
@@ -235,14 +235,14 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void Metrics_ReopenFromNormalizedRows()
+    public async Task Metrics_ReopenFromNormalizedRows()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
         var startTime = new DateTime(2025, 2, 3, 4, 5, 6, DateTimeKind.Utc);
         using (var repository = CreateRepository(workspace.Path))
         {
-            repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+            await repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
             {
                 new ResourceMetrics
                 {
@@ -290,7 +290,76 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void Metrics_EquivalentAttributesShareIndexedDimension()
+    public async Task Metrics_HistogramPackedStorage_ReopensAndRejectsChangedBucketCountLength()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        var startTime = new DateTime(2025, 2, 3, 4, 5, 6, DateTimeKind.Utc);
+        using (var repository = CreateRepository(workspace.Path))
+        {
+            var histogram = CreateHistogramMetric("histogram", startTime);
+            histogram.Histogram.DataPoints[0].ExplicitBounds.Clear();
+            histogram.Histogram.DataPoints[0].ExplicitBounds.Add([1, 2]);
+            var addContext = new AddContext();
+            await repository.AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
+            {
+                new ResourceMetrics
+                {
+                    Resource = CreateResource(),
+                    ScopeMetrics = { new ScopeMetrics { Scope = CreateScope("TestMeter"), Metrics = { histogram } } }
+                }
+            });
+            Assert.Equal(1, addContext.SuccessCount);
+            Assert.Equal(0, addContext.FailureCount);
+        }
+
+        using (var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "SELECT length(bucket_counts) FROM telemetry_metric_points;";
+            Assert.Equal(24L, command.ExecuteScalar());
+            command.CommandText = "SELECT length(explicit_bounds) FROM telemetry_metric_points;";
+            Assert.Equal(16L, command.ExecuteScalar());
+            command.CommandText = """
+                SELECT COUNT(*)
+                FROM sqlite_schema
+                WHERE type = 'table'
+                  AND name IN ('telemetry_metric_histograms', 'telemetry_metric_histogram_bucket_counts', 'telemetry_metric_histogram_explicit_bounds');
+                """;
+            Assert.Equal(0L, command.ExecuteScalar());
+        }
+
+        using var reopenedRepository = CreateRepository(workspace.Path);
+        var changedHistogram = CreateHistogramMetric("histogram", startTime.AddMinutes(1));
+        changedHistogram.Histogram.DataPoints[0].BucketCounts.Add(4);
+        var changedContext = new AddContext();
+        await reopenedRepository.AddMetricsAsync(changedContext, new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics = { new ScopeMetrics { Scope = CreateScope("TestMeter"), Metrics = { changedHistogram } } }
+            }
+        });
+
+        Assert.Equal(0, changedContext.SuccessCount);
+        Assert.Equal(1, changedContext.FailureCount);
+        var instrument = reopenedRepository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = new ResourceKey("TestService", "TestId"),
+            MeterName = "TestMeter",
+            InstrumentName = "histogram",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+        var value = Assert.IsType<HistogramValue>(Assert.Single(Assert.Single(instrument!.Dimensions).Values));
+        Assert.Equal([1UL, 2UL, 3UL], value.Values);
+        Assert.Equal([1d, 2d], value.ExplicitBounds);
+    }
+
+    [Fact]
+    public async Task Metrics_EquivalentAttributesShareIndexedDimension()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
@@ -305,7 +374,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                 new[] { KeyValuePair.Create("first", "different") }
             })
             {
-                repository.AddMetrics(addContext, new RepeatedField<ResourceMetrics>
+                await repository.AddMetricsAsync(addContext, new RepeatedField<ResourceMetrics>
                 {
                     new ResourceMetrics
                     {
@@ -334,7 +403,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void Scopes_AreSharedAcrossLogsTracesAndMetrics()
+    public async Task Scopes_AreSharedAcrossLogsTracesAndMetrics()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
@@ -342,7 +411,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         var scope = CreateScope(name: "SharedScope", attributes: [KeyValuePair.Create("scope-key", "scope-value")]);
         using (var repository = CreateRepository(workspace.Path))
         {
-            repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+            await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
             {
                 new ResourceLogs
                 {
@@ -357,7 +426,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                     }
                 }
             });
-            repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+            await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
             {
                 new ResourceSpans
                 {
@@ -372,7 +441,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                     }
                 }
             });
-            repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+            await repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
             {
                 new ResourceMetrics
                 {
@@ -426,7 +495,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void Scopes_ReopenAndReusePersistedScopesWithAndWithoutAttributes()
+    public async Task Scopes_ReopenAndReusePersistedScopesWithAndWithoutAttributes()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
@@ -437,7 +506,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         {
             using var repository = CreateRepository(workspace.Path);
             var addContext = new AddContext();
-            repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+            await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
             {
                 new ResourceLogs
                 {
@@ -464,14 +533,14 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void ResourceViews_EquivalentAttributesShareNormalizedRows()
+    public async Task ResourceViews_EquivalentAttributesShareNormalizedRows()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
         using (var repository = CreateRepository(workspace.Path))
         {
             var addContext = new AddContext();
-            repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+            await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
             {
                 new ResourceLogs
                 {
@@ -511,13 +580,13 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void ResourceViews_LimitRejectsNewNormalizedRow()
+    public async Task ResourceViews_LimitRejectsNewNormalizedRow()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
         using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+            await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -554,7 +623,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
             Assert.Equal((long)TelemetryRepositoryLimits.MaxResourceViewCount, command.ExecuteScalar());
         }
 
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>
+            await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -574,14 +643,14 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
     }
 
     [Fact]
-    public void Scopes_AreDeletedAfterTheirFinalOwnerIsCleared()
+    public async Task Scopes_AreDeletedAfterTheirFinalOwnerIsCleared()
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         var databasePath = GetDatabasePath(workspace.Path);
         var startTime = new DateTime(2025, 3, 4, 5, 6, 7, DateTimeKind.Utc);
         var scope = CreateScope("SharedScope");
         using var repository = CreateRepository(workspace.Path);
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -589,7 +658,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                 ScopeLogs = { new ScopeLogs { Scope = scope, LogRecords = { CreateLogRecord() } } }
             }
         });
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -604,7 +673,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
                 }
             }
         });
-        repository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -620,11 +689,11 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
             }
         });
 
-        repository.ClearStructuredLogs();
+        await repository.ClearStructuredLogsAsync();
         Assert.Equal(1L, GetScopeCount(databasePath));
-        repository.ClearTraces();
+        await repository.ClearTracesAsync();
         Assert.Equal(1L, GetScopeCount(databasePath));
-        repository.ClearMetrics();
+        await repository.ClearMetricsAsync();
         Assert.Equal(0L, GetScopeCount(databasePath));
     }
 

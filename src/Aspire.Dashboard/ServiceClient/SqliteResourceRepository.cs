@@ -19,12 +19,12 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     private readonly IKnownPropertyLookup _knownPropertyLookup;
     private readonly ILogger _logger;
     private readonly bool _ownsDatabase;
-    private readonly object _lock = new();
+    private readonly object _stateLock = new();
     private readonly Dictionary<string, ResourceViewModel> _resources = new(StringComparers.ResourceName);
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _resourceChannels = [];
     private readonly Dictionary<string, ImmutableHashSet<Channel<IReadOnlyList<ResourceLogLine>>>> _consoleChannels = new(StringComparers.ResourceName);
     private readonly Dictionary<string, int> _lastConsoleLogLineNumbers = new(StringComparers.ResourceName);
-    private bool _disposed;
+    private int _disposed;
 
     public SqliteResourceRepository(
         string databasePath,
@@ -55,39 +55,41 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
 
     public ResourceViewModel? GetResource(string resourceName)
     {
-        lock (_lock)
+        ThrowIfDisposed();
+        lock (_stateLock)
         {
-            ThrowIfDisposed();
             return _resources.GetValueOrDefault(resourceName);
         }
     }
 
     public IReadOnlyList<ResourceViewModel> GetResources()
     {
-        lock (_lock)
+        ThrowIfDisposed();
+        lock (_stateLock)
         {
-            ThrowIfDisposed();
             return _resources.Values.ToList();
         }
     }
 
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
     {
-        lock (_lock)
+        ThrowIfDisposed();
+        var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>(new UnboundedChannelOptions
         {
-            ThrowIfDisposed();
-            var channel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>(new UnboundedChannelOptions
-            {
-                AllowSynchronousContinuations = false,
-                SingleReader = true,
-                SingleWriter = false
-            });
+            AllowSynchronousContinuations = false,
+            SingleReader = true,
+            SingleWriter = false
+        });
+        ImmutableArray<ResourceViewModel> initialState;
+        lock (_stateLock)
+        {
             _resourceChannels = _resourceChannels.Add(channel);
-
-            return Task.FromResult(new ResourceViewModelSubscription(
-                _resources.Values.ToImmutableArray(),
-                ReadResourceUpdatesAsync(channel, cancellationToken)));
+            initialState = _resources.Values.ToImmutableArray();
         }
+
+        return Task.FromResult(new ResourceViewModelSubscription(
+            initialState,
+            ReadResourceUpdatesAsync(channel, cancellationToken)));
     }
 
     public async IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(
@@ -95,19 +97,16 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
         ResourceLogLine[] lines;
-        lock (_lock)
-        {
-            ThrowIfDisposed();
-            using var connection = _database.OpenConnection();
-            lines = connection.Query<ConsoleLogRecord>("""
-                SELECT line_number AS LineNumber, content AS Content, is_stderr AS IsStdErr
-                FROM console_logs
-                WHERE resource_name = @ResourceName
-                ORDER BY console_log_id;
-                """, new { ResourceName = resourceName })
-                .Select(line => new ResourceLogLine(line.LineNumber, line.Content, line.IsStdErr))
-                .ToArray();
-        }
+        ThrowIfDisposed();
+        using var connection = _database.OpenConnection();
+        lines = connection.Query<ConsoleLogRecord>("""
+            SELECT line_number AS LineNumber, content AS Content, is_stderr AS IsStdErr
+            FROM console_logs
+            WHERE resource_name = @ResourceName
+            ORDER BY console_log_id;
+            """, new { ResourceName = resourceName })
+            .Select(line => new ResourceLogLine(line.LineNumber, line.Content, line.IsStdErr))
+            .ToArray();
 
         cancellationToken.ThrowIfCancellationRequested();
         if (lines.Length > 0)
@@ -122,9 +121,11 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     {
         ResourceLogLine[] initialLines;
         Channel<IReadOnlyList<ResourceLogLine>> channel;
-        lock (_lock)
+        ThrowIfDisposed();
+        // Keep the initial query and channel registration atomic with console-log writes. Otherwise, a write
+        // could commit after the query but before registration, causing the subscriber to miss those lines.
+        using (await _database.WriteLock.LockAsync(cancellationToken).ConfigureAwait(false))
         {
-            ThrowIfDisposed();
             using var connection = _database.OpenConnection();
             initialLines = connection.Query<ConsoleLogRecord>("""
                 SELECT line_number AS LineNumber, content AS Content, is_stderr AS IsStdErr
@@ -141,7 +142,10 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 SingleReader = true,
                 SingleWriter = false
             });
-            _consoleChannels[resourceName] = (_consoleChannels.GetValueOrDefault(resourceName) ?? []).Add(channel);
+            lock (_stateLock)
+            {
+                _consoleChannels[resourceName] = (_consoleChannels.GetValueOrDefault(resourceName) ?? []).Add(channel);
+            }
         }
 
         try
@@ -158,7 +162,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         }
         finally
         {
-            lock (_lock)
+            lock (_stateLock)
             {
                 if (_consoleChannels.TryGetValue(resourceName, out var channels))
                 {
@@ -176,59 +180,71 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         }
     }
 
-    void IResourceRepositoryWriter.ReplaceResources(IReadOnlyList<Resource> resources)
+    async Task IResourceRepositoryWriter.ReplaceResourcesAsync(IReadOnlyList<Resource> resources)
     {
         EnsureWritable();
+        ThrowIfDisposed();
         List<ResourceViewModelChange> changes = [];
 
-        lock (_lock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
-            ThrowIfDisposed();
-            using var connection = _database.OpenConnection();
-            using var transaction = connection.BeginTransaction();
+            Dictionary<string, ResourceViewModel> currentResources;
+            lock (_stateLock)
+            {
+                currentResources = new Dictionary<string, ResourceViewModel>(_resources, StringComparers.ResourceName);
+            }
+
+            var replacementResources = new Dictionary<string, ResourceViewModel>(StringComparers.ResourceName);
+            var resourcesToSave = new List<ResourceToSave>(resources.Count);
             var replacementResourceNames = resources.Select(resource => resource.Name).ToHashSet(StringComparers.ResourceName);
-            foreach (var (resourceName, viewModel) in _resources)
+            foreach (var (resourceName, viewModel) in currentResources)
             {
                 if (!replacementResourceNames.Contains(resourceName))
                 {
                     changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Delete, viewModel));
                 }
             }
-            var resourcesWithLoadedConsoleLogs = _resources.Values
+            var resourcesWithLoadedConsoleLogs = currentResources.Values
                 .Where(resource => resource.ConsoleLogsLoaded)
                 .Select(resource => resource.Name)
                 .ToHashSet(StringComparers.ResourceName);
 
-            connection.Execute("DELETE FROM dashboard_resources;", transaction: transaction);
-            _resources.Clear();
-            var resourcesToSave = new List<ResourceToSave>(resources.Count);
-
             foreach (var resource in resources)
             {
-                var viewModel = CreateViewModel(resource);
+                var viewModel = CreateViewModel(resource, replacementResources);
                 viewModel.ConsoleLogsLoaded = resourcesWithLoadedConsoleLogs.Contains(resource.Name);
                 resourcesToSave.Add(new(resource, viewModel.ReplicaIndex, viewModel.ConsoleLogsLoaded));
-                _resources[resource.Name] = viewModel;
+                replacementResources[resource.Name] = viewModel;
                 changes.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, viewModel));
             }
 
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
+            connection.Execute("DELETE FROM dashboard_resources;", transaction: transaction);
             InsertResources(connection, transaction, resourcesToSave);
             transaction.Commit();
+
+            lock (_stateLock)
+            {
+                _resources.Clear();
+                foreach (var (resourceName, viewModel) in replacementResources)
+                {
+                    _resources.Add(resourceName, viewModel);
+                }
+            }
         }
 
         PublishResourceChanges(changes);
     }
 
-    void IResourceRepositoryWriter.ApplyChanges(IReadOnlyList<WatchResourcesChange> changes)
+    async Task IResourceRepositoryWriter.ApplyChangesAsync(IReadOnlyList<WatchResourcesChange> changes)
     {
         EnsureWritable();
+        ThrowIfDisposed();
         List<ResourceViewModelChange> viewModelChanges = [];
 
-        lock (_lock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
-            ThrowIfDisposed();
-            using var connection = _database.OpenConnection();
-            using var transaction = connection.BeginTransaction();
             var affectedResourceNames = changes
                 .Select(change => change.KindCase switch
                 {
@@ -240,54 +256,74 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 .Distinct(StringComparers.ResourceName)
                 .ToArray();
             var resourcesToSave = new Dictionary<string, ResourceToSave>(StringComparers.ResourceName);
+            Dictionary<string, ResourceViewModel> updatedResources;
 
+            lock (_stateLock)
+            {
+                updatedResources = new Dictionary<string, ResourceViewModel>(_resources, StringComparers.ResourceName);
+            }
             foreach (var change in changes)
             {
                 if (change.KindCase == WatchResourcesChange.KindOneofCase.Upsert)
                 {
                     var resource = change.Upsert;
-                    var viewModel = CreateViewModel(resource);
+                    var viewModel = CreateViewModel(resource, updatedResources);
                     resourcesToSave[resource.Name] = new(resource, viewModel.ReplicaIndex, viewModel.ConsoleLogsLoaded);
-                    _resources[resource.Name] = viewModel;
+                    updatedResources[resource.Name] = viewModel;
                     viewModelChanges.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Upsert, viewModel));
                 }
-                else if (change.KindCase == WatchResourcesChange.KindOneofCase.Delete && _resources.Remove(change.Delete.ResourceName, out var removed))
+                else if (change.KindCase == WatchResourcesChange.KindOneofCase.Delete && updatedResources.Remove(change.Delete.ResourceName, out var removed))
                 {
                     resourcesToSave.Remove(change.Delete.ResourceName);
                     viewModelChanges.Add(new ResourceViewModelChange(ResourceViewModelChangeType.Delete, removed));
                 }
             }
 
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
             connection.Execute("DELETE FROM dashboard_resources WHERE resource_name IN @ResourceNames;", new { ResourceNames = affectedResourceNames }, transaction);
             InsertResources(connection, transaction, resourcesToSave.Values.ToArray());
             transaction.Commit();
+
+            lock (_stateLock)
+            {
+                _resources.Clear();
+                foreach (var (resourceName, viewModel) in updatedResources)
+                {
+                    _resources.Add(resourceName, viewModel);
+                }
+            }
         }
 
         PublishResourceChanges(viewModelChanges);
     }
 
-    void IResourceRepositoryWriter.MarkConsoleLogsLoaded(string resourceName)
+    async Task IResourceRepositoryWriter.MarkConsoleLogsLoadedAsync(string resourceName)
     {
         EnsureWritable();
-        lock (_lock)
+        ThrowIfDisposed();
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
-            ThrowIfDisposed();
             using var connection = _database.OpenConnection();
             connection.Execute("""
                 UPDATE dashboard_resources
                 SET console_logs_loaded = 1
                 WHERE resource_name = @ResourceName;
                 """, new { ResourceName = resourceName });
-            if (_resources.TryGetValue(resourceName, out var resource))
+            lock (_stateLock)
             {
-                resource.ConsoleLogsLoaded = true;
+                if (_resources.TryGetValue(resourceName, out var resource))
+                {
+                    resource.ConsoleLogsLoaded = true;
+                }
             }
         }
     }
 
-    void IResourceRepositoryWriter.AddConsoleLogs(string resourceName, IReadOnlyList<ConsoleLogLine> logLines)
+    async Task IResourceRepositoryWriter.AddConsoleLogsAsync(string resourceName, IReadOnlyList<ConsoleLogLine> logLines)
     {
         EnsureWritable();
+        ThrowIfDisposed();
         if (logLines.Count == 0)
         {
             return;
@@ -295,17 +331,14 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
 
         var viewModelLines = logLines.Select(line => new ResourceLogLine(line.LineNumber, line.Text, line.IsStdErr)).ToArray();
         Channel<IReadOnlyList<ResourceLogLine>>[] channels;
-        lock (_lock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
-            ThrowIfDisposed();
-            using var connection = _database.OpenConnection();
-            using var transaction = connection.BeginTransaction();
-            connection.Execute("""
-                UPDATE dashboard_resources
-                SET console_logs_loaded = 1
-                WHERE resource_name = @ResourceName;
-                """, new { ResourceName = resourceName }, transaction);
-            var lastLineNumber = _lastConsoleLogLineNumbers.GetValueOrDefault(resourceName, int.MinValue);
+            int lastLineNumber;
+            lock (_stateLock)
+            {
+                lastLineNumber = _lastConsoleLogLineNumbers.GetValueOrDefault(resourceName, int.MinValue);
+            }
+
             // A response can overlap a previously persisted response or repeat a line number within the
             // same batch. Persist only new line numbers and keep the latest content for an in-batch repeat.
             var consoleLogsToInsert = new List<ConsoleLogToInsert>(logLines.Count);
@@ -327,17 +360,29 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                     consoleLogsToInsert.Add(new(line.LineNumber, line.Text, line.IsStdErr));
                 }
             }
+
+            using var connection = _database.OpenConnection();
+            using var transaction = connection.BeginTransaction();
+            connection.Execute("""
+                UPDATE dashboard_resources
+                SET console_logs_loaded = 1
+                WHERE resource_name = @ResourceName;
+                """, new { ResourceName = resourceName }, transaction);
             InsertConsoleLogs(connection, transaction, resourceName, consoleLogsToInsert);
             transaction.Commit();
-            if (consoleLogsToInsert.Count > 0)
+
+            lock (_stateLock)
             {
-                _lastConsoleLogLineNumbers[resourceName] = consoleLogsToInsert.Max(line => line.LineNumber);
+                if (consoleLogsToInsert.Count > 0)
+                {
+                    _lastConsoleLogLineNumbers[resourceName] = consoleLogsToInsert.Max(line => line.LineNumber);
+                }
+                if (_resources.TryGetValue(resourceName, out var resource))
+                {
+                    resource.ConsoleLogsLoaded = true;
+                }
+                channels = (_consoleChannels.GetValueOrDefault(resourceName) ?? []).ToArray();
             }
-            if (_resources.TryGetValue(resourceName, out var resource))
-            {
-                resource.ConsoleLogsLoaded = true;
-            }
-            channels = (_consoleChannels.GetValueOrDefault(resourceName) ?? []).ToArray();
         }
 
         foreach (var channel in channels)
@@ -346,16 +391,16 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         }
     }
 
-    private ResourceViewModel CreateViewModel(Resource resource)
+    private ResourceViewModel CreateViewModel(Resource resource, IReadOnlyDictionary<string, ResourceViewModel> resources)
     {
-        if (_resources.TryGetValue(resource.Name, out var existingResource))
+        if (resources.TryGetValue(resource.Name, out var existingResource))
         {
             var viewModel = resource.ToViewModel(existingResource.ReplicaIndex, _knownPropertyLookup, _logger);
             viewModel.ConsoleLogsLoaded = existingResource.ConsoleLogsLoaded;
             return viewModel;
         }
 
-        var replicaIndex = _resources.Values.Count(r => string.Equals(r.DisplayName, resource.DisplayName, StringComparisons.ResourceName)) + 1;
+        var replicaIndex = resources.Values.Count(r => string.Equals(r.DisplayName, resource.DisplayName, StringComparisons.ResourceName)) + 1;
         return resource.ToViewModel(replicaIndex, _knownPropertyLookup, _logger);
     }
 
@@ -383,7 +428,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         }
         finally
         {
-            lock (_lock)
+            lock (_stateLock)
             {
                 _resourceChannels = _resourceChannels.Remove(channel);
             }
@@ -398,7 +443,7 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         }
 
         Channel<IReadOnlyList<ResourceViewModelChange>>[] channels;
-        lock (_lock)
+        lock (_stateLock)
         {
             channels = _resourceChannels.ToArray();
         }
@@ -413,28 +458,32 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         _database.EnsureWritable("Historical dashboard resources are read-only.");
     }
 
-    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(_disposed, this);
+    private void ThrowIfDisposed() => ObjectDisposedException.ThrowIf(Volatile.Read(ref _disposed) != 0, this);
 
     public void Dispose()
     {
-        lock (_lock)
+        using (_database.WriteLock.Lock())
         {
-            if (_disposed)
+            if (Interlocked.Exchange(ref _disposed, 1) != 0)
             {
                 return;
             }
-            _disposed = true;
 
-            foreach (var channel in _resourceChannels)
+            Channel<IReadOnlyList<ResourceViewModelChange>>[] resourceChannels;
+            Channel<IReadOnlyList<ResourceLogLine>>[] consoleChannels;
+            lock (_stateLock)
+            {
+                resourceChannels = _resourceChannels.ToArray();
+                consoleChannels = _consoleChannels.Values.SelectMany(channels => channels).ToArray();
+            }
+
+            foreach (var channel in resourceChannels)
             {
                 channel.Writer.TryComplete();
             }
-            foreach (var channels in _consoleChannels.Values)
+            foreach (var channel in consoleChannels)
             {
-                foreach (var channel in channels)
-                {
-                    channel.Writer.TryComplete();
-                }
+                channel.Writer.TryComplete();
             }
 
             _database.ClearPool();

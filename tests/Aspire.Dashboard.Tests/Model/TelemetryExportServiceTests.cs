@@ -28,12 +28,12 @@ public sealed class TelemetryExportServiceTests
     private static readonly DateTime s_testTime = new(2024, 1, 15, 10, 30, 0, DateTimeKind.Utc);
 
     [Fact]
-    public void ConvertLogsToOtlpJson_SingleLog_ReturnsCorrectStructure()
+    public async Task ConvertLogsToOtlpJson_SingleLog_ReturnsCorrectStructure()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -95,12 +95,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertLogsToOtlpJson_AddsAspireLogIdAttribute()
+    public async Task ConvertLogsToOtlpJson_AddsAspireLogIdAttribute()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -133,12 +133,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertLogsToOtlpJson_MultipleLogs_GroupsByScope()
+    public async Task ConvertLogsToOtlpJson_MultipleLogs_GroupsByScope()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -214,12 +214,12 @@ public sealed class TelemetryExportServiceTests
     [InlineData(SeverityNumber.Fatal2, "Critical")]
     [InlineData(SeverityNumber.Fatal3, "Critical")]
     [InlineData(SeverityNumber.Fatal4, "Critical")]
-    public void ConvertLogsToOtlpJson_RoundTripsSeverityNumber(SeverityNumber inputSeverity, string expectedSeverityText)
+    public async Task ConvertLogsToOtlpJson_RoundTripsSeverityNumber(SeverityNumber inputSeverity, string expectedSeverityText)
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -251,12 +251,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertTracesToOtlpJson_SingleTrace_ReturnsCorrectStructure()
+    public async Task ConvertTracesToOtlpJson_SingleTrace_ReturnsCorrectStructure()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -329,12 +329,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertTracesToOtlpJson_SpanWithParent_IncludesParentSpanId()
+    public async Task ConvertTracesToOtlpJson_SpanWithParent_IncludesParentSpanId()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -372,12 +372,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertTracesToOtlpJson_WithPersistedPeer_AddsDestinationNameAttribute()
+    public async Task ConvertTracesToOtlpJson_WithPersistedPeer_AddsDestinationNameAttribute()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -421,12 +421,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertTracesToOtlpJson_WithoutPersistedPeer_AddsPeerAddressAttribute()
+    public async Task ConvertTracesToOtlpJson_WithoutPersistedPeer_AddsPeerAddressAttribute()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -503,12 +503,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertMetricsToOtlpJson_SingleInstrument_ReturnsCorrectStructure()
+    public async Task ConvertMetricsToOtlpJson_SingleInstrument_ReturnsCorrectStructure()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
+        await repository.AddMetricsAsync(addContext, new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
         {
             new OpenTelemetry.Proto.Metrics.V1.ResourceMetrics
             {
@@ -580,12 +580,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertMetricsToOtlpJson_MultipleInstruments_GroupsByScope()
+    public async Task ConvertMetricsToOtlpJson_MultipleInstruments_GroupsByScope()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddMetrics(addContext, new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
+        await repository.AddMetricsAsync(addContext, new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
         {
             new OpenTelemetry.Proto.Metrics.V1.ResourceMetrics
             {
@@ -668,10 +668,10 @@ public sealed class TelemetryExportServiceTests
         var exportService = await CreateExportServiceAsync(repository);
 
         // Add test data for three resources
-        AddTestData(repository, "resource1", "111");
-        AddTestData(repository, "resource2", "222");
-        AddTestData(repository, "resource3", "333");
-        AddTestData(repository, "resource4", "444");
+        await AddTestData(repository, "resource1", "111");
+        await AddTestData(repository, "resource2", "222");
+        await AddTestData(repository, "resource3", "333");
+        await AddTestData(repository, "resource4", "444");
 
         // Act - Export only structured logs for resource1, only traces for resource2, all types for resource3
         var selectedResources = new Dictionary<string, HashSet<AspireDataType>>
@@ -729,7 +729,7 @@ public sealed class TelemetryExportServiceTests
         var addContext = new AddContext();
 
         // Add logs
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -771,7 +771,7 @@ public sealed class TelemetryExportServiceTests
         var addContext = new AddContext();
 
         // Add logs for only one resource
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -788,7 +788,7 @@ public sealed class TelemetryExportServiceTests
         });
 
         // Add traces for a different resource
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -833,7 +833,7 @@ public sealed class TelemetryExportServiceTests
         const string japaneseAttributeValue = "日本語の属性値"; // "Japanese attribute value"
         const string japaneseEventName = "テストイベント"; // "Test event"
 
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -906,12 +906,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertSpanToJson_ReturnsValidOtlpTelemetryDataJson()
+    public async Task ConvertSpanToJson_ReturnsValidOtlpTelemetryDataJson()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -943,12 +943,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertSpanToJson_WithLogs_IncludesLogsInOutput()
+    public async Task ConvertSpanToJson_WithLogs_IncludesLogsInOutput()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -963,7 +963,7 @@ public sealed class TelemetryExportServiceTests
                 }
             }
         });
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -995,12 +995,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertTraceToJson_WithLogs_IncludesLogsInOutput()
+    public async Task ConvertTraceToJson_WithLogs_IncludesLogsInOutput()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1019,7 +1019,7 @@ public sealed class TelemetryExportServiceTests
                 }
             }
         });
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1055,12 +1055,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertTraceToJson_ReturnsValidOtlpTelemetryDataJson()
+    public async Task ConvertTraceToJson_ReturnsValidOtlpTelemetryDataJson()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1095,12 +1095,12 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
-    public void ConvertLogEntryToJson_ReturnsValidOtlpTelemetryDataJson()
+    public async Task ConvertLogEntryToJson_ReturnsValidOtlpTelemetryDataJson()
     {
         // Arrange
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1149,11 +1149,11 @@ public sealed class TelemetryExportServiceTests
             _ => new HashSet<AspireDataType>([AspireDataType.ConsoleLogs, AspireDataType.StructuredLogs, AspireDataType.Traces, AspireDataType.Metrics]));
     }
 
-    private static void AddTestData(InMemoryTelemetryRepository repository, string resourceName, string instanceId)
+    private static async Task AddTestData(InMemoryTelemetryRepository repository, string resourceName, string instanceId)
     {
         var compositeName = $"{resourceName}-{instanceId}";
 
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>()
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1169,7 +1169,7 @@ public sealed class TelemetryExportServiceTests
             }
         });
 
-        repository.AddTraces(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1188,7 +1188,7 @@ public sealed class TelemetryExportServiceTests
             }
         });
 
-        repository.AddMetrics(new AddContext(), new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
+        await repository.AddMetricsAsync(new AddContext(), new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
         {
             new OpenTelemetry.Proto.Metrics.V1.ResourceMetrics
             {

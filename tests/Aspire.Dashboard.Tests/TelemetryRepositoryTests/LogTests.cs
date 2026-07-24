@@ -30,14 +30,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs()
+    public async Task AddLogs()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -93,11 +93,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetLogSummaries_ReturnsPageData()
+    public async Task GetLogSummaries_ReturnsPageData()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AsWriter().AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -120,7 +120,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                 }
             }
         });
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -244,11 +244,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetLogsFieldValues_AllFieldsMatchMaterializedLogs()
+    public async Task GetLogsFieldValues_AllFieldsMatchMaterializedLogs()
     {
         var repository = CreateRepository();
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -300,14 +300,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_NoBody_EmptyMessage()
+    public async Task AddLogs_NoBody_EmptyMessage()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -341,14 +341,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_MultipleOutOfOrder()
+    public async Task AddLogs_MultipleOutOfOrder()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -403,14 +403,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_Error_UnviewedCount()
+    public async Task AddLogs_Error_UnviewedCount()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -478,7 +478,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_Error_UnviewedCount_WithReadSubscriptionAll()
+    public async Task AddLogs_Error_UnviewedCount_WithReadSubscriptionAll()
     {
         // Arrange
         var repository = CreateRepository();
@@ -486,7 +486,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -530,7 +530,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_Error_UnviewedCount_WithReadSubscriptionOneApp()
+    public async Task AddLogs_Error_UnviewedCount_WithReadSubscriptionOneApp()
     {
         // Arrange
         var repository = CreateRepository();
@@ -538,7 +538,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -583,7 +583,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_Error_UnviewedCount_WithNonReadSubscription()
+    public async Task AddLogs_Error_UnviewedCount_WithNonReadSubscription()
     {
         // Arrange
         var repository = CreateRepository();
@@ -591,7 +591,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -666,7 +666,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act 1
         var addContext1 = new AddContext();
-        repository.AsWriter().AddLogs(addContext1, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext1, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -703,7 +703,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         var addContext2 = new AddContext();
-        repository.AsWriter().AddLogs(addContext2, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext2, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -736,7 +736,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void Unsubscribe()
+    public async Task Unsubscribe()
     {
         // Arrange
         var repository = CreateRepository();
@@ -751,7 +751,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -792,10 +792,10 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         Task task;
         using (ExecutionContext.SuppressFlow())
         {
-            task = Task.Run(() =>
+            task = Task.Run(async () =>
             {
                 var addContext = new AddContext();
-                repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+                await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
                 {
                     new ResourceLogs
                     {
@@ -821,7 +821,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_AttributeLimits_LimitsApplied()
+    public async Task AddLogs_AttributeLimits_LimitsApplied()
     {
         // Arrange
         var repository = CreateRepository(maxAttributeCount: 5, maxAttributeLength: 16);
@@ -839,7 +839,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         }
 
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -937,7 +937,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Act
         var addContext = new AddContext();
         logger.LogInformation("Writing log 1");
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -959,7 +959,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         logger.LogInformation("Received log 1 callback");
 
         logger.LogInformation("Writing log 2");
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -985,14 +985,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void FilterLogs_With_Message_Returns_CorrectLog()
+    public async Task FilterLogs_With_Message_Returns_CorrectLog()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1035,11 +1035,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     [InlineData("%")]
     [InlineData("_")]
     [InlineData("!")]
-    public void FilterLogs_WithLikeMetacharacter_TreatsValueAsLiteral(string fragment)
+    public async Task FilterLogs_WithLikeMetacharacter_TreatsValueAsLiteral(string fragment)
     {
         var repository = CreateRepository();
         var expectedMessage = $"matches-{fragment}-literal";
-        repository.AsWriter().AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1072,14 +1072,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void FilterLogs_With_EventName_Returns_CorrectLog()
+    public async Task FilterLogs_With_EventName_Returns_CorrectLog()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1119,14 +1119,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_MultipleResources_SameInstanceId_CreateMultipleResources()
+    public async Task AddLogs_MultipleResources_SameInstanceId_CreateMultipleResources()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1218,14 +1218,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetLogs_MultipleInstances()
+    public async Task GetLogs_MultipleInstances()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1307,13 +1307,13 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void RemoveLogs_All()
+    public async Task RemoveLogs_All()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1354,7 +1354,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.AsWriter().ClearStructuredLogs();
+        await repository.AsWriter().ClearStructuredLogsAsync();
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1372,13 +1372,13 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void RemoveLogs_SelectedResource()
+    public async Task RemoveLogs_SelectedResource()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1419,7 +1419,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.AsWriter().ClearStructuredLogs(new ResourceKey("resource1", "123"));
+        await repository.AsWriter().ClearStructuredLogsAsync(new ResourceKey("resource1", "123"));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1446,13 +1446,13 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void RemoveLogs_MultipleSelectedResources()
+    public async Task RemoveLogs_MultipleSelectedResources()
     {
         // Arrange
         var repository = CreateRepository();
 
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1493,7 +1493,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        repository.AsWriter().ClearStructuredLogs(new ResourceKey("resource1", null));
+        await repository.AsWriter().ClearStructuredLogsAsync(new ResourceKey("resource1", null));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
@@ -1512,14 +1512,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_ObservedUnixTimeNanos()
+    public async Task AddLogs_ObservedUnixTimeNanos()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1553,14 +1553,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_EventName_FromLogRecordField()
+    public async Task AddLogs_EventName_FromLogRecordField()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1594,14 +1594,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_EventName_FromLegacyAttribute()
+    public async Task AddLogs_EventName_FromLegacyAttribute()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1637,14 +1637,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_EventName_FieldTakesPrecedenceOverAttribute()
+    public async Task AddLogs_EventName_FieldTakesPrecedenceOverAttribute()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1679,14 +1679,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void AddLogs_EventName_NullWhenNotSet()
+    public async Task AddLogs_EventName_NullWhenNotSet()
     {
         // Arrange
         var repository = CreateRepository();
 
         // Act
         var addContext = new AddContext();
-        repository.AsWriter().AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1720,11 +1720,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetLogs_DisabledFiltersAreIgnored()
+    public async Task GetLogs_DisabledFiltersAreIgnored()
     {
         var repository = CreateRepository();
 
-        repository.AsWriter().AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1787,14 +1787,14 @@ public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTest
     protected override bool UseSqlite => true;
 
     [Fact]
-    public void AddLogs_LargeAttributeBatchesRoundTripAcrossResources()
+    public async Task AddLogs_LargeAttributeBatchesRoundTripAcrossResources()
     {
         var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
         var context = new AddContext();
         var attributes = Enumerable.Range(0, 128)
             .Select(index => KeyValuePair.Create($"key-{index}", $"value-{index}"))
             .ToArray();
-        repository.AsWriter().AddLogs(context, new RepeatedField<ResourceLogs>
+        await repository.AsWriter().AddLogsAsync(context, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {

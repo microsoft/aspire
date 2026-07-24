@@ -4,10 +4,15 @@
 using System.Collections.Concurrent;
 using System.Data.Common;
 using System.Diagnostics;
+using Aspire.Dashboard.Configuration;
+using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Tests;
 using Dapper;
 using Microsoft.Data.Sqlite;
+using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -17,17 +22,47 @@ public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHel
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
 
     [Fact]
-    public void InitializeSchema_HistogramCountsUseIntegerStorage()
+    public void InitializeSchema_HistogramValuesUseBlobStorage()
     {
         using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
         database.InitializeSchema();
         using var connection = database.OpenConnection();
 
         var histogramCountColumnType = connection.QuerySingle<string>("SELECT type FROM pragma_table_info('telemetry_metric_points') WHERE name = 'histogram_count';");
-        var bucketCountColumnType = connection.QuerySingle<string>("SELECT type FROM pragma_table_info('telemetry_metric_histogram_bucket_counts') WHERE name = 'bucket_count';");
+        var histogramColumnTypes = connection.Query<(string Name, string Type)>("SELECT name, type FROM pragma_table_info('telemetry_metric_points') WHERE name IN ('bucket_counts', 'explicit_bounds') ORDER BY name;");
 
         Assert.Equal("INTEGER", histogramCountColumnType);
-        Assert.Equal("INTEGER", bucketCountColumnType);
+        Assert.Collection(
+            histogramColumnTypes,
+            column => Assert.Equal(("bucket_counts", "BLOB"), column),
+            column => Assert.Equal(("explicit_bounds", "BLOB"), column));
+        Assert.Equal(0, connection.QuerySingle<int>("SELECT COUNT(*) FROM sqlite_schema WHERE type = 'table' AND name = 'telemetry_metric_histograms';"));
+    }
+
+    [Fact]
+    public async Task RepositoryWrites_ShareDatabaseWriteLock()
+    {
+        using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        using var telemetryRepository = new SqliteTelemetryRepository(
+            database,
+            NullLoggerFactory.Instance,
+            Options.Create(new DashboardOptions()),
+            new PauseManager(),
+            []);
+        using var resourceRepository = new SqliteResourceRepository(database, new MockKnownPropertyLookup(), NullLoggerFactory.Instance);
+
+        Task telemetryWriteTask;
+        Task resourceWriteTask;
+        using (await database.WriteLock.LockAsync())
+        {
+            telemetryWriteTask = ((ITelemetryRepositoryWriter)telemetryRepository).ClearMetricsAsync();
+            resourceWriteTask = ((IResourceRepositoryWriter)resourceRepository).ReplaceResourcesAsync([]);
+
+            Assert.False(telemetryWriteTask.IsCompleted);
+            Assert.False(resourceWriteTask.IsCompleted);
+        }
+
+        await Task.WhenAll(telemetryWriteTask, resourceWriteTask);
     }
 
     [Fact]

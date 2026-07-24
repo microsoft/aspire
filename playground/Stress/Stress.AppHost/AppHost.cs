@@ -9,6 +9,7 @@ using Microsoft.Extensions.Diagnostics.HealthChecks;
 
 var builder = DistributedApplication.CreateBuilder(args);
 builder.Services.AddHttpClient();
+builder.Services.AddHttpClient("large-telemetry", client => client.Timeout = Timeout.InfiniteTimeSpan);
 builder.Services.AddHealthChecks().AddAsyncCheck("health-test", async (ct) =>
 {
     await Task.Delay(5_000, ct);
@@ -100,6 +101,18 @@ builder.AddCommandResources(serviceBuilder, telemetryBuilder);
 // the dashboard binary (defaults to the Aspire.Dashboard bin output in the
 // artifacts dir).
 var dashboardBuilder = builder.AddProject<Projects.Aspire_Dashboard>(KnownResourceNames.AspireDashboard);
+if (string.Equals(builder.Configuration["STRESS_REMOVE_DASHBOARD_LIMITS"], bool.TrueString, StringComparison.OrdinalIgnoreCase))
+{
+    var unlimited = int.MaxValue.ToString(CultureInfo.InvariantCulture);
+    dashboardBuilder
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxLogCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxTraceCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxMetricsCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxAttributeCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxAttributeLength", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxSpanEventCount", unlimited)
+        .WithEnvironment("Dashboard__TelemetryLimits__MaxResourceCount", unlimited);
+}
 if (builder.Configuration["OTEL_EXPORTER_OTLP_ENDPOINT"] is { Length: > 0 } dashboardOtlpEndpoint)
 {
     // The AppHost normally points every project at its own dashboard. Preserve an explicitly configured

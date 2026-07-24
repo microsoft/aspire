@@ -147,12 +147,20 @@ internal static class FluentUISetupHelpers
         comboboxModule.SetupVoid("setControlAttribute", _ => true);
     }
 
-    public static void ConfigureTelemetryRepository(
+    public static async Task ConfigureTelemetryRepository(
         TestContext context,
         bool readOnly,
-        Action<ITelemetryRepositoryWriter> seed)
+        Func<ITelemetryRepositoryWriter, Task> seed)
     {
-        context.Services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly, seed));
+        context.Services.AddSingleton(new TelemetryRepositoryConfiguration(readOnly));
+
+        var databasePath = Path.Combine(context.Services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
+        var loggerFactory = context.Services.GetRequiredService<ILoggerFactory>();
+        var options = context.Services.GetRequiredService<IOptions<DashboardOptions>>();
+        var outgoingPeerResolvers = context.Services.GetServices<IOutgoingPeerResolver>();
+
+        using var writer = new SqliteTelemetryRepository(databasePath, loggerFactory, options, new PauseManager(), outgoingPeerResolvers);
+        await seed(writer);
     }
 
     public static void AddCommonDashboardServices(
@@ -176,12 +184,6 @@ internal static class FluentUISetupHelpers
             var pauseManager = services.GetRequiredService<PauseManager>();
             var outgoingPeerResolvers = services.GetServices<IOutgoingPeerResolver>();
             var configuration = services.GetService<TelemetryRepositoryConfiguration>();
-
-            if (configuration is not null)
-            {
-                using var writer = new SqliteTelemetryRepository(databasePath, loggerFactory, options, new PauseManager(), outgoingPeerResolvers);
-                configuration.Seed(writer);
-            }
 
             return new SqliteTelemetryRepository(
                 databasePath,
@@ -307,5 +309,5 @@ internal static class FluentUISetupHelpers
         });
     }
 
-    private sealed record TelemetryRepositoryConfiguration(bool ReadOnly, Action<ITelemetryRepositoryWriter> Seed);
+    private sealed record TelemetryRepositoryConfiguration(bool ReadOnly);
 }

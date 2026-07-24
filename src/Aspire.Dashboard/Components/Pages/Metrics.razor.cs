@@ -241,8 +241,7 @@ public partial class Metrics : IDisposable, IComponentWithTelemetry, IPageWithSe
 
     private Task ClearMetrics(ResourceKey? key)
     {
-        TelemetryRepositoryWriter.ClearMetrics(key);
-        return Task.CompletedTask;
+        return TelemetryRepositoryWriter.ClearMetricsAsync(key);
     }
 
     private Task HandleSelectedDurationChangedAsync()

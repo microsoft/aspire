@@ -22,10 +22,10 @@ public sealed partial class SqliteTelemetryRepository
     private const int MaxSpanBatchSize = 25;
     private const int MaxSpanDetailBatchSize = 50;
 
-    private List<OtlpSpan> AddTracesToDatabase(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
+    private async Task<List<OtlpSpan>> AddTracesToDatabaseAsync(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
     {
         var addedSpans = new List<OtlpSpan>();
-        lock (_writeLock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();
@@ -1052,7 +1052,7 @@ public sealed partial class SqliteTelemetryRepository
             """, new { _otlpContext.Options.MaxTraceCount }, transaction);
     }
 
-    private void ClearSelectedTracesFromDatabase(Dictionary<string, HashSet<AspireDataType>> selectedResources)
+    private async Task ClearSelectedTracesFromDatabaseAsync(Dictionary<string, HashSet<AspireDataType>> selectedResources)
     {
         using var connection = _database.OpenConnection();
         var resources = connection.Query<TelemetryResourceRecord>("""
@@ -1066,14 +1066,14 @@ public sealed partial class SqliteTelemetryRepository
                 dataTypes.Contains(AspireDataType.Traces) &&
                 !dataTypes.Contains(AspireDataType.Resource))
             {
-                ClearTracesFromDatabase(key);
+                await ClearTracesFromDatabaseAsync(key).ConfigureAwait(false);
             }
         }
     }
 
-    private void RecalculateUninstrumentedPeers()
+    private async Task RecalculateUninstrumentedPeersAsync()
     {
-        lock (_writeLock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
             using var writeConnection = _database.OpenConnection();
             using var transaction = writeConnection.BeginTransaction();
@@ -1223,9 +1223,9 @@ public sealed partial class SqliteTelemetryRepository
         return false;
     }
 
-    private void ClearTracesFromDatabase(ResourceKey? resourceKey)
+    private async Task ClearTracesFromDatabaseAsync(ResourceKey? resourceKey)
     {
-        lock (_writeLock)
+        using (await _database.WriteLock.LockAsync().ConfigureAwait(false))
         {
             using var connection = _database.OpenConnection();
             using var transaction = connection.BeginTransaction();

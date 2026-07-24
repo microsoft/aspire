@@ -144,21 +144,21 @@ public sealed class TelemetryImportService
 
         if (telemetryData.ResourceLogs is { Length: > 0 })
         {
-            ImportLogs(telemetryData.ResourceLogs);
+            await ImportLogsAsync(telemetryData.ResourceLogs).ConfigureAwait(false);
             _logger.LogDebug("Imported logs from {FileName}", fileName);
             imported = true;
         }
 
         if (telemetryData.ResourceSpans is { Length: > 0 })
         {
-            ImportTraces(telemetryData.ResourceSpans);
+            await ImportTracesAsync(telemetryData.ResourceSpans).ConfigureAwait(false);
             _logger.LogDebug("Imported traces from {FileName}", fileName);
             imported = true;
         }
 
         if (telemetryData.ResourceMetrics is { Length: > 0 })
         {
-            ImportMetrics(telemetryData.ResourceMetrics);
+            await ImportMetricsAsync(telemetryData.ResourceMetrics).ConfigureAwait(false);
             _logger.LogDebug("Imported metrics from {FileName}", fileName);
             imported = true;
         }
@@ -169,35 +169,35 @@ public sealed class TelemetryImportService
         }
     }
 
-    private void ImportLogs(OtlpResourceLogsJson[] resourceLogs)
+    private async Task ImportLogsAsync(OtlpResourceLogsJson[] resourceLogs)
     {
         var exportRequest = new OtlpExportLogsServiceRequestJson { ResourceLogs = resourceLogs };
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        _telemetryRepositoryWriter.AddLogs(addContext, protobufRequest.ResourceLogs);
+        await _telemetryRepositoryWriter.AddLogsAsync(addContext, protobufRequest.ResourceLogs).ConfigureAwait(false);
 
         _logger.LogDebug("Imported logs: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }
 
-    private void ImportTraces(OtlpResourceSpansJson[] resourceSpans)
+    private async Task ImportTracesAsync(OtlpResourceSpansJson[] resourceSpans)
     {
         var exportRequest = new OtlpExportTraceServiceRequestJson { ResourceSpans = resourceSpans };
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        _telemetryRepositoryWriter.AddTraces(addContext, protobufRequest.ResourceSpans);
+        await _telemetryRepositoryWriter.AddTracesAsync(addContext, protobufRequest.ResourceSpans).ConfigureAwait(false);
 
         _logger.LogDebug("Imported traces: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }
 
-    private void ImportMetrics(OtlpResourceMetricsJson[] resourceMetrics)
+    private async Task ImportMetricsAsync(OtlpResourceMetricsJson[] resourceMetrics)
     {
         var exportRequest = new OtlpExportMetricsServiceRequestJson { ResourceMetrics = resourceMetrics };
         var protobufRequest = OtlpJsonToProtobufConverter.ToProtobuf(exportRequest);
 
         var addContext = new AddContext();
-        _telemetryRepositoryWriter.AddMetrics(addContext, protobufRequest.ResourceMetrics);
+        await _telemetryRepositoryWriter.AddMetricsAsync(addContext, protobufRequest.ResourceMetrics).ConfigureAwait(false);
 
         _logger.LogDebug("Imported metrics: {SuccessCount} succeeded, {FailureCount} failed", addContext.SuccessCount, addContext.FailureCount);
     }

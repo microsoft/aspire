@@ -357,14 +357,14 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
     }
 
-    public void AddLogs(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
+    public Task AddLogsAsync(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
     {
         ThrowIfReadOnly();
 
         if (_pauseManager.AreStructuredLogsPaused(out _))
         {
             _logger.LogTrace("{Count} incoming structured log(s) ignored because of an active pause.", resourceLogs.Count);
-            return;
+            return Task.CompletedTask;
         }
 
         foreach (var rl in resourceLogs)
@@ -386,6 +386,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
 
         RaiseSubscriptionChanged(_logSubscriptions);
+        return Task.CompletedTask;
     }
 
     public void AddLogsCore(AddContext context, OtlpResourceView resourceView, RepeatedField<ScopeLogs> scopeLogs)
@@ -1394,7 +1395,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
     /// Clears selected telemetry signals for specified resources.
     /// </summary>
     /// <param name="selectedResources">Dictionary mapping resource names to the data types to clear.</param>
-    public void ClearSelectedSignals(Dictionary<string, HashSet<AspireDataType>> selectedResources)
+    public Task ClearSelectedSignalsAsync(Dictionary<string, HashSet<AspireDataType>> selectedResources)
     {
         ThrowIfReadOnly();
 
@@ -1440,9 +1441,17 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
             // Always remove everything if the resource is being removed.
             return dataTypes.Contains(dataType) || dataTypes.Contains(AspireDataType.Resource);
         }
+
+        return Task.CompletedTask;
     }
 
-    public void ClearTraces(ResourceKey? resourceKey = null)
+    public Task ClearTracesAsync(ResourceKey? resourceKey = null)
+    {
+        ClearTraces(resourceKey);
+        return Task.CompletedTask;
+    }
+
+    private void ClearTraces(ResourceKey? resourceKey)
     {
         ThrowIfReadOnly();
 
@@ -1506,7 +1515,13 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         RaiseSubscriptionChanged(_tracesSubscriptions);
     }
 
-    public void ClearStructuredLogs(ResourceKey? resourceKey = null)
+    public Task ClearStructuredLogsAsync(ResourceKey? resourceKey = null)
+    {
+        ClearStructuredLogs(resourceKey);
+        return Task.CompletedTask;
+    }
+
+    private void ClearStructuredLogs(ResourceKey? resourceKey)
     {
         ThrowIfReadOnly();
 
@@ -1570,7 +1585,13 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
     }
 
-    public void ClearMetrics(ResourceKey? resourceKey = null)
+    public Task ClearMetricsAsync(ResourceKey? resourceKey = null)
+    {
+        ClearMetrics(resourceKey);
+        return Task.CompletedTask;
+    }
+
+    private void ClearMetrics(ResourceKey? resourceKey)
     {
         ThrowIfReadOnly();
 
@@ -1740,14 +1761,14 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
     }
 
-    public void AddMetrics(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
+    public Task AddMetricsAsync(AddContext context, RepeatedField<ResourceMetrics> resourceMetrics)
     {
         ThrowIfReadOnly();
 
         if (_pauseManager.AreMetricsPaused(out _))
         {
             _logger.LogTrace("{Count} incoming metric(s) ignored because of an active pause.", resourceMetrics.Count);
-            return;
+            return Task.CompletedTask;
         }
 
         foreach (var rm in resourceMetrics)
@@ -1770,6 +1791,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
 
         RaiseSubscriptionChanged(_metricsSubscriptions);
+        return Task.CompletedTask;
     }
 
     private void AddMetrics(ResourceEntry resourceEntry, AddContext context, RepeatedField<ScopeMetrics> scopeMetrics)
@@ -1929,14 +1951,14 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         };
     }
 
-    public void AddTraces(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
+    public Task AddTracesAsync(AddContext context, RepeatedField<ResourceSpans> resourceSpans)
     {
         ThrowIfReadOnly();
 
         if (_pauseManager.AreTracesPaused(out _))
         {
             _logger.LogTrace("{Count} incoming trace(s) ignored because of an active pause.", resourceSpans.Count);
-            return;
+            return Task.CompletedTask;
         }
 
         foreach (var rs in resourceSpans)
@@ -1958,6 +1980,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
 
         RaiseSubscriptionChanged(_tracesSubscriptions);
+        return Task.CompletedTask;
     }
 
     private static OtlpSpanStatusCode ConvertStatus(Status? status)

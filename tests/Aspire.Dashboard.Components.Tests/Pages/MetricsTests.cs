@@ -37,11 +37,11 @@ public partial class MetricsTests : DashboardTestContext
     [Theory]
     [InlineData(false, true)]
     [InlineData(true, false)]
-    public void SignalActions_UseTelemetryRepositoryReadOnlyState(bool telemetryRepositoryIsReadOnly, bool dashboardClientIsReadOnly)
+    public async Task SignalActions_UseTelemetryRepositoryReadOnlyState(bool telemetryRepositoryIsReadOnly, bool dashboardClientIsReadOnly)
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
-        FluentUISetupHelpers.ConfigureTelemetryRepository(this, telemetryRepositoryIsReadOnly, _ => { });
         Services.AddSingleton<IDashboardClient>(new TestDashboardClient(isReadOnly: dashboardClientIsReadOnly));
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, telemetryRepositoryIsReadOnly, _ => Task.CompletedTask);
 
         var cut = RenderComponent<Metrics>(builder => builder.AddCascadingValue(new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false)));
 
@@ -50,9 +50,9 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ChangeResource_MeterAndInstrumentOnNewResource_InstrumentSet()
+    public async Task ChangeResource_MeterAndInstrumentOnNewResource_InstrumentSet()
     {
-        ChangeResourceAndAssertInstrument(
+        await ChangeResourceAndAssertInstrument(
             app1InstrumentName: "test1",
             app2InstrumentName: "test1",
             expectedMeterNameAfterChange: "test-meter",
@@ -60,9 +60,9 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared()
+    public async Task ChangeResource_MeterAndInstrumentNotOnNewResources_InstrumentCleared()
     {
-        ChangeResourceAndAssertInstrument(
+        await ChangeResourceAndAssertInstrument(
             app1InstrumentName: "test1",
             app2InstrumentName: "test2",
             expectedMeterNameAfterChange: null,
@@ -70,14 +70,14 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ChartContainer_ParametersAndActiveView_OnlyRefreshAndRenderWhenChanged()
+    public async Task ChartContainer_ParametersAndActiveView_OnlyRefreshAndRenderWhenChanged()
     {
         JSInterop.Mode = JSRuntimeMode.Loose;
         MetricsSetupHelpers.SetupMetricsPage(this);
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
         var metricTime = DateTime.UtcNow.AddMinutes(-1);
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -133,7 +133,7 @@ public partial class MetricsTests : DashboardTestContext
         Assert.Empty(cut.FindComponents<MetricTable>());
         Assert.Empty(activities);
 
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -183,7 +183,7 @@ public partial class MetricsTests : DashboardTestContext
         MetricsSetupHelpers.SetupMetricsPage(this);
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -262,7 +262,7 @@ public partial class MetricsTests : DashboardTestContext
         });
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -293,7 +293,7 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void InitialLoad_HasSessionState_RedirectUsingState()
+    public async Task InitialLoad_HasSessionState_RedirectUsingState()
     {
         // Arrange
         var testSessionStorage = new TestSessionStorage
@@ -331,7 +331,7 @@ public partial class MetricsTests : DashboardTestContext
         };
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -383,13 +383,13 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void MetricsTree_MetricsAdded_TreeUpdated()
+    public async Task MetricsTree_MetricsAdded_TreeUpdated()
     {
         // Arrange
         MetricsSetupHelpers.SetupMetricsPage(this);
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -434,7 +434,7 @@ public partial class MetricsTests : DashboardTestContext
 
         // Act 2
         // New instruments added
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -479,11 +479,11 @@ public partial class MetricsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ReadOnly_ChartEndsAtLatestMetricTime()
+    public async Task ReadOnly_ChartEndsAtLatestMetricTime()
     {
         MetricsSetupHelpers.SetupMetricsPage(this);
 
-        FluentUISetupHelpers.ConfigureTelemetryRepository(this, readOnly: true, telemetryRepository => telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await FluentUISetupHelpers.ConfigureTelemetryRepository(this, readOnly: true, telemetryRepository => telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {
@@ -522,7 +522,7 @@ public partial class MetricsTests : DashboardTestContext
         });
     }
 
-    private void ChangeResourceAndAssertInstrument(string app1InstrumentName, string app2InstrumentName, string? expectedMeterNameAfterChange, string? expectedInstrumentNameAfterChange)
+    private async Task ChangeResourceAndAssertInstrument(string app1InstrumentName, string app2InstrumentName, string? expectedMeterNameAfterChange, string? expectedInstrumentNameAfterChange)
     {
         // Arrange
         MetricsSetupHelpers.SetupMetricsPage(this);
@@ -531,7 +531,7 @@ public partial class MetricsTests : DashboardTestContext
         navigationManager.NavigateTo(DashboardUrls.MetricsUrl(resource: "TestApp", meter: "test-meter", instrument: app1InstrumentName, duration: 720, view: MetricViewKind.Table.ToString()));
 
         var telemetryRepository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        telemetryRepository.AddMetrics(new AddContext(), new RepeatedField<ResourceMetrics>
+        await telemetryRepository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
         {
             new ResourceMetrics
             {

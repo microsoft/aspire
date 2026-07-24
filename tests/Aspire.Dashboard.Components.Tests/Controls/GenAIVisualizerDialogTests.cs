@@ -130,7 +130,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
 
         var cut = SetUpDialog(out var dialogService);
         var repository = Services.GetRequiredService<SqliteTelemetryRepository>();
-        repository.AddLogs(new AddContext(), new RepeatedField<ResourceLogs>
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -181,7 +181,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         
         // Add initial trace to repository for the dialog to display
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -228,7 +228,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var originalContent = instance.Content;
 
         // Act - Add a DIFFERENT trace to the repository
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -264,7 +264,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         
         // Add initial trace to repository for the dialog to display
         var addContext = new AddContext();
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -325,7 +325,7 @@ public class GenAIVisualizerDialogTests : DashboardTestContext
         var originalContent = instance.Content;
 
         // Act - Add a new span to the SAME trace that the dialog is displaying
-        repository.AddTraces(addContext, new RepeatedField<ResourceSpans>
+        await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {

@@ -450,7 +450,17 @@ public sealed partial class SqliteTelemetryRepository
 
     private void EnsureCachePopulated()
     {
-        lock (_writeLock)
+        lock (_cacheLock)
+        {
+            if (_cachePopulated)
+            {
+                return;
+            }
+        }
+
+        // Writers update the database and metadata caches as one operation. Wait for any active write to
+        // finish so the cache is populated from committed data instead of a partially updated state.
+        using (_database.WriteLock.Lock())
         {
             lock (_cacheLock)
             {

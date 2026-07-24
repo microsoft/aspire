@@ -289,7 +289,7 @@ public sealed class TelemetryImportServiceTests
         var sourceRepository = CreateRepository();
         var addContext = new AddContext();
 
-        sourceRepository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await sourceRepository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -340,7 +340,7 @@ public sealed class TelemetryImportServiceTests
         var sourceRepository = CreateRepository();
         var addContext = new AddContext();
 
-        sourceRepository.AddLogs(addContext, new RepeatedField<ResourceLogs>()
+        await sourceRepository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -401,7 +401,7 @@ public sealed class TelemetryImportServiceTests
         var sourceRepository = CreateRepository();
         var addContext = new AddContext();
 
-        sourceRepository.AddTraces(addContext, new RepeatedField<ResourceSpans>()
+        await sourceRepository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
