@@ -15,6 +15,7 @@ public class OtlpInstrumentSummary
     public required OtlpInstrumentType Type { get; init; }
     public required OtlpAggregationTemporality AggregationTemporality { get; init; }
     public required OtlpScope Parent { get; init; }
+    public required OtlpResourceView ResourceView { get; init; }
 
     public OtlpInstrumentKey GetKey() => new(Parent.Name, Name);
 }

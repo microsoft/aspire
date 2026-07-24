@@ -65,6 +65,18 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
+    public void RunMode_RejectsConcurrentTimestampCollision()
+    {
+        var timeProvider = new FixedTimeProvider(new DateTimeOffset(2026, 7, 20, 12, 34, 56, 789, TimeSpan.Zero));
+        var options = CreateOptions();
+        using var firstRunStore = CreateRunStore(options, timeProvider);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateRunStore(options, timeProvider));
+
+        Assert.Equal($"Dashboard run '{firstRunStore.RunId}' is already in use by another dashboard process.", exception.Message);
+    }
+
+    [Fact]
     public void RunMetadata_IncludesSchemaVersion()
     {
         using var runStore = CreateRunStore(CreateOptions());
@@ -227,6 +239,19 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             testSink.Writes,
             write => write.Message == $"Resuming dashboard database at '{secondRunStore.DatabasePath}'.");
         Assert.Equal(LogLevel.Debug, resumeLog.LogLevel);
+    }
+
+    [Fact]
+    public void ResumeMode_RejectsConcurrentDashboardForApplication()
+    {
+        var options = CreateOptions("My Dashboard", DashboardPersistenceMode.Resume);
+        using var firstRunStore = CreateRunStore(options);
+
+        var exception = Assert.Throws<InvalidOperationException>(() => CreateRunStore(options));
+
+        Assert.Equal(
+            $"Dashboard data for application 'My Dashboard' is already in use by another dashboard process. Database path: '{firstRunStore.DatabasePath}'.",
+            exception.Message);
     }
 
     [Fact]

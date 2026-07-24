@@ -45,6 +45,7 @@ internal sealed class DashboardClient : IDashboardClient
 {
     private const string ApiKeyHeaderName = "x-resource-service-api-key";
     private const string TroubleshootingUrl = "https://aka.ms/aspire/dashboard-apphost-connection-failed";
+    internal const string LiveAppHostServiceKey = "LiveAppHost";
 
     // The dashboard's own version, extracted from its assembly at startup. Used to compare against
     // the minimum version required by the AppHost.

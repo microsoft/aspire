@@ -523,6 +523,8 @@ public class ChartDataCalculatorTests
 
     private static OtlpInstrumentData CreateInstrumentData(List<DimensionScope> dimensions)
     {
+        var resource = new OtlpResource("resource", instanceId: null, uninstrumentedPeer: false, CreateContext());
+
         return new OtlpInstrumentData
         {
             Summary = new OtlpInstrumentSummary
@@ -532,7 +534,8 @@ public class ChartDataCalculatorTests
                 Unit = "items",
                 Type = OtlpInstrumentType.Gauge,
                 AggregationTemporality = OtlpAggregationTemporality.Cumulative,
-                Parent = OtlpScope.Empty
+                Parent = OtlpScope.Empty,
+                ResourceView = new OtlpResourceView(resource, Array.Empty<KeyValuePair<string, string>>())
             },
             Dimensions = dimensions,
             KnownAttributeValues = [],

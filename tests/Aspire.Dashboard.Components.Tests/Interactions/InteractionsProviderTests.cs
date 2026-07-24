@@ -81,6 +81,57 @@ public partial class InteractionsProviderTests : DashboardTestContext
     }
 
     [Fact]
+    public async Task Initialize_InteractionsUseLiveDashboardClientAsync()
+    {
+        var liveInteractionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var liveRequestsChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var selectedInteractionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
+        var selectedRequestsChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var liveSubscriptionCount = 0;
+        var selectedSubscriptionCount = 0;
+
+        var liveDashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            interactionChannelProvider: () =>
+            {
+                Interlocked.Increment(ref liveSubscriptionCount);
+                return liveInteractionsChannel;
+            },
+            sendInteractionUpdateChannel: liveRequestsChannel);
+        var selectedDashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            interactionChannelProvider: () =>
+            {
+                Interlocked.Increment(ref selectedSubscriptionCount);
+                return selectedInteractionsChannel;
+            },
+            sendInteractionUpdateChannel: selectedRequestsChannel,
+            isReadOnly: true);
+
+        SetupInteractionProviderServices(liveDashboardClient, selectedDashboardClient: selectedDashboardClient);
+
+        var cut = RenderComponent<Components.Interactions.InteractionsProvider>(builder =>
+        {
+            builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
+        });
+
+        cut.WaitForAssertion(() =>
+        {
+            Assert.Same(liveDashboardClient, cut.Instance.DashboardClient);
+            Assert.Equal(1, Volatile.Read(ref liveSubscriptionCount));
+            Assert.Equal(0, Volatile.Read(ref selectedSubscriptionCount));
+        });
+
+        var request = new WatchInteractionsRequestUpdate();
+        await cut.Instance.DashboardClient.SendInteractionRequestAsync(request, CancellationToken.None);
+
+        Assert.Same(request, await liveRequestsChannel.Reader.ReadAsync().AsTask().DefaultTimeout());
+        Assert.False(selectedRequestsChannel.Reader.TryRead(out _));
+
+        await cut.Instance.DisposeAsync().DefaultTimeout();
+    }
+
+    [Fact]
     public async Task ReceiveData_MessageBoxOpen_OpenDialog()
     {
         // Arrange
@@ -289,6 +340,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         // Act 2
         Assert.NotNull(dialogParameters);
         Assert.NotNull(vm);
+        Assert.Same(dashboardClient, vm.DashboardClient);
 
         await vm.OnSubmitCallback(response, false).DefaultTimeout();
 
@@ -622,7 +674,11 @@ public partial class InteractionsProviderTests : DashboardTestContext
         await instance.DisposeAsync().DefaultTimeout();
     }
 
-    private void SetupInteractionProviderServices(TestDashboardClient? dashboardClient = null, TestDialogService? dialogService = null, TestMessageService? messageService = null)
+    private void SetupInteractionProviderServices(
+        TestDashboardClient? dashboardClient = null,
+        TestDialogService? dialogService = null,
+        TestMessageService? messageService = null,
+        TestDashboardClient? selectedDashboardClient = null)
     {
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
 
@@ -631,7 +687,8 @@ public partial class InteractionsProviderTests : DashboardTestContext
 
         Services.AddSingleton<IDialogService>(dialogService ?? new TestDialogService());
         Services.AddSingleton<IMessageService>(messageService ?? new TestMessageService());
-        Services.AddSingleton<IDashboardClient>(dashboardClient ?? new TestDashboardClient());
+        Services.AddSingleton<IDashboardClient>(selectedDashboardClient ?? new TestDashboardClient());
+        Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey, dashboardClient ?? new TestDashboardClient());
         Services.AddSingleton<DashboardTelemetryService>();
         Services.AddSingleton<IDashboardTelemetrySender, TestDashboardTelemetrySender>();
         Services.AddSingleton<ComponentTelemetryContextProvider>();

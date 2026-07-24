@@ -263,6 +263,7 @@ public sealed partial class SqliteTelemetryRepository
         SqliteConnection connection,
         IDbTransaction transaction,
         CachedResource resource,
+        CachedResourceView resourceView,
         CachedResourceScope resourceScope,
         Metric metric)
     {
@@ -295,15 +296,16 @@ public sealed partial class SqliteTelemetryRepository
 
             var instrumentId = connection.QuerySingle<long>("""
                 INSERT INTO telemetry_metric_instruments (
-                    resource_id, scope_id, instrument_name, description, unit, instrument_type,
+                    resource_id, resource_view_id, scope_id, instrument_name, description, unit, instrument_type,
                     aggregation_temporality, is_monotonic)
                 VALUES (
-                    @ResourceId, @ScopeId, @InstrumentName, @Description, @Unit, @InstrumentType,
+                    @ResourceId, @ResourceViewId, @ScopeId, @InstrumentName, @Description, @Unit, @InstrumentType,
                     @AggregationTemporality, @IsMonotonic)
                 RETURNING instrument_id;
                 """, new
             {
                 resource.ResourceId,
+                resourceView.ResourceViewId,
                 ScopeId = resourceScope.Scope.ScopeId,
                 InstrumentName = metric.Name,
                 metric.Description,
@@ -316,6 +318,7 @@ public sealed partial class SqliteTelemetryRepository
             {
                 InstrumentId = instrumentId,
                 ResourceId = resource.ResourceId,
+                ResourceViewId = resourceView.ResourceViewId,
                 ScopeId = resourceScope.Scope.ScopeId,
                 InstrumentName = metric.Name,
                 Description = metric.Description,
@@ -327,7 +330,7 @@ public sealed partial class SqliteTelemetryRepository
             resource.InstrumentCount++;
             _metricIngestionState.LoadedDimensionInstruments.Add(instrumentId);
             _metricIngestionState.DimensionCounts[instrumentId] = 0;
-            return AddCachedInstrument(resourceScope, record);
+            return AddCachedInstrument(resource, resourceScope, record);
         }
     }
 
@@ -335,6 +338,7 @@ public sealed partial class SqliteTelemetryRepository
         SqliteConnection connection,
         IDbTransaction transaction,
         CachedResource resource,
+        CachedResourceView resourceView,
         CachedResourceScope resourceScope,
         RepeatedField<Metric> metrics)
     {
@@ -362,12 +366,13 @@ public sealed partial class SqliteTelemetryRepository
             {
                 var sql = new StringBuilder("""
                     INSERT INTO telemetry_metric_instruments (
-                        resource_id, scope_id, instrument_name, description, unit, instrument_type,
+                        resource_id, resource_view_id, scope_id, instrument_name, description, unit, instrument_type,
                         aggregation_temporality, is_monotonic)
                     VALUES
                     """);
                 var parameters = new DynamicParameters();
                 parameters.Add("ResourceId", resource.ResourceId);
+                parameters.Add("ResourceViewId", resourceView.ResourceViewId);
                 parameters.Add("ScopeId", resourceScope.Scope.ScopeId);
                 for (var index = 0; index < batch.Length; index++)
                 {
@@ -375,7 +380,7 @@ public sealed partial class SqliteTelemetryRepository
                     {
                         sql.AppendLine(",");
                     }
-                    sql.Append(CultureInfo.InvariantCulture, $"    (@ResourceId, @ScopeId, @InstrumentName{index}, @Description{index}, @Unit{index}, @InstrumentType{index}, @AggregationTemporality{index}, @IsMonotonic{index})");
+                    sql.Append(CultureInfo.InvariantCulture, $"    (@ResourceId, @ResourceViewId, @ScopeId, @InstrumentName{index}, @Description{index}, @Unit{index}, @InstrumentType{index}, @AggregationTemporality{index}, @IsMonotonic{index})");
                     parameters.Add($"InstrumentName{index}", batch[index].Name);
                     parameters.Add($"Description{index}", batch[index].Description);
                     parameters.Add($"Unit{index}", batch[index].Unit);
@@ -394,10 +399,11 @@ public sealed partial class SqliteTelemetryRepository
                 foreach (var insertedRecord in insertedRecords)
                 {
                     var metric = metricsByName[insertedRecord.InstrumentName];
-                    AddCachedInstrument(resourceScope, new CachedInstrumentRecord
+                    AddCachedInstrument(resource, resourceScope, new CachedInstrumentRecord
                     {
                         InstrumentId = insertedRecord.InstrumentId,
                         ResourceId = resource.ResourceId,
+                        ResourceViewId = resourceView.ResourceViewId,
                         ScopeId = resourceScope.Scope.ScopeId,
                         InstrumentName = metric.Name,
                         Description = metric.Description,
@@ -428,6 +434,7 @@ public sealed partial class SqliteTelemetryRepository
         var records = connection.Query<CachedInstrumentRecord>("""
             SELECT instrument_id AS InstrumentId,
                 resource_id AS ResourceId,
+                resource_view_id AS ResourceViewId,
                 scope_id AS ScopeId,
                 instrument_name AS InstrumentName,
                 description AS Description,
@@ -444,7 +451,7 @@ public sealed partial class SqliteTelemetryRepository
         }, transaction);
         foreach (var loadedRecord in records)
         {
-            AddCachedInstrument(resourceScope, loadedRecord);
+            AddCachedInstrument(resource, resourceScope, loadedRecord);
         }
         resourceScope.InstrumentsLoaded = true;
     }
@@ -522,6 +529,7 @@ public sealed partial class SqliteTelemetryRepository
                 SELECT
                     instrument_id AS InstrumentId,
                     resource_id AS ResourceId,
+                    resource_view_id AS ResourceViewId,
                     scope_id AS ScopeId,
                     instrument_name AS InstrumentName,
                     description AS Description,
@@ -577,7 +585,7 @@ public sealed partial class SqliteTelemetryRepository
                         _cachedScopesById.TryGetValue(record.ScopeId, out var scope))
                     {
                         var resourceScope = AddCachedScope(resource, scope, CachedTelemetryType.Metrics);
-                        AddCachedInstrument(resourceScope, record);
+                        AddCachedInstrument(resource, resourceScope, record);
                     }
                 }
 
@@ -658,7 +666,7 @@ public sealed partial class SqliteTelemetryRepository
         return resourceScope;
     }
 
-    private CachedInstrument AddCachedInstrument(CachedResourceScope resourceScope, CachedInstrumentRecord record)
+    private CachedInstrument AddCachedInstrument(CachedResource resource, CachedResourceScope resourceScope, CachedInstrumentRecord record)
     {
         if (!resourceScope.Instruments.TryGetValue(record.InstrumentName, out var instrument))
         {
@@ -671,7 +679,8 @@ public sealed partial class SqliteTelemetryRepository
                     Unit = record.Unit,
                     Type = (OtlpInstrumentType)record.InstrumentType,
                     AggregationTemporality = (OtlpAggregationTemporality)record.AggregationTemporality,
-                    Parent = resourceScope.Scope.Scope
+                    Parent = resourceScope.Scope.Scope,
+                    ResourceView = resource.ViewsById[record.ResourceViewId].View
                 },
                 record.HasOverflow);
             resourceScope.Instruments.Add(record.InstrumentName, instrument);
@@ -849,6 +858,7 @@ public sealed partial class SqliteTelemetryRepository
     {
         public required long InstrumentId { get; init; }
         public required long ResourceId { get; init; }
+        public required long ResourceViewId { get; init; }
         public required long ScopeId { get; init; }
         public required string InstrumentName { get; init; }
         public required string Description { get; init; }
