@@ -16,6 +16,7 @@ namespace Aspire.Cli.Commands;
 internal sealed class PublishVerificationSession : IPipelineExecutionSession
 {
     private const string PipelineOutputsCapability = "pipeline-outputs.v1";
+    private const string PublishManifestStepName = "publish-manifest";
     private const string PreparedState = "Prepared";
     private const string SucceededState = "Succeeded";
 
@@ -296,6 +297,12 @@ internal sealed class PublishVerificationSession : IPipelineExecutionSession
             throw new PublishVerificationException(PublishCommandStrings.VerifyAppHostDirectoryChanged);
         }
 
+        var outputs = plan.Outputs
+            .Select(ParseOutput)
+            .OrderByDescending(output => output.IsPrimary)
+            .ThenBy(output => output.PublisherName, StringComparer.Ordinal)
+            .ThenBy(output => output.Name, StringComparer.Ordinal)
+            .ToArray();
         var unsupportedSteps = plan.Steps
             .Where(step => !step.SupportsOutputPathRelocation)
             .Select(step => step.Name)
@@ -303,18 +310,18 @@ internal sealed class PublishVerificationSession : IPipelineExecutionSession
             .ToArray();
         if (unsupportedSteps.Length > 0)
         {
+            if (unsupportedSteps.Contains(PublishManifestStepName, StringComparer.Ordinal) &&
+                outputs.Any(output => output.IsPrimary && output.Kind == PublishVerificationOutputKind.File))
+            {
+                throw new PublishVerificationException(PublishCommandStrings.VerifyManifestFileNotSupported);
+            }
+
             throw new PublishVerificationException(string.Format(
                 CultureInfo.CurrentCulture,
                 PublishCommandStrings.VerifyUnsupportedSteps,
                 string.Join(", ", unsupportedSteps)));
         }
 
-        var outputs = plan.Outputs
-            .Select(ParseOutput)
-            .OrderByDescending(output => output.IsPrimary)
-            .ThenBy(output => output.PublisherName, StringComparer.Ordinal)
-            .ThenBy(output => output.Name, StringComparer.Ordinal)
-            .ToArray();
         var primaryOutputs = outputs
             .Where(output => output.IsPrimary)
             .ToArray();

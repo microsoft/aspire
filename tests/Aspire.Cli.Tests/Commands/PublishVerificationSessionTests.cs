@@ -246,6 +246,76 @@ public class PublishVerificationSessionTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task PreflightAndAuthorizeAsync_ManifestFilePrimary_FailsBeforeAuthorization()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var context = await CreateContextAsync(workspace);
+        var targetFile = Path.Combine(context.RepositoryRoot.FullName, "manifest.json");
+        await using var session = await PublishVerificationSession.CreateAsync(
+            context.AppHostFile,
+            targetFile,
+            context.Git,
+            context.Interaction,
+            NullLogger<PublishCommand>.Instance,
+            ["aspire", "publish", "--output-path", targetFile],
+            TestContext.Current.CancellationToken);
+        var plan = CreatePlan(
+            context,
+            session,
+            "Prepared",
+            supportsRelocation: false,
+            stepName: "publish-manifest",
+            primaryKind: "File",
+            primaryTargetPath: targetFile);
+        var authorized = false;
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetCapabilitiesAsyncCallback = _ => Task.FromResult<string[]>(["baseline.v2", "pipeline-outputs.v1"]),
+            GetPipelineOutputsAsyncCallback = _ => Task.FromResult(plan),
+            AuthorizePipelineExecutionAsyncCallback = _ =>
+            {
+                authorized = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        var exception = await Assert.ThrowsAsync<PublishVerificationException>(
+            () => session.PreflightAndAuthorizeAsync(backchannel, TestContext.Current.CancellationToken));
+
+        Assert.Equal(Aspire.Cli.Resources.PublishCommandStrings.VerifyManifestFileNotSupported, exception.Message);
+        Assert.False(authorized);
+        Assert.False(File.Exists(targetFile));
+    }
+
+    [Fact]
+    public async Task PreflightAndAuthorizeAsync_ManifestDirectoryPrimary_Authorizes()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var context = await CreateContextAsync(workspace);
+        await using var session = await context.CreateSessionAsync();
+        var plan = CreatePlan(
+            context,
+            session,
+            "Prepared",
+            stepName: "publish-manifest");
+        var authorized = false;
+        var backchannel = new TestAppHostBackchannel
+        {
+            GetCapabilitiesAsyncCallback = _ => Task.FromResult<string[]>(["baseline.v2", "pipeline-outputs.v1"]),
+            GetPipelineOutputsAsyncCallback = _ => Task.FromResult(plan),
+            AuthorizePipelineExecutionAsyncCallback = _ =>
+            {
+                authorized = true;
+                return Task.CompletedTask;
+            }
+        };
+
+        await session.PreflightAndAuthorizeAsync(backchannel, TestContext.Current.CancellationToken);
+
+        Assert.True(authorized);
+    }
+
+    [Fact]
     public async Task DisposeAsync_StagedSymlink_DoesNotMutateLinkTarget()
     {
         using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
@@ -340,13 +410,16 @@ public class PublishVerificationSessionTests(ITestOutputHelper outputHelper)
         PublishVerificationSession session,
         string state,
         bool supportsRelocation = true,
-        PipelineOutputInfo[]? additionalOutputs = null)
+        PipelineOutputInfo[]? additionalOutputs = null,
+        string stepName = "publish",
+        string primaryKind = "Directory",
+        string? primaryTargetPath = null)
     {
         return new GetPipelineOutputsResponse
         {
             AppHostDirectory = context.AppHostDirectory,
             State = state,
-            Steps = [new PipelineOutputStepInfo { Name = "publish", SupportsOutputPathRelocation = supportsRelocation }],
+            Steps = [new PipelineOutputStepInfo { Name = stepName, SupportsOutputPathRelocation = supportsRelocation }],
             Outputs =
             [
                 new PipelineOutputInfo
@@ -354,9 +427,9 @@ public class PublishVerificationSessionTests(ITestOutputHelper outputHelper)
                     IsPrimary = true,
                     PublisherName = "aspire",
                     Name = "primary",
-                    Kind = "Directory",
+                    Kind = primaryKind,
                     OutputPath = session.OutputPath,
-                    LogicalTargetPath = context.TargetDirectory
+                    LogicalTargetPath = primaryTargetPath ?? context.TargetDirectory
                 },
                 .. (additionalOutputs ?? [])
             ]
