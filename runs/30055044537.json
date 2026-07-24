@@ -1,0 +1,38 @@
+{
+  "run_id": 30055044537,
+  "run_attempt": 1,
+  "run_url": "https://github.com/microsoft/aspire/actions/runs/30055044537",
+  "analyzed_at": "2026-07-24T00:44:15Z",
+  "verdict": "flaky-test",
+  "pr": {
+    "number": 18879,
+    "title": "Update dependencies from microsoft/dcp",
+    "author": "dotnet-maestro[bot]",
+    "state": "closed",
+    "head_branch": "darc-main-cc39e6ea-376e-4cab-8bbd-43d62fabcf87",
+    "base_branch": "main",
+    "url": "https://github.com/microsoft/aspire/pull/18879"
+  },
+  "failed_jobs": [
+    {
+      "name": "Tests / Cli / Cli (windows-latest)",
+      "id": 89365341353,
+      "conclusion": "failure",
+      "url": "https://github.com/microsoft/aspire/actions/runs/30055044537/job/89365341353",
+      "classification": "flaky-test",
+      "reason": "Single test failed with TimeoutException in ProcessGuestLauncherTests. PR only modified eng/Version.Details.xml and eng/Versions.props (dependency version bumps), unrelated to CLI process guest launcher code.",
+      "failed_steps": ["Run tests (Windows)"]
+    }
+  ],
+  "failed_tests": [
+    {
+      "name": "Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget",
+      "job": "Tests / Cli / Cli (windows-latest)",
+      "error": "System.TimeoutException : The operation has timed out.",
+      "stack_trace": "at Aspire.Cli.Tests.Projects.ProcessGuestLauncherTests.LaunchAsync_WithGracefulServices_BlockingSignalerDoesNotConsumeGracefulBudget() in D:\\a\\aspire\\aspire\\tests\\Aspire.Cli.Tests\\Projects\\ProcessGuestLauncherTests.cs:line 186",
+      "classification": "flaky",
+      "reason": "TimeoutException in a process/signal timing test unrelated to the PR changes (dependency version bumps only). Other tests in the same ProcessGuestLauncherTests class have known flaky patterns with TimeoutException."
+    }
+  ],
+  "causes": ["processguest-blockingsignaler-timeout"]
+}
