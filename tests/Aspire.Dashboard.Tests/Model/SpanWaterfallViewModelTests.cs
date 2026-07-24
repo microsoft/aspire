@@ -4,11 +4,11 @@
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Tests.Shared.Telemetry;
-using Google.Protobuf.Collections;
+using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
-using OpenTelemetry.Proto.Common.V1;
 using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
@@ -51,13 +51,23 @@ public sealed class SpanWaterfallViewModelTests
         // Arrange
         var context = new OtlpContext { Logger = NullLogger.Instance, Options = new() };
         var app1 = new OtlpResource("app1", "instance", uninstrumentedPeer: false, context);
-        var app1View = new OtlpResourceView(app1, new RepeatedField<KeyValue>());
-
         var date = new DateTime(2001, 1, 1, 1, 1, 2, DateTimeKind.Utc);
         var trace = new OtlpTrace(new byte[] { 1, 2, 3 }, DateTime.MinValue);
         var scope = TelemetryTestHelpers.CreateOtlpScope(context);
         trace.AddSpan(TelemetryTestHelpers.CreateOtlpSpan(app1, trace, scope, spanId: "31", parentSpanId: null, startDate: date, endDate: date));
-        var log = new OtlpLogEntry(TelemetryTestHelpers.CreateLogRecord(traceId: trace.TraceId, spanId: "1"), app1View, scope, context);
+        var log = new LogSummary
+        {
+            InternalId = 1,
+            TimeStamp = date,
+            Severity = LogLevel.Information,
+            Message = "Test log",
+            SpanId = "31",
+            TraceId = trace.TraceId,
+            ScopeName = scope.Name,
+            Resource = app1,
+            ExceptionText = null,
+            HasGenAI = false
+        };
 
         // Act
         var vm = SpanWaterfallViewModel.Create(trace, [log], new SpanWaterfallViewModel.TraceDetailState([], []));

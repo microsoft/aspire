@@ -112,12 +112,54 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
 
         var secondResource = Assert.Single(historicalRepository.GetResources());
         var summary = Assert.Single(historicalRepository.GetInstrumentSummaries(firstResource.ResourceKey));
-        var view = Assert.Single(firstResource.GetViews());
+        var views = firstResource.GetViews().OrderBy(view => view.Properties.Length).ToList();
 
         Assert.Same(firstResource, secondResource);
-        Assert.Same(firstResource, view.Resource);
+        Assert.Collection(views,
+            view =>
+            {
+                Assert.Same(firstResource, view.Resource);
+                Assert.Empty(view.Properties);
+            },
+            view =>
+            {
+                Assert.Same(firstResource, view.Resource);
+                var property = Assert.Single(view.Properties);
+                Assert.Equal(KeyValuePair.Create("resource-key", "resource-value"), property);
+            });
         Assert.Equal("requests", summary.Name);
         Assert.Empty(activities);
+    }
+
+    [Fact]
+    public async Task Metrics_ReopenWithResourceView()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using (var repository = CreateRepository(workspace.Path))
+        {
+            await repository.AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+            {
+                new ResourceMetrics
+                {
+                    Resource = CreateResource(),
+                    ScopeMetrics =
+                    {
+                        new ScopeMetrics
+                        {
+                            Scope = CreateScope("TestScope"),
+                            Metrics = { CreateSumMetric("requests", new DateTime(2025, 4, 5, 6, 7, 8, DateTimeKind.Utc)) }
+                        }
+                    }
+                }
+            });
+        }
+
+        using var reopenedRepository = CreateRepository(workspace.Path, readOnly: true);
+        var resource = Assert.Single(reopenedRepository.GetResources());
+        var view = Assert.Single(resource.GetViews());
+
+        Assert.Same(resource, view.Resource);
+        Assert.Empty(view.Properties);
     }
 
     [Fact]
@@ -574,7 +616,7 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         connection.Open();
         using var command = connection.CreateCommand();
         command.CommandText = "SELECT COUNT(*) FROM telemetry_resource_views;";
-        Assert.Equal(1L, command.ExecuteScalar());
+        Assert.Equal(2L, command.ExecuteScalar());
         command.CommandText = "SELECT COUNT(*) FROM telemetry_resource_view_attributes;";
         Assert.Equal(2L, command.ExecuteScalar());
     }
@@ -697,6 +739,98 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
         Assert.Equal(0L, GetScopeCount(databasePath));
     }
 
+    [Fact]
+    public async Task ResourcesAndResourceViews_AreRetainedAfterSignalsCleared()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        var startTime = new DateTime(2025, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        using var repository = CreateRepository(workspace.Path);
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(attributes: [KeyValuePair.Create("signal", "logs")]),
+                ScopeLogs = { new ScopeLogs { Scope = CreateScope("Logger"), LogRecords = { CreateLogRecord() } } }
+            }
+        });
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(attributes: [KeyValuePair.Create("signal", "traces")]),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope("Tracer"),
+                        Spans = { CreateSpan("trace", "span", startTime, startTime.AddSeconds(1)) }
+                    }
+                }
+            }
+        });
+
+        await repository.ClearStructuredLogsAsync();
+        await repository.ClearTracesAsync();
+
+        using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_resources;";
+        Assert.Equal(1L, command.ExecuteScalar());
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_resource_views;";
+        Assert.Equal(3L, command.ExecuteScalar());
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_resource_view_attributes;";
+        Assert.Equal(2L, command.ExecuteScalar());
+    }
+
+    [Fact]
+    public async Task TraceTrimming_DoesNotRecalculateResourceFlags()
+    {
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        var databasePath = GetDatabasePath(workspace.Path);
+        var startTime = new DateTime(2025, 3, 4, 5, 6, 7, DateTimeKind.Utc);
+        using var repository = CreateRepository(workspace.Path, maxTraceCount: 1);
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "FirstService", instanceId: "first"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan("first-trace", "first-span", startTime, startTime.AddSeconds(1)) }
+                    }
+                }
+            }
+        });
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "SecondService", instanceId: "second"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope(),
+                        Spans = { CreateSpan("second-trace", "second-span", startTime.AddMinutes(1), startTime.AddMinutes(1).AddSeconds(1)) }
+                    }
+                }
+            }
+        });
+
+        using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_traces;";
+        Assert.Equal(1L, command.ExecuteScalar());
+        command.CommandText = "SELECT COUNT(*) FROM telemetry_resources WHERE has_traces = 1;";
+        Assert.Equal(2L, command.ExecuteScalar());
+    }
+
     private static long GetScopeCount(string databasePath)
     {
         using var connection = new SqliteConnection($"Data Source={databasePath};Mode=ReadOnly;Pooling=False");
@@ -708,12 +842,14 @@ public sealed class SqliteTelemetryPersistenceTests(ITestOutputHelper testOutput
 
     private static string GetDatabasePath(string workspacePath) => Path.Combine(workspacePath, "dashboard.db");
 
-    private static SqliteTelemetryRepository CreateRepository(string workspacePath, bool readOnly = false)
+    private static SqliteTelemetryRepository CreateRepository(string workspacePath, bool readOnly = false, int? maxTraceCount = null)
     {
+        var options = new DashboardOptions();
+        options.TelemetryLimits.MaxTraceCount = maxTraceCount ?? options.TelemetryLimits.MaxTraceCount;
         return new SqliteTelemetryRepository(
             GetDatabasePath(workspacePath),
             NullLoggerFactory.Instance,
-            Options.Create(new DashboardOptions()),
+            Options.Create(options),
             new PauseManager(),
             [],
             readOnly);

@@ -19,6 +19,7 @@ public sealed partial class SqliteTelemetryRepository
 {
     private const int MaxLogBatchSize = 50;
     private const int MaxLogAttributeBatchSize = 200;
+    private const int MaxLogAttributeReadBatchSize = 500;
 
     private async Task<List<OtlpLogEntry>> AddLogsToDatabaseAsync(AddContext context, RepeatedField<ResourceLogs> resourceLogs)
     {
@@ -219,14 +220,6 @@ public sealed partial class SqliteTelemetryRepository
                 ORDER BY timestamp_ticks, log_id
                 LIMIT MAX((SELECT COUNT(*) FROM telemetry_logs) - @MaxLogCount, 0)
             );
-
-            DELETE FROM telemetry_resource_views
-            WHERE NOT EXISTS (
-                SELECT 1 FROM telemetry_logs WHERE telemetry_logs.resource_view_id = telemetry_resource_views.resource_view_id
-                        )
-                            AND NOT EXISTS (
-                                SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_view_id = telemetry_resource_views.resource_view_id
-                            );
             """, new { _otlpContext.Options.MaxLogCount }, transaction);
     }
 
@@ -234,44 +227,71 @@ public sealed partial class SqliteTelemetryRepository
     {
         using var connection = _database.OpenConnection();
         var query = BuildLogQuery(context);
-        var totalCount = connection.QuerySingle<int>($"SELECT COUNT(*) {query.FromAndWhere}", query.Parameters);
-        if (totalCount == 0)
-        {
-            return PagedResult<OtlpLogEntry>.Empty;
-        }
-
         query.Parameters.Add("StartIndex", context.StartIndex);
         query.Parameters.Add("Count", context.Count);
-        var records = connection.Query<LogRecord>(
+        var recordsWithCount = connection.Query<long, LogRecord?, (long TotalItemCount, LogRecord? Record)>(
             $"""
+            WITH
+            filtered_logs AS (
+                SELECT
+                    l.*,
+                    r.resource_name,
+                    r.instance_id,
+                    r.uninstrumented_peer,
+                    r.has_logs,
+                    r.has_traces,
+                    r.has_metrics,
+                    s.scope_name,
+                    s.scope_version
+                {query.FromAndWhere}
+            ),
+            log_aggregate AS (
+                SELECT COUNT(*) AS TotalItemCount
+                FROM filtered_logs
+            ),
+            paged_logs AS (
+                SELECT *
+                FROM filtered_logs
+                ORDER BY timestamp_ticks, log_id DESC
+                LIMIT @Count OFFSET @StartIndex
+            )
             SELECT
-                l.log_id AS LogId,
-                l.resource_id AS ResourceId,
-                l.resource_view_id AS ResourceViewId,
-                l.scope_id AS ScopeId,
-                l.timestamp_ticks AS TimestampTicks,
-                l.flags AS Flags,
-                l.severity AS Severity,
-                l.severity_number AS SeverityNumber,
-                l.message AS Message,
-                l.span_id AS SpanId,
-                l.trace_id AS TraceId,
-                l.parent_id AS ParentId,
-                l.original_format AS OriginalFormat,
-                l.event_name AS EventName,
-                r.resource_name AS ResourceName,
-                r.instance_id AS InstanceId,
-                r.uninstrumented_peer AS UninstrumentedPeer,
-                r.has_logs AS HasLogs,
-                r.has_traces AS HasTraces,
-                r.has_metrics AS HasMetrics,
-                s.scope_name AS ScopeName,
-                s.scope_version AS ScopeVersion
-            {query.FromAndWhere}
-            ORDER BY l.timestamp_ticks, l.log_id DESC
-            LIMIT @Count OFFSET @StartIndex;
+                a.TotalItemCount,
+                pl.log_id AS LogId,
+                pl.resource_id AS ResourceId,
+                pl.resource_view_id AS ResourceViewId,
+                pl.scope_id AS ScopeId,
+                pl.timestamp_ticks AS TimestampTicks,
+                pl.flags AS Flags,
+                pl.severity AS Severity,
+                pl.severity_number AS SeverityNumber,
+                pl.message AS Message,
+                pl.span_id AS SpanId,
+                pl.trace_id AS TraceId,
+                pl.parent_id AS ParentId,
+                pl.original_format AS OriginalFormat,
+                pl.event_name AS EventName,
+                pl.resource_name AS ResourceName,
+                pl.instance_id AS InstanceId,
+                pl.uninstrumented_peer AS UninstrumentedPeer,
+                pl.has_logs AS HasLogs,
+                pl.has_traces AS HasTraces,
+                pl.has_metrics AS HasMetrics,
+                pl.scope_name AS ScopeName,
+                pl.scope_version AS ScopeVersion
+            FROM log_aggregate a
+            LEFT JOIN paged_logs pl ON 1 = 1
+            ORDER BY pl.timestamp_ticks, pl.log_id DESC;
             """,
-            query.Parameters).AsList();
+            static (totalItemCount, record) => (totalItemCount, record),
+            query.Parameters,
+            splitOn: "LogId").AsList();
+
+        var totalCount = checked((int)recordsWithCount[0].TotalItemCount);
+        var records = recordsWithCount
+            .Where(item => item.Record is not null)
+            .Select(item => item.Record!)
+            .ToList();
 
         return new PagedResult<OtlpLogEntry>
         {
@@ -298,7 +318,8 @@ public sealed partial class SqliteTelemetryRepository
                     l.*,
                     r.resource_name,
                     r.instance_id,
-                    r.uninstrumented_peer
+                    r.uninstrumented_peer,
+                    s.scope_name
                 {query.FromAndWhere}
             ),
             log_aggregate AS (
@@ -339,6 +360,8 @@ public sealed partial class SqliteTelemetryRepository
                 pl.message AS Message,
                 pl.span_id AS SpanId,
                 pl.trace_id AS TraceId,
+                pl.scope_name AS ScopeName,
+                pl.event_name AS EventName,
                 pl.resource_id AS ResourceId,
                 pl.resource_name AS ResourceName,
                 pl.instance_id AS InstanceId,
@@ -394,6 +417,8 @@ public sealed partial class SqliteTelemetryRepository
                     Message = record.Message!,
                     SpanId = record.SpanId!,
                     TraceId = record.TraceId!,
+                    ScopeName = record.ScopeName!,
+                    EventName = record.EventName,
                     Resource = GetCachedResource(record.ResourceId!.Value)!,
                     ExceptionText = record.ExceptionText,
                     HasGenAI = record.HasGenAI!.Value
@@ -436,35 +461,6 @@ public sealed partial class SqliteTelemetryRepository
             WHERE l.log_id = @LogId;
             """, new { LogId = logId }).AsList();
         return records.Count == 0 ? null : MaterializeLogs(connection, records)[0];
-    }
-
-    private List<OtlpLogEntry> GetLogsForSpanFromDatabase(string traceId, string spanId)
-    {
-        return GetLogsFromDatabase(new GetLogsContext
-        {
-            ResourceKeys = [],
-            StartIndex = 0,
-            Count = int.MaxValue,
-            Filters =
-            [
-                new FieldTelemetryFilter { Field = KnownStructuredLogFields.TraceIdField, Condition = FilterCondition.Equals, Value = traceId },
-                new FieldTelemetryFilter { Field = KnownStructuredLogFields.SpanIdField, Condition = FilterCondition.Equals, Value = spanId }
-            ]
-        }).Items;
-    }
-
-    private List<OtlpLogEntry> GetLogsForTraceFromDatabase(string traceId)
-    {
-        return GetLogsFromDatabase(new GetLogsContext
-        {
-            ResourceKeys = [],
-            StartIndex = 0,
-            Count = int.MaxValue,
-            Filters =
-            [
-                new FieldTelemetryFilter { Field = KnownStructuredLogFields.TraceIdField, Condition = FilterCondition.Equals, Value = traceId }
-            ]
-        }).Items;
     }
 
     private List<string> GetLogPropertyKeysFromDatabase(ResourceKey? resourceKey)
@@ -694,12 +690,17 @@ public sealed partial class SqliteTelemetryRepository
         }
 
         var logIds = records.Select(record => record.LogId).Distinct().ToArray();
-        var logAttributes = connection.Query<OwnedAttributeRecord>("""
-            SELECT log_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
-            FROM telemetry_log_attributes
-            WHERE log_id IN @Ids
-            ORDER BY log_id, ordinal;
-            """, new { Ids = logIds }).ToLookup(record => record.OwnerId);
+        var attributeRecords = new List<OwnedAttributeRecord>();
+        foreach (var logIdBatch in logIds.Chunk(MaxLogAttributeReadBatchSize))
+        {
+            attributeRecords.AddRange(connection.Query<OwnedAttributeRecord>("""
+                SELECT log_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+                FROM telemetry_log_attributes
+                WHERE log_id IN @Ids
+                ORDER BY log_id, ordinal;
+                """, new { Ids = logIdBatch }));
+        }
+        var logAttributes = attributeRecords.ToLookup(record => record.OwnerId);
         var results = new List<OtlpLogEntry>(records.Count);
         foreach (var record in records)
         {
@@ -780,14 +781,6 @@ public sealed partial class SqliteTelemetryRepository
                 DELETE FROM telemetry_logs
                 WHERE resource_id IN (SELECT resource_id FROM telemetry_resources{where});
 
-                DELETE FROM telemetry_resource_views
-                WHERE NOT EXISTS (
-                    SELECT 1 FROM telemetry_logs WHERE telemetry_logs.resource_view_id = telemetry_resource_views.resource_view_id
-                                )
-                                    AND NOT EXISTS (
-                                        SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_view_id = telemetry_resource_views.resource_view_id
-                                    );
-
                 UPDATE telemetry_resources
                 SET has_logs = EXISTS (SELECT 1 FROM telemetry_logs WHERE telemetry_logs.resource_id = telemetry_resources.resource_id);
                 """, parameters, transaction);
@@ -848,6 +841,8 @@ public sealed partial class SqliteTelemetryRepository
         public string? Message { get; init; }
         public string? SpanId { get; init; }
         public string? TraceId { get; init; }
+        public string? ScopeName { get; init; }
+        public string? EventName { get; init; }
         public long? ResourceId { get; init; }
         public string? ResourceName { get; init; }
         public string? InstanceId { get; init; }

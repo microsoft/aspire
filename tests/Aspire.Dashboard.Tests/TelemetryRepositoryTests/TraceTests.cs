@@ -2068,7 +2068,12 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Spans have different views
         var views = resource.GetViews().OrderBy(v => v.Properties.Length).ToList();
-        Assert.Collection(views,
+        Assert.Equal(UseSqlite ? 3 : 2, views.Count);
+        if (UseSqlite)
+        {
+            Assert.Empty(views[0].Properties);
+        }
+        Assert.Collection(views.Where(v => v.Properties.Length > 0),
             v =>
             {
                 Assert.Collection(v.Properties,

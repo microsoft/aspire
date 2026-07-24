@@ -35,8 +35,10 @@ public sealed partial class SqliteTelemetryRepository
     {
         lock (_cacheLock)
         {
-            if (_cachedResourcesByKey.TryGetValue(resourceKey, out var cachedResource))
+            CachedResource cachedResource;
+            if (_cachedResourcesByKey.TryGetValue(resourceKey, out var existingResource))
             {
+                cachedResource = existingResource;
                 if (cachedResource.Resource.UninstrumentedPeer && !uninstrumentedPeer)
                 {
                     connection.Execute(
@@ -45,48 +47,53 @@ public sealed partial class SqliteTelemetryRepository
                         transaction);
                 }
                 cachedResource.Resource.SetUninstrumentedPeer(uninstrumentedPeer);
-                return cachedResource;
             }
-
-            var record = connection.QuerySingleOrDefault<CachedResourceRecord>("""
-                SELECT
-                    resource_id AS ResourceId,
-                    resource_name AS ResourceName,
-                    instance_id AS InstanceId,
-                    uninstrumented_peer AS UninstrumentedPeer,
-                    has_logs AS HasLogs,
-                    has_traces AS HasTraces,
-                    has_metrics AS HasMetrics
-                FROM telemetry_resources
-                WHERE resource_name = @ResourceName
-                  AND instance_id IS @InstanceId;
-                """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
-            if (record is not null)
+            else
             {
-                cachedResource = GetOrAddCachedResource(record);
-                if (cachedResource.Resource.UninstrumentedPeer && !uninstrumentedPeer)
+                var record = connection.QuerySingleOrDefault<CachedResourceRecord>("""
+                    SELECT
+                        resource_id AS ResourceId,
+                        resource_name AS ResourceName,
+                        instance_id AS InstanceId,
+                        uninstrumented_peer AS UninstrumentedPeer,
+                        has_logs AS HasLogs,
+                        has_traces AS HasTraces,
+                        has_metrics AS HasMetrics
+                    FROM telemetry_resources
+                    WHERE resource_name = @ResourceName
+                      AND instance_id IS @InstanceId;
+                    """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
+                if (record is not null)
                 {
-                    connection.Execute(
-                        "UPDATE telemetry_resources SET uninstrumented_peer = 0 WHERE resource_id = @ResourceId;",
-                        new { cachedResource.ResourceId },
-                        transaction);
+                    cachedResource = GetOrAddCachedResource(record);
+                    if (cachedResource.Resource.UninstrumentedPeer && !uninstrumentedPeer)
+                    {
+                        connection.Execute(
+                            "UPDATE telemetry_resources SET uninstrumented_peer = 0 WHERE resource_id = @ResourceId;",
+                            new { cachedResource.ResourceId },
+                            transaction);
+                    }
+                    cachedResource.Resource.SetUninstrumentedPeer(uninstrumentedPeer);
                 }
-                cachedResource.Resource.SetUninstrumentedPeer(uninstrumentedPeer);
-                return cachedResource;
+                else
+                {
+                    var resourceCount = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_resources;", transaction: transaction);
+                    if (resourceCount >= _otlpContext.Options.MaxResourceCount)
+                    {
+                        throw new InvalidOperationException($"Resource limit of {_otlpContext.Options.MaxResourceCount} reached. Resource '{resourceKey}' will not be added.");
+                    }
+
+                    var resourceId = connection.QuerySingle<long>("""
+                        INSERT INTO telemetry_resources (resource_name, instance_id)
+                        VALUES (@ResourceName, @InstanceId)
+                        RETURNING resource_id;
+                        """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
+                    cachedResource = CreateCachedResource(resourceId, resourceKey, uninstrumentedPeer);
+                }
             }
 
-            var resourceCount = connection.QuerySingle<int>("SELECT COUNT(*) FROM telemetry_resources;", transaction: transaction);
-            if (resourceCount >= _otlpContext.Options.MaxResourceCount)
-            {
-                throw new InvalidOperationException($"Resource limit of {_otlpContext.Options.MaxResourceCount} reached. Resource '{resourceKey}' will not be added.");
-            }
-
-            var resourceId = connection.QuerySingle<long>("""
-                INSERT INTO telemetry_resources (resource_name, instance_id)
-                VALUES (@ResourceName, @InstanceId)
-                RETURNING resource_id;
-                """, new { ResourceName = resourceKey.Name, resourceKey.InstanceId }, transaction);
-            return CreateCachedResource(resourceId, resourceKey, uninstrumentedPeer);
+            GetOrAddCachedResourceView(connection, transaction, cachedResource, []);
+            return cachedResource;
         }
     }
 

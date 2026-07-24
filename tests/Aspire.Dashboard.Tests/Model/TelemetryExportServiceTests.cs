@@ -5,6 +5,7 @@ using System.Globalization;
 using System.IO.Compression;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Model.Serialization;
 using Aspire.Dashboard.Otlp.Model;
@@ -16,6 +17,7 @@ using Google.Protobuf.Collections;
 using Google.Protobuf.WellKnownTypes;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Options;
 using OpenTelemetry.Proto.Logs.V1;
 using OpenTelemetry.Proto.Trace.V1;
 using Xunit;
@@ -23,7 +25,7 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class TelemetryExportServiceTests
+public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelper)
 {
     private static readonly DateTime s_testTime = new(2024, 1, 15, 10, 30, 0, DateTimeKind.Utc);
 
@@ -31,7 +33,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertLogsToOtlpJson_SingleLog_ReturnsCorrectStructure()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -98,7 +101,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertLogsToOtlpJson_AddsAspireLogIdAttribute()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -136,7 +140,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertLogsToOtlpJson_MultipleLogs_GroupsByScope()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -217,7 +222,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertLogsToOtlpJson_RoundTripsSeverityNumber(SeverityNumber inputSeverity, string expectedSeverityText)
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -254,7 +260,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertTracesToOtlpJson_SingleTrace_ReturnsCorrectStructure()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -332,7 +339,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertTracesToOtlpJson_SpanWithParent_IncludesParentSpanId()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -375,7 +383,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertTracesToOtlpJson_WithPersistedPeer_AddsDestinationNameAttribute()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -424,7 +433,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertTracesToOtlpJson_WithoutPersistedPeer_AddsPeerAddressAttribute()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -506,7 +516,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertMetricsToOtlpJson_SingleInstrument_ReturnsCorrectStructure()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddMetricsAsync(addContext, new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
         {
@@ -583,7 +594,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertMetricsToOtlpJson_MultipleInstruments_GroupsByScope()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddMetricsAsync(addContext, new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
         {
@@ -664,7 +676,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ExportSelectedAsync_ExportsOnlySelectedDataTypesForSpecificResources()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var exportService = await CreateExportServiceAsync(repository);
 
         // Add test data for three resources
@@ -725,7 +738,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ExportAllAsync_WhenDashboardClientDisabled_ExportsOnlyTelemetry()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
 
         // Add logs
@@ -764,10 +778,111 @@ public sealed class TelemetryExportServiceTests
     }
 
     [Fact]
+    public async Task ExportSelectedAsync_LargeNumberOfStructuredLogs_ExportsAllLogs()
+    {
+        const int logCount = 40_000;
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
+        var logRecords = new RepeatedField<LogRecord>();
+        for (var index = 0; index < logCount; index++)
+        {
+            logRecords.Add(CreateLogRecord(
+                time: s_testTime.AddTicks(index),
+                message: $"Log {index}",
+                attributes: [KeyValuePair.Create("log.index", index.ToString(CultureInfo.InvariantCulture))]));
+        }
+
+        await repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        {
+            new ResourceLogs
+            {
+                Resource = CreateResource(name: "LargeService", instanceId: "instance-1"),
+                ScopeLogs =
+                {
+                    new ScopeLogs
+                    {
+                        Scope = CreateScope("LargeLogger"),
+                        LogRecords = { logRecords }
+                    }
+                }
+            }
+        });
+
+        var service = await CreateExportServiceAsync(repository, isDashboardClientEnabled: false);
+        var selectedResources = new Dictionary<string, HashSet<AspireDataType>>
+        {
+            ["LargeService-instance-1"] = [AspireDataType.StructuredLogs]
+        };
+
+        using var zipStream = await service.ExportSelectedAsync(selectedResources, CancellationToken.None).DefaultTimeout();
+        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+        var logEntry = Assert.Single(archive.Entries);
+        Assert.Equal("structuredlogs/LargeService.json", logEntry.FullName);
+
+        using var logStream = logEntry.Open();
+        var logsData = await JsonSerializer.DeserializeAsync(logStream, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
+        var exportedLogs = Assert.Single(logsData!.ResourceLogs!).ScopeLogs!.SelectMany(scope => scope.LogRecords!).ToList();
+        Assert.Equal(logCount, exportedLogs.Count);
+        Assert.All(exportedLogs, log => Assert.Contains(log.Attributes!, attribute => attribute.Key == "log.index"));
+    }
+
+    [Fact]
+    public async Task ExportSelectedAsync_LargeNumberOfTraces_ExportsAllTraces()
+    {
+        const int traceCount = 10_000;
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
+        var spans = new RepeatedField<Span>();
+        for (var index = 0; index < traceCount; index++)
+        {
+            spans.Add(CreateSpan(
+                traceId: $"trace-{index}",
+                spanId: $"span-{index}",
+                startTime: s_testTime.AddTicks(index),
+                endTime: s_testTime.AddTicks(index + 1),
+                attributes: [KeyValuePair.Create("trace.index", index.ToString(CultureInfo.InvariantCulture))]));
+        }
+
+        await repository.AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        {
+            new ResourceSpans
+            {
+                Resource = CreateResource(name: "LargeService", instanceId: "instance-1"),
+                ScopeSpans =
+                {
+                    new ScopeSpans
+                    {
+                        Scope = CreateScope("LargeTracer"),
+                        Spans = { spans }
+                    }
+                }
+            }
+        });
+
+        var service = await CreateExportServiceAsync(repository, isDashboardClientEnabled: false);
+        var selectedResources = new Dictionary<string, HashSet<AspireDataType>>
+        {
+            ["LargeService-instance-1"] = [AspireDataType.Traces]
+        };
+
+        using var zipStream = await service.ExportSelectedAsync(selectedResources, CancellationToken.None).DefaultTimeout();
+        using var archive = new ZipArchive(zipStream, ZipArchiveMode.Read);
+        var traceEntry = Assert.Single(archive.Entries);
+        Assert.Equal("traces/LargeService.json", traceEntry.FullName);
+
+        using var traceStream = traceEntry.Open();
+        var tracesData = await JsonSerializer.DeserializeAsync(traceStream, OtlpJsonSerializerContext.Default.OtlpTelemetryDataJson);
+        var exportedSpans = Assert.Single(tracesData!.ResourceSpans!).ScopeSpans!.SelectMany(scope => scope.Spans!).ToList();
+        Assert.Equal(traceCount, exportedSpans.Count);
+        Assert.All(exportedSpans, span => Assert.Contains(span.Attributes!, attribute => attribute.Key == "trace.index"));
+    }
+
+    [Fact]
     public async Task ExportSelectedAsync_SkipsEmptyResources()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
 
         // Add logs for only one resource
@@ -826,7 +941,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ExportSelectedAsync_JapaneseCharactersInLogs_PreservesContent()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
 
         const string japaneseMessage = "これはテストログメッセージです"; // "This is a test log message"
@@ -909,7 +1025,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertSpanToJson_ReturnsValidOtlpTelemetryDataJson()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -946,7 +1063,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertSpanToJson_WithLogs_IncludesLogsInOutput()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -998,7 +1116,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertTraceToJson_WithLogs_IncludesLogsInOutput()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -1058,7 +1177,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertTraceToJson_ReturnsValidOtlpTelemetryDataJson()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -1098,7 +1218,8 @@ public sealed class TelemetryExportServiceTests
     public async Task ConvertLogEntryToJson_ReturnsValidOtlpTelemetryDataJson()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var workspace = TemporaryWorkspace.Create(testOutputHelper);
+        using var repository = CreateRepository(workspace.Path);
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -1130,7 +1251,7 @@ public sealed class TelemetryExportServiceTests
         Assert.Single(data.ResourceLogs[0].ScopeLogs![0].LogRecords!);
     }
 
-    private static async Task<TelemetryExportService> CreateExportServiceAsync(InMemoryTelemetryRepository repository, bool isDashboardClientEnabled = true)
+    private static async Task<TelemetryExportService> CreateExportServiceAsync(ITelemetryRepository repository, bool isDashboardClientEnabled = true)
     {
         var dashboardClient = new TestDashboardClient(isEnabled: isDashboardClientEnabled);
         var sessionStorage = new TestSessionStorage();
@@ -1141,7 +1262,7 @@ public sealed class TelemetryExportServiceTests
         return new TelemetryExportService(dataSource, consoleLogsFetcher, dashboardClient);
     }
 
-    private static Dictionary<string, HashSet<AspireDataType>> BuildAllResourcesSelection(InMemoryTelemetryRepository repository)
+    private static Dictionary<string, HashSet<AspireDataType>> BuildAllResourcesSelection(ITelemetryRepository repository)
     {
         var allResources = repository.GetResources();
         return allResources.ToDictionary(
@@ -1149,7 +1270,7 @@ public sealed class TelemetryExportServiceTests
             _ => new HashSet<AspireDataType>([AspireDataType.ConsoleLogs, AspireDataType.StructuredLogs, AspireDataType.Traces, AspireDataType.Metrics]));
     }
 
-    private static async Task AddTestData(InMemoryTelemetryRepository repository, string resourceName, string instanceId)
+    private static async Task AddTestData(SqliteTelemetryRepository repository, string resourceName, string instanceId)
     {
         var compositeName = $"{resourceName}-{instanceId}";
 
@@ -1206,6 +1327,19 @@ public sealed class TelemetryExportServiceTests
                 }
             }
         });
+    }
+
+    private static SqliteTelemetryRepository CreateRepository(string workspacePath)
+    {
+        return new SqliteTelemetryRepository(
+            Path.Combine(workspacePath, "dashboard.db"),
+            NullLoggerFactory.Instance,
+            Options.Create(new DashboardOptions
+            {
+                TelemetryLimits = new TelemetryLimitOptions { MaxLogCount = 40_000 }
+            }),
+            new PauseManager(),
+            []);
     }
 
     [Fact]

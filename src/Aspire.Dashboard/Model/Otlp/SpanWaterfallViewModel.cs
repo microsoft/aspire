@@ -4,6 +4,7 @@
 using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using Aspire.Dashboard.Otlp.Model;
+using Aspire.Dashboard.Otlp.Storage;
 
 namespace Aspire.Dashboard.Model.Otlp;
 
@@ -160,7 +161,7 @@ public sealed class SpanWaterfallViewModel
         return $"{OtlpResource.GetResourceName(span.Source, allResources)}: {span.GetDisplaySummary()}";
     }
 
-    public static List<SpanWaterfallViewModel> Create(OtlpTrace trace, List<OtlpLogEntry> logs, TraceDetailState state)
+    public static List<SpanWaterfallViewModel> Create(OtlpTrace trace, List<LogSummary> logs, TraceDetailState state)
     {
         var orderedSpans = new List<SpanWaterfallViewModel>();
         var groupedLogs = logs.GroupBy(l => l.SpanId).ToDictionary(l => l.Key, g => g.ToList());
@@ -179,7 +180,7 @@ public sealed class SpanWaterfallViewModel
 
         return orderedSpans;
 
-        static SpanWaterfallViewModel CreateViewModel(OtlpSpan span, int depth, bool hidden, TraceDetailState state, List<OtlpLogEntry>? spanLogs, ref int currentSpanLogIndex)
+        static SpanWaterfallViewModel CreateViewModel(OtlpSpan span, int depth, bool hidden, TraceDetailState state, List<LogSummary>? spanLogs, ref int currentSpanLogIndex)
         {
             var traceStart = span.Trace.FirstSpan.StartTime;
             var relativeStart = span.StartTime - traceStart;

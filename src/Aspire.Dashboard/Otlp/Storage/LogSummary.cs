@@ -16,6 +16,8 @@ public sealed class LogSummary
     public required string Message { get; init; }
     public required string SpanId { get; init; }
     public required string TraceId { get; init; }
+    public required string ScopeName { get; init; }
+    public string? EventName { get; init; }
     public required OtlpResource Resource { get; init; }
     public required string? ExceptionText { get; init; }
     public required bool HasGenAI { get; init; }

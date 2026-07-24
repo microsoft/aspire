@@ -1042,13 +1042,6 @@ public sealed partial class SqliteTelemetryRepository
                 ORDER BY first_span_timestamp_ticks, trace_id
                 LIMIT MAX((SELECT COUNT(*) FROM telemetry_traces) - @MaxTraceCount, 0)
             );
-
-            DELETE FROM telemetry_resource_views
-            WHERE NOT EXISTS (SELECT 1 FROM telemetry_logs WHERE telemetry_logs.resource_view_id = telemetry_resource_views.resource_view_id)
-              AND NOT EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_view_id = telemetry_resource_views.resource_view_id);
-
-            UPDATE telemetry_resources
-            SET has_traces = EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_id = telemetry_resources.resource_id);
             """, new { _otlpContext.Options.MaxTraceCount }, transaction);
     }
 
@@ -1250,10 +1243,6 @@ public sealed partial class SqliteTelemetryRepository
                     FROM telemetry_spans
                     WHERE resource_id IN (SELECT resource_id FROM telemetry_resources{where})
                 );
-
-                DELETE FROM telemetry_resource_views
-                WHERE NOT EXISTS (SELECT 1 FROM telemetry_logs WHERE telemetry_logs.resource_view_id = telemetry_resource_views.resource_view_id)
-                  AND NOT EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_view_id = telemetry_resource_views.resource_view_id);
 
                 UPDATE telemetry_resources
                 SET has_traces = EXISTS (SELECT 1 FROM telemetry_spans WHERE telemetry_spans.resource_id = telemetry_resources.resource_id);
