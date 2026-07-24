@@ -950,7 +950,7 @@ test(`${features("AOT-CONTRACT-001")} streams and deduplicates AOT resource cons
   await expect(consoleRegion.locator(".console__footer")).toContainText("3 lines");
 });
 
-test(`${features("AOT-CONTRACT-001")} replays, filters, pauses, and resumes AOT structured logs`, async ({ page }) => {
+test(`${features("AOT-CONTRACT-001", "HTTP-STRUCTURED-LOG-CLEAR-001")} owns structured-log replay, live updates, and clear through versioned AOT routes`, async ({ page }) => {
   const otlpLog = (message: string, timeUnixNano: string) => ({
     resourceLogs: [{
       resource: { attributes: [{ key: "service.name", value: { stringValue: "stress-api" } }] },
@@ -967,6 +967,9 @@ test(`${features("AOT-CONTRACT-001")} replays, filters, pauses, and resumes AOT 
     }],
   });
   let sendLiveLog: ((message: string, timeUnixNano: string) => void) | null = null;
+  let hasBacklog = true;
+  let clearResource: string | null | undefined;
+  let legacyLogRequests = 0;
 
   await page.route("**/api/dashboard", async (route) => {
     await route.fulfill({
@@ -975,7 +978,7 @@ test(`${features("AOT-CONTRACT-001")} replays, filters, pauses, and resumes AOT 
         versions: [{
           version: 1,
           basePath: "/api/dashboard/v1",
-          capabilities: ["configuration", "structured-logs", "structured-logs-live"],
+          capabilities: ["configuration", "structured-logs", "structured-logs-live", "structured-logs-clear"],
         }],
       },
     });
@@ -983,8 +986,20 @@ test(`${features("AOT-CONTRACT-001")} replays, filters, pauses, and resumes AOT 
   await page.route("**/api/dashboard/v1/config", async (route) => {
     await route.fulfill({ json: { applicationName: "Stress AOT", dashboardVersion: "13.5.0-aot", runtimeVersion: ".NET 10.0.0" } });
   });
-  await page.route("**/api/dashboard/v1/structured-logs", async (route) => {
-    await route.fulfill({ json: { totalCount: 1, data: otlpLog("AOT backlog entry", "100") } });
+  await page.route("**/api/dashboard/v1/structured-logs*", async (route) => {
+    if (route.request().method() === "DELETE") {
+      clearResource = new URL(route.request().url()).searchParams.get("resource");
+      hasBacklog = false;
+      await route.fulfill({ status: 204 });
+      return;
+    }
+
+    await route.fulfill({
+      json: {
+        totalCount: hasBacklog ? 1 : 0,
+        data: hasBacklog ? otlpLog("AOT backlog entry", "100") : { resourceLogs: [] },
+      },
+    });
   });
   await page.route("**/api/dashboard/v1/structured-logs/live/negotiate?**", async (route) => {
     await route.fulfill({
@@ -998,6 +1013,11 @@ test(`${features("AOT-CONTRACT-001")} replays, filters, pauses, and resumes AOT 
   });
   await page.route("**/api/deck/config", async (route) => route.fulfill({ json: config }));
   await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.unroute("**/api/deck/telemetry/logs?*");
+  await page.route("**/api/deck/telemetry/logs*", async (route) => {
+    legacyLogRequests++;
+    await route.fulfill({ json: { totalCount: 0, data: { resourceLogs: [] } } });
+  });
   await page.routeWebSocket("**/api/dashboard/v1/structured-logs/live?id=*", (webSocket) => {
     let invocationId: string | undefined;
     webSocket.onMessage((message) => {
@@ -1035,6 +1055,17 @@ test(`${features("AOT-CONTRACT-001")} replays, filters, pauses, and resumes AOT 
   await expect(logs).not.toContainText("AOT paused entry");
   await pause.click();
   await expect(logs).toContainText("AOT paused entry");
+
+  const region = page.getByRole("main").getByRole("region", { name: "Structured Logs" });
+  await region.getByRole("combobox", { name: "Resource" }).selectOption("stress-api");
+  await region.getByRole("button", { name: "Clear structured logs" }).click();
+  await page.getByRole("menuitem", { name: "Clear stress-api" }).click();
+
+  await expect(page.getByRole("status")).toHaveText("Cleared structured logs for stress-api.");
+  await expect(region.locator(".page__subtitle")).toHaveText("0 total · showing 0");
+  await expect(region).toContainText("No structured logs.");
+  expect(clearResource).toBe("stress-api");
+  expect(legacyLogRequests).toBe(0);
 });
 
 test(`${features("HTTP-CONFIG-001", "HTTP-RESOURCES-001", "HTTP-MOCK-ISOLATION-001")} loads the dashboard from the HTTP backend`, async ({ page }, testInfo: TestInfo) => {

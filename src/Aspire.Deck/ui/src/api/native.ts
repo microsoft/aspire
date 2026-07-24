@@ -42,6 +42,7 @@ const resourceStreamCapability = "resources-live";
 const commandsCapability = "commands";
 const structuredLogsCapability = "structured-logs";
 const structuredLogStreamCapability = "structured-logs-live";
+const structuredLogClearCapability = "structured-logs-clear";
 const tracesCapability = "traces";
 const traceStreamCapability = "traces-live";
 const traceClearCapability = "traces-clear";
@@ -51,14 +52,17 @@ const metricClearCapability = "metrics-clear";
 const consoleLogsCapability = "console-logs";
 const consoleLogStreamCapability = "console-logs-live";
 const interactionsCapability = "interactions";
+const maximumStructuredLogDedupeKeys = 10_000;
 const maximumTraceDedupeKeys = 10_000;
 const supportedVersions = new Set([1]);
 
 let negotiatedVersion: Promise<DashboardApiVersion> | null = null;
 let configuration: Promise<DeckConfig> | null = null;
 const structuredLogListeners = new Set<(logs: NativeStructuredLogs) => void>();
-const structuredLogKeys = new Set<string>();
+const structuredLogKeys = new Map<string, true>();
+const structuredLogRestartListeners = new Set<() => void>();
 let structuredLogs: NativeStructuredLogs = { logCount: 0, recentLogs: [] };
+let structuredLogGeneration = 0;
 const traceListeners = new Set<(traces: NativeTraces) => void>();
 const traceKeys = new Map<string, true>();
 const traceRestartListeners = new Set<() => void>();
@@ -152,6 +156,18 @@ function notifyStructuredLogs(): void {
   for (const listener of structuredLogListeners) listener(structuredLogs);
 }
 
+function rememberStructuredLogKey(key: string): boolean {
+  if (structuredLogKeys.has(key)) return false;
+
+  structuredLogKeys.set(key, true);
+  if (structuredLogKeys.size > maximumStructuredLogDedupeKeys) {
+    const oldestKey = structuredLogKeys.keys().next().value;
+    if (oldestKey !== undefined) structuredLogKeys.delete(oldestKey);
+  }
+
+  return true;
+}
+
 function notifyTraces(): void {
   for (const listener of traceListeners) listener(traces);
 }
@@ -164,7 +180,7 @@ async function refreshStructuredLogs(): Promise<void> {
   }
   const records = getLogRecordSummaries(snapshot.data);
   structuredLogKeys.clear();
-  for (const record of records) structuredLogKeys.add(record.recordKey);
+  for (const record of records) rememberStructuredLogKey(record.recordKey);
   structuredLogs = {
     logCount: snapshot.totalCount,
     recentLogs: records.map(withoutRecordKey).sort(compareNewestFirst),
@@ -177,11 +193,10 @@ async function getStructuredLogs(): Promise<NativeStructuredLogs> {
   return structuredLogs;
 }
 
-function appendStructuredLogEvent(event: DashboardStructuredLogsEvent): void {
+function appendStructuredLogEvent(event: DashboardStructuredLogsEvent, generation: number): void {
+  if (generation !== structuredLogGeneration) return;
   const additions = getLogRecordSummaries(event.data).filter((log) => {
-    if (structuredLogKeys.has(log.recordKey)) return false;
-    structuredLogKeys.add(log.recordKey);
-    return true;
+    return rememberStructuredLogKey(log.recordKey);
   }).map(withoutRecordKey);
   if (additions.length === 0) return;
   structuredLogs = {
@@ -680,11 +695,45 @@ function subscribeResources(
 
 function subscribeStructuredLogs(callback: (logs: NativeStructuredLogs) => void): () => void {
   let cancelled = false;
+  let starting = false;
   let connection: HubConnection | null = null;
   let subscription: ISubscription<DashboardStructuredLogsEvent> | null = null;
   let retryTimer: number | undefined;
 
+  const scheduleStart = (): void => {
+    if (cancelled || retryTimer !== undefined) return;
+    retryTimer = window.setTimeout(() => {
+      retryTimer = undefined;
+      void start();
+    }, 1_000);
+  };
+
+  const beginStream = (): void => {
+    if (cancelled || connection?.state !== HubConnectionState.Connected) return;
+    subscription?.dispose();
+    const generation = structuredLogGeneration;
+    subscription = connection.stream<DashboardStructuredLogsEvent>("WatchStructuredLogs").subscribe({
+      next: (event) => {
+        if (typeof event !== "object" || event === null || typeof event.data !== "object" || event.data === null) {
+          void connection?.stop();
+          return;
+        }
+        appendStructuredLogEvent(event, generation);
+      },
+      error: () => {
+        subscription = null;
+        if (connection?.state === HubConnectionState.Connected) void connection.stop();
+      },
+      complete: () => {
+        subscription = null;
+        if (connection?.state === HubConnectionState.Connected) void connection.stop();
+      },
+    });
+  };
+
   const start = async (): Promise<void> => {
+    if (cancelled || starting) return;
+    starting = true;
     try {
       const version = await getNegotiatedVersion();
       if (!version.capabilities.includes(structuredLogsCapability)
@@ -701,48 +750,43 @@ function subscribeStructuredLogs(callback: (logs: NativeStructuredLogs) => void)
         .configureLogging(LogLevel.None)
         .build();
       connection.onreconnected(() => {
-        void refreshStructuredLogs().catch(() => undefined);
-        beginStream();
+        void refreshStructuredLogs().then(beginStream).catch(() => void connection?.stop());
       });
       connection.onclose(() => {
         subscription = null;
-        if (!cancelled) retryTimer = window.setTimeout(() => void start(), 1_000);
+        connection = null;
+        scheduleStart();
       });
       await connection.start();
       beginStream();
     } catch {
-      if (!cancelled) retryTimer = window.setTimeout(() => void start(), 1_000);
+      connection = null;
+      scheduleStart();
+    } finally {
+      starting = false;
     }
   };
 
-  const beginStream = (): void => {
-    if (cancelled || connection?.state !== HubConnectionState.Connected) return;
+  const restart = (): void => {
+    if (cancelled) return;
     subscription?.dispose();
-    subscription = connection.stream<DashboardStructuredLogsEvent>("WatchStructuredLogs").subscribe({
-      next: (event) => {
-        if (typeof event !== "object" || event === null || typeof event.data !== "object" || event.data === null) {
-          void connection?.stop();
-          return;
-        }
-        appendStructuredLogEvent(event);
-      },
-      error: () => {
-        subscription = null;
-        if (connection?.state === HubConnectionState.Connected) void connection.stop();
-      },
-      complete: () => {
-        subscription = null;
-        if (connection?.state === HubConnectionState.Connected) void connection.stop();
-      },
+    subscription = null;
+    const previousConnection = connection;
+    connection = null;
+    const stopped = previousConnection?.stop() ?? Promise.resolve();
+    void stopped.finally(() => {
+      if (!cancelled) void start();
     });
   };
 
   structuredLogListeners.add(callback);
+  structuredLogRestartListeners.add(restart);
   callback(structuredLogs);
   void start();
   return () => {
     cancelled = true;
     structuredLogListeners.delete(callback);
+    structuredLogRestartListeners.delete(restart);
     if (retryTimer !== undefined) window.clearTimeout(retryTimer);
     subscription?.dispose();
     void connection?.stop();
@@ -869,6 +913,27 @@ function subscribeMetrics(callback: (metrics: NativeMetrics) => void): () => voi
       metricPollTimer = undefined;
     }
   };
+}
+
+async function clearStructuredLogs(resourceName: string | null): Promise<void> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(structuredLogsCapability)
+      || !version.capabilities.includes(structuredLogStreamCapability)
+      || !version.capabilities.includes(structuredLogClearCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise structured-log clearing.");
+  }
+
+  const resourceQuery = resourceName === null ? "" : `?resource=${encodeURIComponent(resourceName)}`;
+  await deleteNoContent(`${version.basePath}/structured-logs${resourceQuery}`);
+
+  // A pre-clear stream can still have buffered additions. Ignore that generation, replace
+  // local identity state from the post-clear snapshot, then reconnect for a clean live handoff.
+  structuredLogGeneration++;
+  try {
+    await refreshStructuredLogs();
+  } finally {
+    for (const restart of structuredLogRestartListeners) restart();
+  }
 }
 
 async function clearTraces(resourceName: string | null): Promise<void> {
@@ -1052,6 +1117,7 @@ export const nativeBackend = {
   respondInteraction,
   getStructuredLogs,
   refreshStructuredLogs,
+  clearStructuredLogs,
   getTraces,
   refreshTraces,
   clearTraces,

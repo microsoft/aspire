@@ -15,6 +15,7 @@ internal static class DashboardApiContract
     public const string CommandsCapability = "commands";
     public const string StructuredLogsCapability = "structured-logs";
     public const string StructuredLogStreamCapability = "structured-logs-live";
+    public const string StructuredLogClearCapability = "structured-logs-clear";
     public const string TracesCapability = "traces";
     public const string TraceStreamCapability = "traces-live";
     public const string TraceClearCapability = "traces-clear";

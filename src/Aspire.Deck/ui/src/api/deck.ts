@@ -298,6 +298,7 @@ export function getTelemetrySummary(): Promise<TelemetrySummary> {
       return Promise.all([
         nativeBackend.hasCapability("structured-logs"),
         nativeBackend.hasCapability("structured-logs-live"),
+        nativeBackend.hasCapability("structured-logs-clear"),
         nativeBackend.hasCapability("traces"),
         nativeBackend.hasCapability("traces-live"),
         nativeBackend.hasCapability("metrics"),
@@ -306,13 +307,14 @@ export function getTelemetrySummary(): Promise<TelemetrySummary> {
       ]).then(async ([
         hasLogBacklog,
         hasLogLive,
+        hasLogClear,
         hasTraceBacklog,
         hasTraceLive,
         hasMetrics,
         hasMetricSeries,
         hasMetricClear,
       ]) => {
-        const useNativeLogs = hasLogBacklog && hasLogLive;
+        const useNativeLogs = hasLogBacklog && hasLogLive && hasLogClear;
         const useNativeTraces = hasTraceBacklog && hasTraceLive;
         const useNativeMetrics = hasMetrics && hasMetricSeries && hasMetricClear;
         const [legacy, logs, traces, metrics] = await Promise.all([
@@ -339,11 +341,18 @@ export function clearStructuredLogs(resourceName: string | null): Promise<void> 
     return invoke<void>("deck_clear_structured_logs", { resourceName });
   }
   if (isHttpBackend()) {
-    return httpBackend.clearStructuredLogs(resourceName).then(async () => {
-      if (isAotBackend() && await nativeBackend.hasCapability("structured-logs")) {
-        await nativeBackend.refreshStructuredLogs();
-      }
-    });
+    if (isAotBackend()) {
+      return Promise.all([
+        nativeBackend.hasCapability("structured-logs"),
+        nativeBackend.hasCapability("structured-logs-live"),
+        nativeBackend.hasCapability("structured-logs-clear"),
+      ]).then(([hasBacklog, hasLive, hasClear]) => (
+        hasBacklog && hasLive && hasClear
+          ? nativeBackend.clearStructuredLogs(resourceName)
+          : httpBackend.clearStructuredLogs(resourceName)
+      ));
+    }
+    return httpBackend.clearStructuredLogs(resourceName);
   }
   mockBackend.clearStructuredLogs(resourceName);
   return Promise.resolve();
@@ -566,6 +575,7 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
       void Promise.all([
         nativeBackend.hasCapability("structured-logs"),
         nativeBackend.hasCapability("structured-logs-live"),
+        nativeBackend.hasCapability("structured-logs-clear"),
         nativeBackend.hasCapability("traces"),
         nativeBackend.hasCapability("traces-live"),
         nativeBackend.hasCapability("metrics"),
@@ -574,6 +584,7 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
       ]).then(([
         hasLogBacklog,
         hasLogLive,
+        hasLogClear,
         hasTraceBacklog,
         hasTraceLive,
         hasMetrics,
@@ -581,7 +592,7 @@ export function onTelemetry(cb: (summary: TelemetrySummary) => void): Unsubscrib
         hasMetricClear,
       ]) => {
         if (cancelled) return;
-        useNativeLogs = hasLogBacklog && hasLogLive;
+        useNativeLogs = hasLogBacklog && hasLogLive && hasLogClear;
         useNativeTraces = hasTraceBacklog && hasTraceLive;
         useNativeMetrics = hasMetrics && hasMetricSeries && hasMetricClear;
 

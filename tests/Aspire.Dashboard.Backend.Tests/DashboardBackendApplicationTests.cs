@@ -34,7 +34,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"interactions\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"interactions\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -996,6 +996,36 @@ public class DashboardBackendApplicationTests
                 .GetString());
     }
 
+    [Theory]
+    [InlineData(null)]
+    [InlineData("stress-api")]
+    public async Task ClearStructuredLogs_ForwardsResourceAndCredentials(string? resourceName)
+    {
+        var source = new TestStructuredLogSource(
+            new DashboardStructuredLogsSnapshot(0, JsonSerializer.SerializeToElement(new { })),
+            []);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardStructuredLogSource>(source);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var client = app.GetTestClient();
+        var path = resourceName is null
+            ? DashboardApiContract.VersionOneBasePath + "/structured-logs"
+            : DashboardApiContract.VersionOneBasePath + "/structured-logs?resource=stress-api";
+        using var request = new HttpRequestMessage(HttpMethod.Delete, path);
+        request.Headers.TryAddWithoutValidation("Cookie", ".Aspire.Dashboard=browser-session");
+        request.Headers.TryAddWithoutValidation("Authorization", "Bearer dashboard-token");
+        using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+        Assert.Equal(resourceName, source.ClearedResourceName);
+        Assert.Equal(".Aspire.Dashboard=browser-session", source.Credentials?.Cookie);
+        Assert.Equal("Bearer dashboard-token", source.Credentials?.Authorization);
+    }
+
     [Fact]
     public async Task GetTraces_ReturnsSourceGeneratedFilteredSnapshotAndForwardsCredentials()
     {
@@ -1562,6 +1592,7 @@ public class DashboardBackendApplicationTests
         DashboardStructuredLogsEvent[] events) : IDashboardStructuredLogSource
     {
         public DashboardRequestCredentials? Credentials { get; private set; }
+        public string? ClearedResourceName { get; private set; }
 
         public ValueTask<DashboardStructuredLogsSnapshot> GetSnapshotAsync(
             DashboardRequestCredentials credentials,
@@ -1582,6 +1613,16 @@ public class DashboardBackendApplicationTests
                 yield return logEvent;
                 await Task.Yield();
             }
+        }
+
+        public ValueTask<bool> ClearAsync(
+            string? resourceName,
+            DashboardRequestCredentials credentials,
+            CancellationToken cancellationToken)
+        {
+            Credentials = credentials;
+            ClearedResourceName = resourceName;
+            return ValueTask.FromResult(true);
         }
     }
 

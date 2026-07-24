@@ -57,6 +57,7 @@ internal static class DashboardBackendApplication
                             DashboardApiContract.CommandsCapability,
                             DashboardApiContract.StructuredLogsCapability,
                             DashboardApiContract.StructuredLogStreamCapability,
+                            DashboardApiContract.StructuredLogClearCapability,
                             DashboardApiContract.TracesCapability,
                             DashboardApiContract.TraceStreamCapability,
                             DashboardApiContract.TraceClearCapability,
@@ -124,6 +125,24 @@ internal static class DashboardBackendApplication
                 return Results.Json(
                     snapshot,
                     DashboardBackendJsonSerializerContext.Default.DashboardStructuredLogsSnapshot);
+            }
+            catch (DashboardStructuredLogServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
+        app.MapDelete($"{DashboardApiContract.VersionOneBasePath}/structured-logs", async (
+            HttpContext context,
+            IDashboardStructuredLogSource structuredLogSource) =>
+        {
+            try
+            {
+                var cleared = await structuredLogSource.ClearAsync(
+                    GetSingleQueryValue(context.Request.Query, "resource"),
+                    DashboardRequestCredentials.From(context.Request),
+                    context.RequestAborted).ConfigureAwait(false);
+                return cleared ? Results.NoContent() : Results.NotFound();
             }
             catch (DashboardStructuredLogServiceUnavailableException ex)
             {

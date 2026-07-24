@@ -40,8 +40,11 @@ interface StressResourceApi {
 }
 
 async function getDashboardResources(page: Page): Promise<StressResourceApi[]> {
-  return await page.evaluate(async () => {
-    const response = await fetch("/api/deck/resources", {
+  const path = dashboardBackend === "aot"
+    ? "/api/dashboard/v1/resources"
+    : "/api/deck/resources";
+  return await page.evaluate(async (resourcePath) => {
+    const response = await fetch(resourcePath, {
       cache: "no-store",
       credentials: "same-origin",
     });
@@ -49,7 +52,7 @@ async function getDashboardResources(page: Page): Promise<StressResourceApi[]> {
       throw new Error(`Resource request failed with ${response.status}.`);
     }
     return await response.json();
-  }) as StressResourceApi[];
+  }, path) as StressResourceApi[];
 }
 
 async function runTelemetryServiceLifecycleCommand(page: Page): Promise<void> {
@@ -66,8 +69,11 @@ async function runTelemetryServiceLifecycleCommand(page: Page): Promise<void> {
     throw new Error("The Stress telemetry service has no enabled start or restart command.");
   }
 
-  const response = await page.evaluate(async ({ resourceName, commandName }) => {
-    const commandResponse = await fetch("/api/deck/commands/execute", {
+  const commandPath = dashboardBackend === "aot"
+    ? "/api/dashboard/v1/commands/execute"
+    : "/api/deck/commands/execute";
+  const response = await page.evaluate(async ({ path, resourceName, commandName }) => {
+    const commandResponse = await fetch(path, {
       method: "POST",
       cache: "no-store",
       credentials: "same-origin",
@@ -81,7 +87,7 @@ async function runTelemetryServiceLifecycleCommand(page: Page): Promise<void> {
       throw new Error(`Command request failed with ${commandResponse.status}.`);
     }
     return await commandResponse.json();
-  }, { resourceName: telemetryService.name, commandName: lifecycleCommand.name }) as { kind: string };
+  }, { path: commandPath, resourceName: telemetryService.name, commandName: lifecycleCommand.name }) as { kind: string };
   if (response.kind !== "succeeded") {
     throw new Error(`Telemetry lifecycle command returned '${response.kind}'.`);
   }
@@ -397,7 +403,7 @@ test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-0
 
   const readTotal = async (): Promise<number> => {
     const text = await subtitle.innerText();
-    const total = Number(text.match(/^(\d+) total/)?.[1]);
+    const total = Number(text.match(/^([\d,]+) total/)?.[1]?.replaceAll(",", ""));
     if (!Number.isFinite(total)) {
       throw new Error(`Unable to read structured-log total from '${text}'.`);
     }
@@ -417,16 +423,27 @@ test(`${features("STRESS-STRUCTURED-LOGS-001", "STRESS-STRUCTURED-LOG-RESOURCE-0
   const pause = logs.getByRole("switch", { name: "Pause incoming data" });
   await pause.check();
   await expect(subtitle).toContainText("paused");
+  const pausedTotal = await readTotal();
 
   await runTelemetryServiceLifecycleCommand(page);
-  const readNavigationTotal = async (): Promise<number> =>
-    Number((await navigationButton(page, "Structured Logs").innerText()).match(/(\d+)$/)?.[1]);
-  await expect.poll(readNavigationTotal, { timeout: 45_000 }).toBeGreaterThan(initialTotal);
-  expect(await readTotal()).toBe(initialTotal);
+  const snapshotPath = dashboardBackend === "aot"
+    ? "/api/dashboard/v1/structured-logs"
+    : "/api/deck/telemetry/logs?limit=1";
+  const readAuthoritativeTotal = async (): Promise<number> =>
+    await page.evaluate(async (path) => {
+      const response = await fetch(path, { cache: "no-store", credentials: "same-origin" });
+      if (!response.ok) {
+        throw new Error(`Structured-log snapshot request failed with ${response.status}.`);
+      }
+      return Number((await response.json() as { totalCount: number }).totalCount);
+    }, snapshotPath);
+  await expect.poll(readAuthoritativeTotal, { timeout: 45_000 }).not.toBe(pausedTotal);
+  expect(await readTotal()).toBe(pausedTotal);
 
   await pause.uncheck();
   await expect(subtitle).not.toContainText("paused");
-  await expect.poll(readTotal).toBeGreaterThan(initialTotal);
+  await expect.poll(readTotal).not.toBe(pausedTotal);
+  expect(await readTotal()).toBeGreaterThan(0);
 
   await resource.selectOption("stress-telemetryservice");
   await expect.poll(() => rows.count()).toBeGreaterThan(0);

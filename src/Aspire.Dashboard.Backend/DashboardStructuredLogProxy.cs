@@ -22,6 +22,11 @@ internal interface IDashboardStructuredLogSource
     IAsyncEnumerable<DashboardStructuredLogsEvent> WatchAsync(
         DashboardRequestCredentials credentials,
         CancellationToken cancellationToken);
+
+    ValueTask<bool> ClearAsync(
+        string? resourceName,
+        DashboardRequestCredentials credentials,
+        CancellationToken cancellationToken);
 }
 
 internal sealed class DashboardStructuredLogServiceUnavailableException(string message, Exception? innerException = null)
@@ -30,25 +35,43 @@ internal sealed class DashboardStructuredLogServiceUnavailableException(string m
 internal sealed class DashboardStructuredLogProxy(IConfiguration configuration) : IDashboardStructuredLogSource
 {
     private const string LegacyDashboardUrlKey = "DashboardBackend:LegacyDashboardUrl";
-    private static readonly HttpClient s_client = new(new SocketsHttpHandler { UseCookies = false });
+    private static readonly HttpClient s_client = new(new SocketsHttpHandler
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false
+    });
 
     public async ValueTask<DashboardStructuredLogsSnapshot> GetSnapshotAsync(
         DashboardRequestCredentials credentials,
         CancellationToken cancellationToken)
     {
         using var request = CreateRequest(HttpMethod.Get, "api/deck/telemetry/logs?limit=5000", credentials);
-        using var response = await SendAsync(request, HttpCompletionOption.ResponseContentRead, cancellationToken).ConfigureAwait(false);
-        using var content = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
-        using var document = await JsonDocument.ParseAsync(content, cancellationToken: cancellationToken).ConfigureAwait(false);
-        var root = document.RootElement;
-        if (!root.TryGetProperty("totalCount", out var totalCount)
-            || !totalCount.TryGetInt32(out var count)
-            || !root.TryGetProperty("data", out var data))
+        using var response = await SendAsync(
+            request,
+            HttpCompletionOption.ResponseContentRead,
+            allowNotFound: false,
+            cancellationToken).ConfigureAwait(false);
+        try
         {
-            throw new DashboardStructuredLogServiceUnavailableException("The legacy dashboard returned an incompatible structured-log snapshot.");
-        }
+            using var content = await OpenContentStreamAsync(response, cancellationToken).ConfigureAwait(false);
+            using var document = await JsonDocument.ParseAsync(content, cancellationToken: cancellationToken).ConfigureAwait(false);
+            var root = document.RootElement;
+            if (!root.TryGetProperty("totalCount", out var totalCount)
+                || !totalCount.TryGetInt32(out var count)
+                || !root.TryGetProperty("data", out var data))
+            {
+                throw new DashboardStructuredLogServiceUnavailableException(
+                    "The legacy dashboard returned an incompatible structured-log snapshot.");
+            }
 
-        return new DashboardStructuredLogsSnapshot(count, data.Clone());
+            return new DashboardStructuredLogsSnapshot(count, data.Clone());
+        }
+        catch (JsonException ex)
+        {
+            throw new DashboardStructuredLogServiceUnavailableException(
+                "The legacy dashboard returned an incompatible structured-log snapshot.",
+                ex);
+        }
     }
 
     public async IAsyncEnumerable<DashboardStructuredLogsEvent> WatchAsync(
@@ -57,24 +80,60 @@ internal sealed class DashboardStructuredLogProxy(IConfiguration configuration) 
     {
         using var request = CreateRequest(HttpMethod.Get, "api/deck/telemetry/logs?follow=true", credentials);
         request.Headers.Accept.ParseAdd("application/x-ndjson");
-        using var response = await SendAsync(request, HttpCompletionOption.ResponseHeadersRead, cancellationToken).ConfigureAwait(false);
-        using var content = await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        using var response = await SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            allowNotFound: false,
+            cancellationToken).ConfigureAwait(false);
+        using var content = await OpenContentStreamAsync(response, cancellationToken).ConfigureAwait(false);
         using var reader = new StreamReader(content);
 
         // The legacy endpoint emits one complete OTLP JSON object per line:
         //   {"resourceLogs":[{"resource":{...},"scopeLogs":[...]}]}
         // Messages contain escaped newlines inside JSON strings, so physical line boundaries
         // remain safe NDJSON record delimiters.
-        while (await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false) is { } line)
+        while (await ReadLineAsync(reader, cancellationToken).ConfigureAwait(false) is { } line)
         {
             if (string.IsNullOrWhiteSpace(line))
             {
                 continue;
             }
 
-            using var document = JsonDocument.Parse(line);
-            yield return new DashboardStructuredLogsEvent(document.RootElement.Clone());
+            DashboardStructuredLogsEvent logEvent;
+            try
+            {
+                using var document = JsonDocument.Parse(line);
+                logEvent = new DashboardStructuredLogsEvent(document.RootElement.Clone());
+            }
+            catch (JsonException ex)
+            {
+                throw new DashboardStructuredLogServiceUnavailableException(
+                    "The legacy dashboard returned an incompatible structured-log event.",
+                    ex);
+            }
+
+            yield return logEvent;
         }
+    }
+
+    public async ValueTask<bool> ClearAsync(
+        string? resourceName,
+        DashboardRequestCredentials credentials,
+        CancellationToken cancellationToken)
+    {
+        var path = "api/deck/telemetry/logs";
+        if (!string.IsNullOrWhiteSpace(resourceName))
+        {
+            path += QueryString.Create("resource", resourceName);
+        }
+
+        using var request = CreateRequest(HttpMethod.Delete, path, credentials);
+        using var response = await SendAsync(
+            request,
+            HttpCompletionOption.ResponseHeadersRead,
+            allowNotFound: true,
+            cancellationToken).ConfigureAwait(false);
+        return response.StatusCode is not System.Net.HttpStatusCode.NotFound;
     }
 
     private Uri GetLegacyDashboardUrl()
@@ -112,12 +171,14 @@ internal sealed class DashboardStructuredLogProxy(IConfiguration configuration) 
     private static async Task<HttpResponseMessage> SendAsync(
         HttpRequestMessage request,
         HttpCompletionOption completionOption,
+        bool allowNotFound,
         CancellationToken cancellationToken)
     {
         try
         {
             var response = await s_client.SendAsync(request, completionOption, cancellationToken).ConfigureAwait(false);
-            if (!response.IsSuccessStatusCode)
+            if (!response.IsSuccessStatusCode
+                && !(allowNotFound && response.StatusCode is System.Net.HttpStatusCode.NotFound))
             {
                 response.Dispose();
                 throw new DashboardStructuredLogServiceUnavailableException(
@@ -134,6 +195,38 @@ internal sealed class DashboardStructuredLogProxy(IConfiguration configuration) 
         {
             throw new DashboardStructuredLogServiceUnavailableException(
                 "The legacy dashboard structured-log endpoint is unavailable.",
+                ex);
+        }
+    }
+
+    private static async ValueTask<Stream> OpenContentStreamAsync(
+        HttpResponseMessage response,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await response.Content.ReadAsStreamAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            throw new DashboardStructuredLogServiceUnavailableException(
+                "The legacy dashboard structured-log endpoint is unavailable.",
+                ex);
+        }
+    }
+
+    private static async ValueTask<string?> ReadLineAsync(
+        StreamReader reader,
+        CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await reader.ReadLineAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (IOException ex)
+        {
+            throw new DashboardStructuredLogServiceUnavailableException(
+                "The legacy dashboard structured-log stream is unavailable.",
                 ex);
         }
     }

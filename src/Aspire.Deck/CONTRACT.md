@@ -33,13 +33,13 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "interactions"]
+      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "structured-logs-clear", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "interactions"]
     }
   ]
 }
 ```
 
-Version 1 currently defines fifteen capabilities:
+Version 1 currently defines sixteen capabilities:
 
 | Capability | Route | Response |
 | --- | --- | --- |
@@ -49,6 +49,7 @@ Version 1 currently defines fifteen capabilities:
 | `commands` | `POST {basePath}/commands/execute` | `CommandResponse` |
 | `structured-logs` | `GET {basePath}/structured-logs` | `StructuredLogsSnapshot` |
 | `structured-logs-live` | SignalR hub at `{basePath}/structured-logs/live` | `StructuredLogsEvent` server stream |
+| `structured-logs-clear` | `DELETE {basePath}/structured-logs` | No content |
 | `traces` | `GET {basePath}/traces` | `TraceSnapshot` |
 | `traces-live` | SignalR hub at `{basePath}/traces/live` | `TraceEvent` server stream |
 | `traces-clear` | `DELETE {basePath}/traces` | No content |
@@ -87,8 +88,11 @@ JSON resource-log tree used by the existing dashboard. The AOT host obtains the 
 loopback legacy dashboard and forwards the browser's dashboard credentials. `structured-logs-live`
 exposes `WatchStructuredLogs`; each event contains one `data` OTLP tree. React performs text,
 resource, severity, and structured-attribute filtering locally and freezes its displayed snapshot
-while paused. Destructive structured-log operations remain on `/api/deck`; after a legacy
-structured-log clear, React reloads the versioned backlog.
+while paused. `structured-logs-clear` accepts the optional `resource` query parameter. React bounds
+its identity window to 10,000 entries and retains at most 5,000 log details. After clearing, it
+ignores the old stream generation, refreshes the authoritative snapshot, and reconnects so buffered
+pre-clear logs cannot reappear. A server must advertise all three structured-log capabilities
+before React stops using the existing structured-log transport.
 
 The `traces` response contains `{ totalCount, returnedCount, data }`, where `data` is the complete
 OTLP resource-span tree needed for trace correlation, waterfall layout, span details, events, and
