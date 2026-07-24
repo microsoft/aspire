@@ -1,0 +1,9 @@
+{
+  "author": "danegsta",
+  "comment": "Improvement: preserve Linux system cert roots in SSL_CERT_DIR for project/executable resources",
+  "mergedAt": "2026-07-24T00:05:36Z",
+  "number": 18851,
+  "runDate": "2026-07-24T00:23:38Z",
+  "status": "included",
+  "title": "Improve Linux dev certificate trust handling"
+}

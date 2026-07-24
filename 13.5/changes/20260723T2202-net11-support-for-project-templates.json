@@ -1,0 +1,19 @@
+{
+  "area": "Templates",
+  "areaEmoji": "📄",
+  "backport": false,
+  "breaking": false,
+  "changeType": "New features",
+  "communityContributors": [],
+  "description": "Aspire project templates now support .NET 11 Preview as an opt-in target framework, allowing developers to evaluate Aspire on .NET 11 while templates continue to default to .NET 10. All nine framework-aware templates are updated, including the corresponding OpenAPI package substitutions.",
+  "docsPrs": [],
+  "docsRequired": true,
+  "emoji": "🆙",
+  "firstMergedAt": "2026-07-23T22:02:26Z",
+  "lastMergedAt": "2026-07-23T22:02:26Z",
+  "name": ".NET 11 support for project templates",
+  "owner": "DamianEdwards",
+  "prs": [
+    18849
+  ]
+}

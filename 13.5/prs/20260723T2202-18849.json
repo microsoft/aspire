@@ -1,0 +1,9 @@
+{
+  "author": "DamianEdwards",
+  "comment": "New feature: .NET 11 as opt-in target framework for project templates",
+  "mergedAt": "2026-07-23T22:02:26Z",
+  "number": 18849,
+  "runDate": "2026-07-24T00:23:38Z",
+  "status": "included",
+  "title": "Add .NET 11 support to project templates"
+}
