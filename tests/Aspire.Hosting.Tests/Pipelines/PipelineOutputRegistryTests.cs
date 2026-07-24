@@ -14,6 +14,7 @@ using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Hosting.Tests.Pipelines;
@@ -456,6 +457,57 @@ public class PipelineOutputRegistryTests(ITestOutputHelper testOutputHelper)
         await stepExecuted.Task.WaitAsync(TimeSpan.FromSeconds(10));
         await app.WaitForShutdownAsync().WaitAsync(TimeSpan.FromSeconds(10));
         Assert.Equal(PipelineOutputExecutionState.Succeeded, registry.GetExecutionState());
+    }
+
+    [Fact]
+    public async Task PipelineExecuteAsync_WaitsForAuthorizationBeforeSteps()
+    {
+        var bootstrapConfiguration = new ConfigurationBuilder().Build();
+        using var fileSystem = new FileSystemService(bootstrapConfiguration);
+        var root = fileSystem.TempDirectory.CreateTempSubdirectory("direct-pipeline-authorization-tests").Path;
+        var appHostDirectory = Path.Combine(root, "repo", "src", "AppHost");
+        var stagingPath = Path.Combine(root, "staging");
+        var primaryTargetPath = Path.Combine(appHostDirectory, "aspire-output");
+        var primaryOutputPath = Path.Combine(stagingPath, "primary");
+        Directory.CreateDirectory(appHostDirectory);
+
+        using var builder = TestDistributedApplicationBuilder.Create(
+            options => options.ProjectDirectory = appHostDirectory,
+            testOutputHelper,
+            "AppHost:Operation=publish",
+            "Pipeline:Step=direct-publisher",
+            $"Pipeline:OutputPath={primaryOutputPath}",
+            $"{PipelineOutputRegistry.StagingPathConfigurationKey}={stagingPath}",
+            $"{PipelineOutputRegistry.TargetOutputPathConfigurationKey}={primaryTargetPath}");
+        var stepExecuted = false;
+        builder.Pipeline.AddStep(new PipelineStep
+        {
+            Name = "direct-publisher",
+            SupportsOutputPathRelocation = true,
+            Action = _ =>
+            {
+                stepExecuted = true;
+                return Task.CompletedTask;
+            }
+        });
+
+        using var app = builder.Build();
+        var context = new PipelineContext(
+            app.Services.GetRequiredService<DistributedApplicationModel>(),
+            app.Services.GetRequiredService<DistributedApplicationExecutionContext>(),
+            app.Services,
+            NullLogger.Instance,
+            CancellationToken.None);
+        var executionTask = builder.Pipeline.ExecuteAsync(context);
+
+        var registry = app.Services.GetRequiredService<PipelineOutputRegistry>();
+        await registry.WaitForPreparationAsync(CancellationToken.None).WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.False(stepExecuted);
+        Assert.False(executionTask.IsCompleted);
+
+        registry.AuthorizeExecution();
+        await executionTask.WaitAsync(TimeSpan.FromSeconds(10));
+        Assert.True(stepExecuted);
     }
 
     [Fact]
