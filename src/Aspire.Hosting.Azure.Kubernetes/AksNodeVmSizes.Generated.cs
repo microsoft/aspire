@@ -1586,30 +1586,6 @@ public static partial class AksNodeVmSizes
     }
 
     /// <summary>
-    /// VM sizes in the standardDCSv2Family.
-    /// </summary>
-    public static class StandardDCSv2
-    {
-        /// <summary>
-        /// Standard_DC2s_v2 — 2 vCPUs — 8 GB RAM — Premium SSD
-        /// </summary>
-        [AspireValue("AksNodeVmSizes")]
-        public const string StandardDC2sV2 = "Standard_DC2s_v2";
-
-        /// <summary>
-        /// Standard_DC4s_v2 — 4 vCPUs — 16 GB RAM — Premium SSD
-        /// </summary>
-        [AspireValue("AksNodeVmSizes")]
-        public const string StandardDC4sV2 = "Standard_DC4s_v2";
-
-        /// <summary>
-        /// Standard_DC8_v2 — 8 vCPUs — 32 GB RAM — Premium SSD
-        /// </summary>
-        [AspireValue("AksNodeVmSizes")]
-        public const string StandardDC8V2 = "Standard_DC8_v2";
-    }
-
-    /// <summary>
     /// VM sizes in the standardDCSv3Family.
     /// </summary>
     public static class StandardDCSv3
