@@ -8,6 +8,7 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using System.Text.Json.Serialization.Metadata;
 using Aspire.Cli.Configuration;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Caching;
@@ -94,12 +95,14 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
     private readonly ILogger<AppHostInfoDiskCache> _logger;
     private readonly DirectoryInfo _cacheDirectory;
     private readonly IConfigurationService _configurationService;
+    private readonly IEnvironment _environment;
 
-    public AppHostInfoDiskCache(ILogger<AppHostInfoDiskCache> logger, CliExecutionContext executionContext, IConfigurationService configurationService)
+    public AppHostInfoDiskCache(ILogger<AppHostInfoDiskCache> logger, CliExecutionContext executionContext, IConfigurationService configurationService, IEnvironment environment)
     {
         _logger = logger;
         _cacheDirectory = new DirectoryInfo(Path.Combine(executionContext.CacheDirectory.FullName, SubDirectoryName));
         _configurationService = configurationService;
+        _environment = environment;
     }
 
     public async Task<AppHostInfoCacheEntry?> TryGetAsync(FileInfo projectFile, CancellationToken cancellationToken)
@@ -223,7 +226,7 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
     /// The key is a hex-encoded XxHash3 of a delimited string of inputs; it is suitable for
     /// use as a filename on all platforms.
     /// </summary>
-    public string GetCacheKey(FileInfo projectFile) => ComputeKeyAsync(projectFile);
+    public string GetCacheKey(FileInfo projectFile) => ComputeKeyAsync(projectFile, _environment);
 
     private async Task<bool> IsDisabledAsync(FileInfo projectFile, CancellationToken cancellationToken)
     {
@@ -232,7 +235,7 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
         return string.Equals(value, "true", StringComparison.OrdinalIgnoreCase);
     }
 
-    internal static string ComputeKeyAsync(FileInfo projectFile)
+    internal static string ComputeKeyAsync(FileInfo projectFile, IEnvironment environment)
     {
         // Raw fingerprint shape:
         //   v1|/repo/app/AppHost.csproj|csproj=638831006400000000|assets=638831006410000000|...
@@ -244,7 +247,7 @@ internal sealed class AppHostInfoDiskCache : IAppHostInfoDiskCache
         var sb = new StringBuilder(512);
         sb.Append(SchemaVersion);
         sb.Append('|');
-        sb.Append(projectFile.FullName);
+        sb.Append(CliPathHelper.NormalizePathCasing(projectFile.FullName, environment));
         sb.Append('|');
         AppendMtime(sb, projectFile.FullName, "csproj");
 

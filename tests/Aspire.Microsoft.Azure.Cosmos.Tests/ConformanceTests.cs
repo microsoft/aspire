@@ -16,7 +16,7 @@ public class ConformanceTests : ConformanceTests<CosmosClient, MicrosoftAzureCos
 
     protected override string ActivitySourceName => "Azure.Cosmos.Operation";
 
-    protected override string[] RequiredLogCategories => Array.Empty<string>();
+    protected override RequiredLogCategory[] RequiredLogCategories => [];
 
     protected override void PopulateConfiguration(ConfigurationManager configuration, string? key = null)
         => configuration.AddInMemoryCollection(new KeyValuePair<string, string?>[1]

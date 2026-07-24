@@ -1,9 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
+import { spawnSync } from 'child_process';
 import type { AspireExtensionE2EControlCommand, AspireExtensionE2EControlStatus } from '../../types/extensionApi';
 import { applyE2eControl, isSamePath, readStateFile, sleepSynchronously, waitForExtensionState } from './assertions';
-import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getWorkspaceRoot } from './paths';
-import { runProcess } from './process';
+import { getCliPath, getPrimaryAppHostProjectPath, getRepoRoot, getRunRoot, getWorkspaceRoot } from './paths';
+import { ProcessError, runProcess } from './process';
 
 const csharpFileHeader = `// Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
@@ -62,8 +63,16 @@ export async function setShowStatusDelayForE2E(delayMs: number | undefined): Pro
     await applyE2eControl({ showStatusDelayMs: delayMs ?? null });
 }
 
-export async function executeE2eControlCommand(command: AspireExtensionE2EControlCommand, options?: { waitFor?: 'started' | 'applied' }): Promise<AspireExtensionE2EControlStatus> {
-    return await applyE2eControl({ command }, options?.waitFor ?? 'applied');
+export async function resetDashboardDefaultChangedNotificationForE2E(): Promise<void> {
+    await applyE2eControl({ resetDashboardDefaultChangedNotification: true });
+}
+
+export async function executeE2eControlCommand(
+    command: AspireExtensionE2EControlCommand,
+    options?: { waitFor?: 'started' | 'applied'; timeoutMs?: number }
+): Promise<AspireExtensionE2EControlStatus> {
+    const timeoutMs = options?.timeoutMs ?? (command.name === 'stopDebugging' ? 180000 : undefined);
+    return await applyE2eControl({ command }, options?.waitFor ?? 'applied', timeoutMs);
 }
 
 export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Promise<unknown>>, failureMessage: string): Promise<void> {
@@ -77,8 +86,22 @@ export async function runE2eTeardown(cleanups: ReadonlyArray<() => unknown | Pro
     }
 
     if (failures.length > 0) {
-        throw new AggregateError(failures, failureMessage);
+        throw new AggregateError(failures.map(redactE2eTeardownFailure), formatE2eTeardownFailureMessage(failureMessage, failures.map(redactE2eTeardownFailure)));
     }
+}
+
+function formatE2eTeardownFailureMessage(failureMessage: string, failures: ReadonlyArray<string>): string {
+    const formattedFailures = failures.map((failure, index) => `${index + 1}. ${failure}`);
+
+    return `${failureMessage}\n${formattedFailures.join('\n')}`;
+}
+
+function redactE2eTeardownFailure(failure: unknown): string {
+    const details = failure instanceof Error ? `${failure.name}: ${failure.message}` : String(failure);
+
+    return details
+        .replace(/https?:\/\/\S+/g, '<redacted-url>')
+        .replace(/Last state:[\s\S]*/g, 'Last state: <redacted>');
 }
 
 export async function createEmptyAppHostProject(projectName: string): Promise<string> {
@@ -135,8 +158,27 @@ export async function clearBreakpoints(): Promise<void> {
     await executeE2eControlCommand({ name: 'clearBreakpoints' });
 }
 
-export function removeGeneratedProject(projectName: string): void {
+export async function removeGeneratedProject(projectName: string, knownAppHostPid?: number): Promise<void> {
+    await waitForNoRunningAppHostPathOrStopKnownProcess(getGeneratedAppHostPath(projectName), 30000, knownAppHostPid, 'before deleting');
     removePath(getGeneratedProjectRoot(projectName), { recursive: true, force: true });
+}
+
+export function getRunningAppHostPid(appHostPath: string): number | undefined {
+    return getRunningAppHostFromState(appHostPath)?.appHostPid;
+}
+
+export async function waitForRunningAppHostPid(appHostPath: string, timeoutMs: number): Promise<number> {
+    const started = Date.now();
+    while (Date.now() - started < timeoutMs) {
+        const pid = getRunningAppHostPid(appHostPath);
+        if (pid !== undefined) {
+            return pid;
+        }
+
+        await delay(250);
+    }
+
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for AppHost process state before stopping ${appHostPath}.`);
 }
 
 export function removePrimaryAppHostFixture(): void {
@@ -255,45 +297,100 @@ export function removeAdditionalAppHostCandidate(projectName = 'AspireE2E.Second
     removePath(path.join(getWorkspaceRoot(), projectName), { recursive: true, force: true });
 }
 
+export function createExternalSingleFileAppHost(projectName = 'AspireE2E.ExternalAppHost'): string {
+    const runRoot = getRunRoot();
+    if (!runRoot) {
+        throw new Error('ASPIRE_EXTENSION_E2E_RUN_ROOT is required to create an external AppHost fixture.');
+    }
+
+    const projectDirectory = path.join(runRoot, 'external-apphosts', projectName);
+    removePath(projectDirectory, { recursive: true, force: true });
+    fs.mkdirSync(projectDirectory, { recursive: true });
+    const appHostPath = path.join(projectDirectory, 'apphost.cs');
+    fs.writeFileSync(appHostPath, `${csharpFileHeader}#:sdk Aspire.AppHost.Sdk@${getAppHostSdkVersion()}
+
+var builder = DistributedApplication.CreateBuilder(args);
+builder.AddParameter("external-value");
+
+builder.Build().Run();
+`);
+
+    return appHostPath;
+}
+
+export function removeExternalSingleFileAppHost(projectName = 'AspireE2E.ExternalAppHost'): void {
+    const runRoot = getRunRoot();
+    if (runRoot) {
+        removePath(path.join(runRoot, 'external-apphosts', projectName), { recursive: true, force: true });
+    }
+}
+
 export async function stopPrimaryAppHostIfRunning(): Promise<void> {
     await stopAppHostIfRunning(getPrimaryAppHostProjectPath());
 }
 
 export async function stopAppHostIfRunning(appHostPath: string): Promise<void> {
+    const runningAppHostBeforeStop = getRunningAppHostFromState(appHostPath);
+    const stopError = await tryStopAppHost(appHostPath);
+
+    if (!stopError) {
+        await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+        return;
+    }
+
+    if (/not running|No running AppHost|No AppHost/i.test(stopError.message)) {
+        await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+        return;
+    }
+
+    if (/timed out|Failed to stop/i.test(stopError.message)) {
+        if (runningAppHostBeforeStop?.appHostPid !== undefined) {
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop.appHostPid, 'after stopping');
+            return;
+        }
+
+        const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+        if (!runningAppHost) {
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+            return;
+        }
+
+        try {
+            await waitForProcessExit(runningAppHost.appHostPid, 30000);
+        }
+        catch {
+            if (isProcessRunning(runningAppHost.appHostPid)) {
+                await stopProcess(runningAppHost.appHostPid, 30000);
+            }
+        }
+
+        if (!await getRunningAppHostAccordingToCli(appHostPath)) {
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+            return;
+        }
+
+        if (isProcessRunning(runningAppHost.appHostPid)) {
+            await stopProcess(runningAppHost.appHostPid, 30000);
+            await waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath, 30000, runningAppHostBeforeStop?.appHostPid, 'after stopping');
+            return;
+        }
+
+        throw new Error(`AppHost is still running according to aspire ps: ${appHostPath}`);
+    }
+
+    throw stopError;
+}
+
+async function tryStopAppHost(appHostPath: string): Promise<Error | undefined> {
     try {
         await runProcess(getCliPath(), ['stop', '--non-interactive', '--apphost', appHostPath], {
             cwd: getWorkspaceRoot(),
             timeoutMs: 60000,
         });
-        await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);
-    }
-    catch (error) {
-        if (!(error instanceof Error)) {
-            throw error;
-        }
-
-        if (/not running|No running AppHost|No AppHost/i.test(error.message)) {
-            await waitForRunningAppHostProcessExitFromState(appHostPath, 5000).catch(() => undefined);
-            return;
-        }
-
-        if (/timed out|Failed to stop/i.test(error.message)) {
-            try {
-                const runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
-                if (!runningAppHost) {
-                    return;
-                }
-
-                await waitForProcessExit(runningAppHost.appHostPid, 30000);
-                if (!await getRunningAppHostAccordingToCli(appHostPath)) {
-                    return;
-                }
-
-                throw new Error(`AppHost is still running according to aspire ps: ${appHostPath}`);
-            }
-            catch {
-                throw error;
-            }
+        return undefined;
+    } catch (error) {
+        if (error instanceof Error) {
+            return error;
         }
 
         throw error;
@@ -307,7 +404,7 @@ interface PsAppHost {
 }
 
 async function getRunningAppHostAccordingToCli(appHostPath: string): Promise<PsAppHost | undefined> {
-    const result = await runProcess(getCliPath(), ['ps', '--format', 'json'], {
+    const result = await runProcess(getCliPath(), ['ps', '--format', 'json', '--nologo'], {
         cwd: getWorkspaceRoot(),
         timeoutMs: 30000,
     });
@@ -339,14 +436,124 @@ function isPsAppHost(value: unknown): value is PsAppHost {
         && (candidate.status === undefined || typeof candidate.status === 'string');
 }
 
-async function waitForRunningAppHostProcessExitFromState(appHostPath: string, timeoutMs: number): Promise<void> {
-    const runningAppHost = getRunningAppHostFromState(appHostPath);
-    if (runningAppHost) {
-        await waitForProcessExit(runningAppHost.appHostPid, timeoutMs);
-        return;
+async function waitForNoRunningAppHostPath(appHostPath: string, timeoutMs: number, knownAppHostPid: number | undefined, actionDescription: string): Promise<void> {
+    const started = Date.now();
+    let lastKnownAppHostPid = knownAppHostPid;
+
+    while (Date.now() - started < timeoutMs) {
+        const runningAppHost = getRunningAppHostFromState(appHostPath);
+        if (runningAppHost) {
+            lastKnownAppHostPid = runningAppHost.appHostPid;
+        }
+
+        if (lastKnownAppHostPid === undefined || !isProcessRunning(lastKnownAppHostPid)) {
+            return;
+        }
+
+        await delay(250);
     }
 
-    throw new Error(`Unable to find running AppHost state for ${appHostPath}.`);
+    const runningAppHost = getRunningAppHostFromState(appHostPath);
+    throw new Error(`Timed out after ${timeoutMs}ms waiting for AppHost process ${runningAppHost?.appHostPid ?? lastKnownAppHostPid ?? '<unknown>'} to exit ${actionDescription} ${path.dirname(appHostPath)}.`);
+}
+
+async function waitForNoRunningAppHostPathOrStopKnownProcess(appHostPath: string, timeoutMs: number, knownAppHostPid: number | undefined, actionDescription: string): Promise<void> {
+    try {
+        await waitForNoRunningAppHostPath(appHostPath, timeoutMs, knownAppHostPid, actionDescription);
+    }
+    catch (error) {
+        let runningAppHost: PsAppHost | undefined;
+        try {
+            runningAppHost = await getRunningAppHostAccordingToCli(appHostPath);
+        }
+        catch (cliError) {
+            if (!isProcessTimeoutError(cliError) || knownAppHostPid === undefined) {
+                throw cliError;
+            }
+
+            const runningAppHostFromState = getRunningAppHostFromState(appHostPath);
+            if (runningAppHostFromState?.appHostPid !== knownAppHostPid) {
+                throw error;
+            }
+
+            if (!isKnownAppHostProcess(knownAppHostPid, appHostPath)) {
+                throw error;
+            }
+
+            await stopProcess(knownAppHostPid, 30000);
+            await waitForNoRunningAppHostPath(appHostPath, 5000, knownAppHostPid, actionDescription);
+            return;
+        }
+
+        // The extension state file can lag behind the CLI registry after stopDebugging:
+        // it may still contain an AppHost PID even though aspire ps has already dropped
+        // the AppHost. At that point the PID may be stale/reused, so don't SIGTERM it.
+        if (!runningAppHost) {
+            return;
+        }
+
+        if (!isProcessRunning(runningAppHost.appHostPid)) {
+            throw error;
+        }
+
+        await stopProcess(runningAppHost.appHostPid, 30000);
+        await waitForNoRunningAppHostPath(appHostPath, 5000, runningAppHost.appHostPid, actionDescription);
+    }
+}
+
+function isProcessTimeoutError(error: unknown): boolean {
+    return error instanceof ProcessError && /\btimed out after \d+ms\b/i.test(error.message);
+}
+
+function isKnownAppHostProcess(pid: number, appHostPath: string): boolean {
+    const commandLine = getProcessCommandLine(pid);
+    if (commandLine === undefined) {
+        return false;
+    }
+
+    return normalizePathForCommandLineSearch(commandLine).includes(normalizePathForCommandLineSearch(appHostPath));
+}
+
+function getProcessCommandLine(pid: number): string | undefined {
+    if (!Number.isInteger(pid) || pid <= 0) {
+        return undefined;
+    }
+
+    if (process.platform === 'linux') {
+        try {
+            const commandLine = fs.readFileSync(`/proc/${pid}/cmdline`, 'utf8').replace(/\0/g, ' ').trim();
+            return commandLine.length > 0 ? commandLine : undefined;
+        }
+        catch (error) {
+            if (isProcessLookupError(error)) {
+                return undefined;
+            }
+
+            throw error;
+        }
+    }
+
+    if (process.platform === 'win32') {
+        const result = spawnSync('powershell.exe', [
+            '-NoProfile',
+            '-NonInteractive',
+            '-Command',
+            `$process = Get-CimInstance Win32_Process -Filter "ProcessId = ${pid}"; if ($process) { $process.CommandLine }`,
+        ], { encoding: 'utf8', timeout: 5000 });
+
+        return result.status === 0 && result.stdout.trim().length > 0 ? result.stdout.trim() : undefined;
+    }
+
+    const result = spawnSync('ps', ['-p', String(pid), '-o', 'command='], { encoding: 'utf8', timeout: 5000 });
+    return result.status === 0 && result.stdout.trim().length > 0 ? result.stdout.trim() : undefined;
+}
+
+function normalizePathForCommandLineSearch(value: string): string {
+    return value.replace(/\\/g, '/').toLowerCase();
+}
+
+function isProcessLookupError(error: unknown): boolean {
+    return error instanceof Error && 'code' in error && (error.code === 'ENOENT' || error.code === 'ESRCH' || error.code === 'EACCES' || error.code === 'EPERM');
 }
 
 function getRunningAppHostFromState(appHostPath: string) {
@@ -367,6 +574,21 @@ async function waitForProcessExit(pid: number, timeoutMs: number): Promise<void>
     }
 
     throw new Error(`Timed out after ${timeoutMs}ms waiting for process ${pid} to exit.`);
+}
+
+async function stopProcess(pid: number, timeoutMs: number): Promise<void> {
+    try {
+        process.kill(pid, 'SIGTERM');
+    }
+    catch (error) {
+        if (error instanceof Error && 'code' in error && error.code === 'ESRCH') {
+            return;
+        }
+
+        throw error;
+    }
+
+    await waitForProcessExit(pid, timeoutMs);
 }
 
 function isProcessRunning(pid: number): boolean {
@@ -430,7 +652,7 @@ if (args.includes('--include-disabled-commands')) {
   process.exit(123);
 }
 
-if (args.length === 3 && args[0] === 'config' && args[1] === 'info' && args[2] === '--json') {
+if (args[0] === 'config' && args[1] === 'info' && args.includes('--json')) {
 ${options.configInfoJson === undefined
         ? `  console.error(${JSON.stringify(options.configInfoStderr ?? 'config info is not available')});
   process.exit(${options.configInfoExitCode ?? 1});`
@@ -566,5 +788,5 @@ function isRetryableFileSystemError(error: unknown): boolean {
     }
 
     const code = (error as NodeJS.ErrnoException).code;
-    return code === 'EBUSY' || code === 'EPERM' || code === 'EACCES';
+    return code === 'EBUSY' || code === 'EPERM' || code === 'EACCES' || code === 'ENOTEMPTY';
 }

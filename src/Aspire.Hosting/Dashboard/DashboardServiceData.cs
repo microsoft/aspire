@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Runtime.CompilerServices;
-using Aspire.Dashboard.Model;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Hosting.ApplicationModel;
 using Microsoft.Extensions.Logging;
@@ -20,18 +19,23 @@ internal sealed class DashboardServiceData : IDisposable
     private readonly ResourceCommandService _resourceCommandService;
     private readonly InteractionService _interactionService;
     private readonly ResourceLoggerService _resourceLoggerService;
+    private readonly IFileUploadStore _fileUploadStore;
+    private readonly ILogger<DashboardServiceData> _logger;
 
     public DashboardServiceData(
         ResourceNotificationService resourceNotificationService,
         ResourceLoggerService resourceLoggerService,
         ILogger<DashboardServiceData> logger,
         ResourceCommandService resourceCommandService,
-        InteractionService interactionService)
+        InteractionService interactionService,
+        IFileUploadStore fileUploadStore)
     {
         _resourceLoggerService = resourceLoggerService;
         _resourcePublisher = new ResourcePublisher(_cts.Token);
         _resourceCommandService = resourceCommandService;
         _interactionService = interactionService;
+        _fileUploadStore = fileUploadStore;
+        _logger = logger;
         var cancellationToken = _cts.Token;
 
         Task.Run(async () =>
@@ -49,32 +53,18 @@ internal sealed class DashboardServiceData : IDisposable
                 // ITerminalConnectionResolver, which resolves replica -> UDS server-side
                 // so an authenticated browser cannot coerce the dashboard into
                 // connecting to arbitrary UDS endpoints by tampering with the path.
-                var terminalAnnotation = resource.Annotations.OfType<TerminalAnnotation>().FirstOrDefault();
-                if (terminalAnnotation is not null)
+                //
+                // The same stamping is applied on the auxiliary backchannel path so that
+                // `aspire describe` and the VS Code extension observe identical terminal
+                // metadata; both call sites share TerminalResourceSnapshotProperties.
+                var terminalProperties = TerminalResourceSnapshotProperties.AddTerminalProperties(resource, resourceId, snapshot.Properties);
+
+                // ImmutableArray's == operator compares the underlying array reference, so this is
+                // true only when AddTerminalProperties returned the original array unchanged (no
+                // TerminalAnnotation). Avoid rebuilding the snapshot in that common case.
+                if (terminalProperties != snapshot.Properties)
                 {
-                    var terminalHosts = terminalAnnotation.TerminalHosts;
-                    var replicaCount = terminalHosts.Count;
-                    var replicaIndex = ResolveReplicaIndex(resource, resourceId);
-                    var consumerUdsPath = (uint)replicaIndex < (uint)replicaCount
-                        ? terminalHosts[replicaIndex].Layout.ConsumerUdsPath
-                        : null;
-
-                    var properties = snapshot.Properties
-                        .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.Enabled, "true") { IsSensitive = false })
-                        .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.ReplicaIndex, replicaIndex.ToString(System.Globalization.CultureInfo.InvariantCulture)) { IsSensitive = false })
-                        .Add(new ResourcePropertySnapshot(KnownProperties.Terminal.ReplicaCount, replicaCount.ToString(System.Globalization.CultureInfo.InvariantCulture)) { IsSensitive = false });
-
-                    if (consumerUdsPath is not null)
-                    {
-                        // Mark the UDS path sensitive so the dashboard masks it in the
-                        // resource details panel. The path still flows through gRPC to
-                        // the dashboard process (which is intentional - it needs the
-                        // path to open the local socket on the user's behalf).
-                        properties = properties.Add(
-                            new ResourcePropertySnapshot(KnownProperties.Terminal.ConsumerUdsPath, consumerUdsPath) { IsSensitive = true });
-                    }
-
-                    snapshot = snapshot with { Properties = properties };
+                    snapshot = snapshot with { Properties = terminalProperties };
                 }
 
                 return new GenericResourceSnapshot(snapshot)
@@ -99,30 +89,6 @@ internal sealed class DashboardServiceData : IDisposable
                     IconName = snapshot.IconName,
                     IconVariant = snapshot.IconVariant
                 };
-            }
-
-            // Maps the per-replica DCP resourceId (e.g. "myapp-abc123") back to its
-            // stable 0-based replica index by consulting DcpInstancesAnnotation, which
-            // DcpNameGenerator populates at instance-allocation time. Falls back to 0
-            // for non-DCP resources or when the annotation isn't present yet (e.g.
-            // initial pre-DCP snapshots).
-            static int ResolveReplicaIndex(IResource resource, string resourceId)
-            {
-                var instances = resource.Annotations.OfType<DcpInstancesAnnotation>().FirstOrDefault();
-                if (instances is null)
-                {
-                    return 0;
-                }
-
-                foreach (var instance in instances.Instances)
-                {
-                    if (string.Equals(instance.Name, resourceId, StringComparison.Ordinal))
-                    {
-                        return instance.Index;
-                    }
-                }
-
-                return 0;
             }
 
             var timestamp = DateTime.UtcNow;
@@ -241,6 +207,8 @@ internal sealed class DashboardServiceData : IDisposable
                         return new InteractionCompletionState { Complete = true, State = request.MessageBox.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.Notification:
                         return new InteractionCompletionState { Complete = true, State = request.Notification.Result };
+                    case WatchInteractionsRequestUpdate.KindOneofCase.PromptProgress:
+                        return new InteractionCompletionState { Complete = true, State = request.PromptProgress.Result };
                     case WatchInteractionsRequestUpdate.KindOneofCase.InputsDialog:
                         var inputsInfo = (Interaction.InputsInteractionInfo)interaction.InteractionInfo;
                         var options = (InputsDialogInteractionOptions)interaction.Options;
@@ -249,7 +217,7 @@ internal sealed class DashboardServiceData : IDisposable
                             serviceProvider,
                             logger,
                             inputsInfo,
-                            request.InputsDialog.InputItems.Select(i => new InputDto(i.Name, i.Value, DashboardService.MapInputType(i.InputType))).ToList(),
+                            request.InputsDialog.InputItems.Select(i => MapInputDto(i)).ToList(),
                             request.ResponseUpdate,
                             interaction.CancellationToken);
 
@@ -262,7 +230,27 @@ internal sealed class DashboardServiceData : IDisposable
             cancellationToken).ConfigureAwait(false);
     }
 
-    public record InputDto(string Name, string Value, InputType InputType);
+    private InputDto MapInputDto(Aspire.DashboardService.Proto.V1.InteractionInput i)
+    {
+        var inputType = DashboardService.MapInputType(i.InputType);
+
+        // For file inputs, Value contains a JSON array of objects with file IDs and names.
+        // Resolve each ID to the temp file path and build InputFileDto entries.
+        if (inputType == InputType.File)
+        {
+            var files = FileUploadStore.ResolveFileReferences(_fileUploadStore, i.Value, i.Name, _logger);
+            if (files is not null)
+            {
+                return new InputDto(i.Name, i.Value, inputType, files);
+            }
+        }
+
+        return new InputDto(i.Name, i.Value, inputType);
+    }
+
+    public record InputFileDto(string Id, string Name, string FilePath);
+
+    public record InputDto(string Name, string Value, InputType InputType, IReadOnlyList<InputFileDto>? Files = null);
 
     public static void ProcessInputs(IServiceProvider serviceProvider, ILogger logger, Interaction.InputsInteractionInfo inputsInfo, List<InputDto> inputDtos, bool dependencyChange, CancellationToken cancellationToken)
     {
@@ -287,6 +275,23 @@ internal sealed class DashboardServiceData : IDisposable
             if (!string.Equals(modelInput.Value ?? string.Empty, incomingValue ?? string.Empty))
             {
                 modelInput.Value = incomingValue;
+
+                // For File inputs, build InteractionFile instances from the resolved file info.
+                if (requestInput.InputType == InputType.File)
+                {
+                    if (requestInput.Files is { Count: > 0 })
+                    {
+                        var interactionFiles = requestInput.Files
+                            .Select(f => new InteractionFile(f.Id, f.Name, f.FilePath))
+                            .ToArray();
+                        modelInput.SetFiles(interactionFiles);
+                    }
+                    else
+                    {
+                        // Clear stale file references when the selection is empty.
+                        modelInput.SetFiles([]);
+                    }
+                }
 
                 // If we're processing updates because of a dependency change, check to see if this input is depended on.
                 if (dependencyChange)

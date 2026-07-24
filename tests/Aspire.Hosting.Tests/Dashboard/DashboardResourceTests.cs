@@ -132,7 +132,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            ["ASPNETCORE_URLS"] = "http://localhost",
+            [KnownAspNetCoreConfigNames.Urls] = "http://localhost",
             [dashboardOtlpGrpcEndpointUrlKey] = "http://localhost"
         });
 
@@ -172,12 +172,12 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
             },
             e =>
             {
-                Assert.Equal("ASPNETCORE_ENVIRONMENT", e.Key);
+                Assert.Equal(KnownAspNetCoreConfigNames.Environment, e.Key);
                 Assert.Equal("Production", e.Value);
             },
             e =>
             {
-                Assert.Equal(KnownConfigNames.AspNetCoreUrls, e.Key);
+                Assert.Equal(KnownAspNetCoreConfigNames.Urls, e.Key);
                 Assert.Equal("http://localhost:5003", e.Value);
             },
             e =>
@@ -226,7 +226,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [KnownConfigNames.AspNetCoreUrls] = "https://localhost:17131;http://localhost:15000",
+            [KnownAspNetCoreConfigNames.Urls] = "https://localhost:17131;http://localhost:15000",
             [dashboardOtlpGrpcEndpointUrlKey] = string.Empty
         });
 
@@ -297,7 +297,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         var config = new Dictionary<string, string?>
         {
-            [KnownConfigNames.AspNetCoreUrls] = dashboardUrls,
+            [KnownAspNetCoreConfigNames.Urls] = dashboardUrls,
         };
 
         if (allowUnsecuredTransport is not null)
@@ -397,7 +397,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [KnownConfigNames.AspNetCoreUrls] = "http://localhost",
+            [KnownAspNetCoreConfigNames.Urls] = "http://localhost",
             [dashboardOtlpGrpcEndpointUrlKey] = "http://localhost",
             ["AppHost:BrowserToken"] = "TestBrowserToken!",
             ["AppHost:OtlpApiKey"] = "TestOtlpApiKey!"
@@ -439,7 +439,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [KnownConfigNames.AspNetCoreUrls] = "http://localhost",
+            [KnownAspNetCoreConfigNames.Urls] = "http://localhost",
             [dashboardOtlpGrpcEndpointUrlKey] = "http://localhost"
         });
 
@@ -475,7 +475,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [KnownConfigNames.AspNetCoreUrls] = "http://localhost",
+            [KnownAspNetCoreConfigNames.Urls] = "http://localhost",
             [dashboardOtlpGrpcEndpointUrlKey] = "http://localhost"
         });
 
@@ -512,7 +512,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [KnownConfigNames.AspNetCoreUrls] = "http://localhost",
+            [KnownAspNetCoreConfigNames.Urls] = "http://localhost",
             [otlpHttpEndpointUrlKey] = "http://localhost",
             [corsAllowedOriginsKey] = explicitCorsAllowedOrigins
         });
@@ -607,7 +607,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [KnownConfigNames.AspNetCoreUrls] = "http://localhost",
+            [KnownAspNetCoreConfigNames.Urls] = "http://localhost",
             [otlpGrpcEndpointUrlKey] = "http://localhost",
             [corsAllowedOriginsKey] = explicitCorsAllowedOrigins
         });
@@ -641,7 +641,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         builder.Configuration.AddInMemoryCollection(new Dictionary<string, string?>
         {
-            [KnownConfigNames.AspNetCoreUrls] = "https://localhost",
+            [KnownAspNetCoreConfigNames.Urls] = "https://localhost",
             [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost"
         });
 
@@ -768,10 +768,12 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
         // Push some logs through to the dashboard resource.
         var logger = resourceLoggerService.GetLogger("aspire-dashboard-0");
 
-        // The logging watcher expects a JSON payload
+        // The logging watcher expects a JSON payload. Use an "Aspire.Dashboard." prefixed category
+        // so the LogMessage method trims it and routes to "Aspire.Hosting.Dashboard.Test" rather than
+        // "Aspire.Hosting.Dashboard.ThirdParty.Test".
         var dashboardLogMessage = new DashboardLogMessage
         {
-            Category = "Test",
+            Category = "Aspire.Dashboard.Test",
             LogLevel = logLevel,
             Message = "Test dashboard message"
         };
@@ -833,7 +835,7 @@ public class DashboardResourceTests(ITestOutputHelper testOutputHelper)
 
         var config = new Dictionary<string, string?>
         {
-            [KnownConfigNames.AspNetCoreUrls] = "http://localhost;https://localhost",
+            [KnownAspNetCoreConfigNames.Urls] = "http://localhost;https://localhost",
             [KnownConfigNames.DashboardOtlpGrpcEndpointUrl] = "http://localhost"
         };
 

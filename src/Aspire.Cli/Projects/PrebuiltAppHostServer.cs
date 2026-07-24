@@ -13,6 +13,7 @@ using Aspire.Cli.DotNet;
 using Aspire.Cli.Layout;
 using Aspire.Cli.NuGet;
 using Aspire.Cli.Packaging;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
 using Aspire.Shared;
@@ -44,6 +45,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     private readonly IDotNetSdkInstaller _sdkInstaller;
     private readonly IPackagingService _packagingService;
     private readonly CliExecutionContext _executionContext;
+    private readonly IProcessExecutionFactory _processExecutionFactory;
+    private readonly IEnvironment _environment;
     private readonly ILogger _logger;
     private readonly BundleLayoutLease? _layoutLease;
     private readonly string _workingDirectory;
@@ -66,6 +69,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     /// <param name="sdkInstaller">The SDK installer for checking .NET SDK availability.</param>
     /// <param name="packagingService">The packaging service for channel resolution.</param>
     /// <param name="executionContext">The CLI execution context providing identity channel information.</param>
+    /// <param name="processExecutionFactory">The factory used to spawn and manage the AppHost server child process.</param>
+    /// <param name="environment">The environment abstraction for OS detection.</param>
     /// <param name="logger">The logger for diagnostic output.</param>
     /// <param name="layoutLease">The active bundle layout lease, if this server is running from a versioned bundle.</param>
     public PrebuiltAppHostServer(
@@ -77,6 +82,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         IDotNetSdkInstaller sdkInstaller,
         IPackagingService packagingService,
         CliExecutionContext executionContext,
+        IProcessExecutionFactory processExecutionFactory,
+        IEnvironment environment,
         ILogger logger,
         BundleLayoutLease? layoutLease = null)
     {
@@ -88,6 +95,8 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
         _sdkInstaller = sdkInstaller;
         _packagingService = packagingService;
         _executionContext = executionContext;
+        _processExecutionFactory = processExecutionFactory;
+        _environment = environment;
         _logger = logger;
         _layoutLease = layoutLease;
 
@@ -911,48 +920,69 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
     internal static string RedactSourceForDisplay(string source) => PackageSourceRedactor.RedactForDisplay(source);
 
     /// <inheritdoc />
-    public (string SocketPath, Process Process, OutputCollector OutputCollector) Run(
+    public async Task<AppHostServerRunResult> RunAsync(
         int hostPid,
-        IReadOnlyDictionary<string, string>? environmentVariables = null,
-        string[]? additionalArgs = null,
-        bool debug = false)
+        IReadOnlyDictionary<string, string>? environmentVariables,
+        string[]? additionalArgs,
+        bool debug,
+        AppHostServerRunControl? runControl)
     {
         var startInfo = CreateStartInfo(hostPid, environmentVariables, additionalArgs, debug);
-
-        var process = Process.Start(startInfo)!;
-
         var outputCollector = new OutputCollector();
-        process.OutputDataReceived += (_, e) =>
+
+        // The execution local is forward-referenced by the log callbacks so they can read the
+        // child's pid per line (ProcessInvocationOptions.StandardOutputCallback is line-only). The
+        // log level + prefix differ from the dotnet-based server (#16729); keeping them here keeps
+        // this server's per-line behavior in one place. ProcessExecution publishes the child pid before
+        // it starts stdout/stderr pumps so immediate output can read ProcessId.
+        IProcessExecution execution = null!;
+
+        void OnStdout(string line)
         {
-            if (e.Data is not null)
-            {
-                // Promoted from LogTrace to LogDebug so that apphost-server stdout reaches the
-                // CLI's on-disk log under the default file-logger filter (Debug). Previously
-                // these lines were dropped entirely, which made apphost-side warnings
-                // (for example, "LoaderExceptions" from the type-discovery path) invisible to
-                // anyone diagnosing a "no code generator found" / "no language support found"
-                // error. See https://github.com/microsoft/aspire/issues/16729.
-                _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", process.Id, e.Data);
-                outputCollector.AppendOutput(e.Data);
-            }
-        };
-        process.ErrorDataReceived += (_, e) =>
+            // Promoted from LogTrace to LogDebug so that apphost-server stdout reaches the
+            // CLI's on-disk log under the default file-logger filter (Debug). Previously
+            // these lines were dropped entirely, which made apphost-side warnings
+            // (for example, "LoaderExceptions" from the type-discovery path) invisible to
+            // anyone diagnosing a "no code generator found" / "no language support found"
+            // error. See https://github.com/microsoft/aspire/issues/16729.
+            _logger.LogDebug("PrebuiltAppHostServer({ProcessId}) stdout: {Line}", execution.ProcessId, line);
+            outputCollector.AppendOutput(line);
+        }
+
+        void OnStderr(string line)
         {
-            if (e.Data is not null)
-            {
-                // Promoted from LogTrace to LogInformation so that apphost-server stderr is
-                // visible at the default console log level (Information). Stderr is reserved
-                // for genuine problems in well-behaved server processes, so surfacing it
-                // by default is appropriate. See https://github.com/microsoft/aspire/issues/16729.
-                _logger.LogInformation("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", process.Id, e.Data);
-                outputCollector.AppendError(e.Data);
-            }
+            // Promoted from LogTrace to LogInformation so that apphost-server stderr is
+            // visible at the default console log level (Information). Stderr is reserved
+            // for genuine problems in well-behaved server processes, so surfacing it
+            // by default is appropriate. See https://github.com/microsoft/aspire/issues/16729.
+            _logger.LogInformation("PrebuiltAppHostServer({ProcessId}) stderr: {Line}", execution.ProcessId, line);
+            outputCollector.AppendError(line);
+        }
+
+        var options = new ProcessInvocationOptions
+        {
+            StandardOutputCallback = OnStdout,
+            StandardErrorCallback = OnStderr,
+            IsolateConsole = runControl?.IsolateConsole ?? false,
+            KillOnParentExit = runControl?.KillOnParentExit ?? false,
+            GracefulShutdownSignaler = runControl?.GracefulShutdownSignaler,
+            ShutdownService = runControl?.ShutdownService,
+            KillEntireProcessTreeOnCancel = !_environment.IsWindows(),
         };
 
-        process.BeginOutputReadLine();
-        process.BeginErrorReadLine();
+        execution = _processExecutionFactory.CreateExecution(startInfo, options);
 
-        return (_socketPath, process, outputCollector);
+        try
+        {
+            await execution.StartAsync(CancellationToken.None).ConfigureAwait(false);
+        }
+        catch
+        {
+            await execution.DisposeAsync().ConfigureAwait(false);
+            throw;
+        }
+
+        return new AppHostServerRunResult(_socketPath, outputCollector, execution);
     }
 
     internal ProcessStartInfo CreateStartInfo(
@@ -988,9 +1018,14 @@ internal sealed class PrebuiltAppHostServer : IAppHostServerProject, IDisposable
 
         // Configure environment
         startInfo.Environment["REMOTE_APP_HOST_SOCKET_PATH"] = _socketPath;
-        startInfo.Environment["REMOTE_APP_HOST_PID"] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
-        startInfo.Environment[KnownConfigNames.CliProcessId] = hostPid.ToString(System.Globalization.CultureInfo.InvariantCulture);
         startInfo.Environment[KnownConfigNames.CliLogFilePath] = _executionContext.LogFilePath;
+
+        // Stamp the launching CLI (hostPid) as the parent under both the RemoteHost and generic CLI
+        // key pairs. Resolve the start time once and pair it with the PID so the RemoteHost orphan
+        // detector verifies both and does not keep the server alive against a recycled PID.
+        var hostStartedUnix = ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(hostPid);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.RemoteAppHostProcessId, KnownConfigNames.RemoteAppHostProcessStarted);
+        OrphanDetectionEnvironment.Apply(startInfo.Environment, hostPid, hostStartedUnix, KnownConfigNames.CliProcessId, KnownConfigNames.CliProcessStarted);
 
         if (_integrationLibsPath is not null)
         {

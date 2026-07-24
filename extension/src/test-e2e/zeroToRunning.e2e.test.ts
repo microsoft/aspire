@@ -1,7 +1,7 @@
 import * as assert from 'assert';
 import * as fs from 'fs';
 import { getCommandInvocationCount, getTerminalCommandCount, waitForCommandOutcome, waitForDebugDashboardUrl, waitForDebugSessionStartup, waitForExtensionState, waitForHttpText, waitForNoDebugSessions, waitForRepositoryIdle, waitForSelectedWorkspaceAppHost, waitForTerminalCommand } from './helpers/assertions';
-import { addIntegrationPackageToAppHost, clearBreakpoints, createEmptyAppHostProject, executeE2eControlCommand, getGeneratedAppHostPath, removeGeneratedProject, removePrimaryAppHostFixture, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, writeWorkspaceAppHostConfigForPath } from './helpers/fixtures';
+import { addIntegrationPackageToAppHost, clearBreakpoints, createEmptyAppHostProject, executeE2eControlCommand, getGeneratedAppHostPath, getRunningAppHostPid, removeGeneratedProject, removePrimaryAppHostFixture, restoreWorkspaceAppHostConfig, restoreWorkspaceCliPath, runE2eTeardown, setCliUnavailableForE2E, setTerminalCommandExecutionSuppressedForE2E, stopAppHostIfRunning, waitForRunningAppHostPid, writeWorkspaceAppHostConfigForPath, writeWorkspaceSetting } from './helpers/fixtures';
 import { openAspireView, waitForEditorTitle, waitForTreeItem, waitForWorkbenchTextAfterIntegratedBrowserNavigation } from './helpers/vscode';
 
 suite('Aspire zero-to-running E2E', function () {
@@ -9,22 +9,30 @@ suite('Aspire zero-to-running E2E', function () {
 
     const projectName = 'ExtensionZeroToRunningApp';
     const appHostPath = getGeneratedAppHostPath(projectName);
+    let appHostPidBeforeStop: number | undefined;
+
+    setup(() => {
+        appHostPidBeforeStop = undefined;
+    });
 
     teardown(async () => {
         await runE2eTeardown([
+            () => appHostPidBeforeStop ??= getRunningAppHostPid(appHostPath),
             () => setCliUnavailableForE2E(false),
             () => setTerminalCommandExecutionSuppressedForE2E(false),
+            () => writeWorkspaceSetting('aspire.dashboardBrowser', undefined),
             () => restoreWorkspaceCliPath(),
             () => clearBreakpoints(),
             () => executeE2eControlCommand({ name: 'stopDebugging' }),
             () => stopAppHostIfRunning(appHostPath),
             () => waitForNoDebugSessions().catch(() => undefined),
             () => restoreWorkspaceAppHostConfig(),
-            () => removeGeneratedProject(projectName),
+            () => removeGeneratedProject(projectName, appHostPidBeforeStop),
         ], 'Zero-to-running E2E teardown failed.');
     });
 
     test('creates a new AppHost, adds a package, and debugs to the dashboard', async () => {
+        writeWorkspaceSetting('aspire.dashboardBrowser', 'integratedBrowser');
         removePrimaryAppHostFixture();
         let section = await openAspireView();
         await waitForRepositoryIdle();
@@ -96,6 +104,7 @@ suite('Aspire zero-to-running E2E', function () {
             assert.ok(browserText.includes('Resources') || browserText.includes(dashboardHost));
         }
 
+        appHostPidBeforeStop = await waitForRunningAppHostPid(appHostPath, 30000);
         await executeE2eControlCommand({ name: 'stopDebugging' });
         await waitForNoDebugSessions();
     });

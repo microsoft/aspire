@@ -211,8 +211,14 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<ILoggerProvider>(sp => sp.GetRequiredService<BackchannelLoggerProvider>());
         _innerBuilder.Logging.AddFilter("Microsoft.Hosting.Lifetime", LogLevel.Warning);
         _innerBuilder.Logging.AddFilter("Microsoft.AspNetCore.Server.Kestrel", LogLevel.Error);
-        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Error);
         _innerBuilder.Logging.AddFilter("Grpc.AspNetCore.Server.ServerCallHandler", LogLevel.Error);
+        // Allow warnings from Aspire's dashboard code. We control this code and want to be able to log warnings to help troubleshoot issues in the dashboard.
+        // For example, misconfigured icons from the apphost are logged as warnings, and we want those to be visible to users.
+        // The volume of logs from this category should be low, so it shouldn't cause too much noise.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard", LogLevel.Warning);
+        // Third-party dashboard categories (e.g. Microsoft.AspNetCore, Grpc) are routed under
+        // Aspire.Hosting.Dashboard.ThirdParty so they can be filtered with a single rule.
+        _innerBuilder.Logging.AddFilter("Aspire.Hosting.Dashboard.ThirdParty", LogLevel.Error);
 
         // This is to reduce log noise when we activate health checks for resources which may not yet be
         // fully initialized. For example a database which is not yet created.
@@ -408,6 +414,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
+        _innerBuilder.Services.AddSingleton<IFileUploadStore, Dashboard.FileUploadStore>();
 
         ConfigureHealthChecks();
 

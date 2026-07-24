@@ -7,6 +7,7 @@ using Aspire.Cli.Backchannel;
 using Aspire.Cli.Interaction;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
+using Aspire.Cli.Utils;
 using Microsoft.Extensions.Logging;
 
 namespace Aspire.Cli.Projects;
@@ -69,6 +70,9 @@ internal sealed class RunningInstanceManager
             if (stopped)
             {
                 _interactionService.DisplaySuccess(RunCommandStrings.RunningInstanceStopped);
+                // Clean up the socket file now that the instance has been stopped so a later command does not
+                // rediscover it and try to connect to a dead process (https://github.com/microsoft/aspire/issues/17587).
+                AppHostHelper.TryDeleteSocketFile(socketPath, _logger);
             }
             else
             {

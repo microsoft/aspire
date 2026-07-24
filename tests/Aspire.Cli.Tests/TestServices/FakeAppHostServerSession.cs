@@ -1,8 +1,8 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
-using System.Diagnostics;
 using Aspire.Cli.Commands.Sdk;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Utils;
 using Aspire.TypeSystem;
@@ -15,20 +15,75 @@ namespace Aspire.Cli.Tests.TestServices;
 /// </summary>
 internal sealed class FakeAppHostServerSession : IAppHostServerSession
 {
-    private readonly FakeAppHostRpcClient _rpcClient = new();
+    private readonly IAppHostRpcClient _rpcClient;
+    private readonly TaskCompletionSource<int> _exit = new();
 
-    public string SocketPath => "fake-socket";
+    public FakeAppHostServerSession(IAppHostRpcClient? rpcClient = null)
+    {
+        _rpcClient = rpcClient ?? new FakeAppHostRpcClient();
+    }
 
-    public Process ServerProcess { get; } = Process.GetCurrentProcess();
+    public Func<Task>? StartAsyncCallback { get; init; }
 
-    public OutputCollector Output { get; } = new();
+    public Func<CancellationToken, Task<IAppHostRpcClient>>? GetRpcClientAsyncCallback { get; init; }
 
-    public string AuthenticationToken => "fake-token";
+    public bool StartAsyncCalled { get; private set; }
+
+    public string AuthenticationToken { get; } = "fake-token";
+
+    public string? SocketPath { get; } = "fake.sock";
+
+    public OutputCollector? Output { get; } = new();
+
+    public bool? HasServerExited => _exit.Task.IsCompleted;
+
+    public int? TryGetServerExitCode() => _exit.Task.IsCompletedSuccessfully ? _exit.Task.Result : null;
+
+    public async Task StartAsync()
+    {
+        StartAsyncCalled = true;
+        if (StartAsyncCallback is not null)
+        {
+            await StartAsyncCallback();
+        }
+    }
+
+    public Task<int> WaitForExitAsync() => _exit.Task;
 
     public Task<IAppHostRpcClient> GetRpcClientAsync(CancellationToken cancellationToken)
-        => Task.FromResult<IAppHostRpcClient>(_rpcClient);
+        => GetRpcClientAsyncCallback is not null
+            ? GetRpcClientAsyncCallback(cancellationToken)
+            : Task.FromResult(_rpcClient);
 
-    public ValueTask DisposeAsync() => ValueTask.CompletedTask;
+    public ValueTask DisposeAsync()
+    {
+        _exit.TrySetResult(0);
+        return ValueTask.CompletedTask;
+    }
+}
+
+/// <summary>
+/// Fake <see cref="IAppHostServerSessionFactory"/> that hands back a <see cref="FakeAppHostServerSession"/>
+/// without building or launching a real AppHost server.
+/// </summary>
+internal sealed class FakeAppHostServerSessionFactory : IAppHostServerSessionFactory
+{
+    public IAppHostServerSession? Session { get; init; }
+
+    public Dictionary<string, string>? CapturedEnvironmentVariables { get; private set; }
+
+    public IAppHostServerSession Create(
+        IAppHostServerProject appHostServerProject,
+        Dictionary<string, string>? environmentVariables,
+        bool debug,
+        IProcessTreeGracefulShutdownSignaler? gracefulShutdownSignaler,
+        IGracefulShutdownWindow? shutdownService,
+        bool isolateConsole,
+        CancellationToken stopRequested)
+    {
+        CapturedEnvironmentVariables = environmentVariables is null ? null : new Dictionary<string, string>(environmentVariables);
+        return Session ?? new FakeAppHostServerSession();
+    }
 }
 
 /// <summary>

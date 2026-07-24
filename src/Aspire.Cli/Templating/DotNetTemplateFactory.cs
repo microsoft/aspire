@@ -3,7 +3,6 @@
 
 using System.CommandLine;
 using System.Globalization;
-using System.Runtime.InteropServices;
 using Aspire.Cli.Certificates;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
@@ -27,7 +26,8 @@ internal class DotNetTemplateFactory(
     IFeatures features,
     AspireCliTelemetry telemetry,
     ICliHostEnvironment hostEnvironment,
-    TemplateNuGetConfigService templateNuGetConfigService)
+    TemplateNuGetConfigService templateNuGetConfigService,
+    IEnvironment environment)
     : ITemplateFactory
 {
     // Template-specific options
@@ -105,8 +105,8 @@ internal class DotNetTemplateFactory(
         }
 
         // Fall back to checking for dotnet on the system PATH.
-        var dotnetFileName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dotnet.exe" : "dotnet";
-        var pathVariable = Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+        var dotnetFileName = environment.IsWindows() ? "dotnet.exe" : "dotnet";
+        var pathVariable = environment.GetEnvironmentVariable("PATH") ?? string.Empty;
 
         foreach (var directory in pathVariable.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries))
         {

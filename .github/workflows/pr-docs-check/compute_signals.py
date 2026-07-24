@@ -15,6 +15,11 @@ The agent reads the resulting file verbatim and treats
 Each triggered signal carries evidence (file path + matching diff
 fragment or PR-body snippet) so the audit trail is reproducible.
 
+Backport PRs are hard-excluded: when `excluded == true` (with
+`exclusion_reasons` recording why), the PR is out of scope for docs
+generation regardless of which signals fired, because a backport is
+documented against its original forward PR — see `detect_backport`.
+
 Usage
 -----
 
@@ -63,6 +68,7 @@ from typing import Callable, Pattern
 #   src/Aspire.Hosting.Redis/RedisContainerImageTags.cs   -> container_image_tags_file_changed
 #   src/Aspire.ProjectTemplates/templates/...             -> project_template_changed
 #   src/Aspire.Hosting.Analyzers/AppHostAnalyzer.cs       -> analyzer_source_changed
+#   src/Aspire.Hosting.CodeGeneration.Go/...              -> polyglot_code_generator_changed
 #   docs/list-of-diagnostics.md                           -> diagnostic_documentation_changed
 #   src/Aspire.Hosting/ApplicationModel/KnownDefaults.cs  -> defaults_or_constants_file_changed
 PATH_TRIGGERS: list[tuple[str, str, str]] = [
@@ -123,6 +129,23 @@ PATH_TRIGGERS: list[tuple[str, str, str]] = [
     # Roslyn analyzers — users see new build warnings/errors.
     ("analyzer_source_changed", "any",
      r"^src/Aspire\.(Hosting|AppHost)\.Analyzers/.+\.cs$"),
+    # Polyglot code generators. These emit the Go / TypeScript / Python /
+    # Rust / Java SDK source that AppHost authors write against, so the
+    # generated method and function signatures ARE the public API for
+    # polyglot AppHosts. Critically, no api/*.cs baseline tracks that
+    # generated output, so a signature-shape change (e.g. flattening a
+    # wrapper `options` DTO so it is passed directly) is a real — and
+    # potentially breaking — user-facing change that leaves no fingerprint
+    # on any of the C# API surfaces the other signals watch. It also need
+    # not touch the RPC payload at all, so the diff can look like a pure
+    # internal refactor. Watch both the per-language generator projects
+    # and the shared `src/Shared/CodeGeneration/` helpers they build on.
+    # (microsoft/aspire#18698: the Go options-DTO flattening breaking
+    # change classified as internal_refactor with signal_count == 0
+    # because nothing in the catalog matched these paths — the RPC payload
+    # was byte-identical and the PR carried no breaking wording or label.)
+    ("polyglot_code_generator_changed", "any",
+     r"^src/(Aspire\.Hosting\.CodeGeneration\.[^/]+|Shared/CodeGeneration)/.+$"),
     # Files whose name ends in `Defaults.cs` or `Constants.cs`
     # typically hold shipping default values (timeouts, retry
     # counts, well-known property names, image tags, etc.).
@@ -326,6 +349,105 @@ _ONLY_TEST_OR_BUILD_RE = re.compile(
 )
 
 
+# ============================================================
+# Exclusion: backport PRs
+# ============================================================
+# A backport PR ports an already-merged change onto a release branch. Its
+# user-facing documentation is authored against the original (forward) PR on
+# the default branch, so a backport must NEVER spawn its own aspire.dev docs
+# PR — even when it carries user-facing signals. Re-documenting a backport is
+# pure noise: a duplicate draft PR a human has to close.
+#
+# This matters because the workflow runs on release/* merges as well as main
+# (see `on:` in pr-docs-check.md), so without this guard every merged backport
+# would be analyzed and could draft a redundant docs PR.
+#
+# We detect both the `/backport` bot's PRs (.github/workflows/backport.yml)
+# and explicit/manual backports, which follow the same conventions. The matched
+# reason names are surfaced in `exclusion_reasons` for the audit trail:
+#
+#   reason name              strength  example match
+#   -----------------------  --------  ----------------------------------------
+#   head_branch_is_backport  strong    head.ref = "backport/pr-1234-to-release/13.3"
+#   title_release_prefix     strong    title    = "[release/13.3] Fix the thing"
+#   body_backport_marker     strong    body     = "Backport of #1234 to release/13.3"
+#   backport_label           strong    labels   = ["backport"]  (exact, not substring)
+#   base_branch_is_release   weak      base.ref = "release/13.3"
+#
+# A STRONG marker is positive evidence that the PR is a port of an
+# already-merged change, so any one of them is sufficient to exclude. The
+# `/backport` bot always sets all three of head/title/body (see backport.yml:
+# temp branch `backport/pr-<n>-to-<target>`, title `[%target%] %title%`, body
+# `Backport of #%n% to %target%`), so a real backport is always caught.
+#
+# `base_branch_is_release` is WEAK and is NOT sufficient on its own: the
+# workflow triggers on `release/*` merges (see `on:`), so a release base also
+# matches a direct release-only fix authored straight against `release/*` — and
+# that IS exactly the kind of user-facing change this workflow exists to catch.
+# Excluding on the base ref alone would silently skip docs for it. We therefore
+# only exclude when at least one strong marker is present; the release base is
+# still recorded alongside the strong markers when one fires, but never drives
+# exclusion by itself. (microsoft/aspire#18119 review.)
+_BACKPORT_BASE_RE = re.compile(r"^release/", re.IGNORECASE)
+_BACKPORT_HEAD_RE = re.compile(r"^backport/", re.IGNORECASE)
+_BACKPORT_TITLE_RE = re.compile(r"^\s*\[release/", re.IGNORECASE)
+# Anchor the body marker to the start of a line so ordinary prose like
+# "we should backport this later" does NOT trip it. The bot/explicit body
+# starts with "Backport of #<N> to release/X.Y".
+_BACKPORT_BODY_RE = re.compile(r"(?im)^\s*backport(?:ed|ing)?\s+of\s+#?\d+")
+
+# Exact label names that mark a completed backport. Matched case-insensitively
+# but as a WHOLE label, never a substring: `backport_label` is a strong marker
+# that excludes on its own, so a future intent-to-port label such as
+# `needs-backport` or `backport-candidate` — which flags a *forward* PR that
+# still needs documenting — must NOT be mistaken for a real backport.
+# (microsoft/aspire#18119 review.)
+_BACKPORT_LABELS = frozenset({"backport"})
+
+# Strong backport markers are positive evidence of a port; any one of them is
+# sufficient to exclude. `base_branch_is_release` is intentionally absent — it
+# is a weak indicator that only counts as supporting context, never on its own.
+_STRONG_BACKPORT_REASONS = frozenset({
+    "head_branch_is_backport",
+    "title_release_prefix",
+    "body_backport_marker",
+    "backport_label",
+})
+
+
+def detect_backport(pr: dict) -> list[str]:
+    """Return the backport reasons that matched (empty list means no markers).
+
+    Note: a non-empty list does not by itself mean the PR is excluded — see
+    `_STRONG_BACKPORT_REASONS`. `base_branch_is_release` can match a direct
+    release-only fix, so exclusion requires at least one strong marker.
+    """
+    reasons: list[str] = []
+    base_ref = ((pr.get("base") or {}).get("ref")) or ""
+    head_ref = ((pr.get("head") or {}).get("ref")) or ""
+    title = pr.get("title") or ""
+    body = pr.get("body") or ""
+    labels = [(lab.get("name") or "") for lab in (pr.get("labels") or [])]
+
+    if _BACKPORT_BASE_RE.match(base_ref):
+        reasons.append("base_branch_is_release")
+    if _BACKPORT_HEAD_RE.match(head_ref):
+        reasons.append("head_branch_is_backport")
+    if _BACKPORT_TITLE_RE.match(title):
+        reasons.append("title_release_prefix")
+    if _BACKPORT_BODY_RE.search(body):
+        reasons.append("body_backport_marker")
+    if any(lab.strip().lower() in _BACKPORT_LABELS for lab in labels):
+        reasons.append("backport_label")
+    return reasons
+
+
+# Meta signals that describe the change but must never gate doc generation:
+# `only_test_or_build_changes` is advisory; `is_backport` drives the exclusion.
+# Both are excluded from `triggered_signals`.
+_NON_GATING_SIGNALS = frozenset({"only_test_or_build_changes", "is_backport"})
+
+
 def _trim_hint(text: str, limit: int = 200) -> str:
     """Trim a single-line evidence hint so signals.json stays readable."""
     text = text.strip()
@@ -363,9 +485,27 @@ def compute_signals(pr: dict, files: list[dict]) -> dict:
             status = f.get("status") or ""
             if status_filter == "added" and status != "added":
                 continue
-            if regex.match(filename):
-                signals[signal_name] = True
-                record(signal_name, filename, f"path matched {path_regex}")
+            # GitHub reports a rename with the destination in `filename` and the
+            # source in `previous_filename` (status == "renamed"). Matching only
+            # `filename` misses *outbound* renames — a watched file moved to an
+            # untracked path — which would otherwise slip through as
+            # signal_count == 0 even though a status_filter of "any" is meant to
+            # include renames. Check the source path too so a generator source
+            # relocated out of the watched tree still gates. Inbound renames are
+            # already covered because the destination lands under `filename`.
+            # See https://docs.github.com/rest/pulls/pulls#list-pull-requests-files
+            candidate_paths = [filename]
+            if status == "renamed":
+                previous_filename = f.get("previous_filename") or ""
+                if previous_filename:
+                    candidate_paths.append(previous_filename)
+            for candidate in candidate_paths:
+                if regex.match(candidate):
+                    signals[signal_name] = True
+                    # Record the path that actually matched (the source for an
+                    # outbound rename) so the evidence points at the watched file.
+                    record(signal_name, candidate, f"path matched {path_regex}")
+                    break
 
     # ---- Group B: diff-content triggers ----
     #
@@ -466,18 +606,50 @@ def compute_signals(pr: dict, files: list[dict]) -> dict:
     else:
         signals["only_test_or_build_changes"] = False
 
-    # `only_test_or_build_changes` is advisory — exclude it from
-    # triggered_signals so it can't accidentally force docs_required.
+    # ---- Exclusion: backport PRs ----
+    # Detected from the PR's base/head branch, title, body, or labels. A
+    # backport is documented via its forward PR, so it is hard-excluded below.
+    # Exclusion requires at least one STRONG marker (head/title/body/label); a
+    # release base alone is a weak indicator that also matches a direct
+    # release-only fix, so it never excludes by itself (see
+    # `_STRONG_BACKPORT_REASONS`).
+    backport_reasons = detect_backport(pr)
+    has_strong_backport_marker = any(
+        reason in _STRONG_BACKPORT_REASONS for reason in backport_reasons
+    )
+    signals["is_backport"] = has_strong_backport_marker
+
+    # `only_test_or_build_changes` and `is_backport` are meta signals —
+    # exclude them from triggered_signals so they can't be mistaken for
+    # gating signals (the former is advisory; the latter is an exclusion).
     gating_signals = [
         name for name, v in signals.items()
-        if v and name != "only_test_or_build_changes"
+        if v and name not in _NON_GATING_SIGNALS
     ]
+
+    excluded = has_strong_backport_marker
+    if excluded:
+        # A backport's docs are handled against its forward PR on the default
+        # branch, so never recommend a separate docs PR for it — even when
+        # gating signals fired. The triggered signals are still reported for
+        # the audit trail; the prompt's Step 5 exclusion branch explains the
+        # skip and cites `exclusion_reasons`.
+        recommendation = "docs_optional"
+    else:
+        recommendation = "docs_required" if gating_signals else "docs_optional"
 
     return {
         "source_pr_number": int(pr.get("number") or 0),
         "triggered_signals": sorted(gating_signals),
         "signal_count": len(gating_signals),
-        "recommendation": "docs_required" if gating_signals else "docs_optional",
+        "recommendation": recommendation,
+        # `excluded` overrides `recommendation`: when true the PR is out of
+        # scope for docs generation (e.g. a backport) and the agent must skip.
+        "excluded": excluded,
+        # Report all matched reasons when excluded (including the weak release
+        # base, as supporting context); empty when a release base matched but no
+        # strong marker did, since that PR is NOT excluded.
+        "exclusion_reasons": backport_reasons if excluded else [],
         "signals": signals,
         # Evidence is only emitted for triggered signals to keep the
         # file small and to avoid confusing the agent with empty arrays.

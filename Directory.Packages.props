@@ -65,6 +65,7 @@
     <PackageVersion Include="Azure.Provisioning.Storage" Version="1.1.2" />
     <PackageVersion Include="Azure.Provisioning.WebPubSub" Version="1.1.0" />
     <PackageVersion Include="Azure.ResourceManager.Authorization" Version="1.1.6" />
+    <PackageVersion Include="Azure.ResourceManager.KeyVault" Version="1.4.0" />
     <PackageVersion Include="Azure.ResourceManager.Resources" Version="1.11.2" />
     <!-- AspNetCore.HealthChecks dependencies (3rd party packages) -->
     <PackageVersion Include="AspNetCore.HealthChecks.ApplicationStatus" Version="9.0.0" />
@@ -129,14 +130,14 @@
     <PackageVersion Include="NATS.Net" Version="2.8.0" />
     <PackageVersion Include="NCrontab.Signed" Version="3.4.0" />
     <PackageVersion Include="Npgsql.DependencyInjection" Version="10.0.2" />
-    <PackageVersion Include="OpenAI" Version="2.10.0" />
+    <PackageVersion Include="OpenAI" Version="2.12.0" />
     <PackageVersion Include="Oracle.ManagedDataAccess.OpenTelemetry" Version="23.26.200" />
     <PackageVersion Include="Polly.Core" Version="8.6.6" />
     <PackageVersion Include="Polly.Extensions" Version="8.6.6" />
     <PackageVersion Include="Pomelo.EntityFrameworkCore.MySql" Version="9.0.0" />
     <PackageVersion Include="Qdrant.Client" Version="1.18.1" />
     <PackageVersion Include="RabbitMQ.Client" Version="7.2.1" />
-    <PackageVersion Include="Spectre.Console" Version="0.57.0" />
+    <PackageVersion Include="Spectre.Console" Version="0.57.2" />
     <PackageVersion Include="StackExchange.Redis" Version="2.13.1" />
     <PackageVersion Include="System.IO.Hashing" Version="10.0.8" />
     <PackageVersion Include="Yarp.ReverseProxy" Version="2.3.0" />
@@ -193,7 +194,7 @@
     <PackageVersion Include="Microsoft.Azure.Functions.Worker.Extensions.DurableTask.AzureManaged" Version="1.8.0" />
     <!-- playground apps dependencies for javascript -->
     <!-- Pinned versions for Component Governance - Remove when root dependencies are updated -->
-    <PackageVersion Include="Azure.Core" Version="1.55.0" />
+    <PackageVersion Include="Azure.Core" Version="1.57.0" />
     <PackageVersion Include="Azure.Identity" Version="1.21.0" />
     <!-- https://github.com/Azure/azure-cosmos-dotnet-v3/pull/3313 -->
     <PackageVersion Include="Newtonsoft.Json" Version="13.0.4" />

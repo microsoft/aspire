@@ -222,6 +222,26 @@
         <target state="new">Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</target>
         <note>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</note>
       </trans-unit>
+      <trans-unit id="DevCertsInstallOpenSslCleanAndTrustFixFormat">
+        <source>Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</source>
+        <target state="new">Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</target>
+        <note>{0} is the openssl command/package name, {1} is the aspire certs clean command, {2} is the aspire certs trust command (not localizable)</note>
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilDetails">
+        <source>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</source>
+        <target state="new">Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilFix">
+        <source>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</source>
+        <target state="new">Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsMissingCertUtilMessage">
+        <source>certutil is not available; browser certificate trust may be incomplete</source>
+        <target state="new">certutil is not available; browser certificate trust may be incomplete</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DevCertsMultipleNoneTrustedDetailsFormat">
         <source>Found certificates: {0}. Having multiple certificates can cause confusion.</source>
         <target state="new">Found certificates: {0}. Having multiple certificates can cause confusion.</target>
@@ -272,6 +292,36 @@
         <target state="new">HTTPS development certificate has an older version ({0})</target>
         <note />
       </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheMissingCurrentCertificateMessage">
+        <source>OpenSSL HTTPS development certificate cache is missing the current certificate</source>
+        <target state="new">OpenSSL HTTPS development certificate cache is missing the current certificate</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheMissingDetailsFormat">
+        <source>The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
+        <target state="new">The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheMissingHashLinkDetailsFormat">
+        <source>The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</source>
+        <target state="new">The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</target>
+        <note>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</note>
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheMissingHashLinkMessage">
+        <source>OpenSSL HTTPS development certificate cache is missing subject-hash links</source>
+        <target state="new">OpenSSL HTTPS development certificate cache is missing subject-hash links</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheUnreadableFilesDetailsFormat">
+        <source>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</source>
+        <target state="new">Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</target>
+        <note>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</note>
+      </trans-unit>
+      <trans-unit id="DevCertsOpenSslCacheUnreadableMessage">
+        <source>OpenSSL HTTPS development certificate cache contains unreadable certificate files</source>
+        <target state="new">OpenSSL HTTPS development certificate cache contains unreadable certificate files</target>
+        <note />
+      </trans-unit>
       <trans-unit id="DevCertsPartiallyTrustedDetailsFormat">
         <source>The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</source>
         <target state="new">The certificate is in the trusted store, but SSL_CERT_DIR is not configured to include '{0}'. Some applications may not trust the certificate. 'aspire run' will configure this automatically.</target>
@@ -305,6 +355,11 @@
       <trans-unit id="DevCertsTrustedMessage">
         <source>HTTPS development certificate is trusted</source>
         <target state="new">HTTPS development certificate is trusted</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="DevelopmentToolsCategoryHeader">
+        <source>Development Tools</source>
+        <target state="new">Development Tools</target>
         <note />
       </trans-unit>
       <trans-unit id="EnvironmentCategoryHeader">
@@ -344,10 +399,22 @@ The legacy file continues to work — this is a non-blocking warning.</target>
         <target state="new">Legacy .aspire/settings.json detected at {0}</target>
         <note>{0} is the full path to the legacy settings file.</note>
       </trans-unit>
+      <trans-unit id="LegacyTypeScriptAppHostMessageFormat">
+        <source>Legacy 'apphost.ts' layout detected at {0}</source>
+        <target state="new">Legacy 'apphost.ts' layout detected at {0}</target>
+        <note>{0} is the full path to the legacy apphost.ts file.</note>
+      </trans-unit>
       <trans-unit id="OperatingSystemMessageFormat">
         <source>Operating system: {0}</source>
         <target state="new">Operating system: {0}</target>
         <note>{0} is the operating system display name and version, for example "Windows 10.0.22631", "macOS 26.0", or "Linux Ubuntu 24.04".</note>
+      </trans-unit>
+      <trans-unit id="PendingMigrationFix">
+        <source>Run 'aspire update --migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</source>
+        <target state="new">Run 'aspire update --migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</target>
+        <note />
       </trans-unit>
       <trans-unit id="SdkCategoryHeader">
         <source>.NET SDK</source>
@@ -397,6 +464,21 @@ The legacy file continues to work — this is a non-blocking warning.</target>
       <trans-unit id="VersionUnknown">
         <source>unknown</source>
         <target state="new">unknown</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionInstalledMessage">
+        <source>Aspire extension for VS Code is installed</source>
+        <target state="new">Aspire extension for VS Code is installed</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionMissingFix">
+        <source>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</source>
+        <target state="new">Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="VsCodeExtensionMissingMessage">
+        <source>VS Code is installed, but the Aspire extension is not installed</source>
+        <target state="new">VS Code is installed, but the Aspire extension is not installed</target>
         <note />
       </trans-unit>
     </body>

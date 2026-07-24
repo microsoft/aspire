@@ -2,6 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.Json;
+using System.Xml;
+using System.Xml.Linq;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Bundles;
 using Aspire.Cli.Certificates;
@@ -10,6 +12,7 @@ using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
@@ -42,10 +45,19 @@ internal sealed class DotNetAppHostProject : IAppHostProject
     private readonly Program.CliLoggingOptions _loggingOptions;
     private readonly IAppHostInfoResolver _appHostInfoResolver;
     private readonly IConfigurationService _configurationService;
+    private readonly IGracefulShutdownWindow _shutdownService;
+    private readonly IProcessTreeGracefulShutdownSignaler _gracefulShutdownSignaler;
     private readonly CliExecutionContext _executionContext;
+    private readonly IEnvironment _environment;
 
     private static readonly string[] s_detectionPatterns = ["*.csproj", "*.fsproj", "*.vbproj", "apphost.cs"];
     private const string DirectLaunchDisabledConfigKey = "dotnetAppHostDirectLaunchDisabled";
+
+    private const string AspireAppHostSdkName = "Aspire.AppHost.Sdk";
+    private const string IsAspireHostProperty = "IsAspireHost";
+    private const string ProjectAppHostSourceFileName = "AppHost.cs";
+    private const string DirectoryBuildPropsName = "Directory.Build.props";
+    private const string DirectoryBuildTargetsName = "Directory.Build.targets";
 
     internal static IReadOnlyCollection<string> ProjectExtensions { get; } =
         Array.AsReadOnly([".csproj", ".fsproj", ".vbproj"]);
@@ -67,13 +79,16 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         IProjectUpdater projectUpdater,
         IDotNetSdkInstaller sdkInstaller,
         IBundleService bundleService,
+        IEnvironment environment,
         ILogger<DotNetAppHostProject> logger,
         Diagnostics.FileLoggerProvider fileLoggerProvider,
         Program.CliLoggingOptions loggingOptions,
         IAppHostInfoResolver appHostInfoResolver,
         IConfigurationService configurationService,
+        IGracefulShutdownWindow shutdownService,
+        IProcessTreeGracefulShutdownSignaler gracefulShutdownSignaler,
         CliExecutionContext executionContext,
-        TimeProvider? timeProvider = null)
+        TimeProvider timeProvider)
     {
         _runner = runner;
         _interactionService = interactionService;
@@ -84,13 +99,16 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         _projectUpdater = projectUpdater;
         _sdkInstaller = sdkInstaller;
         _bundleService = bundleService;
+        _environment = environment;
         _logger = logger;
         _fileLoggerProvider = fileLoggerProvider;
         _loggingOptions = loggingOptions;
         _appHostInfoResolver = appHostInfoResolver;
         _configurationService = configurationService;
+        _shutdownService = shutdownService;
+        _gracefulShutdownSignaler = gracefulShutdownSignaler;
         _executionContext = executionContext;
-        _timeProvider = timeProvider ?? TimeProvider.System;
+        _timeProvider = timeProvider;
         _runningInstanceManager = new RunningInstanceManager(_logger, _interactionService, _timeProvider, _profilingTelemetry);
     }
 
@@ -168,6 +186,161 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         return false;
     }
 
+    internal static bool IsLikelyAppHost(FileInfo projectFile)
+    {
+        if (!TryLoadProjectRoot(projectFile.FullName, out var root) || root is null)
+        {
+            // The file is missing, unreadable, or not well-formed XML. Fall back to the name heuristic so a
+            // broken AppHost project is still treated as a candidate (and can later surface as unbuildable).
+            return MatchesAppHostNameHeuristics(projectFile);
+        }
+
+        // 1) An Aspire AppHost marker declared inline in the project file itself.
+        if (ContainsAppHostMarker(root))
+        {
+            return true;
+        }
+
+        // 2) A co-located Directory.Build.props/.targets can promote an otherwise ordinary-looking project to
+        //    an Aspire AppHost during MSBuild evaluation (for example by setting
+        //    <IsAspireHost>true</IsAspireHost> or importing the Aspire.AppHost.Sdk). Tests in this repo do
+        //    exactly this. Those files are parsed as XML and matched on element names, so a real *setter*
+        //    element is detected while a mere *consumer* of the property
+        //    (Condition="'$(IsAspireHost)' == 'true'") is ignored. A loose substring match would instead
+        //    over-promote every sibling that only reads the property.
+        if (DirectoryContainsAppHostMarker(projectFile.Directory))
+        {
+            return true;
+        }
+
+        // No inline or co-located Aspire marker. Fall back to the name heuristic.
+        return MatchesAppHostNameHeuristics(projectFile);
+    }
+
+    private static bool TryLoadProjectRoot(string path, out XElement? root)
+    {
+        try
+        {
+            root = XDocument.Load(path).Root;
+            return true;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or XmlException)
+        {
+            root = null;
+            return false;
+        }
+    }
+
+    private static bool DirectoryContainsAppHostMarker(DirectoryInfo? directory)
+    {
+        if (directory is null)
+        {
+            return false;
+        }
+
+        foreach (var fileName in new[] { DirectoryBuildPropsName, DirectoryBuildTargetsName })
+        {
+            var filePath = Path.Combine(directory.FullName, fileName);
+            if (!File.Exists(filePath))
+            {
+                continue;
+            }
+
+            if (TryLoadProjectRoot(filePath, out var root) && root is not null && ContainsAppHostMarker(root))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool ContainsAppHostMarker(XElement root)
+    {
+        // Only MSBuild project files declare Aspire markers, so ignore any other well-formed XML whose root
+        // is not <Project>. Compare on Name.LocalName so projects using the legacy MSBuild XML namespace
+        // (xmlns="http://schemas.microsoft.com/developer/msbuild/2003") are still recognized.
+        if (!root.Name.LocalName.Equals("Project", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        // 1) SDK-style reference declared via the Sdk attribute on <Project>, which may list multiple
+        //    SDKs with optional versions, e.g.:
+        //      <Project Sdk="Microsoft.NET.Sdk;Aspire.AppHost.Sdk/9.0.0">
+        var sdkAttribute = root.Attribute("Sdk")?.Value;
+        if (sdkAttribute is not null && ContainsAspireAppHostSdk(sdkAttribute))
+        {
+            return true;
+        }
+
+        // The remaining checks compare on Name.LocalName so that projects declaring the legacy MSBuild
+        // XML namespace (xmlns="http://schemas.microsoft.com/developer/msbuild/2003") are matched the
+        // same as SDK-style projects that omit it.
+
+        // 2) Nested SDK reference element, e.g.:
+        //      <Sdk Name="Aspire.AppHost.Sdk" Version="9.0.0" />
+        var hasSdkElement = root.Descendants()
+            .Any(e => e.Name.LocalName.Equals("Sdk", StringComparison.Ordinal)
+                && string.Equals(e.Attribute("Name")?.Value, AspireAppHostSdkName, StringComparison.OrdinalIgnoreCase));
+        if (hasSdkElement)
+        {
+            return true;
+        }
+
+        // 3) Explicit <IsAspireHost>true</IsAspireHost> property element. The Aspire.AppHost.Sdk sets this
+        //    during evaluation, but it can also appear literally in a project or build file. Matching on the
+        //    element (rather than a substring) means a consumer condition such as
+        //    Condition="'$(IsAspireHost)' == 'true'" is correctly not treated as a marker.
+        return root.Descendants()
+            .Any(e => e.Name.LocalName.Equals(IsAspireHostProperty, StringComparison.Ordinal)
+                && string.Equals(e.Value.Trim(), "true", StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool MatchesAppHostNameHeuristics(FileInfo projectFile)
+    {
+        // Convention 1: the project file is named like an AppHost, e.g. "MyApp.AppHost.csproj" or
+        // "AppHost.csproj". Compare on the name without extension so both "Foo.AppHost" and "AppHost" match.
+        if (Path.GetFileNameWithoutExtension(projectFile.Name).EndsWith("AppHost", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Convention 2: a sibling AppHost.cs source file lives next to the project. Project-based AppHosts
+        // created by the templates (e.g. `aspire new`) ship an AppHost.cs (PascalCase) with the builder
+        // entrypoint, so its presence is a strong signal even when the csproj carries no inline marker.
+        // (The lowercase apphost.cs is the separate single-file AppHost convention, which has no csproj.)
+        //
+        // Match the file name case-insensitively by enumerating the directory rather than calling
+        // File.Exists with a fixed-case name: File.Exists is case-sensitive on Linux/macOS and would miss
+        // the PascalCase AppHost.cs there. This preserves the behavior of the previous discovery heuristic.
+        var directory = projectFile.Directory;
+        return directory is not null
+            && directory.EnumerateFiles("*.cs", SearchOption.TopDirectoryOnly)
+                .Any(file => file.Name.Equals(ProjectAppHostSourceFileName, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private static bool ContainsAspireAppHostSdk(string sdkAttribute)
+    {
+        // SDK references resolve through NuGet, whose package IDs are case-insensitive, so a project could
+        // legitimately write the SDK name in any casing (e.g. "aspire.apphost.sdk") and still build as an
+        // AppHost. Match case-insensitively so this cheap pre-check agrees with MSBuild rather than wrongly
+        // skipping a real AppHost over a casing difference.
+        var sdks = sdkAttribute.Split(';');
+        foreach (var sdk in sdks)
+        {
+            var trimmedSdk = sdk.Trim();
+
+            if (trimmedSdk.Equals(AspireAppHostSdkName, StringComparison.OrdinalIgnoreCase) ||
+                trimmedSdk.StartsWith(AspireAppHostSdkName + "/", StringComparison.OrdinalIgnoreCase))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     // ═══════════════════════════════════════════════════════════════
     // CREATION
     // ═══════════════════════════════════════════════════════════════
@@ -203,6 +376,13 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return new AppHostValidationResult(IsValid: IsValidSingleFileAppHost(appHostFile));
         }
 
+        // Fast path that mitigates the MSBuild "evaluation storm": cheaply reject project-file
+        // candidates that are not likely AppHosts before paying for MSBuild evaluation below.
+        if (!IsLikelyAppHost(appHostFile))
+        {
+            return new AppHostValidationResult(IsValid: false);
+        }
+
         // The resolver owns the cache/MSBuild fallback so validation and later run/publish
         // decisions share a single source of truth for AppHost project metadata.
         using var cliBundleLease = await AcquireCliBundleLayoutAsync(cancellationToken);
@@ -213,12 +393,22 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return new AppHostValidationResult(IsValid: true, AspireHostingVersion: information.AspireHostingVersion);
         }
 
-        // Check if it's possibly an unbuildable AppHost (has the right name pattern but couldn't be validated)
-        var isPossiblyUnbuildable = IsPossiblyUnbuildableAppHost(appHostFile);
+        // MSBuild evaluated the project cleanly (exit code 0) but it is not an Aspire host. That is an
+        // authoritative "no": for example a Microsoft.NET.Sdk.Web project that merely sits next to an
+        // apphost.cs and so passed the name heuristic above. Reject it quietly rather than surfacing a
+        // spurious possibly-unbuildable warning for a project that evaluates fine and simply isn't an AppHost.
+        if (information.ExitCode == 0)
+        {
+            return new AppHostValidationResult(IsValid: false);
+        }
 
+        // MSBuild failed to evaluate the project (non-zero exit). The cheap classifier judged it a likely
+        // AppHost (an inline/co-located marker or the name heuristic), so surface it as a possibly-unbuildable
+        // AppHost (kept as a candidate with a warning) rather than silently discarding what may be a real
+        // AppHost that currently fails to build.
         return new AppHostValidationResult(
             IsValid: false,
-            IsPossiblyUnbuildable: isPossiblyUnbuildable);
+            IsPossiblyUnbuildable: true);
     }
 
     /// <inheritdoc />
@@ -232,15 +422,6 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         return information.ExitCode == 0 && information.IsAspireHost
             ? information.AspireHostingVersion
             : null;
-    }
-
-    private static bool IsPossiblyUnbuildableAppHost(FileInfo projectFile)
-    {
-        var fileNameSuggestsAppHost = projectFile.Name.EndsWith("AppHost.csproj", StringComparison.OrdinalIgnoreCase);
-        var folderContainsAppHostCSharpFile = projectFile.Directory!
-            .EnumerateFiles("*", SearchOption.TopDirectoryOnly)
-            .Any(f => f.Name.Equals("AppHost.cs", StringComparison.OrdinalIgnoreCase));
-        return fileNameSuggestsAppHost || folderContainsAppHostCSharpFile;
     }
 
     /// <inheritdoc />
@@ -340,7 +521,17 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             StandardOutputCallback = runOutputCollector.AppendOutput,
             StandardErrorCallback = runOutputCollector.AppendError,
             StartDebugSession = context.StartDebugSession,
-            Debug = context.Debug
+            Debug = context.Debug,
+            KillEntireProcessTreeOnCancel = ShouldKillEntireProcessTreeOnCancel(_environment.IsWindows()),
+            // Run path opts into the shared shutdown ladder so pure .NET AppHosts get the
+            // same graceful-then-tree-kill semantics as TypeScript AppHosts (which already
+            // route through AppHostServerSession/ProcessGuestLauncher). Build, restore,
+            // package add, layout, and other short-lived invocations leave these unset so
+            // they continue to use the shared ladder's force-kill mode.
+            IsolateConsole = true,
+            KillOnParentExit = true,
+            GracefulShutdownSignaler = _gracefulShutdownSignaler,
+            ShutdownService = _shutdownService,
         };
 
         // The backchannel completion source is the contract with RunCommand
@@ -351,6 +542,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
         {
             ConfigureSingleFileRunEnvironment(effectiveAppHostFile, env, args: context.UnmatchedTokens);
         }
+
+        env[KnownConfigNames.DcpWorkloadId] = AppHostWorkloadId.Create(effectiveAppHostFile);
 
         var directRun = !isSingleFileAppHost && !watch && !isExtensionHost
             ? await TryCreateDirectRunSpecAsync(effectiveAppHostFile, env, context.UnmatchedTokens, runOptions.NoLaunchProfile, cancellationToken)
@@ -404,6 +597,8 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             }
         }
     }
+
+    internal static bool ShouldKillEntireProcessTreeOnCancel(bool isWindows) => !isWindows;
 
     private async Task EnsureDevCertificatesTrustedAsync(AppHostProjectContext context, Dictionary<string, string> env, CancellationToken cancellationToken)
     {
@@ -780,7 +975,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
             if (!string.IsNullOrWhiteSpace(profile.ApplicationUrl))
             {
-                env["ASPNETCORE_URLS"] = profile.ApplicationUrl;
+                env[KnownAspNetCoreConfigNames.Urls] = profile.ApplicationUrl;
             }
 
             if (profile.EnvironmentVariables is not null)
@@ -1035,7 +1230,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
             return false;
         }
 
-        env["ASPNETCORE_URLS"] = profile.ApplicationUrl;
+        env[KnownAspNetCoreConfigNames.Urls] = profile.ApplicationUrl;
 
         if (profile.EnvironmentVariables is not null)
         {
@@ -1055,7 +1250,7 @@ internal sealed class DotNetAppHostProject : IAppHostProject
 
     private static void ApplyDefaultSingleFileEndpoints(IDictionary<string, string> env)
     {
-        env["ASPNETCORE_URLS"] = "https://localhost:17193;http://localhost:15069";
+        env[KnownAspNetCoreConfigNames.Urls] = "https://localhost:17193;http://localhost:15069";
         env["ASPIRE_DASHBOARD_OTLP_ENDPOINT_URL"] = "https://localhost:21293";
         env["ASPIRE_RESOURCE_SERVICE_ENDPOINT_URL"] = "https://localhost:22086";
     }

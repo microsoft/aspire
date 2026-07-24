@@ -1,7 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as vscode from 'vscode';
-import { AspireTerminalProvider, shellArg } from '../utils/AspireTerminalProvider';
+import { AspireTerminalProvider, ShellArg, shellArg } from '../utils/AspireTerminalProvider';
 import { ResourceState, HealthStatus, StateStyle } from '../editor/resourceConstants';
 import { compareResourceCommands, getParameterValueDescription, getResourceStateDescription } from '../utils/resourceDisplay';
 import {
@@ -47,17 +47,22 @@ import {
     ResourceCommandArgumentInputJson,
     ResourceJson,
     ViewMode,
+    isAppHostPathUnderFolder,
     isMatchingAppHostPath,
     shortenPaths,
     ResourceCommandJson,
 } from './AppHostDataRepository';
 import { collectResourceCommandArguments, ResourceCommandArgumentValue } from './ResourceCommandArguments';
 import { createResourceCommandArgumentLoader } from './ResourceCommandArgumentsLoader';
+import { executeResourceCommand as executeResourceCommandWithUi, type ResourceCommandExecutionOutcome } from './resourceCommandExecution';
 import { AppHostLaunchService } from '../services/AppHostLaunchService';
+import { isCommandCancellation } from '../utils/telemetry';
 
 type TreeElement = AppHostItem | EndpointUrlItem | ResourcesGroupItem | ResourceItem | WorkspaceResourcesItem | WorkspaceAppHostItem | WorkspaceAppHostsGroupItem | RunningAppHostsGroupItem | WorkspaceAppHostActionItem | WorkspaceAppHostPathItem | HealthChecksGroupItem | HealthCheckItem | LogFileItem | CommandsGroupItem | ResourceCommandItem;
 
 const integratedBrowserOpenCommand = 'workbench.action.browser.open';
+const terminalEnabledPropertyName = 'terminal.enabled';
+const terminalReplicaIndexPropertyName = 'terminal.replicaIndex';
 
 function sortResources(resources: ResourceJson[]): ResourceJson[] {
     return [...resources].sort((a, b) => {
@@ -420,12 +425,26 @@ export function getResourceContextValue(resource: ResourceJson): string {
     if (hasEnabledCommand(commands, 'restart') || hasEnabledCommand(commands, 'resource-restart')) {
         parts.push('canRestart');
     }
+    if (isTerminalEnabled(resource)) {
+        parts.push('canOpenTerminal');
+    }
     return parts.join(':');
 }
 
 function hasEnabledCommand(commands: Record<string, ResourceCommandJson> | null | undefined, commandName: string): boolean {
     const command = commands?.[commandName];
     return isCommandVisibleToUi(command) && isEnabledCommand(command);
+}
+
+function isTerminalEnabled(resource: ResourceJson): boolean {
+    const value = resource.properties?.[terminalEnabledPropertyName];
+    return value?.trim().toLowerCase() === 'true';
+}
+
+function getTerminalReplicaIndex(resource: ResourceJson): string | undefined {
+    const value = resource.properties?.[terminalReplicaIndexPropertyName];
+    const trimmedValue = value?.trim();
+    return trimmedValue && trimmedValue.length > 0 ? trimmedValue : undefined;
 }
 
 export function getResourceIcon(resource: ResourceJson): vscode.ThemeIcon {
@@ -672,8 +691,9 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
     }
 
     private _trackStoppingAppHost(appHostPath: string): void {
-        const existingKey = this._findStoppingAppHostKey(appHostPath);
-        const key = existingKey ?? getComparisonKey(path.normalize(path.resolve(appHostPath)));
+        const resolvedAppHostPath = this._findKnownRunningAppHostPath(appHostPath) ?? appHostPath;
+        const existingKey = this._findStoppingAppHostKey(resolvedAppHostPath);
+        const key = existingKey ?? getComparisonKey(path.normalize(path.resolve(resolvedAppHostPath)));
         const existingTimeout = this._stoppingAppHostTimeouts.get(key);
         if (existingTimeout) {
             clearTimeout(existingTimeout);
@@ -692,6 +712,39 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
 
     private _isStoppingAppHost(appHostPath: string | undefined): boolean {
         return this._findStoppingAppHostKey(appHostPath) !== undefined;
+    }
+
+    private _isKnownRunningAppHost(appHostPath: string | undefined): boolean {
+        if (!appHostPath) {
+            return false;
+        }
+
+        return this._findKnownRunningAppHostPath(appHostPath) !== undefined;
+    }
+
+    private _findKnownRunningAppHostPath(appHostPath: string): string | undefined {
+        const runningAppHostPaths = this._getKnownRunningAppHostPaths();
+        const exactMatch = runningAppHostPaths.find(runningPath => isMatchingAppHostPath(runningPath, appHostPath));
+        if (exactMatch) {
+            return exactMatch;
+        }
+
+        const folderMatches = runningAppHostPaths.filter(runningPath => isAppHostPathUnderFolder(runningPath, appHostPath));
+        return folderMatches.length === 1 ? folderMatches[0] : undefined;
+    }
+
+    private _getKnownRunningAppHostPaths(): string[] {
+        const paths: string[] = [];
+        for (const appHostPath of [
+            this._repository.workspaceAppHost?.appHostPath,
+            ...this._repository.appHosts.map(appHost => appHost.appHostPath),
+        ]) {
+            if (appHostPath && !paths.some(existingPath => isSamePath(existingPath, appHostPath))) {
+                paths.push(appHostPath);
+            }
+        }
+
+        return paths;
     }
 
     private _findStoppingAppHostKey(appHostPath: string | undefined): string | undefined {
@@ -938,9 +991,13 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             const workspaceResources = [...this._repository.workspaceResources];
             const workspaceAppHost = this._repository.workspaceAppHost;
             const workspaceCandidatePaths = this._repository.workspaceAppHostCandidatePaths ?? [];
+            const runningAppHostPaths = this._repository.appHosts.map(appHost => appHost.appHostPath);
             const workspaceAppHostPaths = workspaceCandidatePaths.length > 0
-                ? workspaceCandidatePaths
-                : this._repository.appHosts.map(appHost => appHost.appHostPath);
+                ? [
+                    ...workspaceCandidatePaths,
+                    ...runningAppHostPaths.filter(runningPath => !workspaceCandidatePaths.some(candidatePath => isMatchingAppHostPath(runningPath, candidatePath))),
+                ]
+                : runningAppHostPaths;
 
             if (workspaceAppHostPaths.length > 1 || (workspaceResources.length === 0 && !workspaceAppHost)) {
                 const selectedAppHostPath = workspaceAppHost?.appHostPath ?? this._repository.workspaceAppHostPath;
@@ -995,14 +1052,30 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
                 }
 
                 if (workspaceItems.length > 0 && runningItems.length > 0) {
-                    // Wrap running items in a sibling group so both sets share the same
-                    // indentation depth and the visual hierarchy reads symmetrically.
-                    const runningGroup = new RunningAppHostsGroupItem(runningItems);
-                    return [runningGroup, new WorkspaceAppHostsGroupItem(workspaceItems)];
+                    // Each set (running / idle) only gets a "(N)" grouping header when it
+                    // contains two or more AppHosts. A lone AppHost on either side is surfaced
+                    // directly as a top-level sibling instead of being wrapped in a "(1)" node
+                    // that adds nesting and a redundant click target without value.
+                    // See https://github.com/microsoft/aspire/issues/18420.
+                    // A single running AppHost is a flat WorkspaceResourcesItem (resources shown
+                    // inline), matching the pure single-running case below.
+                    const runningChild = runningItems.length === 1
+                        ? runningItems[0]
+                        : new RunningAppHostsGroupItem(runningItems);
+                    const workspaceChild = workspaceItems.length === 1
+                        ? workspaceItems[0]
+                        : new WorkspaceAppHostsGroupItem(workspaceItems);
+                    return [runningChild, workspaceChild];
                 }
-                // When nothing is running, still wrap idle items in the group so they
-                // render under the "Workspace AppHosts" header. This keeps the tree shape
-                // consistent with the mixed case and avoids loose root-level items.
+                // For a single idle AppHost (nothing running), skip the "Workspace AppHosts"
+                // grouping node and surface the AppHost directly at the root, for the same
+                // reason as the mixed case above (mirrors VS Code's SCM view for a single repo).
+                // See https://github.com/microsoft/aspire/issues/18420.
+                if (workspaceItems.length === 1) {
+                    return [workspaceItems[0]];
+                }
+                // When two or more idle AppHosts exist, wrap them under the "Workspace AppHosts"
+                // header so the tree shape stays consistent and avoids loose root-level items.
                 if (workspaceItems.length > 0) {
                     return [new WorkspaceAppHostsGroupItem(workspaceItems)];
                 }
@@ -1295,9 +1368,27 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         try {
             await this._launchService.launch(appHostPath, 'run', noDebug);
         } catch (err) {
-            vscode.window.showErrorMessage(errorMessage(err));
+            if (!isCommandCancellation(err)) {
+                vscode.window.showErrorMessage(errorMessage(err));
+            }
             throw err;
         }
+    }
+
+    notifyAppHostStopping(appHostPath: string): void {
+        if (!appHostPath) {
+            return;
+        }
+
+        this._markAppHostStopping(appHostPath);
+        this._repository.requestAppHostStopRefresh?.(appHostPath);
+    }
+
+    private _markAppHostStopping(appHostPath: string): void {
+        if (this._isKnownRunningAppHost(appHostPath)) {
+            this._trackStoppingAppHost(appHostPath);
+        }
+        this._onDidChangeTreeData.fire();
     }
 
     async stopAppHost(element: AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem): Promise<void> {
@@ -1307,10 +1398,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        this._trackStoppingAppHost(appHostPath);
-        this._onDidChangeTreeData.fire();
+        this._markAppHostStopping(appHostPath);
         try {
             await this._terminalProvider.sendAspireCommandToAspireTerminal(['stop', '--apphost', shellArg(appHostPath)]);
+            this._repository.requestAppHostStopRefresh?.(appHostPath);
         } catch (err) {
             const stoppingKey = this._findStoppingAppHostKey(appHostPath);
             if (stoppingKey) {
@@ -1346,16 +1437,16 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         }
     }
 
-    async stopResource(element: ResourceItem): Promise<void> {
-        await this._runResourceCommand(element, 'stop');
+    async stopResource(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
+        return await this._runResourceCommand(element, 'stop');
     }
 
-    async startResource(element: ResourceItem): Promise<void> {
-        await this._runResourceCommand(element, 'start');
+    async startResource(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
+        return await this._runResourceCommand(element, 'start');
     }
 
-    async restartResource(element: ResourceItem): Promise<void> {
-        await this._runResourceCommand(element, 'restart');
+    async restartResource(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
+        return await this._runResourceCommand(element, 'restart');
     }
 
     async viewResourceLogs(element: ResourceItem): Promise<void> {
@@ -1376,7 +1467,22 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         await this._terminalProvider.sendAspireCommandToAspireTerminal(['logs', shellArg(resourceName), '--apphost', shellArg(appHost.appHostPath)]);
     }
 
-    async executeResourceCommand(element: ResourceItem): Promise<void> {
+    async openResourceTerminal(element: ResourceItem): Promise<void> {
+        const command: Array<string | ShellArg> = ['terminal', 'attach', shellArg(element.resource.name)];
+        const appHostPath = this._getAppHostPathForResource(element);
+        if (appHostPath) {
+            command.push('--apphost', shellArg(appHostPath));
+        }
+
+        const replicaIndex = getTerminalReplicaIndex(element.resource);
+        if (replicaIndex) {
+            command.push('--replica', shellArg(replicaIndex));
+        }
+
+        await this._terminalProvider.sendAspireCommandToAspireTerminal(command, true, undefined, { terminalTarget: 'editor' });
+    }
+
+    async executeResourceCommand(element: ResourceItem): Promise<ResourceCommandExecutionOutcome | void> {
         const commands = element.resource.commands;
         if (!commands || Object.keys(commands).length === 0) {
             vscode.window.showInformationMessage(noCommandsAvailable);
@@ -1413,10 +1519,10 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             throw new vscode.CancellationError();
         }
 
-        await this._runResourceCommand(element, selected.label, commandArguments.args, commandArguments.containsSecret);
+        return await this._runResourceCommand(element, selected.label, commandArguments.args);
     }
 
-    async executeResourceCommandItem(element: ResourceCommandItem): Promise<void> {
+    async executeResourceCommandItem(element: ResourceCommandItem): Promise<ResourceCommandExecutionOutcome | void> {
         const commandName = element.commandName;
         const command = element.commandJson;
         const resourceItem = element.resourceItem;
@@ -1434,7 +1540,7 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
             return;
         }
 
-        await this._runResourceCommand(resourceItem, commandName, commandArguments.args, commandArguments.containsSecret);
+        return await this._runResourceCommand(resourceItem, commandName, commandArguments.args);
     }
 
     async copyAppHostPath(element: AppHostItem | WorkspaceResourcesItem | WorkspaceAppHostItem): Promise<void> {
@@ -1502,21 +1608,47 @@ export class AspireAppHostTreeProvider implements vscode.TreeDataProvider<TreeEl
         await vscode.commands.executeCommand('simpleBrowser.show', element.url);
     }
 
-    private async _runResourceCommand(element: ResourceItem, commandName: string, additionalArgs?: string[], redactAdditionalArgs = false): Promise<void> {
-        if (this._repository.viewMode === 'workspace') {
-            const appHostPath = this._getAppHostPathForResource(element);
-            const command = appHostPath
-                ? ['resource', shellArg(element.resource.name), shellArg(commandName), '--apphost', shellArg(appHostPath)]
-                : ['resource', shellArg(element.resource.name), shellArg(commandName)];
-            await this._terminalProvider.sendAspireCommandToAspireTerminal(command, true, additionalArgs, { redactAdditionalArgs });
+    private async _runResourceCommand(element: ResourceItem, commandName: string, additionalArgs?: string[]): Promise<ResourceCommandExecutionOutcome | void> {
+        // Execute resource commands over the hidden CLI backchannel instead of typing into the
+        // visible Aspire terminal. The CLI runs the command non-interactively, and any returned
+        // value is surfaced in a read-only editor via showResourceCommandOutput. additionalArgs are
+        // forwarded verbatim (they already carry the `--` delimiter and prompted values); secret
+        // values are not echoed to a terminal, and the spawn diagnostics log redacts tokens after
+        // the `--` delimiter, so no separate redaction flag is needed here.
+        const appHostPath = this._repository.viewMode === 'workspace'
+            ? this._getAppHostPathForResource(element)
+            : this._findAppHostForResource(element)?.appHostPath;
+
+        if (this._repository.viewMode !== 'workspace' && appHostPath === undefined) {
             return;
         }
 
-        const appHost = this._findAppHostForResource(element);
-        if (!appHost) {
-            return;
-        }
-        await this._terminalProvider.sendAspireCommandToAspireTerminal(['resource', shellArg(element.resource.name), shellArg(commandName), '--apphost', shellArg(appHost.appHostPath)], true, additionalArgs, { redactAdditionalArgs });
+        return await executeResourceCommandWithUi(
+            this._repository,
+            (resourceName, command, content, outputAppHostPath) => this.showResourceCommandOutput(resourceName, command, content, outputAppHostPath),
+            {
+                resourceName: element.resource.name,
+                displayName: element.resource.displayName ?? element.resource.name,
+                commandName,
+                appHostPath: appHostPath ?? undefined,
+                additionalArgs,
+            });
+    }
+
+    async showResourceCommandOutput(resourceName: string, commandName: string, content: string, appHostPath?: string): Promise<void> {
+        // Reuse the read-only aspire-source virtual document provider so returned command values open
+        // in a normal editor the user can read, search, and copy from, without a save prompt.
+        const safeName = `${resourceName}-${commandName}`.replace(/[^A-Za-z0-9._-]+/g, '_');
+        const uri = vscode.Uri.from({
+            scheme: 'aspire-source',
+            path: `${safeName}-output.txt`,
+            query: appHostPath === undefined ? undefined : `appHostPath=${encodeURIComponent(path.normalize(appHostPath))}`,
+        });
+        this._ensureContentProviderRegistered();
+        this._appHostSourceContents.set(uri.toString(), content);
+        this._onDidChangeContent.fire(uri);
+        const document = await vscode.workspace.openTextDocument(uri);
+        await vscode.window.showTextDocument(document, { preview: true });
     }
 
     private async _loadResourceCommandArguments(element: ResourceItem, commandName: string, values: readonly ResourceCommandArgumentValue[]): Promise<ResourceCommandArgumentInputJson[] | undefined> {

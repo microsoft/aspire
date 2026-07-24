@@ -452,6 +452,9 @@ type PipelineStepFactoryContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pi
  */
 type PipelineSummaryHandle = Handle<'Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary'>;
 
+/** Provides context to the work callback of a progress interaction. */
+type ProgressContextHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ProgressContext'>;
+
 /** Various properties to modify the behavior of the project resource. */
 type ProjectResourceOptionsHandle = Handle<'Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions'>;
 
@@ -835,6 +838,35 @@ export interface CommandOptions {
     isHighlighted?: boolean;
     /** A callback that is used to update the command state. The callback is executed when the command's resource snapshot is updated. If a callback isn't specified, the command is always enabled. */
     updateState?: (arg: UpdateCommandStateContext) => Promise<ResourceCommandState>;
+    /**
+     * Gets or sets options for displaying a progress dialog while the command is executing.
+     *
+     * When `Message` is not `null` or empty, a progress dialog
+     * is automatically shown while the command callback executes. The dialog closes when the command completes.
+     * When `null`, or when `Message` is `null` or empty,
+     * no progress dialog is shown and the command executes without visual feedback.
+     */
+    progress?: CommandProgressOptions;
+}
+
+/** Options for displaying a progress dialog while a command is executing. */
+export interface CommandProgressOptions {
+    /**
+     * Gets or sets the message to display in the progress dialog.
+     *
+     * When not `null` or empty, a progress dialog is displayed while the command executes.
+     */
+    message?: string | null;
+    /** Gets or sets the optional title of the progress dialog. */
+    title?: string | null;
+    /**
+     * Gets or sets a value indicating whether the cancel button is hidden in the progress dialog.
+     *
+     * When `false` (the default), a cancel button is shown. Clicking it cancels the command via the
+     * `CancellationToken`.
+     * When `true`, no cancel button is displayed and the user cannot cancel the operation from the dialog.
+     */
+    hideCancelButton?: boolean;
 }
 
 /** Represents a value produced by a command. */
@@ -899,6 +931,12 @@ export interface CreateInteractionInputOptions {
     disabled?: boolean | null;
     /** Gets or sets the maximum length for text inputs. */
     maxLength?: number | null;
+    /** Gets or sets the maximum file size in bytes for file inputs. */
+    maxFileSize?: number | null;
+    /** Gets or sets a value indicating whether multiple files can be selected. Only used by file inputs. */
+    allowMultipleFiles?: boolean | null;
+    /** Gets or sets the file type filter for file inputs. Uses the same format as the HTML accept attribute. */
+    fileFilter?: string | null;
 }
 
 /** Options controlling when a dynamic-loading callback runs. */
@@ -1024,6 +1062,8 @@ export interface HttpsCertificateExecutionConfigurationContext {
     certificatePath?: ReferenceExpression;
     /** Expression that will resolve to the path of the server authentication certificate key in PEM format. For containers this will be a path inside the container. */
     keyPath?: ReferenceExpression;
+    /** Expression that will resolve to the path of the server authentication certificate and key in a combined PEM file. For containers this will be a path inside the container. */
+    certificateWithKeyPath?: ReferenceExpression;
     /** Expression that will resolve to the path of the server authentication certificate in PFX format. For containers this will be a path inside the container. */
     pfxPath?: ReferenceExpression;
 }
@@ -1040,6 +1080,8 @@ export interface HttpsCertificateExecutionConfigurationExportData {
     pfxPathExpression?: string;
     /** Indicates whether the key path was referenced. */
     isKeyPathReferenced?: boolean;
+    /** Indicates whether the key path was referenced. */
+    isCertificateWithKeyPathReferenced?: boolean;
     /** Indicates whether the PFX path was referenced. */
     isPfxPathReferenced?: boolean;
     /** The certificate password, if any. */
@@ -1122,6 +1164,16 @@ export interface InteractionNotificationOptions {
     linkText?: string | null;
     /** Gets or sets the URL for the link in the notification. */
     linkUrl?: string | null;
+}
+
+/** Options for progress dialog prompts. */
+export interface InteractionProgressOptions {
+    /** Gets or sets the primary button text (e.g. "Cancel"). */
+    primaryButtonText?: string | null;
+    /** Gets or sets a value indicating whether Markdown in the message is rendered. */
+    enableMessageMarkdown?: boolean | null;
+    /** Gets or sets an optional asynchronous work callback to execute while the progress dialog is displayed. When provided, the progress dialog remains open while this callback executes and closes automatically when the callback completes. */
+    work?: (arg: ProgressContext) => Promise<void>;
 }
 
 /** Options for customizing parameter inputs from polyglot app hosts. */
@@ -1577,6 +1629,12 @@ export interface GetStatusAsyncOptions {
 
 export interface GetValueAsyncOptions {
     /** The cancellation token. */
+    cancellationToken?: AbortSignal | CancellationToken;
+}
+
+export interface PromptProgressOptions {
+    title?: string;
+    options?: InteractionProgressOptions;
     cancellationToken?: AbortSignal | CancellationToken;
 }
 
@@ -5981,6 +6039,8 @@ export interface HttpsCertificateConfigurationCallbackAnnotationContext {
     certificatePath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to the private key for the certificate. */
     keyPath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to the certificate and key concatenated together in PEM format. */
+    certificateWithKeyPath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to a PFX file for the key pair. */
     pfxPath(): Promise<ReferenceExpression>;
     /** Gets the `CancellationToken` that can be used to cancel the operation. */
@@ -6000,6 +6060,8 @@ export interface HttpsCertificateConfigurationCallbackAnnotationContextPromise e
     certificatePath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to the private key for the certificate. */
     keyPath(): Promise<ReferenceExpression>;
+    /** A value provider that will resolve to a path to the certificate and key concatenated together in PEM format. */
+    certificateWithKeyPath(): Promise<ReferenceExpression>;
     /** A value provider that will resolve to a path to a PFX file for the key pair. */
     pfxPath(): Promise<ReferenceExpression>;
     /** Gets the `CancellationToken` that can be used to cancel the operation. */
@@ -6053,6 +6115,13 @@ class HttpsCertificateConfigurationCallbackAnnotationContextImpl implements Http
     async keyPath(): Promise<ReferenceExpression> {
         return await this._client.invokeCapability<ReferenceExpression>(
             'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.keyPath',
+            { context: this._handle }
+        );
+    }
+
+    async certificateWithKeyPath(): Promise<ReferenceExpression> {
+        return await this._client.invokeCapability<ReferenceExpression>(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath',
             { context: this._handle }
         );
     }
@@ -6125,6 +6194,10 @@ class HttpsCertificateConfigurationCallbackAnnotationContextPromiseImpl implemen
 
     keyPath(): Promise<ReferenceExpression> {
         return this._promise.then(obj => obj.keyPath());
+    }
+
+    certificateWithKeyPath(): Promise<ReferenceExpression> {
+        return this._promise.then(obj => obj.certificateWithKeyPath());
     }
 
     pfxPath(): Promise<ReferenceExpression> {
@@ -8257,6 +8330,64 @@ class PipelineSummaryPromiseImpl implements PipelineSummaryPromise {
 
     addMarkdown(key: string, markdownString: string): PipelineSummaryPromise {
         return new PipelineSummaryPromiseImpl(this._promise.then(obj => obj.addMarkdown(key, markdownString)), this._client);
+    }
+
+}
+
+// ============================================================================
+// ProgressContext
+// ============================================================================
+
+/** Provides context to the work callback of a progress interaction. */
+export interface ProgressContext {
+    toJSON(): MarshalledHandle;
+    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+export interface ProgressContextPromise extends PromiseLike<ProgressContext> {
+    /** Gets the `CancellationToken` that is triggered when the user clicks the cancel button or the operation is externally canceled. */
+    cancellationToken(): Promise<CancellationToken>;
+}
+
+// ============================================================================
+// ProgressContextImpl
+// ============================================================================
+
+/** Provides context to the work callback of a progress interaction. */
+class ProgressContextImpl implements ProgressContext {
+    constructor(private _handle: ProgressContextHandle, private _client: AspireClientRpc) {}
+
+    /** Serialize for JSON-RPC transport */
+    toJSON(): MarshalledHandle { return this._handle.toJSON(); }
+
+    async cancellationToken(): Promise<CancellationToken> {
+        const result = await this._client.invokeCapability<string | null>(
+            'Aspire.Hosting/ProgressContext.cancellationToken',
+            { context: this._handle }
+        );
+        return CancellationToken.fromValue(result);
+    }
+
+}
+
+/**
+ * Thenable wrapper for ProgressContext that enables fluent chaining.
+ */
+class ProgressContextPromiseImpl implements ProgressContextPromise {
+    constructor(private _promise: Promise<ProgressContext>, private _client: AspireClientRpc, track = true) {
+        if (track) { _client.trackPromise(_promise); }
+    }
+
+    then<TResult1 = ProgressContext, TResult2 = never>(
+        onfulfilled?: ((value: ProgressContext) => TResult1 | PromiseLike<TResult1>) | null,
+        onrejected?: ((reason: unknown) => TResult2 | PromiseLike<TResult2>) | null
+    ): PromiseLike<TResult1 | TResult2> {
+        return this._promise.then(onfulfilled, onrejected);
+    }
+
+    cancellationToken(): Promise<CancellationToken> {
+        return this._promise.then(obj => obj.cancellationToken());
     }
 
 }
@@ -12600,6 +12731,11 @@ export interface InteractionService {
      */
     promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
     /**
+     * Displays a progress dialog with an indeterminate progress indicator.
+     * @param options Additional options.
+     */
+    promptProgress(message: string, options?: PromptProgressOptions): Promise<BoolInteractionResult>;
+    /**
      * Prompts the user for a single input.
      * @param options Additional options.
      */
@@ -12629,6 +12765,11 @@ export interface InteractionService {
      * @param options Additional options.
      */
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a file input.
+     * @param options Additional options.
+     */
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
     /**
      * Creates a choice input that selects from a list of options.
      * @param name The name of the input.
@@ -12659,6 +12800,11 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
      */
     promptNotification(title: string, message: string, options?: InteractionNotificationOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<BoolInteractionResult>;
     /**
+     * Displays a progress dialog with an indeterminate progress indicator.
+     * @param options Additional options.
+     */
+    promptProgress(message: string, options?: PromptProgressOptions): Promise<BoolInteractionResult>;
+    /**
      * Prompts the user for a single input.
      * @param options Additional options.
      */
@@ -12688,6 +12834,11 @@ export interface InteractionServicePromise extends PromiseLike<InteractionServic
      * @param options Additional options.
      */
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
+    /**
+     * Creates a file input.
+     * @param options Additional options.
+     */
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise;
     /**
      * Creates a choice input that selects from a list of options.
      * @param name The name of the input.
@@ -12757,6 +12908,37 @@ class InteractionServiceImpl implements InteractionService {
         if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
         return await this._client.invokeCapability<BoolInteractionResult>(
             'Aspire.Hosting/promptNotification',
+            rpcArgs
+        );
+    }
+
+    /**
+     * Displays a progress dialog with an indeterminate progress indicator.
+     * @param optionsBag Additional options.
+     */
+    async promptProgress(message: string, optionsBag?: PromptProgressOptions): Promise<BoolInteractionResult> {
+        const title = optionsBag?.title;
+        const options = optionsBag?.options;
+        const cancellationToken = optionsBag?.cancellationToken;
+        const __optionsForRpc = options === undefined || options === null ? options : { ...options };
+        if (__optionsForRpc !== undefined && __optionsForRpc !== null) {
+            const __optionsForRpcData = __optionsForRpc as Record<string, unknown>;
+            const ____optionsForRpcWork = __optionsForRpc.work;
+            if (____optionsForRpcWork !== undefined) {
+                const ____optionsForRpcWorkId = ____optionsForRpcWork ? registerCallback(async (argData: unknown) => {
+                    const argHandle = wrapIfHandle(argData) as ProgressContextHandle;
+                    const arg = new ProgressContextImpl(argHandle, this._client);
+                    await ____optionsForRpcWork(arg);
+                }) : undefined;
+                __optionsForRpcData["work"] = ____optionsForRpcWorkId;
+            }
+        }
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, message };
+        if (title !== undefined) rpcArgs.title = title;
+        if (options !== undefined) rpcArgs.options = __optionsForRpc;
+        if (cancellationToken !== undefined) rpcArgs.cancellationToken = CancellationToken.fromValue(cancellationToken);
+        return await this._client.invokeCapability<BoolInteractionResult>(
+            'Aspire.Hosting/promptProgress',
             rpcArgs
         );
     }
@@ -12899,6 +13081,25 @@ class InteractionServiceImpl implements InteractionService {
     }
 
     /** @internal */
+    async _createFileInputInternal(name: string, options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
+        const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
+        if (options !== undefined) rpcArgs.options = options;
+        const result = await this._client.invokeCapability<InteractionInputBuilderHandle>(
+            'Aspire.Hosting/createFileInput',
+            rpcArgs
+        );
+        return new InteractionInputBuilderImpl(result, this._client);
+    }
+
+    /**
+     * Creates a file input.
+     * @param options Additional options.
+     */
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._createFileInputInternal(name, options), this._client);
+    }
+
+    /** @internal */
     async _createChoiceInputInternal(name: string, choices?: InteractionChoiceOption[], options?: CreateInteractionInputOptions): Promise<InteractionInputBuilder> {
         const rpcArgs: Record<string, unknown> = { interactionService: this._handle, name };
         if (choices !== undefined) rpcArgs.choices = choices;
@@ -12954,6 +13155,10 @@ class InteractionServicePromiseImpl implements InteractionServicePromise {
         return this._promise.then(obj => obj.promptNotification(title, message, options, cancellationToken));
     }
 
+    promptProgress(message: string, options?: PromptProgressOptions): Promise<BoolInteractionResult> {
+        return this._promise.then(obj => obj.promptProgress(message, options));
+    }
+
     promptInput(title: string, message: string, input: Awaitable<InteractionInputBuilder>, options?: InteractionInputsDialogOptions, cancellationToken?: AbortSignal | CancellationToken): Promise<InputInteractionResult> {
         return this._promise.then(obj => obj.promptInput(title, message, input, options, cancellationToken));
     }
@@ -12976,6 +13181,10 @@ class InteractionServicePromiseImpl implements InteractionServicePromise {
 
     createNumberInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
         return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createNumberInput(name, options)), this._client);
+    }
+
+    createFileInput(name: string, options?: CreateInteractionInputOptions): InteractionInputBuilderPromise {
+        return new InteractionInputBuilderPromiseImpl(this._promise.then(obj => obj.createFileInput(name, options)), this._client);
     }
 
     createChoiceInput(name: string, options?: CreateChoiceInputOptions): InteractionInputBuilderPromise {
@@ -61047,6 +61256,7 @@ registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep', (h
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext', (handle, client) => new PipelineStepContextImpl(handle as PipelineStepContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext', (handle, client) => new PipelineStepFactoryContextImpl(handle as PipelineStepFactoryContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary', (handle, client) => new PipelineSummaryImpl(handle as PipelineSummaryHandle, client));
+registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProgressContext', (handle, client) => new ProgressContextImpl(handle as ProgressContextHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions', (handle, client) => new ProjectResourceOptionsImpl(handle as ProjectResourceOptionsHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder', (handle, client) => new ReferenceExpressionBuilderImpl(handle as ReferenceExpressionBuilderHandle, client));
 registerHandleWrapper('Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext', (handle, client) => new RequiredCommandValidationContextImpl(handle as RequiredCommandValidationContextHandle, client));

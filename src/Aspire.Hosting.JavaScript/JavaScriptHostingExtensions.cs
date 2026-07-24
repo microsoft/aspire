@@ -5,6 +5,7 @@
 #pragma warning disable ASPIREPIPELINES001
 #pragma warning disable ASPIRECERTIFICATES001
 #pragma warning disable ASPIREEXTENSION001
+#pragma warning disable ASPIRECOMMAND001
 
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
@@ -33,23 +34,34 @@ public static class JavaScriptHostingExtensions
     private const string DefaultJavaScriptRunScriptName = "dev";
     private const string DefaultYarpImage = Yarp.YarpContainerImageTags.Registry + "/" + Yarp.YarpContainerImageTags.Image + ":" + Yarp.YarpContainerImageTags.Tag;
 
+    // Help links surfaced when a required command is missing, mapped to a command by ResolveHelpLink.
+    private const string NodeHelpLink = "https://nodejs.org/en/download/";
+    private const string NpmHelpLink = "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm";
+    private const string BunHelpLink = "https://bun.sh/docs/installation";
+    private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
+    private const string PnpmHelpLink = "https://pnpm.io/installation";
+
+    // npm/yarn/pnpm are Node CLIs: whether they install packages or launch the app's run script, they spawn
+    // node, so node must be on PATH too. bun is a full Node replacement and needs no node.
+    private static readonly string[] s_nodeBasedPackageManagers = ["npm", "yarn", "pnpm"];
+
     // This is the order of config files that Vite will look for by default
     // See https://github.com/vitejs/vite/blob/main/packages/vite/src/node/constants.ts#L97
     private static readonly string[] s_defaultConfigFiles = ["vite.config.js", "vite.config.mjs", "vite.config.ts", "vite.config.cjs", "vite.config.mts", "vite.config.cts"];
 
     // The token to replace with the relative path to the user's Vite config file
-    private const string AspireViteRelativeConfigToken = "%%ASPIRE_VITE_RELATIVE_CONFIG_PATH%%";
+    private const string AspireViteConfigPathToken = "%%ASPIRE_VITE_CONFIG_PATH%%";
 
     // The token to replace with the absolute path to the original Vite config file
     private const string AspireViteAbsoluteConfigToken = "%%ASPIRE_VITE_ABSOLUTE_CONFIG_PATH%%";
 
     // A template Vite config that loads an existing config provides a default https configuration if one isn't present
     // Uses environment variables to configure a TLS certificate in PFX format and its password if specified
-    // The value of %%ASPIRE_VITE_RELATIVE_CONFIG_PATH%% is replaced with the path to the user's actual Vite config file at runtime
+    // The value of %%ASPIRE_VITE_CONFIG_PATH%% is replaced with the relative path to the user's actual Vite config file at runtime
     // Vite only supports module style config files, so we don't have to handle commonjs style imports or exports here
     private const string AspireViteConfig = """
     import { defineConfig } from 'vite'
-    import config from '%%ASPIRE_VITE_RELATIVE_CONFIG_PATH%%'
+    import config from '%%ASPIRE_VITE_CONFIG_PATH%%'
 
     console.log('Applying Aspire specific Vite configuration for HTTPS support.')
     console.log('Found original Vite configuration at "%%ASPIRE_VITE_ABSOLUTE_CONFIG_PATH%%"')
@@ -288,7 +300,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithNodeDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("node", "https://nodejs.org/en/download/")
+            .WithRequiredCommandsFromPackageManager("node")
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
             .WithCertificateTrustConfiguration((ctx) =>
             {
@@ -316,6 +328,91 @@ public static class JavaScriptHostingExtensions
 
                 return Task.CompletedTask;
             });
+
+    // Registers a hook that materializes the resource's required commands just before start. The annotations are
+    // added on BeforeStartEvent in every execution context, but they only have an effect in run mode, where
+    // RequiredCommandValidationEventingSubscriber validates them against the local PATH on
+    // BeforeResourceStartedEvent (which fires after BeforeStartEvent). Resolving them here - rather than eagerly
+    // as each With* method runs - lets the package-manager selection settle first, so a later selection fully
+    // replaces an earlier one without having to remove stale RequiredCommandAnnotations.
+    // See https://github.com/microsoft/aspire/issues/18625.
+    //
+    // runtimeCommand is the executable the app was created to run with (node for
+    // AddNodeApp/AddViteApp/AddJavaScriptApp, bun for AddBunApp); it launches the app whenever the app is not
+    // routed through a package-manager run script.
+    private static IResourceBuilder<TResource> WithRequiredCommandsFromPackageManager<TResource>(
+        this IResourceBuilder<TResource> builder,
+        string runtimeCommand) where TResource : JavaScriptAppResource
+    {
+        var resource = builder.Resource;
+        builder.ApplicationBuilder.OnBeforeStart((_, _) =>
+        {
+            foreach (var (command, helpLink) in ResolveRequiredCommands(resource, runtimeCommand))
+            {
+                // Idempotent: skip commands already present so an unexpected second publish of BeforeStartEvent
+                // cannot add duplicate RequiredCommandAnnotations for the same command.
+                if (!resource.Annotations.OfType<RequiredCommandAnnotation>().Any(a => string.Equals(a.Command, command, StringComparison.Ordinal)))
+                {
+                    resource.Annotations.Add(new RequiredCommandAnnotation(command) { HelpLink = helpLink });
+                }
+            }
+
+            return Task.CompletedTask;
+        });
+
+        return builder;
+    }
+
+    // Resolves the executables that must be on PATH for the app to install and run, from how the app is actually
+    // launched. Two independent axes:
+    //   - Runtime: apps that launch via a named package-manager run script (npm run dev / bun run dev) - which is
+    //     every AddViteApp/AddJavaScriptApp, plus AddNodeApp/AddBunApp when WithRunScript is used - are launched by
+    //     the package manager, so the package manager is the runtime. Apps that invoke a script file directly
+    //     (AddNodeApp "server.js" / AddBunApp "server.ts" with no run script) are launched by their fixed runtime
+    //     (node/bun) regardless of any package manager.
+    //   - Install: a selected package manager also runs at install time, so it must be on PATH even when a
+    //     different runtime launches the app - e.g. AddNodeApp(...).WithBun() runs `node server.js` but installs
+    //     with `bun`, so both node and bun are required.
+    // npm/yarn/pnpm additionally require node (they are Node CLIs); bun does not. This projection is what fixes
+    // https://github.com/microsoft/aspire/issues/18625 (AddViteApp(...).WithBun() requires only bun) without
+    // dropping the runtime for direct-script apps.
+    private static IEnumerable<(string Command, string? HelpLink)> ResolveRequiredCommands(IResource resource, string runtimeCommand)
+    {
+        resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager);
+
+        // A package manager only replaces the runtime when the app launches through a run script; otherwise the
+        // runtime executes the script file directly.
+        var launchesViaRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
+        var runCommand = launchesViaRunScript && packageManager is not null
+            ? packageManager.ExecutableName
+            : runtimeCommand;
+
+        var commands = new HashSet<string>(StringComparer.Ordinal) { runCommand };
+
+        if (packageManager is not null)
+        {
+            commands.Add(packageManager.ExecutableName);
+        }
+
+        if (commands.Overlaps(s_nodeBasedPackageManagers))
+        {
+            commands.Add("node");
+        }
+
+        return commands.Select(static command => (command, ResolveHelpLink(command)));
+    }
+
+    // Maps a required executable to the install/help link surfaced when the command is missing on PATH.
+    private static string? ResolveHelpLink(string command) => command switch
+    {
+        "node" => NodeHelpLink,
+        "npm" => NpmHelpLink,
+        "bun" => BunHelpLink,
+        "yarn" => YarnHelpLink,
+        "pnpm" => PnpmHelpLink,
+        // Unknown/custom package manager: no specific install help link.
+        _ => null,
+    };
 
     // The default Docker image used for AddBunApp build and runtime stages.
     // Pinned to the major version tag to keep generated Dockerfiles deterministic
@@ -630,7 +727,7 @@ public static class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithBunDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("bun", "https://bun.sh/docs/installation")
+            .WithRequiredCommandsFromPackageManager("bun")
             // Bun honors NODE_ENV for module resolution and runtime mode the same way Node does.
             // See https://bun.com/docs/runtime/env
             .WithEnvironment("NODE_ENV", builder.ApplicationBuilder.Environment.IsDevelopment() ? "development" : "production")
@@ -1366,6 +1463,7 @@ public static class JavaScriptHostingExtensions
         ArgumentException.ThrowIfNullOrEmpty(appDirectory);
 
         appDirectory = PathNormalizer.NormalizePathForCurrentPlatform(Path.Combine(builder.AppHostDirectory, appDirectory));
+        var appHostId = builder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
         var resource = new ViteAppResource(name, "npm", appDirectory);
 
         var resourceBuilder = builder.CreateDefaultJavaScriptAppBuilder(
@@ -1411,7 +1509,7 @@ public static class JavaScriptHostingExtensions
                 {
                     configTarget = ctx.Arguments[cfgIndex + 1] switch
                     {
-                        string s when !string.IsNullOrEmpty(s) && !s.StartsWith("--") => s,
+                        string s when !string.IsNullOrEmpty(s) && !s.StartsWith("--", StringComparison.Ordinal) => s,
                         ReferenceExpression re => await re.GetValueAsync(ctx.CancellationToken).ConfigureAwait(false),
                         _ => null,
                     };
@@ -1452,18 +1550,39 @@ public static class JavaScriptHostingExtensions
                     {
                         // Determine the absolute path to the original config file
                         var absoluteConfigPath = Path.GetFullPath(configTarget, appDirectory);
-                        // Determine the relative path from the Aspire vite config to the original config file
-                        var relativeConfigPath = Path.GetRelativePath(Path.Join(appDirectory, "node_modules", ".bin"), absoluteConfigPath);
 
-                        // If we are expecting to run the vite app with HTTPS termination, generate an Aspire specific Vite config file that can mutate the user's original config
+                        // Find the nearest node_modules directory by walking up from the app directory.
+                        // This handles package managers that hoist dependencies (e.g. yarn workspaces)
+                        // where node_modules lives at the repo root rather than in the app directory.
+                        // Writing inside node_modules ensures Node.js module resolution can find
+                        // bare imports like 'vite' in the generated wrapper config.
+                        var nodeModulesDir = FindNearestNodeModules(appDirectory);
+                        if (nodeModulesDir is null)
+                        {
+                            var resourceLoggerService = ctx.ExecutionContext.Services.GetRequiredService<ResourceLoggerService>();
+                            var resourceLogger = resourceLoggerService.GetLogger(resource);
+                            resourceLogger.LogWarning("Could not find a node_modules directory in or above '{AppDirectory}' for resource '{ResourceName}'. Automatic HTTPS configuration won't be available. Ensure packages are installed before starting the app.", appDirectory, resource.Name);
+                            ctx.Arguments.Add("--config");
+                            ctx.Arguments.Add(configTarget);
+                            return;
+                        }
+
+                        // Use the same per-AppHost discriminator as persistent resource names so concurrent
+                        // AppHosts sharing a hoisted node_modules directory cannot overwrite each other's wrappers.
+                        var aspireConfigDir = Path.Join(nodeModulesDir, ".aspire", appHostId, resource.Name);
+                        Directory.CreateDirectory(aspireConfigDir);
+
+                        // Compute the relative path from the wrapper location to the original config
+                        var relativeConfigPath = Path.GetRelativePath(aspireConfigDir, absoluteConfigPath).Replace("\\", "/");
+
+                        // Generate an Aspire specific Vite config file that wraps the user's original config with HTTPS support
                         var aspireConfig = AspireViteConfig
-                            .Replace(AspireViteRelativeConfigToken, relativeConfigPath.Replace("\\", "/"), StringComparison.Ordinal)
+                            .Replace(AspireViteConfigPathToken, relativeConfigPath, StringComparison.Ordinal)
                             .Replace(AspireViteAbsoluteConfigToken, absoluteConfigPath.Replace("\\", "\\\\"), StringComparison.Ordinal);
-                        var aspireConfigPath = Path.Join(appDirectory, "node_modules", ".bin", $"aspire.{Path.GetFileName(configTarget)}");
+                        var aspireConfigPath = Path.Join(aspireConfigDir, $"aspire.{Path.GetFileName(configTarget)}");
                         File.WriteAllText(aspireConfigPath, aspireConfig);
 
-                        // Override the path to the Vite config file to use the Aspire generated one. If we made it here, we
-                        // know there isn't an existing --config argument present.
+                        // Override the path to the Vite config file to use the Aspire generated one
                         ctx.Arguments.Add("--config");
                         ctx.Arguments.Add(aspireConfigPath);
 
@@ -1493,7 +1612,8 @@ public static class JavaScriptHostingExtensions
         if (builder.ExecutionContext.IsRunMode)
         {
             // Vite only supports a single endpoint, so we have to modify the existing endpoint to use HTTPS instead of
-            // adding a new one.
+            // adding a new one. The user explicitly opted into HTTPS via WithHttpsDeveloperCertificate(), so the scheme
+            // change is unconditional here.
             resourceBuilder.SubscribeHttpsEndpointsUpdate(ctx =>
             {
                 resourceBuilder.WithEndpoint("http", ep => ep.UriScheme = "https");
@@ -1681,8 +1801,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation([installCommand, .. installArgs ?? []])
             {
                 ProductionInstallArgs = "--omit=dev"
-            })
-            .WithRequiredCommand("npm", "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1748,8 +1867,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("bun", "https://bun.sh/docs/installation");
+            });
 
         if (!resource.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
         {
@@ -1827,8 +1945,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--production"
-            })
-            .WithRequiredCommand("yarn", "https://yarnpkg.com/getting-started/install");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -1904,8 +2021,7 @@ public static class JavaScriptHostingExtensions
             .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs])
             {
                 ProductionInstallArgs = "--prod"
-            })
-            .WithRequiredCommand("pnpm", "https://pnpm.io/installation");
+            });
 
         AddInstaller(resource, install);
         return resource;
@@ -2279,6 +2395,31 @@ public static class JavaScriptHostingExtensions
                 throw new ArgumentException($"The apiPath must contain only URL-safe path characters (alphanumeric, '/', '-', '_'). Invalid character: '{c}'", nameof(apiPath));
             }
         }
+    }
+
+    /// <summary>
+    /// Walks up from <paramref name="startDirectory"/> to find the nearest <c>node_modules</c> directory.
+    /// </summary>
+    private static string? FindNearestNodeModules(string startDirectory)
+    {
+        var current = Path.GetFullPath(startDirectory);
+        while (current is not null)
+        {
+            var candidate = Path.Join(current, "node_modules");
+            if (Directory.Exists(candidate))
+            {
+                return candidate;
+            }
+
+            var parent = Path.GetDirectoryName(current);
+            if (parent == current)
+            {
+                break;
+            }
+            current = parent;
+        }
+
+        return null;
     }
 
     private static string NormalizeRelativePath(string path)

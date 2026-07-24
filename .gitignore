@@ -209,6 +209,10 @@ extension/node_modules/
 extension/.corepack-cache/
 **/.vscode-test/
 extension/.version
+extension/.vscode-test-short.mjs
+extension/local-shortpath.vscode-test.mjs
+extension/v/
+extension/x/
 
 # Generated extension localization files (regenerated from XLF during build)
 extension/l10n/bundle.l10n.json

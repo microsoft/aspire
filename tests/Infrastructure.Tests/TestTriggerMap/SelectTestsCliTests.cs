@@ -156,10 +156,25 @@ public sealed class SelectTestsCliTests
                 var comment = File.ReadAllText(commentPath);
                 Assert.StartsWith("## Tests selector", comment);
                 Assert.DoesNotContain("audit mode", comment);
-                Assert.Contains("**Test projects (1 / 2)**", comment);
-                Assert.Contains("- `Aspire.Hosting.Tests`", comment);
-                Assert.Contains("**Jobs (1)**", comment);
-                Assert.Contains("- `extension-e2e`", comment);
+                Assert.Contains("### Selected test projects (1 / 2)", comment);
+                Assert.Contains("`Aspire.Hosting.Tests`", comment);
+                Assert.Contains("### Selected jobs (1)", comment);
+                Assert.Contains("`extension-e2e`", comment);
+                // Test projects are the primary signal, so their section must come BEFORE the jobs
+                // section. Falsifies a revert to the old jobs-first ordering.
+                Assert.True(
+                    comment.IndexOf("### Selected test projects", StringComparison.Ordinal)
+                        < comment.IndexOf("### Selected jobs", StringComparison.Ordinal),
+                    "Selected test projects must be listed before Selected jobs.");
+                // The rationale is collapsed by default behind a <details> so the comment leads with
+                // what runs; the heading is the <summary>. Falsifies a revert to a plain "### How these
+                // were chosen" heading that is always expanded.
+                Assert.Contains("<summary>How these were chosen — grouped by what changed</summary>", comment);
+                Assert.DoesNotContain("### How these were chosen", comment);
+                // The job-reasons table attributes each selected job to what triggered it
+                // (extension-e2e <- trigger.txt). Falsifies a revert that drops the table.
+                Assert.Contains("| Job | Triggered by |", comment);
+                Assert.Contains("| `extension-e2e` | `trigger.txt` |", comment);
                 Assert.DoesNotContain("### Options", comment);
                 Assert.DoesNotContain("Changed files", comment);
                 Assert.DoesNotContain("Would have been", comment);
@@ -171,10 +186,11 @@ public sealed class SelectTestsCliTests
         });
     }
 
-    // The PR comment lists EVERY cause that selected an item — not a single "primary" cause with a
-    // "(+N more)" tail. A reviewer must see exactly which changed files / edges pulled each test in.
-    // Here both trigger.txt and prod.txt route to Aspire.Hosting.Tests, so its one comment line must
-    // name both files. Failure mode: truncating to one cause hides why a test was selected.
+    // The PR comment attributes EVERY cause that selected an item — no truncation, no "(+N more)"
+    // tail. A reviewer must see exactly which changed files / edges pulled each test in. Here both
+    // trigger.txt and prod.txt route to Aspire.Hosting.Tests, so the grouped "how chosen" section must
+    // show both files as triggers (the project appears under each). Failure mode: dropping a trigger
+    // hides why a test was selected.
     [Fact]
     public void CommentListsEveryCauseWithoutTruncation()
     {
@@ -190,10 +206,15 @@ public sealed class SelectTestsCliTests
                 Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
 
                 var comment = File.ReadAllText(commentPath);
-                var line = Array.Find(comment.Split('\n'), l => l.Contains("`Aspire.Hosting.Tests`", StringComparison.Ordinal));
-                Assert.NotNull(line);
-                Assert.Contains("`trigger.txt`", line);
-                Assert.Contains("`prod.txt`", line);
+                // Each changed file is its own group heading, and the "directly" bucket under it lists
+                // exactly the projects that file pulled in. Asserting the grouped (by-trigger) shape --
+                // file heading + "→ **N** directly: ..." -- falsifies a revert to the flat per-project
+                // rendering, which had no such per-file buckets. prod.txt selects both projects;
+                // trigger.txt selects only the test project.
+                Assert.Contains("`prod.txt`** *(changed)*", comment);
+                Assert.Contains("→ **2** directly: `Aspire.Hosting`, `Aspire.Hosting.Tests`", comment);
+                Assert.Contains("`trigger.txt`** *(changed)*", comment);
+                Assert.Contains("→ **1** directly: `Aspire.Hosting.Tests`", comment);
                 Assert.DoesNotContain("more)", comment);
             }
             finally
@@ -201,6 +222,97 @@ public sealed class SelectTestsCliTests
                 Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
             }
         });
+    }
+
+    // A job pulled in by SEVERAL independent triggers must render each as its OWN bulleted line, not
+    // comma-joined: a comma between e.g. "affected project X" and a selected-test reason reads as a
+    // single causal chain when they are unrelated. Here job:multi is hit by a path rule (a.txt) AND a
+    // derived_targets pull from the selected test Aspire.Cli.Tests; the cell must bullet the two and
+    // name the trigger as "selected test" (a noun, parallel to "affected project"). Failure mode:
+    // regressing to comma-joining makes "affected project X, selected test Y" look like one chain.
+    [Fact]
+    public void JobWithIndependentCausesRendersEachReasonOnItsOwnLine()
+    {
+        const string slnx = """
+            <Solution>
+              <Project Path="tests/Aspire.Cli.Tests/Aspire.Cli.Tests.csproj" />
+            </Solution>
+            """;
+        const string map = """
+            version: 1
+            path_rules:
+              - paths: [a.txt]
+                targets: ["job:multi"]
+              - paths: [b.txt]
+                targets: ["test:Aspire.Cli.Tests"]
+            derived_targets:
+              - tests: [test:Aspire.Cli.Tests]
+                targets: [job:multi]
+            """;
+
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "a.txt", "b.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+                var comment = File.ReadAllText(commentPath);
+                // The two independent triggers are bulleted on separate lines (<br>), and the derived
+                // pull reads "selected test" -- pinning the bullets, the separation, and the wording in
+                // one exact cell match.
+                Assert.Contains("| `multi` | • `a.txt`<br>• selected test `Aspire.Cli.Tests` |", comment);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        }, slnx: slnx, map: map);
+    }
+
+    // The headline call-out (⚠️ "N of the M ... come from a single change") and the <details> collapse
+    // in RenderProjectList are both threshold-gated (headline: tests >= 10 && largest group >= 5;
+    // collapse: inline limit of 12). A single change that fans out to many projects must trip both.
+    // Failure mode: a refactor silently drops the headline or stops collapsing large buckets, making
+    // big selections unreadable again — the very problem this comment layout exists to solve.
+    [Fact]
+    public void LargeFanOutEmitsHeadlineAndCollapsesProjectList()
+    {
+        var projects = Enumerable.Range(1, 14).Select(i => $"Aspire.Pkg{i:00}.Tests").ToList();
+        var slnx = "<Solution>\n"
+            + string.Join("\n", projects.Select(p => $"  <Project Path=\"tests/{p}/{p}.csproj\" />"))
+            + "\n</Solution>";
+        // One path rule maps a single changed file to all 14 test projects, so they land in one group.
+        var map = "version: 1\npath_rules:\n  - paths: [big.txt]\n    targets: ["
+            + string.Join(", ", projects.Select(p => $"\"test:{p}\""))
+            + "]\n";
+
+        RunInTempRepo((repoRoot, propsPath, _) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var previous = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "big.txt");
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true));
+
+                var comment = File.ReadAllText(commentPath);
+                // Headline names the count and the single change that drove it.
+                Assert.Contains("⚠️ 14 of the 14 selected test projects come from a single change — `big.txt`", comment);
+                // The 14-project bucket (over the inline limit of 12) collapses into a <details>.
+                Assert.Contains("<details><summary>show 14</summary>", comment);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previous);
+            }
+        }, slnx: slnx, map: map);
     }
 
     // In audit mode the comment is advisory: the full matrix and all jobs still run, and the lists
@@ -495,14 +607,16 @@ public sealed class SelectTestsCliTests
         });
     }
 
-    // P1-6. --from/--to is an endpoint-to-endpoint (two-dot) diff, NOT a three-dot merge-base diff.
-    // The repo below diverges so the two differ: feature adds trigger.txt off a base commit, then the
-    // base advances by editing other.txt. A two-dot diff(advanced-base, feature) reports BOTH files;
-    // a three-dot diff would report only trigger.txt. Selecting Aspire.Cli.Tests (other.txt's target)
-    // therefore proves two-dot semantics — an accidental switch to '...' would drop it and silently
-    // change which files (and tests) a moved-base PR selects.
+    // P1-6. --from/--to is a merge-base (three-dot) diff: the change set is taken from the common
+    // ancestor of base..head, NOT from the base tip. The repo below diverges so the two differ: feature
+    // adds trigger.txt off a base commit, then the base advances by editing other.txt. A base-tip..head
+    // diff would report BOTH files; the merge-base diff reports only trigger.txt. other.txt was changed
+    // on the advanced base AFTER the branch point, so it is NOT the PR's change and must not be selected.
+    // This is the real-world failure that motivated the merge-base switch: a file changed on main after a
+    // PR branched (tools/ExtractTestPartitions/Program.cs) tripped the run-all fallback under the old
+    // base-tip..head diff -- https://github.com/microsoft/aspire/pull/18377#issuecomment-4782187184.
     [Fact]
-    public void FromToUsesTwoDotDiffSemantics()
+    public void FromToUsesMergeBaseDiffSemantics()
     {
         WithGitRepo((repoRoot, output) =>
         {
@@ -517,7 +631,7 @@ public sealed class SelectTestsCliTests
             GitCommitAll(repoRoot, "feature change");
             var featureSha = RunGit(repoRoot, "rev-parse", "HEAD");
 
-            // Advance the base after the branch point so two-dot and three-dot diverge.
+            // Advance the base after the branch point so base-tip..head and merge-base..head diverge.
             RunGit(repoRoot, "checkout", "-q", "-b", "advanced-base", baseSha);
             WriteFile(repoRoot, "other.txt", "v1");
             GitCommitAll(repoRoot, "base advances");
@@ -527,10 +641,107 @@ public sealed class SelectTestsCliTests
             Selection.Run(Options(repoRoot, propsPath, from: advancedBaseSha, to: featureSha, skipLayer1: true, enforce: true));
 
             var props = File.ReadAllText(propsPath);
-            // trigger.txt (added on feature) -> Aspire.Hosting.Tests; other.txt (differs across the two
-            // endpoints) -> Aspire.Cli.Tests. The latter is present only under two-dot.
+            // trigger.txt (added on feature, the PR's own change) -> Aspire.Hosting.Tests. other.txt was
+            // changed on the advanced base AFTER the branch point, so the merge-base diff excludes it and
+            // Aspire.Cli.Tests (its target) is NOT selected. A regression to base-tip..head would add it.
             Assert.Contains("Aspire.Hosting.Tests", props);
-            Assert.Contains("Aspire.Cli.Tests", props);
+            Assert.DoesNotContain("Aspire.Cli.Tests", props);
+        });
+    }
+
+    // P1-6a. An unresolved merge-base must NOT block the PR: when base and head share no common ancestor
+    // (history not deep enough, or genuinely divergent branches), the selector degrades to a fail-SAFE
+    // run-ALL rather than throwing -- over-selecting is safe, blocking every affected PR is not. Two
+    // unrelated root histories (an --orphan branch) make `git merge-base` find nothing. The run must
+    // succeed (exit 0), select ALL (so enforce writes NO restriction props -> the full matrix runs), and
+    // record the fallback reason in the summary so a systemic regression is visible, not hidden behind a
+    // green-but-full-matrix run. Failure mode: a regression that re-throws here turns every PR whose
+    // checkout can't reach the branch point red.
+    [Fact]
+    public void MergeBaseWithNoCommonAncestorFallsBackToAll()
+    {
+        WithGitRepo((repoRoot, output) =>
+        {
+            WriteFile(repoRoot, "Aspire.slnx", Slnx);
+            WriteFile(repoRoot, "map.yml", Map);
+            WriteFile(repoRoot, "other.txt", "v0");
+            GitCommitAll(repoRoot, "base");
+            var baseSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            // --orphan starts a branch with no parent, so its first commit is a second root that shares
+            // no history with main; merge-base(unrelated, main) is therefore empty.
+            RunGit(repoRoot, "checkout", "-q", "--orphan", "unrelated");
+            WriteFile(repoRoot, "unrelated.txt", "v0");
+            GitCommitAll(repoRoot, "unrelated root");
+            var unrelatedSha = RunGit(repoRoot, "rev-parse", "HEAD");
+
+            var propsPath = Path.Combine(repoRoot, "BeforeBuildProps.props");
+            var exit = Selection.Run(Options(repoRoot, propsPath, from: unrelatedSha, to: baseSha, skipLayer1: true, enforce: true));
+
+            Assert.Equal(0, exit);
+            // ALL selected -> enforce writes no restriction props, so enumerate-tests runs everything.
+            Assert.False(File.Exists(propsPath));
+
+            // The fallback is recorded in the run summary (the durable record the weekly audit reads),
+            // naming the merge-base as the cause.
+            var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
+            Assert.Contains("fail-safe run-all because", summary);
+            Assert.Contains("merge-base", summary);
+        });
+    }
+
+    // P1-6d. The CI action's OWN merge-base fallback enters the tool with --force-all already set (the
+    // shell deepen loop gave up), so RunCore's merge-base block is skipped and the reason can't be derived
+    // here -- the action passes it via --force-all-reason. ALL THREE output surfaces must name THAT reason
+    // ("fail-safe run-all because ...") rather than the run-full-ci kill switch, so a systemic
+    // shallow-history regression can't hide behind a green-but-full-matrix run no matter which surface a
+    // reader consults:
+    //   - the step summary (the weekly audit reads it, not the raw logs),
+    //   - the PR comment (what a contributor sees on the PR), and
+    //   - the JSON artifact (the durable, machine-readable record).
+    // The reason flows through SelectorOptions.ForceAllReason into SelectionResult.EscalationReason, which
+    // the comment and JSON both render. Failure mode: carrying the reason only into the summary (not the
+    // selector) relabels the comment and JSON as the run-full-ci kill switch, contradicting the summary.
+    [Fact]
+    public void ForceAllReasonIsRecordedAcrossAllSurfacesDistinctFromKillSwitch()
+    {
+        RunInTempRepo((repoRoot, propsPath, output) =>
+        {
+            var commentPath = Path.Combine(repoRoot, "comment.md");
+            var jsonPath = Path.Combine(repoRoot, "selection.json");
+            var previousComment = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            var previousJson = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                var changed = WriteChangedFiles(repoRoot, "src/Aspire.Hosting/Foo.cs");
+                const string reason = "git merge-base of base abc123 and head def456 was unreachable within 4096 commits of CI checkout history";
+
+                Selection.Run(Options(repoRoot, propsPath, changedFilesPath: changed, skipLayer1: true, enforce: true, forceAll: true, forceAllReason: reason));
+
+                // The action-supplied reason is surfaced verbatim, flagged as fail-safe rather than kill switch.
+                var summary = File.ReadAllText(Path.Combine(repoRoot, "summary"));
+                Assert.Contains($"force-all: True — fail-safe run-all because {reason}", summary);
+                Assert.DoesNotContain("force-all: True (kill switch)", summary);
+                Assert.Contains($"**selects ALL** — {reason}", summary);
+
+                // The PR comment's ALL banner names the same reason, not the run-full-ci kill switch.
+                var comment = File.ReadAllText(commentPath);
+                Assert.Contains($"**Runs the full test matrix + all jobs (ALL)** — {reason}", comment);
+                Assert.DoesNotContain("the run-full-ci label forces the full matrix", comment);
+
+                // The durable JSON artifact records the same reason under escalationReason.
+                using var doc = JsonDocument.Parse(File.ReadAllText(jsonPath));
+                var root = doc.RootElement;
+                Assert.True(root.GetProperty("selectsAll").GetBoolean());
+                Assert.Equal(reason, root.GetProperty("escalationReason").GetString());
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previousComment);
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previousJson);
+            }
         });
     }
 
@@ -783,7 +994,8 @@ public sealed class SelectTestsCliTests
         bool skipLayer1 = false,
         bool forceAll = false,
         bool enforce = false,
-        string? slnxPath = null) =>
+        string? slnxPath = null,
+        string? forceAllReason = null) =>
         new(
             RepoRoot: repoRoot,
             MapPath: Path.Combine(repoRoot, "map.yml"),
@@ -794,7 +1006,8 @@ public sealed class SelectTestsCliTests
             SkipLayer1: skipLayer1,
             ForceAll: forceAll,
             Enforce: enforce,
-            BeforeBuildProps: propsPath);
+            BeforeBuildProps: propsPath,
+            ForceAllReason: forceAllReason);
 
     private static string WriteChangedFiles(string repoRoot, params string[] paths)
     {

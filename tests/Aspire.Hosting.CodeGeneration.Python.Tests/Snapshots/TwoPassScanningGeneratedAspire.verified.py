@@ -1530,7 +1530,7 @@ IconVariant = typing.Literal["Regular", "Filled"]
 
 ImagePullPolicy = typing.Literal["Default", "Always", "Missing", "Never"]
 
-InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number"]
+InputType = typing.Literal["Text", "SecretText", "Choice", "Boolean", "Number", "File"]
 
 MessageIntent = typing.Literal["None", "Success", "Warning", "Error", "Information", "Confirmation"]
 
@@ -1789,6 +1789,12 @@ class CommandOptions(typing.TypedDict, total=False):
     IconVariant: IconVariant | None
     IsHighlighted: bool
     UpdateState: typing.Callable[[UpdateCommandStateContext], ResourceCommandState]
+    Progress: CommandProgressOptions
+
+class CommandProgressOptions(typing.TypedDict, total=False):
+    Message: str | None
+    Title: str | None
+    HideCancelButton: bool
 
 class CommandResultData(typing.TypedDict, total=False):
     Value: str
@@ -1820,6 +1826,9 @@ class CreateInteractionInputOptions(typing.TypedDict, total=False):
     AllowCustomChoice: bool | None
     Disabled: bool | None
     MaxLength: int | None
+    MaxFileSize: int | None
+    AllowMultipleFiles: bool | None
+    FileFilter: str | None
 
 class DynamicLoadingOptions(typing.TypedDict, total=False):
     AlwaysLoadOnStart: bool | None
@@ -1870,6 +1879,7 @@ class HttpCommandRequestExportData(typing.TypedDict, total=False):
 class HttpsCertificateExecutionConfigurationContext(typing.TypedDict, total=False):
     CertificatePath: ReferenceExpression
     KeyPath: ReferenceExpression
+    CertificateWithKeyPath: ReferenceExpression
     PfxPath: ReferenceExpression
 
 class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=False):
@@ -1878,6 +1888,7 @@ class HttpsCertificateExecutionConfigurationExportData(typing.TypedDict, total=F
     KeyPathExpression: str
     PfxPathExpression: str
     IsKeyPathReferenced: bool
+    IsCertificateWithKeyPathReferenced: bool
     IsPfxPathReferenced: bool
     Password: str | None
 
@@ -1907,6 +1918,9 @@ class InteractionInput(typing.TypedDict, total=False):
     AllowCustomChoice: bool
     Disabled: bool
     MaxLength: int | None
+    AllowMultipleFiles: bool
+    FileFilter: str | None
+    MaxFileSize: int | None
 
 class InteractionInputsDialogOptions(typing.TypedDict, total=False):
     PrimaryButtonText: str | None
@@ -1933,6 +1947,11 @@ class InteractionNotificationOptions(typing.TypedDict, total=False):
     Intent: MessageIntent | None
     LinkText: str | None
     LinkUrl: str | None
+
+class InteractionProgressOptions(typing.TypedDict, total=False):
+    PrimaryButtonText: str | None
+    EnableMessageMarkdown: bool | None
+    Work: typing.Callable[[ProgressContext], None]
 
 class ParameterCustomInputOptions(typing.TypedDict, total=False):
     InputType: InputType | None
@@ -2993,6 +3012,22 @@ class AbstractInteractionService:
         )
         return typing.cast(BoolInteractionResult, result)
 
+    def prompt_progress(self, message: str, *, title: str | None = None, options: InteractionProgressOptions | None = None, timeout: int | None = None) -> BoolInteractionResult:
+        """Displays a progress dialog with an indeterminate progress indicator."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['message'] = message
+        if title is not None:
+            rpc_args['title'] = title
+        if options is not None:
+            rpc_args['options'] = options
+        if timeout is not None:
+            rpc_args['cancellationToken'] = self._client.register_cancellation_token(timeout)
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/promptProgress',
+            rpc_args,
+        )
+        return typing.cast(BoolInteractionResult, result)
+
     def prompt_input(self, title: str, message: str, input: InteractionInputBuilder, *, options: InteractionInputsDialogOptions | None = None, timeout: int | None = None) -> InputInteractionResult:
         """Prompts the user for a single input."""
         rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
@@ -3069,6 +3104,18 @@ class AbstractInteractionService:
             rpc_args['options'] = options
         result = self._client.invoke_capability(
             'Aspire.Hosting/createNumberInput',
+            rpc_args,
+        )
+        return typing.cast(InteractionInputBuilder, result)
+
+    def create_file_input(self, name: str, *, options: CreateInteractionInputOptions | None = None) -> InteractionInputBuilder:
+        """Creates a file input."""
+        rpc_args: dict[str, typing.Any] = {'interactionService': self._handle}
+        rpc_args['name'] = name
+        if options is not None:
+            rpc_args['options'] = options
+        result = self._client.invoke_capability(
+            'Aspire.Hosting/createFileInput',
             rpc_args,
         )
         return typing.cast(InteractionInputBuilder, result)
@@ -5466,6 +5513,15 @@ class HttpsCertificateConfigurationCallbackAnnotationContext:
         return typing.cast(ReferenceExpression, result)
 
     @_cached_property
+    def certificate_with_key_path(self) -> ReferenceExpression:
+        """A value provider that will resolve to a path to the certificate and key concatenated together in PEM format."""
+        result = self._client.invoke_capability(
+            'Aspire.Hosting.ApplicationModel/HttpsCertificateConfigurationCallbackAnnotationContext.certificateWithKeyPath',
+            {'context': self._handle}
+        )
+        return typing.cast(ReferenceExpression, result)
+
+    @_cached_property
     def pfx_path(self) -> ReferenceExpression:
         """A value provider that will resolve to a path to a PFX file for the key pair."""
         result = self._client.invoke_capability(
@@ -6319,6 +6375,30 @@ class PipelineSummary:
             'Aspire.Hosting/addMarkdown',
             rpc_args
         )
+
+
+class ProgressContext:
+    """Type class for ProgressContext."""
+
+    def __init__(self, handle: Handle, client: AspireClient) -> None:
+        self._handle = handle
+        self._client = client
+
+    def __repr__(self) -> str:
+        return f"ProgressContext(handle={self._handle.handle_id})"
+
+    @_uncached_property
+    def handle(self) -> Handle:
+        """The underlying object reference handle."""
+        return self._handle
+
+    def cancel(self) -> None:
+        """Cancel the operation."""
+        token: CancellationToken = self._client.invoke_capability(
+            'Aspire.Hosting/ProgressContext.cancellationToken',
+            {'context': self._handle}
+        )
+        token.cancel()
 
 
 class ProjectResourceOptions:
@@ -12813,6 +12893,7 @@ _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStep",
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepContext", PipelineStepContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineStepFactoryContext", PipelineStepFactoryContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.Pipelines.PipelineSummary", PipelineSummary)
+_register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ProgressContext", ProgressContext)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ProjectResourceOptions", ProjectResourceOptions)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.ReferenceExpressionBuilder", ReferenceExpressionBuilder)
 _register_handle_wrapper("Aspire.Hosting/Aspire.Hosting.ApplicationModel.RequiredCommandValidationContext", RequiredCommandValidationContext)

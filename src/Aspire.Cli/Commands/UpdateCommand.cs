@@ -4,10 +4,11 @@
 using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
-using System.Runtime.InteropServices;
+using Aspire.Cli.Acquisition;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Exceptions;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Migrations;
 using Aspire.Cli.Packaging;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -30,8 +31,11 @@ internal sealed class UpdateCommand : BaseCommand
     private readonly ICliDownloader? _cliDownloader;
     private readonly ICliUpdateNotifier _updateNotifier;
     private readonly IFeatures _features;
+    private readonly IEnvironment _environment;
     private readonly IConfigurationService _configurationService;
     private readonly IConfiguration _configuration;
+    private readonly IEnumerable<IMigration> _migrations;
+    private readonly IProcessPathProvider _processPathProvider;
 
     private static readonly OptionWithLegacy<FileInfo?> s_appHostOption = new("--apphost", "--project", UpdateCommandStrings.ProjectArgumentDescription);
     private static readonly Option<bool> s_selfOption = new("--self")
@@ -42,6 +46,10 @@ internal sealed class UpdateCommand : BaseCommand
     {
         Description = UpdateCommandStrings.YesOptionDescription,
         Aliases = { "-y" }
+    };
+    private static readonly Option<bool> s_migrateOption = new("--migrate")
+    {
+        Description = UpdateCommandStrings.MigrateOptionDescription
     };
     private static readonly Option<string?> s_nugetConfigDirOption = new("--nuget-config-dir")
     {
@@ -56,8 +64,11 @@ internal sealed class UpdateCommand : BaseCommand
         IAppHostProjectFactory projectFactory,
         ILogger<UpdateCommand> logger,
         ICliDownloader? cliDownloader,
+        IEnvironment environment,
         IConfigurationService configurationService,
         IConfiguration configuration,
+        IEnumerable<IMigration> migrations,
+        IProcessPathProvider processPathProvider,
         CommonCommandServices services)
         : base("update", UpdateCommandStrings.Description, services)
     {
@@ -68,12 +79,16 @@ internal sealed class UpdateCommand : BaseCommand
         _cliDownloader = cliDownloader;
         _updateNotifier = services.UpdateNotifier;
         _features = services.Features;
+        _environment = environment;
         _configurationService = configurationService;
         _configuration = configuration;
+        _migrations = migrations;
+        _processPathProvider = processPathProvider;
 
         Options.Add(s_appHostOption);
         Options.Add(s_selfOption);
         Options.Add(s_yesOption);
+        Options.Add(s_migrateOption);
         Options.Add(s_nugetConfigDirOption);
 
         AddNonInteractiveRequiresYesValidator(this, s_yesOption);
@@ -100,14 +115,34 @@ internal sealed class UpdateCommand : BaseCommand
         Options.Add(_qualityOption);
     }
 
-    private static string? GetDotNetToolUpdateCommand()
+    private string? GetDotNetToolUpdateCommand()
     {
-        return DotNetToolDetection.GetDotNetToolUpdateCommand();
+        return DotNetToolDetection.GetDotNetToolUpdateCommand(_processPathProvider.ProcessPath);
     }
 
     private static string? GetNpmUpdateCommand()
     {
         return NpmInstallDetection.GetNpmUpdateCommand();
+    }
+
+    private bool IsNixInstall()
+    {
+        var processPath = _processPathProvider.ProcessPath;
+        if (string.IsNullOrEmpty(processPath))
+        {
+            return false;
+        }
+
+        var resolvedProcessPath = CliPathHelper.ResolveSymlinkOrOriginalPath(processPath, _logger);
+        var binaryDir = Path.GetDirectoryName(resolvedProcessPath);
+        if (string.IsNullOrEmpty(binaryDir))
+        {
+            return false;
+        }
+
+        var sidecarPath = Path.Combine(binaryDir, InstallSidecarReader.SidecarFileName);
+        var source = InstallSidecarReader.ReadSourceField(sidecarPath);
+        return InstallSourceExtensions.ParseInstallSource(source) == InstallSource.Nix;
     }
 
     protected override async Task<CommandResult> ExecuteAsync(ParseResult parseResult, CancellationToken cancellationToken)
@@ -137,14 +172,9 @@ internal sealed class UpdateCommand : BaseCommand
                 return CommandResult.Success();
             }
 
-            if (_cliDownloader is null)
-            {
-                return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
-            }
-
             try
             {
-                return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
+                return await ExecuteSelfUpdateAsync(parseResult, null, cancellationToken);
             }
             catch (OperationCanceledException)
             {
@@ -330,6 +360,15 @@ internal sealed class UpdateCommand : BaseCommand
 
             await project.UpdatePackagesAsync(updateContext, cancellationToken);
 
+            // The package update may have moved the project onto a newer Aspire version whose
+            // recommended conventions require an on-disk migration (e.g. apphost.ts -> apphost.mts).
+            // When --migrate is passed we apply pending migrations now, after the packages are
+            // updated, since a migration may depend on the newer package version. Without --migrate
+            // we stay non-destructive and only surface a non-blocking advisory. Detection reuses the
+            // same IMigration registry behind `aspire doctor`, so any future migration shows up here
+            // automatically.
+            await HandlePendingMigrationsAsync(parseResult.GetValue(s_migrateOption), projectFile, confirmBinding, cancellationToken);
+
             // After successful project update, check if CLI update is available and prompt
             // Only prompt if the channel supports CLI downloads (has a non-null CliDownloadBaseUrl)
             if (_cliDownloader is not null &&
@@ -360,7 +399,7 @@ internal sealed class UpdateCommand : BaseCommand
                     }
 
                     // Use the same channel that was selected for the project update
-                    return await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+                    return await ExecuteSelfUpdateAsync(parseResult, channel.Name, cancellationToken);
                 }
             }
         }
@@ -381,10 +420,11 @@ internal sealed class UpdateCommand : BaseCommand
             // Check if this is a "no project found" error and prompt for self-update
             if (string.Equals(ex.Message, ErrorStrings.NoProjectFileFound, StringComparisons.CliInputOrOutput))
             {
-                // Only prompt for self-update when we can actually perform it: not as a
-                // dotnet tool, not from an npm install, and the GitHub-binary downloader
-                // is wired up. Otherwise the downloader would overwrite package-manager-owned
-                // files instead of letting the package manager handle the update.
+                // dotnet tool and npm installs have package-manager-specific update commands, so
+                // this recovery path does not prompt for archive self-update in those cases. Nix
+                // does not have a launcher-provided command here; let it reach ExecuteSelfUpdateAsync
+                // where the Nix store guard can print Nix-specific guidance instead of writing to
+                // the read-only install path.
                 if (GetDotNetToolUpdateCommand() is null && GetNpmUpdateCommand() is null && _cliDownloader is not null)
                 {
                     var shouldUpdateCli = await InteractionService.PromptConfirmAsync(
@@ -394,7 +434,7 @@ internal sealed class UpdateCommand : BaseCommand
 
                     if (shouldUpdateCli)
                     {
-                        return await ExecuteSelfUpdateAsync(parseResult, cancellationToken);
+                        return await ExecuteSelfUpdateAsync(parseResult, null, cancellationToken);
                     }
                 }
             }
@@ -407,6 +447,106 @@ internal sealed class UpdateCommand : BaseCommand
         }
 
         return CommandResult.FromExitCode(0);
+    }
+
+    /// <summary>
+    /// After a successful project update, detects pending migrations from the <see cref="IMigration"/>
+    /// registry. When <paramref name="applyRequested"/> is <c>true</c> (the user passed <c>--migrate</c>)
+    /// the migrations are applied in <see cref="IMigration.Order"/> after an optional confirmation;
+    /// otherwise a non-blocking advisory is printed nudging the user toward <c>aspire update --migrate</c>.
+    /// Migrations run after the package update so that any migration depending on a newer package
+    /// version sees the updated packages. A failure here never turns a successful update into a failure.
+    /// </summary>
+    private async Task HandlePendingMigrationsAsync(bool applyRequested, FileInfo projectFile, PromptBinding<bool> confirmBinding, CancellationToken cancellationToken)
+    {
+        var context = new MigrationContext(projectFile);
+
+        // Detect once up front so we can list the full set before asking for a single confirmation.
+        var pending = new List<(IMigration Migration, MigrationDescriptor Descriptor)>();
+        foreach (var migration in _migrations.OrderBy(m => m.Order))
+        {
+            MigrationDescriptor? descriptor;
+            try
+            {
+                descriptor = await migration.DetectAsync(context, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // A broken migration provider must not turn a successful update into a failure.
+                _logger.LogDebug(ex, "Migration '{MigrationId}' detection failed", migration.Id);
+                continue;
+            }
+
+            if (descriptor is not null)
+            {
+                pending.Add((migration, descriptor));
+            }
+        }
+
+        if (!applyRequested)
+        {
+            if (pending.Count == 0)
+            {
+                return;
+            }
+
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.PendingMigrationsHeader);
+            foreach (var (_, descriptor) in pending)
+            {
+                InteractionService.DisplaySubtleMessage($"  - {descriptor.Title}");
+            }
+
+            InteractionService.DisplaySubtleMessage(UpdateCommandStrings.PendingMigrationsHint);
+            return;
+        }
+
+        if (pending.Count == 0)
+        {
+            InteractionService.DisplaySubtleMessage(MigrationStrings.NothingToMigrate);
+            return;
+        }
+
+        InteractionService.DisplayMessage(KnownEmojis.Gear, MigrationStrings.AvailableMigrationsHeader);
+        foreach (var (_, descriptor) in pending)
+        {
+            InteractionService.DisplaySubtleMessage($"  - {descriptor.Title}");
+        }
+
+        // Applying migrations rewrites source files, so confirm before doing so. The shared
+        // confirmBinding is pre-set to "yes" when --yes was passed (and the non-interactive
+        // validator already required --yes), so this only prompts in interactive runs.
+        var confirmed = await InteractionService.PromptConfirmAsync(
+            MigrationStrings.ConfirmApplyPrompt,
+            binding: confirmBinding,
+            cancellationToken: cancellationToken);
+        if (!confirmed)
+        {
+            InteractionService.DisplaySubtleMessage(MigrationStrings.MigrationCancelled);
+            return;
+        }
+
+        foreach (var (migration, _) in pending)
+        {
+            try
+            {
+                await migration.ApplyAsync(context, cancellationToken);
+            }
+            catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // The packages were already updated successfully; a migration failure should warn
+                // but not fail the overall update so the user keeps the successful package update.
+                _logger.LogDebug(ex, "Migration '{MigrationId}' apply failed", migration.Id);
+                InteractionService.DisplayMessage(KnownEmojis.Warning, UpdateCommandStrings.MigrationApplyFailedWarning);
+            }
+        }
     }
 
     private async Task<CommandResult?> TryUpdateCliBeforeGuestProjectUpdateAsync(
@@ -461,7 +601,7 @@ internal sealed class UpdateCommand : BaseCommand
             return CommandResult.Success();
         }
 
-        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, cancellationToken, channel.Name);
+        var selfUpdateResult = await ExecuteSelfUpdateAsync(parseResult, channel.Name, cancellationToken);
         if (selfUpdateResult.ExitCode == CliExitCodes.Success)
         {
             InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.ProjectUpdateSkippedAfterCliUpdateMessage);
@@ -496,8 +636,29 @@ internal sealed class UpdateCommand : BaseCommand
             || string.Equals(ExecutionContext.IdentityChannel, PackageChannelNames.Staging, StringComparisons.ChannelName);
     }
 
-    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, CancellationToken cancellationToken, string? selectedChannel = null)
+    private async Task<CommandResult> ExecuteSelfUpdateAsync(ParseResult parseResult, string? selectedChannel, CancellationToken cancellationToken)
     {
+        // Keep the Nix guard at the archive self-update boundary. The dotnet tool and npm
+        // checks live at the call sites because they produce package-manager commands before
+        // the user is prompted or before project-update skip messaging is emitted. Nix installs
+        // are identified from the sidecar next to the resolved binary, and every path that
+        // reaches this method is about to replace that binary in-place. A Nix profile or flake
+        // points at an immutable /nix/store path, so archive self-update would either fail with
+        // no write permission or bypass Nix if it fell back to another directory. Let Nix update
+        // the profile/flake instead.
+        if (IsNixInstall())
+        {
+            InteractionService.DisplayMessage(KnownEmojis.Information, UpdateCommandStrings.NixSelfUpdateMessage);
+            InteractionService.DisplayPlainText("  nix profile upgrade aspire-cli");
+            InteractionService.DisplayPlainText("  nix flake update <input-name>");
+            return CommandResult.Success();
+        }
+
+        if (_cliDownloader is null)
+        {
+            return CommandResult.Failure(CliExitCodes.InvalidCommand, "CLI self-update is not available in this environment.");
+        }
+
         var channel = selectedChannel ?? parseResult.GetValue(_channelOption) ?? parseResult.GetValue(_qualityOption);
 
         // If channel is not specified, prompt the user to select one. The choice
@@ -550,7 +711,7 @@ internal sealed class UpdateCommand : BaseCommand
         try
         {
             // Get current executable path for display purposes only
-            var currentExePath = Environment.ProcessPath;
+            var currentExePath = _processPathProvider.ProcessPath;
             if (string.IsNullOrEmpty(currentExePath))
             {
                 return CommandResult.Failure(CliExitCodes.InvalidCommand, "Unable to determine the current executable path.");
@@ -560,9 +721,10 @@ internal sealed class UpdateCommand : BaseCommand
             InteractionService.DisplayMessage(KnownEmojis.UpButton, $"Updating to channel: {channel}");
 
             // Download the latest CLI
-            var archivePath = await _cliDownloader!.DownloadLatestCliAsync(channel, cancellationToken);
+            var archivePath = await _cliDownloader.DownloadLatestCliAsync(channel, cancellationToken);
 
-            // Extract and update to $HOME/.aspire/bin
+            // Replace the current CLI in-place. Package-manager-owned installs that should not
+            // be mutated, such as dotnet tool, npm, and Nix, are handled before this path.
             await ExtractAndUpdateAsync(archivePath, cancellationToken);
 
             return CommandResult.Success();
@@ -581,8 +743,10 @@ internal sealed class UpdateCommand : BaseCommand
 
     private async Task ExtractAndUpdateAsync(string archivePath, CancellationToken cancellationToken)
     {
-        // Install to the same directory as the current CLI executable
-        var currentExePath = Environment.ProcessPath;
+        // Archive self-update is a same-directory replacement, not an installer that searches
+        // for a writable fallback. If the executable is package-manager-owned, installing
+        // elsewhere would leave the user's PATH/profile pointing at the old package-managed CLI.
+        var currentExePath = _processPathProvider.ProcessPath;
         if (string.IsNullOrEmpty(currentExePath))
         {
             throw new InvalidOperationException("Unable to determine current CLI location.");
@@ -594,7 +758,7 @@ internal sealed class UpdateCommand : BaseCommand
             throw new InvalidOperationException($"Unable to determine installation directory from: {currentExePath}");
         }
 
-        var exeName = RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "aspire.exe" : "aspire";
+        var exeName = _environment.IsWindows() ? "aspire.exe" : "aspire";
         var targetExePath = Path.Combine(installDir, exeName);
         var tempExtractDir = Directory.CreateTempSubdirectory("aspire-cli-extract").FullName;
 
@@ -605,7 +769,7 @@ internal sealed class UpdateCommand : BaseCommand
                 UpdateCommandStrings.ExtractingNewCli,
                 async () =>
                 {
-                    await ArchiveHelper.ExtractAsync(archivePath, tempExtractDir, cancellationToken);
+                    await ArchiveHelper.ExtractAsync(archivePath, tempExtractDir, _environment, cancellationToken);
                     return 0;
                 },
                 KnownEmojis.Package);
@@ -642,7 +806,7 @@ internal sealed class UpdateCommand : BaseCommand
                 File.Copy(newExePath, targetExePath, overwrite: true);
 
                 // On Unix systems, ensure the executable bit is set
-                if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+                if (!_environment.IsWindows())
                 {
                     SetExecutablePermission(targetExePath);
                 }
@@ -663,7 +827,7 @@ internal sealed class UpdateCommand : BaseCommand
                 // which are only accessible when that binary is running.
 
                 // Display helpful message about PATH
-                if (!IsInPath(installDir))
+                if (!IsInPath(installDir, _environment))
                 {
                     InteractionService.DisplayMessage(KnownEmojis.Information, $"Note: {installDir} is not in your PATH. Add it to use the updated CLI globally.");
                 }
@@ -696,7 +860,7 @@ internal sealed class UpdateCommand : BaseCommand
         }
     }
 
-    private static bool IsInPath(string directory)
+    private static bool IsInPath(string directory, IEnvironment environment)
     {
         var pathEnv = Environment.GetEnvironmentVariable("PATH");
         if (string.IsNullOrEmpty(pathEnv))
@@ -709,14 +873,14 @@ internal sealed class UpdateCommand : BaseCommand
 
         return paths.Any(p =>
             string.Equals(Path.GetFullPath(p.Trim()), Path.GetFullPath(directory),
-                RuntimeInformation.IsOSPlatform(OSPlatform.Windows)
+                environment.IsWindows()
                     ? StringComparison.OrdinalIgnoreCase
                     : StringComparison.Ordinal));
     }
 
     private void SetExecutablePermission(string filePath)
     {
-        if (!RuntimeInformation.IsOSPlatform(OSPlatform.Windows))
+        if (!_environment.IsWindows())
         {
             try
             {
@@ -782,4 +946,5 @@ internal sealed class UpdateCommand : BaseCommand
             _logger.LogWarning(ex, "Failed to clean up directory {Directory}", directory);
         }
     }
+
 }

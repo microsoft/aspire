@@ -8,14 +8,14 @@ namespace Infrastructure.Tests.TestTriggerMap;
 
 /// <summary>
 /// Behavior spec for the <see cref="TestSelector"/> engine. These tests drive the selector with
-/// small SYNTHETIC maps (a temp <c>map.yml</c> + a fake matrix + fake project dirs), so they assert
+/// small SYNTHETIC maps (a workspace <c>map.yml</c> + a fake matrix + fake project dirs), so they assert
 /// the resolution mechanisms — conventions, overrides, ignore, Layer-1 attribution, the run-all
 /// fallback, derived targets, and group expansion — without coupling to the contents of the real
 /// <c>eng/github-ci/test-trigger-map.yml</c>. A thin set of real-map invariant smokes (computed from the
 /// filesystem, never hardcoding project names) lives at the end; structural invariants of the real
 /// map are covered by <see cref="TestTriggerMapTests"/>.
 /// </summary>
-public sealed class SelectTestsAcceptanceTests : IDisposable
+public sealed class SelectTestsAcceptanceTests(ITestOutputHelper outputHelper) : IDisposable
 {
     // A synthetic map exercising every section. Test projects referenced here are supplied (or
     // withheld) via the per-test matrix to drive the existence guard.
@@ -105,14 +105,14 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
 
     // Temp dirs holding synthetic maps are tracked here and removed in Dispose, so the ~40 tests in
     // this class don't each leave a directory behind. xUnit constructs one instance per test, so a
-    // given test's temp dirs are cleaned up when that instance is disposed.
-    private readonly List<TestTempDirectory> _tempDirs = [];
+    // given test's workspace dirs are cleaned up when that instance is disposed.
+    private readonly List<TemporaryWorkspace> _tempDirs = [];
 
     private string NewMapDir()
     {
-        var temp = new TestTempDirectory();
-        _tempDirs.Add(temp);
-        return temp.Path;
+        var workspace = TemporaryWorkspace.Create(outputHelper);
+        _tempDirs.Add(workspace);
+        return workspace.Path;
     }
 
     private TestSelector Selector(IEnumerable<string>? projectDirs = null)
@@ -535,7 +535,8 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
     public void DerivedJobCauseNamesTheTriggeringTestProject()
     {
         // A job pulled in purely because a test project is selected: tests/CliTests/** -> test:CliTests
-        // (convention) -> job:cli-starter (derived_targets). The cause must say "via test CliTests".
+        // (convention) -> job:cli-starter (derived_targets). The cause is DerivedFromTest naming CliTests
+        // (rendered "selected test CliTests" in the job-reasons cell).
         var r = Select(["tests/CliTests/Foo.cs"]);
 
         var cause = Assert.Single(r.JobCauses["job:cli-starter"]);
@@ -816,6 +817,19 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
         Assert.True(filter.IsExcluded("Aspire-Core.slnf"));
         Assert.True(filter.IsExcluded("localhive.ps1"));                 // localhive.* -> localhive\.[^/]*
 
+        // Repository metadata with no build/test impact: a PR touching only these must not force the
+        // full matrix via the run-all fallback (the reason they are in the skip-gate patterns file).
+        Assert.True(filter.IsExcluded(".gitignore"));                    // repo-ROOT .gitignore (anchored)
+        Assert.True(filter.IsExcluded(".github/CODEOWNERS"));
+        Assert.True(filter.IsExcluded(".github/ISSUE_TEMPLATE/10_bug_report.yml"));
+
+        // Safety carve-outs: NOT dropped, because they can change build/test outcomes -- nested .gitignore
+        // files are shipped CLI-template assets (Layer 1 / conventions route them to their projects), and
+        // .editorconfig / .gitattributes affect the build and checkout.
+        Assert.False(filter.IsExcluded("src/Aspire.Cli/Templating/Templates/ts-starter/.gitignore"));
+        Assert.False(filter.IsExcluded(".editorconfig"));
+        Assert.False(filter.IsExcluded(".gitattributes"));
+
         // Kept: real source the patterns file does not list.
         Assert.False(filter.IsExcluded("src/Aspire.Cli/Program.cs"));
 
@@ -860,6 +874,63 @@ public sealed class SelectTestsAcceptanceTests : IDisposable
 
         Assert.Contains(expectedTest, r.TestProjects);
         Assert.False(r.SelectsAll);
+    }
+
+    // An integration's checked-in *.ats.txt baseline tracks its exported [AspireExport] surface -- the
+    // same surface the per-language polyglot playground scripts regenerate and compile
+    // (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). A change to that
+    // baseline must therefore run BOTH typescript-api-compat (baseline diff) AND polyglot (regenerate +
+    // compile in every language), so a breaking surface change is caught even if the author did not also
+    // touch the tests/PolyglotAppHosts fixtures. The baseline is not a compiled item, so Layer 1 is blind
+    // to it: routing here is the only thing that fires polyglot. Run with --skip-layer1 semantics (no
+    // Layer 1 affected set) to prove the curated layer alone carries both targets.
+    [Fact]
+    public void RealMapIntegrationAtsBaselineChangeRunsTypeScriptApiCompatAndPolyglot()
+    {
+        var mapPath = Path.Combine(RepoRoot.Path, "eng", "github-ci", "test-trigger-map.yml");
+        var selector = new TestSelector(mapPath, EnumerateMatrixTestProjects(), LoadProjectDirectories());
+
+        var atsBaseline = FirstIntegrationAtsBaselineWithPolyglotFixture();
+
+        var r = selector.Select([atsBaseline], [], new SelectorOptions());
+
+        Assert.False(r.SelectsAll);
+        Assert.Contains("job:typescript-api-compat", r.Jobs);
+        Assert.Contains("job:polyglot", r.Jobs);
+    }
+
+    // A real src/Aspire.Hosting*/api/<name>.ats.txt baseline for a genuine INTEGRATION (not the
+    // codegen engine itself) whose integration also has a tests/PolyglotAppHosts/<name> fixture, so the
+    // change exercises the polyglot playground for that integration's exported surface. Computed from the
+    // filesystem (never hardcoded names) so it survives integrations being added or removed. The engine
+    // projects below are excluded because they reach polyglot through affected_project_rules (their
+    // project NAME), not through the *.ats.txt path rule under test here -- so picking one would not prove
+    // the path rule fires polyglot.
+    private static string FirstIntegrationAtsBaselineWithPolyglotFixture()
+    {
+        var srcDir = Path.Combine(RepoRoot.Path, "src");
+        var polyglotRoot = Path.Combine(RepoRoot.Path, "tests", "PolyglotAppHosts");
+
+        static bool IsEngineProject(string name) =>
+            name is "Aspire.Hosting" or "Aspire.Hosting.RemoteHost"
+            || name.StartsWith("Aspire.Hosting.CodeGeneration.", StringComparison.Ordinal);
+
+        foreach (var projectDir in Directory.EnumerateDirectories(srcDir, "Aspire.Hosting*").Order(StringComparer.Ordinal))
+        {
+            var name = Path.GetFileName(projectDir);
+            if (IsEngineProject(name))
+            {
+                continue;
+            }
+
+            var baseline = Path.Combine(projectDir, "api", $"{name}.ats.txt");
+            if (File.Exists(baseline) && Directory.Exists(Path.Combine(polyglotRoot, name)))
+            {
+                return $"src/{name}/api/{name}.ats.txt";
+            }
+        }
+
+        throw new InvalidOperationException("No integration src/Aspire.Hosting*/api/<name>.ats.txt with a matching tests/PolyglotAppHosts/<name> fixture was found.");
     }
 
     private static (string Dir, string Test) FirstComponentWithSameNamedTest(IReadOnlyCollection<string> matrix)

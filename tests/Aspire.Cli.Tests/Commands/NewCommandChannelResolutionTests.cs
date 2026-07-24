@@ -11,6 +11,7 @@ using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -34,7 +35,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task NewCommand_DoesNotConsultGlobalConfigurationServiceForChannelKey()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var tripwireConfigService = new global::Aspire.Cli.Tests.TestServices.TestConfigurationService
         {
@@ -77,7 +78,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                         Task.FromResult<IEnumerable<NuGetPackage>>(
                             [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "13.3.0" }])
                 };
-                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures());
+                var implicitChannel = PackageChannel.CreateImplicitChannel(fakeCache, new TestFeatures(), NullLogger.Instance);
                 return new TestPackagingService
                 {
                     GetChannelsAsyncCallback = _ => Task.FromResult<IEnumerable<PackageChannel>>([implicitChannel])
@@ -438,7 +439,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
         TemplateRuntime runtime = TemplateRuntime.Cli,
         string? versionOptionArg = null)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var capturedInputs = new CapturedTemplateInputs();
 
@@ -513,7 +514,7 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                 Task.FromResult<IEnumerable<NuGetPackage>>(
                     [new NuGetPackage { Id = "Aspire.ProjectTemplates", Source = "nuget", Version = "13.3.0" }])
         };
-        var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures());
+        var implicitChannel = PackageChannel.CreateImplicitChannel(implicitCache, new TestFeatures(), NullLogger.Instance);
 
         // Always register a stable channel — matches what PackagingService advertises in
         // production. Its version (13.5.0) is distinct from Implicit (13.3.0) so a test
@@ -529,7 +530,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
             PackageChannelQuality.Stable,
             [new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json")],
             stableCache,
-            features: new TestFeatures());
+            features: new TestFeatures(),
+            NullLogger.Instance);
 
         var channels = new List<PackageChannel> { implicitChannel, stableChannel };
 
@@ -555,7 +557,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
                 ],
                 explicitCache,
-                features: new TestFeatures()));
+                features: new TestFeatures(),
+                NullLogger.Instance));
         }
 
         // PR hives are an additional explicit channel shape (PackageChannelQuality.Both
@@ -578,7 +581,8 @@ public class NewCommandChannelResolutionTests(ITestOutputHelper outputHelper)
                     new PackageMapping(PackageMapping.AllPackages, "https://api.nuget.org/v3/index.json"),
                 ],
                 prCache,
-                features: new TestFeatures()));
+                features: new TestFeatures(),
+                NullLogger.Instance));
         }
 
         return new TestPackagingService

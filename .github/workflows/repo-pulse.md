@@ -17,6 +17,10 @@ on:
     - cron: "0 16 * * *"   # 16:00 UTC daily (08:00 PT in PST / 09:00 PT in PDT)
   workflow_dispatch:
 
+# Only run in the canonical repository. Forks don't have the required
+# secrets/permissions for this report workflow.
+if: github.repository == 'microsoft/aspire'
+
 permissions:
   contents: read
   issues: read

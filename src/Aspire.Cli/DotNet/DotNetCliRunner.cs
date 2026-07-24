@@ -5,18 +5,20 @@ using System.Diagnostics;
 using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using System.Net.Sockets;
-using System.Runtime.InteropServices;
 using System.Security.Cryptography;
 using System.Text;
 using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Caching;
+using Aspire.Cli.Commands;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Utils;
 using Aspire.Hosting;
+using Aspire.Hosting.Utils;
 using Aspire.Shared;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.DependencyInjection;
@@ -59,6 +61,95 @@ internal sealed class ProcessInvocationOptions
     /// Useful for background operations like NuGet package cache refreshes.
     /// </summary>
     public bool SuppressLogging { get; set; }
+
+    /// <summary>
+    /// Controls whether cancellation should terminate the whole process tree or only the root process.
+    /// </summary>
+    public bool KillEntireProcessTreeOnCancel { get; set; } = true;
+
+    /// <summary>
+    /// When <c>true</c>, the spawned process is given its own hidden console group (Windows) so the
+    /// shutdown ladder in <see cref="ProcessExecution"/> can target the child with DCP's
+    /// <c>stop-process-tree</c> CTRL+C dance without also signalling the CLI.
+    /// </summary>
+    /// <remarks>
+    /// Pair with <see cref="GracefulShutdownSignaler"/> and <see cref="ShutdownService"/> for
+    /// graceful shutdown. Pair with <see cref="KillOnParentExit"/> when the child should also be
+    /// bound to the Windows kill-on-close job as a crash-time safety net.
+    /// Leaving the signaler/service unset means cancellation falls back to
+    /// <see cref="ProcessExecution"/>'s force-kill mode, preserving back-compat
+    /// for the many non-Run callers (build, restore, package add, layout, etc.).
+    /// </remarks>
+    public bool IsolateConsole { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, the child is bound to the CLI's Windows kill-on-close job so the OS terminates
+    /// it when the CLI exits unexpectedly (crash / SIGKILL), even if the child does not react 
+    /// to cancellation request. This is an OS-level, Windows-only crash-time safety net
+    /// for background helpers that must never outlive their parent — the <c>aspire-managed</c> NuGet
+    /// helper, the standalone dashboard, and the profiling collector — and, unlike
+    /// <see cref="IsolateConsole"/>, it does not give the child a new console group.
+    /// </summary>
+    /// <remarks>
+    /// On non-Windows hosts this is a no-op; process-group signalling plus the in-child
+    /// parent-liveness watchdog (which self-terminates when <c>ASPIRE_CLI_PID</c> disappears) provide
+    /// the cross-platform equivalent. The two layers are complementary: the job is the instant,
+    /// guaranteed backstop on Windows, and the watchdog is the graceful, cross-platform mechanism.
+    /// </remarks>
+    public bool KillOnParentExit { get; set; }
+
+    /// <summary>
+    /// When <c>true</c>, the process is launched as a detached child that survives the launching CLI.
+    /// </summary>
+    public bool Detached { get; set; }
+
+    /// <summary>
+    /// Test hook for overriding the DCP executable used to launch detached Unix processes.
+    /// </summary>
+    internal string? DetachedUnixLauncherPathOverride { get; set; }
+
+    /// <summary>
+    /// Optional predicate for inherited environment variable names that should be removed before applying caller-supplied variables.
+    /// </summary>
+    public Func<string, bool>? EnvironmentVariableFilter { get; set; }
+
+    /// <summary>
+    /// Issues the graceful shutdown signal during the shutdown ladder (DCP
+    /// <c>stop-process-tree</c> on Windows, SIGTERM on Unix). When <c>null</c>, the cancellation
+    /// path uses <see cref="ProcessExecution"/>'s force-kill mode.
+    /// </summary>
+    public IProcessTreeGracefulShutdownSignaler? GracefulShutdownSignaler { get; set; }
+
+    /// <summary>
+    /// The central graceful-shutdown window whose
+    /// <see cref="ConsoleCancellationManager.GracefulShutdownToken"/> bounds the shutdown ladder. When
+    /// <c>null</c>, the cancellation path uses <see cref="ProcessExecution"/>'s
+    /// force-kill mode.
+    /// </summary>
+    public IGracefulShutdownWindow? ShutdownService { get; set; }
+
+    /// <summary>
+    /// Creates a shallow copy so a caller-supplied instance can be layered with additional settings
+    /// without mutating the original, which the caller may reuse across invocations. The delegate and
+    /// service references are intentionally shared with the copy.
+    /// </summary>
+    public ProcessInvocationOptions Clone() => new()
+    {
+        StandardOutputCallback = StandardOutputCallback,
+        StandardErrorCallback = StandardErrorCallback,
+        NoLaunchProfile = NoLaunchProfile,
+        StartDebugSession = StartDebugSession,
+        Debug = Debug,
+        SuppressLogging = SuppressLogging,
+        KillEntireProcessTreeOnCancel = KillEntireProcessTreeOnCancel,
+        IsolateConsole = IsolateConsole,
+        KillOnParentExit = KillOnParentExit,
+        Detached = Detached,
+        DetachedUnixLauncherPathOverride = DetachedUnixLauncherPathOverride,
+        EnvironmentVariableFilter = EnvironmentVariableFilter,
+        GracefulShutdownSignaler = GracefulShutdownSignaler,
+        ShutdownService = ShutdownService,
+    };
 }
 
 internal sealed class DotNetCliRunner(
@@ -71,7 +162,8 @@ internal sealed class DotNetCliRunner(
     IFeatures features,
     IInteractionService interactionService,
     CliExecutionContext executionContext,
-    IProcessExecutionFactory executionFactory) : IDotNetCliRunner
+    IProcessExecutionFactory executionFactory,
+    IEnvironment environment) : IDotNetCliRunner
 {
     private readonly IDiskCache _diskCache = diskCache;
 
@@ -138,10 +230,13 @@ internal sealed class DotNetCliRunner(
         var outputCounters = new ProcessOutputCounters();
         var instrumentedOptions = CreateInstrumentedProcessOptions(options, processActivity, outputCounters);
 
-        // Do not use 'using' here: StartBackchannelAsync runs fire-and-forget and
+        // Do not use 'await using' here: StartBackchannelAsync runs fire-and-forget and
         // accesses execution.HasExited / ExitCode after this method returns. Disposing
         // the underlying Process while the backchannel task is still polling would
-        // cause ObjectDisposedException. Let the GC handle cleanup instead.
+        // cause ObjectDisposedException. We intentionally never dispose this execution:
+        // IAsyncDisposable.DisposeAsync is not called by the finalizer, but the Process's
+        // native handles are still reclaimed by the SafeHandle finalizers, so this is not
+        // a resource leak.
         var execution = executionFactory.CreateExecution(processFileName, effectiveArgs, finalEnv, workingDirectory, instrumentedOptions);
 
         // Get socket path from env if present
@@ -174,7 +269,7 @@ internal sealed class DotNetCliRunner(
             }
         }
 
-        var started = execution.Start();
+        var started = await execution.StartAsync(cancellationToken).ConfigureAwait(false);
         processActivity.AddDotNetProcessStartResult(started, started ? execution.ProcessId : null);
 
         if (!started)
@@ -271,6 +366,21 @@ internal sealed class DotNetCliRunner(
             StartDebugSession = options.StartDebugSession,
             Debug = options.Debug,
             SuppressLogging = options.SuppressLogging,
+            KillEntireProcessTreeOnCancel = options.KillEntireProcessTreeOnCancel,
+            // Forward the Run-path shutdown ladder opt-ins. Forgetting any of these silently
+            // demotes the run to the force-kill fallback: IsolateConsole=false skips console
+            // isolation, KillOnParentExit=false removes the Windows crash-time job safety net, and the
+            // null signaler/service pair causes ProcessExecution's OCE catch
+            // (DotNet/ProcessExecution.cs) to route through its force-kill mode (best-effort SIGTERM
+            // then kill) instead of its graceful ladder. Build/restore/etc. callers leave these unset
+            // and intentionally keep the force-kill path.
+            IsolateConsole = options.IsolateConsole,
+            KillOnParentExit = options.KillOnParentExit,
+            Detached = options.Detached,
+            DetachedUnixLauncherPathOverride = options.DetachedUnixLauncherPathOverride,
+            EnvironmentVariableFilter = options.EnvironmentVariableFilter,
+            GracefulShutdownSignaler = options.GracefulShutdownSignaler,
+            ShutdownService = options.ShutdownService,
             StandardOutputCallback = line =>
             {
                 var lineCount = Interlocked.Increment(ref outputCounters.StdoutLineCount);
@@ -298,28 +408,15 @@ internal sealed class DotNetCliRunner(
         public int StderrLineCount;
     }
 
-    internal static int GetCurrentProcessId() => Environment.ProcessId;
-
-    internal static long GetCurrentProcessStartTimeUnixSeconds()
-    {
-        var startTime = Process.GetCurrentProcess().StartTime;
-        return ((DateTimeOffset)startTime).ToUnixTimeSeconds();
-    }
-
     /// <summary>
     /// Configures dotnet-specific environment variables for CLI process executions.
     /// </summary>
     private void ConfigureDotNetEnvironment(IDictionary<string, string> env)
     {
-        // The AppHost uses this environment variable to signal to the CliOrphanDetector which process
-        // it should monitor in order to know when to stop the CLI. As long as the process still exists
-        // the orphan detector will allow the CLI to keep running. If the environment variable does
-        // not exist the orphan detector will exit.
-        env[KnownConfigNames.CliProcessId] = GetCurrentProcessId().ToString(CultureInfo.InvariantCulture);
-
-        // Set the CLI process start time for robust orphan detection to prevent PID reuse issues.
-        // The AppHost will verify both PID and start time to ensure it's monitoring the correct process.
-        env[KnownConfigNames.CliProcessStarted] = GetCurrentProcessStartTimeUnixSeconds().ToString(CultureInfo.InvariantCulture);
+        // Stamp the CLI's identity (PID + start time) so the AppHost's CliOrphanDetector can verify
+        // which process it is monitoring and exit once that process is gone. Verifying both PID and
+        // start time avoids acting on a recycled PID. If the variables are absent the detector exits.
+        OrphanDetectionEnvironment.ApplyCurrentProcess(env);
 
         // Pass the CLI log file path so that querying CLI processes (e.g., aspire resource, aspire stop)
         // can surface it to help users diagnose issues in the managing CLI process.
@@ -352,7 +449,7 @@ internal sealed class DotNetCliRunner(
         var sdkInstallPath = Path.Combine(sdksDirectory, "dotnet", sdkVersion);
         var dotnetExecutablePath = Path.Combine(
             sdkInstallPath,
-            RuntimeInformation.IsOSPlatform(OSPlatform.Windows) ? "dotnet.exe" : "dotnet"
+            environment.IsWindows() ? "dotnet.exe" : "dotnet"
         );
 
         if (Directory.Exists(sdkInstallPath))
@@ -363,7 +460,7 @@ internal sealed class DotNetCliRunner(
             // Prepend the private SDK path to PATH. Check if the caller already provided a PATH override.
             var currentPath = env.TryGetValue("PATH", out var userPath)
                 ? userPath
-                : Environment.GetEnvironmentVariable("PATH") ?? string.Empty;
+                : environment.GetEnvironmentVariable("PATH") ?? string.Empty;
             env["PATH"] = $"{sdkInstallPath}{Path.PathSeparator}{currentPath}";
 
             logger.LogDebug("Using private SDK installation at {SdkPath}", sdkInstallPath);
@@ -390,7 +487,7 @@ internal sealed class DotNetCliRunner(
         logger.LogDebug("Starting backchannel connection to AppHost at {SocketPath}", socketPath);
 
         var startTime = DateTimeOffset.UtcNow;
-        var connectionTimeout = GetBackchannelConnectionTimeout();
+        var connectionTimeout = GetBackchannelConnectionTimeout(configuration);
 
         do
         {
@@ -418,8 +515,8 @@ internal sealed class DotNetCliRunner(
                 // Log at Debug level - this is expected when AppHost crashes, the real error is in AppHost output
                 logger.LogDebug(ex, "AppHost process has exited with code {ExitCode}. Unable to connect to backchannel at {SocketPath}", execution.ExitCode, socketPath);
                 var message = execution.ExitCode == CliExitCodes.Success
-                    ? "AppHost process has exited"
-                    : "AppHost process has exited unexpectedly";
+                    ? "The AppHost process exited"
+                    : $"The AppHost process exited unexpectedly with exit code {execution.ExitCode}";
                 var backchannelException = new FailedToConnectBackchannelConnection(message, ex);
                 backchannelCompletionSource.SetException(backchannelException);
                 return;
@@ -482,15 +579,87 @@ internal sealed class DotNetCliRunner(
 
     private static void AddAspireCliPathEnvironment(Dictionary<string, string> env, FileInfo? projectFile)
     {
-        if (projectFile is null || env.ContainsKey("AspireCliPath") || string.IsNullOrWhiteSpace(Environment.ProcessPath))
+        var processPath = Environment.ProcessPath;
+        if (projectFile is null || env.ContainsKey("AspireCliPath") || string.IsNullOrWhiteSpace(processPath) || !ShouldForwardProcessPathAsAspireCliPath(processPath))
         {
             return;
         }
 
-        env["AspireCliPath"] = Environment.ProcessPath;
+        env["AspireCliPath"] = processPath;
     }
 
-    private TimeSpan GetBackchannelConnectionTimeout()
+    internal static bool ShouldForwardProcessPathAsAspireCliPath(string processPath)
+    {
+        if (IsDotNetMuxerPath(processPath))
+        {
+            return false;
+        }
+
+        var cliDirectory = Path.GetDirectoryName(processPath);
+        if (string.IsNullOrEmpty(cliDirectory))
+        {
+            return false;
+        }
+
+        if (IsUnbundledFrameworkDependentCliPath(cliDirectory))
+        {
+            return false;
+        }
+
+        // Users often invoke the dogfood CLI through a symlink such as
+        // ~/bin/aspire -> artifacts/bin/Aspire.Cli/Debug/net10.0/aspire. Resolve the
+        // link before forwarding so a symlinked raw build cannot stamp stale
+        // bundle metadata through ResolveAspireCliBundle's AspireCliPath path.
+        var resolvedProcessPath = PathNormalizer.ResolveSymlinks(processPath);
+        if (!string.Equals(resolvedProcessPath, processPath, StringComparison.Ordinal))
+        {
+            var resolvedCliDirectory = Path.GetDirectoryName(resolvedProcessPath);
+            if (!string.IsNullOrEmpty(resolvedCliDirectory) && IsUnbundledFrameworkDependentCliPath(resolvedCliDirectory))
+            {
+                return false;
+            }
+        }
+
+        return true;
+    }
+
+    private static bool IsDotNetMuxerPath(string processPath)
+    {
+        return string.Equals(Path.GetFileNameWithoutExtension(processPath), "dotnet", StringComparison.OrdinalIgnoreCase);
+    }
+
+    private static bool IsUnbundledFrameworkDependentCliPath(string cliDirectory)
+    {
+        var cliAssemblyPath = Path.Combine(cliDirectory, "aspire.dll");
+        if (!File.Exists(cliAssemblyPath))
+        {
+            return false;
+        }
+
+        // Raw `dotnet build` outputs place the apphost next to aspire.dll, but
+        // they do not contain a bundle layout. If we forward that path as
+        // AspireCliPath, ResolveAspireCliBundle treats it as an explicit CLI and
+        // falls through to ASPIRE_HOME, which can stamp stale bundle metadata.
+        return !HasInstallSidecar(cliDirectory) && !HasAdjacentBundleLayout(cliDirectory);
+    }
+
+    private static bool HasInstallSidecar(string cliDirectory)
+    {
+        return File.Exists(Path.Combine(cliDirectory, ".aspire-install.json"));
+    }
+
+    private static bool HasAdjacentBundleLayout(string cliDirectory)
+    {
+        return HasBundleRoot(cliDirectory) || HasBundleRoot(Path.Combine(cliDirectory, "bundle"));
+    }
+
+    private static bool HasBundleRoot(string bundleRoot)
+    {
+        return BundleDiscovery.TryDiscoverDcpFromDirectory(bundleRoot, out _, out _, out _)
+            && BundleDiscovery.TryDiscoverManagedFromDirectory(bundleRoot, out _);
+    }
+
+    internal static TimeSpan GetBackchannelConnectionTimeout(IConfiguration configuration)
     {
         var configuredValue = configuration[KnownConfigNames.CliBackchannelConnectTimeoutSeconds];
         if (double.TryParse(configuredValue, CultureInfo.InvariantCulture, out var seconds) && seconds >= 0)
@@ -498,7 +667,14 @@ internal sealed class DotNetCliRunner(
             return TimeSpan.FromSeconds(seconds);
         }
 
-        return TimeSpan.FromSeconds(60);
+        var timeout = TimeSpan.FromSeconds(WaitCommand.DefaultTimeoutSeconds);
+        var configuredStartupTimeout = configuration[CliConfigNames.AppHostStartupTimeout];
+        if (int.TryParse(configuredStartupTimeout, CultureInfo.InvariantCulture, out var startupTimeoutSeconds) && startupTimeoutSeconds > timeout.TotalSeconds)
+        {
+            timeout = TimeSpan.FromSeconds(startupTimeoutSeconds);
+        }
+
+        return timeout;
     }
 
     // Cache expiry/max age handled inside DiskCache implementation.
@@ -1019,7 +1195,7 @@ internal sealed class DotNetCliRunner(
     internal static bool TryParsePackageVersionFromStdout(string stdout, [NotNullWhen(true)] out string? version)
     {
         var lines = stdout.Split(Environment.NewLine);
-        var successLine = lines.SingleOrDefault(x => x.StartsWith("Success: Aspire.ProjectTemplates"));
+        var successLine = lines.SingleOrDefault(x => x.StartsWith("Success: Aspire.ProjectTemplates", StringComparison.Ordinal));
 
         if (successLine is null)
         {

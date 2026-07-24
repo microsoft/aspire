@@ -16,6 +16,9 @@ $embeddedDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\Embedded'
 $metadataPath = Join-Path $embeddedDir 'aspire-skills.metadata.json'
 $installerPath = Join-Path $repoRoot 'src\Aspire.Cli\Agents\AspireSkills\AspireSkillsInstaller.cs'
 $cliProjectPath = Join-Path $repoRoot 'src\Aspire.Cli\Aspire.Cli.csproj'
+$hooksDir = Join-Path $repoRoot 'src\Aspire.Cli\Agents\Hooks'
+
+. (Join-Path $scriptDir 'aspire-skills-bundle.common.ps1')
 
 function Invoke-GitHubCli {
     param(
@@ -132,6 +135,51 @@ try {
 
     Copy-Item -Path $archivePath -Destination $targetArchivePath -Force
 
+    # Sync the telemetry hook scripts from the same release. Hooks are SOURCE files in aspire-skills
+    # (hooks/scripts/track-telemetry.{sh,ps1}), so they are pinned to the immutable commit the release
+    # tag points at and fetched via the contents API (see aspire-skills-bundle.common.ps1). Releases
+    # that predate the telemetry hooks feature do not contain hooks/scripts/*, so a missing hook is a
+    # warning + skip during the transition rather than a hard failure of the whole bundle update;
+    # verification only enforces hooks once they are recorded in metadata.
+    New-Item -ItemType Directory -Force -Path $hooksDir | Out-Null
+    $hookMetadata = $null
+    try {
+        $hookCommitSha = Get-AspireSkillsReleaseCommitSha -Repository $Repository -Tag $release.tagName
+
+        # Fetch every hook first and only write to disk + record metadata once all fetches succeed.
+        # Writing inside the fetch loop could leave one fresh + one stale file (and no hooks metadata)
+        # if a later fetch failed, after which verify-aspire-skills-bundle.ps1 would silently skip hook
+        # verification. Collecting first makes the on-disk update atomic.
+        $hookContents = [ordered]@{}
+        $hookHashes = [ordered]@{}
+        foreach ($hookFileName in Get-AspireSkillsHookFileNames) {
+            Write-Host "Syncing hook script '$hookFileName' from '$Repository' at commit '$hookCommitSha'..."
+            $hookBytes = Get-AspireSkillsHookContent -Repository $Repository -CommitSha $hookCommitSha -FileName $hookFileName
+            $hookContents[$hookFileName] = $hookBytes
+            $hookHashes[$hookFileName] = Get-AspireSkillsSha256Hex -Bytes $hookBytes
+        }
+
+        foreach ($hookFileName in $hookContents.Keys) {
+            [System.IO.File]::WriteAllBytes((Join-Path $hooksDir $hookFileName), $hookContents[$hookFileName])
+        }
+
+        $hookMetadata = [ordered]@{
+            commitSha = $hookCommitSha
+            files = $hookHashes
+        }
+    }
+    catch {
+        # A release that predates the telemetry hooks feature has no hooks/scripts/* (HTTP 404); that
+        # is the only expected soft-skip during the transition. Any other failure (transient network,
+        # auth, rate limit) stays fatal so a real error can never silently ship a hook-less bundle.
+        if ($_.Exception.Message -match 'HTTP 404|Not Found') {
+            Write-Warning "Skipping telemetry hook sync for release '$($release.tagName)': hooks not present in this release."
+        }
+        else {
+            throw
+        }
+    }
+
     $metadata = [ordered]@{
         version = $normalizedVersion
         repository = $Repository
@@ -139,7 +187,10 @@ try {
         assetName = $asset.name
         sha256 = $hash
     }
-    Set-TextFile -Path $metadataPath -Content ($metadata | ConvertTo-Json)
+    if ($null -ne $hookMetadata) {
+        $metadata['hooks'] = $hookMetadata
+    }
+    Set-TextFile -Path $metadataPath -Content ($metadata | ConvertTo-Json -Depth 10)
 
     $installerContent = Get-Content -Raw -Path $installerPath
     $installerContent = [regex]::Replace(

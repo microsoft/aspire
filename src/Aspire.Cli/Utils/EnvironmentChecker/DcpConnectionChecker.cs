@@ -24,6 +24,7 @@ internal sealed class DcpConnectionChecker(
     CertificateManager certificateManager,
     IProcessExecutionFactory processExecutionFactory,
     CliExecutionContext executionContext,
+    IEnvironment environment,
     ILogger<DcpConnectionChecker> logger) : IDcpConnectionChecker
 {
     private static readonly TimeSpan s_connectionTimeout = TimeSpan.FromSeconds(20);
@@ -42,6 +43,7 @@ internal sealed class DcpConnectionChecker(
                 certificateManager,
                 processExecutionFactory,
                 executionContext,
+                environment,
                 logger,
                 timeoutCts.Token).ConfigureAwait(false);
 
@@ -219,6 +221,7 @@ internal sealed class DcpConnectionChecker(
             CertificateManager certificateManager,
             IProcessExecutionFactory processExecutionFactory,
             CliExecutionContext executionContext,
+            IEnvironment environment,
             ILogger logger,
             CancellationToken cancellationToken)
         {
@@ -227,6 +230,7 @@ internal sealed class DcpConnectionChecker(
             var dcpExecutablePath = BundleDiscovery.GetDcpExecutablePath(dcpDirectory);
             var output = new OutputCollector();
             IProcessExecution? process = null;
+            var processStarted = false;
 
             try
             {
@@ -239,7 +243,7 @@ internal sealed class DcpConnectionChecker(
 
                 if (useDeveloperCertificate)
                 {
-                    AddDeveloperCertificateArguments(arguments, certificateManager);
+                    AddDeveloperCertificateArguments(arguments, certificateManager, environment);
                 }
 
                 var environmentVariables = new Dictionary<string, string>();
@@ -266,11 +270,12 @@ internal sealed class DcpConnectionChecker(
                     executionContext.WorkingDirectory,
                     options);
 
-                if (!process.Start())
+                if (!await process.StartAsync(cancellationToken).ConfigureAwait(false))
                 {
                     throw new InvalidOperationException(DoctorCommandStrings.DcpStartFailedMessage);
                 }
 
+                processStarted = true;
                 var session = new DcpConnectionTestSession(process, sessionDirectory, kubeconfigPath, output, logger);
                 await session.WaitForKubeconfigFileAsync(cancellationToken).ConfigureAwait(false);
                 return session;
@@ -281,7 +286,7 @@ internal sealed class DcpConnectionChecker(
                 {
                     try
                     {
-                        if (!process.HasExited)
+                        if (processStarted && !process.HasExited)
                         {
                             process.Kill(entireProcessTree: true);
                         }
@@ -291,7 +296,7 @@ internal sealed class DcpConnectionChecker(
                     }
                     finally
                     {
-                        process.Dispose();
+                        await process.DisposeAsync().ConfigureAwait(false);
                     }
                 }
 
@@ -312,7 +317,7 @@ internal sealed class DcpConnectionChecker(
         {
             await WaitForKubeconfigFileAsync(cancellationToken).ConfigureAwait(false);
 
-            return await DcpKubeconfig.ReadFileWithRetryAsync(_kubeconfigPath, cancellationToken).ConfigureAwait(false);
+            return await DcpKubeconfig.ReadFileWithRetryAsync(_kubeconfigPath, cancellationToken: cancellationToken).ConfigureAwait(false);
         }
 
         public async Task StopDcpAsync(HttpClient client, DcpKubeconfig kubeconfig, CancellationToken cancellationToken)
@@ -360,7 +365,7 @@ internal sealed class DcpConnectionChecker(
             }
             finally
             {
-                _process.Dispose();
+                await _process.DisposeAsync().ConfigureAwait(false);
 
                 try
                 {
@@ -402,7 +407,7 @@ internal sealed class DcpConnectionChecker(
             return lines.Length == 0 ? DoctorCommandStrings.DcpNoOutputDetails : string.Join(Environment.NewLine, lines);
         }
 
-        private static void AddDeveloperCertificateArguments(List<string> arguments, CertificateManager certificateManager)
+        private static void AddDeveloperCertificateArguments(List<string> arguments, CertificateManager certificateManager, IEnvironment environment)
         {
             var certificates = certificateManager.ListCertificates(StoreName.My, StoreLocation.CurrentUser, isValid: true);
             try
@@ -424,7 +429,7 @@ internal sealed class DcpConnectionChecker(
                 arguments.Add("--tls-cert-thumbprint");
                 arguments.Add(certificate.Thumbprint);
 
-                if (OperatingSystem.IsWindows())
+                if (environment.IsWindows())
                 {
                     return;
                 }

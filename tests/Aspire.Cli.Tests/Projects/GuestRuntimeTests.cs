@@ -4,20 +4,33 @@
 using System.Collections.Concurrent;
 using System.Diagnostics;
 using Aspire.Cli.Diagnostics;
+using Aspire.Cli.DotNet;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Telemetry;
 using Aspire.Cli.Tests.TestServices;
+using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Tests;
 using Aspire.TypeSystem;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
+using Microsoft.Extensions.Logging.Abstractions;
 
 namespace Aspire.Cli.Tests.Projects;
 
 public class GuestRuntimeTests(ITestOutputHelper outputHelper)
 {
     private readonly ILoggerFactory _loggerFactory = LoggerFactory.Create(builder => builder.AddXunit(outputHelper));
+
+    private ProcessGuestLauncher CreateLauncher(
+        FileLoggerProvider? fileLoggerProvider = null,
+        Func<string, string?>? commandResolver = null)
+        => new(
+            "test",
+            _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
+            fileLoggerProvider: fileLoggerProvider,
+            commandResolver: commandResolver ?? PathLookupHelper.FindFullPathFromPath,
+            processExecutionFactory: new ProcessExecutionFactory(new TestEnvironment(), NullLogger<ProcessExecutionFactory>.Instance));
 
     private GuestRuntime CreateRuntime(
         RuntimeSpec? spec = null,
@@ -27,8 +40,9 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         return new GuestRuntime(
             spec ?? CreateTestSpec(),
             _loggerFactory.CreateLogger<GuestRuntime>(),
-            commandResolver: commandResolver,
-            profilingTelemetry: profilingTelemetry);
+            commandResolver ?? PathLookupHelper.FindFullPathFromPath,
+            new TestEnvironment(),
+            profilingTelemetry ?? new ProfilingTelemetry(new ConfigurationBuilder().Build()));
     }
 
     private static RuntimeSpec CreateTestSpec(
@@ -249,7 +263,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var spec = CreateTestSpec(
             execute: new CommandSpec
@@ -267,7 +281,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             ]);
         var runtime = CreateRuntime(spec, profilingTelemetry: profilingTelemetry);
         var launcher = new RecordingLauncher();
-        var directory = new DirectoryInfo(tempDirectory.Path);
+        var directory = new DirectoryInfo(workspace.Path);
         var appHostFile = new FileInfo(Path.Combine(directory.FullName, "apphost.ts"));
 
         await runtime.RunAsync(appHostFile, directory, new Dictionary<string, string>(), watchMode: false, launcher, CancellationToken.None);
@@ -714,10 +728,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         {
             using var fileLoggerProvider = new FileLoggerProvider(logFilePath, new TestStartupErrorWriter());
 
-            var launcher = new ProcessGuestLauncher(
-                "test",
-                _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
-                fileLoggerProvider,
+            var launcher = CreateLauncher(
+                fileLoggerProvider: fileLoggerProvider,
                 commandResolver: cmd => cmd == "dotnet" ? "dotnet" : null);
 
             var (exitCode, output) = await launcher.LaunchAsync(
@@ -725,6 +737,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
                 ["--version"],
                 new DirectoryInfo(Path.GetTempPath()),
                 new Dictionary<string, string>(),
+                afterLaunchAsync: null,
+                options: null,
                 CancellationToken.None);
 
             Assert.Equal(0, exitCode);
@@ -763,11 +777,9 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             (ProfilingTelemetry.EnvironmentVariables.Enabled, "true"),
             (ProfilingTelemetry.EnvironmentVariables.SessionId, "session-1"));
         using var listener = ActivityListenerHelper.Create(profilingTelemetry.ActivitySource, onActivityStopped: stoppedActivities.Add);
-        using var tempDirectory = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
-        var launcher = new ProcessGuestLauncher(
-            "test",
-            _loggerFactory.CreateLogger<ProcessGuestLauncher>(),
+        var launcher = CreateLauncher(
             commandResolver: cmd => cmd == "dotnet" ? "dotnet" : null);
 
         using (profilingTelemetry.StartGuestExecuteCommand(
@@ -775,14 +787,16 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             "Test Runtime",
             "dotnet",
             ["--version"],
-            new DirectoryInfo(tempDirectory.Path),
+            new DirectoryInfo(workspace.Path),
             ProfilingTelemetry.Values.GuestCommandPhaseExecute))
         {
             var (exitCode, output) = await launcher.LaunchAsync(
                 "dotnet",
                 ["--version"],
-                new DirectoryInfo(tempDirectory.Path),
+                new DirectoryInfo(workspace.Path),
                 new Dictionary<string, string>(),
+                afterLaunchAsync: null,
+                options: null,
                 CancellationToken.None);
 
             Assert.Equal(0, exitCode);
@@ -816,9 +830,7 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
         // passed to this launcher. The launcher must kill the guest process tree (rather than
         // leaving it running) and drain output, otherwise pendingRun never completes and the CLI
         // appears to hang while it waits for the AppHost system to exit.
-        var launcher = new ProcessGuestLauncher(
-            "test",
-            _loggerFactory.CreateLogger<ProcessGuestLauncher>());
+        var launcher = CreateLauncher();
 
         // Use a long-running cross-platform command. We pick something the OS resolves through PATH
         // so the launcher's CommandPathResolver succeeds without any fake.
@@ -843,6 +855,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             args,
             new DirectoryInfo(Path.GetTempPath()),
             new Dictionary<string, string>(),
+            afterLaunchAsync: null,
+            options: null,
             cts.Token);
 
         // Give the process a moment to actually start before cancelling so we exercise the
@@ -873,8 +887,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsync_CreatesMissingMigrationFiles()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var tempDir = tempDirectory.Path;
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var tempDir = workspace.Path;
 
         var migrationFileName = "tsconfig.apphost.json";
         var migrationContent = """{ "compilerOptions": { "target": "ES2022" } }""";
@@ -916,8 +930,8 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task RunAsync_DoesNotOverwriteExistingMigrationFiles()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var tempDir = tempDirectory.Path;
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var tempDir = workspace.Path;
 
         var migrationFileName = "tsconfig.apphost.json";
         var migrationContent = """{ "compilerOptions": { "target": "ES2022" } }""";
@@ -988,8 +1002,9 @@ public class GuestRuntimeTests(ITestOutputHelper outputHelper)
             string[] args,
             DirectoryInfo workingDirectory,
             IDictionary<string, string> environmentVariables,
-            CancellationToken cancellationToken,
-            Func<Task>? afterLaunchAsync = null)
+            Func<Task>? afterLaunchAsync,
+            GuestLaunchOptions? options,
+            CancellationToken cancellationToken)
         {
             Calls.Add((command, args));
             LastCommand = command;

@@ -82,6 +82,18 @@
   <data name="EnvironmentCategoryHeader" xml:space="preserve">
     <value>Environment</value>
   </data>
+  <data name="DevelopmentToolsCategoryHeader" xml:space="preserve">
+    <value>Development Tools</value>
+  </data>
+  <data name="VsCodeExtensionInstalledMessage" xml:space="preserve">
+    <value>Aspire extension for VS Code is installed</value>
+  </data>
+  <data name="VsCodeExtensionMissingMessage" xml:space="preserve">
+    <value>VS Code is installed, but the Aspire extension is not installed</value>
+  </data>
+  <data name="VsCodeExtensionMissingFix" xml:space="preserve">
+    <value>Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience.</value>
+  </data>
   <data name="SummaryFormat" xml:space="preserve">
     <value>Summary: {0} passed, {1} warnings, {2} failed</value>
   </data>
@@ -143,6 +155,10 @@
     <value>Run '{0}' to remove all certificates, then run '{1}' to create and trust a new one.</value>
     <comment>{0} is the aspire certs clean command, {1} is the aspire certs trust command (not localizable)</comment>
   </data>
+  <data name="DevCertsInstallOpenSslCleanAndTrustFixFormat" xml:space="preserve">
+    <value>Install {0}, run '{1}' to remove all certificates, then run '{2}' to create and trust a new one.</value>
+    <comment>{0} is the openssl command/package name, {1} is the aspire certs clean command, {2} is the aspire certs trust command (not localizable)</comment>
+  </data>
   <data name="DevCertsMultipleNoneTrustedMessageFormat" xml:space="preserve">
     <value>Multiple HTTPS development certificates found ({0} certificates), but none are trusted</value>
   </data>
@@ -178,6 +194,36 @@
   </data>
   <data name="DevCertsOldVersionDetailsFormat" xml:space="preserve">
     <value>Older certificate versions (&lt; v{0}) may not support all certificate trust scenarios.</value>
+  </data>
+  <data name="DevCertsMissingCertUtilMessage" xml:space="preserve">
+    <value>certutil is not available; browser certificate trust may be incomplete</value>
+  </data>
+  <data name="DevCertsMissingCertUtilDetails" xml:space="preserve">
+    <value>Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux.</value>
+  </data>
+  <data name="DevCertsMissingCertUtilFix" xml:space="preserve">
+    <value>Install certutil from your distribution's NSS tools package (for example, libnss3-tools).</value>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingCurrentCertificateMessage" xml:space="preserve">
+    <value>OpenSSL HTTPS development certificate cache is missing the current certificate</value>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingDetailsFormat" xml:space="preserve">
+    <value>The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</comment>
+  </data>
+  <data name="DevCertsOpenSslCacheUnreadableMessage" xml:space="preserve">
+    <value>OpenSSL HTTPS development certificate cache contains unreadable certificate files</value>
+  </data>
+  <data name="DevCertsOpenSslCacheUnreadableFilesDetailsFormat" xml:space="preserve">
+    <value>Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is a comma-separated list of certificate file names.</comment>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingHashLinkMessage" xml:space="preserve">
+    <value>OpenSSL HTTPS development certificate cache is missing subject-hash links</value>
+  </data>
+  <data name="DevCertsOpenSslCacheMissingHashLinkDetailsFormat" xml:space="preserve">
+    <value>The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories.</value>
+    <comment>{0} is the OpenSSL certificate cache directory. {1} is the certificate thumbprint.</comment>
   </data>
   <data name="DcpBundleNotFoundMessage" xml:space="preserve">
     <value>Developer Control Plane (DCP) bundle not found; skipping connection health checks</value>
@@ -318,5 +364,13 @@
   <data name="LegacySettingsDetectedFix" xml:space="preserve">
     <value>Run 'aspire init' (or any aspire run/add/update/pipeline command) to migrate to aspire.config.json.
 The legacy file continues to work — this is a non-blocking warning.</value>
+  </data>
+  <data name="LegacyTypeScriptAppHostMessageFormat" xml:space="preserve">
+    <value>Legacy 'apphost.ts' layout detected at {0}</value>
+    <comment>{0} is the full path to the legacy apphost.ts file.</comment>
+  </data>
+  <data name="PendingMigrationFix" xml:space="preserve">
+    <value>Run 'aspire update --migrate' to apply the recommended migration.
+The current layout continues to work — this is a non-blocking warning.</value>
   </data>
 </root>

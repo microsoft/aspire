@@ -23,7 +23,7 @@ public sealed class ConformanceTests : ConformanceTests<DataLakeServiceClient, A
 
     // AzureDataLakeSettings subclassed by AzureDataLakeFileSystemSettings
     protected override bool CheckOptionClassSealed => false;
-    protected override string[] RequiredLogCategories => ["Azure.Core", "Azure.Identity"];
+    protected override RequiredLogCategory[] RequiredLogCategories => [new("Azure.Core"), new("Azure.Identity")];
     protected override bool SupportsKeyedRegistrations => true;
     protected override bool CanConnectToServer => s_canConnectToServer.Value;
     protected override string ConfigurationSectionName => "Aspire:Azure:Storage:Files:DataLake";

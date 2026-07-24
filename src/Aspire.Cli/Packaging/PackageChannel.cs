@@ -9,7 +9,6 @@ using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Hosting.Utils;
 using Microsoft.Extensions.Logging;
-using Microsoft.Extensions.Logging.Abstractions;
 using Semver;
 using NuGetPackage = Aspire.Shared.NuGetPackageCli;
 
@@ -30,6 +29,18 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
     private readonly string? _currentCliVersion = currentCliVersion;
 
     private const string GuestAppHostSdkPackageId = "Aspire.Hosting";
+
+    // The NuGet 'polyglot' tag added by default to Aspire.Hosting integrations that run the export
+    // analyzer; authors opt out with <IsAspirePolyglotCompatible>false</IsAspirePolyglotCompatible> (see
+    // src/Directory.Build.targets and Aspire.Hosting/buildTransitive/Aspire.Hosting.targets). Its presence
+    // identifies an integration whose API surface is projected to non-C# AppHosts via [AspireExport] (ATS)
+    // coverage, so `aspire add` can hide integrations that a polyglot AppHost cannot consume.
+    private const string PolyglotTag = "polyglot";
+
+    // NuGet search query scoping that restricts results to packages carrying the polyglot tag.
+    // Verified to work against nuget.org and Azure DevOps feeds, but NOT against local folder feeds,
+    // which is why the local-source path reads the nuspec <tags> directly instead.
+    private const string PolyglotTagSearchTerm = "tags:polyglot";
 
     public string Name { get; } = name;
     public PackageChannelQuality Quality { get; } = quality;
@@ -228,7 +239,7 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
                 return GetPackageFileMetadata(file.FullName);
             })
             .OfType<PackageFileMetadata>()
-            .Where(metadata => IsIntegrationPackageId(metadata.PackageId))
+            .Where(metadata => PackageIdFilters.IsIntegrationPackageId(metadata.PackageId))
             .Where(metadata => showDeprecatedPackages || !DeprecatedPackages.IsDeprecated(metadata.PackageId))
             .Where(IsAllowedByQuality);
 
@@ -254,6 +265,119 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             { Quality: PackageChannelQuality.Prerelease, Version: { IsPrerelease: true } } => true,
             _ => false
         };
+    }
+
+    /// <summary>
+    /// Returns the set of integration package IDs in this channel that are marked polyglot-compatible,
+    /// i.e. carry the <c>polyglot</c> NuGet tag. That tag is added by default to Aspire.Hosting
+    /// integrations that run the export analyzer; authors opt out with
+    /// <c>&lt;IsAspirePolyglotCompatible&gt;false&lt;/IsAspirePolyglotCompatible&gt;</c>.
+    /// </summary>
+    /// <remarks>
+    /// Used by <c>aspire add</c> to hide integrations that have no ATS export coverage from non-C#
+    /// AppHosts. The tag is read differently per channel kind because <c>dotnet package search --format json</c>
+    /// does not return tags and <c>tags:</c> query scoping is not honored by local folder feeds:
+    /// <list type="bullet">
+    /// <item>Local package source / hive: the <c>&lt;tags&gt;</c> element is read from the nuspec inside each <c>.nupkg</c>.</item>
+    /// <item>Remote feeds: a secondary <c>tags:polyglot</c> search is issued.</item>
+    /// </list>
+    /// </remarks>
+    public async Task<IReadOnlySet<string>> GetPolyglotCompatiblePackageIdsAsync(DirectoryInfo workingDirectory, CancellationToken cancellationToken)
+    {
+        var localPackageSource = GetLocalAspirePackageSource();
+        if (localPackageSource is not null)
+        {
+            return GetPolyglotCompatiblePackageIdsFromLocalPackageSource(localPackageSource, cancellationToken);
+        }
+
+        using var tempNuGetConfig = Type is PackageChannelType.Explicit ? await TemporaryNuGetConfig.CreateAsync(Mappings!) : null;
+
+        var tasks = new List<Task<IEnumerable<NuGetPackage>>>();
+
+        if (Quality is PackageChannelQuality.Stable or PackageChannelQuality.Both)
+        {
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(workingDirectory, PolyglotTagSearchTerm, filter: null, prerelease: false, tempNuGetConfig?.ConfigFile, useCache: true, cancellationToken));
+        }
+
+        if (Quality is PackageChannelQuality.Prerelease or PackageChannelQuality.Both)
+        {
+            tasks.Add(nuGetPackageCache.GetPackagesAsync(workingDirectory, PolyglotTagSearchTerm, filter: null, prerelease: true, tempNuGetConfig?.ConfigFile, useCache: true, cancellationToken));
+        }
+
+        var results = await Task.WhenAll(tasks);
+
+        return results
+            .SelectMany(r => r)
+            .Select(p => p.Id)
+            .ToHashSet(StringComparers.NuGetPackageId);
+    }
+
+    private IReadOnlySet<string> GetPolyglotCompatiblePackageIdsFromLocalPackageSource(DirectoryInfo packageSource, CancellationToken cancellationToken)
+    {
+        var ids = new HashSet<string>(StringComparers.NuGetPackageId);
+
+        foreach (var file in packageSource.EnumerateFiles("*.nupkg", SearchOption.TopDirectoryOnly))
+        {
+            cancellationToken.ThrowIfCancellationRequested();
+
+            if (GetPackageFileMetadata(file.FullName) is not { } metadata || !PackageIdFilters.IsIntegrationPackageId(metadata.PackageId))
+            {
+                continue;
+            }
+
+            if (PackageHasPolyglotTag(file.FullName, logger))
+            {
+                ids.Add(metadata.PackageId);
+            }
+        }
+
+        return ids;
+    }
+
+    private static bool PackageHasPolyglotTag(string packageFile, ILogger logger)
+    {
+        try
+        {
+            using var archive = ZipFile.OpenRead(packageFile);
+            var nuspecEntry = archive.Entries.FirstOrDefault(entry => entry.FullName.EndsWith(".nuspec", StringComparison.OrdinalIgnoreCase));
+            if (nuspecEntry is null)
+            {
+                return false;
+            }
+
+            using var stream = nuspecEntry.Open();
+            var document = XDocument.Load(stream);
+            var tags = document
+                .Descendants()
+                .FirstOrDefault(element => element.Name.LocalName == "tags")?.Value;
+
+            return HasPolyglotTag(tags);
+        }
+        catch (IOException ex)
+        {
+            logger.LogDebug(ex, "Failed to read package file '{PackageFile}' while resolving polyglot tag.", packageFile);
+            return false;
+        }
+        catch (InvalidDataException ex)
+        {
+            logger.LogDebug(ex, "Package file '{PackageFile}' contains invalid data.", packageFile);
+            return false;
+        }
+        catch (System.Xml.XmlException ex)
+        {
+            logger.LogDebug(ex, "Failed to parse nuspec in package file '{PackageFile}'.", packageFile);
+            return false;
+        }
+    }
+
+    private static bool HasPolyglotTag(string? tags)
+    {
+        // nuspec <tags> are a single space-delimited string, e.g.
+        //   <tags>aspire integration hosting redis cache caching polyglot</tags>
+        // Match whole tokens so a substring like "polyglotted" wouldn't be treated as the marker.
+        return tags is not null && tags
+            .Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(tag => string.Equals(tag, PolyglotTag, StringComparison.OrdinalIgnoreCase));
     }
 
     public async Task<IEnumerable<NuGetPackage>> GetPackagesAsync(string packageId, DirectoryInfo workingDirectory, CancellationToken cancellationToken)
@@ -584,42 +708,18 @@ internal class PackageChannel(string name, PackageChannelQuality quality, Packag
             !string.Equals(mapping.PackageFilter, PackageMapping.AllPackages, StringComparison.Ordinal);
     }
 
-    private static bool IsIntegrationPackageId(string packageId)
+    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, string? currentCliVersion = null)
     {
-        // NuGet package IDs are case-insensitive, so prefix checks use OrdinalIgnoreCase
-        // to stay consistent with StringComparers.NuGetPackageId used elsewhere in this
-        // file. .nupkg files on disk normally carry the canonical casing, but matching
-        // case-insensitively avoids silently dropping integrations whose file names were
-        // produced with a non-canonical casing (e.g. a third-party hive build).
-        //
-        // This method classifies a package id by namespace only. The deprecation filter
-        // is applied separately in GetIntegrationPackagesFromLocalPackageSource so it can
-        // be gated on the ShowDeprecatedPackages feature flag, matching the feed-based
-        // path in NuGetPackageCache.
-        var isHostingOrCommunityToolkitNamespaced = packageId.StartsWith("Aspire.Hosting.", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("CommunityToolkit.Aspire.Hosting.", StringComparison.OrdinalIgnoreCase);
-
-        var isExcluded = packageId.StartsWith("Aspire.Hosting.AppHost", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("Aspire.Hosting.Sdk", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("Aspire.Hosting.Orchestration", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("Aspire.Hosting.Testing", StringComparison.OrdinalIgnoreCase) ||
-            packageId.StartsWith("Aspire.Hosting.Msi", StringComparison.OrdinalIgnoreCase);
-
-        return isHostingOrCommunityToolkitNamespaced && !isExcluded;
+        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion);
     }
 
-    public static PackageChannel CreateExplicitChannel(string name, PackageChannelQuality quality, PackageMapping[]? mappings, INuGetPackageCache nuGetPackageCache, IFeatures features, bool configureGlobalPackagesFolder = false, string? cliDownloadBaseUrl = null, string? pinnedVersion = null, ILogger? logger = null, string? currentCliVersion = null)
-    {
-        return new PackageChannel(name, quality, mappings, nuGetPackageCache, features, logger ?? NullLogger.Instance, configureGlobalPackagesFolder, cliDownloadBaseUrl, pinnedVersion, currentCliVersion);
-    }
-
-    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger? logger = null, string? currentCliVersion = null)
+    public static PackageChannel CreateImplicitChannel(INuGetPackageCache nuGetPackageCache, IFeatures features, ILogger logger, string? currentCliVersion = null)
     {
         // The reason that PackageChannelQuality.Both is because there are situations like
         // in community toolkit where there is a newer beta version available for a package
         // in the case of implicit feeds we want to be able to show that, along side the stable
         // version. Not really an issue for template selection though (unless we start allowing)
         // for broader templating options.
-        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger ?? NullLogger.Instance, currentCliVersion: currentCliVersion);
+        return new PackageChannel("default", PackageChannelQuality.Both, null, nuGetPackageCache, features, logger, currentCliVersion: currentCliVersion);
     }
 }

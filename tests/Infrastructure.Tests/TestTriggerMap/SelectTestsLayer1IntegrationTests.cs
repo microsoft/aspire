@@ -17,8 +17,11 @@ namespace Infrastructure.Tests.TestTriggerMap;
 [Collection("GraphAffectedProjects")] // MSBuildLocator registers process-wide; keep these serialized.
 public sealed class SelectTestsLayer1IntegrationTests
 {
-    public SelectTestsLayer1IntegrationTests()
+    private readonly ITestOutputHelper _outputHelper;
+
+    public SelectTestsLayer1IntegrationTests(ITestOutputHelper outputHelper)
     {
+        _outputHelper = outputHelper;
         GraphAffectedProjects.EnsureMSBuildRegistered();
     }
 
@@ -29,7 +32,8 @@ public sealed class SelectTestsLayer1IntegrationTests
     [Fact]
     public void ProductionChangeFlowsThroughLayer1IntoEnforceProps()
     {
-        using var fixture = new GraphRepoFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var fixture = new GraphRepoFixture(workspace);
 
         var changed = fixture.WriteChangedFiles("src/Core/Core.cs");
         var propsPath = System.IO.Path.Combine(fixture.Path, "BeforeBuildProps.props");
@@ -54,6 +58,61 @@ public sealed class SelectTestsLayer1IntegrationTests
         });
     }
 
+    // The merge-base rebind feeds BOTH layers: Layer 1's graph closure must diff from the branch point
+    // too, not the base tip. The existing CLI-level merge-base test runs with --skip-layer1, so nothing
+    // pins that Layer 1 also honors it. Diverge the history so the two diff bases disagree: the PR edits
+    // Core's source on a feature branch, and the base separately edits an INDEPENDENT project's source
+    // (Other) after the branch point. The PR's own change set is Core only, so Layer 1 must select
+    // Core.Tests and NOT Other.Tests. Failure mode: a regression that fed Layer 1 the base tip (or
+    // rebased only Layer 2) would attribute Other.Tests from base-branch churn the PR never touched.
+    [Fact]
+    public void Layer1DiffsFromMergeBaseNotBaseTip()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var fixture = new GraphRepoFixture(workspace, withSecondProject: true);
+        fixture.InitGit();
+        fixture.CommitAll("base");
+        var baseSha = fixture.Git("rev-parse", "HEAD");
+
+        // The PR's own change: edit Core's source on a feature branch off the base.
+        fixture.Git("checkout", "-q", "-b", "feature");
+        fixture.WriteFile("src/Core/Core.cs", "namespace Core; public class C(ITestOutputHelper outputHelper) { public int X; }");
+        fixture.CommitAll("feature: change Core");
+        var featureSha = fixture.Git("rev-parse", "HEAD");
+
+        // Base-branch churn AFTER the branch point: edit Other's source on the advanced base. A
+        // base-tip..head diff would surface Other.cs (it differs across the two tips) and select
+        // Other.Tests; the merge-base..head diff excludes it.
+        fixture.Git("checkout", "-q", "-b", "advanced-base", baseSha);
+        fixture.WriteFile("src/Other/Other.cs", "namespace Other; public class O(ITestOutputHelper outputHelper) { public int Y; }");
+        fixture.CommitAll("base advances: change Other");
+        var advancedBaseSha = fixture.Git("rev-parse", "HEAD");
+
+        var propsPath = System.IO.Path.Combine(fixture.Path, "BeforeBuildProps.props");
+        fixture.WithGitHubEnvRedirected(output =>
+        {
+            var exit = Selection.Run(new RunOptions(
+                RepoRoot: fixture.Path,
+                MapPath: System.IO.Path.Combine(fixture.Path, "map.yml"),
+                SlnxPath: System.IO.Path.Combine(fixture.Path, "Aspire.slnx"),
+                From: advancedBaseSha,
+                To: featureSha,
+                ChangedFilesPath: null,
+                SkipLayer1: false,
+                ForceAll: false,
+                Enforce: true,
+                BeforeBuildProps: propsPath));
+
+            Assert.Equal(0, exit);
+            var props = File.ReadAllText(propsPath);
+            // Core.cs is the PR's own change -> Core.Tests selected via the reverse-dependency graph.
+            Assert.Contains("tests/Core.Tests/Core.Tests.csproj", props);
+            // Other.cs changed only on the advanced base AFTER the branch point, so the merge-base diff
+            // excludes it and Other.Tests is NOT selected. A regression to base-tip..head would add it.
+            Assert.DoesNotContain("tests/Other.Tests/Other.Tests.csproj", props);
+        });
+    }
+
     // Failure mode: the step summary reports THAT Core.Tests was selected but not HOW, so a reviewer
     // can't see the decision path. The Layer 1 cause must render the full chain -- seed file then the
     // reverse-dependency project chain -- so a change to src/Core/Core.cs shows as
@@ -61,7 +120,8 @@ public sealed class SelectTestsLayer1IntegrationTests
     [Fact]
     public void Layer1SelectionRendersFullDecisionPathInSummary()
     {
-        using var fixture = new GraphRepoFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var fixture = new GraphRepoFixture(workspace);
 
         var changed = fixture.WriteChangedFiles("src/Core/Core.cs");
         var propsPath = System.IO.Path.Combine(fixture.Path, "BeforeBuildProps.props");
@@ -89,12 +149,15 @@ public sealed class SelectTestsLayer1IntegrationTests
                     BeforeBuildProps: propsPath));
 
                 Assert.Equal(0, exit);
-                // Summary carries the full chain; the terse PR comment names just the seed file.
+                // Summary carries the full chain; the terse PR comment groups the graph fan-out under
+                // the seed file heading instead of repeating the path per project.
                 var summary = File.ReadAllText(System.IO.Path.Combine(fixture.Path, "summary"));
                 Assert.Contains("src/Core/Core.cs → Core → Core.Tests", summary);
 
                 var comment = File.ReadAllText(commentPath);
-                Assert.Contains("via graph from `src/Core/Core.cs`", comment);
+                Assert.Contains("`src/Core/Core.cs`", comment);
+                Assert.Contains("via the project graph", comment);
+                Assert.Contains("`Core.Tests`", comment);
 
                 // The JSON artifact preserves the decision path as a structured array.
                 using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(jsonPath));
@@ -113,6 +176,63 @@ public sealed class SelectTestsLayer1IntegrationTests
         });
     }
 
+    // Failure mode: the "(N hops)" annotation in the PR comment (MemberWithHops, path.Count - 2) is
+    // dropped or its math regresses, so a reviewer loses the near-vs-far dependency signal for
+    // graph-selected tests. With Core.Tests -> Mid -> Core, a change to src/Core/Core.cs reaches
+    // Core.Tests through two project edges, which must render as "(2 hops)".
+    [Fact]
+    public void MultiHopGraphSelectionAnnotatesHopCountInComment()
+    {
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var fixture = new GraphRepoFixture(workspace, withIntermediateProject: true);
+
+        var changed = fixture.WriteChangedFiles("src/Core/Core.cs");
+        var propsPath = System.IO.Path.Combine(fixture.Path, "BeforeBuildProps.props");
+
+        fixture.WithGitHubEnvRedirected(_ =>
+        {
+            var commentPath = System.IO.Path.Combine(fixture.Path, "comment.md");
+            var jsonPath = System.IO.Path.Combine(fixture.Path, "selection.json");
+            var previousComment = Environment.GetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE");
+            var previousJson = Environment.GetEnvironmentVariable("SELECT_TESTS_JSON_FILE");
+            Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", commentPath);
+            Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", jsonPath);
+            try
+            {
+                var exit = Selection.Run(new RunOptions(
+                    RepoRoot: fixture.Path,
+                    MapPath: System.IO.Path.Combine(fixture.Path, "map.yml"),
+                    SlnxPath: System.IO.Path.Combine(fixture.Path, "Aspire.slnx"),
+                    From: null,
+                    To: null,
+                    ChangedFilesPath: changed,
+                    SkipLayer1: false,
+                    ForceAll: false,
+                    Enforce: true,
+                    BeforeBuildProps: propsPath));
+
+                Assert.Equal(0, exit);
+
+                // The structured path confirms the two-edge chain before we assert on the rendered text.
+                using var doc = System.Text.Json.JsonDocument.Parse(File.ReadAllText(jsonPath));
+                var cause = doc.RootElement.GetProperty("testProjects").EnumerateArray()
+                    .Single(t => t.GetProperty("name").GetString() == "Core.Tests")
+                    .GetProperty("causes").EnumerateArray().Single();
+                var path = cause.GetProperty("path").EnumerateArray().Select(e => e.GetString()).ToArray();
+                Assert.Equal(new[] { "src/Core/Core.cs", "Core", "Mid", "Core.Tests" }, path);
+
+                var comment = File.ReadAllText(commentPath);
+                Assert.Contains("via the project graph", comment);
+                Assert.Contains("`Core.Tests` (2 hops)", comment);
+            }
+            finally
+            {
+                Environment.SetEnvironmentVariable("SELECT_TESTS_COMMENT_FILE", previousComment);
+                Environment.SetEnvironmentVariable("SELECT_TESTS_JSON_FILE", previousJson);
+            }
+        });
+    }
+
     /// <summary>
     /// A temp repo with a real, buildable MSBuild graph: <c>src/Core</c> (production) and
     /// <c>tests/Core.Tests</c> (a test project referencing it), plus an <c>Aspire.slnx</c> and an
@@ -120,21 +240,71 @@ public sealed class SelectTestsLayer1IntegrationTests
     /// </summary>
     private sealed class GraphRepoFixture : IDisposable
     {
-        private readonly TestTempDirectory _temp = new();
+        private readonly TemporaryWorkspace _workspace;
 
-        public string Path => _temp.Path;
+        public string Path => _workspace.Path;
 
-        public GraphRepoFixture()
+        public GraphRepoFixture(TemporaryWorkspace workspace, bool withIntermediateProject = false, bool withSecondProject = false)
         {
+            _workspace = workspace;
+
             Write("Directory.Build.props", "<Project />");
             Write("Directory.Build.targets", "<Project />");
             Write("map.yml", "version: 1\n");
 
-            Write("src/Core/Core.cs", "namespace Core; public class C { }");
+            Write("src/Core/Core.cs", "namespace Core; public class C(ITestOutputHelper outputHelper) { }");
             WriteProject("src/Core/Core.csproj", compiles: ["Core.cs"], references: []);
 
-            Write("tests/Core.Tests/Core.Tests.cs", "namespace Core.Tests; public class T { }");
+            if (withIntermediateProject)
+            {
+                // A two-edge chain: Core.Tests -> Mid -> Core. A change to src/Core/Core.cs reaches
+                // Core.Tests through two project edges, so its Layer 1 path is
+                // [src/Core/Core.cs, Core, Mid, Core.Tests] (hops == 2) -- exactly what makes the PR
+                // comment render the "(N hops)" annotation. Only Core.Tests (under tests/) is in the
+                // test matrix; Mid is a production project that just lengthens the dependency path.
+                Write("src/Mid/Mid.cs", "namespace Mid; public class M(ITestOutputHelper outputHelper) { }");
+                WriteProject("src/Mid/Mid.csproj", compiles: ["Mid.cs"], references: [@"..\..\src\Core\Core.csproj"]);
+
+                Write("tests/Core.Tests/Core.Tests.cs", "namespace Core.Tests; public class T(ITestOutputHelper outputHelper) { }");
+                WriteProject("tests/Core.Tests/Core.Tests.csproj", compiles: ["Core.Tests.cs"], references: [@"..\..\src\Mid\Mid.csproj"]);
+
+                Write("Aspire.slnx",
+                    """
+                    <Solution>
+                      <Project Path="src/Core/Core.csproj" />
+                      <Project Path="src/Mid/Mid.csproj" />
+                      <Project Path="tests/Core.Tests/Core.Tests.csproj" />
+                    </Solution>
+                    """);
+                return;
+            }
+
+            Write("tests/Core.Tests/Core.Tests.cs", "namespace Core.Tests; public class T(ITestOutputHelper outputHelper) { }");
             WriteProject("tests/Core.Tests/Core.Tests.csproj", compiles: ["Core.Tests.cs"], references: [@"..\..\src\Core\Core.csproj"]);
+
+            if (withSecondProject)
+            {
+                // A second, INDEPENDENT graph (Other.Tests -> Other) with no edge to Core. It exists so a
+                // diff can change Other's source in isolation: a base-tip..head diff that picked up that
+                // base-branch churn would select Other.Tests, while a merge-base diff (the PR's own
+                // change set) leaves Other.Tests out -- the discriminator the merge-base test asserts.
+                Write("src/Other/Other.cs", "namespace Other; public class O(ITestOutputHelper outputHelper) { }");
+                WriteProject("src/Other/Other.csproj", compiles: ["Other.cs"], references: []);
+
+                Write("tests/Other.Tests/Other.Tests.cs", "namespace Other.Tests; public class T(ITestOutputHelper outputHelper) { }");
+                WriteProject("tests/Other.Tests/Other.Tests.csproj", compiles: ["Other.Tests.cs"], references: [@"..\..\src\Other\Other.csproj"]);
+
+                Write("Aspire.slnx",
+                    """
+                    <Solution>
+                      <Project Path="src/Core/Core.csproj" />
+                      <Project Path="tests/Core.Tests/Core.Tests.csproj" />
+                      <Project Path="src/Other/Other.csproj" />
+                      <Project Path="tests/Other.Tests/Other.Tests.csproj" />
+                    </Solution>
+                    """);
+                return;
+            }
 
             Write("Aspire.slnx",
                 """
@@ -147,10 +317,30 @@ public sealed class SelectTestsLayer1IntegrationTests
 
         public string WriteChangedFiles(params string[] paths)
         {
-            var changed = System.IO.Path.Combine(_temp.Path, "changed.txt");
+            var changed = System.IO.Path.Combine(_workspace.Path, "changed.txt");
             File.WriteAllLines(changed, paths);
             return changed;
         }
+
+        // Git scaffolding for the tests that need real history (the merge-base diff path). Tests that
+        // feed a literal --changed-files list don't init a repo at all.
+        public void InitGit()
+        {
+            Git("init", "-q", "-b", "main");
+            Git("config", "user.email", "test@example.com");
+            Git("config", "user.name", "Test");
+            Git("config", "commit.gpgsign", "false");
+        }
+
+        public void CommitAll(string message)
+        {
+            Git("add", "-A");
+            Git("commit", "-q", "-m", message);
+        }
+
+        public string Git(params string[] args) => GitCli.Run(_workspace.Path, args);
+
+        public void WriteFile(string relativePath, string contents) => Write(relativePath, contents);
 
         public void WithGitHubEnvRedirected(Action<Func<IReadOnlyDictionary<string, string>>> body)
         {
@@ -158,9 +348,9 @@ public sealed class SelectTestsLayer1IntegrationTests
             var prevSummary = Environment.GetEnvironmentVariable("GITHUB_STEP_SUMMARY");
             try
             {
-                var outputPath = System.IO.Path.Combine(_temp.Path, "output");
+                var outputPath = System.IO.Path.Combine(_workspace.Path, "output");
                 Environment.SetEnvironmentVariable("GITHUB_OUTPUT", outputPath);
-                Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", System.IO.Path.Combine(_temp.Path, "summary"));
+                Environment.SetEnvironmentVariable("GITHUB_STEP_SUMMARY", System.IO.Path.Combine(_workspace.Path, "summary"));
 
                 IReadOnlyDictionary<string, string> ReadOutput()
                 {
@@ -191,7 +381,7 @@ public sealed class SelectTestsLayer1IntegrationTests
 
         private void Write(string relativePath, string contents)
         {
-            var fullPath = System.IO.Path.Combine(_temp.Path, relativePath.Replace('\\', System.IO.Path.DirectorySeparatorChar));
+            var fullPath = System.IO.Path.Combine(_workspace.Path, relativePath.Replace('\\', System.IO.Path.DirectorySeparatorChar));
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fullPath)!);
             File.WriteAllText(fullPath, contents);
         }
@@ -216,6 +406,6 @@ public sealed class SelectTestsLayer1IntegrationTests
                 """);
         }
 
-        public void Dispose() => _temp.Dispose();
+        public void Dispose() => _workspace.Dispose();
     }
 }

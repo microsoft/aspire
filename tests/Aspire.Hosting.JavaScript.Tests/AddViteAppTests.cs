@@ -6,6 +6,7 @@
 #pragma warning disable ASPIREPIPELINES001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
+using System.Runtime.CompilerServices;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Pipelines;
 using Aspire.Hosting.Tests.Utils;
@@ -15,16 +16,16 @@ using Microsoft.Extensions.Logging;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
-public class AddViteAppTests
+public class AddViteAppTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task VerifyDefaultDockerfile()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
         // Create vite directory to ensure manifest generates correct relative build context path
-        var viteDir = Path.Combine(tempDir.Path, "vite");
+        var viteDir = Path.Combine(workspace.Path, "vite");
         Directory.CreateDirectory(viteDir);
 
         // Create a lock file so npm ci is used in the Dockerfile
@@ -33,7 +34,7 @@ public class AddViteAppTests
         var nodeApp = builder.AddViteApp("vite", viteDir)
             .WithNpm(install: true);
 
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
         var expectedManifest = $$"""
             {
@@ -59,7 +60,7 @@ public class AddViteAppTests
             """;
         Assert.Equal(expectedManifest, manifest.ToString());
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "vite.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "vite.Dockerfile");
         var dockerfileContents = File.ReadAllText(dockerfilePath);
         var expectedDockerfile = $$"""
             FROM node:22-slim
@@ -82,10 +83,10 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileWhenPublishedAsStaticWebsite()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var viteDir = Path.Combine(tempDir.Path, "vite");
+        var viteDir = Path.Combine(workspace.Path, "vite");
         Directory.CreateDirectory(viteDir);
         File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
 
@@ -93,9 +94,9 @@ public class AddViteAppTests
             .WithNpm(install: true)
             .PublishAsStaticWebsite();
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "vite.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "vite.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
 
         var dockerBuildAnnotation = nodeApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
@@ -108,14 +109,14 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileWhenPublishedAsStaticWebsiteWithApiProxy()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var viteDir = Path.Combine(tempDir.Path, "vite");
+        var viteDir = Path.Combine(workspace.Path, "vite");
         Directory.CreateDirectory(viteDir);
         File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
 
-        var apiDir = Path.Combine(tempDir.Path, "api");
+        var apiDir = Path.Combine(workspace.Path, "api");
         Directory.CreateDirectory(apiDir);
         File.WriteAllText(Path.Combine(apiDir, "package-lock.json"), "empty");
 
@@ -126,19 +127,19 @@ public class AddViteAppTests
             .WithNpm(install: true)
             .PublishAsStaticWebsite("/api", api);
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "vite.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "vite.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
     }
 
     [Fact]
     public async Task PublishAsStaticWebsiteSetsYarpEnvironmentVariables()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var viteDir = Path.Combine(tempDir.Path, "vite");
+        var viteDir = Path.Combine(workspace.Path, "vite");
         Directory.CreateDirectory(viteDir);
         File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
 
@@ -156,14 +157,14 @@ public class AddViteAppTests
     [Fact]
     public async Task PublishAsStaticWebsiteWithApiProxySetsReverseProxyEnvironmentVariables()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var viteDir = Path.Combine(tempDir.Path, "vite");
+        var viteDir = Path.Combine(workspace.Path, "vite");
         Directory.CreateDirectory(viteDir);
         File.WriteAllText(Path.Combine(viteDir, "package-lock.json"), "empty");
 
-        var apiDir = Path.Combine(tempDir.Path, "api");
+        var apiDir = Path.Combine(workspace.Path, "api");
         Directory.CreateDirectory(apiDir);
         File.WriteAllText(Path.Combine(apiDir, "package-lock.json"), "empty");
 
@@ -186,10 +187,10 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileWhenPublishedAsStaticWebsiteWithCustomOutputPath()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "angular");
+        var appDir = Path.Combine(workspace.Path, "angular");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "package-lock.json"), "empty");
 
@@ -197,9 +198,9 @@ public class AddViteAppTests
             .WithNpm(install: true)
             .PublishAsStaticWebsite(o => o.OutputPath = "dist/browser");
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "angular.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "angular.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
 
         var dockerBuildAnnotation = nodeApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
@@ -212,10 +213,10 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileWhenPublishedAsNodeServer()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "vite");
+        var appDir = Path.Combine(workspace.Path, "vite");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "package-lock.json"), "empty");
 
@@ -223,9 +224,9 @@ public class AddViteAppTests
             .WithNpm(install: true)
             .PublishAsNodeServer(".output/server/index.mjs", ".output");
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "vite.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "vite.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
 
         var containerFilesSource = nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>().Single();
@@ -235,19 +236,19 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileWhenPublishedAsNextStandalone()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        var nextDir = Path.Combine(workspace.Path, "nextjs");
         Directory.CreateDirectory(nextDir);
         File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
 
         var nodeApp = builder.AddNextJsApp("nextjs", nextDir)
             .WithNpm(install: true);
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "nextjs.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "nextjs.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
 
         Assert.Empty(nodeApp.Resource.Annotations.OfType<ContainerFilesSourceAnnotation>());
@@ -256,29 +257,29 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileWhenNextJsAppUsesPnpm()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        var nextDir = Path.Combine(workspace.Path, "nextjs");
         Directory.CreateDirectory(nextDir);
         File.WriteAllText(Path.Combine(nextDir, "pnpm-lock.yaml"), "");
 
         var nodeApp = builder.AddNextJsApp("nextjs", nextDir)
             .WithPnpm(install: true);
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "nextjs.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "nextjs.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
     }
 
     [Fact]
     public async Task VerifyDockerfileWhenPackageScriptUsesPnpm()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "nuxt");
+        var appDir = Path.Combine(workspace.Path, "nuxt");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "pnpm-lock.yaml"), "");
 
@@ -286,19 +287,19 @@ public class AddViteAppTests
             .WithPnpm(install: true)
             .PublishAsPackageScript("start");
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "nuxt.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "nuxt.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
     }
 
     [Fact]
     public async Task VerifyDockerfileWhenPackageScriptUsesBun()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "nuxt");
+        var appDir = Path.Combine(workspace.Path, "nuxt");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "bun.lock"), "");
 
@@ -306,27 +307,27 @@ public class AddViteAppTests
             .WithBun(install: true)
             .PublishAsPackageScript("start");
 
-        await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "nuxt.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "nuxt.Dockerfile");
         await Verify(File.ReadAllText(dockerfilePath));
     }
 
     [Fact]
     public async Task VerifyDockerfileWithNodeVersionFromNvmrc()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Create an .nvmrc file
-        File.WriteAllText(Path.Combine(tempDir.Path, ".nvmrc"), "18.20.0");
+        File.WriteAllText(Path.Combine(workspace.Path, ".nvmrc"), "18.20.0");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", workspace.Path)
             .WithNpm();
 
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "vite.Dockerfile"));
 
         // Should detect version 18 from .nvmrc
         Assert.Contains("FROM node:18-slim", dockerfileContents);
@@ -335,18 +336,18 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileWithNodeVersionFromNodeVersion()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Create a .node-version file
-        File.WriteAllText(Path.Combine(tempDir.Path, ".node-version"), "v21.5.0");
+        File.WriteAllText(Path.Combine(workspace.Path, ".node-version"), "v21.5.0");
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", workspace.Path)
             .WithNpm();
 
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "vite.Dockerfile"));
 
         // Should detect version 21 from .node-version
         Assert.Contains("FROM node:21-slim", dockerfileContents);
@@ -355,7 +356,7 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileWithNodeVersionFromToolVersions()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Create a .tool-versions file
         var toolVersions = """
@@ -363,15 +364,15 @@ public class AddViteAppTests
             nodejs 19.8.1
             python 3.11.0
             """;
-        File.WriteAllText(Path.Combine(tempDir.Path, ".tool-versions"), toolVersions);
+        File.WriteAllText(Path.Combine(workspace.Path, ".tool-versions"), toolVersions);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", workspace.Path)
             .WithNpm();
 
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "vite.Dockerfile"));
 
         // Should detect version 19 from .tool-versions
         Assert.Contains("FROM node:19-slim", dockerfileContents);
@@ -380,7 +381,7 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileWithNodeVersionFromToolVersionsUsingTabs()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Create a .tool-versions file using tabs between the tool name and version
         var toolVersions = string.Join(Environment.NewLine,
@@ -389,15 +390,15 @@ public class AddViteAppTests
             "nodejs\t19.8.1",
             "python 3.11.0"
         ]);
-        File.WriteAllText(Path.Combine(tempDir.Path, ".tool-versions"), toolVersions);
+        File.WriteAllText(Path.Combine(workspace.Path, ".tool-versions"), toolVersions);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", workspace.Path)
             .WithNpm();
 
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "vite.Dockerfile"));
 
         Assert.Contains("FROM node:19-slim", dockerfileContents);
     }
@@ -405,7 +406,7 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileIgnoresPackageJsonEnginesWhenNoPinnedVersionExists()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var packageJson = """
             {
@@ -415,15 +416,15 @@ public class AddViteAppTests
               }
             }
             """;
-        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), packageJson);
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), packageJson);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", workspace.Path)
             .WithNpm();
 
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "vite.Dockerfile"));
 
         Assert.Contains("FROM node:22-slim", dockerfileContents);
     }
@@ -431,16 +432,16 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyDockerfileDefaultsTo22WhenNoVersionFound()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Don't create any version files - should default to 22
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", workspace.Path)
             .WithNpm();
 
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "vite.Dockerfile"));
 
         // Should default to version 22
         Assert.Contains("FROM node:22-slim", dockerfileContents);
@@ -454,17 +455,17 @@ public class AddViteAppTests
     [InlineData("~19.5.0", "node:19-slim")]
     public async Task VerifyDockerfileHandlesVariousVersionFormats(string versionString, string expectedImage)
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        File.WriteAllText(Path.Combine(tempDir.Path, ".nvmrc"), versionString);
+        File.WriteAllText(Path.Combine(workspace.Path, ".nvmrc"), versionString);
 
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+        var nodeApp = builder.AddViteApp("vite", workspace.Path)
             .WithNpm();
 
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "vite.Dockerfile"));
 
         Assert.Contains($"FROM {expectedImage}", dockerfileContents);
     }
@@ -472,21 +473,21 @@ public class AddViteAppTests
     [Fact]
     public async Task VerifyCustomBaseImage()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
         var customImage = "node:22-myspecialimage";
-        var nodeApp = builder.AddViteApp("vite", tempDir.Path)
+        var nodeApp = builder.AddViteApp("vite", workspace.Path)
             .WithNpm(install: true)
             .WithDockerfileBaseImage(buildImage: customImage);
 
-        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(nodeApp.Resource, workspace.Path);
 
         // Verify the manifest structure
         Assert.Equal("container.v1", manifest["type"]?.ToString());
 
         // Verify the Dockerfile contains the custom base image
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "vite.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "vite.Dockerfile"));
         Assert.Contains($"FROM {customImage}", dockerfileContents);
     }
 
@@ -541,18 +542,17 @@ public class AddViteAppTests
     [Fact]
     public async Task AddViteApp_ServerAuthCertConfig_WithExistingConfigArgument_ReplacesConfigPath()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(tempDir.Path, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
+        // Create node_modules directory for wrapper config generation
+        Directory.CreateDirectory(Path.Combine(workspace.Path, "node_modules"));
 
         // Create a vite config file
-        var viteConfigPath = Path.Combine(tempDir.Path, "vite.config.js");
+        var viteConfigPath = Path.Combine(workspace.Path, "vite.config.js");
         File.WriteAllText(viteConfigPath, "export default {}");
 
         var builder = DistributedApplication.CreateBuilder();
-        var viteApp = builder.AddViteApp("test-app", tempDir.Path)
+        var viteApp = builder.AddViteApp("test-app", workspace.Path)
             .WithViteConfig("vite.config.js");
 
         using var app = builder.Build();
@@ -571,12 +571,13 @@ public class AddViteAppTests
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
             Resource = nodeResource,
             Arguments = args,
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -585,14 +586,14 @@ public class AddViteAppTests
         // Invoke the callback
         await certConfigAnnotation.Callback(context);
 
-        // Verify a new --config was added with Aspire-specific path
+        // Verify the existing --config was replaced with the Aspire wrapper path
         var configIndex = args.IndexOf("--config");
         Assert.True(configIndex >= 0);
         Assert.True(configIndex + 1 < args.Count);
         var newConfigPath = args[configIndex + 1] as string;
         Assert.NotNull(newConfigPath);
         Assert.Contains("aspire.", newConfigPath);
-        Assert.Contains("node_modules", newConfigPath);
+        Assert.Contains(Path.Combine("node_modules", ".aspire"), newConfigPath);
 
         // Verify environment variables were set
         Assert.Contains("TLS_CONFIG_PFX", env.Keys);
@@ -602,18 +603,17 @@ public class AddViteAppTests
     [Fact]
     public async Task AddViteApp_ServerAuthCertConfig_WithoutExistingConfigArgument_DetectsDefaultConfig()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(tempDir.Path, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
+        // Create node_modules directory for wrapper config generation
+        Directory.CreateDirectory(Path.Combine(workspace.Path, "node_modules"));
 
         // Create a default vite config file that would be auto-detected
-        var viteConfigPath = Path.Combine(tempDir.Path, "vite.config.js");
+        var viteConfigPath = Path.Combine(workspace.Path, "vite.config.js");
         File.WriteAllText(viteConfigPath, "export default {}");
 
         var builder = DistributedApplication.CreateBuilder();
-        var viteApp = builder.AddViteApp("test-app", tempDir.Path);
+        var viteApp = builder.AddViteApp("test-app", workspace.Path);
 
         using var app = builder.Build();
 
@@ -625,18 +625,19 @@ public class AddViteAppTests
             .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
             .Single();
 
-        // Set up a context without --config argument (simulating default behavior)
+        // Set up a context without --config argument
         var args = new List<object> { "run", "dev", "--", "--port", "3000" };
         var env = new Dictionary<string, object>();
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
             Resource = nodeResource,
             Arguments = args,
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -660,11 +661,11 @@ public class AddViteAppTests
     [Fact]
     public async Task AddViteApp_ServerAuthCertConfig_WithMissingConfigFile_DoesNotAddConfigArgument()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // Don't create any vite config file
         var builder = DistributedApplication.CreateBuilder();
-        var viteApp = builder.AddViteApp("test-app", tempDir.Path);
+        var viteApp = builder.AddViteApp("test-app", workspace.Path);
 
         using var app = builder.Build();
 
@@ -688,6 +689,7 @@ public class AddViteAppTests
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -696,28 +698,69 @@ public class AddViteAppTests
         // Invoke the callback
         await certConfigAnnotation.Callback(context);
 
-        // Verify no --config was added since no default config file exists
+        // Verify no --config was added
         Assert.DoesNotContain("--config", args);
 
-        // Environment variables should NOT be set if there was no config to wrap
+        // Environment variables should NOT be set
+        Assert.Empty(env);
+    }
+
+    [Fact]
+    public async Task AddViteApp_ServerAuthCertConfig_WithMissingNodeModules_PreservesConfigArgument()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var viteConfigPath = Path.Combine(workspace.Path, "vite.config.js");
+        File.WriteAllText(viteConfigPath, "export default {}");
+
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddViteApp("test-app", workspace.Path);
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+        var certConfigAnnotation = nodeResource.Annotations
+            .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
+            .Single();
+
+        var args = new List<object> { "run", "dev", "--", "--port", "3000", "--config", viteConfigPath };
+        var env = new Dictionary<string, object>();
+
+        var context = new HttpsCertificateConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
+            Resource = nodeResource,
+            Arguments = args,
+            EnvironmentVariables = env,
+            CertificatePath = ReferenceExpression.Create($"cert.pem"),
+            KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
+            PfxPath = ReferenceExpression.Create($"cert.pfx"),
+            Password = null,
+            CancellationToken = CancellationToken.None
+        };
+
+        await certConfigAnnotation.Callback(context);
+
+        Assert.Equal(["run", "dev", "--", "--port", "3000", "--config", viteConfigPath], args);
         Assert.Empty(env);
     }
 
     [Fact]
     public async Task AddViteApp_ServerAuthCertConfig_WithPassword_SetsPasswordEnvironmentVariable()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(tempDir.Path, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
+        // Create node_modules directory for wrapper config generation
+        Directory.CreateDirectory(Path.Combine(workspace.Path, "node_modules"));
 
         // Create a vite config file
-        var viteConfigPath = Path.Combine(tempDir.Path, "vite.config.js");
+        var viteConfigPath = Path.Combine(workspace.Path, "vite.config.js");
         File.WriteAllText(viteConfigPath, "export default {}");
 
         var builder = DistributedApplication.CreateBuilder();
-        var viteApp = builder.AddViteApp("test-app", tempDir.Path);
+        var viteApp = builder.AddViteApp("test-app", workspace.Path);
 
         using var app = builder.Build();
 
@@ -738,12 +781,13 @@ public class AddViteAppTests
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
             Resource = nodeResource,
             Arguments = args,
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = password,
             CancellationToken = CancellationToken.None
@@ -759,76 +803,182 @@ public class AddViteAppTests
     }
 
     [Fact]
-    public async Task AddViteApp_ServerAuthCertConfig_EscapesBackslashesInAbsoluteConfigPath()
+    public async Task AddViteApp_ServerAuthCertConfig_WritesWrapperToNearestNodeModules()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create a subdirectory path that will contain backslashes on Windows
-        var subDir = Path.Combine(tempDir.Path, "my-app", "frontend");
-        Directory.CreateDirectory(subDir);
+        // Simulate a hoisted monorepo layout: node_modules is at the repo root, not in the app directory
+        var repoRoot = Path.Combine(workspace.Path, "repo");
+        var appDir = Path.Combine(repoRoot, "packages", "frontend");
+        Directory.CreateDirectory(appDir);
+        Directory.CreateDirectory(Path.Combine(repoRoot, "node_modules"));
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(subDir, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
-
-        // Create a vite config file
-        var viteConfigPath = Path.Combine(subDir, "vite.config.js");
+        // Create a vite config file in the app directory
+        var viteConfigPath = Path.Combine(appDir, "vite.config.ts");
         File.WriteAllText(viteConfigPath, "export default {}");
 
-        var builder = DistributedApplication.CreateBuilder();
-        var viteApp = builder.AddViteApp("test-app", subDir);
+        using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
+        builder.AddViteApp("test-app", appDir)
+            .WithHttpsDeveloperCertificate();
+        var appHostId = builder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
 
         using var app = builder.Build();
 
-        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
-        var nodeResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+        // Execute the before-start hooks which triggers SubscribeHttpsEndpointsUpdate (endpoint scheme change)
+        await ExecuteBeforeStartHooksAsync(app, CancellationToken.None);
 
-        // Get the HttpsCertificateConfigurationCallbackAnnotation
-        var certConfigAnnotation = nodeResource.Annotations
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var viteResource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+
+        // Now invoke the cert config callback which generates the wrapper file
+        var certConfigAnnotation = viteResource.Annotations
             .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
             .Single();
 
-        // Set up a context without --config argument (simulating default behavior)
         var args = new List<object> { "run", "dev", "--", "--port", "3000" };
         var env = new Dictionary<string, object>();
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
-            Resource = nodeResource,
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
+            Resource = viteResource,
             Arguments = args,
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
         };
 
-        // Invoke the callback
         await certConfigAnnotation.Callback(context);
 
-        // Verify a --config was added with Aspire-specific path
+        // Verify the wrapper was written under the hoisted node_modules/.aspire (repo root, not app dir)
+        var expectedDir = Path.Combine(repoRoot, "node_modules", ".aspire", appHostId, "test-app");
+        Assert.True(Directory.Exists(expectedDir), $"Expected .aspire directory at {expectedDir}");
+
+        var wrapperFiles = Directory.GetFiles(expectedDir, "aspire.vite.config.ts");
+        Assert.Single(wrapperFiles);
+
+        // Verify the --config argument points to the wrapper in the hoisted location
         var configIndex = args.IndexOf("--config");
         Assert.True(configIndex >= 0);
-        Assert.True(configIndex + 1 < args.Count);
-        var newConfigPath = args[configIndex + 1] as string;
-        Assert.NotNull(newConfigPath);
+        var configPath = args[configIndex + 1] as string;
+        Assert.NotNull(configPath);
+        Assert.StartsWith(expectedDir, configPath);
 
-        // Read the generated Aspire Vite config file
-        var generatedConfigContent = File.ReadAllText(newConfigPath);
+        // Verify wrapper content
+        var wrapperContent = File.ReadAllText(wrapperFiles[0]);
 
-        // Verify the generated config contains the absolute path with properly escaped backslashes
-        // The absolute path should have backslashes escaped as \\\\ in the JavaScript string
+        Assert.Contains("import config from '../../../../packages/frontend/vite.config.ts'", wrapperContent);
+
+        // The console.log line should contain properly escaped backslashes for JavaScript
         var absoluteConfigPath = Path.GetFullPath(viteConfigPath);
         var expectedEscapedPath = absoluteConfigPath.Replace("\\", "\\\\");
+        Assert.Contains($"Found original Vite configuration at \"{expectedEscapedPath}\"", wrapperContent);
+    }
 
-        Assert.Contains($"console.log('Found original Vite configuration at \"{expectedEscapedPath}\"')", generatedConfigContent);
+    [Fact]
+    public async Task AddViteApp_ServerAuthCertConfig_SharedNodeModules_WritesResourceSpecificWrappers()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Verify the import statement uses forward slashes for the relative path
-        Assert.Contains("import config from '", generatedConfigContent);
-        // The import path should use forward slashes (not backslashes)
-        Assert.DoesNotMatch(@"import config from '[^']*\\[^']*'", generatedConfigContent);
+        var repoRoot = Path.Combine(workspace.Path, "repo");
+        var firstAppDirectory = Path.Combine(repoRoot, "packages", "frontend-a");
+        var secondAppDirectory = Path.Combine(repoRoot, "packages", "frontend-b");
+        Directory.CreateDirectory(firstAppDirectory);
+        Directory.CreateDirectory(secondAppDirectory);
+        Directory.CreateDirectory(Path.Combine(repoRoot, "node_modules"));
+
+        var firstConfigPath = Path.Combine(firstAppDirectory, "vite.config.ts");
+        var secondConfigPath = Path.Combine(secondAppDirectory, "vite.config.ts");
+        File.WriteAllText(firstConfigPath, "export default { app: 'a' }");
+        File.WriteAllText(secondConfigPath, "export default { app: 'b' }");
+
+        var builder = DistributedApplication.CreateBuilder();
+        builder.AddViteApp("frontend-a", firstAppDirectory);
+        builder.AddViteApp("frontend-b", secondAppDirectory);
+        var appHostId = builder.Configuration["AppHost:Sha256"]![..10].ToLowerInvariant();
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resources = appModel.Resources.OfType<ViteAppResource>().ToDictionary(resource => resource.Name);
+        var configPaths = new Dictionary<string, string>();
+
+        foreach (var resourceName in resources.Keys)
+        {
+            var resource = resources[resourceName];
+            var args = new List<object> { "run", "dev", "--", "--port", "3000" };
+            var context = new HttpsCertificateConfigurationCallbackAnnotationContext
+            {
+                ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
+                Resource = resource,
+                Arguments = args,
+                EnvironmentVariables = new Dictionary<string, object>(),
+                CertificatePath = ReferenceExpression.Create($"cert.pem"),
+                KeyPath = ReferenceExpression.Create($"key.pem"),
+                CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
+                PfxPath = ReferenceExpression.Create($"cert.pfx"),
+                Password = null,
+                CancellationToken = CancellationToken.None
+            };
+
+            var certConfigAnnotation = resource.Annotations
+                .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
+                .Single();
+            await certConfigAnnotation.Callback(context);
+
+            var configIndex = args.IndexOf("--config");
+            configPaths[resourceName] = Assert.IsType<string>(args[configIndex + 1]);
+        }
+
+        var firstWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", appHostId, "frontend-a", "aspire.vite.config.ts");
+        var secondWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", appHostId, "frontend-b", "aspire.vite.config.ts");
+        Assert.Equal(firstWrapperPath, configPaths["frontend-a"]);
+        Assert.Equal(secondWrapperPath, configPaths["frontend-b"]);
+        Assert.Contains(Path.GetFullPath(firstConfigPath).Replace("\\", "\\\\"), File.ReadAllText(firstWrapperPath));
+        Assert.Contains(Path.GetFullPath(secondConfigPath).Replace("\\", "\\\\"), File.ReadAllText(secondWrapperPath));
+    }
+
+    [Fact]
+    public async Task AddViteApp_ServerAuthCertConfig_SharedNodeModules_WritesAppHostSpecificWrappers()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var repoRoot = Path.Combine(workspace.Path, "repo");
+        var firstAppDirectory = Path.Combine(repoRoot, "apps", "first");
+        var secondAppDirectory = Path.Combine(repoRoot, "apps", "second");
+        Directory.CreateDirectory(firstAppDirectory);
+        Directory.CreateDirectory(secondAppDirectory);
+        Directory.CreateDirectory(Path.Combine(repoRoot, "node_modules"));
+
+        var firstConfigPath = Path.Combine(firstAppDirectory, "vite.config.ts");
+        var secondConfigPath = Path.Combine(secondAppDirectory, "vite.config.ts");
+        File.WriteAllText(firstConfigPath, "export default { app: 'first' }");
+        File.WriteAllText(secondConfigPath, "export default { app: 'second' }");
+
+        const string firstAppHostSha = "1111111111111111";
+        const string secondAppHostSha = "2222222222222222";
+
+        using var firstBuilder = TestDistributedApplicationBuilder.Create($"AppHostSha={firstAppHostSha}");
+        using var secondBuilder = TestDistributedApplicationBuilder.Create($"AppHostSha={secondAppHostSha}");
+        firstBuilder.AddViteApp("frontend", firstAppDirectory);
+        secondBuilder.AddViteApp("frontend", secondAppDirectory);
+
+        using var firstApp = firstBuilder.Build();
+        using var secondApp = secondBuilder.Build();
+
+        var firstWrapperPath = await GenerateViteWrapperAsync(firstApp);
+        var secondWrapperPath = await GenerateViteWrapperAsync(secondApp);
+
+        var expectedFirstWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", firstAppHostSha[..10], "frontend", "aspire.vite.config.ts");
+        var expectedSecondWrapperPath = Path.Combine(repoRoot, "node_modules", ".aspire", secondAppHostSha[..10], "frontend", "aspire.vite.config.ts");
+        Assert.Equal(expectedFirstWrapperPath, firstWrapperPath);
+        Assert.Equal(expectedSecondWrapperPath, secondWrapperPath);
+        Assert.Contains(Path.GetFullPath(firstConfigPath).Replace("\\", "\\\\"), File.ReadAllText(firstWrapperPath));
+        Assert.Contains(Path.GetFullPath(secondConfigPath).Replace("\\", "\\\\"), File.ReadAllText(secondWrapperPath));
     }
 
     [Theory]
@@ -840,18 +990,17 @@ public class AddViteAppTests
     [InlineData("vite.config.cts")]
     public async Task AddViteApp_ServerAuthCertConfig_DetectsAllDefaultConfigFileFormats(string configFileName)
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        // Create node_modules/.bin directory for Aspire config generation
-        var nodeModulesBinDir = Path.Combine(tempDir.Path, "node_modules", ".bin");
-        Directory.CreateDirectory(nodeModulesBinDir);
+        // Create node_modules directory for wrapper config generation
+        Directory.CreateDirectory(Path.Combine(workspace.Path, "node_modules"));
 
         // Create the specific config file format
-        var viteConfigPath = Path.Combine(tempDir.Path, configFileName);
+        var viteConfigPath = Path.Combine(workspace.Path, configFileName);
         File.WriteAllText(viteConfigPath, "export default {}");
 
         var builder = DistributedApplication.CreateBuilder();
-        var viteApp = builder.AddViteApp("test-app", tempDir.Path);
+        var viteApp = builder.AddViteApp("test-app", workspace.Path);
 
         using var app = builder.Build();
 
@@ -869,12 +1018,13 @@ public class AddViteAppTests
 
         var context = new HttpsCertificateConfigurationCallbackAnnotationContext
         {
-            ExecutionContext = new DistributedApplicationExecutionContext(DistributedApplicationOperation.Run),
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
             Resource = nodeResource,
             Arguments = args,
             EnvironmentVariables = env,
             CertificatePath = ReferenceExpression.Create($"cert.pem"),
             KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
             PfxPath = ReferenceExpression.Create($"cert.pfx"),
             Password = null,
             CancellationToken = CancellationToken.None
@@ -894,10 +1044,10 @@ public class AddViteAppTests
     [Fact]
     public void NextJsAppHasBuildValidationStep()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
-        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        var nextDir = Path.Combine(workspace.Path, "nextjs");
         Directory.CreateDirectory(nextDir);
         File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
 
@@ -910,10 +1060,10 @@ public class AddViteAppTests
     [Fact]
     public void DisableBuildValidationAddsSuppressAnnotation()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create().WithResourceCleanUp(true);
 
-        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        var nextDir = Path.Combine(workspace.Path, "nextjs");
         Directory.CreateDirectory(nextDir);
         File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
 
@@ -926,11 +1076,11 @@ public class AddViteAppTests
     [Fact]
     public async Task NextJsStandaloneCheckFailsInPipelineWhenMissing()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, step: null).WithResourceCleanUp(true);
         builder.Services.AddSingleton<IPipelineActivityReporter, NullPublishingActivityReporter>();
 
-        var nextDir = Path.Combine(tempDir.Path, "nextjs");
+        var nextDir = Path.Combine(workspace.Path, "nextjs");
         Directory.CreateDirectory(nextDir);
         File.WriteAllText(Path.Combine(nextDir, "package-lock.json"), "empty");
         File.WriteAllText(Path.Combine(nextDir, "next.config.ts"), "const nextConfig = {}; export default nextConfig;");
@@ -952,7 +1102,38 @@ public class AddViteAppTests
         Assert.Contains("output: \"standalone\"", ex.ToString());
     }
 
+    private static async Task<string> GenerateViteWrapperAsync(DistributedApplication app)
+    {
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var resource = Assert.Single(appModel.Resources.OfType<ViteAppResource>());
+        var args = new List<object> { "run", "dev", "--", "--port", "3000" };
+        var context = new HttpsCertificateConfigurationCallbackAnnotationContext
+        {
+            ExecutionContext = new DistributedApplicationExecutionContext(new DistributedApplicationExecutionContextOptions(DistributedApplicationOperation.Run) { Services = app.Services }),
+            Resource = resource,
+            Arguments = args,
+            EnvironmentVariables = new Dictionary<string, object>(),
+            CertificatePath = ReferenceExpression.Create($"cert.pem"),
+            KeyPath = ReferenceExpression.Create($"key.pem"),
+            CertificateWithKeyPath = ReferenceExpression.Create($"cert-with-key.pem"),
+            PfxPath = ReferenceExpression.Create($"cert.pfx"),
+            Password = null,
+            CancellationToken = CancellationToken.None
+        };
+
+        var certConfigAnnotation = resource.Annotations
+            .OfType<HttpsCertificateConfigurationCallbackAnnotation>()
+            .Single();
+        await certConfigAnnotation.Callback(context);
+
+        var configIndex = args.IndexOf("--config");
+        return Assert.IsType<string>(args[configIndex + 1]);
+    }
+
     // Helper class for testing IValueProvider
+    [UnsafeAccessor(UnsafeAccessorKind.Method, Name = "ExecuteBeforeStartHooksAsync")]
+    private static extern Task ExecuteBeforeStartHooksAsync(DistributedApplication app, CancellationToken cancellationToken);
+
     private sealed class TestValueProvider : IValueProvider
     {
         private readonly string _value;

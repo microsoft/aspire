@@ -670,6 +670,77 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task GetResourceSnapshotsAsync_StampsTerminalPropertiesForTerminalEnabledResource()
+    {
+        // The dashboard gRPC path stamps terminal.* onto resource snapshots, but `aspire describe`
+        // and the VS Code extension read this backchannel path instead. Guard that the backchannel
+        // also surfaces terminal availability (and redacts the sensitive consumer UDS path) so the
+        // extension's "Open terminal" affordance lights up.
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myapp"));
+        AddSyntheticTerminalAnnotation(custom.Resource, replicaCount: 1);
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", null)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result);
+        Assert.Equal("true", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.enabled"]).GetValue<string>());
+        Assert.Equal("0", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.replicaIndex"]).GetValue<string>());
+        Assert.Equal("1", Assert.IsAssignableFrom<JsonValue>(snapshot.Properties["terminal.replicaCount"]).GetValue<string>());
+        // The consumer UDS path is sensitive; it must be present as a key but redacted to null so
+        // the host-local socket path never leaks to CLI/extension callers.
+        Assert.True(snapshot.Properties.ContainsKey("terminal.consumerUdsPath"));
+        Assert.Null(snapshot.Properties["terminal.consumerUdsPath"]);
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
+    public async Task GetResourceSnapshotsAsync_DoesNotStampTerminalPropertiesForNonTerminalResource()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
+
+        var custom = builder.AddResource(new CustomResource("myapp"));
+
+        using var app = builder.Build();
+        await app.StartAsync().DefaultTimeout();
+
+        var notificationService = app.Services.GetRequiredService<ResourceNotificationService>();
+        await notificationService.PublishUpdateAsync(custom.Resource, s => s with
+        {
+            State = new ResourceStateSnapshot("Running", null)
+        }).DefaultTimeout();
+
+        var target = new AuxiliaryBackchannelRpcTarget(
+            NullLogger<AuxiliaryBackchannelRpcTarget>.Instance,
+            app.Services.GetRequiredService<IConfiguration>(),
+            app.Services.GetRequiredService<ProfilingTelemetry>(),
+            app.Services);
+
+        var result = await target.GetResourceSnapshotsAsync().DefaultTimeout();
+
+        var snapshot = Assert.Single(result);
+        Assert.DoesNotContain(snapshot.Properties.Keys, k => k.StartsWith("terminal.", StringComparison.Ordinal));
+
+        await app.StopAsync().DefaultTimeout(TestConstants.LongTimeoutTimeSpan);
+    }
+
+    [Fact]
     public async Task WaitForResourceAsync_AcceptsResourceId()
     {
         using var builder = TestDistributedApplicationBuilder.Create(outputHelper);
@@ -852,6 +923,31 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
     private sealed class CustomResource(string name) : Resource(name)
     {
+    }
+
+    // Synthesise per-replica terminal layouts directly rather than going through the public
+    // WithTerminal() path so the test stays focused on backchannel snapshot stamping and doesn't
+    // depend on real DCP terminal-host provisioning. Mirrors DashboardServiceDataTerminalTests.
+    private static void AddSyntheticTerminalAnnotation(Resource resource, int replicaCount)
+    {
+        var hosts = new TerminalHostResource[replicaCount];
+        var baseDir = Directory.CreateTempSubdirectory("abrt-").FullName;
+        for (var i = 0; i < replicaCount; i++)
+        {
+            var pseudoId = $"test{i.ToString(System.Globalization.CultureInfo.InvariantCulture).PadLeft(7, '0')}";
+            var layout = new TerminalHostLayout(
+                replicaId: pseudoId,
+                parentReplicaIndex: i,
+                producerUdsPath: Path.Combine(baseDir, $"{pseudoId}.dcp.sock"),
+                consumerUdsPath: Path.Combine(baseDir, $"{pseudoId}.host.sock"),
+                controlUdsPath: Path.Combine(baseDir, $"{pseudoId}.ctrl.sock"),
+                metadataPath: Path.Combine(baseDir, $"{pseudoId}.metadata.json"));
+            hosts[i] = new TerminalHostResource($"{resource.Name}-terminalhost-{i}", resource, layout);
+        }
+
+        var annotation = new TerminalAnnotation(new TerminalOptions { Columns = 132, Rows = 40 });
+        annotation.Initialize(hosts);
+        resource.Annotations.Add(annotation);
     }
 
     private sealed class FixedTimeProvider : TimeProvider
@@ -1379,7 +1475,7 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
         using var builder = TestDistributedApplicationBuilder.Create(
             options => options.DisableDashboard = false,
             outputHelper,
-            $"{KnownConfigNames.AspNetCoreUrls}=http://localhost",
+            $"{KnownAspNetCoreConfigNames.Urls}=http://localhost",
             $"{KnownConfigNames.DashboardOtlpGrpcEndpointUrl}=http://localhost",
             $"{KnownConfigNames.DashboardUnsecuredAllowAnonymous}=true",
             $"{KnownConfigNames.ProfilingEnabled}=true");
@@ -2047,6 +2143,8 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
             {
                 ["AppHost:Path"] = "/path/to/apphost.csproj",
                 [KnownConfigNames.CliProcessId] = "5678",
+                [KnownConfigNames.CliProcessStarted] = "1783180199",
+                [KnownConfigNames.CliProcessStartedStable] = "1783180250",
                 [KnownConfigNames.CliLogFilePath] = "/logs/cli_20260516T120000_abcd1234.log"
             })
             .Build();
@@ -2066,6 +2164,15 @@ public class AuxiliaryBackchannelRpcTargetTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("/logs/cli_20260516T120000_abcd1234.log", result.CliLogFilePath);
         Assert.Equal(5678, result.CliProcessId);
+        Assert.Equal(DateTimeOffset.FromUnixTimeSeconds(1783180199), result.CliStartedAt);
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(1783180250), result.CliStableStartedAt);
+        Assert.NotNull(result.StartedAt);
+        Assert.NotNull(result.StableStartedAt);
+        Assert.True(ProcessStartTimeHelper.AreClose(
+            ProcessStartTimeHelper.GetCurrentProcessRuntimeStartTimeUnixSeconds(),
+            result.StartedAt.Value.ToUnixTimeSeconds(),
+            TimeSpan.FromSeconds(1)));
+        Assert.Equal(ProcessStartTimeHelper.TryGetProcessStartTimeUnixMilliseconds(Environment.ProcessId), result.StableStartedAt.Value.ToUnixTimeMilliseconds());
     }
 
     [Fact]

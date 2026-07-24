@@ -1,6 +1,6 @@
 import * as vscode from "vscode";
 import { EventEmitter } from "vscode";
-import * as fs from "fs";
+import { promises as fs } from "fs";
 import { createDebugAdapterTracker, AppHostOutputHandler, AppHostRestartHandler } from "./adapterTracker";
 import { AspireResourceExtendedDebugConfiguration, AspireResourceDebugSession, EnvVar, AspireExtendedDebugConfiguration, NodeLaunchConfiguration, ProjectLaunchConfiguration, StartAppHostOptions } from "../dcp/types";
 import { extensionLogOutputChannel } from "../utils/logging";
@@ -12,6 +12,7 @@ import { AnsiColors } from "../utils/AspireTerminalProvider";
 import { applyTextStyle } from "../utils/strings";
 import { nodeDebuggerExtension } from "./languages/node";
 import { cleanupRun } from "./runCleanupRegistry";
+import { runWithRunStartWrappers } from "./runStartRegistry";
 import AspireRpcServer from "../server/AspireRpcServer";
 import { createDebugSessionConfiguration } from "./debuggerExtensions";
 import { AspireTerminalProvider } from "../utils/AspireTerminalProvider";
@@ -21,11 +22,37 @@ import os from "os";
 import { EnvironmentVariables } from "../utils/environment";
 import { sendTelemetryEvent } from "../utils/telemetry";
 import { classifyAppHostPath, classifyAppHostDirectory } from "../utils/appHostLanguage";
+import { bucketAspireCommand } from "../utils/telemetryBuckets";
+import { getAppHostTargetVersion } from "../utils/appHostTargetVersion";
 import type { AspireDebugConsoleOutputEvent } from "../types/extensionApi";
+import { appHostTelemetryTargetPathConfigKey } from "./AspireDebugConfigurationMetadata";
 
+export type DashboardLaunchBehavior = 'none' | 'notification' | DashboardBrowserType;
 export type DashboardBrowserType = 'openExternalBrowser' | 'integratedBrowser' | 'debugChrome' | 'debugEdge' | 'debugFirefox';
 
+export function getLoggableDebugConfiguration(debugConfig: AspireResourceExtendedDebugConfiguration, includeEnvironment: boolean): vscode.DebugConfiguration {
+  if (includeEnvironment && debugConfig.type !== 'maui') {
+    return debugConfig;
+  }
+
+  if (includeEnvironment) {
+    return {
+      ...debugConfig,
+      environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
+    };
+  }
+
+  return {
+    ...debugConfig,
+    env: debugConfig.env ? '<redacted>' : undefined,
+    environmentVariables: debugConfig.environmentVariables ? '<redacted>' : undefined,
+    msbuildProperties: debugConfig.msbuildProperties instanceof Map ? Object.fromEntries(debugConfig.msbuildProperties) : debugConfig.msbuildProperties,
+  };
+}
+
 export class AspireDebugSession implements vscode.DebugAdapter {
+  private static readonly _mauiDebugStartMaxAttempts = 3;
+  private static readonly _mauiDebugStartRetryDelayMs = 5000;
   private readonly _onDidSendMessage = new EventEmitter<any>();
   private readonly _onDidSendDebugConsoleOutput = new EventEmitter<AspireDebugConsoleOutputEvent>();
   private _messageSeq = 1;
@@ -53,6 +80,12 @@ export class AspireDebugSession implements vscode.DebugAdapter {
   // Tracks the AppHost-language classification of the launched program so it can
   // be repeated on the matching end event without re-deriving from `configuration`.
   private _appHostLanguageAtLaunch: 'csharp' | 'typescript' | 'unknown' = 'unknown';
+  private _appHostLanguageAtLaunchPromise: Promise<'csharp' | 'typescript' | 'unknown'> | undefined = undefined;
+  // Resolving telemetry metadata can require project/config reads, so the launch
+  // path starts the work in the background and reuses the same result for start/end telemetry.
+  private _appHostTargetVersionAtLaunch = 'unknown';
+  private _appHostTargetVersionAtLaunchPromise: Promise<string> | undefined = undefined;
+  private _appHostIsDirectoryAtLaunch: 'true' | 'false' | 'unknown' = 'unknown';
   // Mode the AppHost was launched with (`run` | `debug`) — captured for the
   // matching end event.
   private _appHostModeAtLaunch: 'run' | 'debug' = 'run';
@@ -75,18 +108,22 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     return this._startupCompleted;
   }
 
-  constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void) {
+  constructor(session: vscode.DebugSession, rpcServer: AspireRpcServer, dcpServer: AspireDcpServer, terminalProvider: AspireTerminalProvider, removeAspireDebugSession: (session: AspireDebugSession) => void, debugSessionId: string = generateDcpIdPrefix()) {
     this._session = session;
     this._rpcServer = rpcServer;
     this._dcpServer = dcpServer;
     this._terminalProvider = terminalProvider;
     this.configuration = session.configuration as AspireExtendedDebugConfiguration;
 
-    this.debugSessionId = generateDcpIdPrefix();
+    this.debugSessionId = debugSessionId;
 
     this._disposables.push({
       dispose: () => removeAspireDebugSession(this)
     });
+  }
+
+  async stopDebugging(): Promise<void> {
+    await vscode.debug.stopDebugging(this._session);
   }
 
   handleMessage(message: any): void {
@@ -112,84 +149,7 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         body: {}
       });
 
-      const command = this.configuration.command ?? 'run';
-      const noDebug = !!message.arguments?.noDebug && command === 'run';
-
-      // Append any additional command args forwarded from the CLI (e.g., step name for 'do', unmatched tokens)
-      const commandArgs = this.configuration.args ?? [];
-      const appHostPath = this._session.configuration.program as string;
-      const appHostIsDirectory = isDirectory(appHostPath);
-      const extensionArgs: string[] = [];
-
-      // Telemetry: emit `debug/apphost/start` once per AppHost launch. We do it
-      // here (rather than in the constructor) because the constructor runs
-      // before VS Code's debug-launch UX completes; this branch is the single
-      // entry point that triggers an actual CLI spawn. The matching end event
-      // is emitted from dispose().
-      this._appHostStartTimeMs = Date.now();
-      this._appHostLanguageAtLaunch = appHostIsDirectory
-        ? classifyAppHostDirectory(appHostPath)
-        : classifyAppHostPath(appHostPath);
-      this._appHostModeAtLaunch = noDebug ? 'run' : 'debug';
-      // `command` originates in the user's launch.json and is typed in the
-      // contributing extension surface as AspireCommandType ('run'|'deploy'|
-      // 'publish'|'do'), but launch.json is freeform JSON — a typo or custom
-      // value would otherwise leak verbatim into telemetry. Clamp to the known
-      // set so the dimension stays bounded.
-      const knownCommands: ReadonlySet<string> = new Set(['run', 'deploy', 'publish', 'do']);
-      const commandForTelemetry = knownCommands.has(command) ? command : 'other';
-      sendTelemetryEvent('debug/apphost/start', {
-        mode: this._appHostModeAtLaunch,
-        apphost_language: this._appHostLanguageAtLaunch,
-        apphost_is_directory: appHostIsDirectory ? 'true' : 'false',
-        command: commandForTelemetry,
-      });
-
-      // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
-      const step = this.configuration.step;
-      if (command === 'do' && step && commandArgs.length === 0) {
-        extensionArgs.push(step);
-      }
-
-      // --start-debug-session tells the CLI to launch the AppHost via the extension with debugger attached
-      if (!noDebug) {
-        extensionArgs.push('--start-debug-session');
-      }
-
-      if (!commandArgs.includes('--nologo')) {
-        extensionArgs.push('--nologo');
-      }
-
-      if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
-        extensionArgs.push('--cli-wait-for-debugger');
-      }
-
-      if (process.env[EnvironmentVariables.ASPIRE_APPHOST_STOP_ON_ENTRY] === 'true') {
-        extensionArgs.push('--wait-for-debugger');
-      }
-
-      if (this._terminalProvider.isCliDebugLoggingEnabled()) {
-        extensionArgs.push('--debug');
-      }
-
-      if (!appHostIsDirectory) {
-        extensionArgs.push('--apphost', appHostPath);
-      }
-
-      const args = buildAspireCommandArgs(command, commandArgs, extensionArgs);
-      const commandLabel = `aspire ${command}`;
-
-      if (appHostIsDirectory) {
-        this.sendMessageWithEmoji("📁", launchingWithDirectory(appHostPath));
-
-        void this.spawnAspireCommand(args, appHostPath, noDebug, commandLabel);
-      }
-      else {
-        this.sendMessageWithEmoji("📂", launchingWithAppHost(appHostPath));
-
-        const workspaceFolder = path.dirname(appHostPath);
-        void this.spawnAspireCommand(args, workspaceFolder, noDebug, commandLabel);
-      }
+      void this.handleLaunchMessage(message);
     }
     else if (message.command === 'disconnect' || message.command === 'terminate') {
       this.sendMessageWithEmoji("🔌", disconnectingFromSession);
@@ -204,6 +164,31 @@ export class AspireDebugSession implements vscode.DebugAdapter {
         body: {}
       });
     }
+    else if (message.command === 'setBreakpoints') {
+      const breakpoints = Array.isArray(message.arguments?.breakpoints)
+        ? message.arguments.breakpoints
+        : [];
+
+      this.sendResponse(message, {
+        // The Aspire adapter does not bind user breakpoints itself, but VS Code still
+        // sends breakpoint requests to every active debug session. The DAP response
+        // must include a breakpoint array; otherwise newer VS Code builds throw while
+        // reading the missing body.breakpoints field and can prevent child sessions
+        // from receiving the same source breakpoints.
+        breakpoints: breakpoints.map((breakpoint: { line?: number; column?: number }, index: number) => ({
+          id: index + 1,
+          verified: false,
+          line: breakpoint.line,
+          column: breakpoint.column,
+        }))
+      });
+    }
+    else if (message.command === 'setFunctionBreakpoints' || message.command === 'setDataBreakpoints') {
+      this.sendResponse(message, { breakpoints: [] });
+    }
+    else if (message.command === 'setExceptionBreakpoints') {
+      this.sendResponse(message, { breakpoints: [] });
+    }
     else if (message.command) {
       // Respond to all other requests with a generic success
       this.sendEvent({
@@ -216,9 +201,134 @@ export class AspireDebugSession implements vscode.DebugAdapter {
       });
     }
 
-    function isDirectory(pathToCheck: string): boolean {
-      return fs.existsSync(pathToCheck) && fs.statSync(pathToCheck).isDirectory();
+  }
+
+  private async handleLaunchMessage(message: any): Promise<void> {
+    const command = this.configuration.command ?? 'run';
+    const noDebug = !!message.arguments?.noDebug && command === 'run';
+
+    // Append any additional command args forwarded from the CLI (e.g., step name for 'do', unmatched tokens)
+    const commandArgs = this.configuration.args ?? [];
+    const appHostPath = this._session.configuration.program as string;
+    const appHostTelemetryTargetPath = typeof this._session.configuration[appHostTelemetryTargetPathConfigKey] === 'string'
+      ? this._session.configuration[appHostTelemetryTargetPathConfigKey]
+      : undefined;
+    const extensionArgs: string[] = [];
+    // Telemetry: emit `debug/apphost/start` once per AppHost launch. This must
+    // happen before any awaited filesystem metadata work because child
+    // `debug/runsession/start` events can arrive immediately after CLI spawn.
+    // Values that need async enrichment are resolved in the background for the
+    // matching end event instead of being reported as permanently-unknown start
+    // dimensions.
+    this._appHostStartTimeMs = Date.now();
+    this._appHostModeAtLaunch = noDebug ? 'run' : 'debug';
+    // Before the filesystem probe below, the file extension is the only language
+    // signal available. Prefer the resolved telemetry target when a default
+    // workspace launch already selected a concrete AppHost.
+    const appHostTelemetryTargetLanguage = classifyAppHostPath(appHostTelemetryTargetPath);
+    this._appHostLanguageAtLaunch = appHostTelemetryTargetLanguage !== 'unknown'
+      ? appHostTelemetryTargetLanguage
+      : classifyAppHostPath(appHostPath);
+    this._appHostTargetVersionAtLaunch = 'unknown';
+    this._appHostTargetVersionAtLaunchPromise = this.resolveAppHostTargetVersionAtLaunch(appHostTelemetryTargetPath ?? appHostPath);
+    this._appHostIsDirectoryAtLaunch = 'unknown';
+    sendTelemetryEvent('debug/apphost/start', {
+      mode: this._appHostModeAtLaunch,
+      apphost_language: this._appHostLanguageAtLaunch,
+      command: bucketAspireCommand(command),
+    });
+
+    const appHostIsDirectory = await this.isDirectory(appHostPath);
+    if (this._disposed) {
+      return;
     }
+
+    this._appHostIsDirectoryAtLaunch = appHostIsDirectory ? 'true' : 'false';
+    this._appHostLanguageAtLaunchPromise = this.resolveAppHostLanguageAtLaunch(appHostPath, appHostIsDirectory, appHostTelemetryTargetPath);
+
+    // For 'do' with an explicit step (old CLI fallback), pass it as a positional argument
+    const step = this.configuration.step;
+    if (command === 'do' && step && commandArgs.length === 0) {
+      extensionArgs.push(step);
+    }
+
+    // --start-debug-session tells the CLI to launch the AppHost via the extension with debugger attached
+    if (!noDebug) {
+      extensionArgs.push('--start-debug-session');
+    }
+
+    if (!commandArgs.includes('--nologo')) {
+      extensionArgs.push('--nologo');
+    }
+
+    if (process.env[EnvironmentVariables.ASPIRE_CLI_STOP_ON_ENTRY] === 'true') {
+      extensionArgs.push('--cli-wait-for-debugger');
+    }
+
+    if (process.env[EnvironmentVariables.ASPIRE_APPHOST_STOP_ON_ENTRY] === 'true') {
+      extensionArgs.push('--wait-for-debugger');
+    }
+
+    if (this._terminalProvider.isCliDebugLoggingEnabled()) {
+      extensionArgs.push('--debug');
+    }
+
+    if (!appHostIsDirectory) {
+      extensionArgs.push('--apphost', appHostPath);
+    }
+
+    const args = buildAspireCommandArgs(command, commandArgs, extensionArgs);
+    const commandLabel = `aspire ${command}`;
+
+    if (appHostIsDirectory) {
+      this.sendMessageWithEmoji("📁", launchingWithDirectory(appHostPath));
+
+      void this.spawnAspireCommand(args, appHostPath, noDebug, commandLabel);
+    }
+    else {
+      this.sendMessageWithEmoji("📂", launchingWithAppHost(appHostPath));
+
+      const workspaceFolder = path.dirname(appHostPath);
+      void this.spawnAspireCommand(args, workspaceFolder, noDebug, commandLabel);
+    }
+  }
+
+  private async isDirectory(pathToCheck: string): Promise<boolean> {
+    try {
+      return (await fs.stat(pathToCheck)).isDirectory();
+    }
+    catch {
+      return false;
+    }
+  }
+
+  private async resolveAppHostLanguageAtLaunch(appHostPath: string | undefined, appHostIsDirectory: boolean, appHostTelemetryTargetPath: string | undefined): Promise<'csharp' | 'typescript' | 'unknown'> {
+    try {
+      const telemetryTargetLanguage = classifyAppHostPath(appHostTelemetryTargetPath);
+      this._appHostLanguageAtLaunch = telemetryTargetLanguage !== 'unknown'
+        ? telemetryTargetLanguage
+        : (appHostIsDirectory
+          ? await classifyAppHostDirectory(appHostPath)
+          : classifyAppHostPath(appHostPath));
+    }
+    catch {
+      // Telemetry enrichment must never break or delay the debug launch path.
+      this._appHostLanguageAtLaunch = 'unknown';
+    }
+
+    return this._appHostLanguageAtLaunch;
+  }
+
+  private async resolveAppHostTargetVersionAtLaunch(appHostPath: string | undefined): Promise<string> {
+    try {
+      this._appHostTargetVersionAtLaunch = await getAppHostTargetVersion(appHostPath) ?? 'unknown';
+    }
+    catch {
+      // Telemetry enrichment must never break or delay the debug launch path.
+      this._appHostTargetVersionAtLaunch = 'unknown';
+    }
+
+    return this._appHostTargetVersionAtLaunch;
   }
 
   async spawnAspireCommand(args: string[], workingDirectory: string | undefined, noDebug: boolean, commandLabel: string = 'aspire run') {
@@ -440,16 +550,24 @@ export class AspireDebugSession implements vscode.DebugAdapter {
 
   async startAndGetDebugSession(debugConfig: AspireResourceExtendedDebugConfiguration): Promise<AspireResourceDebugSession | undefined> {
     return new Promise(async (resolve) => {
-      const logConfig = this._terminalProvider.isDebugConfigEnvironmentLoggingEnabled()
-        ? debugConfig
-        : { ...debugConfig, env: debugConfig.env ? '<redacted>' : undefined };
+      const logConfig = getLoggableDebugConfiguration(debugConfig, this._terminalProvider.isDebugConfigEnvironmentLoggingEnabled());
       extensionLogOutputChannel.info(`Starting debug session with configuration: ${JSON.stringify(logConfig)}`);
       this.createDebugAdapterTrackerCore(debugConfig.type);
 
+      let resolved = false;
       const disposable = vscode.debug.onDidStartDebugSession(session => {
         if (session.configuration.runId === debugConfig.runId) {
           extensionLogOutputChannel.info(`Debug session started: ${session.name} (run id: ${session.configuration.runId})`);
           disposable.dispose();
+
+          if (this._disposed) {
+            extensionLogOutputChannel.info(`Stopping debug session that started after Aspire session disposal: ${session.name} (run id: ${session.configuration.runId})`);
+            vscode.debug.stopDebugging(session);
+            cleanupRun(debugConfig.runId);
+            resolved = true;
+            resolve(undefined);
+            return;
+          }
 
           const disposalFunction = () => {
             extensionLogOutputChannel.info(`Stopping debug session: ${session.name} (run id: ${session.configuration.runId})`);
@@ -470,21 +588,72 @@ export class AspireDebugSession implements vscode.DebugAdapter {
             dispose: disposalFunction
           });
 
+          resolved = true;
           resolve(vsCodeDebugSession);
         }
       });
 
-      const started = await vscode.debug.startDebugging(undefined, debugConfig, this._session);
+      let started = false;
+      try {
+        const workspaceFolder = this.getDebugSessionWorkspaceFolder(debugConfig);
+        const maxAttempts = debugConfig.type === 'maui' ? AspireDebugSession._mauiDebugStartMaxAttempts : 1;
+        for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+          if (this._disposed) {
+            break;
+          }
+
+          started = await runWithRunStartWrappers(debugConfig.runId, () => this.startDebugging(workspaceFolder, debugConfig));
+          if (started) {
+            break;
+          }
+
+          if (attempt < maxAttempts && !this._disposed) {
+            extensionLogOutputChannel.warn(`Debug session did not start for run ID ${debugConfig.runId}; retrying (${attempt}/${maxAttempts}).`);
+            await delay(AspireDebugSession._mauiDebugStartRetryDelayMs);
+          }
+        }
+      } catch (error) {
+        disposable.dispose();
+        cleanupRun(debugConfig.runId);
+        extensionLogOutputChannel.error(`Failed to start debug session: ${error instanceof Error ? error.stack ?? error.message : String(error)}`);
+        resolved = true;
+        resolve(undefined);
+        return;
+      }
+
       if (!started) {
         disposable.dispose();
+        cleanupRun(debugConfig.runId);
+        resolved = true;
         resolve(undefined);
       }
 
       setTimeout(() => {
-        disposable.dispose();
-        resolve(undefined);
+        if (!resolved) {
+          disposable.dispose();
+          cleanupRun(debugConfig.runId);
+          resolved = true;
+          resolve(undefined);
+        }
       }, 10000);
     });
+  }
+
+  private async startDebugging(workspaceFolder: vscode.WorkspaceFolder | undefined, debugConfig: AspireResourceExtendedDebugConfiguration): Promise<boolean> {
+    // VS Code terminates the parent debug session when the MAUI extension cancels
+    // a parented child launch before the MAUI project system is ready. We still
+    // track and stop the MAUI session ourselves once it starts, so leave it
+    // unparented to keep the AppHost alive across bounded start retries.
+    const parentSession = debugConfig.type === 'maui' ? undefined : this._session;
+    return await vscode.debug.startDebugging(workspaceFolder, debugConfig, parentSession);
+  }
+
+  private getDebugSessionWorkspaceFolder(debugConfig: AspireResourceExtendedDebugConfiguration): vscode.WorkspaceFolder | undefined {
+    const resourcePath = typeof debugConfig.cwd === 'string'
+      ? debugConfig.cwd
+      : typeof debugConfig.program === 'string' ? debugConfig.program : undefined;
+
+    return resourcePath ? vscode.workspace.getWorkspaceFolder(vscode.Uri.file(resourcePath)) : undefined;
   }
 
   /**
@@ -581,6 +750,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     const startMs = this._appHostStartTimeMs;
     const mode = this._appHostModeAtLaunch;
     const language = this._appHostLanguageAtLaunch;
+    const languagePromise = this._appHostLanguageAtLaunchPromise;
+    const targetVersion = this._appHostTargetVersionAtLaunch;
+    const targetVersionPromise = this._appHostTargetVersionAtLaunchPromise;
+    const appHostIsDirectory = this._appHostIsDirectoryAtLaunch;
     const debugSessionId = this.debugSessionId;
     const dcpServer = this._dcpServer;
 
@@ -605,17 +778,24 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     // AppHosts that aborted before reaching the CLI spawn.
     if (startMs !== undefined) {
       setTimeout(() => {
-        const aggregate = dcpServer.takeDebugSessionAggregateStats(debugSessionId);
-        sendTelemetryEvent('debug/apphost/end', {
-          mode,
-          apphost_language: language,
-          ended_with_error: aggregate?.anyNonZeroExit ? 'true' : 'false',
-          distinct_resource_types: aggregate ? aggregate.distinctResourceTypes.join(',') : '',
-        }, {
-          duration_ms: Date.now() - startMs,
-          total_child_sessions: aggregate?.totalChildSessions ?? 0,
-          distinct_resource_type_count: aggregate?.distinctResourceTypes.length ?? 0,
-        });
+        void (async () => {
+          const durationMs = Date.now() - startMs;
+          const resolvedLanguage = await languagePromise ?? language;
+          const resolvedTargetVersion = await targetVersionPromise ?? targetVersion;
+          const aggregate = dcpServer.takeDebugSessionAggregateStats(debugSessionId);
+          sendTelemetryEvent('debug/apphost/end', {
+            mode,
+            apphost_language: resolvedLanguage,
+            apphost_target_version: resolvedTargetVersion,
+            apphost_is_directory: appHostIsDirectory,
+            ended_with_error: aggregate?.anyNonZeroExit ? 'true' : 'false',
+            distinct_resource_types: aggregate ? aggregate.distinctResourceTypes.join(',') : '',
+          }, {
+            duration_ms: durationMs,
+            total_child_sessions: aggregate?.totalChildSessions ?? 0,
+            distinct_resource_type_count: aggregate?.distinctResourceTypes.length ?? 0,
+          });
+        })();
       }, 500);
     }
   }
@@ -700,6 +880,10 @@ export class AspireDebugSession implements vscode.DebugAdapter {
     this._onDidChangeState.fire();
     extensionLogOutputChannel.info(`AppHost startup completed and dashboard is running.`);
   }
+}
+
+function delay(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 export function buildAspireCommandArgs(command: string, commandArgs: string[], extensionArgs: string[]): string[] {

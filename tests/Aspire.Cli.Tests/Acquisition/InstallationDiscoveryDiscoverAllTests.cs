@@ -35,7 +35,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // spawned. The user-installed binary on PATH is the most dangerous case:
         // if a user runs `aspire doctor`, we cannot execute arbitrary
         // same-named binaries we happened to find.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pathDir = Path.Combine(workspace.WorkspaceRoot.FullName, "no-sidecar-bin");
         Directory.CreateDirectory(pathDir);
         var noSidecarBinary = WriteFakeBinary(pathDir);
@@ -65,7 +65,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             return;
         }
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pathDir = Path.Combine(workspace.WorkspaceRoot.FullName, "unreadable-bin");
         Directory.CreateDirectory(pathDir);
         var binary = WriteFakeBinary(pathDir);
@@ -97,7 +97,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task DiscoverAllAsync_PathHit_WithMalformedSidecar_IsListedAsNotProbedWithInvalidSidecarReason()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pathDir = Path.Combine(workspace.WorkspaceRoot.FullName, "malformed-bin");
         Directory.CreateDirectory(pathDir);
         var binary = WriteFakeBinary(pathDir);
@@ -124,7 +124,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // install metadata to be probed. The peer probe is called, and its returned
         // InstallationInfo is merged with the discovered path so the row
         // displayed to the user matches what `which` would show.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
         Directory.CreateDirectory(binDir);
         var binary = WriteFakeBinary(binDir);
@@ -159,7 +159,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task DiscoverAllAsync_PathStatusTracksActiveShadowedAndOffPathInstalls()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var firstPathDir = Path.Combine(workspace.WorkspaceRoot.FullName, "path-first");
         var secondPathDir = Path.Combine(workspace.WorkspaceRoot.FullName, "path-second");
         var offPathDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
@@ -214,7 +214,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task DiscoverAllAsync_UnknownSidecarSource_WithSuccessfulProbe_ProbesAndSurfacesRawRoute()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
         Directory.CreateDirectory(binDir);
         var binary = WriteTrustedFakeBinary(binDir, "apt");
@@ -245,7 +245,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task DiscoverAllAsync_UnknownSidecarSource_WithFailedProbe_ProbesAndSurfacesFailedWithRawRoute()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
         Directory.CreateDirectory(binDir);
         var binary = WriteTrustedFakeBinary(binDir, "apt");
@@ -272,7 +272,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // A peer that fails (timeout / non-zero exit / invalid JSON) is per-row,
         // not whole-command. The route from the sidecar is still surfaced so the
         // user sees "this is a PR install but it wouldn't talk to me", not nothing.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var prDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "dogfood", "pr-9999", "bin");
         Directory.CreateDirectory(prDir);
         var binary = WriteFakeBinary(prDir);
@@ -296,7 +296,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task DiscoverAllAsync_UnknownPeerProbeResult_Throws()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
         Directory.CreateDirectory(binDir);
         var binary = WriteFakeBinary(binDir);
@@ -318,7 +318,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     [InlineData(false, InstallationInfoStatus.NotProbed)]
     public async Task DiscoverAllAsync_ProbeFailureAndMissingInstallMetadata_SurfaceDistinctStatuses(bool hasInstallMetadata, string expectedStatus)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, hasInstallMetadata ? "metadata-bin" : "no-metadata-bin");
         Directory.CreateDirectory(binDir);
         var binary = WriteFakeBinary(binDir);
@@ -362,7 +362,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // of whether the older peer's --version output includes channel
         // info. Discovery should overlay it from the dogfood/pr-<N>/
         // path layout when probe.Channel comes back null.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var prDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "dogfood", "pr-12345", "bin");
         Directory.CreateDirectory(prDir);
         var binary = WriteFakeBinary(prDir);
@@ -396,7 +396,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // with the path-derived value, even if they happen to match.
         // This guards against a bug where overlay logic assumes channel
         // is always missing on the fallback path.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var prDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "dogfood", "pr-12345", "bin");
         Directory.CreateDirectory(prDir);
         var binary = WriteFakeBinary(prDir);
@@ -431,7 +431,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // discovery should fall back to that signal so older brew peers,
         // which don't recognize the `doctor --self` self-describe contract,
         // still surface their channel instead of "(unknown)".
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var brewDir = Path.Combine(workspace.WorkspaceRoot.FullName, "Caskroom", "aspire", "13.4.0-pr.17115.gcd700928");
         Directory.CreateDirectory(brewDir);
         var binary = WriteFakeBinary(brewDir);
@@ -467,7 +467,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // version-based derivation must return null (we can't recover the
         // channel from a `13.4.0` style stable version), so the channel
         // stays unset and the doctor table renders "(unknown)".
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var brewDir = Path.Combine(workspace.WorkspaceRoot.FullName, "Caskroom", "aspire", "13.4.0");
         Directory.CreateDirectory(brewDir);
         var binary = WriteFakeBinary(brewDir);
@@ -505,7 +505,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // matches `pr-<digits>`; anything else (custom --install-path
         // installs, manual layouts, future label shapes) returns null so
         // we don't surface a misleading channel string.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binary = Path.Combine(workspace.WorkspaceRoot.FullName, "dogfood", labelName, "bin", "aspire");
         Directory.CreateDirectory(Path.GetDirectoryName(binary)!);
 
@@ -519,7 +519,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // The grandparent dir must literally be `dogfood` — anything else
         // (e.g., `~/.aspire/staging/pr-1/bin`) is not the conventional
         // PR-script layout and we shouldn't synthesize a channel from it.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binary = Path.Combine(workspace.WorkspaceRoot.FullName, "staging", "pr-1234", "bin", "aspire");
         Directory.CreateDirectory(Path.GetDirectoryName(binary)!);
 
@@ -530,7 +530,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     [Fact]
     public void TryDerivePrChannel_AcceptsValidDogfoodLayout()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binary = Path.Combine(workspace.WorkspaceRoot.FullName, "dogfood", "pr-9876", "bin", "aspire");
 
         var derived = InstallationDiscovery.TryDerivePrChannel(binary);
@@ -570,7 +570,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // should see why in --log-level debug output. Without this, an
         // install that "doesn't show up correctly" in `aspire doctor`
         // is hard to diagnose.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var pathDir = Path.Combine(workspace.WorkspaceRoot.FullName, "no-sidecar-bin");
         Directory.CreateDirectory(pathDir);
         WriteFakeBinary(pathDir);
@@ -580,10 +580,12 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var capturedLog = new CapturingLogger<InstallationDiscovery>();
         var discovery = new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader("local"),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: new FakePeerInstallProbe(),
             executionContext: CreateExecutionContext(workspace),
-            logger: capturedLog);
+            environment: new TestEnvironment(),
+            logger: capturedLog,
+            candidateSources: []);
 
         await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -600,17 +602,19 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // A stale ~/.aspire/dogfood/pr-N directory without a bin/aspire
         // inside (failed install, partial uninstall, manual mucking) is
         // worth flagging in debug output so the user can correlate.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var staleDogfoodDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "dogfood", "pr-9999");
         Directory.CreateDirectory(staleDogfoodDir); // exists, but no bin/aspire inside
 
         var capturedLog = new CapturingLogger<InstallationDiscovery>();
         var discovery = new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader("local"),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: new FakePeerInstallProbe(),
             executionContext: CreateExecutionContext(workspace),
-            logger: capturedLog);
+            environment: new TestEnvironment(),
+            logger: capturedLog,
+            candidateSources: []);
 
         await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -629,7 +633,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             return;
         }
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dogfoodRoot = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "dogfood");
         Directory.CreateDirectory(dogfoodRoot);
         var originalMode = File.GetUnixFileMode(dogfoodRoot);
@@ -641,10 +645,12 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             var capturedLog = new CapturingLogger<InstallationDiscovery>();
             var discovery = new InstallationDiscovery(
                 channelReader: new FakeIdentityChannelReader("local"),
-                sidecarReader: new InstallSidecarReader(),
+                sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
                 peerProbe: new FakePeerInstallProbe(),
                 executionContext: CreateExecutionContext(workspace),
-                logger: capturedLog);
+                environment: new TestEnvironment(),
+                logger: capturedLog,
+                candidateSources: []);
 
             var results = await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -670,7 +676,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             return;
         }
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var toolStore = Path.Combine(workspace.WorkspaceRoot.FullName, ".dotnet", "tools", ".store", "aspire.cli");
         Directory.CreateDirectory(toolStore);
         var originalMode = File.GetUnixFileMode(toolStore);
@@ -682,10 +688,12 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             var capturedLog = new CapturingLogger<InstallationDiscovery>();
             var discovery = new InstallationDiscovery(
                 channelReader: new FakeIdentityChannelReader("local"),
-                sidecarReader: new InstallSidecarReader(),
+                sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
                 peerProbe: new FakePeerInstallProbe(),
                 executionContext: CreateExecutionContext(workspace),
-                logger: capturedLog);
+                environment: new TestEnvironment(),
+                logger: capturedLog,
+                candidateSources: []);
 
             var results = await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -715,7 +723,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // Self must appear first regardless of what walks find — both for
         // the table display contract ("(current)" marker) and to keep peer
         // dedup deterministic.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var discovery = NewDiscovery(new FakePeerInstallProbe(), workspace);
         var results = await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
@@ -729,7 +737,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task DiscoverAllAsync_RunningCliUsesIdentityChannel()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var discovery = NewDiscovery(new FakePeerInstallProbe(), workspace, identityChannel: "staging");
         var results = await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
@@ -750,7 +758,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // is the only redirection that works uniformly. This test
         // intentionally does NOT set HOME/USERPROFILE so it would fail on
         // Windows pre-fix.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var releaseBinDir = Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "bin");
         Directory.CreateDirectory(releaseBinDir);
         var binary = WriteFakeBinary(releaseBinDir);
@@ -778,7 +786,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
     [Fact]
     public async Task DiscoverAllAsync_UsesAspireHomeDirectoryForPortableInstallPrefixes()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var userHome = workspace.CreateDirectory("user-home");
         var aspireHome = workspace.CreateDirectory("portable-home");
         var releaseBinDir = Path.Combine(aspireHome.FullName, "bin");
@@ -810,10 +818,12 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
             aspireHomeDirectory: aspireHome);
         var discovery = new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader("local"),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: probe,
             executionContext: context,
-            logger: NullLogger<InstallationDiscovery>.Instance);
+            environment: new TestEnvironment(),
+            logger: NullLogger<InstallationDiscovery>.Instance,
+            candidateSources: []);
 
         var results = await discovery.DiscoverAllAsync(TestContext.Current.CancellationToken);
 
@@ -833,7 +843,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // a regression in either the helper or the dedup site is caught.
         Assert.SkipUnless(OperatingSystem.IsMacOS(), "Firmlink dedup only applies on macOS where /var → /private/var is a firmlink.");
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, "firmlink-self-bin");
         Directory.CreateDirectory(binDir);
         var binary = WriteTrustedFakeBinary(binDir, "pr");
@@ -908,7 +918,7 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         // BinaryPath (or an empty string for a fake path) and the resulting row's CanonicalPath
         // would not match the hint. This is the strongest way to pin "we used the hint" because
         // there's no filesystem trick that could produce this canonical from the binary on disk.
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var binDir = Path.Combine(workspace.WorkspaceRoot.FullName, "hint-bin");
         Directory.CreateDirectory(binDir);
         var binary = WriteFakeBinary(binDir);
@@ -918,9 +928,10 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         var hintSource = new FixedCandidateSource(new InstallationDiscoveryCandidate(binary, "test-hint", fakeCanonical));
         var discovery = new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader("local"),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: probe,
             executionContext: CreateExecutionContext(workspace),
+            environment: new TestEnvironment(),
             logger: NullLogger<InstallationDiscovery>.Instance,
             candidateSources: [hintSource]);
 
@@ -952,14 +963,16 @@ public class InstallationDiscoveryDiscoverAllTests(ITestOutputHelper outputHelpe
         }
     }
 
-    private static InstallationDiscovery NewDiscovery(FakePeerInstallProbe probe, TemporaryWorkspace workspace, string identityChannel = "local")
+    private InstallationDiscovery NewDiscovery(FakePeerInstallProbe probe, TemporaryWorkspace workspace, string identityChannel = "local")
     {
         return new InstallationDiscovery(
             channelReader: new FakeIdentityChannelReader(identityChannel),
-            sidecarReader: new InstallSidecarReader(),
+            sidecarReader: CliTestHelper.CreateSidecarReader(outputHelper),
             peerProbe: probe,
             executionContext: CreateExecutionContext(workspace),
-            logger: NullLogger<InstallationDiscovery>.Instance);
+            environment: new TestEnvironment(),
+            logger: NullLogger<InstallationDiscovery>.Instance,
+            candidateSources: []);
     }
 
     /// <summary>

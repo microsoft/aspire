@@ -7,6 +7,7 @@ using Aspire.Cli.Tests.Mcp;
 using Aspire.Cli.Tests.TestServices;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
+using Microsoft.Extensions.Logging.Abstractions;
 using System.Xml.Linq;
 
 namespace Aspire.Cli.Tests.Templating;
@@ -25,7 +26,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_CreatesSelfContainedConfigWithoutAmbientSources()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDirectory = workspace.WorkspaceRoot.CreateSubdirectory("output");
         await File.WriteAllTextAsync(
             Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config"),
@@ -70,7 +71,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_PreservesRequestedChannelFallbackMappings()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDirectory = workspace.WorkspaceRoot.CreateSubdirectory("output");
         const string sourceOverride = "/tmp/aspire-pr-hive/packages";
         const string channelAspireSource = "https://example.invalid/aspire";
@@ -90,7 +91,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                         new PackageMapping(PackageMapping.AllPackages, fallbackSource),
                     ],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([channel]);
             }
         };
@@ -109,7 +110,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_UpdatesOnlyProjectLocalConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDirectory = workspace.WorkspaceRoot.CreateSubdirectory("output");
         await File.WriteAllTextAsync(
             Path.Combine(workspace.WorkspaceRoot.FullName, "nuget.config"),
@@ -146,13 +147,13 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         Assert.Contains(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == "https://project.example/v3/index.json");
         Assert.DoesNotContain(doc.Root!.Element("packageSources")!.Elements("add"), e => (string?)e.Attribute("value") == "https://parent.example/v3/index.json");
         Assert.Equal(["Aspire*"], GetPackagePatternsForSource(doc, sourceOverride));
-        Assert.Equal(["Project.*", PackageMapping.AllPackages], GetPackagePatternsForSource(doc, "project-local"));
+        Assert.Equal(["Project.*"], GetPackagePatternsForSource(doc, "project-local"));
     }
 
     [Fact]
     public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_NullSourceShortCircuits()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagingService = new TestPackagingService
         {
             GetChannelsAsyncCallback = _ => throw new InvalidOperationException("Channel lookup should not run without a source override.")
@@ -170,7 +171,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [InlineData("https://example.invalid/v3/index.json#token")]
     public async Task CreateOrUpdateNuGetConfigForSourceOverrideAsync_CredentialBearingHttpSourceThrows(string sourceOverride)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var service = CreateService();
 
         await Assert.ThrowsAsync<ArgumentException>(
@@ -226,7 +227,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                 var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache
                 {
                     GetIntegrationPackagesAsyncCallback = (_, _, _, _) => Task.FromResult(Enumerable.Empty<Aspire.Shared.NuGetPackageCli>())
-                }, new TestFeatures());
+                }, new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
             }
         };
@@ -259,7 +260,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
             }
         };
@@ -286,7 +287,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
                 var stableCh = PackageChannel.CreateExplicitChannel(
                     "stable",
                     PackageChannelQuality.Both,
@@ -298,7 +299,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                             new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "13.3.0", Source = "stable-src" }
                         ])
                     },
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, stableCh]);
             }
         };
@@ -328,7 +329,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         {
             GetChannelsAsyncCallback = _ =>
             {
-                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures());
+                var implicitCh = PackageChannel.CreateImplicitChannel(new FakeNuGetPackageCache(), new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh]);
             }
         };
@@ -369,7 +370,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         bool expectImplicitChannel,
         string? expectedChannelName)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var hivesDir = new DirectoryInfo(Path.Combine(workspace.WorkspaceRoot.FullName, ".aspire", "hives"));
         if (createHiveOnDisk)
         {
@@ -389,13 +390,14 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     [
                         new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "1.0.0", Source = "implicit-src" }
                     ])
-                }, new TestFeatures());
+                }, new TestFeatures(), NullLogger.Instance);
                 var hiveCh = PackageChannel.CreateExplicitChannel(
                     "pr-12345",
                     PackageChannelQuality.Both,
                     [new PackageMapping("Aspire*", "pr-src")],
                     new FakeNuGetPackageCache(),
                     features: new TestFeatures(),
+                    NullLogger.Instance,
                     pinnedVersion: "2.0.0");
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, hiveCh]);
             }
@@ -436,7 +438,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ResolveTemplatePackageAsync_IdentityPackagesOverride_IncludesLocalChannelEvenWhenPrHivesSuppressed()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var packagesDir = workspace.CreateDirectory("identity-packages");
         var executionContext = TestExecutionContextHelper.CreateExecutionContext(
             workspace.WorkspaceRoot,
@@ -455,13 +457,14 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     [
                         new Aspire.Shared.NuGetPackageCli { Id = TemplateNuGetConfigService.TemplatesPackageName, Version = "13.4.3", Source = "nuget.org" }
                     ])
-                }, new TestFeatures());
+                }, new TestFeatures(), NullLogger.Instance);
                 var localStableCh = PackageChannel.CreateExplicitChannel(
                     "stable",
                     PackageChannelQuality.Both,
                     [new PackageMapping("Aspire*", packagesDir.FullName.Replace('\\', '/'))],
                     new FakeNuGetPackageCache(),
                     features: new TestFeatures(),
+                    NullLogger.Instance,
                     pinnedVersion: "13.5.0");
                 return Task.FromResult<IEnumerable<PackageChannel>>([implicitCh, localStableCh]);
             }
@@ -503,7 +506,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PromptToCreateOrUpdateNuGetConfigAsync_ExplicitChannelRequiringConfig_CreatesConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
 
         var packagingService = new TestPackagingService
@@ -519,7 +522,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                         new PackageMapping("*", "https://api.nuget.org/v3/index.json")
                     ],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([dailyCh]);
             }
         };
@@ -543,7 +546,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PromptToCreateOrUpdateNuGetConfigAsync_StableChannel_DoesNotCreateConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
 
         var packagingService = new TestPackagingService
@@ -557,7 +560,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     PackageChannelQuality.Stable,
                     [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
             }
         };
@@ -573,7 +576,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task PromptToCreateOrUpdateNuGetConfigAsync_StableChannel_UpdatesExistingConfig()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
 
         // Pre-existing nuget.config from a previous daily channel
@@ -602,7 +605,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     PackageChannelQuality.Stable,
                     [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
             }
         };
@@ -633,7 +636,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
         //   - No existing config → skip creation entirely (return false)
         //   - Existing config → update it to clean up stale feeds (return true)
         // See: https://github.com/microsoft/aspire/issues/18124
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var outputDir = workspace.WorkspaceRoot.CreateSubdirectory("output");
 
         if (hasExistingConfig)
@@ -659,7 +662,7 @@ public class TemplateNuGetConfigServiceTests(ITestOutputHelper outputHelper)
                     PackageChannelQuality.Stable,
                     [new PackageMapping("*", "https://api.nuget.org/v3/index.json")],
                     new FakeNuGetPackageCache(),
-                    features: new TestFeatures());
+                    features: new TestFeatures(), NullLogger.Instance);
                 return Task.FromResult<IEnumerable<PackageChannel>>([stableCh]);
             }
         };

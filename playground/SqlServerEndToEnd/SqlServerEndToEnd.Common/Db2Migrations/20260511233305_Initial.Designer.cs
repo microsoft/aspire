@@ -9,7 +9,7 @@ using SqlServerEndToEnd.Common;
 
 #nullable disable
 
-namespace SqlServerEndToEnd.Common.Db2
+namespace SqlServerEndToEnd.Common.Db2Migrations
 {
     [DbContext(typeof(MyDb2Context))]
     [Migration("20260511233305_Initial")]

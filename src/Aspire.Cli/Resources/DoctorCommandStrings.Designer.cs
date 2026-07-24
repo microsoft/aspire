@@ -132,6 +132,42 @@ namespace Aspire.Cli.Resources {
         }
         
         /// <summary>
+        ///   Looks up a localized string similar to Development Tools.
+        /// </summary>
+        public static string DevelopmentToolsCategoryHeader {
+            get {
+                return ResourceManager.GetString("DevelopmentToolsCategoryHeader", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire extension for VS Code is installed.
+        /// </summary>
+        public static string VsCodeExtensionInstalledMessage {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionInstalledMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to VS Code is installed, but the Aspire extension is not installed.
+        /// </summary>
+        public static string VsCodeExtensionMissingMessage {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionMissingMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install the Aspire extension from the VS Code Marketplace for an integrated Aspire experience..
+        /// </summary>
+        public static string VsCodeExtensionMissingFix {
+            get {
+                return ResourceManager.GetString("VsCodeExtensionMissingFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to Summary: {0} passed, {1} warnings, {2} failed.
         /// </summary>
         public static string SummaryFormat {
@@ -283,6 +319,15 @@ namespace Aspire.Cli.Resources {
                 return ResourceManager.GetString("DevCertsCleanAndTrustFixFormat", resourceCulture);
             }
         }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install {0}, run &apos;{1}&apos; to remove all certificates, then run &apos;{2}&apos; to create and trust a new one..
+        /// </summary>
+        public static string DevCertsInstallOpenSslCleanAndTrustFixFormat {
+            get {
+                return ResourceManager.GetString("DevCertsInstallOpenSslCleanAndTrustFixFormat", resourceCulture);
+            }
+        }
         
         /// <summary>
         ///   Looks up a localized string similar to Multiple HTTPS development certificates found ({0} certificates), but none are trusted.
@@ -389,6 +434,87 @@ namespace Aspire.Cli.Resources {
         public static string DevCertsOldVersionDetailsFormat {
             get {
                 return ResourceManager.GetString("DevCertsOldVersionDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to certutil is not available; browser certificate trust may be incomplete.
+        /// </summary>
+        public static string DevCertsMissingCertUtilMessage {
+            get {
+                return ResourceManager.GetString("DevCertsMissingCertUtilMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Aspire uses certutil to query and update NSS certificate databases used by Firefox and Chromium browsers on Linux..
+        /// </summary>
+        public static string DevCertsMissingCertUtilDetails {
+            get {
+                return ResourceManager.GetString("DevCertsMissingCertUtilDetails", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Install certutil from your distribution's NSS tools package (for example, libnss3-tools)..
+        /// </summary>
+        public static string DevCertsMissingCertUtilFix {
+            get {
+                return ResourceManager.GetString("DevCertsMissingCertUtilFix", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache is missing the current certificate.
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingCurrentCertificateMessage {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingCurrentCertificateMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The OpenSSL certificate cache at '{0}' does not contain certificate {1} from the .NET current user certificate store. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates..
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache contains unreadable certificate files.
+        /// </summary>
+        public static string DevCertsOpenSslCacheUnreadableMessage {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Could not read certificate files under '{0}': {1}. Run 'aspire certs clean' and then 'aspire certs trust' to remove stale or corrupt certificates and regenerate trusted development certificates..
+        /// </summary>
+        public static string DevCertsOpenSslCacheUnreadableFilesDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheUnreadableFilesDetailsFormat", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to OpenSSL HTTPS development certificate cache is missing subject-hash links.
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingHashLinkMessage {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingHashLinkMessage", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to The OpenSSL certificate cache at '{0}' contains certificate {1}, but no subject-hash entry points to it. OpenSSL workloads use subject-hash entries when loading CA directories..
+        /// </summary>
+        public static string DevCertsOpenSslCacheMissingHashLinkDetailsFormat {
+            get {
+                return ResourceManager.GetString("DevCertsOpenSslCacheMissingHashLinkDetailsFormat", resourceCulture);
             }
         }
 
@@ -767,6 +893,24 @@ namespace Aspire.Cli.Resources {
         public static string LegacySettingsDetectedFix {
             get {
                 return ResourceManager.GetString("LegacySettingsDetectedFix", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Legacy 'apphost.ts' layout detected at {0}.
+        /// </summary>
+        public static string LegacyTypeScriptAppHostMessageFormat {
+            get {
+                return ResourceManager.GetString("LegacyTypeScriptAppHostMessageFormat", resourceCulture);
+            }
+        }
+        
+        /// <summary>
+        ///   Looks up a localized string similar to Run 'aspire update --migrate' to apply the recommended migration....
+        /// </summary>
+        public static string PendingMigrationFix {
+            get {
+                return ResourceManager.GetString("PendingMigrationFix", resourceCulture);
             }
         }
     }

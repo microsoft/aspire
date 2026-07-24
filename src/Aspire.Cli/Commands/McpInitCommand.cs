@@ -36,6 +36,7 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
         PlaywrightCliInstaller playwrightCliInstaller,
         IGitRepository gitRepository,
         ILanguageDiscovery languageDiscovery,
+        Aspire.Cli.Agents.Hooks.ITelemetryHookConfigurator telemetryHookConfigurator,
         CommonCommandServices services)
         : base("init", McpCommandStrings.InitCommand_Description, services)
     {
@@ -46,6 +47,7 @@ internal sealed class McpInitCommand : BaseCommand, IPackageMetaPrefetchingComma
             playwrightCliInstaller,
             gitRepository,
             languageDiscovery,
+            telemetryHookConfigurator,
             services);
     }
 

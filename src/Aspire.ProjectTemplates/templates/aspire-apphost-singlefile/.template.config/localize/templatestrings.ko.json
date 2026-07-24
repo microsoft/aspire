@@ -3,6 +3,7 @@
   "name": "Aspire 단일 파일 앱 호스트",
   "description": "단일 파일 시나리오(.NET 10+)를 위한 최소한의 Aspire AppHost입니다.",
   "symbols/Framework/choices/net10.0/description": "대상 net10.0",
+  "symbols/Framework/choices/net11.0/description": "Target net11.0",
   "symbols/appHostHttpPort/description": "AppHost 프로젝트의 launchSettings.json HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostOtlpHttpPort/description": "AppHost 프로젝트의 launchSettings.json OTLP HTTP 엔드포인트에 사용할 포트 번호입니다.",
   "symbols/appHostResourceHttpPort/description": "AppHost 프로젝트의 launchSettings.json 리소스 서비스 HTTP 엔드포인트에 사용할 포트 번호입니다.",

@@ -17,6 +17,11 @@ namespace Aspire.Cli.Certificates;
 internal static partial class CertificateHelpers
 {
     /// <summary>
+    /// The command used to query and update NSS certificate databases.
+    /// </summary>
+    internal const string CertUtilCommand = "certutil";
+
+    /// <summary>
     /// The environment variable name for overriding the dev-certs OpenSSL certificate directory.
     /// </summary>
     internal const string DevCertsOpenSslCertDirEnvVar = "DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY";
@@ -39,9 +44,9 @@ internal static partial class CertificateHelpers
     /// <summary>
     /// Gets the dev-certs trust path, respecting the <c>DOTNET_DEV_CERTS_OPENSSL_CERTIFICATE_DIRECTORY</c> override.
     /// </summary>
-    internal static string GetDevCertsTrustPath()
+    internal static string GetDevCertsTrustPath(IEnvironment environment)
     {
-        var overridePath = Environment.GetEnvironmentVariable(DevCertsOpenSslCertDirEnvVar);
+        var overridePath = environment.GetEnvironmentVariable(DevCertsOpenSslCertDirEnvVar);
         return !string.IsNullOrEmpty(overridePath) ? overridePath : s_defaultDevCertsTrustPath;
     }
 

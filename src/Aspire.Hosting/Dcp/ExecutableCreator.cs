@@ -94,7 +94,12 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
         spec.PemCertificates = pemCertificates;
 
-        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, spec.Args?.Count ?? 0);
+        var executableArgumentStartIndex = spec.Args?.Count ?? 0;
+        var launchArgs = BuildLaunchArgs(er, spec, configuration.Arguments, executableArgumentStartIndex);
+        if (!HasProjectLaunchArgsOverride(er.ModelResource))
+        {
+            AddDotnetRunArgsForExecutableAnnotatedProject(er, launchArgs, executableArgumentStartIndex);
+        }
         var executableArgs = launchArgs.Where(a => a.Executable).Select(a => a.Value).ToList();
         var displayArgs = launchArgs.Where(a => a.Display).ToList();
         if (executableArgs.Count > 0)
@@ -156,23 +161,50 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // Invoke the debug configuration callback now that endpoints are allocated.
         // This allows launch configurations to access endpoint URLs that were not
         // available during PrepareExecutables().
-        // "project" launch types configure their launch configs in PrepareProjectExecutables() directly;
-        // all other types (plain executables and project subtypes like azure-functions) are handled here.
+        // "project" launch types on ProjectResources configure their launch configs in
+        // PrepareProjectExecutables() directly. Plain executables that carry IProjectMetadata and a
+        // "project" SupportsDebuggingAnnotation (e.g. DotnetProjectResource) are prepared as plain executables, 
+        // so their "project" launch configuration is applied here for IDE/F5 parity with AddProject. 
+        // All other types (plain executables and project subtypes like azure-functions) are also handled here.
         if (!er.ModelResource.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
-            && er.ModelResource.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation)
-            && supportsDebuggingAnnotation.LaunchConfigurationType is not "project")
+            && er.ModelResource.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation))
         {
-            var mode = _configuration[KnownConfigNames.DebugSessionRunMode] ?? ExecutableLaunchMode.NoDebug;
-            try
+            if (supportsDebuggingAnnotation.LaunchConfigurationType is "project")
             {
-                // Clear any existing launch configurations (needed for restart scenarios).
-                exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
-                supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode);
+                // ProjectResources already applied the "project" launch config in PrepareProjectExecutables().
+                // Only plain executables carrying project metadata need it applied here.
+                if (er.ModelResource is not ProjectResource)
+                {
+                    if (er.ModelResource.TryGetLastAnnotation<IProjectMetadata>(out var plainProjectMetadata))
+                    {
+                        // Clear and re-apply the launch configuration to ensure proper restart behavior.
+                        ApplyProjectLaunchConfiguration(exe, er.ModelResource, plainProjectMetadata, supportsDebuggingAnnotation);
+                    }
+                    else
+                    {
+                        throw new FailedToApplyEnvironmentException(
+                            $"Resource '{er.ModelResource.Name}' declares \"project\" debug launch support (WithDebugSupport) but has no project metadata. " +
+                            $"The \"project\" launch configuration type is reserved for .NET project resources; use a resource that carries {nameof(IProjectMetadata)} or a different launch configuration type.");
+                    }
+                }
             }
-            catch (Exception ex)
+            else
             {
-                _logger.LogWarning(ex, "Failed to apply launch configuration for resource '{ResourceName}'. Falling back to process execution.", er.ModelResource.Name);
-                exe.Spec.ExecutionType = ExecutionType.Process;
+                // We have non-project Executable that supports debugging; need to annotate it properly.
+
+                var mode = _configuration[KnownConfigNames.DebugSessionRunMode] ?? ExecutableLaunchMode.NoDebug;
+                try
+                {
+                    // Clear any existing launch configurations (needed for restart scenarios).
+                    exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
+                    supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode);
+                }
+                // Only fall back to Process when Spec.Args still forms a runnable command.
+                catch (Exception ex) when (!supportsDebuggingAnnotation.RewritesArgumentsForDebugging)
+                {
+                    _logger.LogWarning(ex, "Failed to apply launch configuration for resource '{ResourceName}'. Falling back to process execution.", er.ModelResource.Name);
+                    exe.Spec.ExecutionType = ExecutionType.Process;
+                }
             }
         }
 
@@ -197,8 +229,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             for (var i = 0; i < replicas; i++)
             {
                 var exeInstance = DcpExecutor.GetDcpInstance(project, instanceIndex: i);
-                var exe = Executable.Create(exeInstance.Name, "dotnet");
-                exe.Spec.WorkingDirectory = Path.GetDirectoryName(projectMetadata.ProjectPath);
+                project.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation);
+
+                var exe = Executable.Create(exeInstance.Name, executableAnnotation?.Command ?? "dotnet");
+                exe.Spec.WorkingDirectory = executableAnnotation?.WorkingDirectory ?? Path.GetDirectoryName(projectMetadata.ProjectPath);
 
                 exe.Annotate(CustomResource.OtelServiceNameAnnotation, project.Name);
                 exe.Annotate(CustomResource.OtelServiceInstanceIdAnnotation, project.GetOtelServiceInstanceId(exeInstance));
@@ -212,10 +246,34 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
                 var isInDebugSession = !string.IsNullOrEmpty(_configuration[DcpExecutor.DebugSessionPortVar]);
                 var persistent = project.GetLifetimeType() == Lifetime.Persistent;
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+                project.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var launchOverride);
+#pragma warning restore ASPIREPROJECTS001
                 exe.Spec.Persistent = persistent;
                 if (persistent)
                 {
                     ApplyMonitorProcess(project, exe.Spec);
+                }
+
+                if (launchOverride is not null)
+                {
+                    exe.Spec.ExecutionType = ExecutionType.Process;
+                    launchOverride.Apply(projectArgs, projectMetadata.ProjectPath, _distributedApplicationOptions.Configuration);
+
+                    exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, CreateProjectLaunchConfiguration(project, projectMetadata));
+
+                    exe.SetAnnotationAsObjectList(CustomResource.ResourceProjectArgsAnnotation, projectArgs);
+
+                    if (project.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _))
+                    {
+                        exe.Spec.Start = false;
+                    }
+
+                    var overrideExeAppResource = new RenderedModelResource<Executable>(project, exe);
+                    DcpModelUtilities.AddServicesProducedInfo(overrideExeAppResource, _appResources.Get());
+                    _appResources.Add(overrideExeAppResource);
+
+                    continue;
                 }
 
                 SupportsDebuggingAnnotation? supportsDebuggingAnnotation = null;
@@ -223,12 +281,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 if (!persistent && !forceProcessExecution && project.SupportsDebugging(_configuration, out supportsDebuggingAnnotation))
                 {
                     exe.Spec.ExecutionType = ExecutionType.IDE;
-                    exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
+
+                    // A Process fallback runs the DCP Executable Spec's command and args "as is". When the debug
+                    // support rewrites the resource's arguments for debugging (an argsCallback on an
+                    // IResourceWithArgs, supplied via the generic WithDebugSupport), those args are valid only for
+                    // IDE launch, so a Process fallback would run a broken command. Skip the fallback in that case.
+                    if (!supportsDebuggingAnnotation.RewritesArgumentsForDebugging)
+                    {
+                        exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
+                    }
 
                     if (supportsDebuggingAnnotation.LaunchConfigurationType is "project")
                     {
                         // We want this annotation even if we are not using IDE execution; see ToSnapshot() for details.
-                        exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, CreateProjectLaunchConfiguration(project, projectMetadata));
+                        ApplyProjectLaunchConfiguration(exe, project, projectMetadata, supportsDebuggingAnnotation);
                     }
                     // Non-project launch types (e.g. azure-functions) have their launch configuration
                     // applied later in CreateExecutableAsync() after endpoints are allocated,
@@ -256,67 +322,76 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                         }
                     }
                 }
-                else if (!persistent && !forceProcessExecution && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation))
+                else if (!persistent && !forceProcessExecution && ShouldFallBackToIdeExecution(isInDebugSession, supportsDebuggingAnnotation, executableAnnotation))
                 {
                     // Fall back to IDE execution with a standard ProjectLaunchConfiguration when:
                     // 1. No SupportsDebuggingAnnotation exists (e.g. AddResource-based ProjectResource
                     //    subclasses that don't call WithDebugSupport). These should get the same IDE
                     //    treatment that AddProject provides by default.
                     // 2. The annotation exists but the IDE did not send DEBUG_SESSION_INFO (Visual Studio
-                    //    scenario). VS handles all project resources natively, so non-"project" types
+                    //    scenario). VS handles project-like resources natively, so non-"project" types
                     //    like "azure-functions" still need IDE execution with ProjectLaunchConfiguration.
+                    //    Resources with explicit executable commands, such as MAUI platform resources,
+                    //    must preserve their process launch args unless an IDE explicitly advertises
+                    //    support for their custom launch type.
                     exe.Spec.ExecutionType = ExecutionType.IDE;
                     exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
 
-                    exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, CreateProjectLaunchConfiguration(project, projectMetadata));
+                    ApplyProjectLaunchConfiguration(exe, project, projectMetadata);
                 }
                 else
                 {
                     exe.Spec.ExecutionType = ExecutionType.Process;
 
-                    var projectLaunchConfiguration = new ProjectLaunchConfiguration();
-                    projectLaunchConfiguration.ProjectPath = projectMetadata.ProjectPath;
-
-                    // `dotnet watch` does not work with file-based apps yet, so we have to use `dotnet run` in that case
-                    if (_configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
+                    // Some ProjectResource subtypes, such as MAUI platform resources, intentionally
+                    // provide their own executable command and SDK-shaped app host args. Do not prefix
+                    // those args with Aspire's default `dotnet run --project ...` wrapper.
+                    if (executableAnnotation is null)
                     {
-                        projectArgs.Add("run");
-                        projectArgs.Add(projectMetadata.IsFileBasedApp ? "--file" : "--project");
-                        projectArgs.Add(projectMetadata.ProjectPath);
-                        if (projectMetadata.IsFileBasedApp)
+                        var projectLaunchConfiguration = new ProjectLaunchConfiguration();
+                        projectLaunchConfiguration.ProjectPath = projectMetadata.ProjectPath;
+
+                        // `dotnet watch` does not work with file-based apps yet, so we have to use `dotnet run` in that case
+                        if (_configuration.GetBool("DOTNET_WATCH") is not true || projectMetadata.IsFileBasedApp)
                         {
-                            projectArgs.Add("--no-cache");
+                            projectArgs.Add("run");
+                            projectArgs.Add(projectMetadata.IsFileBasedApp ? "--file" : "--project");
+                            projectArgs.Add(projectMetadata.ProjectPath);
+                            if (projectMetadata.IsFileBasedApp)
+                            {
+                                projectArgs.Add("--no-cache");
+                            }
+                            if (projectMetadata.SuppressBuild)
+                            {
+                                projectArgs.Add("--no-build");
+                            }
                         }
-                        if (projectMetadata.SuppressBuild)
+                        else
                         {
-                            projectArgs.Add("--no-build");
+                            projectArgs.AddRange([
+                                "watch",
+                                "--non-interactive",
+                                "--no-hot-reload",
+                                "--project",
+                                projectMetadata.ProjectPath
+                            ]);
                         }
-                    }
-                    else
-                    {
-                        projectArgs.AddRange([
-                            "watch",
-                            "--non-interactive",
-                            "--no-hot-reload",
-                            "--project",
-                            projectMetadata.ProjectPath
-                        ]);
-                    }
 
-                    if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
-                    {
-                        projectArgs.AddRange(new[] { "--configuration", _distributedApplicationOptions.Configuration });
+                        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration))
+                        {
+                            projectArgs.AddRange(new[] { "--configuration", _distributedApplicationOptions.Configuration });
+                        }
+
+                        // We pretty much always want to suppress the normal launch profile handling
+                        // because the settings from the profile will override the ambient environment settings, which is not what we want
+                        // (the ambient environment settings for service processes come from the application model
+                        // and should be HIGHER priority than the launch profile settings).
+                        // This means we need to apply the launch profile settings manually inside CreateExecutableAsync().
+                        projectArgs.Add("--no-launch-profile");
+
+                        // We want this annotation even if we are not using IDE execution; see ToSnapshot() for details.
+                        exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, projectLaunchConfiguration);
                     }
-
-                    // We pretty much always want to suppress the normal launch profile handling
-                    // because the settings from the profile will override the ambient environment settings, which is not what we want
-                    // (the ambient environment settings for service processes come from the application model
-                    // and should be HIGHER priority than the launch profile settings).
-                    // This means we need to apply the launch profile settings manually inside CreateExecutableAsync().
-                    projectArgs.Add("--no-launch-profile");
-
-                    // We want this annotation even if we are not using IDE execution; see ToSnapshot() for details.
-                    exe.AnnotateAsObjectList(Executable.LaunchConfigurationsAnnotation, projectLaunchConfiguration);
                 }
 
                 exe.SetAnnotationAsObjectList(CustomResource.ResourceProjectArgsAnnotation, projectArgs);
@@ -366,12 +441,20 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
             if (!persistent
                 && !executable.HasAnnotationOfType<ForceProcessExecutionAnnotation>()
-                && executable.SupportsDebugging(_configuration, out _))
+                && executable.SupportsDebugging(_configuration, out var supportsDebuggingAnnotation))
             {
                 // Just mark as IDE execution here - the actual launch configuration callback
                 // will be invoked in CreateExecutableAsync after endpoints are allocated.
                 exe.Spec.ExecutionType = ExecutionType.IDE;
-                exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
+
+                // A Process fallback is only meaningful when the fallback can actually launch the resource.
+                // This means the DCP Executable Spec has "real" command and args that can be executed "as is".
+                // In case of "project" launch configuration type, or when RewritesArgumentsForDebugging is true, 
+                // that is not the case, so we do not add the fallback. 
+                if (supportsDebuggingAnnotation.LaunchConfigurationType is not "project" && !supportsDebuggingAnnotation.RewritesArgumentsForDebugging)
+                {
+                    exe.Spec.FallbackExecutionTypes = [ExecutionType.Process];
+                }
             }
             else
             {
@@ -418,10 +501,17 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
                 var dirs = new List<string> { certificatesOutputPath };
                 if (scope == CertificateTrustScope.Append)
                 {
-                    var existing = Environment.GetEnvironmentVariable("SSL_CERT_DIR");
-                    if (!string.IsNullOrEmpty(existing))
+                    var existingSslCertDir = Environment.GetEnvironmentVariable(CertificateTrustExecutionConfigurationGatherer.SslCertDirEnvironmentVariable);
+                    if (existingSslCertDir is not null)
                     {
-                        dirs.AddRange(existing.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
+                        dirs.AddRange(existingSslCertDir.Split(Path.PathSeparator, StringSplitOptions.RemoveEmptyEntries));
+                    }
+                    else if (OperatingSystem.IsLinux())
+                    {
+                        // Do not invoke the openssl CLI here. This fallback is only for dotnet-run AppHosts
+                        // where Aspire CLI did not already materialize OpenSSL's default directory into
+                        // SSL_CERT_DIR, so reuse the same well-known certificate directories used for containers.
+                        dirs.AddRange(ContainerCertificatePathsAnnotation.DefaultCertificateDirectoriesPaths.Where(Directory.Exists));
                     }
                 }
 
@@ -437,6 +527,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             {
                 CertificatePath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.crt")}"),
                 KeyPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.key")}"),
+                CertificateWithKeyPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.pem")}"),
                 PfxPath = ReferenceExpression.Create($"{Path.Join(baseServerAuthOutputPath, $"{cert.Thumbprint}.pfx")}"),
             })
             .BuildAsync(_executionContext, resourceLogger, cancellationToken)
@@ -473,10 +564,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
             var thumbprint = tlsCertificateConfiguration.Certificate.Thumbprint;
             var publicCertificatePem = tlsCertificateConfiguration.Certificate.ExportCertificatePem();
             (var keyPem, var pfxBytes) = await DeveloperCertificateService.GetKeyMaterialAsync(
-                tlsCertificateConfiguration.Certificate,
-                tlsCertificateConfiguration.Password,
-                tlsCertificateConfiguration.IsKeyPathReferenced,
-                tlsCertificateConfiguration.IsPfxPathReferenced,
+                certificate: tlsCertificateConfiguration.Certificate,
+                password: tlsCertificateConfiguration.Password,
+                needKeyPem: tlsCertificateConfiguration.IsKeyPathReferenced || tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced,
+                needPfx: tlsCertificateConfiguration.IsPfxPathReferenced,
                 cancellationToken
             ).ConfigureAwait(false);
 
@@ -497,6 +588,10 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
 
                 // Write each of the certificate, key, and PFX assets to the temp folder
                 File.WriteAllBytes(Path.Join(baseServerAuthOutputPath, $"{thumbprint}.key"), keyBytes);
+                if (tlsCertificateConfiguration.IsCertificateWithKeyPathReferenced)
+                {
+                    File.WriteAllText(Path.Join(baseServerAuthOutputPath, $"{thumbprint}.pem"), new([.. keyPem, '\n', .. publicCertificatePem]));
+                }
 
                 Array.Clear(keyPem, 0, keyPem.Length);
                 Array.Clear(keyBytes, 0, keyBytes.Length);
@@ -529,6 +624,18 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         // Follows behavior in the IDE execution spec when in IDE execution mode:
         // https://github.com/microsoft/aspire/blob/main/docs/specs/IDE-execution.md#project-launch-configuration-type-project
         var appHostArgList = appHostArgs.ToList();
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        var hasProjectLaunchArgsOverride = er.ModelResource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out var projectLaunchArgsOverride);
+#pragma warning restore ASPIREPROJECTS001
+        if (projectLaunchArgsOverride?.LeadingResourceArgumentToRemove is { } leadingResourceArgumentToRemove &&
+            appHostArgList.Count > 0 &&
+            string.Equals(appHostArgList[0].Value, leadingResourceArgumentToRemove, StringComparison.Ordinal))
+        {
+            // Some integrations keep an SDK-shaped verb in resource args for model consumers, but the
+            // launch override can already represent that verb. Only remove it when the annotation opts in.
+            appHostArgList.RemoveAt(0);
+        }
+
         var launchArgs = new List<LaunchArgument>();
         var nextExecutableArgumentIndex = executableArgumentStartIndex;
 
@@ -539,7 +646,7 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         }
 
         // If the executable is a project then include any command line args from the launch profile.
-        if (er.ModelResource is ProjectResource project)
+        if (!hasProjectLaunchArgsOverride && er.ModelResource is ProjectResource project)
         {
             // Args in the launch profile is used when:
             // 1. The project is run as an executable. Launch profile args are combined with app host supplied args.
@@ -576,13 +683,122 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return launchArgs;
     }
 
+    private void AddDotnetRunArgsForExecutableAnnotatedProject(RenderedModelResource<Executable> er, List<LaunchArgument> launchArgs, int executableArgumentStartIndex)
+    {
+        if (er.ModelResource is not ProjectResource ||
+            !er.ModelResource.TryGetLastAnnotation<ExecutableAnnotation>(out var executableAnnotation) ||
+            !string.Equals(executableAnnotation.Command, "dotnet", StringComparison.OrdinalIgnoreCase))
+        {
+            return;
+        }
+
+        var runIndex = launchArgs.FindIndex(argument => argument.Executable && string.Equals(argument.Value, "run", StringComparison.Ordinal));
+        if (runIndex < 0)
+        {
+            return;
+        }
+
+        List<LaunchArgument>? launchProfileArgs = null;
+        if (runIndex > 0 &&
+            launchArgs[0].Executable &&
+            string.Equals(launchArgs[0].Value, "--", StringComparison.Ordinal))
+        {
+            // Process execution passes project launch-profile args before "dotnet run", separated by "--".
+            // IDE execution already owns the launch profile via ProjectLaunchConfiguration, so keep those
+            // values out of the executable argument list while we insert the AppHost configuration flags
+            // immediately after "dotnet run".
+            launchProfileArgs = launchArgs.GetRange(0, runIndex);
+            launchArgs.RemoveRange(0, runIndex);
+            runIndex = 0;
+        }
+
+        var argsToInsert = new List<string>();
+        if (!string.IsNullOrEmpty(_distributedApplicationOptions.Configuration) &&
+            !ContainsDotnetRunOption(launchArgs, "--configuration", "-c"))
+        {
+            argsToInsert.AddRange(["--configuration", _distributedApplicationOptions.Configuration]);
+        }
+
+        if (!ContainsDotnetRunOption(launchArgs, "--no-launch-profile") &&
+            !ContainsDotnetRunOption(launchArgs, "--launch-profile"))
+        {
+            argsToInsert.Add("--no-launch-profile");
+        }
+
+        if (argsToInsert.Count == 0 && launchProfileArgs is null)
+        {
+            return;
+        }
+
+        // Some ProjectResource subtypes provide the `dotnet run` command through resource args
+        // instead of using Aspire's default project wrapper. Keep the SDK-shaped command, but
+        // preserve the same AppHost configuration and launch-profile suppression that regular
+        // process-launched project resources get.
+        if (argsToInsert.Count > 0)
+        {
+            launchArgs.InsertRange(runIndex + 1, argsToInsert.Select(argument => new LaunchArgument(argument, IsSensitive: false, Executable: true, Display: false, EffectiveArgumentIndex: null)));
+        }
+
+        if (launchProfileArgs is not null)
+        {
+            // Launch profile args were originally before the app host args, separated by `--`.
+            // Once this path preserves the caller-provided `dotnet run` command, those args must
+            // move after the inserted SDK options so `dotnet run` parses them as application args.
+            launchArgs.AddRange(launchProfileArgs);
+        }
+
+        ReindexExecutableLaunchArgs(launchArgs, executableArgumentStartIndex);
+    }
+
+    private static bool ContainsDotnetRunOption(List<LaunchArgument> launchArgs, params string[] options)
+    {
+        var separatorIndex = launchArgs.FindIndex(argument => argument.Executable && string.Equals(argument.Value, "--", StringComparison.Ordinal));
+        var endIndex = separatorIndex < 0 ? launchArgs.Count : separatorIndex;
+
+        for (var i = 0; i < endIndex; i++)
+        {
+            var value = launchArgs[i].Value;
+            if (options.Any(option => string.Equals(value, option, StringComparison.Ordinal) || value.StartsWith(option + "=", StringComparison.Ordinal)))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static bool HasProjectLaunchArgsOverride(IResource resource)
+    {
+#pragma warning disable ASPIREPROJECTS001 // Type is for evaluation purposes only and is subject to change or removal in future updates. Suppress this diagnostic to proceed.
+        return resource.TryGetLastAnnotation<ProjectLaunchArgsOverrideAnnotation>(out _);
+#pragma warning restore ASPIREPROJECTS001
+    }
+
+    private static void ReindexExecutableLaunchArgs(List<LaunchArgument> launchArgs, int executableArgumentStartIndex)
+    {
+        var nextExecutableArgumentIndex = executableArgumentStartIndex;
+        for (var i = 0; i < launchArgs.Count; i++)
+        {
+            var argument = launchArgs[i];
+            launchArgs[i] = argument with
+            {
+                EffectiveArgumentIndex = argument.Executable ? nextExecutableArgumentIndex++ : null
+            };
+        }
+    }
+
     /// <summary>
     /// Determines whether to fall back to IDE execution for a project resource that did not pass
     /// <see cref="ExtensionUtils.SupportsDebugging"/>.
     /// </summary>
-    private bool ShouldFallBackToIdeExecution(bool isInDebugSession, SupportsDebuggingAnnotation? supportsDebuggingAnnotation)
+    private bool ShouldFallBackToIdeExecution(bool isInDebugSession, SupportsDebuggingAnnotation? supportsDebuggingAnnotation, ExecutableAnnotation? executableAnnotation)
     {
         if (!isInDebugSession)
+        {
+            return false;
+        }
+
+        if (executableAnnotation is not null && supportsDebuggingAnnotation?.LaunchConfigurationType is not null and not "project")
         {
             return false;
         }
@@ -595,21 +811,59 @@ internal sealed class ExecutableCreator : IObjectCreator<Executable, EmptyCreati
         return true;
     }
 
-    private ProjectLaunchConfiguration CreateProjectLaunchConfiguration(ProjectResource project, IProjectMetadata projectMetadata)
+    private void ApplyProjectLaunchConfiguration(Executable exe, IResource project, IProjectMetadata projectMetadata, SupportsDebuggingAnnotation? supportsDebuggingAnnotation = null)
+    {
+        if (supportsDebuggingAnnotation?.LaunchConfigurationType is "project")
+        {
+            var mode = GetProjectLaunchConfigurationMode();
+            exe.Annotate(Executable.LaunchConfigurationsAnnotation, string.Empty);
+            supportsDebuggingAnnotation.LaunchConfigurationAnnotator(exe, mode);
+
+            if (!exe.TryGetProjectLaunchConfiguration(out var projectLaunchConfiguration))
+            {
+                throw new InvalidOperationException($"Project resource '{project.Name}' produced an invalid project launch configuration.");
+            }
+
+            ApplyProjectLaunchConfigurationDefaults(projectLaunchConfiguration, project, projectMetadata);
+            exe.SetProjectLaunchConfiguration(projectLaunchConfiguration);
+            return;
+        }
+
+        exe.SetProjectLaunchConfiguration(CreateProjectLaunchConfiguration(project, projectMetadata));
+    }
+
+    private ProjectLaunchConfiguration CreateProjectLaunchConfiguration(IResource project, IProjectMetadata projectMetadata)
     {
         var projectLaunchConfiguration = new ProjectLaunchConfiguration();
         projectLaunchConfiguration.ProjectPath = projectMetadata.ProjectPath;
-        projectLaunchConfiguration.Mode = _configuration[KnownConfigNames.DebugSessionRunMode]
-            ?? (Debugger.IsAttached ? ExecutableLaunchMode.Debug : ExecutableLaunchMode.NoDebug);
+        projectLaunchConfiguration.Mode = GetProjectLaunchConfigurationMode();
 
-        projectLaunchConfiguration.DisableLaunchProfile = project.TryGetLastAnnotation<ExcludeLaunchProfileAnnotation>(out _);
+        ApplyProjectLaunchConfigurationDefaults(projectLaunchConfiguration, project, projectMetadata);
+
+        return projectLaunchConfiguration;
+    }
+
+    private static void ApplyProjectLaunchConfigurationDefaults(ProjectLaunchConfiguration projectLaunchConfiguration, IResource project, IProjectMetadata projectMetadata)
+    {
+        if (string.IsNullOrEmpty(projectLaunchConfiguration.ProjectPath))
+        {
+            projectLaunchConfiguration.ProjectPath = projectMetadata.ProjectPath;
+        }
+
+        projectLaunchConfiguration.DisableLaunchProfile |= project.TryGetLastAnnotation<ExcludeLaunchProfileAnnotation>(out _);
         // Use the effective launch profile which has fallback logic
-        if (!projectLaunchConfiguration.DisableLaunchProfile && project.GetEffectiveLaunchProfile() is NamedLaunchProfile namedLaunchProfile)
+        if (!projectLaunchConfiguration.DisableLaunchProfile &&
+            string.IsNullOrEmpty(projectLaunchConfiguration.LaunchProfile) &&
+            project.GetEffectiveLaunchProfile() is NamedLaunchProfile namedLaunchProfile)
         {
             projectLaunchConfiguration.LaunchProfile = namedLaunchProfile.Name;
         }
+    }
 
-        return projectLaunchConfiguration;
+    private string GetProjectLaunchConfigurationMode()
+    {
+        return _configuration[KnownConfigNames.DebugSessionRunMode]
+            ?? (Debugger.IsAttached ? ExecutableLaunchMode.Debug : ExecutableLaunchMode.NoDebug);
     }
 
     private static List<string> GetLaunchProfileArgs(LaunchProfile? launchProfile)

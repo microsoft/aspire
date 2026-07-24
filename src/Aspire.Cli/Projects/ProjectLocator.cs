@@ -32,7 +32,7 @@ internal interface IProjectLocator
         CancellationToken cancellationToken);
 
     /// <summary>
-    /// Streams candidate AppHost projects as validation completes.
+    /// Streams candidate AppHost projects as discovery/validation completes.
     /// </summary>
     /// <param name="searchDirectory">The directory to search recursively.</param>
     /// <param name="scope">Controls which files are considered. See <see cref="AppHostDiscoveryScope"/>.</param>
@@ -42,7 +42,7 @@ internal interface IProjectLocator
     /// <see cref="IAppHostCandidateFinder.FindCandidateFilesAsync"/> for caller obligations.
     /// </param>
     /// <param name="cancellationToken">The cancellation token.</param>
-    /// <returns>An async stream of candidate AppHost projects in validation-completion order.</returns>
+    /// <returns>An async stream of candidate AppHost projects in completion order.</returns>
     async IAsyncEnumerable<AppHostProjectCandidate> FindAppHostProjectsStreamAsync(
         DirectoryInfo searchDirectory,
         AppHostDiscoveryScope scope,
@@ -93,6 +93,9 @@ internal interface IProjectLocator
             : throw new NotSupportedException();
     Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default);
 
+    Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
+        => UseOrFindAppHostProjectFileAsync(projectFile, multipleAppHostProjectsFoundBehavior, createSettingsFile, cancellationToken);
+
     Task<FileInfo?> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, bool createSettingsFile, CancellationToken cancellationToken);
 
     /// <summary>
@@ -130,6 +133,7 @@ internal enum AppHostProjectCandidateStatus
 internal sealed class ProjectLocator(
     ILogger<ProjectLocator> logger,
     CliExecutionContext executionContext,
+    IEnvironment environment,
     IInteractionService interactionService,
     IConfigurationService configurationService,
     IAppHostProjectFactory projectFactory,
@@ -166,7 +170,7 @@ internal sealed class ProjectLocator(
     /// <returns>A list of candidate AppHost projects with language metadata sorted by full path.</returns>
     public async Task<List<AppHostProjectCandidate>> FindAppHostProjectsAsync(DirectoryInfo searchDirectory, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken)
     {
-        var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth, cancellationToken);
+        var allCandidates = await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth, cancellationToken: cancellationToken);
         var candidates = allCandidates.BuildableAppHost.Concat(allCandidates.UnbuildableSuspectedAppHostProjects).ToList();
         candidates.Sort((x, y) => string.Compare(x.AppHostFile.FullName, y.AppHostFile.FullName, StringComparison.Ordinal));
         return candidates;
@@ -223,7 +227,7 @@ internal sealed class ProjectLocator(
     {
         try
         {
-            await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth: null, cancellationToken, candidateWriter, onDirectoryEnumerated).ConfigureAwait(false);
+            await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts: false, displayProgress: false, scope, maxDepth: null, candidateWriter, onDirectoryEnumerated, cancellationToken).ConfigureAwait(false);
             candidateWriter.TryComplete();
         }
         catch (Exception ex)
@@ -273,12 +277,7 @@ internal sealed class ProjectLocator(
         return await FindAppHostProjectFilesAsync(new DirectoryInfo(searchDirectory), AppHostDiscoveryScope.AllFiles, cancellationToken);
     }
 
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, AppHostDiscoveryScope scope, CancellationToken cancellationToken)
-    {
-        return await FindAppHostProjectFilesAsync(searchDirectory, stopAfterMultipleBuildableAppHosts, displayProgress: true, scope, maxDepth: null, cancellationToken);
-    }
-
-    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, CancellationToken cancellationToken, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null)
+    private async Task<(List<AppHostProjectCandidate> BuildableAppHost, List<AppHostProjectCandidate> UnbuildableSuspectedAppHostProjects, bool HasUnsupportedProjects)> FindAppHostProjectFilesAsync(DirectoryInfo searchDirectory, bool stopAfterMultipleBuildableAppHosts, bool displayProgress, AppHostDiscoveryScope scope, int? maxDepth, ChannelWriter<AppHostProjectCandidate>? candidateWriter = null, Action<int>? onDirectoryEnumerated = null, CancellationToken cancellationToken = default)
     {
         using var activity = telemetry.StartDiagnosticActivity();
 
@@ -456,7 +455,7 @@ internal sealed class ProjectLocator(
                 // Windows and default macOS APFS volumes are case-insensitive, so a
                 // differently-cased settings path can still refer to the same file found
                 // by the discovery walk. See https://github.com/microsoft/aspire/issues/17635.
-                var pathComparison = OperatingSystem.IsWindows() || OperatingSystem.IsMacOS()
+                var pathComparison = environment.IsWindows() || environment.IsMacOS()
                     ? StringComparison.OrdinalIgnoreCase
                     : StringComparison.Ordinal;
 
@@ -814,7 +813,12 @@ internal sealed class ProjectLocator(
         return true;
     }
 
-    public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default)
+    public Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, CancellationToken cancellationToken = default)
+    {
+        return UseOrFindAppHostProjectFileAsync(projectFile, multipleAppHostProjectsFoundBehavior, createSettingsFile, displayProgress: true, cancellationToken);
+    }
+
+    public async Task<AppHostProjectSearchResult> UseOrFindAppHostProjectFileAsync(FileInfo? projectFile, MultipleAppHostProjectsFoundBehavior multipleAppHostProjectsFoundBehavior, bool createSettingsFile, bool displayProgress, CancellationToken cancellationToken = default)
     {
         logger.LogDebug("Finding project file in {CurrentDirectory}", executionContext.WorkingDirectory);
 
@@ -832,11 +836,16 @@ internal sealed class ProjectLocator(
                 var searchResults = await FindAppHostProjectFilesAsync(
                     directory,
                     stopAfterMultipleBuildableAppHosts: multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Throw,
-                    AppHostDiscoveryScope.ExplicitDirectory,
-                    cancellationToken);
+                    displayProgress: displayProgress,
+                    scope: AppHostDiscoveryScope.ExplicitDirectory,
+                    maxDepth: null,
+                    cancellationToken: cancellationToken);
                 var appHostProjects = searchResults.BuildableAppHost.Select(c => c.AppHostFile).ToList();
 
-                interactionService.DisplayEmptyLine();
+                if (displayProgress)
+                {
+                    interactionService.DisplayEmptyLine();
+                }
 
                 if (appHostProjects.Count == 0)
                 {
@@ -926,8 +935,10 @@ internal sealed class ProjectLocator(
                 // If no handler matched, for .cs files check if we should search the parent directory
                 if (projectFile.Name.Equals("apphost.cs", StringComparison.OrdinalIgnoreCase) && projectFile.Directory is { } parentDirectory)
                 {
-                    // File exists but is not a valid single-file apphost. Search in the parent directory
-                    return await UseOrFindAppHostProjectFileAsync(new FileInfo(parentDirectory.FullName), multipleAppHostProjectsFoundBehavior, createSettingsFile, cancellationToken);
+                    // File exists but is not a valid single-file apphost. Search in the parent directory.
+                    // Propagate displayProgress so callers that opted out of progress UI (e.g. the hidden
+                    // `extension get-apphosts` flow) do not start emitting progress on this fallback path.
+                    return await UseOrFindAppHostProjectFileAsync(new FileInfo(parentDirectory.FullName), multipleAppHostProjectsFoundBehavior, createSettingsFile, displayProgress, cancellationToken);
                 }
 
                 // No handler can process this file
@@ -955,8 +966,10 @@ internal sealed class ProjectLocator(
         var results = await FindAppHostProjectFilesAsync(
             executionContext.WorkingDirectory,
             stopAfterMultipleBuildableAppHosts: multipleAppHostProjectsFoundBehavior is MultipleAppHostProjectsFoundBehavior.Throw && settingsAppHost is null,
-            AppHostDiscoveryScope.DefaultFiltered,
-            cancellationToken);
+            displayProgress: displayProgress,
+            scope: AppHostDiscoveryScope.DefaultFiltered,
+            maxDepth: null,
+            cancellationToken: cancellationToken);
 
         logger.LogDebug("Found {ProjectFileCount} project files.", results.BuildableAppHost.Count);
 
@@ -997,7 +1010,7 @@ internal sealed class ProjectLocator(
             // Check if a previously-selected apphost is cached in settings and
             // is still among the discovered candidates. If so, reuse it to avoid
             // prompting the user every time when nothing has changed.
-            var pathComparison = OperatingSystem.IsWindows()
+            var pathComparison = environment.IsWindows()
                 ? StringComparison.OrdinalIgnoreCase
                 : StringComparison.Ordinal;
 
@@ -1031,7 +1044,7 @@ internal sealed class ProjectLocator(
         // the discovered candidate set (e.g. parent directory or excluded by enumeration).
         var allCandidates = results.BuildableAppHost.Select(c => c.AppHostFile).ToList();
         if (selectedAppHost is not null
-            && !allCandidates.Any(f => string.Equals(f.FullName, selectedAppHost.FullName, OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
+            && !allCandidates.Any(f => string.Equals(f.FullName, selectedAppHost.FullName, environment.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal)))
         {
             allCandidates = [.. allCandidates, selectedAppHost];
         }
@@ -1180,7 +1193,7 @@ internal sealed class ProjectLocator(
 
     private string? GetNuGetPackagesCachePath()
     {
-        var envPath = executionContext.GetEnvironmentVariable("NUGET_PACKAGES");
+        var envPath = environment.GetEnvironmentVariable("NUGET_PACKAGES");
         if (!string.IsNullOrEmpty(envPath))
         {
             return Path.GetFullPath(envPath);

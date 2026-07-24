@@ -22,6 +22,7 @@
 #   job:cli-starter            tests.yml cli_starter_validation_windows
 #   job:winget-installer       tests.yml prepare_winget_installer_artifacts
 #   job:homebrew-installer     tests.yml prepare_homebrew_installer_artifacts
+#   job:nix-package            tests.yml nix_package
 #   job:api-diffs              generate-api-diffs.yml    (schedule-only today)
 #   job:ats-diffs              generate-ats-diffs.yml    (schedule-only today)
 #   job:deployment-e2e         deployment-tests.yml      (schedule/dispatch-only today)
@@ -174,12 +175,21 @@ path_rules:
     targets: [job:typescript-sdk]
     reason: vitest over generated TS SDK; ts-starter is a narrow sub-path of Aspire.Cli, not the whole project
   - paths:
-      - src/Aspire.Hosting*/api/*.ats.txt
       - src/**/*.tscompat.suppression.txt
       - tools/TypeScriptApiCompat/**
       - .github/workflows/typescript-api-compat.yml
     targets: [job:typescript-api-compat]
-    reason: checked-in *.ats.txt/suppression baselines are not compiled items (Layer 1 blind); Hosting/Cli production projects are in affected_project_rules
+    reason: checked-in suppression baselines are not compiled items (Layer 1 blind); Hosting/Cli production projects are in affected_project_rules
+  # A checked-in *.ats.txt baseline changes EXACTLY when an integration's [AspireExport] surface
+  # changes -- the same surface the per-language polyglot playground scripts regenerate and compile
+  # (aspire restore --apphost over tests/PolyglotAppHosts/<integration>/<lang>). So an exported-surface
+  # change must run BOTH typescript-api-compat (baseline diff) AND polyglot (regenerate+compile in every
+  # language), even when the author has not also touched the tests/PolyglotAppHosts fixtures. The baseline
+  # is not a compiled item, so Layer 1 is blind to it and these targets must be enumerated here.
+  - paths:
+      - src/Aspire.Hosting*/api/*.ats.txt
+    targets: [job:typescript-api-compat, job:polyglot]
+    reason: an integration's *.ats.txt baseline tracks its exported ATS surface; the polyglot playground regenerates+compiles that surface per language, so a baseline change must run polyglot too
   - paths: [extension/**]
     targets: [job:extension-unit]
     reason: extension_tests_win + extension_bootstrap_linux run yarn build/test in extension/
@@ -251,6 +261,13 @@ path_rules:
       - eng/scripts/pack-cli-npm-package.ps1
     targets: [test:Aspire.Cli.Tests, test:Infrastructure.Tests]
     reason: Cli.Tests/Npm/AspireJsLauncherTests and Infrastructure.Tests parse this script
+  - paths:
+      - .github/workflows/update-nix-cli-flake.yml
+      - flake.nix
+      - flake.lock
+      - eng/nix/**
+    targets: [test:Infrastructure.Tests, job:nix-package]
+    reason: Infrastructure.Tests validates the Nix flake, package derivation, update script, and release asset manifest; the Nix package smoke runs nix flake check, nix build, and the packaged CLI
   - paths:
       - eng/scripts/download-native-archives.ps1
       - eng/scripts/stage-native-cli-tool-packages.ps1

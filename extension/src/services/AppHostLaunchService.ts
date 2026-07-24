@@ -1,9 +1,28 @@
 import * as path from 'path';
+import * as fs from 'fs';
 import * as vscode from 'vscode';
 import { AspireCommandType, AspireExtendedDebugConfiguration } from '../dcp/types';
+import { startDebuggingDeclined } from '../loc/strings';
+import { classifyAppHostDirectory, classifyAppHostPath } from '../utils/appHostLanguage';
+import { classifyError, isCommandCancellation, sendTelemetryEvent, type EventProperties } from '../utils/telemetry';
+import { bucketAspireCommand } from '../utils/telemetryBuckets';
+import { checkCliAvailableOrRedirect } from '../utils/workspace';
 
 function getComparisonKey(value: string): string {
     return process.platform === 'win32' ? value.toLowerCase() : value;
+}
+
+function isAspireCommandType(value: unknown): value is AspireCommandType {
+    return value === 'run' || value === 'deploy' || value === 'publish' || value === 'do';
+}
+
+function getTerminationCommand(configuration: vscode.DebugConfiguration): AspireCommandType | undefined {
+    // Run is the default Aspire command when omitted from launch configuration.
+    if (configuration.command === undefined || configuration.command === null) {
+        return 'run';
+    }
+
+    return isAspireCommandType(configuration.command) ? configuration.command : undefined;
 }
 
 export interface AppHostLaunchRequestedEvent {
@@ -12,6 +31,12 @@ export interface AppHostLaunchRequestedEvent {
     noDebug: boolean;
     doStep?: string;
     executionSuppressed: boolean;
+}
+
+export interface AppHostDebugSessionTerminatedEvent {
+    appHostPath: string;
+    command?: AspireCommandType;
+    shouldRequestStopRefresh: boolean;
 }
 
 /**
@@ -29,7 +54,7 @@ export class AppHostLaunchService implements vscode.Disposable {
     private readonly _onDidChangeLaunchingState = new vscode.EventEmitter<void>();
     readonly onDidChangeLaunchingState = this._onDidChangeLaunchingState.event;
 
-    private readonly _onDidTerminateAppHostDebugSession = new vscode.EventEmitter<string>();
+    private readonly _onDidTerminateAppHostDebugSession = new vscode.EventEmitter<AppHostDebugSessionTerminatedEvent>();
     readonly onDidTerminateAppHostDebugSession = this._onDidTerminateAppHostDebugSession.event;
 
     private readonly _onDidRequestLaunch = new vscode.EventEmitter<AppHostLaunchRequestedEvent>();
@@ -47,7 +72,12 @@ export class AppHostLaunchService implements vscode.Disposable {
                 if (this._launchingPaths.delete(key)) {
                     this._onDidChangeLaunchingState.fire();
                 }
-                this._onDidTerminateAppHostDebugSession.fire(appHostPath);
+                const command = getTerminationCommand(session.configuration);
+                this._onDidTerminateAppHostDebugSession.fire({
+                    appHostPath,
+                    command,
+                    shouldRequestStopRefresh: command === 'run',
+                });
             }
         });
     }
@@ -108,13 +138,9 @@ export class AppHostLaunchService implements vscode.Disposable {
      * @param doStep Optional step name for the 'do' command.
      */
     async launch(appHostPath: string, command: AspireCommandType, noDebug: boolean, doStep?: string): Promise<void> {
-        // Track launching state before awaiting startDebugging so the tree shows "Starting..."
-        // immediately. We must clear this state if startDebugging returns false (debug adapter
-        // rejected, no provider matched, user cancelled) or throws — otherwise no terminate
-        // event will fire and the tree item stays stuck on the spinner indefinitely.
-        // See https://code.visualstudio.com/api/references/vscode-api#debug.startDebugging
-        this._launchingPaths.add(getComparisonKey(path.resolve(appHostPath)));
-        this._onDidChangeLaunchingState.fire();
+        const startTime = Date.now();
+        const executionSuppressed = isE2eDebugLaunchSuppressed();
+        const telemetryProperties = await getLaunchTelemetryProperties(appHostPath, command, noDebug, executionSuppressed);
 
         const config: AspireExtendedDebugConfiguration = {
             type: 'aspire',
@@ -129,7 +155,6 @@ export class AppHostLaunchService implements vscode.Disposable {
             config.step = doStep;
         }
 
-        const executionSuppressed = isE2eDebugLaunchSuppressed();
         this._onDidRequestLaunch.fire({
             appHostPath,
             command,
@@ -137,21 +162,82 @@ export class AppHostLaunchService implements vscode.Disposable {
             doStep,
             executionSuppressed,
         });
-
         if (executionSuppressed) {
             this.clearLaunching(appHostPath);
+            sendTelemetryEvent('apphost/launch/result', {
+                ...telemetryProperties,
+                outcome: 'suppressed',
+            }, {
+                duration_ms: Date.now() - startTime,
+            });
             return;
         }
 
         try {
+            // Track launching state before awaiting the CLI/debug checks so the tree shows
+            // "Starting..." immediately after the user invokes the command. Every pre-start
+            // failure path below clears it because VS Code will not emit a terminate event.
+            // See https://code.visualstudio.com/api/references/vscode-api#debug.startDebugging
+            this._launchingPaths.add(getComparisonKey(path.resolve(appHostPath)));
+            this._onDidChangeLaunchingState.fire();
+
+            const cliAvailability = await checkCliAvailableOrRedirect('debug_gate');
+            if (!cliAvailability.available) {
+                throw new vscode.CancellationError();
+            }
+            config.skipCliAvailabilityCheck = true;
+
             const started = await vscode.debug.startDebugging(undefined, config);
             if (!started) {
-                throw new Error(`VS Code did not start the Aspire ${command} session for ${vscode.workspace.asRelativePath(appHostPath)}.`);
+                // A false result means VS Code declined the launch before the
+                // debug session started (for example, no provider matched or
+                // an adapter gate rejected it). Surface it as an error so the
+                // tree command path does not silently swallow a real launch
+                // failure while still clearing the temporary "Starting..." state.
+                const error = new Error(startDebuggingDeclined(command, vscode.workspace.asRelativePath(appHostPath)));
+                error.name = 'StartDebuggingDeclined';
+                throw error;
             }
+            sendTelemetryEvent('apphost/launch/result', {
+                ...telemetryProperties,
+                outcome: 'success',
+            }, {
+                duration_ms: Date.now() - startTime,
+            });
         } catch (err) {
             this.clearLaunching(appHostPath);
+            const canceled = isCommandCancellation(err);
+            const properties: EventProperties<'apphost/launch/result'> = {
+                ...telemetryProperties,
+                outcome: canceled ? 'canceled' : 'error',
+            };
+            if (!canceled) {
+                properties.error_kind = classifyError(err);
+            }
+            sendTelemetryEvent('apphost/launch/result', properties, {
+                duration_ms: Date.now() - startTime,
+            });
             throw err;
         }
+    }
+}
+
+async function getLaunchTelemetryProperties(appHostPath: string, command: AspireCommandType, noDebug: boolean, executionSuppressed: boolean) {
+    const isDirectory = isDirectoryForTelemetry(appHostPath);
+    return {
+        mode: noDebug ? 'run' : 'debug',
+        command: bucketAspireCommand(command),
+        apphost_language: isDirectory ? await classifyAppHostDirectory(appHostPath) : classifyAppHostPath(appHostPath),
+        execution_suppressed: executionSuppressed ? 'true' : 'false',
+    };
+}
+
+function isDirectoryForTelemetry(appHostPath: string): boolean {
+    try {
+        return fs.statSync(appHostPath, { throwIfNoEntry: false })?.isDirectory() === true;
+    }
+    catch {
+        return false;
     }
 }
 

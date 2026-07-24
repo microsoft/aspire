@@ -145,6 +145,24 @@ function getRunTestsTimeoutMs() {
   return configured;
 }
 
+function getSetupDownloadRetryOptions() {
+  return {
+    attempts: getPositiveIntegerEnvironmentVariable('ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_ATTEMPTS', 5),
+    retryDelayMs: getPositiveIntegerEnvironmentVariable('ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_RETRY_DELAY_MS', 15000),
+    beforeRetry: cleanPartialExtesterDownloads,
+    timeout: getPositiveIntegerEnvironmentVariable('ASPIRE_EXTENSION_E2E_SETUP_DOWNLOAD_TIMEOUT_MS', 240000),
+  };
+}
+
+function getPositiveIntegerEnvironmentVariable(name, defaultValue) {
+  const configured = Number(process.env[name] || defaultValue);
+  if (!Number.isInteger(configured) || configured <= 0) {
+    throw new Error(`${name} must be a positive integer. Got '${process.env[name]}'.`);
+  }
+
+  return configured;
+}
+
 function redactStateFileForArtifacts() {
   const state = readJsonIfExists(stateFile);
   if (!state) {
@@ -535,11 +553,15 @@ async function main() {
       LC_ALL: 'C.UTF-8',
       NODE_PATH: [extesterNodeModules, process.env.NODE_PATH].filter(Boolean).join(path.delimiter),
     });
+    if (process.env.ASPIRE_EXTENSION_E2E_UNSET_CLI_START_TIMEOUT === 'true') {
+      extestEnv.ASPIRE_CLI_START_TIMEOUT = undefined;
+    }
 
+    const setupDownloadRetryOptions = getSetupDownloadRetryOptions();
     logStep('Downloading VS Code');
-    runWithRetry(process.execPath, [extesterCli, 'get-vscode', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, { attempts: 2, retryDelayMs: 5000, beforeRetry: cleanPartialExtesterDownloads, timeout: 240000 });
+    runWithRetry(process.execPath, [extesterCli, 'get-vscode', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, setupDownloadRetryOptions);
     logStep('Downloading ChromeDriver');
-    runWithRetry(process.execPath, [extesterCli, 'get-chromedriver', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, { attempts: 2, retryDelayMs: 5000, beforeRetry: cleanPartialExtesterDownloads, timeout: 240000 });
+    runWithRetry(process.execPath, [extesterCli, 'get-chromedriver', '--storage', storageDir, '--code_version', vscodeVersion], extestEnv, setupDownloadRetryOptions);
     logStep('Installing VSIX');
     run(process.execPath, [extesterCli, 'install-vsix', '--storage', storageDir, '--extensions_dir', extensionsDir, '--vsix_file', vsixPath], extestEnv, { timeout: 300000 });
 
@@ -756,8 +778,6 @@ function prepareWorkspaceFixture(resolvedCliPath, resolvedAppHostSdkVersion) {
   fs.writeFileSync(path.join(vscodeDirectory, 'settings.json'), JSON.stringify({
     'aspire.aspireCliExecutablePath': resolvedCliPath,
     'aspire.closeDashboardOnDebugEnd': true,
-    'aspire.dashboardBrowser': 'integratedBrowser',
-    'aspire.enableAspireDashboardAutoLaunch': 'launch',
     'aspire.enableAutoRestore': false,
     'aspire.enableSettingsFileCreationPromptOnStartup': false,
     'aspire.appHostDiscoveryTimeoutMs': 120000,
@@ -818,7 +838,8 @@ function writeAppHostProject(projectName, resolvedAppHostSdkVersion) {
 `);
 
   fs.writeFileSync(path.join(projectDirectory, 'AppHost.cs'), `${csharpFileHeader}#pragma warning disable ASPIREINTERACTION001
-// The E2E fixture intentionally covers interaction command arguments while the API is still experimental.
+#pragma warning disable ASPIRETERMINAL001
+// The E2E fixture intentionally covers interaction command arguments and terminal metadata while those APIs are still experimental.
 var builder = DistributedApplication.CreateBuilder(args);
 
 builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
@@ -826,7 +847,7 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
     .WithCommand(
         "echo-arguments",
         "echo-arguments",
-        static _ => Task.FromResult(CommandResults.Success()),
+        static context => Task.FromResult(CommandResults.Success("Echo arguments completed.", context.Arguments.GetString("message")!)),
         new CommandOptions
         {
             Arguments =
@@ -886,6 +907,13 @@ builder.AddProject<Projects.AspireE2E_Worker>("e2e-worker")
         });
 
 builder.AddResource(new NoCommandsResource("e2e-no-commands"));
+
+// e2e-terminal opts into WithTerminal so the real CLI surfaces terminal.enabled and
+// terminal.replicaIndex over the backchannel. The extension's Open terminal action reads
+// those properties, so this resource exercises that metadata flowing through a real CLI process.
+builder.AddProject<Projects.AspireE2E_Worker>("e2e-terminal")
+    .WithHttpEndpoint(name: "http")
+    .WithTerminal();
 
 builder.Build().Run();
 

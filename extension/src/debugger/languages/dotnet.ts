@@ -1,6 +1,6 @@
 import * as vscode from 'vscode';
 import { extensionLogOutputChannel } from '../../utils/logging';
-import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger } from '../../loc/strings';
+import { noCsharpBuildTask, buildFailedWithExitCode, noOutputFromMsbuild, failedToGetTargetPath, invalidLaunchConfiguration, buildFailedForProjectWithError, processExitedWithCode, lookingForDevkitBuildTask, csharpDevKitNotInstalled, failedToInspectRuntimeConfig, dotNetRunFallbackDisablesDebugger, dotNetRunFileBasedExecutableProfileFallback, executableLaunchProfileMissingExecutablePath } from '../../loc/strings';
 import { ChildProcessWithoutNullStreams, execFile, spawn } from 'child_process';
 import * as util from 'util';
 import * as path from 'path';
@@ -8,19 +8,22 @@ import * as readline from 'readline';
 import * as os from 'os';
 import * as fs from 'fs';
 import { doesFileExist } from '../../utils/io';
-import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
+import { AspireResourceExtendedDebugConfiguration, EnvVar, ExecutableLaunchConfiguration, isProjectLaunchConfiguration, ProjectLaunchConfiguration } from '../../dcp/types';
 import { ResourceDebuggerExtension } from '../debuggerExtensions';
 import {
     readLaunchSettings,
     determineBaseLaunchProfile,
+    determineDefaultLaunchProfile,
     mergeEnvironmentVariables,
     determineArguments,
     determineWorkingDirectory,
     determineServerReadyAction,
     LaunchProfileCommandName,
+    LaunchProfile,
     expandEnvironmentVariables
 } from '../launchProfiles';
 import { AspireDebugSession } from '../AspireDebugSession';
+import { createAspireCliPathProcessEnvironment } from '../../utils/cliPathEnvironment';
 
 interface IDotNetService {
     getAndActivateDevKit(): Promise<boolean>
@@ -63,7 +66,7 @@ class DotNetService implements IDotNetService {
             extensionLogOutputChannel.info(`Building .NET project: ${projectFile} using dotnet CLI`);
 
             const args = ['build', projectFile];
-            const buildProcess = spawn('dotnet', args);
+            const buildProcess = spawn('dotnet', args, { env: createAspireCliPathProcessEnvironment() });
 
             let stdoutOutput = '';
             let stderrOutput = '';
@@ -112,7 +115,7 @@ class DotNetService implements IDotNetService {
             '-property:GenerateFullPaths=true'
         ];
         try {
-            const { stdout } = await this.execFileAsync('dotnet', args, { encoding: 'utf8' });
+            const { stdout } = await this.execFileAsync('dotnet', args, { encoding: 'utf8', env: createAspireCliPathProcessEnvironment() });
             const output = stdout.trim();
             if (!output) {
                 throw new Error(noOutputFromMsbuild);
@@ -138,7 +141,7 @@ class DotNetService implements IDotNetService {
 
                 childProcess = spawn('dotnet', ['run-api'], {
                     cwd: path.dirname(projectPath),
-                    env: process.env,
+                    env: createAspireCliPathProcessEnvironment(),
                     stdio: ['pipe', 'pipe', 'pipe']
                 });
 
@@ -174,6 +177,7 @@ export function isFileBasedApp(projectPath: string): boolean {
 
 interface RunApiOutput {
     executablePath: string;
+    commandLineArguments: string;
     env?: { [key: string]: string };
 }
 
@@ -188,8 +192,78 @@ function getRunApiConfigFromOutput(runApiOutput: string): RunApiOutput {
 
     return {
         executablePath: parsed.ExecutablePath,
+        commandLineArguments: parsed.CommandLineArguments,
         env: parsed.EnvironmentVariables
     };
+}
+
+function isDotnetLauncher(executablePath: string): boolean {
+    // If the command is "dotnet", but with a full path, it is not the SDK-injected dotnet launcher,
+    // but a user program that just happens to be named "dotnet".
+    if (path.dirname(executablePath) !== '.') {
+        return false;
+    }
+
+    const executableName = path.basename(executablePath).toLowerCase();
+    return executableName === 'dotnet' || executableName === 'dotnet.exe';
+}
+
+// DOTNET_ROOT and its architecture-specific variants (e.g. DOTNET_ROOT_X64, DOTNET_ROOT_ARM64) that the SDK
+// injects so a launched program can locate the .NET runtime.
+const dotnetRootEnvironmentVariablePattern = new RegExp(
+    '^DOTNET_ROOT(_[A-Z0-9]+)?$',
+    process.platform === 'win32' ? 'i' : undefined);
+
+// Returns .NET host environment variables from the given environment, minus any in the excluded set.
+function pickRuntimeHostEnvironment(
+    env: { [key: string]: string } | undefined,
+    excluded: Set<string>
+): { [key: string]: string } | undefined {
+    if (!env) {
+        return undefined;
+    }
+
+    const runtimeHostEnv: { [key: string]: string } = {};
+    for (const [name, value] of Object.entries(env)) {
+        if (!dotnetRootEnvironmentVariablePattern.test(name)) {
+            continue;
+        }
+
+        if (excluded.has(name.toUpperCase())) {
+            continue;
+        }
+
+        runtimeHostEnv[name] = value;
+    }
+
+    return Object.keys(runtimeHostEnv).length > 0 ? runtimeHostEnv : undefined;
+}
+
+function collectProfileDotnetHostEnvVarNames(profile: LaunchProfile | null | undefined): Set<string> {
+    const names = new Set<string>();
+    for (const name of Object.keys(profile?.environmentVariables ?? {})) {
+        if (dotnetRootEnvironmentVariablePattern.test(name)) {
+            names.add(name.toUpperCase());
+        }
+    }
+
+    return names;
+}
+
+// Combine the SDK host arguments from `dotnet run-api` (the built app DLL that is passed to the `dotnet`
+// launcher) with the user/launch-profile application arguments that were already resolved onto the debug
+// configuration. `hostArguments` is present only when the program is the `dotnet` launcher; 
+// for an apphost-executable build it is undefined and only the application arguments remain.
+// The host arguments must come first because they identify what to run; the user application arguments
+// follow and are passed to the app. The result is kept as a single command-line string so the quoting the
+// SDK already applied to CommandLineArguments is preserved.
+function combineRunApiArguments(hostArguments: string | undefined, applicationArguments: string | string[] | undefined): string | string[] | undefined {
+    const applicationArgumentsText = Array.isArray(applicationArguments) ? applicationArguments.join(' ') : applicationArguments;
+    const combined = [hostArguments, applicationArgumentsText]
+        .filter((part): part is string => part !== undefined && part.length > 0)
+        .join(' ');
+
+    return combined.length > 0 ? combined : undefined;
 }
 
 function createErrorWithStreamedDebugConsoleOutput(message: string): Error {
@@ -232,8 +306,17 @@ function quoteCommandLineArgument(argument: string): string {
     return `"${argument.replace(/"/g, '\\"')}"`;
 }
 
-function createDotNetRunArguments(projectPath: string, baseProfileArgs: string | undefined, runSessionArgs: string[] | undefined): string[] | string {
-    const dotnetRunArgs = ['run', '--project', projectPath, '--no-launch-profile'];
+function createDotNetRunBaseArguments(projectPath: string, fileBased: boolean): string[] {
+    // File-based apps (.cs) launch with `dotnet run --file <app.cs> --no-cache`; project files launch with
+    // `dotnet run --project <proj>`. This mirrors how the hosting side builds the non-debug `dotnet run`
+    // command line in DotnetProjectHostingExtensions.
+    return fileBased
+        ? ['run', '--file', projectPath, '--no-cache', '--no-launch-profile']
+        : ['run', '--project', projectPath, '--no-launch-profile'];
+}
+
+function createDotNetRunArguments(projectPath: string, baseProfileArgs: string | undefined, runSessionArgs: string[] | undefined, fileBased: boolean = false): string[] | string {
+    const dotnetRunArgs = createDotNetRunBaseArguments(projectPath, fileBased);
     if (runSessionArgs !== undefined) {
         if (runSessionArgs.length > 0) {
             dotnetRunArgs.push('--', ...runSessionArgs);
@@ -246,11 +329,33 @@ function createDotNetRunArguments(projectPath: string, baseProfileArgs: string |
         // launchSettings.json stores application arguments as a command-line string, for example:
         //   --path "value with spaces" --flag
         // Preserve that string instead of reparsing it here so debugger command-line parsing
-        // handles escaping consistently with normal project launches.
-        return `run --project ${quoteCommandLineArgument(projectPath)} --no-launch-profile -- ${baseProfileArgs}`;
+        // handles escaping consistently with normal project launches. Only the path token needs quoting.
+        const quotedRunArgs = createDotNetRunBaseArguments(quoteCommandLineArgument(projectPath), fileBased);
+        return `${quotedRunArgs.join(' ')} -- ${baseProfileArgs}`;
     }
 
     return dotnetRunArgs;
+}
+
+function configureDotNetRunDebugConfiguration(
+    debugConfiguration: AspireResourceExtendedDebugConfiguration,
+    args: string[] | string,
+    baseProfileEnvironmentVariables: { [key: string]: string } | undefined,
+    runSessionEnvironmentVariables: EnvVar[]): void {
+    debugConfiguration.program = 'dotnet';
+    debugConfiguration.args = args;
+    // Intentionally do NOT set cwd here. The caller already resolved debugConfiguration.cwd from the
+    // selected launch profile via determineWorkingDirectory (which falls back to the project directory
+    // when the profile sets no workingDirectory). Because this fallback launches with --no-launch-profile,
+    // `dotnet run` will not re-apply the profile's workingDirectory itself, so overwriting cwd here would
+    // silently discard a custom profile workingDirectory and launch the app from the wrong directory.
+    debugConfiguration.executablePath = undefined;
+    debugConfiguration.noDebug = true;
+    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
+        baseProfileEnvironmentVariables,
+        debugConfiguration.env,
+        runSessionEnvironmentVariables
+    ));
 }
 
 export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSession: AspireDebugSession) => IDotNetService): ResourceDebuggerExtension {
@@ -268,8 +373,6 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
             throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
         },
         createDebugSessionConfigurationCallback: async (launchConfig, args, env, launchOptions, debugConfiguration: AspireResourceExtendedDebugConfiguration): Promise<void> => {
-            const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
-
             if (!isProjectLaunchConfiguration(launchConfig)) {
                 extensionLogOutputChannel.info(`The resource type was not project for ${JSON.stringify(launchConfig)}`);
                 throw new Error(invalidLaunchConfiguration(JSON.stringify(launchConfig)));
@@ -312,12 +415,25 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 debugConfiguration.serverReadyAction = determineServerReadyAction(baseProfile?.launchBrowser, baseProfile?.applicationUrl, baseProfile?.launchUrl);
             }
 
+            // TODO: Remove this block — the dashboard no longer recognizes ASPIRE_DASHBOARD_AI_DISABLED.
+            // See https://github.com/microsoft/aspire/issues/18751
             // Temporarily disable GH Copilot on the dashboard before the extension implementation is approved
             if (launchOptions.isApphost) {
                 env.push({ name: "ASPIRE_DASHBOARD_AI_DISABLED", value: "true" });
             }
 
-            if (baseProfile?.commandName?.toLowerCase() === LaunchProfileCommandName.executable && baseProfile.executablePath) {
+            // An Executable-command launch profile must specify an executablePath. The .NET SDK's
+            // ExecutableProvider requires it, so `dotnet run` / `dotnet run-api` fail with a configuration
+            // error when it is missing. Without this guard the extension would instead fall through the
+            // `&& executablePath` check below and silently launch the project output (or file-based app),
+            // running a different program than the SDK would. Surface the same configuration error instead.
+            if (baseProfile?.commandName === LaunchProfileCommandName.executable && !baseProfile.executablePath) {
+                throw new Error(executableLaunchProfileMissingExecutablePath(profileName ?? ''));
+            }
+
+            if (baseProfile?.commandName === LaunchProfileCommandName.executable && baseProfile.executablePath) {
+                const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
+
                 // For Executable command profiles (e.g., class library integrations), the launch profile
                 // specifies an external executable to run instead of the project output.
                 // Build the project to ensure dependencies are compiled, then launch
@@ -340,6 +456,7 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                 ));
             }
             else if (!isFileBasedApp(projectPath)) {
+                const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
                 const outputPath = await dotNetService.getDotNetTargetPath(projectPath);
                 if ((!(await doesFileExist(outputPath)) || launchOptions.forceBuild)) {
                     await dotNetService.buildDotNetProject(projectPath);
@@ -352,37 +469,83 @@ export function createProjectDebuggerExtension(dotNetServiceProducer: (debugSess
                         vscode.window.showInformationMessage(fallbackMessage);
                     }
 
-                    debugConfiguration.program = 'dotnet';
-                    debugConfiguration.args = createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args);
-                    debugConfiguration.cwd = path.dirname(projectPath);
-                    debugConfiguration.executablePath = undefined;
-                    debugConfiguration.noDebug = true;
+                    configureDotNetRunDebugConfiguration(debugConfiguration, createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args), baseProfile?.environmentVariables, env);
                 } else {
                     debugConfiguration.program = outputPath;
+                    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
+                        baseProfile?.environmentVariables,
+                        debugConfiguration.env,
+                        env
+                    ));
                 }
-                debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
-                    baseProfile?.environmentVariables,
-                    debugConfiguration.env,
-                    env
-                ));
             }
             else {
-                // For file-based apps, get the dotnet run-api output first to determine the executable path
-                const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath);
-                const runApiConfig = getRunApiConfigFromOutput(runApiOutput);
+                const dotNetService: IDotNetService = dotNetServiceProducer(launchOptions.debugSession);
 
-                // There may be an older cached version of the file-based app, so we
-                // should force a build.
-                await dotNetService.buildDotNetProject(projectPath);
+                // `dotnet run-api` always applies the SDK *default* (first supported) launch profile and offers
+                // no way to request a specific profile or --no-launch-profile. When that default profile is an
+                // 'Executable' profile, run-api reports THAT profile's external command (e.g. `dotnet --version`)
+                // instead of the file-based app, so its ExecutablePath / CommandLineArguments / environment
+                // describe the wrong program. This branch is only reached when the selected base profile is not an
+                // Executable profile (profiles disabled, or a later 'Project' profile explicitly selected), so
+                // blindly trusting run-api's program here would launch the wrong thing.
+                const { profile: runApiDefaultProfile, profileName: runApiDefaultProfileName } = determineDefaultLaunchProfile(launchSettings);
 
-                debugConfiguration.program = runApiConfig.executablePath;
+                if (runApiDefaultProfile?.commandName === LaunchProfileCommandName.executable) {
+                    // Do not trust run-api's program. Launch the file-based app ourselves with
+                    // `dotnet run --file <app.cs> --no-launch-profile` (no debugger attach), applying the selected
+                    // profile's arguments and environment. This mirrors the dotnet-run fallback used when project
+                    // build output is not directly runnable.
+                    const fallbackMessage = dotNetRunFileBasedExecutableProfileFallback(runApiDefaultProfileName ?? '', projectPath);
+                    extensionLogOutputChannel.warn(fallbackMessage);
+                    if (launchOptions.debug) {
+                        vscode.window.showInformationMessage(fallbackMessage);
+                    }
 
-                debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
-                    baseProfile?.environmentVariables,
-                    debugConfiguration.env,
-                    env,
-                    runApiConfig.env
-                ));
+                    // There may be an older cached version of the file-based app, so force a build.
+                    await dotNetService.buildDotNetProject(projectPath);
+
+                    configureDotNetRunDebugConfiguration(
+                        debugConfiguration,
+                        createDotNetRunArguments(projectPath, baseProfile?.commandLineArgs, args, /* fileBased */ true),
+                        baseProfile?.environmentVariables,
+                        env);
+                }
+                else {
+                    // The default profile is a 'Project' profile (or there is none), so run-api's program is the
+                    // file-based app itself and can be trusted.
+                    const runApiOutput = await dotNetService.getDotNetRunApiOutput(projectPath);
+                    const runApiConfig = getRunApiConfigFromOutput(runApiOutput);
+
+                    // There may be an older cached version of the file-based app, so force a build.
+                    await dotNetService.buildDotNetProject(projectPath);
+
+                    debugConfiguration.program = runApiConfig.executablePath;
+
+                    const hostArguments = isDotnetLauncher(runApiConfig.executablePath) ? runApiConfig.commandLineArguments : undefined;
+                    debugConfiguration.args = combineRunApiArguments(hostArguments, debugConfiguration.args);
+
+                    // Intentionally do NOT consume run-api's WorkingDirectory: it carries the SDK default profile's
+                    // working directory, whereas cwd was already resolved from the (possibly different) selected
+                    // launch profile via determineWorkingDirectory.
+                    //
+                    // From run-api's environment we keep ONLY the SDK-injected runtime host-resolution variables
+                    // (DOTNET_ROOT*) so the launched program can locate the .NET runtime.
+                    // BUT
+                    // If the default launch profile, or the selected launch profile sets any of these variables,
+                    // we must not override them with the run-api values.
+                    const profileDefinedRuntimeHostNames = new Set<string>([
+                        ...collectProfileDotnetHostEnvVarNames(runApiDefaultProfile),
+                        ...collectProfileDotnetHostEnvVarNames(baseProfile)
+                    ]);
+
+                    debugConfiguration.env = Object.fromEntries(mergeEnvironmentVariables(
+                        baseProfile?.environmentVariables,
+                        debugConfiguration.env,
+                        env,
+                        pickRuntimeHostEnvironment(runApiConfig.env, profileDefinedRuntimeHostNames)
+                    ));
+                }
             }
 
             // Set DOTNET_LAUNCH_PROFILE

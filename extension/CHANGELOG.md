@@ -1,9 +1,35 @@
 # Aspire VS Code Extension Changelog
 
+## v1.16.0
+
+### Features
+
+- Flatten single-AppHost group nodes in the AppHosts tree view so a lone running or idle AppHost is surfaced directly at the top level instead of under a redundant `(1)` wrapper ([#18420](https://github.com/microsoft/aspire/issues/18420), [#18523](https://github.com/microsoft/aspire/pull/18523)).
+- Update the Marketplace page with focused AppHost-view, debug-session, and dashboard screenshots, and add AppHost telemetry signals for discovery, launch, and running-state metrics; all events respect `telemetry.telemetryLevel` ([#17898](https://github.com/microsoft/aspire/pull/17898)).
+
+### Fixes
+
+- Fix the Get Started walkthrough's Install Aspire CLI step to use a package-manager picker (WinGet, Homebrew, npm, .NET tool, mise) instead of shell-specific piped scripts, resolving failures on Windows when the default shell is `cmd.exe` ([#18459](https://github.com/microsoft/aspire/issues/18459), [#18522](https://github.com/microsoft/aspire/pull/18522)).
+- Fix stale global AppHosts appearing in the Aspire pane when switching back to a workspace view; global AppHosts are now cleared and re-filtered immediately on view switch ([#18506](https://github.com/microsoft/aspire/issues/18506), [#18516](https://github.com/microsoft/aspire/pull/18516)).
+
+## v1.15.0
+
+### Features
+
+- Add MAUI platform debugging support (iOS simulator/device, Mac Catalyst, Android emulator/device, and Windows) for MAUI resources running under Aspire when the VS Code MAUI extension is installed ([#17853](https://github.com/microsoft/aspire/issues/17853), [#17857](https://github.com/microsoft/aspire/pull/17857)).
+- Expose AppHost query and resource management APIs from the Aspire extension for programmatic integration by tools such as C# Dev Kit v2 ([#17705](https://github.com/microsoft/aspire/pull/17705)).
+
+### Fixes
+
+- Fix stale AppHost running state in the Aspire pane after a debug session ends ([#17946](https://github.com/microsoft/aspire/issues/17946), [#17965](https://github.com/microsoft/aspire/pull/17965)).
+- Stop the Aspire panel from showing a false CLI upgrade prompt for non-compatibility errors such as a missing container runtime ([#18337](https://github.com/microsoft/aspire/issues/18337), [#18358](https://github.com/microsoft/aspire/pull/18358)).
+- Extend the AppHost debug startup timeout for extension-managed debug sessions so breakpoints hit before `builder.Build()` no longer cause the CLI to terminate the session ([#18021](https://github.com/microsoft/aspire/issues/18021), [#18353](https://github.com/microsoft/aspire/pull/18353)).
+
 ## v1.14.0
 
 ### Features
 
+- Stop opening the Aspire Dashboard automatically by default. Use the Aspire: Dashboard Browser setting or a launch.json `dashboardBrowser` value to opt into notifications, an external browser, the integrated browser, or browser debugging ([#17923](https://github.com/microsoft/aspire/issues/17923)).
 - Add Bun debugging support for Bun services running under Aspire ([#17848](https://github.com/microsoft/aspire/pull/17848)).
 - Improve parameter display in the resource tree and AppHost CodeLens: secrets are masked, long values are truncated, and missing parameter values are shown explicitly ([#17193](https://github.com/microsoft/aspire/issues/17193), [#17881](https://github.com/microsoft/aspire/pull/17881)).
 
