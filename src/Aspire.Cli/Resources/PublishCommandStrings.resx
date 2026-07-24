@@ -186,6 +186,9 @@
   <data name="VerifyListStepsNotSupported" xml:space="preserve">
     <value>The --verify and --list-steps options cannot be used together.</value>
   </data>
+  <data name="VerifyManifestFileNotSupported" xml:space="preserve">
+    <value>Publish verification does not support a direct manifest file output. Publish the manifest to a directory so all companion artifacts can be inventoried.</value>
+  </data>
   <data name="VerifyMissingFilesHeader" xml:space="preserve">
     <value>Missing files in '{0}':</value>
   </data>

@@ -225,6 +225,12 @@ namespace Aspire.Cli.Resources {
             }
         }
 
+        public static string VerifyManifestFileNotSupported {
+            get {
+                return ResourceManager.GetString("VerifyManifestFileNotSupported", resourceCulture);
+            }
+        }
+
         public static string VerifyMissingFilesHeader {
             get {
                 return ResourceManager.GetString("VerifyMissingFilesHeader", resourceCulture);

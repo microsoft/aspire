@@ -117,6 +117,11 @@
         <target state="new">The --verify and --list-steps options cannot be used together.</target>
         <note />
       </trans-unit>
+      <trans-unit id="VerifyManifestFileNotSupported">
+        <source>Publish verification does not support a direct manifest file output. Publish the manifest to a directory so all companion artifacts can be inventoried.</source>
+        <target state="new">Publish verification does not support a direct manifest file output. Publish the manifest to a directory so all companion artifacts can be inventoried.</target>
+        <note />
+      </trans-unit>
       <trans-unit id="VerifyMissingFilesHeader">
         <source>Missing files in '{0}':</source>
         <target state="new">Missing files in '{0}':</target>
