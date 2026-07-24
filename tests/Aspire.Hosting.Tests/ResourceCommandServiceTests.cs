@@ -1116,17 +1116,17 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public async Task ExecuteCommandAsync_LoadedDynamicArgumentStillDisabledWithDefaultValue_DoesNotReturnDisabledValidationError()
+    public async Task ExecuteCommandAsync_LoadedDynamicArgumentStillDisabledWithDefaultValue_ReturnsDisabledValidationError()
     {
         using var builder = CreateBuilder();
 
-        InteractionInputCollection? capturedArguments = null;
+        var executed = false;
         var custom = builder.AddResource(new CustomResource("myResource"));
         custom.WithCommand(name: "mycommand",
                 displayName: "My command",
-                executeCommand: context =>
+                executeCommand: _ =>
                 {
-                    capturedArguments = context.Arguments;
+                    executed = true;
                     return Task.FromResult(CommandResults.Success());
                 },
                 commandOptions: new CommandOptions
@@ -1179,10 +1179,12 @@ public class ResourceCommandServiceTests(ITestOutputHelper testOutputHelper)
             },
             CancellationToken.None).DefaultTimeout();
 
-        Assert.True(result.Success);
-        Assert.NotNull(capturedArguments);
-        Assert.Equal("default", capturedArguments.GetString("profile"));
-        Assert.Empty(capturedArguments["profile"].ValidationErrors);
+        Assert.False(result.Success);
+        Assert.False(executed);
+        Assert.NotNull(result.InvalidArguments);
+
+        var profileArgument = Assert.Single(result.InvalidArguments, argument => argument.Name == "profile");
+        Assert.Equal("Argument is disabled.", Assert.Single(profileArgument.ValidationErrors));
     }
 
     [Fact]
