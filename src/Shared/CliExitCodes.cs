@@ -28,6 +28,7 @@ internal static class CliExitCodes
     public const int FailedToStartCli = 20;
     public const int MissingRequiredArgument = 21;
     public const int FailedToSearchIntegrations = 22;
+    public const int PublishVerificationFailed = 23;
 
     // 130 is the conventional exit code for cancellation (128 + SIGINT signal 2).
     // Used for all user-initiated cancellations, not just SIGINT, so callers can

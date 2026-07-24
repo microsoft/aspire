@@ -143,6 +143,120 @@ public class GitRepositoryTests(ITestOutputHelper outputHelper)
         Assert.Equal(sessionId, startedActivity.GetTagItem(ProfilingTelemetry.Tags.ProfilingSessionId));
     }
 
+    [Fact]
+    public async Task ExplicitRootOperations_HandleTrackedUntrackedIgnoredNegatedAndUnusualPaths()
+    {
+        await GitTestHelper.EnsureGitAvailableAsync();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await workspace.InitializeGitAsync().DefaultTimeout();
+        await GitTestHelper.ConfigureGitIdentityAsync(workspace.WorkspaceRoot.FullName);
+
+        var firstOutput = workspace.WorkspaceRoot.CreateSubdirectory("output with spaces");
+        var secondOutput = workspace.WorkspaceRoot.CreateSubdirectory("output-two");
+        var trackedIgnored = Path.Combine(firstOutput.FullName, "tracked.ignored");
+        var deletedTracked = Path.Combine(firstOutput.FullName, "deleted tracked.txt");
+        var untrackedFileName = OperatingSystem.IsWindows() ? "untracked file.txt" : "line\nbreak.txt";
+        var untracked = Path.Combine(secondOutput.FullName, untrackedFileName);
+        var ignored = Path.Combine(secondOutput.FullName, "excluded.ignored");
+        var negated = Path.Combine(secondOutput.FullName, "keep.ignored");
+        await File.WriteAllTextAsync(trackedIgnored, "tracked");
+        await File.WriteAllTextAsync(deletedTracked, "deleted");
+        await File.WriteAllTextAsync(untracked, "untracked");
+        await File.WriteAllTextAsync(ignored, "ignored");
+        await File.WriteAllTextAsync(negated, "included");
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore"),
+            "*.ignored\n!keep.ignored\n");
+        await GitTestHelper.RunGitAsync(
+            workspace.WorkspaceRoot.FullName,
+            "add",
+            "-f",
+            "output with spaces/tracked.ignored",
+            "output with spaces/deleted tracked.txt",
+            ".gitignore");
+        await GitTestHelper.RunGitAsync(workspace.WorkspaceRoot.FullName, "commit", "-m", "init");
+        File.Delete(deletedTracked);
+
+        var executionContext = workspace.CreateExecutionContext();
+        using var profilingTelemetry = CreateProfilingTelemetry();
+        var repo = new GitRepository(
+            executionContext,
+            new TestEnvironment(),
+            NullLogger<GitRepository>.Instance,
+            profilingTelemetry);
+
+        var root = await repo.GetRootAsync(firstOutput, TestContext.Current.CancellationToken);
+        var result = await repo.GetIncludedFilesAsync(
+            root!,
+            [firstOutput.FullName, secondOutput.FullName],
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(workspace.WorkspaceRoot.FullName, root!.FullName);
+        Assert.NotNull(result);
+        Assert.Contains(Path.GetFullPath(trackedIgnored), result!);
+        Assert.Contains(Path.GetFullPath(deletedTracked), result);
+        Assert.Contains(Path.GetFullPath(untracked), result);
+        Assert.Contains(Path.GetFullPath(negated), result);
+        Assert.DoesNotContain(Path.GetFullPath(ignored), result);
+    }
+
+    [Fact]
+    public async Task GetIgnoredFilesAsync_DistinguishesNotIgnoredFromGitFailure()
+    {
+        await GitTestHelper.EnsureGitAvailableAsync();
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        await workspace.InitializeGitAsync().DefaultTimeout();
+        await File.WriteAllTextAsync(
+            Path.Combine(workspace.WorkspaceRoot.FullName, ".gitignore"),
+            "*.tmp\n!keep.tmp\n");
+        var ignored = Path.Combine(workspace.WorkspaceRoot.FullName, "generated", "missing.tmp");
+        var negated = Path.Combine(workspace.WorkspaceRoot.FullName, "generated", "keep.tmp");
+        var ordinary = Path.Combine(workspace.WorkspaceRoot.FullName, "generated", "ordinary.txt");
+
+        var executionContext = workspace.CreateExecutionContext();
+        using var profilingTelemetry = CreateProfilingTelemetry();
+        var repo = new GitRepository(
+            executionContext,
+            new TestEnvironment(),
+            NullLogger<GitRepository>.Instance,
+            profilingTelemetry);
+
+        var result = await repo.GetIgnoredFilesAsync(
+            workspace.WorkspaceRoot,
+            [ignored, negated, ordinary],
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(result);
+        Assert.Equal([Path.GetFullPath(ignored)], result);
+    }
+
+    [Fact]
+    public async Task GetIncludedFilesAsync_PathOutsideExplicitRoot_Throws()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var outside = Directory.CreateTempSubdirectory("aspire-git-outside-");
+        try
+        {
+            var executionContext = workspace.CreateExecutionContext();
+            using var profilingTelemetry = CreateProfilingTelemetry();
+            var repo = new GitRepository(
+                executionContext,
+                new TestEnvironment(),
+                NullLogger<GitRepository>.Instance,
+                profilingTelemetry);
+
+            await Assert.ThrowsAsync<ArgumentException>(
+                () => repo.GetIncludedFilesAsync(
+                    workspace.WorkspaceRoot,
+                    [outside.FullName],
+                    TestContext.Current.CancellationToken));
+        }
+        finally
+        {
+            outside.Delete(recursive: true);
+        }
+    }
+
     private static bool IsActivityFromSession(Activity activity, string operationName, string sessionId)
     {
         return activity.OperationName == operationName &&

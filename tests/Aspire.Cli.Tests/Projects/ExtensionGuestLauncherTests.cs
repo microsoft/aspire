@@ -126,6 +126,39 @@ public class ExtensionGuestLauncherTests
         Assert.Equal("python", capturedArgs[0]);
     }
 
+    [Fact]
+    public async Task LaunchAsync_ForwardsVerificationConfigurationArgumentsUnchanged()
+    {
+        List<string>? capturedArgs = null;
+        var service = new FakeLaunchExtensionService((_, args, _, _) =>
+        {
+            capturedArgs = args;
+        });
+        var launcher = new ExtensionGuestLauncher(
+            service,
+            new FileInfo("/tmp/AppHost.csproj"),
+            debug: true);
+        var arguments = new[]
+        {
+            "run",
+            "--output-path",
+            "/tmp/staging/primary",
+            "Pipeline:Verification:StagingPath=/tmp/staging",
+            "Pipeline:Verification:TargetOutputPath=/repo/aspire-output"
+        };
+
+        await launcher.LaunchAsync(
+            "dotnet",
+            arguments,
+            new DirectoryInfo("/repo"),
+            new Dictionary<string, string>(),
+            afterLaunchAsync: null,
+            options: null,
+            CancellationToken.None);
+
+        Assert.Equal(["dotnet", .. arguments], capturedArgs);
+    }
+
     /// <summary>
     /// Minimal fake that only implements LaunchAppHostAsync for testing ExtensionGuestLauncher.
     /// </summary>

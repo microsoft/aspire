@@ -1,12 +1,15 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using Aspire.Cli.Backchannel;
 using Aspire.Cli.Commands;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Projects;
 using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Tests.TestServices;
 using Microsoft.AspNetCore.InternalTesting;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Configuration;
 using Aspire.Cli.Utils;
 
 namespace Aspire.Cli.Tests.Commands;
@@ -228,6 +231,236 @@ public class PublishCommandTests(ITestOutputHelper outputHelper)
 
         // Assert
         Assert.Equal(0, exitCode); // Ensure the command succeeds
+    }
+
+    [Fact]
+    public void VerifyOption_IsDeclaredOnlyByPublish()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
+        using var provider = services.BuildServiceProvider();
+
+        var publish = provider.GetRequiredService<PublishCommand>();
+        var deploy = provider.GetRequiredService<DeployCommand>();
+
+        Assert.Contains(publish.Options, option => option.Name == "--verify");
+        Assert.DoesNotContain(deploy.Options, option => option.Name == "--verify");
+    }
+
+    [Fact]
+    public async Task PublishCommand_ExtensionDebugRelaunch_ForwardsMatchedAndUnmatchedArguments()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        DebugSessionOptions? debugSessionOptions = null;
+        string? projectFile = null;
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.ExtensionBackchannelFactory = _ => new TestExtensionBackchannel();
+            options.CliHostEnvironmentFactory = serviceProvider =>
+                new CliHostEnvironment(
+                    serviceProvider.GetRequiredService<IConfiguration>(),
+                    nonInteractive: false);
+            options.InteractionServiceFactory = serviceProvider =>
+            {
+                var service = new TestExtensionInteractionService(serviceProvider)
+                {
+                    StartDebugSessionCallback = (_, appHost, _, sessionOptions) =>
+                    {
+                        projectFile = appHost;
+                        debugSessionOptions = sessionOptions;
+                    }
+                };
+                return service;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+        var outputPath = Path.Combine(workspace.WorkspaceRoot.FullName, "generated output");
+
+        var result = command.Parse(
+            $"publish --apphost \"{appHostFile.FullName}\" --output-path \"{outputPath}\" " +
+            "--verify --pipeline-log-level debug --environment staging " +
+            "--include-exception-details --no-build --publisher custom");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.Success, exitCode);
+        Assert.Equal(appHostFile.FullName, projectFile);
+        Assert.NotNull(debugSessionOptions);
+        Assert.Equal("publish", debugSessionOptions.Command);
+        Assert.Equal(
+        [
+            "--output-path",
+            outputPath,
+            "--pipeline-log-level",
+            "debug",
+            "--environment",
+            "staging",
+            "--include-exception-details",
+            "--no-build",
+            "--verify",
+            "--",
+            "--publisher",
+            "custom"
+        ],
+            debugSessionOptions.Args!);
+    }
+
+    [Fact]
+    public async Task PublishVerification_PreservesAppHostRuntimeExitCodeAndCleansStaging()
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var targetDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "generated");
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var git = new TestGitRepository
+        {
+            GetRootFromDirectoryAsyncCallback = (_, _) =>
+                Task.FromResult<DirectoryInfo?>(workspace.WorkspaceRoot),
+            GetIncludedFilesFromPathsAsyncCallback = (_, _, _) =>
+                Task.FromResult<IReadOnlySet<string>?>(new HashSet<string>()),
+            GetIgnoredFilesAsyncCallback = (_, _, _) =>
+                Task.FromResult<IReadOnlySet<string>?>(new HashSet<string>())
+        };
+        string? stagingRoot = null;
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.GitRepositoryFactory = _ => git;
+            options.DotNetCliRunnerFactory = _ =>
+            {
+                var runner = new TestDotNetCliRunner
+                {
+                    BuildAsyncCallback = (_, _, _, _) => 0,
+                    GetAppHostInformationAsyncCallback = (_, _, _) =>
+                        (0, true, VersionHelper.GetDefaultTemplateVersion())
+                };
+                runner.RunAsyncCallback = async (_, _, _, _, arguments, _, completionSource, _, cancellationToken) =>
+                {
+                    var outputPathIndex = Array.IndexOf(arguments, "--output-path");
+                    Assert.True(outputPathIndex >= 0);
+                    var stagedPrimary = arguments[outputPathIndex + 1];
+                    stagingRoot = Directory.GetParent(stagedPrimary)!.FullName;
+                    Assert.Contains(
+                        arguments,
+                        argument => argument == $"Pipeline:Verification:StagingPath={stagingRoot}");
+                    Assert.Contains(
+                        arguments,
+                        argument => argument == $"Pipeline:Verification:TargetOutputPath={targetDirectory}");
+
+                    var planCall = 0;
+                    var stopped = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+                    var backchannel = new TestAppHostBackchannel
+                    {
+                        RequestStopAsyncCalled = stopped,
+                        GetCapabilitiesAsyncCallback = _ =>
+                            Task.FromResult<string[]>(["baseline.v2", "pipeline-outputs.v1"]),
+                        GetPipelineOutputsAsyncCallback = _ => Task.FromResult(new GetPipelineOutputsResponse
+                        {
+                            AppHostDirectory = appHostDirectory.FullName,
+                            State = planCall++ == 0 ? "Prepared" : "Succeeded",
+                            Steps =
+                            [
+                                new PipelineOutputStepInfo
+                                {
+                                    Name = "publish",
+                                    SupportsOutputPathRelocation = true
+                                }
+                            ],
+                            Outputs =
+                            [
+                                new PipelineOutputInfo
+                                {
+                                    IsPrimary = true,
+                                    PublisherName = "aspire",
+                                    Name = "primary",
+                                    Kind = "Directory",
+                                    OutputPath = stagedPrimary,
+                                    LogicalTargetPath = targetDirectory
+                                }
+                            ]
+                        })
+                    };
+                    completionSource!.SetResult(backchannel);
+                    await stopped.Task.WaitAsync(cancellationToken);
+                    return 42;
+                };
+                return runner;
+            };
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse(
+            $"publish --verify --apphost \"{appHostFile.FullName}\" --output-path \"{targetDirectory}\"");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(42, exitCode);
+        Assert.NotNull(stagingRoot);
+        Assert.False(Directory.Exists(stagingRoot));
+        Assert.False(Directory.Exists(targetDirectory));
+    }
+
+    [Theory]
+    [InlineData(null)]
+    [InlineData("invalid")]
+    [InlineData("13.4.6")]
+    public async Task PublishVerification_OldOrUnknownHosting_FailsBeforeGitOrLaunch(string? hostingVersion)
+    {
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var appHostDirectory = workspace.WorkspaceRoot.CreateSubdirectory("AppHost");
+        var appHostFile = new FileInfo(Path.Combine(appHostDirectory.FullName, "AppHost.csproj"));
+        await File.WriteAllTextAsync(appHostFile.FullName, "<Project />");
+        var targetDirectory = Path.Combine(workspace.WorkspaceRoot.FullName, "generated");
+        var projectLocator = new TestProjectLocator
+        {
+            UseOrFindAppHostProjectFileWithBehaviorAsyncCallback = (_, _, _, _) =>
+                Task.FromResult(new AppHostProjectSearchResult(appHostFile, [appHostFile]))
+        };
+        var projectFactory = new TestAppHostProjectFactory
+        {
+            GetAspireHostingVersionAsyncCallback = (_, _) =>
+                Task.FromResult(hostingVersion)
+        };
+        var gitCalled = false;
+        var git = new TestGitRepository
+        {
+            GetRootFromDirectoryAsyncCallback = (_, _) =>
+            {
+                gitCalled = true;
+                return Task.FromResult<DirectoryInfo?>(workspace.WorkspaceRoot);
+            }
+        };
+        var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper, options =>
+        {
+            options.ProjectLocatorFactory = _ => projectLocator;
+            options.AppHostProjectFactory = _ => projectFactory;
+            options.GitRepositoryFactory = _ => git;
+        });
+        using var provider = services.BuildServiceProvider();
+        var command = provider.GetRequiredService<RootCommand>();
+
+        var result = command.Parse(
+            $"publish --verify --apphost \"{appHostFile.FullName}\" --output-path \"{targetDirectory}\"");
+        var exitCode = await result.InvokeAsync().DefaultTimeout();
+
+        Assert.Equal(CliExitCodes.AppHostIncompatible, exitCode);
+        Assert.False(gitCalled);
+        Assert.False(Directory.Exists(targetDirectory));
     }
 }
 
