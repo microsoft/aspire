@@ -819,6 +819,17 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void WithDenoUnstable_RejectsQualifiedNonUnstableFlags()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var denoApp = builder.AddDenoApp("denoapp", AppContext.BaseDirectory, "main.ts");
+
+        var exception = Assert.Throws<ArgumentException>(() => denoApp.WithDenoUnstable("--allow-all"));
+
+        Assert.Equal("features", exception.ParamName);
+    }
+
+    [Fact]
     public async Task WithDenoWatchAndInspect_EmitInRuntimeFlagPosition()
     {
         var args = await GetDenoArgsAsync(d => d

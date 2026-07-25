@@ -955,8 +955,9 @@ public static partial class JavaScriptHostingExtensions
                     var logger = dockerfileContext.Services.GetService<ILogger<JavaScriptAppResource>>();
                     dockerfileContext.Builder.AddContainerFilesStages(dockerfileContext.Resource, logger);
 
+                    var hasCustomRuntimeImage = baseImageAnnotation?.RuntimeImage is not null;
                     var baseRuntimeImage = baseImageAnnotation?.RuntimeImage ?? DefaultDenoImage;
-                    dockerfileContext.Builder
+                    var runtimeStage = dockerfileContext.Builder
                         .From(baseRuntimeImage, "runtime")
                             .EmptyLine()
                             // Match the build stage's DENO_DIR so the copied cache is discovered at runtime.
@@ -972,12 +973,20 @@ public static partial class JavaScriptHostingExtensions
                             // Deno honors NODE_ENV in its Node-compatibility mode (npm: specifiers, package.json
                             // "exports" conditions) exactly as Node/Bun do. Match the Bun publish block.
                             .Env("NODE_ENV", "production")
-                            .EmptyLine()
-                            // The official denoland/deno images provide a non-root `deno` user.
-                            // See https://github.com/denoland/deno_docker
+                            .EmptyLine();
+
+                    if (!hasCustomRuntimeImage)
+                    {
+                        // The default denoland/deno images provide a non-root `deno` user. Respect custom runtime
+                        // images' configured defaults because not every supported Deno variant defines that user
+                        // (for example, denoland/deno:2.1-distroless).
+                        // See https://github.com/denoland/deno_docker
+                        runtimeStage
                             .User("deno")
-                            .EmptyLine()
-                            .Entrypoint(BuildDenoEntrypoint(dockerfileContext.Resource, resource.Command, scriptPath));
+                            .EmptyLine();
+                    }
+
+                    runtimeStage.Entrypoint(BuildDenoEntrypoint(dockerfileContext.Resource, resource.Command, scriptPath));
                 });
             });
 

@@ -321,7 +321,13 @@ public static partial class JavaScriptHostingExtensions
                 continue;
             }
 
-            annotation.UnstableFlags.Add(feature.StartsWith("--", StringComparison.Ordinal) ? feature : $"--unstable-{feature}");
+            if (feature.StartsWith("--", StringComparison.Ordinal) &&
+                !feature.StartsWith("--unstable-", StringComparison.Ordinal))
+            {
+                throw new ArgumentException("Qualified Deno unstable flags must start with \"--unstable-\".", nameof(features));
+            }
+
+            annotation.UnstableFlags.Add(feature.StartsWith("--unstable-", StringComparison.Ordinal) ? feature : $"--unstable-{feature}");
         }
 
         return builder;
