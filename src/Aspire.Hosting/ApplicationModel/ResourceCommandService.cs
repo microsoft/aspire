@@ -347,13 +347,6 @@ public class ResourceCommandService
                     }
 
                     arguments = promptedArguments!;
-                    // The interaction service returns the final server-validated input state after applying
-                    // dynamic loading callbacks. Preserve that fact so disabled inputs with harmless retained
-                    // defaults aren't treated as unresolved submitted arguments during the final validation.
-                    loadedDynamicArgumentNames = arguments
-                        .Where(argument => argument.DynamicLoading is { } dynamicLoading && ShouldLoadDynamicCommandArgument(dynamicLoading, arguments))
-                        .Select(argument => argument.Name)
-                        .ToHashSet(StringComparers.InteractionInputName);
                 }
                 else
                 {
@@ -602,7 +595,7 @@ public class ResourceCommandService
                 // while Shared mode is off. Only report submitted values for dynamic inputs that
                 // never loaded because their dependencies were incomplete, for example
                 // priority=express without a selected item.
-                if (!string.IsNullOrEmpty(value) && argument.DynamicLoading is not null && loadedDynamicArgumentNames?.Contains(argument.Name) != true)
+                if (loadedDynamicArgumentNames is not null && !string.IsNullOrEmpty(value) && argument.DynamicLoading is not null && !loadedDynamicArgumentNames.Contains(argument.Name))
                 {
                     context.AddValidationError(argument, "Argument is disabled.");
                 }
