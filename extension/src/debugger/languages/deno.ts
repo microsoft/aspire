@@ -1,7 +1,7 @@
 import * as net from 'net';
 import * as vscode from 'vscode';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, LaunchOptions, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
-import { denoDisplayName, denoInspectorPortAllocationFailed, denoLabel, invalidLaunchConfiguration } from "../../loc/strings";
+import { denoDisplayName, denoInspectorPortAllocationFailed, denoLabel, denoTaskDebuggingUnsupported, invalidLaunchConfiguration } from "../../loc/strings";
 import { extensionLogOutputChannel } from "../../utils/logging";
 import { ResourceDebuggerExtension } from "../debuggerExtensions";
 import { registerRunCleanup } from "../runCleanupRegistry";
@@ -120,11 +120,20 @@ function registerDenoInspectorPortRelease(port: number, launchOptions: LaunchOpt
  * Injects `--inspect-wait` into a Deno argument vector so VS Code's built-in js-debug (pwa-node) can
  * attach. The flag is placed immediately after a leading sub-command that accepts runtime flags
  * (run/serve/test/bench) so it is parsed as a runtime flag rather than a script argument. `deno task`
- * does not accept inspector flags, so task launches are left unchanged instead of generating an
- * invalid command line. If the caller already configured an inspector flag (WithDenoInspect*), the
- * vector is returned unchanged.
+ * does not accept inspector flags, so debug task launches fail fast instead of starting a
+ * nonfunctional attach session. No-debug launches are left unchanged. If the caller already
+ * configured an inspector flag (WithDenoInspect*), the vector is returned unchanged.
  */
 async function withDenoInspectWait(args: string[], launchOptions: LaunchOptions): Promise<{ runtimeArgs: string[]; port?: number }> {
+    if (!launchOptions.debug) {
+        return { runtimeArgs: [...args] };
+    }
+
+    if (args[0] === 'task') {
+        extensionLogOutputChannel.info('Skipping Deno debug launch for deno task because Deno does not accept runtime inspector flags on the task subcommand.');
+        throw new Error(denoTaskDebuggingUnsupported);
+    }
+
     const existingInspectFlag = findDenoInspectFlag(args);
     if (existingInspectFlag?.port !== undefined) {
         return { runtimeArgs: [...args], port: existingInspectFlag.port };
@@ -136,11 +145,6 @@ async function withDenoInspectWait(args: string[], launchOptions: LaunchOptions)
         const runtimeArgs = [...args];
         runtimeArgs[existingInspectFlag.index] = `${existingInspectFlag.flagName}=${denoInspectorHost}:${port}`;
         return { runtimeArgs, port };
-    }
-
-    if (args[0] === 'task') {
-        extensionLogOutputChannel.info('Skipping Deno inspector injection for deno task because Deno does not accept runtime inspector flags on the task subcommand.');
-        return { runtimeArgs: [...args] };
     }
 
     const port = await allocateDenoInspectorPort();

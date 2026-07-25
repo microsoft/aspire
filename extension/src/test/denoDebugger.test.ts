@@ -33,8 +33,8 @@ suite('Deno Debugger Tests', () => {
         sinon.restore();
     });
 
-    async function configure(launchConfig: DenoLaunchConfiguration, args: string[], debugConfig: AspireResourceExtendedDebugConfiguration): Promise<void> {
-        await denoDebuggerExtension.createDebugSessionConfigurationCallback!(launchConfig, args, [], { debug: true, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
+    async function configure(launchConfig: DenoLaunchConfiguration, args: string[], debugConfig: AspireResourceExtendedDebugConfiguration, debug: boolean = true): Promise<void> {
+        await denoDebuggerExtension.createDebugSessionConfigurationCallback!(launchConfig, args, [], { debug, runId: '1', debugSessionId: '1', isApphost: false, debugSession: fakeAspireDebugSession }, debugConfig);
     }
 
     function assertInjectedInspectWaitArg(arg: string | undefined, debugConfig: AspireResourceExtendedDebugConfiguration): number {
@@ -128,7 +128,7 @@ suite('Deno Debugger Tests', () => {
         assert.strictEqual(terminateDebugSessionListenerDisposeCount, 1);
     });
 
-    test('does not inject --inspect-wait for deno task launches', async () => {
+    test('rejects debug launches for deno task commands', async () => {
         const launchConfig: DenoLaunchConfiguration = {
             type: 'deno',
             runtime_executable: 'deno',
@@ -138,7 +138,25 @@ suite('Deno Debugger Tests', () => {
         const debugConfig = createDebugConfig('/workspace/app/deno.json');
 
         // .WithRunScript("dev") surfaces as ["task", "dev"].
-        await configure(launchConfig, ['task', 'dev'], debugConfig);
+        await assert.rejects(
+            () => configure(launchConfig, ['task', 'dev'], debugConfig),
+            /Deno task launches cannot be debugged automatically/);
+
+        assert.strictEqual(debugConfig.runtimeArgs, undefined);
+        assert.strictEqual(debugConfig.attachSimplePort, undefined);
+        assert.strictEqual(registeredCleanupCount, 0);
+    });
+
+    test('does not inject --inspect-wait for no-debug deno task launches', async () => {
+        const launchConfig: DenoLaunchConfiguration = {
+            type: 'deno',
+            runtime_executable: 'deno',
+            script_path: '/workspace/app/deno.json',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig('/workspace/app/deno.json');
+
+        await configure(launchConfig, ['task', 'dev'], debugConfig, false);
 
         assert.deepStrictEqual(debugConfig.runtimeArgs, ['task', 'dev']);
         assert.strictEqual(debugConfig.attachSimplePort, undefined);
