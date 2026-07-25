@@ -309,6 +309,21 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyDockerfile_AlternatePackageManagerThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
+            .WithRunScript("start")
+            .WithNpm();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ManifestUtils.GetManifest(denoApp.Resource, workspace.Path));
+
+        Assert.Equal("Generated Deno Dockerfiles do not support alternate package manager 'npm'. Use WithDeno() or provide a custom Dockerfile.", exception.Message);
+    }
+
+    [Fact]
     public async Task VerifyDockerfile_CacheUsesUnstableFlags()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -1205,6 +1220,23 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
+        Assert.Equal("package-manager", launchConfig.LaunchMethod);
+    }
+
+    [Fact]
+    public void DenoApp_WithRunScriptAndNpm_ProducesNodeLaunchConfiguration()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
+            .WithRunScript("dev")
+            .WithNpm();
+
+        var launchConfig = InvokeLaunchConfigurationAnnotator(denoApp.Resource);
+
+        Assert.Equal("node", launchConfig.Type);
+        Assert.Equal("npm", launchConfig.RuntimeExecutable);
         Assert.Equal("package-manager", launchConfig.LaunchMethod);
     }
 

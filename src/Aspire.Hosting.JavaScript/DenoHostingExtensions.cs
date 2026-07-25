@@ -729,6 +729,12 @@ public static partial class JavaScriptHostingExtensions
 
     private static void ThrowIfUnsupportedDenoDockerfileOptions(IResource resource)
     {
+        if (resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager) &&
+            !string.Equals(packageManager.ExecutableName, "deno", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Generated Deno Dockerfiles do not support alternate package manager '{packageManager.ExecutableName}'. Use WithDeno() or provide a custom Dockerfile.");
+        }
+
         if (resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno) &&
             deno.NodeModulesDirSet &&
             string.Equals(deno.NodeModulesDirMode, "manual", StringComparison.OrdinalIgnoreCase))

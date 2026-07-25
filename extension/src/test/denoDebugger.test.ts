@@ -181,6 +181,24 @@ suite('Deno Debugger Tests', () => {
         assert.strictEqual(registeredCleanupCount, 0);
     });
 
+    test('ignores inspector-looking script arguments after the entrypoint', async () => {
+        const launchConfig: DenoLaunchConfiguration = {
+            type: 'deno',
+            runtime_executable: 'deno',
+            script_path: '/workspace/app/main.ts',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig('/workspace/app/main.ts');
+
+        await configure(launchConfig, ['run', '-A', 'main.ts', '--inspect=9229'], debugConfig);
+
+        assert.strictEqual(debugConfig.runtimeArgs?.[0], 'run');
+        const injectedPort = assertInjectedInspectWaitArg(debugConfig.runtimeArgs?.[1], debugConfig);
+        assert.notStrictEqual(injectedPort, 9229);
+        assert.deepStrictEqual(debugConfig.runtimeArgs?.slice(2), ['-A', 'main.ts', '--inspect=9229']);
+        assert.strictEqual(registeredCleanupCount, 1);
+    });
+
     test('allocates a different inspector port for each bare user-configured inspector flag', async () => {
         const launchConfig: DenoLaunchConfiguration = {
             type: 'deno',

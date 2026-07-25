@@ -1,4 +1,5 @@
 import * as net from 'net';
+import * as path from 'path';
 import * as vscode from 'vscode';
 import { AspireResourceExtendedDebugConfiguration, ExecutableLaunchConfiguration, JavaScriptRuntimeLaunchConfiguration, LaunchOptions, isJavaScriptRuntimeLaunchConfiguration } from "../../dcp/types";
 import { denoDisplayName, denoInspectorPortAllocationFailed, denoLabel, denoTaskDebuggingUnsupported, invalidLaunchConfiguration } from "../../loc/strings";
@@ -16,6 +17,7 @@ const reservedDenoInspectorPorts = new Set<number>();
 // Deno sub-commands that accept runtime flags (so --inspect-wait must be inserted AFTER this token,
 // not before it — `deno --inspect-wait run` is invalid).
 const denoSubcommandsAcceptingRuntimeFlags = new Set(['run', 'serve', 'test', 'bench']);
+const denoFlagsWithSeparateValue = new Set(['--cert', '--config', '--env-file', '--import-map', '--lock', '--location', '--v8-flags']);
 
 function asDenoConfig(launchConfig: ExecutableLaunchConfiguration): JavaScriptRuntimeLaunchConfiguration {
     if (isJavaScriptRuntimeLaunchConfiguration(launchConfig) && launchConfig.type === 'deno') {
@@ -32,8 +34,9 @@ interface DenoInspectFlag {
     port?: number;
 }
 
-function findDenoInspectFlag(args: string[]): DenoInspectFlag | undefined {
-    for (let index = 0; index < args.length; index++) {
+function findDenoInspectFlag(args: string[], config: JavaScriptRuntimeLaunchConfiguration): DenoInspectFlag | undefined {
+    const runtimeFlagEnd = getDenoRuntimeFlagEndIndex(args, config);
+    for (let index = 0; index < runtimeFlagEnd; index++) {
         const arg = args[index];
         const explicitPortMatch = /^(--inspect(?:-brk|-wait)?)=(?:.*:)?(\d+)$/.exec(arg);
         if (explicitPortMatch) {
@@ -55,6 +58,43 @@ function findDenoInspectFlag(args: string[]): DenoInspectFlag | undefined {
     }
 
     return undefined;
+}
+
+function getDenoRuntimeFlagEndIndex(args: string[], config: JavaScriptRuntimeLaunchConfiguration): number {
+    const startIndex = args.length > 0 && denoSubcommandsAcceptingRuntimeFlags.has(args[0]) ? 1 : 0;
+    for (let index = startIndex; index < args.length; index++) {
+        const arg = args[index];
+        if (isDenoFlagWithSeparateValue(arg)) {
+            index++;
+            continue;
+        }
+
+        if (!arg.startsWith('-') && isDenoEntrypoint(arg, config)) {
+            return index;
+        }
+    }
+
+    return args.length;
+}
+
+function isDenoFlagWithSeparateValue(arg: string): boolean {
+    const equalsIndex = arg.indexOf('=');
+    const flagName = equalsIndex >= 0 ? arg.substring(0, equalsIndex) : arg;
+    return equalsIndex < 0 && denoFlagsWithSeparateValue.has(flagName);
+}
+
+function isDenoEntrypoint(arg: string, config: JavaScriptRuntimeLaunchConfiguration): boolean {
+    const scriptPath = config.script_path;
+    if (!scriptPath) {
+        return true;
+    }
+
+    if (arg === scriptPath) {
+        return true;
+    }
+
+    return !!config.working_directory &&
+        path.resolve(config.working_directory, arg) === scriptPath;
 }
 
 async function getAvailableTcpPort(): Promise<number> {
@@ -124,7 +164,7 @@ function registerDenoInspectorPortRelease(port: number, launchOptions: LaunchOpt
  * nonfunctional attach session. No-debug launches are left unchanged. If the caller already
  * configured an inspector flag (WithDenoInspect*), the vector is returned unchanged.
  */
-async function withDenoInspectWait(args: string[], launchOptions: LaunchOptions): Promise<{ runtimeArgs: string[]; port?: number }> {
+async function withDenoInspectWait(args: string[], config: JavaScriptRuntimeLaunchConfiguration, launchOptions: LaunchOptions): Promise<{ runtimeArgs: string[]; port?: number }> {
     if (!launchOptions.debug) {
         return { runtimeArgs: [...args] };
     }
@@ -134,7 +174,7 @@ async function withDenoInspectWait(args: string[], launchOptions: LaunchOptions)
         throw new Error(denoTaskDebuggingUnsupported);
     }
 
-    const existingInspectFlag = findDenoInspectFlag(args);
+    const existingInspectFlag = findDenoInspectFlag(args, config);
     if (existingInspectFlag?.port !== undefined) {
         return { runtimeArgs: [...args], port: existingInspectFlag.port };
     }
@@ -181,7 +221,7 @@ export const denoDebuggerExtension: ResourceDebuggerExtension = {
         // runtimeExecutable + runtimeArgs and let it attach to the inspector.
         debugConfiguration.runtimeExecutable = config.runtime_executable || 'deno';
 
-        const { runtimeArgs, port } = await withDenoInspectWait(args ?? [], launchOptions);
+        const { runtimeArgs, port } = await withDenoInspectWait(args ?? [], config, launchOptions);
         debugConfiguration.runtimeArgs = runtimeArgs;
 
         if (port !== undefined) {

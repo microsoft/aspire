@@ -2503,8 +2503,11 @@ public static partial class JavaScriptHostingExtensions
                 var hasRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _);
                 var hasPackageManager = resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var pmAnnotation);
                 var isPackageManagerScript = hasRunScript && hasPackageManager;
+                var effectiveLaunchConfigType = launchConfigType == "deno" && isPackageManagerScript
+                    ? GetJavaScriptPackageManagerLaunchConfigurationType(pmAnnotation!.ExecutableName)
+                    : launchConfigType;
 
-                return new JavaScriptLaunchConfiguration(launchConfigType)
+                return new JavaScriptLaunchConfiguration(effectiveLaunchConfigType)
                 {
                     ScriptPath = Path.GetFullPath(scriptPath, workingDirectory),
                     Mode = mode,
@@ -2515,6 +2518,13 @@ public static partial class JavaScriptHostingExtensions
             },
             launchConfigType);
     }
+
+    private static string GetJavaScriptPackageManagerLaunchConfigurationType(string packageManagerExecutable) => packageManagerExecutable switch
+    {
+        "bun" => "bun",
+        "deno" => "deno",
+        _ => "node",
+    };
 
     [Experimental("ASPIREEXTENSION001", UrlFormat = "https://aka.ms/aspire/diagnostics/{0}")]
     internal static IResourceBuilder<T> WithVSCodeDebugging<T>(this IResourceBuilder<T> builder)
