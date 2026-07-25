@@ -10,6 +10,7 @@
 
   <ItemGroup>
     <Compile Include="$(RepoRoot)src\Shared\AzureRoleAssignmentUtils.cs" />
+    <Compile Include="$(SharedDir)Model\KnownRelationshipTypes.cs" />
   </ItemGroup>
   
   <ItemGroup>

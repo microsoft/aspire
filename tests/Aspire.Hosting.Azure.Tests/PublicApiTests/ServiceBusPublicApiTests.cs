@@ -322,32 +322,43 @@ public class ServiceBusPublicApiTests
     }
 
     [Fact]
-    public void WithSqlServerContainerShouldThrowWhenBuilderIsNull()
+    public void WithSqlServerShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<AzureServiceBusEmulatorResource> builder = null!;
-        Action<IResourceBuilder<SqlServerServerResource>> configureContainer = (_) => { };
 
-        var action = () => builder.WithSqlServerContainer(configureContainer);
+        var action = () => builder.WithSqlServer();
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(builder), exception.ParamName);
     }
 
     [Fact]
-    public void WithSqlServerContainerShouldThrowWhenConfigureContainerIsNull()
+    public void WithSqlServerWithCallbackShouldThrowWhenBuilderIsNull()
     {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
-        var builder = testBuilder.AddAzureServiceBus("service-bus");
-        Action<IResourceBuilder<SqlServerServerResource>> configureContainer = null!;
+        IResourceBuilder<AzureServiceBusEmulatorResource> builder = null!;
+        Action<IResourceBuilder<SqlServerServerResource>> configureSqlServer = (_) => { };
 
-        var action = () => builder.RunAsEmulator(configure => configure.WithSqlServerContainer(configureContainer));
+        var action = () => builder.WithSqlServer(configureSqlServer);
 
         var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal(nameof(configureContainer), exception.ParamName);
+        Assert.Equal(nameof(builder), exception.ParamName);
     }
 
     [Fact]
-    public void WithSqlServerShouldThrowWhenBuilderIsNull()
+    public void WithSqlServerShouldThrowWhenConfigureSqlServerIsNull()
+    {
+        using var testBuilder = TestDistributedApplicationBuilder.Create();
+        var builder = testBuilder.AddAzureServiceBus("service-bus");
+        Action<IResourceBuilder<SqlServerServerResource>> configureSqlServer = null!;
+
+        var action = () => builder.RunAsEmulator(configure => configure.WithSqlServer(configureSqlServer));
+
+        var exception = Assert.Throws<ArgumentNullException>(action);
+        Assert.Equal(nameof(configureSqlServer), exception.ParamName);
+    }
+
+    [Fact]
+    public void WithSqlServerWithResourceShouldThrowWhenBuilderIsNull()
     {
         IResourceBuilder<AzureServiceBusEmulatorResource> builder = null!;
         using var testBuilder = TestDistributedApplicationBuilder.Create();
@@ -370,46 +381,5 @@ public class ServiceBusPublicApiTests
 
         var exception = Assert.Throws<ArgumentNullException>(action);
         Assert.Equal(nameof(sqlServer), exception.ParamName);
-    }
-
-    [Fact]
-    public void WithSqlServerConnectionShouldThrowWhenBuilderIsNull()
-    {
-        IResourceBuilder<AzureServiceBusEmulatorResource> builder = null!;
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
-        var sqlServer = testBuilder.AddSqlServer("sql");
-
-        var action = () => builder.WithSqlServerConnection(sqlServer.Resource.PrimaryEndpoint, sqlServer.Resource.PasswordParameter);
-
-        var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal(nameof(builder), exception.ParamName);
-    }
-
-    [Fact]
-    public void WithSqlServerConnectionShouldThrowWhenSqlServerEndpointIsNull()
-    {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
-        var builder = testBuilder.AddAzureServiceBus("service-bus");
-        var sqlServer = testBuilder.AddSqlServer("sql");
-        EndpointReference sqlServerEndpoint = null!;
-
-        var action = () => builder.RunAsEmulator(configure => configure.WithSqlServerConnection(sqlServerEndpoint, sqlServer.Resource.PasswordParameter));
-
-        var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal(nameof(sqlServerEndpoint), exception.ParamName);
-    }
-
-    [Fact]
-    public void WithSqlServerConnectionShouldThrowWhenSaPasswordParameterIsNull()
-    {
-        using var testBuilder = TestDistributedApplicationBuilder.Create();
-        var builder = testBuilder.AddAzureServiceBus("service-bus");
-        var sqlServer = testBuilder.AddSqlServer("sql");
-        ParameterResource saPasswordParameter = null!;
-
-        var action = () => builder.RunAsEmulator(configure => configure.WithSqlServerConnection(sqlServer.Resource.PrimaryEndpoint, saPasswordParameter));
-
-        var exception = Assert.Throws<ArgumentNullException>(action);
-        Assert.Equal(nameof(saPasswordParameter), exception.ParamName);
     }
 }

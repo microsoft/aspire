@@ -674,12 +674,35 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void WithSqlServerContainer_CustomizesSqlServerContainer()
+    public void AddAzureServiceBusWithEmulator_WaitsForSqlServer()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator();
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+
+        AssertWaitsForHealthy(serviceBus.Resource, sql);
+    }
+
+    [Fact]
+    public void WithSqlServer_WithoutArguments_UsesTheSqlServerResourceCreatedForTheEmulator()
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure.WithSqlServer());
+
+        var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
+        Assert.IsType<SqlServerServerResource>(sql);
+    }
+
+    [Fact]
+    public void WithSqlServer_CustomizesSqlServerResource()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
-            .WithSqlServerContainer(sql => sql
+            .WithSqlServer(sql => sql
                 .WithImageTag("2019-latest")
                 .WithContainerName("custom-sql")));
 
@@ -693,12 +716,12 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void WithSqlServerContainer_SupportsSqlServerIntegrationApis()
+    public void WithSqlServer_SupportsSqlServerIntegrationApis()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
-            .WithSqlServerContainer(sql => sql.WithHostPort(12345)));
+            .WithSqlServer(sql => sql.WithHostPort(12345)));
 
         var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
         var endpoint = Assert.Single(sql.Annotations.OfType<EndpointAnnotation>());
@@ -706,14 +729,14 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task WithSqlServerContainer_PasswordChangedInCallback_IsUsedByEmulator()
+    public async Task WithSqlServer_PasswordChangedInCallback_IsUsedByEmulator()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var password = builder.AddParameter("sql-password", "p@ssw0rd1");
 
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
-            .WithSqlServerContainer(sql => sql.WithPassword(password)));
+            .WithSqlServer(sql => sql.WithPassword(password)));
 
         var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
         AllocateContainerNetworkEndpoint(sql, "sb-mssql.dev.internal", 1433);
@@ -734,6 +757,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
             .WithSqlServer(sql));
 
         Assert.DoesNotContain(builder.Resources, x => x.Name == "sb-mssql");
+        AssertWaitsForHealthy(serviceBus.Resource, sql.Resource);
 
         AllocateContainerNetworkEndpoint(sql.Resource, "sql.dev.internal", 1433);
 
@@ -764,57 +788,34 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public async Task WithSqlServerConnection_UsesProvidedEndpointAndPassword()
+    public async Task WithSqlServer_UsesTheAddressProjectedIntoTheContainerNetwork()
     {
+        // The emulator reaches the SQL Server resource through the emulator container's network, so the
+        // endpoint must resolve to the address the orchestrator projects into that network rather than to
+        // the resource name. That address is the container host address when the SQL Server isn't itself
+        // running in the container network.
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var sql = builder.AddSqlServer("sql");
 
         var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
-            .WithSqlServerConnection(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter));
+            .WithSqlServer(sql));
 
-        Assert.DoesNotContain(builder.Resources, x => x.Name == "sb-mssql");
-
-        AllocateContainerNetworkEndpoint(sql.Resource, "sql.dev.internal", 1433);
-
-        var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
-
-        Assert.Equal("Y", env["ACCEPT_EULA"]);
-        Assert.Equal("sql.dev.internal:1433", env["SQL_SERVER"]);
-        Assert.Equal(await sql.Resource.PasswordParameter.GetValueAsync(CancellationToken.None), env["MSSQL_SA_PASSWORD"]);
-    }
-
-    [Fact]
-    public async Task WithSqlServerConnection_HostProcessEndpoint_ResolvesToContainerHostAddress()
-    {
-        // A SQL Server instance that is not a container (e.g. hosted by an executable resource) is not
-        // reachable from the emulator container via its resource name. The endpoint must resolve to the
-        // address the orchestrator projects into the container network (the container host address).
-        using var builder = TestDistributedApplicationBuilder.Create();
-
-        var password = builder.AddParameter("sa-password", "p@ssw0rd1");
-        var sqlHost = builder.AddExecutable("sql-host", "sqlservr", ".")
-            .WithEndpoint(name: "tcp");
-
-        var serviceBus = builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
-            .WithSqlServerConnection(sqlHost.GetEndpoint("tcp"), password.Resource));
-
-        AllocateContainerNetworkEndpoint(sqlHost.Resource, "host.docker.internal", 52133);
+        AllocateContainerNetworkEndpoint(sql.Resource, "host.docker.internal", 52133);
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(serviceBus.Resource, DistributedApplicationOperation.Run, TestServiceProvider.Instance);
 
         Assert.Equal("host.docker.internal:52133", env["SQL_SERVER"]);
-        Assert.Equal("p@ssw0rd1", env["MSSQL_SA_PASSWORD"]);
     }
 
     [Fact]
-    public void WithSqlServerContainer_RemovingTcpEndpoint_Throws()
+    public void WithSqlServer_RemovingTcpEndpoint_Throws()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         var exception = Assert.Throws<InvalidOperationException>(() =>
             builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
-                .WithSqlServerContainer(sql =>
+                .WithSqlServer(sql =>
                 {
                     var endpoint = sql.Resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "tcp");
                     sql.Resource.Annotations.Remove(endpoint);
@@ -824,13 +825,13 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void WithSqlServerContainer_CalledMultipleTimes_AppliesCallbacksInOrder()
+    public void WithSqlServer_CallbackCalledMultipleTimes_AppliesCallbacksInOrder()
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
         builder.AddAzureServiceBus("sb").RunAsEmulator(configure => configure
-            .WithSqlServerContainer(sql => sql.WithImageTag("2019-latest"))
-            .WithSqlServerContainer(sql => sql.WithImageTag("2022-latest")));
+            .WithSqlServer(sql => sql.WithImageTag("2019-latest"))
+            .WithSqlServer(sql => sql.WithImageTag("2022-latest")));
 
         var sql = Assert.Single(builder.Resources, x => x.Name == "sb-mssql");
         var imageAnnotation = Assert.Single(sql.Annotations.OfType<ContainerImageAnnotation>());
@@ -856,12 +857,16 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
         Assert.Equal("sql2.dev.internal:1433", env["SQL_SERVER"]);
         Assert.Equal(await sql2.Resource.PasswordParameter.GetValueAsync(CancellationToken.None), env["MSSQL_SA_PASSWORD"]);
+
+        // The superseded SQL Server resource is no longer waited for either.
+        AssertWaitsForHealthy(serviceBus.Resource, sql2.Resource);
+        Assert.DoesNotContain(serviceBus.Resource.Annotations.OfType<ResourceRelationshipAnnotation>(), r => r.Resource == sql1.Resource);
     }
 
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void WithSqlServerAndWithSqlServerContainer_AreMutuallyExclusive(bool sqlServerFirst)
+    public void WithSqlServer_ExistingResourceAndCallback_AreMutuallyExclusive(bool sqlServerFirst)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -873,11 +878,11 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
                 if (sqlServerFirst)
                 {
                     configure.WithSqlServer(sql)
-                        .WithSqlServerContainer(container => container.WithImageTag("2019-latest"));
+                        .WithSqlServer(emulatorSql => emulatorSql.WithImageTag("2019-latest"));
                 }
                 else
                 {
-                    configure.WithSqlServerContainer(container => container.WithImageTag("2019-latest"))
+                    configure.WithSqlServer(emulatorSql => emulatorSql.WithImageTag("2019-latest"))
                         .WithSqlServer(sql);
                 }
             }));
@@ -888,7 +893,7 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
     [Theory]
     [InlineData(true)]
     [InlineData(false)]
-    public void WithSqlServerConnectionAndWithSqlServerContainer_AreMutuallyExclusive(bool connectionFirst)
+    public void WithSqlServer_ExistingResourceAndDefault_AreMutuallyExclusive(bool sqlServerFirst)
     {
         using var builder = TestDistributedApplicationBuilder.Create();
 
@@ -897,15 +902,13 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
         var exception = Assert.Throws<InvalidOperationException>(() =>
             builder.AddAzureServiceBus("sb").RunAsEmulator(configure =>
             {
-                if (connectionFirst)
+                if (sqlServerFirst)
                 {
-                    configure.WithSqlServerConnection(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter)
-                        .WithSqlServerContainer(container => container.WithImageTag("2019-latest"));
+                    configure.WithSqlServer(sql).WithSqlServer();
                 }
                 else
                 {
-                    configure.WithSqlServerContainer(container => container.WithImageTag("2019-latest"))
-                        .WithSqlServerConnection(sql.Resource.PrimaryEndpoint, sql.Resource.PasswordParameter);
+                    configure.WithSqlServer().WithSqlServer(sql);
                 }
             }));
 
@@ -954,6 +957,13 @@ public class AzureServiceBusExtensionsTests(ITestOutputHelper output)
 
     // Simulates the orchestrator allocating the resource's 'tcp' endpoint on the container network,
     // which is the network context the emulator resolves its SQL Server endpoint in.
+    private static void AssertWaitsForHealthy(IResource resource, IResource dependency)
+    {
+        var wait = Assert.Single(resource.Annotations.OfType<WaitAnnotation>());
+        Assert.Same(dependency, wait.Resource);
+        Assert.Equal(WaitType.WaitUntilHealthy, wait.WaitType);
+    }
+
     private static void AllocateContainerNetworkEndpoint(IResource resource, string address, int port)
     {
         var endpoint = resource.Annotations.OfType<EndpointAnnotation>().Single(e => e.Name == "tcp");

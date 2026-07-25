@@ -9,9 +9,9 @@ namespace Aspire.Hosting.Azure.ServiceBus;
 /// Represents an annotation holding a callback that customizes the SQL Server resource
 /// backing the Azure Service Bus emulator.
 /// </summary>
-internal sealed class SqlServerContainerConfigurationAnnotation : IResourceAnnotation
+internal sealed class SqlServerConfigurationAnnotation : IResourceAnnotation
 {
-    public SqlServerContainerConfigurationAnnotation(Action<IResourceBuilder<SqlServerServerResource>> configure)
+    public SqlServerConfigurationAnnotation(Action<IResourceBuilder<SqlServerServerResource>> configure)
     {
         Configure = configure ?? throw new ArgumentNullException(nameof(configure));
     }

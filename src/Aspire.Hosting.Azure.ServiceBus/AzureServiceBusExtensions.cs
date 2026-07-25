@@ -7,6 +7,7 @@
 using System.Text;
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using Aspire.Dashboard.Model;
 using Aspire.Hosting;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Azure;
@@ -25,7 +26,7 @@ public static class AzureServiceBusExtensions
 {
     private const string EmulatorHealthEndpointName = "emulatorhealth";
     private const string SqlServerEndpointName = "tcp";
-    private const string SqlServerConflictMessage = "The Azure Service Bus emulator cannot use both an existing SQL Server resource and a customized SQL Server container. Remove either the 'WithSqlServerContainer' call or the 'WithSqlServer'/'WithSqlServerConnection' call.";
+    private const string SqlServerConflictMessage = "The Azure Service Bus emulator cannot use both an existing SQL Server resource and a customized built-in SQL Server resource. Remove either the 'WithSqlServer(sqlServer)' call or the 'WithSqlServer(configureSqlServer)' call.";
 
     /// <summary>
     /// Adds an Azure Service Bus Namespace resource to the application model. This resource can be used to create queue, topic, and subscription resources.
@@ -428,11 +429,11 @@ public static class AzureServiceBusExtensions
         configureContainer?.Invoke(surrogateBuilder);
 
         // The emulator needs a SQL Server instance to store its state. By default a dedicated SQL Server
-        // resource is created, but WithSqlServer/WithSqlServerConnection can be used to point the emulator at
-        // an existing SQL Server instance, in which case a SqlServerConnectionAnnotation is already present.
-        // The two options are mutually exclusive, which the extension methods enforce. Annotations added
-        // through the surrogate land on the inner resource (AzureServiceBusEmulatorResource forwards its
-        // Annotations collection), so they are visible on builder.Resource here.
+        // resource is created, but WithSqlServer can be used to point the emulator at an existing SQL Server
+        // resource, in which case a SqlServerConnectionAnnotation is already present. The two options are
+        // mutually exclusive, which the extension methods enforce. Annotations added through the surrogate
+        // land on the inner resource (AzureServiceBusEmulatorResource forwards its Annotations collection),
+        // so they are visible on builder.Resource here.
         if (!builder.Resource.HasAnnotationOfType<SqlServerConnectionAnnotation>())
         {
             var sqlServerBuilder = builder.ApplicationBuilder
@@ -444,18 +445,21 @@ public static class AzureServiceBusExtensions
                 sqlServerBuilder = sqlServerBuilder.WithLifetimeOf(surrogateBuilder);
             }
 
-            // Apply WithSqlServerContainer customizations last so they take precedence over the defaults.
-            foreach (var sqlContainerConfiguration in builder.Resource.Annotations.OfType<SqlServerContainerConfigurationAnnotation>())
+            // Apply the WithSqlServer customizations last so they take precedence over the defaults.
+            foreach (var sqlServerConfiguration in builder.Resource.Annotations.OfType<SqlServerConfigurationAnnotation>())
             {
-                sqlContainerConfiguration.Configure(sqlServerBuilder);
+                sqlServerConfiguration.Configure(sqlServerBuilder);
             }
 
             if (!sqlServerBuilder.Resource.Annotations.OfType<EndpointAnnotation>().Any(e => e.Name == SqlServerEndpointName))
             {
-                throw new InvalidOperationException($"The SQL Server container for the Azure Service Bus emulator must keep its '{SqlServerEndpointName}' endpoint. Update the 'WithSqlServerContainer' callback so it does not remove or rename the endpoint.");
+                throw new InvalidOperationException($"The SQL Server resource for the Azure Service Bus emulator must keep its '{SqlServerEndpointName}' endpoint. Update the 'WithSqlServer' callback so it does not remove or rename the endpoint.");
             }
 
-            builder.WithAnnotation(new SqlServerConnectionAnnotation(sqlServerBuilder.Resource.PrimaryEndpoint, () => sqlServerBuilder.Resource.PasswordParameter));
+            // The emulator fails to start when its backing store isn't accepting connections yet.
+            surrogateBuilder.WaitFor(sqlServerBuilder);
+
+            builder.WithAnnotation(new SqlServerConnectionAnnotation(sqlServerBuilder.Resource));
         }
 
         // The environment callback is registered after the SQL Server connection has been resolved so a failed
@@ -470,9 +474,9 @@ public static class AzureServiceBusExtensions
             }
 
             context.EnvironmentVariables.TryAdd("ACCEPT_EULA", "Y");
-            // The endpoint is resolved in the emulator container's network context, so a containerized SQL
-            // Server resolves to its container-network address and a SQL Server hosted by an executable or
-            // project resolves to the container host address.
+            // The endpoint is resolved in the emulator container's network context, so the SQL Server
+            // resolves to its container-network address rather than to an address that is only reachable
+            // from the host.
             context.EnvironmentVariables.TryAdd("SQL_SERVER", sqlConnection.Endpoint.Property(EndpointProperty.HostAndPort));
             context.EnvironmentVariables.TryAdd("MSSQL_SA_PASSWORD", sqlConnection.Password);
         }));
@@ -604,17 +608,35 @@ public static class AzureServiceBusExtensions
     }
 
     /// <summary>
+    /// Configures the Azure Service Bus emulator to store its state in the SQL Server resource that is
+    /// created for it.
+    /// </summary>
+    /// <param name="builder">Builder for the Azure Service Bus emulator container</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <remarks>
+    /// This is the default behavior, so this method only needs to be called to state that intent explicitly.
+    /// It cannot be combined with <see cref="WithSqlServer(IResourceBuilder{AzureServiceBusEmulatorResource}, IResourceBuilder{SqlServerServerResource})"/>.
+    /// </remarks>
+    [AspireExportIgnore(Reason = "The emulator creates its own SQL Server resource by default, so there is nothing to configure. Use the WithSqlServer overload that takes a SQL Server resource to reuse an existing one.")]
+    public static IResourceBuilder<AzureServiceBusEmulatorResource> WithSqlServer(this IResourceBuilder<AzureServiceBusEmulatorResource> builder)
+    {
+        ArgumentNullException.ThrowIfNull(builder);
+
+        return builder.WithSqlServer(static _ => { });
+    }
+
+    /// <summary>
     /// Customizes the SQL Server resource that backs the Azure Service Bus emulator, allowing the regular
     /// SQL Server integration APIs (such as data volumes, host ports or the password) to be used.
     /// </summary>
     /// <param name="builder">Builder for the Azure Service Bus emulator container</param>
-    /// <param name="configureContainer">Callback that exposes the SQL Server resource used by the emulator to allow for customization.</param>
+    /// <param name="configureSqlServer">Callback that exposes the SQL Server resource used by the emulator to allow for customization.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <remarks>
     /// This method can be called multiple times; the callbacks are applied in order. It cannot be combined
-    /// with <see cref="WithSqlServer"/> or <see cref="WithSqlServerConnection"/>. The emulator connects to
-    /// the SQL Server container through its <c>tcp</c> endpoint, which must not be removed or renamed by
-    /// the callback.
+    /// with <see cref="WithSqlServer(IResourceBuilder{AzureServiceBusEmulatorResource}, IResourceBuilder{SqlServerServerResource})"/>.
+    /// The emulator connects to the SQL Server resource through its <c>tcp</c> endpoint, which must not be
+    /// removed or renamed by the callback.
     /// <example>
     /// Here is an example of how to persist the emulator state in a data volume and use a specific container name:
     /// <code language="csharp">
@@ -622,39 +644,39 @@ public static class AzureServiceBusExtensions
     ///
     /// builder.AddAzureServiceBus("servicebusns")
     ///        .RunAsEmulator(configure => configure
-    ///            .WithSqlServerContainer(sql => sql
+    ///            .WithSqlServer(sql => sql
     ///                .WithDataVolume()
     ///                .WithContainerName("myproject-servicebus-sql")));
     /// </code>
     /// </example>
     /// </remarks>
-    [AspireExportIgnore(Reason = "Action<IResourceBuilder<SqlServerServerResource>> callbacks are not ATS-compatible. Use WithSqlServer with a SQL Server resource instead.")]
-    public static IResourceBuilder<AzureServiceBusEmulatorResource> WithSqlServerContainer(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, Action<IResourceBuilder<SqlServerServerResource>> configureContainer)
+    [AspireExportIgnore(Reason = "Action<IResourceBuilder<SqlServerServerResource>> callbacks are not ATS-compatible. Use the WithSqlServer overload that takes a SQL Server resource instead.")]
+    public static IResourceBuilder<AzureServiceBusEmulatorResource> WithSqlServer(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, Action<IResourceBuilder<SqlServerServerResource>> configureSqlServer)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(configureContainer);
+        ArgumentNullException.ThrowIfNull(configureSqlServer);
 
         if (builder.Resource.HasAnnotationOfType<SqlServerConnectionAnnotation>())
         {
             throw new InvalidOperationException(SqlServerConflictMessage);
         }
 
-        return builder.WithAnnotation(new SqlServerContainerConfigurationAnnotation(configureContainer));
+        return builder.WithAnnotation(new SqlServerConfigurationAnnotation(configureSqlServer));
     }
 
     /// <summary>
     /// Configures the Azure Service Bus emulator to use an existing SQL Server resource instead of
-    /// creating a dedicated SQL Server container.
+    /// creating one for it.
     /// </summary>
     /// <param name="builder">Builder for the Azure Service Bus emulator container</param>
     /// <param name="sqlServer">The SQL Server resource the emulator should use to store its state.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
-    /// The emulator connects to the SQL Server resource over the container network using its primary endpoint
-    /// and administrator password. If this method is called multiple times the last call wins. It cannot be
-    /// combined with <see cref="WithSqlServerContainer"/>. To connect to a SQL Server instance that is not
-    /// modeled as a <see cref="SqlServerServerResource"/>, use <see cref="WithSqlServerConnection"/>.
+    /// The emulator waits for the SQL Server resource to become healthy and connects to it over the container
+    /// network using its primary endpoint and administrator password. If this method is called multiple times
+    /// the last call wins. It cannot be combined with
+    /// <see cref="WithSqlServer(IResourceBuilder{AzureServiceBusEmulatorResource}, Action{IResourceBuilder{SqlServerServerResource}})"/>.
     /// <example>
     /// Here is an example of how to share a SQL Server resource with the emulator:
     /// <code language="csharp">
@@ -675,46 +697,39 @@ public static class AzureServiceBusExtensions
         ArgumentNullException.ThrowIfNull(builder);
         ArgumentNullException.ThrowIfNull(sqlServer);
 
-        // The password is resolved lazily so a WithPassword call on the SQL Server resource after this
-        // call is still honored.
-        return WithSqlServerConnectionCore(builder, sqlServer.Resource.PrimaryEndpoint, () => sqlServer.Resource.PasswordParameter);
-    }
-
-    /// <summary>
-    /// Configures the Azure Service Bus emulator to use an existing SQL Server instance, identified by its
-    /// endpoint and administrator password, instead of creating a dedicated SQL Server container.
-    /// </summary>
-    /// <param name="builder">Builder for the Azure Service Bus emulator container</param>
-    /// <param name="sqlServerEndpoint">The endpoint of the SQL Server instance the emulator should use to store its state.</param>
-    /// <param name="saPasswordParameter">The parameter that contains the SQL Server administrator password.</param>
-    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
-    /// <ats-returns>The resource builder.</ats-returns>
-    /// <remarks>
-    /// This is a lower-level alternative to <see cref="WithSqlServer"/> for SQL Server instances that are not
-    /// modeled as a <see cref="SqlServerServerResource"/>. The endpoint is resolved in the context of the
-    /// emulator's container network: a containerized SQL Server resolves to its container-network address and
-    /// a SQL Server hosted by an executable or project resolves to the container host address. If this method
-    /// is called multiple times the last call wins. It cannot be combined with <see cref="WithSqlServerContainer"/>.
-    /// </remarks>
-    /// <ats-remarks />
-    [AspireExport]
-    public static IResourceBuilder<AzureServiceBusEmulatorResource> WithSqlServerConnection(this IResourceBuilder<AzureServiceBusEmulatorResource> builder, EndpointReference sqlServerEndpoint, ParameterResource saPasswordParameter)
-    {
-        ArgumentNullException.ThrowIfNull(builder);
-        ArgumentNullException.ThrowIfNull(sqlServerEndpoint);
-        ArgumentNullException.ThrowIfNull(saPasswordParameter);
-
-        return WithSqlServerConnectionCore(builder, sqlServerEndpoint, () => saPasswordParameter);
-    }
-
-    private static IResourceBuilder<AzureServiceBusEmulatorResource> WithSqlServerConnectionCore(IResourceBuilder<AzureServiceBusEmulatorResource> builder, EndpointReference endpoint, Func<ParameterResource> passwordResolver)
-    {
-        if (builder.Resource.HasAnnotationOfType<SqlServerContainerConfigurationAnnotation>())
+        if (builder.Resource.HasAnnotationOfType<SqlServerConfigurationAnnotation>())
         {
             throw new InvalidOperationException(SqlServerConflictMessage);
         }
 
-        return builder.WithAnnotation(new SqlServerConnectionAnnotation(endpoint, passwordResolver), ResourceAnnotationMutationBehavior.Replace);
+        // A previous call is replaced entirely, so the emulator doesn't keep waiting for a SQL Server
+        // resource it no longer uses.
+        if (builder.Resource.TryGetLastAnnotation<SqlServerConnectionAnnotation>(out var previousConnection))
+        {
+            RemoveWaitFor(builder.Resource, previousConnection.SqlServer);
+        }
+
+        // The emulator fails to start when its backing store isn't accepting connections yet.
+        builder.WaitFor(sqlServer);
+
+        return builder.WithAnnotation(new SqlServerConnectionAnnotation(sqlServer.Resource), ResourceAnnotationMutationBehavior.Replace);
+    }
+
+    private static void RemoveWaitFor(IResource resource, IResource dependency)
+    {
+        var staleAnnotations = resource.Annotations
+            .Where(annotation => annotation switch
+            {
+                WaitAnnotation wait => wait.Resource == dependency,
+                ResourceRelationshipAnnotation relationship => relationship.Resource == dependency && relationship.Type == KnownRelationshipTypes.WaitFor,
+                _ => false
+            })
+            .ToList();
+
+        foreach (var staleAnnotation in staleAnnotations)
+        {
+            resource.Annotations.Remove(staleAnnotation);
+        }
     }
 
     private static string CreateEmulatorConfigJson(AzureServiceBusResource emulatorResource)
