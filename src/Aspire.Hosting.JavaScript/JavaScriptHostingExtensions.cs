@@ -41,6 +41,8 @@ public static partial class JavaScriptHostingExtensions
     private const string DenoHelpLink = "https://docs.deno.com/runtime/getting_started/installation/";
     private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
     private const string PnpmHelpLink = "https://pnpm.io/installation";
+    private const string DenoDefaultUser = "deno";
+    private const string DenoDefaultUserAndGroup = "deno:deno";
 
     // npm/yarn/pnpm are Node CLIs: whether they install packages or launch the app's run script, they spawn
     // node, so node must be on PATH too. bun is a full Node replacement and needs no node.
@@ -964,11 +966,26 @@ public static partial class JavaScriptHostingExtensions
                             // Match the build stage's DENO_DIR so the copied cache is discovered at runtime.
                             .Env("DENO_DIR", "/deno-dir")
                             .EmptyLine()
-                            .WorkDir("/app")
+                            .WorkDir("/app");
+
+                    if (hasCustomRuntimeImage)
+                    {
+                        runtimeStage
                             .CopyFrom("build", "/app", "/app")
                             // Ship the pre-populated dependency cache so direct run/serve container starts
                             // resolve everything locally instead of re-fetching from the network.
-                            .CopyFrom("build", "/deno-dir", "/deno-dir")
+                            .CopyFrom("build", "/deno-dir", "/deno-dir");
+                    }
+                    else
+                    {
+                        runtimeStage
+                            .CopyFrom("build", "/app", "/app", DenoDefaultUserAndGroup)
+                            // Ship the pre-populated dependency cache so direct run/serve container starts
+                            // resolve everything locally instead of re-fetching from the network.
+                            .CopyFrom("build", "/deno-dir", "/deno-dir", DenoDefaultUserAndGroup);
+                    }
+
+                    runtimeStage
                             .AddContainerFiles(dockerfileContext.Resource, "/app", logger)
                             .EmptyLine()
                             // Deno honors NODE_ENV in its Node-compatibility mode (npm: specifiers, package.json
@@ -983,7 +1000,7 @@ public static partial class JavaScriptHostingExtensions
                         // (for example, denoland/deno:2.1-distroless).
                         // See https://github.com/denoland/deno_docker
                         runtimeStage
-                            .User("deno")
+                            .User(DenoDefaultUser)
                             .EmptyLine();
                     }
 
@@ -1038,13 +1055,16 @@ public static partial class JavaScriptHostingExtensions
     }
 
     private static IResourceBuilder<TResource> WithDenoDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
-        builder.WithOtlpExporter()
+        builder.WithOtlpExporter(OtlpProtocol.HttpProtobuf)
             .WithRequiredCommandsFromPackageManager("deno")
             // Deno has first-class, built-in OpenTelemetry support. Setting OTEL_DENO=true enables automatic export
             // of traces, metrics, and logs to the OTLP endpoint configured by WithOtlpExporter, with no
             // application-level SDK required. Unlike the Node/Bun variants (which need an in-process OpenTelemetry
             // SDK), this is the headline Deno hosting win. The instrumentation is resilient to an unavailable
             // collector, so it is safe to enable unconditionally.
+            //
+            // Deno's native exporter sends OTLP as Protobuf over HTTP, so request that dashboard endpoint instead
+            // of Aspire's default gRPC preference.
             //
             // No `--unstable-otel` flag is emitted: native OTel is STABLE on the pinned Deno 2.9.0 image.
             // Verified empirically on Deno 2.9.0 (2026-07) — `OTEL_DENO=true`
@@ -1066,6 +1086,11 @@ public static partial class JavaScriptHostingExtensions
                     // store, replaces it, or is combined with the operating system store.
                     // See https://docs.deno.com/runtime/reference/env_variables/#special-environment-variables
                     ctx.EnvironmentVariables["DENO_CERT"] = ctx.CertificateBundlePath;
+
+                    // Deno's built-in OTLP exporter is implemented in Rust and uses the OpenTelemetry certificate
+                    // variable rather than DENO_CERT for HTTPS exporter trust.
+                    // See https://opentelemetry.io/docs/specs/otel/protocol/exporter/
+                    ctx.EnvironmentVariables["OTEL_EXPORTER_OTLP_CERTIFICATE"] = ctx.CertificateBundlePath;
 
                     if (ctx.Scope == CertificateTrustScope.Override)
                     {
@@ -1594,16 +1619,31 @@ public static partial class JavaScriptHostingExtensions
 
                                 if (packageManager.ExecutableName == "deno")
                                 {
+                                    var usesDefaultDenoRuntimeImage = string.Equals(runtimeImage, DefaultDenoImage, StringComparison.Ordinal);
                                     var denoRuntimeStage = dockerfileContext.Builder
                                         .From(runtimeImage, "runtime")
-                                        .WorkDir("/app")
-                                        .CopyFrom("build", "/app", "/app");
+                                        .WorkDir("/app");
+
+                                    if (usesDefaultDenoRuntimeImage)
+                                    {
+                                        denoRuntimeStage.CopyFrom("build", "/app", "/app", DenoDefaultUserAndGroup);
+                                    }
+                                    else
+                                    {
+                                        denoRuntimeStage.CopyFrom("build", "/app", "/app");
+                                    }
 
                                     packageManager.InitializeDockerRuntimeStage?.Invoke(denoRuntimeStage);
 
                                     denoRuntimeStage
-                                        .Env("NODE_ENV", "production")
-                                        .Entrypoint(["sh", "-c", $"exec {runCommand}"]);
+                                        .Env("NODE_ENV", "production");
+
+                                    if (usesDefaultDenoRuntimeImage)
+                                    {
+                                        denoRuntimeStage.User(DenoDefaultUser);
+                                    }
+
+                                    denoRuntimeStage.Entrypoint(["sh", "-c", $"exec {runCommand}"]);
                                     break;
                                 }
 

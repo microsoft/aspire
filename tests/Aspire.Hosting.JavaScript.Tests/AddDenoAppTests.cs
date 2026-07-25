@@ -76,7 +76,10 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        await Verify(File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile")));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        await Verify(dockerfileContents);
+        Assert.Equal("COPY --from=build /app /app", GetDockerfileLine(dockerfileContents, "COPY --from=build /app"));
+        Assert.Equal("COPY --from=build /deno-dir /deno-dir", GetDockerfileLine(dockerfileContents, "COPY --from=build /deno-dir"));
     }
 
     [Fact]
@@ -133,7 +136,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         // DENO_DIR must be pinned deterministically in both stages...
         Assert.Contains("ENV DENO_DIR=/deno-dir", dockerfileContents);
         // ...and the populated cache copied into the runtime stage.
-        Assert.Contains("COPY --from=build /deno-dir /deno-dir", dockerfileContents);
+        Assert.Contains("COPY --from=build --chown=deno:deno /deno-dir /deno-dir", dockerfileContents);
         // NODE_ENV must be set for Deno's npm-compatibility mode, mirroring the Bun publish block.
         Assert.Contains("ENV NODE_ENV=production", dockerfileContents);
         // Runtime uses only the build-stage cache instead of re-fetching dependencies from the network.
@@ -274,7 +277,31 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         await Verify(dockerfileContents);
+        Assert.Equal("COPY --from=build --chown=deno:deno /app /app", GetDockerfileLine(dockerfileContents, "COPY --from=build"));
+        Assert.Equal("USER deno", GetDockerfileLine(dockerfileContents, "USER"));
         Assert.Equal("""ENTRYPOINT ["sh","-c","exec deno task start -- --port $PORT"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_PublishAsPackageScriptWithCustomDenoRuntimeImagePreservesImageUser()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"tasks":{"start":"deno run -A main.ts"}}""");
+
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithDockerfileBaseImage("denoland/deno:2.9.0", "denoland/deno:2.1-distroless")
+            .WithDeno()
+            .PublishAsPackageScript("start");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal("COPY --from=build /app /app", GetDockerfileLine(dockerfileContents, "COPY --from=build"));
+        Assert.DoesNotContain(dockerfileContents.Split(Environment.NewLine), line => line.StartsWith("USER ", StringComparison.Ordinal));
     }
 
     [Fact]
@@ -818,6 +845,19 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             a => Assert.Equal("main.ts", a));
     }
 
+    [Theory]
+    [InlineData("invalid")]
+    [InlineData("AUTO")]
+    public void WithDenoNodeModulesDir_RejectsInvalidMode(string mode)
+    {
+        using var builder = TestDistributedApplicationBuilder.Create();
+        var denoApp = builder.AddDenoApp("denoapp", AppContext.BaseDirectory, "main.ts");
+
+        var exception = Assert.Throws<ArgumentException>(() => denoApp.WithDenoNodeModulesDir(mode));
+
+        Assert.Equal("mode", exception.ParamName);
+    }
+
     [Fact]
     public async Task WithDenoNoLock_OverridesLockAndEmitsNoLock()
     {
@@ -1159,7 +1199,9 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         await annotation.Callback(ctx);
 
         // Deno loads an additional PEM certificate via DENO_CERT on top of its bundled Mozilla store.
+        // Its native OTLP exporter is implemented in Rust and reads the OpenTelemetry certificate variable.
         Assert.Same(bundle, envVars["DENO_CERT"]);
+        Assert.Same(bundle, envVars["OTEL_EXPORTER_OTLP_CERTIFICATE"]);
     }
 
     [Fact]
@@ -1186,6 +1228,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         await annotation.Callback(ctx);
 
         Assert.Same(ctx.CertificateBundlePath, envVars["DENO_CERT"]);
+        Assert.Same(ctx.CertificateBundlePath, envVars["OTEL_EXPORTER_OTLP_CERTIFICATE"]);
         Assert.Equal("", envVars["DENO_TLS_CA_STORE"]);
     }
 
@@ -1214,18 +1257,21 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         Assert.Equal("system", envVars["DENO_TLS_CA_STORE"]);
         Assert.Same(ctx.CertificateBundlePath, envVars["DENO_CERT"]);
+        Assert.Same(ctx.CertificateBundlePath, envVars["OTEL_EXPORTER_OTLP_CERTIFICATE"]);
     }
 
     [Fact]
     public async Task AddDenoApp_EnablesNativeOpenTelemetry()
     {
         var builder = DistributedApplication.CreateBuilder();
+        builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "http://localhost:4318";
         var denoApp = builder.AddDenoApp("denoapp", ".", "main.ts");
 
         var env = await EnvironmentVariableEvaluator.GetEnvironmentVariablesAsync(denoApp.Resource, DistributedApplicationOperation.Run);
 
         // Deno's built-in OpenTelemetry integration is enabled with a single environment variable.
         Assert.Equal("true", env["OTEL_DENO"]);
+        Assert.Equal("http/protobuf", env["OTEL_EXPORTER_OTLP_PROTOCOL"]);
     }
 
 #pragma warning disable ASPIREEXTENSION001 // Type is for evaluation purposes only

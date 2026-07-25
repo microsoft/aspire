@@ -20,6 +20,9 @@ namespace Aspire.Hosting;
 public static partial class JavaScriptHostingExtensions
 {
     private const int DenoServeDefaultPort = 8000;
+    private const string DenoNodeModulesDirModeNone = "none";
+    private const string DenoNodeModulesDirModeAuto = "auto";
+    private const string DenoNodeModulesDirModeManual = "manual";
 
     private static DenoCommandLineAnnotation GetOrAddDenoAnnotation(IResourceBuilder<DenoAppResource> builder)
     {
@@ -283,6 +286,7 @@ public static partial class JavaScriptHostingExtensions
     /// <param name="builder">The Deno app resource builder.</param>
     /// <param name="mode">The node_modules mode. When <see langword="null"/> or empty, emits <c>--node-modules-dir</c> without a value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <exception cref="ArgumentException">Thrown when <paramref name="mode"/> is not <see langword="null"/>, empty, <c>none</c>, <c>auto</c>, or <c>manual</c>.</exception>
     /// <ats-returns>The resource builder.</ats-returns>
     /// <remarks>
     /// The generated Deno Dockerfile publisher does not support <c>manual</c> mode because it excludes local
@@ -293,10 +297,26 @@ public static partial class JavaScriptHostingExtensions
     public static IResourceBuilder<DenoAppResource> WithDenoNodeModulesDir(this IResourceBuilder<DenoAppResource> builder, string? mode = null)
     {
         ArgumentNullException.ThrowIfNull(builder);
+        var normalizedMode = ValidateDenoNodeModulesDirMode(mode);
         var annotation = GetOrAddDenoAnnotation(builder);
         annotation.NodeModulesDirSet = true;
-        annotation.NodeModulesDirMode = string.IsNullOrEmpty(mode) ? null : mode;
+        annotation.NodeModulesDirMode = normalizedMode;
         return builder;
+    }
+
+    private static string? ValidateDenoNodeModulesDirMode(string? mode)
+    {
+        if (string.IsNullOrEmpty(mode))
+        {
+            return null;
+        }
+
+        if (mode is DenoNodeModulesDirModeNone or DenoNodeModulesDirModeAuto or DenoNodeModulesDirModeManual)
+        {
+            return mode;
+        }
+
+        throw new ArgumentException("The node_modules mode must be 'none', 'auto', or 'manual'.", nameof(mode));
     }
 
     // ---- Unstable flags ---------------------------------------------------------------------

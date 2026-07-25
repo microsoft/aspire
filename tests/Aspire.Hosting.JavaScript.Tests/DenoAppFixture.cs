@@ -16,6 +16,9 @@ namespace Aspire.Hosting.JavaScript.Tests;
 /// </summary>
 public class DenoAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
 {
+    public const string AspireDashboardResourceName = "aspire-dashboard";
+    public const string DashboardApiKey = "DenoFunctionalTestsApiKey";
+
     private IDistributedApplicationTestingBuilder? _builder;
     private DistributedApplication? _app;
     private string? _denoAppPath;
@@ -27,8 +30,15 @@ public class DenoAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
 
     public async ValueTask InitializeAsync()
     {
-        _builder = TestDistributedApplicationBuilder.Create()
-            .WithTestAndResourceLogging(new TestOutputWrapper(diagnosticMessageSink));
+        _builder = TestDistributedApplicationBuilder.Create(
+            options =>
+            {
+                options.DisableDashboard = false;
+                options.TrustDeveloperCertificate = true;
+            },
+            new TestOutputWrapper(diagnosticMessageSink));
+        _builder.Configuration["ASPIRE_DASHBOARD_OTLP_HTTP_ENDPOINT_URL"] = "https://localhost:0";
+        _builder.Configuration["AppHost:DashboardApiKey"] = DashboardApiKey;
 
         _denoAppPath = CreateDenoApp();
 
@@ -86,10 +96,12 @@ public class DenoAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
             const isTaskRun = Deno.args.includes("--from-task");
             const greeting = isTaskRun ? "Hello from deno task!" : "Hello from deno!";
 
-            Deno.serve({ port }, () =>
-                new Response(greeting, {
+            Deno.serve({ port }, () => {
+                console.log(`Deno telemetry request from ${isTaskRun ? "task" : "direct"} app`);
+                return new Response(greeting, {
                     headers: { "Content-Type": "text/plain" },
-                }));
+                });
+            });
 
             console.log(`Deno server listening on ${port}`);
             """);
@@ -113,6 +125,7 @@ public class DenoAppFixture(IMessageSink diagnosticMessageSink) : IAsyncLifetime
         // Wait for each resource in parallel — separate timeouts would compound startup time
         // and either resource being slow shouldn't starve the other.
         await Task.WhenAll(
+            App.ResourceNotifications.WaitForResourceAsync(AspireDashboardResourceName, KnownResourceStates.Running, cancellationToken),
             App.ResourceNotifications.WaitForResourceHealthyAsync(DenoAppBuilder!.Resource.Name, cancellationToken),
             App.ResourceNotifications.WaitForResourceHealthyAsync(DenoScriptBuilder!.Resource.Name, cancellationToken));
     }
