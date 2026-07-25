@@ -45,6 +45,7 @@ internal enum DenoPermissionKind
     Write,
     Run,
     Env,
+    Import,
     Sys,
     Ffi,
 }
@@ -70,6 +71,7 @@ internal sealed class DenoPermission
         DenoPermissionKind.Write => "write",
         DenoPermissionKind.Run => "run",
         DenoPermissionKind.Env => "env",
+        DenoPermissionKind.Import => "import",
         DenoPermissionKind.Sys => "sys",
         DenoPermissionKind.Ffi => "ffi",
         _ => Kind.ToString().ToLowerInvariant(),
@@ -89,6 +91,9 @@ internal sealed class DenoCommandLineAnnotation : IResourceAnnotation
 {
     /// <summary>The sub-command mode (<c>run</c>, <c>task</c>, or <c>serve</c>). Defaults to <c>run</c>.</summary>
     public DenoCommandMode Mode { get; set; } = DenoCommandMode.Run;
+
+    /// <summary>Whether a fluent mode method explicitly selected <see cref="Mode"/>.</summary>
+    public bool ModeSet { get; set; }
 
     /// <summary>The task name to invoke when <see cref="Mode"/> is <see cref="DenoCommandMode.Task"/>.</summary>
     public string? TaskName { get; set; }

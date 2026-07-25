@@ -14,7 +14,7 @@ Runtime flags are emitted in a fixed, valid-CLI order regardless of the order th
 called:
 
 1. Permissions — `-A`/`--allow-all` or granular `--allow-*`/`--deny-*` (category order: net, read,
-   write, run, env, sys, ffi; allow before deny)
+   write, run, env, import, sys, ffi; allow before deny)
 2. Resolution — `--config`, `--import-map`, `--lock`/`--no-lock`, `--node-modules-dir[=mode]`
 3. `--unstable-*`
 4. `--watch` / `--watch-hmr`
@@ -89,13 +89,19 @@ Watch/HMR are run-mode developer conveniences. The value is honored for the run-
 is intentionally omitted from the generated Dockerfile entrypoint because file-watching has no useful
 meaning in an immutable published container image.
 
-### 6. `deno task` permission flags
+### 6. `deno task` permission flags and publish cache inference
 
 For `deno task`, permissions are defined by the task's own command inside `deno.json`, not on the
 `deno task` invocation. `WithDenoTask(...)` therefore intentionally does **not** emit permission flags
 (`--allow-*`/`--deny-*`); configure them in the task definition. Resolution flags (`--config`,
 `--lock`, `--node-modules-dir`) and `--unstable-*` are still emitted because they are valid
 `deno task` options; `--import-map` is intentionally omitted because Deno rejects it on `deno task`.
+
+Published task entrypoints are opaque to Aspire because a task can run any shell command, including
+another Deno command, a package-manager command, or multiple chained commands. The generated
+Dockerfile therefore does not try to pre-cache an inferred task module graph. If a task-published
+image needs offline startup, define the task so it uses dependencies that are already present in the
+image or author a custom Dockerfile.
 
 ### 7. Interactive / TTY-oriented flags
 
@@ -109,12 +115,16 @@ relying on interactive permission prompts.
 `AddDenoApp` generates a multi-stage Dockerfile (when the app directory has no hand-written
 `Dockerfile`) tuned for Deno's execution model:
 
-- **Dependency pre-caching.** The build stage runs `deno cache <entrypoint>` (or
-  `deno cache --frozen <entrypoint>` when a `deno.lock` is present) to resolve the entrypoint's full
-  module graph — remote URLs and `npm:`/`jsr:` specifiers — into `DENO_DIR`. `DENO_DIR` is pinned to
-  `/deno-dir` in both stages and copied `--from=build` into the runtime stage, so the image starts
-  offline / air-gapped and avoids a cold-start dependency fetch. There is no `node_modules` stage:
-  Deno caches under `DENO_DIR` rather than a project-local folder.
+- **Dependency pre-caching for direct entrypoints.** The build stage runs `deno cache <entrypoint>`
+  (or `deno cache --frozen <entrypoint>` when a `deno.lock` is present) for direct `run`/`serve`
+  entrypoints to resolve the entrypoint's module graph — remote URLs and `npm:`/`jsr:` specifiers —
+  into `DENO_DIR`. `DENO_DIR` is pinned to `/deno-dir` in both stages and copied `--from=build` into
+  the runtime stage. Direct `run`/`serve` published entrypoints add `--cached-only`, so missing
+  dependencies fail fast instead of fetching from the network at container start. `deno task`
+  entrypoints skip this pre-cache because Aspire cannot infer the task's actual module graph.
+- **Build context hygiene.** The generated per-Dockerfile `.dockerignore` excludes local
+  `node_modules` folders. Deno can materialize `node_modules` during the build for npm compatibility,
+  but host-local dependency folders should not leak into the container build context.
 - **`NODE_ENV=production`.** Set in the runtime stage (and in run mode via the resource defaults) so
   Deno's Node-compatibility mode — `npm:` resolution and package.json `exports` conditions — behaves
   like the Node/Bun variants.

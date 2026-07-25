@@ -116,6 +116,16 @@ public static partial class JavaScriptHostingExtensions
     public static IResourceBuilder<DenoAppResource> WithDenoDenyEnv(this IResourceBuilder<DenoAppResource> builder, params string[] variables)
         => AddDenoPermission(builder, DenoPermissionKind.Env, deny: true, variables);
 
+    /// <summary>Grants <c>--allow-import</c>, optionally scoped to the supplied import hosts.</summary>
+    [AspireExport]
+    public static IResourceBuilder<DenoAppResource> WithDenoAllowImport(this IResourceBuilder<DenoAppResource> builder, params string[] hosts)
+        => AddDenoPermission(builder, DenoPermissionKind.Import, deny: false, hosts);
+
+    /// <summary>Denies <c>--deny-import</c>, optionally scoped to the supplied import hosts.</summary>
+    [AspireExport]
+    public static IResourceBuilder<DenoAppResource> WithDenoDenyImport(this IResourceBuilder<DenoAppResource> builder, params string[] hosts)
+        => AddDenoPermission(builder, DenoPermissionKind.Import, deny: true, hosts);
+
     /// <summary>Grants <c>--allow-sys</c>, optionally scoped to the supplied APIs.</summary>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowSys(this IResourceBuilder<DenoAppResource> builder, params string[] apis)
@@ -274,6 +284,7 @@ public static partial class JavaScriptHostingExtensions
         ArgumentNullException.ThrowIfNull(builder);
         var annotation = GetOrAddDenoAnnotation(builder);
         annotation.Mode = DenoCommandMode.Run;
+        annotation.ModeSet = true;
         annotation.TaskName = null;
         return builder;
     }
@@ -289,6 +300,7 @@ public static partial class JavaScriptHostingExtensions
         ArgumentException.ThrowIfNullOrEmpty(taskName);
         var annotation = GetOrAddDenoAnnotation(builder);
         annotation.Mode = DenoCommandMode.Task;
+        annotation.ModeSet = true;
         annotation.TaskName = taskName;
         return builder;
     }
@@ -298,7 +310,9 @@ public static partial class JavaScriptHostingExtensions
     public static IResourceBuilder<DenoAppResource> WithDenoServe(this IResourceBuilder<DenoAppResource> builder)
     {
         ArgumentNullException.ThrowIfNull(builder);
-        GetOrAddDenoAnnotation(builder).Mode = DenoCommandMode.Serve;
+        var annotation = GetOrAddDenoAnnotation(builder);
+        annotation.Mode = DenoCommandMode.Serve;
+        annotation.ModeSet = true;
         builder.WithHttpEndpoint(env: "PORT");
         return builder.WithEndpoint("http", e => e.TargetPort ??= GetNextDenoServeDefaultPort(builder), createIfNotExists: false);
     }
@@ -342,10 +356,12 @@ public static partial class JavaScriptHostingExtensions
         DenoCommandLineAnnotation deno,
         string scriptPath,
         DenoServeEndpointArguments? serveEndpointArguments = null,
-        bool includeDevelopmentFlags = true)
+        bool includeDevelopmentFlags = true,
+        bool includeCachedOnly = false,
+        JavaScriptRunScriptAnnotation? runScript = null,
+        JavaScriptPackageManagerAnnotation? packageManager = null)
     {
         var args = new List<object>();
-
         switch (deno.Mode)
         {
             case DenoCommandMode.Task:
@@ -365,12 +381,31 @@ public static partial class JavaScriptHostingExtensions
 
             case DenoCommandMode.Run:
             default:
+                if (runScript is not null &&
+                    packageManager?.ScriptCommand == "task" &&
+                    !deno.ModeSet)
+                {
+                    args.Add("task");
+                    AppendTaskResolutionFlags(args, deno);
+                    AppendUnstableFlags(args, deno);
+                    args.AddRange(deno.RuntimeArgs);
+                    args.Add(runScript.ScriptName);
+                    args.AddRange(runScript.Args);
+                    args.AddRange(deno.ScriptArgs);
+                    return args;
+                }
+
                 args.Add("run");
                 break;
         }
 
         AppendPermissionFlags(args, deno);
         AppendResolutionFlags(args, deno);
+        if (includeCachedOnly)
+        {
+            args.Add("--cached-only");
+        }
+
         AppendUnstableFlags(args, deno);
         if (includeDevelopmentFlags)
         {
@@ -519,17 +554,35 @@ public static partial class JavaScriptHostingExtensions
     private static string[] BuildDenoEntrypoint(IResource resource, string command, string scriptPath)
     {
         var entrypoint = new List<string> { command };
-        if (resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno))
+        var deno = resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var denoAnnotation) ? denoAnnotation : null;
+        var runScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runScriptAnnotation) ? runScriptAnnotation : null;
+        var packageManager = resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManagerAnnotation) ? packageManagerAnnotation : null;
+
+        if (deno is not null)
         {
             var serveEndpointArguments = deno.Mode == DenoCommandMode.Serve
                 ? GetDenoServeEndpointArguments(resource, isPublishMode: true, useLiteralTargetPort: true)
                 : null;
-            entrypoint.AddRange(BuildDenoArgs(deno, scriptPath, serveEndpointArguments, includeDevelopmentFlags: false).Cast<string>());
+            entrypoint.AddRange(BuildDenoArgs(
+                deno,
+                scriptPath,
+                serveEndpointArguments,
+                includeDevelopmentFlags: false,
+                includeCachedOnly: deno.Mode != DenoCommandMode.Task,
+                runScript: runScript,
+                packageManager: packageManager).Cast<string>());
+        }
+        else if (runScript is not null && packageManager?.ScriptCommand == "task")
+        {
+            entrypoint.Add("task");
+            entrypoint.Add(runScript.ScriptName);
+            entrypoint.AddRange(runScript.Args);
         }
         else
         {
             entrypoint.Add("run");
             entrypoint.Add("-A");
+            entrypoint.Add("--cached-only");
             entrypoint.Add(scriptPath);
         }
 
@@ -539,14 +592,28 @@ public static partial class JavaScriptHostingExtensions
     private static string BuildDenoCacheCommand(IResource resource, string scriptPath, string workingDirectory)
     {
         var args = new List<string> { "deno", "cache" };
+        var hasRunScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out _) &&
+            resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager) &&
+            packageManager.ScriptCommand == "task";
+
         if (resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno))
         {
+            var isTaskMode = deno.Mode == DenoCommandMode.Task || (hasRunScript && deno.Mode == DenoCommandMode.Run && !deno.ModeSet);
+            if (isTaskMode)
+            {
+                return "mkdir -p /deno-dir";
+            }
+
             args.AddRange(GetResolutionFlags(deno, includeImportMap: deno.Mode != DenoCommandMode.Task));
             args.AddRange(deno.UnstableFlags);
             if (ShouldUseFrozenLock(deno, workingDirectory))
             {
                 args.Add("--frozen");
             }
+        }
+        else if (hasRunScript)
+        {
+            return "mkdir -p /deno-dir";
         }
         else if (File.Exists(Path.Combine(workingDirectory, "deno.lock")))
         {

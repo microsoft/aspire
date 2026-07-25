@@ -102,11 +102,11 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.False(File.Exists(Path.Combine(appDir, ".dockerignore")), "Aspire should not write a .dockerignore into the user's source tree.");
 
         // The annotation should carry the default content so it can be inspected/overridden by users.
-        // Unlike the Bun/Node variants, the Deno ignore intentionally does not list node_modules
-        // because Deno caches dependencies under DENO_DIR rather than a project-local folder.
+        // Deno can materialize node_modules for npm compatibility, so keep local dependency folders
+        // out of the generated build context like the Bun/Node variants do.
         var dockerBuildAnnotation = denoApp.Resource.Annotations.OfType<DockerfileBuildAnnotation>().Single();
         Assert.NotNull(dockerBuildAnnotation.BuildContextIgnoreContent);
-        Assert.DoesNotContain("node_modules", dockerBuildAnnotation.BuildContextIgnoreContent!);
+        Assert.Contains("node_modules", dockerBuildAnnotation.BuildContextIgnoreContent!);
     }
 
     [Fact]
@@ -124,8 +124,8 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
 
-        // The build stage must pre-cache the entrypoint's dependency graph into DENO_DIR so the published
-        // image runs offline / air-gapped without a cold-start fetch. Without a deno.lock, plain `deno cache`.
+        // The build stage must pre-cache direct run/serve entrypoints into DENO_DIR. Without a deno.lock,
+        // plain `deno cache` is used.
         Assert.Contains("RUN deno cache main.ts", dockerfileContents);
         // DENO_DIR must be pinned deterministically in both stages...
         Assert.Contains("ENV DENO_DIR=/deno-dir", dockerfileContents);
@@ -133,6 +133,8 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.Contains("COPY --from=build /deno-dir /deno-dir", dockerfileContents);
         // NODE_ENV must be set for Deno's npm-compatibility mode, mirroring the Bun publish block.
         Assert.Contains("ENV NODE_ENV=production", dockerfileContents);
+        // Runtime uses only the build-stage cache instead of re-fetching dependencies from the network.
+        Assert.Equal("""ENTRYPOINT ["deno","run","-A","--cached-only","main.ts"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
     [Fact]
@@ -181,7 +183,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
-    public async Task VerifyDockerfile_TaskCacheUsesTaskResolutionFlags()
+    public async Task VerifyDockerfile_TaskEntrypointSkipsOpaqueTaskCache()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
@@ -201,6 +203,53 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
         await Verify(File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile")));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_WithRunScriptUsesDenoTaskEntrypoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"tasks":{"start":"deno run -A main.ts"}}""");
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithRunScript("start", ["--my-arg"]);
+
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal("RUN mkdir -p /deno-dir", GetDockerfileLine(dockerfileContents, "RUN "));
+        Assert.Equal("""ENTRYPOINT ["deno","task","start","--my-arg"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_WithRunScriptAndDenoFlagsUsesDenoTaskEntrypoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"tasks":{"start":"deno run -A main.ts"}}""");
+        File.WriteAllText(Path.Combine(appDir, "deno.lock"), "{}");
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithRunScript("start", ["--my-arg"])
+            .WithDenoConfig("deno.json")
+            .WithDenoImportMap("import_map.json")
+            .WithDenoLock("deno.lock")
+            .WithDenoNodeModulesDir("auto");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal("RUN mkdir -p /deno-dir", GetDockerfileLine(dockerfileContents, "RUN "));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","task","--config","deno.json","--lock","deno.lock","--node-modules-dir=auto","start","--my-arg"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
     [Fact]
@@ -282,7 +331,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
-        Assert.Equal("""ENTRYPOINT ["deno","run","-A","main.ts"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+        Assert.Equal("""ENTRYPOINT ["deno","run","-A","--cached-only","main.ts"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
     [Fact]
@@ -302,7 +351,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal(
-            """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","5173","server.ts"]""",
+            """ENTRYPOINT ["deno","serve","-A","--cached-only","--host","0.0.0.0","--port","5173","server.ts"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
@@ -323,7 +372,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal(
-            """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","5173","server.ts"]""",
+            """ENTRYPOINT ["deno","serve","-A","--cached-only","--host","0.0.0.0","--port","5173","server.ts"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
@@ -347,7 +396,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal(
-            """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","8000","server.ts"]""",
+            """ENTRYPOINT ["deno","serve","-A","--cached-only","--host","0.0.0.0","--port","8000","server.ts"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
@@ -374,7 +423,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js2.Dockerfile"));
         Assert.Equal(
-            """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","8001","server.ts"]""",
+            """ENTRYPOINT ["deno","serve","-A","--cached-only","--host","0.0.0.0","--port","8001","server.ts"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
@@ -498,6 +547,54 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             arg => Assert.Equal("--my-arg1", arg));
     }
 
+    [Fact]
+    public async Task WithRunScript_ComposesWithDenoFlagsAsTaskCommand()
+    {
+        var builder = DistributedApplication.CreateBuilder();
+
+        builder.AddDenoApp("denoapp", ".", "main.ts")
+            .WithDeno()
+            .WithRunScript("start", ["--my-arg1"])
+            .WithDenoConfig("deno.json")
+            .WithDenoImportMap("import_map.json")
+            .WithDenoLock("deno.lock")
+            .WithDenoAllowNet("localhost");
+
+        using var app = builder.Build();
+
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+        var denoResource = Assert.Single(appModel.Resources.OfType<DenoAppResource>());
+        var args = await ArgumentEvaluator.GetArgumentListAsync(denoResource);
+
+        // WithRunScript is still a Deno task launch when additional WithDeno* flags are added.
+        // Task mode keeps valid task-level resolution flags and leaves permissions/import maps to the task body.
+        Assert.Collection(args,
+            arg => Assert.Equal("task", arg),
+            arg => Assert.Equal("--config", arg),
+            arg => Assert.Equal("deno.json", arg),
+            arg => Assert.Equal("--lock", arg),
+            arg => Assert.Equal("deno.lock", arg),
+            arg => Assert.Equal("start", arg),
+            arg => Assert.Equal("--my-arg1", arg));
+    }
+
+    [Fact]
+    public async Task WithRunScript_ExplicitDenoRunUsesEntrypoint()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDeno()
+            .WithRunScript("start", ["--my-arg1"])
+            .WithDenoRun()
+            .WithDenoAllowAll(false)
+            .WithDenoConfig("deno.json"));
+
+        Assert.Collection(args,
+            arg => Assert.Equal("run", arg),
+            arg => Assert.Equal("--config", arg),
+            arg => Assert.Equal("deno.json", arg),
+            arg => Assert.Equal("main.ts", arg));
+    }
+
     // Helper: build a Deno resource, apply the given flag configuration, and evaluate the emitted argument list.
     private static async Task<IReadOnlyList<string>> GetDenoArgsAsync(Action<IResourceBuilder<DenoAppResource>> configure, string entrypoint = "main.ts")
     {
@@ -527,14 +624,16 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     public async Task WithDenoGranularPermissions_EmitInCanonicalOrderWithValues()
     {
         // Configured out of canonical order and across allow/deny to prove deterministic ordering
-        // (net, read, write, run, env, sys, ffi; allow before deny) independent of call order.
+        // (net, read, write, run, env, import, sys, ffi; allow before deny) independent of call order.
         var args = await GetDenoArgsAsync(d => d
             .WithDenoAllowEnv("PORT", "HOME")
+            .WithDenoDenyImport("evil.example")
             .WithDenoDenyNet("evil.example")
             .WithDenoAllowNet("localhost:8080", "api.internal")
             .WithDenoAllowRead("/etc/app")
             .WithDenoDenyWrite()
             .WithDenoAllowRun("git")
+            .WithDenoAllowImport("cdn.example")
             .WithDenoAllowSys()
             .WithDenoAllowFfi("./native.so"));
 
@@ -546,6 +645,8 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             a => Assert.Equal("--deny-write", a),
             a => Assert.Equal("--allow-run=git", a),
             a => Assert.Equal("--allow-env=PORT,HOME", a),
+            a => Assert.Equal("--allow-import=cdn.example", a),
+            a => Assert.Equal("--deny-import=evil.example", a),
             a => Assert.Equal("--allow-sys", a),
             a => Assert.Equal("--allow-ffi=./native.so", a),
             a => Assert.Equal("main.ts", a));
@@ -881,7 +982,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         await annotation.Callback(ctx);
 
         Assert.Same(ctx.CertificateBundlePath, envVars["DENO_CERT"]);
-        Assert.False(envVars.ContainsKey("DENO_TLS_CA_STORE"));
+        Assert.Equal("", envVars["DENO_TLS_CA_STORE"]);
     }
 
     [Fact]
@@ -908,7 +1009,7 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         await annotation.Callback(ctx);
 
         Assert.Equal("system", envVars["DENO_TLS_CA_STORE"]);
-        Assert.False(envVars.ContainsKey("DENO_CERT"));
+        Assert.Same(ctx.CertificateBundlePath, envVars["DENO_CERT"]);
     }
 
     [Fact]

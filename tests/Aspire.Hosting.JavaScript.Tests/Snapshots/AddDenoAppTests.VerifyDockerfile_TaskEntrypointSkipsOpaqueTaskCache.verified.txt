@@ -5,7 +5,7 @@ ENV DENO_DIR=/deno-dir
 WORKDIR /app
 COPY . .
 
-RUN deno cache --config deno.json --lock custom.lock --node-modules-dir=auto --unstable-sloppy-imports --frozen main.ts
+RUN mkdir -p /deno-dir
 
 FROM denoland/deno:2 AS runtime
 

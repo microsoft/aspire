@@ -1,4 +1,6 @@
 import * as assert from 'assert';
+import * as sinon from 'sinon';
+import * as vscode from 'vscode';
 import { AspireDebugSession } from '../debugger/AspireDebugSession';
 import { denoDebuggerExtension } from '../debugger/languages/deno';
 import { cleanupRun } from '../debugger/runCleanupRegistry';
@@ -7,16 +9,28 @@ import { AspireResourceExtendedDebugConfiguration, DenoLaunchConfiguration } fro
 suite('Deno Debugger Tests', () => {
     const fakeAspireDebugSession = Object.create(AspireDebugSession.prototype) as AspireDebugSession;
     let registeredCleanupCount = 0;
+    let terminateDebugSessionCallback: ((session: vscode.DebugSession) => void) | undefined;
+    let terminateDebugSessionListenerDisposeCount = 0;
+
     fakeAspireDebugSession.registerResourceCleanup = () => {
         registeredCleanupCount++;
     };
 
     setup(() => {
         registeredCleanupCount = 0;
+        terminateDebugSessionCallback = undefined;
+        terminateDebugSessionListenerDisposeCount = 0;
+        sinon.stub(vscode.debug, 'onDidTerminateDebugSession').callsFake(callback => {
+            terminateDebugSessionCallback = callback;
+            return {
+                dispose: () => terminateDebugSessionListenerDisposeCount++
+            };
+        });
     });
 
     teardown(() => {
         cleanupRun('1');
+        sinon.restore();
     });
 
     async function configure(launchConfig: DenoLaunchConfiguration, args: string[], debugConfig: AspireResourceExtendedDebugConfiguration): Promise<void> {
@@ -91,6 +105,27 @@ suite('Deno Debugger Tests', () => {
         const secondPort = assertInjectedInspectWaitArg(secondDebugConfig.runtimeArgs?.[1], secondDebugConfig);
         assert.notStrictEqual(firstPort, secondPort);
         assert.strictEqual(registeredCleanupCount, 2);
+    });
+
+    test('does not release inspector port when a sibling debug session in the same run terminates', async () => {
+        const launchConfig: DenoLaunchConfiguration = {
+            type: 'deno',
+            runtime_executable: 'deno',
+            script_path: '/workspace/app/main.ts',
+            working_directory: '/workspace/app'
+        };
+        const debugConfig = createDebugConfig('/workspace/app/main.ts');
+
+        await configure(launchConfig, ['run', '-A', 'main.ts'], debugConfig);
+
+        assert.ok(terminateDebugSessionCallback);
+        terminateDebugSessionCallback(createTerminatedDebugSession('other-debug-session', '2'));
+
+        assert.strictEqual(terminateDebugSessionListenerDisposeCount, 0);
+
+        terminateDebugSessionCallback(createTerminatedDebugSession('current-debug-session', '1'));
+
+        assert.strictEqual(terminateDebugSessionListenerDisposeCount, 1);
     });
 
     test('does not inject --inspect-wait for deno task launches', async () => {
@@ -177,5 +212,23 @@ function createDebugConfig(program: string = '/workspace/app/main.ts'): AspireRe
         request: 'launch',
         program,
         args: []
+    };
+}
+
+function createTerminatedDebugSession(id: string, debugSessionId: string): vscode.DebugSession {
+    return {
+        id,
+        type: 'deno',
+        name: 'Deno',
+        workspaceFolder: undefined,
+        configuration: {
+            type: 'deno',
+            name: 'Deno',
+            request: 'launch',
+            runId: '1',
+            debugSessionId
+        },
+        customRequest: async (_command: string, _args?: unknown) => undefined,
+        getDebugProtocolBreakpoint: async (_breakpoint: vscode.Breakpoint) => undefined
     };
 }

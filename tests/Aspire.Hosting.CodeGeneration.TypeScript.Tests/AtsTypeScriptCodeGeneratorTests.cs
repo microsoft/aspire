@@ -1884,4 +1884,26 @@ public class AtsTypeScriptCodeGeneratorTests
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.NodeAppResource), StringComparison.Ordinal));
         Assert.Contains(expandedTypeIds, id => id.Contains(nameof(JavaScript.ViteAppResource), StringComparison.Ordinal));
     }
+
+    [Theory]
+    [InlineData("withDenoAllowAll")]
+    [InlineData("withDenoAllowImport")]
+    [InlineData("withDenoDenyImport")]
+    [InlineData("withDenoConfig")]
+    [InlineData("withDenoTask")]
+    [InlineData("withDenoServe")]
+    public void Scanner_DenoMethods_TargetDenoResource(string methodName)
+    {
+        var hostingAssembly = typeof(DistributedApplication).Assembly;
+        var jsAssembly = typeof(Aspire.Hosting.JavaScript.JavaScriptAppResource).Assembly;
+
+        var result = AtsCapabilityScanner.ScanAssemblies([hostingAssembly, jsAssembly]);
+
+        var capability = result.Capabilities
+            .FirstOrDefault(c => c.CapabilityId == $"Aspire.Hosting.JavaScript/{methodName}");
+        Assert.NotNull(capability);
+
+        var denoAppTypeId = AtsTypeMapping.DeriveTypeId(typeof(Aspire.Hosting.JavaScript.DenoAppResource));
+        Assert.Contains(capability.ExpandedTargetTypes.Select(t => t.TypeId), id => id == denoAppTypeId);
+    }
 }

@@ -104,7 +104,8 @@ function registerDenoInspectorPortRelease(port: number, launchOptions: LaunchOpt
     };
 
     debugSessionTermination = vscode.debug.onDidTerminateDebugSession(session => {
-        if (session.configuration.runId === launchOptions.runId) {
+        if (session.configuration.runId === launchOptions.runId &&
+            session.configuration.debugSessionId === launchOptions.debugSessionId) {
             disposeRelease();
         }
     });
