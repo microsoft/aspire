@@ -915,31 +915,26 @@ public sealed partial class SqliteTelemetryRepository
 
     private static void InsertSpanLinks(SqliteConnection connection, IDbTransaction transaction, PendingSpanLink[] links)
     {
-        foreach (var batch in links.Chunk(MaxSpanDetailBatchSize))
+        var linkIds = SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            links,
+            MaxSpanDetailBatchSize,
+            "telemetry_span_links",
+            ["source_trace_id", "source_span_id", "target_trace_id", "target_span_id", "trace_state"],
+            "link_id",
+            static (pendingLink, parameters) =>
+            {
+                var link = pendingLink.Link;
+                parameters[0].Value = link.SourceTraceId;
+                parameters[1].Value = link.SourceSpanId;
+                parameters[2].Value = link.TraceId;
+                parameters[3].Value = link.SpanId;
+                parameters[4].Value = link.TraceState;
+            });
+        for (var i = 0; i < links.Length; i++)
         {
-            var sql = new StringBuilder();
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
-            {
-                var link = batch[index].Link;
-                sql.Append(CultureInfo.InvariantCulture, $$"""
-                    INSERT INTO telemetry_span_links (
-                        source_trace_id, source_span_id, target_trace_id, target_span_id, trace_state)
-                    VALUES (@SourceTraceId{{index}}, @SourceSpanId{{index}}, @TraceId{{index}}, @SpanId{{index}}, @TraceState{{index}})
-                    RETURNING link_id;
-                    """);
-                parameters.Add($"SourceTraceId{index}", link.SourceTraceId);
-                parameters.Add($"SourceSpanId{index}", link.SourceSpanId);
-                parameters.Add($"TraceId{index}", link.TraceId);
-                parameters.Add($"SpanId{index}", link.SpanId);
-                parameters.Add($"TraceState{index}", link.TraceState);
-            }
-
-            using var reader = connection.QueryMultiple(sql.ToString(), parameters, transaction);
-            for (var index = 0; index < batch.Length; index++)
-            {
-                batch[index].LinkId = reader.ReadSingle<long>();
-            }
+            links[i].LinkId = linkIds[i];
         }
     }
 

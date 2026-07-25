@@ -156,7 +156,7 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private static void InsertLogAttributes(SqliteConnection connection, IDbTransaction transaction, List<PendingLog> logs, List<int> logIds)
+    private static void InsertLogAttributes(SqliteConnection connection, IDbTransaction transaction, List<PendingLog> logs, List<long> logIds)
     {
         var attributes = logs
             .SelectMany((pendingLog, logIndex) => pendingLog.Log.Attributes.Select((attribute, ordinal) => (LogId: logIds[logIndex], Ordinal: ordinal, Attribute: attribute)))

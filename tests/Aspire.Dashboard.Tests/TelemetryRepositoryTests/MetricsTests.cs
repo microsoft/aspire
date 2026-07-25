@@ -1863,7 +1863,7 @@ public sealed class SqliteMetricsTests : MetricsTests
         Assert.DoesNotContain(queries, query => query.Contains("FROM telemetry_metric_dimensions d", StringComparison.Ordinal));
         Assert.Single(queries, query => query.StartsWith("DELETE FROM telemetry_metric_points", StringComparison.Ordinal));
         var insertQuery = Assert.Single(queries, query => query.StartsWith("INSERT INTO telemetry_metric_points", StringComparison.Ordinal));
-        Assert.Equal(2, insertQuery.Split("INSERT INTO telemetry_metric_points", StringSplitOptions.None).Length - 1);
+        Assert.Equal(2, insertQuery.Split("@param_dimension_id_", StringSplitOptions.None).Length - 1);
         Assert.Equal(3, context.SuccessCount);
     }
 

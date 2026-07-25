@@ -76,7 +76,7 @@ internal static class SqliteBatchInsert
             bindRowParameters);
     }
 
-    internal static List<int> BatchInsertRows<T>(
+    internal static List<long> BatchInsertRows<T>(
         DbConnection connection,
         IDbTransaction transaction,
         IReadOnlyList<T> data,
@@ -86,7 +86,7 @@ internal static class SqliteBatchInsert
         string returningColumnName,
         BindRowParameters<T> bindRowParameters)
     {
-        var generatedIds = new List<int>(data.Count);
+        var generatedIds = new List<long>(data.Count);
         BatchInsertRows(
             data,
             batchSize,
@@ -98,7 +98,7 @@ internal static class SqliteBatchInsert
                 using var reader = command.ExecuteReader();
                 while (reader.Read())
                 {
-                    generatedIds.Add(reader.GetInt32(0));
+                    generatedIds.Add(reader.GetInt64(0));
                 }
             });
         if (generatedIds.Count != data.Count)

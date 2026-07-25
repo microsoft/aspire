@@ -350,43 +350,35 @@ public sealed partial class SqliteTelemetryRepository
             connection.Execute(sql.ToString(), parameters, transaction);
         }
 
-        // Keep one INSERT statement and RETURNING result set per point inside a single command. This preserves
-        // deterministic point-to-ID mapping for exemplar rows without a round trip per point.
-        foreach (var points in pointBatch.Inserts.Chunk(MaxMetricPointBatchSize))
+        var pointIds = SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            pointBatch.Inserts,
+            MaxMetricPointBatchSize,
+            "telemetry_metric_points",
+            [
+                "dimension_id", "point_type", "start_time_ticks", "end_time_ticks", "repeat_count",
+                "integer_value", "double_value", "histogram_sum", "histogram_count", "bucket_counts", "explicit_bounds", "flags"
+            ],
+            "point_id",
+            static (point, parameters) =>
+            {
+                parameters[0].Value = point.Dimension.DimensionId;
+                parameters[1].Value = point.PointType;
+                parameters[2].Value = point.StartTimeTicks;
+                parameters[3].Value = point.EndTimeTicks;
+                parameters[4].Value = point.RepeatCount;
+                parameters[5].Value = point.IntegerValue ?? (object)DBNull.Value;
+                parameters[6].Value = point.DoubleValue ?? (object)DBNull.Value;
+                parameters[7].Value = point.HistogramSum ?? (object)DBNull.Value;
+                parameters[8].Value = point.HistogramCount ?? (object)DBNull.Value;
+                parameters[9].Value = point.HistogramBucketCounts is not null ? PackInt64Values(point.HistogramBucketCounts) : DBNull.Value;
+                parameters[10].Value = point.HistogramExplicitBounds is not null ? PackDoubleValues(point.HistogramExplicitBounds) : DBNull.Value;
+                parameters[11].Value = point.Flags;
+            });
+        for (var i = 0; i < pointBatch.Inserts.Count; i++)
         {
-            var insertSql = new StringBuilder();
-            var insertParameters = new DynamicParameters();
-            for (var i = 0; i < points.Length; i++)
-            {
-                var point = points[i];
-                insertSql.Append(CultureInfo.InvariantCulture, $$"""
-                    INSERT INTO telemetry_metric_points (
-                        dimension_id, point_type, start_time_ticks, end_time_ticks, repeat_count,
-                        integer_value, double_value, histogram_sum, histogram_count, bucket_counts, explicit_bounds, flags)
-                    VALUES (
-                        @DimensionId{{i}}, @PointType{{i}}, @StartTimeTicks{{i}}, @EndTimeTicks{{i}}, @RepeatCount{{i}},
-                        @IntegerValue{{i}}, @DoubleValue{{i}}, @HistogramSum{{i}}, @HistogramCount{{i}}, @BucketCounts{{i}}, @ExplicitBounds{{i}}, @Flags{{i}})
-                    RETURNING point_id;
-                    """);
-                insertParameters.Add($"DimensionId{i}", point.Dimension.DimensionId);
-                insertParameters.Add($"PointType{i}", point.PointType);
-                insertParameters.Add($"StartTimeTicks{i}", point.StartTimeTicks);
-                insertParameters.Add($"EndTimeTicks{i}", point.EndTimeTicks);
-                insertParameters.Add($"RepeatCount{i}", point.RepeatCount);
-                insertParameters.Add($"IntegerValue{i}", point.IntegerValue);
-                insertParameters.Add($"DoubleValue{i}", point.DoubleValue);
-                insertParameters.Add($"HistogramSum{i}", point.HistogramSum);
-                insertParameters.Add($"HistogramCount{i}", point.HistogramCount);
-                insertParameters.Add($"BucketCounts{i}", point.HistogramBucketCounts is not null ? PackInt64Values(point.HistogramBucketCounts) : null);
-                insertParameters.Add($"ExplicitBounds{i}", point.HistogramExplicitBounds is not null ? PackDoubleValues(point.HistogramExplicitBounds) : null);
-                insertParameters.Add($"Flags{i}", point.Flags);
-            }
-
-            using var reader = connection.QueryMultiple(insertSql.ToString(), insertParameters, transaction);
-            foreach (var point in points)
-            {
-                point.PointId = reader.ReadSingle<long>();
-            }
+            pointBatch.Inserts[i].PointId = pointIds[i];
         }
 
         foreach (var point in pointBatch.Inserts)
@@ -537,39 +529,22 @@ public sealed partial class SqliteTelemetryRepository
         IDbTransaction transaction,
         List<PendingMetricDimension> dimensions)
     {
-        foreach (var batch in dimensions.Chunk(MaxMetricPointBatchSize))
+        var dimensionIds = SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            dimensions,
+            MaxMetricPointBatchSize,
+            "telemetry_metric_dimensions",
+            ["instrument_id", "attribute_hash"],
+            "dimension_id",
+            static (dimension, parameters) =>
+            {
+                parameters[0].Value = dimension.InstrumentId;
+                parameters[1].Value = dimension.AttributeHash;
+            });
+        for (var i = 0; i < dimensions.Count; i++)
         {
-            var sql = new StringBuilder("""
-                INSERT INTO telemetry_metric_dimensions (instrument_id, attribute_hash)
-                VALUES
-                """);
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < batch.Length; index++)
-            {
-                if (index > 0)
-                {
-                    sql.AppendLine(",");
-                }
-                sql.Append(CultureInfo.InvariantCulture, $"    (@InstrumentId{index}, @AttributeHash{index})");
-                parameters.Add($"InstrumentId{index}", batch[index].InstrumentId);
-                parameters.Add($"AttributeHash{index}", batch[index].AttributeHash);
-            }
-            sql.Append("""
-
-                RETURNING dimension_id AS DimensionId, instrument_id AS InstrumentId, attribute_hash AS AttributeHash;
-                """);
-
-            // Hash collisions can produce indistinguishable inserted rows. Their IDs are interchangeable here
-            // because attributes and points are associated only after an ID is assigned to each pending dimension.
-            var pendingDimensions = batch
-                .GroupBy(dimension => (dimension.InstrumentId, dimension.AttributeHash))
-                .ToDictionary(group => group.Key, group => new Queue<PendingMetricDimension>(group));
-            foreach (var insertedDimension in connection.Query<InsertedMetricDimensionRecord>(sql.ToString(), parameters, transaction))
-            {
-                pendingDimensions[(insertedDimension.InstrumentId, insertedDimension.AttributeHash)]
-                    .Dequeue()
-                    .Dimension.DimensionId = insertedDimension.DimensionId;
-            }
+            dimensions[i].Dimension.DimensionId = dimensionIds[i];
         }
     }
 
@@ -874,13 +849,6 @@ public sealed partial class SqliteTelemetryRepository
     }
 
     private sealed record PendingMetricDimension(long InstrumentId, long AttributeHash, MetricDimensionState Dimension);
-
-    private sealed class InsertedMetricDimensionRecord
-    {
-        public required long DimensionId { get; init; }
-        public required long InstrumentId { get; init; }
-        public required long AttributeHash { get; init; }
-    }
 
     private sealed record PendingMetricDimensionAttribute(MetricDimensionState Dimension, int Ordinal, string Key, string Value);
 
