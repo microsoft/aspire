@@ -57,7 +57,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"shell\",\"culture\",\"authentication\",\"manage-data\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"terminal\",\"interactions\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"shell\",\"culture\",\"authentication\",\"manage-data\",\"assistant\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"terminal\",\"interactions\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -341,6 +341,94 @@ public class DashboardBackendApplicationTests
         Assert.Equal("{}", bodies["api/deck/manage-data/import"]);
         Assert.Contains("\"Traces\"", bodies["api/deck/manage-data/export"]);
         Assert.Contains("\"Metrics\"", bodies["api/deck/manage-data/remove"]);
+        Assert.Equal(0, legacyApiProxy.AuthorizationCallCount);
+    }
+
+    [Fact]
+    public async Task AssistantRoutes_ProxyInfoAndOrderedNdjsonChat()
+    {
+        string? chatRequest = null;
+        var legacyApiProxy = new TestLegacyApiProxy(isConfigured: true)
+        {
+            ProxyHandler = async (context, path) =>
+            {
+                switch (path)
+                {
+                    case "api/deck/assistant/info":
+                        Assert.Equal("application/json", context.Request.Headers.Accept);
+                        context.Response.ContentType = "application/json";
+                        await context.Response.WriteAsync(
+                            "{\"models\":[{\"family\":\"gpt-5.4\",\"displayName\":\"GPT-5.4\"}]}",
+                            TestContext.Current.CancellationToken);
+                        break;
+                    case "api/deck/assistant/chat":
+                        Assert.Equal("application/x-ndjson", context.Request.Headers.Accept);
+                        Assert.Equal("application/json; charset=utf-8", context.Request.ContentType);
+                        using (var reader = new StreamReader(context.Request.Body, leaveOpen: true))
+                        {
+                            chatRequest = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
+                        }
+                        context.Response.ContentType = "application/x-ndjson";
+                        context.Response.Headers.CacheControl = "no-store";
+                        context.Response.Headers["X-Accel-Buffering"] = "no";
+                        await context.Response.WriteAsync(
+                            """
+                            {"type":"start","content":null,"message":null}
+                            {"type":"content","content":"Ready","message":null}
+                            {"type":"complete","content":null,"message":null}
+
+                            """,
+                            TestContext.Current.CancellationToken);
+                        break;
+                }
+            }
+        };
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        using var client = app.GetTestClient();
+
+        using var infoRequest = new HttpRequestMessage(
+            HttpMethod.Get,
+            $"{DashboardApiContract.AssistantPath}/info");
+        infoRequest.Headers.Accept.ParseAdd("application/json");
+        using var infoResponse = await client.SendAsync(
+            infoRequest,
+            TestContext.Current.CancellationToken);
+        using var chatRequestMessage = new HttpRequestMessage(
+            HttpMethod.Post,
+            $"{DashboardApiContract.AssistantPath}/chat")
+        {
+            Content = new StringContent(
+                "{\"messages\":[{\"role\":\"user\",\"content\":\"Inspect Stress\"}],\"model\":\"gpt-5.4\"}",
+                Encoding.UTF8,
+                "application/json")
+        };
+        chatRequestMessage.Headers.Accept.ParseAdd("application/x-ndjson");
+        using var chatResponse = await client.SendAsync(
+            chatRequestMessage,
+            HttpCompletionOption.ResponseHeadersRead,
+            TestContext.Current.CancellationToken);
+
+        infoResponse.EnsureSuccessStatusCode();
+        chatResponse.EnsureSuccessStatusCode();
+        Assert.Equal("application/x-ndjson", chatResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal("no-store", chatResponse.Headers.CacheControl?.ToString());
+        Assert.True(chatResponse.Headers.TryGetValues("X-Accel-Buffering", out var buffering));
+        Assert.Equal(["no"], buffering);
+        Assert.NotNull(chatRequest);
+        Assert.Contains("\"Inspect Stress\"", chatRequest);
+        Assert.Equal(
+            [
+                "{\"type\":\"start\",\"content\":null,\"message\":null}",
+                "{\"type\":\"content\",\"content\":\"Ready\",\"message\":null}",
+                "{\"type\":\"complete\",\"content\":null,\"message\":null}"
+            ],
+            (await chatResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken))
+                .Split('\n', StringSplitOptions.RemoveEmptyEntries));
         Assert.Equal(0, legacyApiProxy.AuthorizationCallCount);
     }
 

@@ -16,7 +16,7 @@
 | SHELL-HELP-001 | shell | `/` | shell | covered | APP-HELP-001 | Help opens with documentation and keyboard shortcut reference content. |
 | SHELL-KEYBOARD-001 | shell | `/` | shell | covered | APP-KEYBOARD-001 | Page navigation, panel, help, and settings keyboard shortcuts work. |
 | SHELL-AGENTS-001 | shell | `/` | shell | covered | AOT-SHELL-001; HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | The AI agents entry point appears when enabled. |
-| SHELL-ASSISTANT-001 | shell | `/` | assistant | covered | APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
+| SHELL-ASSISTANT-001 | shell | `/` | assistant | covered | AOT-ASSISTANT-001; APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
 | SHELL-NOTIFICATIONS-001 | shell | `/` | shell | covered | APP-NOTIFICATION-001; CMD-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |
 | SHELL-NOTIFICATION-CENTER-001 | shell | `/` | shell | covered | APP-NOTIFICATION-CENTER-001 | The notification center opens and preserves notification history. |
 | SHELL-SETTINGS-001 | shell | `/` | shell | covered | AOT-SHELL-001; APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Settings opens from the top bar and reports dashboard/runtime versions. |

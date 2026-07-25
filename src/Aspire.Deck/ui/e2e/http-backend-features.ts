@@ -2,6 +2,7 @@ export const httpBackendFeatures = {
   "AOT-CONTRACT-001": "AOT mode negotiates the highest supported contract version, streams resources, console and structured logs, executes commands when advertised, and keeps unported capabilities on the existing backend.",
   "AOT-SHELL-001": "AOT mode loads complete shell metadata and submits culture and sign-out operations only through advertised versioned capabilities.",
   "AOT-MANAGE-DATA-001": "AOT mode inventories, exports, imports, and removes dashboard data only through the advertised versioned Manage Data capability.",
+  "AOT-ASSISTANT-001": "AOT mode discovers assistant models and renders ordered NDJSON chat events only through the advertised versioned assistant capability.",
   "HTTP-SHELL-UNSECURED-001": "Backend security configuration renders a persistent, dismissible unsecured-endpoint warning.",
   "HTTP-MANAGE-DATA-001": "Manage Data inventories, selects, exports, imports, and removes dashboard data through the HTTP backend.",
   "HTTP-AUTH-001": "Frontend API authentication challenges transfer the React browser to the dashboard login flow.",

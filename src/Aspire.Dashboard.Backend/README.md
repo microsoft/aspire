@@ -7,10 +7,10 @@ It is intentionally additive: `Aspire.Dashboard` remains the default Blazor dash
 to host the existing `/api/deck` transport.
 
 The backend currently implements version discovery plus the `configuration`, complete authenticated
-`shell`, `culture`, `authentication`, `manage-data`, read-only `resources` snapshot, SignalR
-`resources-live`, resource `commands`, resource-scoped console backlog/live, structured-log
-backlog/live/clear, trace backlog/live/filter/clear, metric summary/series/clear, versioned
-interaction polling/response, and direct interactive terminal capabilities.
+`shell`, `culture`, `authentication`, `manage-data`, streaming `assistant`, read-only `resources`
+snapshot, SignalR `resources-live`, resource `commands`, resource-scoped console backlog/live,
+structured-log backlog/live/clear, trace backlog/live/filter/clear, metric summary/series/clear,
+versioned interaction polling/response, and direct interactive terminal capabilities.
 Resources, commands, and interactions use one long-lived AppHost resource-service connection.
 Interaction state and response traffic are bounded, and the backend restores an optimistically
 removed prompt when delivery fails so the user can retry. In side-by-side mode, React reads those
@@ -78,6 +78,8 @@ The host exposes:
 - `POST /api/dashboard/v1/authentication/logout` for same-origin sign-out.
 - `GET /api/dashboard/v1/manage-data` plus `POST` to `/export`, `/import`, and `/remove` for
   authenticated inventory, binary export, bounded telemetry import, and destructive removal.
+- `GET /api/dashboard/v1/assistant/info` and `POST /api/dashboard/v1/assistant/chat` for model
+  discovery and cancelable, no-buffer NDJSON assistant responses.
 - `GET /api/dashboard/v1/resources` for the current AppHost resource snapshot.
 - `/api/dashboard/v1/resources/live` for the SignalR `WatchResources` server stream. Each
   subscription receives an authoritative snapshot followed by incremental upserts and deletes.
@@ -110,11 +112,11 @@ The host exposes:
 `DashboardBackend__LegacyDashboardUrl` must identify the existing dashboard's loopback base URL.
 Telemetry and console proxies forward the incoming dashboard cookie or authorization header so the
 legacy dashboard continues to own OTLP storage for unfinished capabilities during this migration
-slice. Shell, culture, Manage Data, login/token/OIDC callback, and logout proxy routes preserve the
-browser-facing Host; the resulting cookie is therefore shared by hostname without exposing the
-internal legacy port. Direct command, interaction, resource, SignalR, and terminal routes do not
-proxy their operation, but they validate the request against that authoritative identity session
-first.
+slice. Shell, culture, Manage Data, assistant, login/token/OIDC callback, and logout proxy routes
+preserve the browser-facing Host; the resulting cookie is therefore shared by hostname without
+exposing the internal legacy port. Direct command, interaction, resource, SignalR, and terminal
+routes do not proxy their operation, but they validate the request against that authoritative
+identity session first.
 
 All HTTP and SignalR JSON uses camel-case names and an explicit `JsonSerializerContext`. New
 contract payloads must be registered with source generation so Native AOT never depends on

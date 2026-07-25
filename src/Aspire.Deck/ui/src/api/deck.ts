@@ -187,6 +187,11 @@ export function removeManageData(request: ManageDataRequest): Promise<void> {
 }
 
 export function getAssistantInfo(): Promise<AssistantInfo> {
+  if (isAotBackend()) {
+    return nativeBackend.hasCapability("assistant").then((supported) => (
+      supported ? nativeBackend.getAssistantInfo() : httpBackend.getAssistantInfo()
+    ));
+  }
   if (isHttpBackend()) {
     return httpBackend.getAssistantInfo();
   }
@@ -198,6 +203,13 @@ export function streamAssistantChat(
   onEvent: (event: AssistantEvent) => void,
   signal: AbortSignal,
 ): Promise<void> {
+  if (isAotBackend()) {
+    return nativeBackend.hasCapability("assistant").then((supported) => (
+      supported
+        ? nativeBackend.streamAssistantChat(request, onEvent, signal)
+        : httpBackend.streamAssistantChat(request, onEvent, signal)
+    ));
+  }
   if (isHttpBackend()) {
     return httpBackend.streamAssistantChat(request, onEvent, signal);
   }
