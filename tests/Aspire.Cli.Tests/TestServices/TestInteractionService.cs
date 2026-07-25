@@ -27,6 +27,7 @@ internal sealed class TestInteractionService : IInteractionService
     public Action<string>? ShowStatusCallback { get; set; }
     public Action<string>? ShowDynamicStatusCallback { get; set; }
     public Action<KnownEmoji, string, ConsoleOutput?>? DisplayMessageCallback { get; set; }
+    public Action<string?, ConsoleOutput?>? DisplayCancellationMessageCallback { get; set; }
     public Action<string>? DisplayVersionUpdateNotificationCallback { get; set; }
     public string? LastVersionUpdateCommand { get; private set; }
 
@@ -44,8 +45,10 @@ internal sealed class TestInteractionService : IInteractionService
 
     // Call tracking
     public List<StringPromptCall> StringPromptCalls { get; } = [];
+    public List<FilePathPromptCall> FilePathPromptCalls { get; } = [];
     public List<BooleanPromptCall> BooleanPromptCalls { get; } = [];
     public List<string> DisplayedErrors { get; } = [];
+    public List<string> ValidationFailures { get; } = [];
     public List<(KnownEmoji Emoji, string Message, ConsoleOutput? ConsoleOverride)> DisplayedMessages { get; } = [];
     public List<(OutputLineStream Stream, string Line)> DisplayedLines { get; } = [];
     public List<string> DisplayedPlainText { get; } = [];
@@ -55,7 +58,7 @@ internal sealed class TestInteractionService : IInteractionService
     public List<string> DisplayedSuccess { get; } = [];
     public List<string> ShownStatuses { get; } = [];
     public int DisplayEmptyLineCount { get; private set; }
-    public List<ConsoleOutput?> DisplayedCancellations { get; } = [];
+    public List<(string? Message, ConsoleOutput? ConsoleOverride)> DisplayedCancellations { get; } = [];
 
     // Response queue setup methods
     public void SetupStringPromptResponse(string response) => _responses.Enqueue((response, ResponseType.String));
@@ -121,22 +124,45 @@ internal sealed class TestInteractionService : IInteractionService
 
         StringPromptCalls.Add(new StringPromptCall(promptText, binding?.DefaultValue, isSecret));
 
+        return PromptForResponseAsync(validator, binding, cancellationToken);
+    }
+
+    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
+    {
+        var (wasProvided, value, _) = PromptBinding.Resolve(binding);
+        if (wasProvided && value is not null)
+        {
+            return Task.FromResult(value);
+        }
+
+        FilePathPromptCalls.Add(new FilePathPromptCall(promptText, binding?.DefaultValue, directory));
+
+        return PromptForResponseAsync(validator, binding, cancellationToken);
+    }
+
+    private Task<string> PromptForResponseAsync(Func<string, ValidationResult>? validator, PromptBinding<string?>? binding, CancellationToken cancellationToken)
+    {
         if (_shouldCancel || cancellationToken.IsCancellationRequested)
         {
             throw new OperationCanceledException();
         }
 
-        if (_responses.TryDequeue(out var response))
+        while (_responses.TryDequeue(out var response))
         {
+            if (validator is not null)
+            {
+                var validationResult = validator(response.Response);
+                if (!validationResult.Successful)
+                {
+                    ValidationFailures.Add(validationResult.Message ?? string.Empty);
+                    continue;
+                }
+            }
+
             return Task.FromResult(response.Response);
         }
 
         return Task.FromResult(binding?.DefaultValue ?? string.Empty);
-    }
-
-    public Task<string> PromptForFilePathAsync(string promptText, Func<string, ValidationResult>? validator = null, bool directory = false, bool required = false, PromptBinding<string?>? binding = null, CancellationToken cancellationToken = default)
-    {
-        return PromptForStringAsync(promptText, validator, isSecret: false, required, binding, cancellationToken);
     }
 
     public Task<T> PromptForSelectionAsync<T>(string promptText, IEnumerable<T> choices, Func<T, string> choiceFormatter, PromptBinding<string?>? binding = null, bool echoSelected = true, CancellationToken cancellationToken = default) where T : notnull
@@ -248,12 +274,14 @@ internal sealed class TestInteractionService : IInteractionService
         }
     }
 
-    public void DisplayCancellationMessage(ConsoleOutput? consoleOverride = null)
+    public void DisplayCancellationMessage(string? message = null, ConsoleOutput? consoleOverride = null)
     {
         lock (_displayLock)
         {
-            DisplayedCancellations.Add(consoleOverride);
+            DisplayedCancellations.Add((message, consoleOverride));
         }
+
+        DisplayCancellationMessageCallback?.Invoke(message, consoleOverride);
     }
 
     public Task<bool> PromptConfirmAsync(string promptText, PromptBinding<bool>? binding = null, CancellationToken cancellationToken = default)
@@ -371,5 +399,6 @@ internal enum ResponseType
 }
 
 internal sealed record StringPromptCall(string PromptText, string? DefaultValue, bool IsSecret);
+internal sealed record FilePathPromptCall(string PromptText, string? DefaultValue, bool Directory);
 internal sealed record SelectionPromptCall<T>(string PromptText, IEnumerable<T> Choices, Func<T, string> ChoiceFormatter);
 internal sealed record BooleanPromptCall(string PromptText, bool DefaultValue);

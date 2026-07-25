@@ -21,8 +21,11 @@ namespace Infrastructure.Tests.TestTriggerMap;
 [Collection("GraphAffectedProjects")] // MSBuildLocator registers process-wide; keep these serialized.
 public sealed class GraphAffectedProjectsTests
 {
-    public GraphAffectedProjectsTests()
+    private readonly ITestOutputHelper _outputHelper;
+
+    public GraphAffectedProjectsTests(ITestOutputHelper outputHelper)
     {
+        _outputHelper = outputHelper;
         // Must run before any GraphAffectedProjects engine method is JITted (see EnsureMSBuildRegistered).
         GraphAffectedProjects.EnsureMSBuildRegistered();
     }
@@ -33,7 +36,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void SourceChangePropagatesToReverseDependents()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         var affected = repo.Compute("Core/Core.cs");
 
@@ -51,7 +55,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void LinkedSharedFileMapsToAllLinkingProjects()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         var affected = repo.Compute("Shared/Linked.cs");
 
@@ -69,7 +74,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void LinkedSharedFileIsReportedAsAttributed()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         var result = repo.ComputeResult("Shared/Linked.cs");
 
@@ -83,7 +89,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void AffectedProjectCarriesTheChainAndSeedFile()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         var result = repo.ComputeResult("Core/Core.cs");
 
@@ -102,7 +109,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void ChangedProjectFileSelectsThatProject()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         var affected = repo.Compute("Mid/Mid.csproj");
 
@@ -118,7 +126,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void DeletedFileUnderProjectDirAttributedViaContainmentFallback()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         // Ghost.cs never existed as an item and is not on disk — exactly the deleted-file shape.
         var affected = repo.Compute("Core/Ghost.cs");
@@ -134,7 +143,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void FileOutsideEveryProjectDirSelectsNothing()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         var affected = repo.Compute("docs/notes.md");
 
@@ -149,7 +159,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void ChangeToImportedBuildPropsAffectsImportingProjects()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         var affected = repo.Compute("Directory.Build.props");
 
@@ -165,7 +176,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void EmptyChangeSetSelectsNothing()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         var affected = repo.Compute();
 
@@ -179,7 +191,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void DeletedFileInNestedProjectDirAttributedToDeepestProject()
     {
-        using var repo = new GraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GraphFixture(workspace);
 
         // Ghost.cs never existed and sits under Core/Nested (a project nested below Core/).
         var affected = repo.Compute("Core/Nested/Ghost.cs");
@@ -199,7 +212,8 @@ public sealed class GraphAffectedProjectsTests
     [Fact]
     public void CrossProjectRenameAttributesBothOldAndNewOwners()
     {
-        using var repo = new GitGraphFixture();
+        using var workspace = TemporaryWorkspace.Create(_outputHelper);
+        using var repo = new GitGraphFixture(workspace);
 
         var affected = repo.RenameAcrossProjectsAndCompute("Core/data.txt", "Other/data.txt");
 
@@ -217,10 +231,12 @@ public sealed class GraphAffectedProjectsTests
     /// </summary>
     private sealed class GraphFixture : IDisposable
     {
-        private readonly TestTempDirectory _temp = new();
+        private readonly TemporaryWorkspace _workspace;
 
-        public GraphFixture()
+        public GraphFixture(TemporaryWorkspace workspace)
         {
+            _workspace = workspace;
+
             // Empty Directory.Build.props/targets stop MSBuild's upward walk from picking up anything
             // above the temp dir, keeping the fixture hermetic.
             Write("Directory.Build.props", "<Project />");
@@ -229,24 +245,24 @@ public sealed class GraphAffectedProjectsTests
             Write("Shared/Linked.cs", "namespace Shared; public static class Linked { }");
 
             // Core: own file + linked shared file; no references.
-            Write("Core/Core.cs", "namespace Core; public class C { }");
+            Write("Core/Core.cs", "namespace Core; public class C(ITestOutputHelper outputHelper) { }");
             WriteProject("Core/Core.csproj", compiles: ["Core.cs", @"..\Shared\Linked.cs"], references: []);
 
             // Mid -> Core.
-            Write("Mid/Mid.cs", "namespace Mid; public class M { }");
+            Write("Mid/Mid.cs", "namespace Mid; public class M(ITestOutputHelper outputHelper) { }");
             WriteProject("Mid/Mid.csproj", compiles: ["Mid.cs"], references: [@"..\Core\Core.csproj"]);
 
             // AppTests -> Mid (a "test" project by name).
-            Write("AppTests/AppTests.cs", "namespace AppTests; public class T { }");
+            Write("AppTests/AppTests.cs", "namespace AppTests; public class T(ITestOutputHelper outputHelper) { }");
             WriteProject("AppTests/AppTests.csproj", compiles: ["AppTests.cs"], references: [@"..\Mid\Mid.csproj"]);
 
             // Other: own file + linked shared file; isolated leaf.
-            Write("Other/Other.cs", "namespace Other; public class O { }");
+            Write("Other/Other.cs", "namespace Other; public class O(ITestOutputHelper outputHelper) { }");
             WriteProject("Other/Other.csproj", compiles: ["Other.cs", @"..\Shared\Linked.cs"], references: []);
 
             // Nested: an isolated project that lives UNDER Core's directory, so the containment
             // fallback must prefer it over Core for files under Core/Nested.
-            Write("Core/Nested/Nested.cs", "namespace Nested; public class N { }");
+            Write("Core/Nested/Nested.cs", "namespace Nested; public class N(ITestOutputHelper outputHelper) { }");
             WriteProject("Core/Nested/Nested.csproj", compiles: ["Nested.cs"], references: []);
 
             Write("Aspire.slnx",
@@ -263,21 +279,21 @@ public sealed class GraphAffectedProjectsTests
 
         public IReadOnlyCollection<string> Compute(params string[] changedRepoRelativePaths)
         {
-            var changedFilesPath = System.IO.Path.Combine(_temp.Path, "changed.txt");
+            var changedFilesPath = System.IO.Path.Combine(_workspace.Path, "changed.txt");
             File.WriteAllLines(changedFilesPath, changedRepoRelativePaths);
-            return GraphAffectedProjects.Compute(_temp.Path, System.IO.Path.Combine(_temp.Path, "Aspire.slnx"), from: null, to: null, changedFilesPath: changedFilesPath).AffectedProjects;
+            return GraphAffectedProjects.Compute(_workspace.Path, System.IO.Path.Combine(_workspace.Path, "Aspire.slnx"), from: null, to: null, changedFilesPath: changedFilesPath).AffectedProjects;
         }
 
         public AffectedResult ComputeResult(params string[] changedRepoRelativePaths)
         {
-            var changedFilesPath = System.IO.Path.Combine(_temp.Path, "changed.txt");
+            var changedFilesPath = System.IO.Path.Combine(_workspace.Path, "changed.txt");
             File.WriteAllLines(changedFilesPath, changedRepoRelativePaths);
-            return GraphAffectedProjects.Compute(_temp.Path, System.IO.Path.Combine(_temp.Path, "Aspire.slnx"), from: null, to: null, changedFilesPath: changedFilesPath);
+            return GraphAffectedProjects.Compute(_workspace.Path, System.IO.Path.Combine(_workspace.Path, "Aspire.slnx"), from: null, to: null, changedFilesPath: changedFilesPath);
         }
 
         private void Write(string relativePath, string contents)
         {
-            var fullPath = System.IO.Path.Combine(_temp.Path, relativePath.Replace('\\', System.IO.Path.DirectorySeparatorChar));
+            var fullPath = System.IO.Path.Combine(_workspace.Path, relativePath.Replace('\\', System.IO.Path.DirectorySeparatorChar));
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fullPath)!);
             File.WriteAllText(fullPath, contents);
         }
@@ -304,7 +320,7 @@ public sealed class GraphAffectedProjectsTests
                 """);
         }
 
-        public void Dispose() => _temp.Dispose();
+        public void Dispose() => _workspace.Dispose();
     }
 
     /// <summary>
@@ -314,25 +330,27 @@ public sealed class GraphAffectedProjectsTests
     /// </summary>
     private sealed class GitGraphFixture : IDisposable
     {
-        private readonly TestTempDirectory _temp = new();
+        private readonly TemporaryWorkspace _workspace;
 
-        public GitGraphFixture()
+        public GitGraphFixture(TemporaryWorkspace workspace)
         {
+            _workspace = workspace;
+
             Write("Directory.Build.props", "<Project />");
             Write("Directory.Build.targets", "<Project />");
 
             Write("Shared/Linked.cs", "namespace Shared; public static class Linked { }");
 
-            Write("Core/Core.cs", "namespace Core; public class C { }");
+            Write("Core/Core.cs", "namespace Core; public class C(ITestOutputHelper outputHelper) { }");
             WriteProject("Core/Core.csproj", compiles: ["Core.cs", @"..\Shared\Linked.cs"], references: []);
 
-            Write("Mid/Mid.cs", "namespace Mid; public class M { }");
+            Write("Mid/Mid.cs", "namespace Mid; public class M(ITestOutputHelper outputHelper) { }");
             WriteProject("Mid/Mid.csproj", compiles: ["Mid.cs"], references: [@"..\Core\Core.csproj"]);
 
-            Write("AppTests/AppTests.cs", "namespace AppTests; public class T { }");
+            Write("AppTests/AppTests.cs", "namespace AppTests; public class T(ITestOutputHelper outputHelper) { }");
             WriteProject("AppTests/AppTests.csproj", compiles: ["AppTests.cs"], references: [@"..\Mid\Mid.csproj"]);
 
-            Write("Other/Other.cs", "namespace Other; public class O { }");
+            Write("Other/Other.cs", "namespace Other; public class O(ITestOutputHelper outputHelper) { }");
             WriteProject("Other/Other.csproj", compiles: ["Other.cs"], references: []);
 
             // A loose, non-declared file (not a <Compile>/<Content> item). It is attributed purely by
@@ -366,17 +384,17 @@ public sealed class GraphAffectedProjectsTests
         {
             var baseSha = Git("rev-parse", "HEAD");
 
-            var newFull = System.IO.Path.Combine(_temp.Path, newRelativePath.Replace('/', System.IO.Path.DirectorySeparatorChar));
+            var newFull = System.IO.Path.Combine(_workspace.Path, newRelativePath.Replace('/', System.IO.Path.DirectorySeparatorChar));
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(newFull)!);
             Git("mv", oldRelativePath, newRelativePath);
             Git("commit", "-q", "-m", "rename across projects");
 
-            return GraphAffectedProjects.Compute(_temp.Path, System.IO.Path.Combine(_temp.Path, "Aspire.slnx"), from: baseSha, to: "HEAD", changedFilesPath: null).AffectedProjects;
+            return GraphAffectedProjects.Compute(_workspace.Path, System.IO.Path.Combine(_workspace.Path, "Aspire.slnx"), from: baseSha, to: "HEAD", changedFilesPath: null).AffectedProjects;
         }
 
         private void Write(string relativePath, string contents)
         {
-            var fullPath = System.IO.Path.Combine(_temp.Path, relativePath.Replace('\\', System.IO.Path.DirectorySeparatorChar));
+            var fullPath = System.IO.Path.Combine(_workspace.Path, relativePath.Replace('\\', System.IO.Path.DirectorySeparatorChar));
             Directory.CreateDirectory(System.IO.Path.GetDirectoryName(fullPath)!);
             File.WriteAllText(fullPath, contents);
         }
@@ -401,8 +419,8 @@ public sealed class GraphAffectedProjectsTests
                 """);
         }
 
-        private string Git(params string[] args) => GitCli.Run(_temp.Path, args);
+        private string Git(params string[] args) => GitCli.Run(_workspace.Path, args);
 
-        public void Dispose() => _temp.Dispose();
+        public void Dispose() => _workspace.Dispose();
     }
 }

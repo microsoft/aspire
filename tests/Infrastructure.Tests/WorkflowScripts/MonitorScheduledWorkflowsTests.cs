@@ -15,7 +15,7 @@ public sealed class MonitorScheduledWorkflowsTests : IDisposable
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _repoRoot;
     private readonly string _harnessPath;
     private readonly ITestOutputHelper _output;
@@ -23,11 +23,12 @@ public sealed class MonitorScheduledWorkflowsTests : IDisposable
     public MonitorScheduledWorkflowsTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _repoRoot = RepoRoot.Path;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "monitor-scheduled-workflows.harness.js");
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["node"])]
@@ -241,7 +242,7 @@ public sealed class MonitorScheduledWorkflowsTests : IDisposable
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
     {
-        var requestPath = Path.Combine(_tempDirectory.Path, $"{Guid.NewGuid():N}.json");
+        var requestPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.json");
         await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { operation, payload }, s_jsonOptions));
 
         using var command = new NodeCommand(_output, "monitor-scheduled-workflows");

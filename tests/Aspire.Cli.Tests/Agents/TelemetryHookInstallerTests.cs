@@ -13,7 +13,7 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureInstalledAsync_MaterializesBothScriptsUnderAspireHooksDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var installer = CreateInstaller(workspace, home);
 
@@ -29,7 +29,7 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureInstalledAsync_ShellScriptUsesLfEndingsAndNoBom()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var installer = CreateInstaller(workspace, home);
 
@@ -47,7 +47,7 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureInstalledAsync_IsIdempotent_WhenContentUnchanged()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var installer = CreateInstaller(workspace, home);
 
@@ -64,7 +64,7 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task EnsureInstalledAsync_RewritesScript_WhenExistingContentDiffers()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var installer = CreateInstaller(workspace, home);
 
@@ -88,7 +88,7 @@ public class TelemetryHookInstallerTests(ITestOutputHelper outputHelper)
             return;
         }
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var home = workspace.CreateDirectory("home");
         var installer = CreateInstaller(workspace, home);
 

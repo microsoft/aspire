@@ -27,13 +27,13 @@ using Microsoft.Extensions.Hosting;
 namespace Aspire.Hosting.Tests;
 
 [Trait("Partition", "2")]
-public class ProjectResourceTests
+public class ProjectResourceTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task AddProjectWithTrailingCommasInLaunchSettingsDoesNotThrow()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var projectDetails = await PrepareProjectWithTrailingCommasInLaunchSettingsAsync(tempDirectory.Path).DefaultTimeout();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDetails = await PrepareProjectWithTrailingCommasInLaunchSettingsAsync(workspace.WorkspaceRoot.FullName).DefaultTimeout();
 
         var appBuilder = CreateBuilder();
 
@@ -76,8 +76,8 @@ public class ProjectResourceTests
     [Fact]
     public async Task AddProjectWithInvalidLaunchSettingsShouldThrowSpecificError()
     {
-        using var tempDirectory = new TestTempDirectory();
-        var projectDetails = await PrepareProjectWithMalformedLaunchSettingsAsync(tempDirectory.Path).DefaultTimeout();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var projectDetails = await PrepareProjectWithMalformedLaunchSettingsAsync(workspace.WorkspaceRoot.FullName).DefaultTimeout();
 
         var ex = Assert.Throws<DistributedApplicationException>(() =>
         {

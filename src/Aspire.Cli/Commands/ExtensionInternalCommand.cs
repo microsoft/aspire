@@ -36,7 +36,7 @@ internal sealed class ExtensionInternalCommand : BaseCommand
         {
             try
             {
-                var result = await _projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.None, createSettingsFile: false, cancellationToken);
+                var result = await _projectLocator.UseOrFindAppHostProjectFileAsync(null, MultipleAppHostProjectsFoundBehavior.None, createSettingsFile: false, displayProgress: false, cancellationToken);
 
                 var json = JsonSerializer.Serialize(new AppHostProjectSearchResultPoco
                 {

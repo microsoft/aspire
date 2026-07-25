@@ -18,6 +18,54 @@ internal sealed class LogEntry
     /// The text content of the log entry. This is the same as <see cref="Content"/>, but without embedded links or other transformations and including the timestamp.
     /// </summary>
     public string? RawContent { get; private set; }
+
+    private string? _strippedRawContent;
+    private string? _strippedLogContent;
+
+    /// <summary>
+    /// <see cref="RawContent"/> with ANSI control sequences removed. This is the plain text the user
+    /// actually sees rendered (including the timestamp). Use this for matching against user-entered
+    /// text - <see cref="Content"/> contains HTML markup added during ANSI conversion and
+    /// <see cref="RawContent"/> still contains the raw escape sequences, so matching against either
+    /// produces false negatives when the term spans markup or a color boundary (for example, the
+    /// default .NET console emits the level prefix as <c>info\x1b[..m:</c>, so a search for
+    /// <c>info:</c> would never match the raw content).
+    /// </summary>
+    /// <remarks>
+    /// The stripped value is cached because filtering runs over the entire log buffer on each update.
+    /// </remarks>
+    public string? GetStrippedRawContent()
+    {
+        if (RawContent is null)
+        {
+            return null;
+        }
+
+        return _strippedRawContent ??= AnsiParser.StripControlSequences(RawContent);
+    }
+
+    /// <summary>
+    /// <see cref="RawContent"/> with the parsed timestamp and ANSI control sequences removed. This
+    /// represents the rendered log message text without optional row adornments such as timestamps,
+    /// resource prefixes, or stderr badges.
+    /// </summary>
+    /// <remarks>
+    /// The stripped value is cached because filtering runs over the entire log buffer on each update.
+    /// </remarks>
+    public string? GetStrippedLogContent()
+    {
+        if (RawContent is null)
+        {
+            return null;
+        }
+
+        _strippedLogContent ??= TimestampParser.TryParseConsoleTimestamp(RawContent, out var timestampParseResult)
+            ? AnsiParser.StripControlSequences(timestampParseResult.Value.ModifiedText)
+            : GetStrippedRawContent();
+
+        return _strippedLogContent;
+    }
+
     public DateTime? Timestamp { get; private set; }
     public LogEntryType Type { get; private set; } = LogEntryType.Default;
     public int LineNumber { get; set; }

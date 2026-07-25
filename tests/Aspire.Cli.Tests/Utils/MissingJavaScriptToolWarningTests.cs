@@ -47,7 +47,7 @@ public class MissingJavaScriptToolWarningTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetMessage_WhenTypeScriptProjectUsesBun_ReturnsToolchainSpecificInstallGuidance()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         File.WriteAllText(Path.Combine(workspace.WorkspaceRoot.FullName, "package.json"), "{ \"packageManager\": \"bun@1.2.0\" }");
 
         var message = MissingJavaScriptToolWarning.GetMessage(workspace.WorkspaceRoot, s_typeScriptLanguage, new TestEnvironment());

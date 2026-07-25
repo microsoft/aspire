@@ -15,7 +15,7 @@ public sealed class ReportSpecializedTestFailuresTests : IDisposable
 {
     private static readonly JsonSerializerOptions s_jsonOptions = new(JsonSerializerDefaults.Web);
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _repoRoot;
     private readonly string _harnessPath;
     private readonly ITestOutputHelper _output;
@@ -23,11 +23,12 @@ public sealed class ReportSpecializedTestFailuresTests : IDisposable
     public ReportSpecializedTestFailuresTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _repoRoot = RepoRoot.Path;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "report-specialized-test-failures.harness.js");
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Theory]
     [InlineData("test-failures", "<!-- ci-failure:tests-outerloop.yml:test-failures -->")]
@@ -224,7 +225,7 @@ public sealed class ReportSpecializedTestFailuresTests : IDisposable
 
     private async Task<T> InvokeHarnessAsync<T>(string operation, object payload)
     {
-        var requestPath = Path.Combine(_tempDirectory.Path, $"{Guid.NewGuid():N}.json");
+        var requestPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.json");
         await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(new { operation, payload }, s_jsonOptions));
 
         using var command = new NodeCommand(_output, "report-specialized-test-failures");

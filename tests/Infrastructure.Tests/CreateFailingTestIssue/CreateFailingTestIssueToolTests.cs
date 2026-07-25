@@ -13,7 +13,7 @@ namespace Infrastructure.Tests;
 /// </summary>
 public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailingTestIssueFixture>, IDisposable
 {
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly CreateFailingTestIssueFixture _fixture;
     private readonly ITestOutputHelper _output;
 
@@ -21,9 +21,10 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
     {
         _fixture = fixture;
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     public async Task ResolvesFailureFromFixtureArtifacts()
@@ -687,7 +688,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
         bool missingJobLog = false,
         params TestTrxCase[] testCases)
     {
-        var fixtureDirectory = Path.Combine(_tempDirectory.Path, Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
+        var fixtureDirectory = Path.Combine(_workspace.Path, Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
         Directory.CreateDirectory(fixtureDirectory);
 
         WriteJsonFixture(
@@ -828,7 +829,7 @@ public sealed class CreateFailingTestIssueToolTests : IClassFixture<CreateFailin
         string headSha,
         string runStatus = "completed")
     {
-        var fixtureDirectory = Path.Combine(_tempDirectory.Path, Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
+        var fixtureDirectory = Path.Combine(_workspace.Path, Guid.NewGuid().ToString("N", CultureInfo.InvariantCulture));
         Directory.CreateDirectory(fixtureDirectory);
 
         WriteJsonFixture(

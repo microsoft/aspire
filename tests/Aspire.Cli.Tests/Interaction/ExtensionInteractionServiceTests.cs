@@ -30,7 +30,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
         console.Profile.Capabilities.Links = true;
         console.Profile.Width = int.MaxValue;
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [extension].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
         var consoleInteractionService = new ConsoleInteractionService(
@@ -61,6 +61,51 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task DisplayCancellationMessage_WithCustomMessage_UsesCancellationBackchannel()
+    {
+        var output = new StringBuilder();
+        var console = AnsiConsole.Create(new AnsiConsoleSettings
+        {
+            Ansi = AnsiSupport.Yes,
+            ColorSystem = ColorSystemSupport.TrueColor,
+            Out = new AnsiConsoleOutput(new StringWriter(output)),
+            Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
+        });
+
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
+        var executionContext = workspace.CreateExecutionContext();
+        var consoleInteractionService = new ConsoleInteractionService(
+            new ConsoleEnvironment(console, console),
+            executionContext,
+            TestHelpers.CreateInteractiveHostEnvironment(),
+            new EnvironmentProcessPathProvider(),
+            NullLoggerFactory.Instance,
+            new ConsoleLogBufferContext());
+        var cancellationMessageCalled = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
+        var displayMessageCalled = false;
+        var backchannel = new TestExtensionBackchannel
+        {
+            DisplayCancellationMessageAsyncCalled = cancellationMessageCalled,
+            DisplayMessageAsyncCallback = (_, _) =>
+            {
+                displayMessageCalled = true;
+                return Task.CompletedTask;
+            }
+        };
+        using var extensionInteractionService = new ExtensionInteractionService(
+            consoleInteractionService,
+            backchannel,
+            extensionPromptEnabled: false,
+            logger: NullLogger<ExtensionInteractionService>.Instance);
+
+        extensionInteractionService.DisplayCancellationMessage("Stopping dashboard.");
+        await extensionInteractionService.FlushAsync();
+
+        Assert.True(cancellationMessageCalled.Task.IsCompletedSuccessfully);
+        Assert.False(displayMessageCalled);
+    }
+
+    [Fact]
     public async Task Dispose_StopsBackgroundPump()
     {
         var output = new StringBuilder();
@@ -72,7 +117,7 @@ public class ExtensionInteractionServiceTests(ITestOutputHelper outputHelper)
             Enrichment = new ProfileEnrichment { UseDefaultEnrichers = false }
         });
 
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var logFilePath = Path.Combine(workspace.WorkspaceRoot.FullName, "cli [extension].log");
         var executionContext = workspace.CreateExecutionContext(logFilePath: logFilePath);
         var consoleInteractionService = new ConsoleInteractionService(

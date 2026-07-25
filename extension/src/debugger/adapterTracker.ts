@@ -29,6 +29,8 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
             }
             const debugSessionId = configuration.debugSessionId;
 
+            let debuggeeExitCode: number | undefined;
+
             return {
                 onWillReceiveMessage: message => {
                     // Detect restart requests on app host debug sessions.
@@ -69,6 +71,11 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
 
                     // Listen for process event with isRestart (if supported by adapter)
                     if (message.type === 'event' && message.event === 'process') {
+                        // A new debuggee process invalidates any exit code captured from a prior run.
+                        // Reset before the PID guard: `systemProcessId` is optional in DAP, so a
+                        // restart reported without it must still clear the stale exit code.
+                        debuggeeExitCode = undefined;
+
                         if (typeof message.body?.systemProcessId !== 'number') {
                             extensionLogOutputChannel.warn(`Debug session ${session.id} does not have a valid system process ID.`);
                             return;
@@ -87,18 +94,24 @@ export function createDebugAdapterTracker(dcpServer: AspireDcpServer, debugAdapt
 
                         dcpServer.sendNotification(processNotification);
                     }
+
+                    if (message.type === 'event' && message.event === 'exited' && typeof message.body?.exitCode === 'number') {
+                        debuggeeExitCode = message.body.exitCode;
+                    }
                 },
                 onExit(code: number | undefined) {
+                    let exitCode = debuggeeExitCode ?? code;
+
                     // Exit code 143 should be treated as normal exit (SIGTERM) on macOS and Linux
-                    if ((process.platform === 'darwin' || process.platform === 'linux') && code === 143) {
-                        code = 0;
+                    if ((process.platform === 'darwin' || process.platform === 'linux') && exitCode === 143) {
+                        exitCode = 0;
                     }
 
                     const notification: SessionTerminatedNotification = {
                         notification_type: 'sessionTerminated',
                         session_id: configuration.runId,
                         dcp_id: debugSessionId,
-                        exit_code: code ?? 0
+                        exit_code: exitCode ?? 0
                     };
 
                     dcpServer.sendNotification(notification);

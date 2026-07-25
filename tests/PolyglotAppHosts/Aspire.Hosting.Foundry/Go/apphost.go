@@ -119,17 +119,15 @@ server.listen(port, '127.0.0.1');
 `,
 		})
 
-	hostedAgent.AsHostedAgent(project, &aspire.AsHostedAgentOptions{
-		Options: &aspire.HostedAgentOptions{
-			Description: "Validation hosted agent",
-			Cpu:         aspire.Float64Ptr(1),
-			Memory:      aspire.Float64Ptr(2),
-			Metadata: map[string]string{
-				"scenario": "validation",
-			},
-			EnvironmentVariables: map[string]string{
-				"VALIDATION_MODE": "true",
-			},
+	hostedAgent.AsHostedAgent(project, aspire.HostedAgentProtocolResponses, "2.0.0", &aspire.HostedAgentOptions{
+		Description: "Validation hosted agent",
+		Cpu:         aspire.Float64Ptr(1),
+		Memory:      aspire.Float64Ptr(2),
+		Metadata: map[string]string{
+			"scenario": "validation",
+		},
+		EnvironmentVariables: map[string]string{
+			"VALIDATION_MODE": "true",
 		},
 	})
 

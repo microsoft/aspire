@@ -11,7 +11,7 @@ using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.JavaScript.Tests;
 
-public class AddDenoAppTests
+public class AddDenoAppTests(ITestOutputHelper outputHelper)
 {
     [Fact]
     public async Task VerifyManifest()
@@ -31,10 +31,10 @@ public class AddDenoAppTests
     [InlineData(false)]
     public async Task VerifyDockerfile(bool includePackageJson)
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         if (includePackageJson)
@@ -44,9 +44,9 @@ public class AddDenoAppTests
 
         var denoApp = builder.AddDenoApp("js", appDir, "main.ts");
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfilePath = Path.Combine(tempDir.Path, "js.Dockerfile");
+        var dockerfilePath = Path.Combine(workspace.Path, "js.Dockerfile");
         var dockerfileContents = File.ReadAllText(dockerfilePath);
         await Verify(dockerfileContents);
 
@@ -59,10 +59,10 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfileWithCustomBaseImage()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "package.json"), "{}");
 
@@ -71,29 +71,29 @@ public class AddDenoAppTests
         var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
             .WithDockerfileBaseImage(customBuildImage, customRuntimeImage);
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        await Verify(File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile")));
+        await Verify(File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile")));
     }
 
     [Fact]
     public async Task VerifyDockerfileEmitsPerDockerfileDockerignore()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "package.json"), "{}");
 
         var denoApp = builder.AddDenoApp("js", appDir, "main.ts");
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
         // The default .dockerignore should be emitted alongside the published Dockerfile using
         // BuildKit's per-Dockerfile convention (<dockerfile-name>.dockerignore), not into the
         // user's source tree.
-        var perDockerfileIgnorePath = Path.Combine(tempDir.Path, "js.Dockerfile.dockerignore");
+        var perDockerfileIgnorePath = Path.Combine(workspace.Path, "js.Dockerfile.dockerignore");
         Assert.True(File.Exists(perDockerfileIgnorePath), $"Expected per-Dockerfile dockerignore at {perDockerfileIgnorePath}");
         var ignoreContents = File.ReadAllText(perDockerfileIgnorePath);
         await Verify(ignoreContents);
@@ -112,17 +112,17 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfile_PreCachesDependenciesAndShipsDenoDir()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var denoApp = builder.AddDenoApp("js", appDir, "main.ts");
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
 
         // The build stage must pre-cache the entrypoint's dependency graph into DENO_DIR so the published
         // image runs offline / air-gapped without a cold-start fetch. Without a deno.lock, plain `deno cache`.
@@ -138,19 +138,19 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfile_UsesFrozenCacheWhenDenoLockExists()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         // A committed lockfile means the build should fail fast on drift rather than silently re-resolve.
         File.WriteAllText(Path.Combine(appDir, "deno.lock"), "{}");
 
         var denoApp = builder.AddDenoApp("js", appDir, "main.ts");
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
 
         Assert.Contains("RUN deno cache --frozen main.ts", dockerfileContents);
         Assert.DoesNotContain("RUN deno cache main.ts", dockerfileContents);
@@ -159,10 +159,10 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfile_CacheUsesConfiguredResolutionAndLockFlags()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "custom.lock"), "{}");
 
@@ -172,9 +172,9 @@ public class AddDenoAppTests
             .WithDenoLock("custom.lock")
             .WithDenoNodeModulesDir("auto");
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal(
             "RUN deno cache --config deno.json --import-map import_map.json --lock custom.lock --node-modules-dir=auto --frozen main.ts",
             GetDockerfileLine(dockerfileContents, "RUN deno cache"));
@@ -183,10 +183,10 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfile_TaskCacheUsesTaskResolutionFlags()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "custom.lock"), "{}");
 
@@ -198,46 +198,46 @@ public class AddDenoAppTests
             .WithDenoNodeModulesDir("auto")
             .WithDenoUnstable("sloppy-imports");
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        await Verify(File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile")));
+        await Verify(File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile")));
     }
 
     [Fact]
     public async Task VerifyDockerfile_CacheUsesNoLockWhenConfigured()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "deno.lock"), "{}");
 
         var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
             .WithDenoNoLock();
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal("RUN deno cache --no-lock main.ts", GetDockerfileLine(dockerfileContents, "RUN deno cache"));
     }
 
     [Fact]
     public async Task VerifyDockerfile_CacheUsesUnstableFlags()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
             .WithDenoConfig("deno.json")
             .WithDenoUnstable("sloppy-imports");
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal(
             "RUN deno cache --config deno.json --unstable-sloppy-imports main.ts",
             GetDockerfileLine(dockerfileContents, "RUN deno cache"));
@@ -246,10 +246,10 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfile_CacheQuotesShellArguments()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
         File.WriteAllText(Path.Combine(appDir, "custom lock's.lock"), "{}");
 
@@ -258,9 +258,9 @@ public class AddDenoAppTests
             .WithDenoImportMap("import map.json")
             .WithDenoLock("custom lock's.lock");
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal(
             """RUN deno cache --config 'deno config.json' --import-map 'import map.json' --lock 'custom lock'"'"'s.lock' --frozen 'main file'"'"'s.ts'""",
             GetDockerfileLine(dockerfileContents, "RUN deno cache"));
@@ -269,38 +269,38 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfile_EntrypointDoesNotIncludeDevelopmentFlags()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
             .WithDenoWatch()
             .WithDenoInspectWait("127.0.0.1:9229");
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal("""ENTRYPOINT ["deno","run","-A","main.ts"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
     [Fact]
     public async Task VerifyDockerfile_ServeEntrypointBindsEndpointTargetPort()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var denoApp = builder.AddDenoApp("js", appDir, "server.ts")
             .WithDenoServe()
             .WithHttpEndpoint(targetPort: 5173);
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal(
             """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","5173","server.ts"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
@@ -309,19 +309,19 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfile_ServeEntrypointPreservesPreconfiguredEndpointTargetPort()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var denoApp = builder.AddDenoApp("js", appDir, "server.ts")
             .WithHttpEndpoint(targetPort: 5173)
             .WithDenoServe();
 
-        await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal(
             """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","5173","server.ts"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
@@ -330,10 +330,10 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfile_ServeDefaultEndpointPinsDenoDefaultPort()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir = Path.Combine(tempDir.Path, "js");
+        var appDir = Path.Combine(workspace.Path, "js");
         Directory.CreateDirectory(appDir);
 
         var denoApp = builder.AddDenoApp("js", appDir, "server.ts")
@@ -342,10 +342,10 @@ public class AddDenoAppTests
         var httpEndpoint = denoApp.Resource.GetEndpoint("http");
         Assert.Equal(8000, httpEndpoint.EndpointAnnotation.TargetPort);
 
-        var manifest = await ManifestUtils.GetManifest(denoApp.Resource, tempDir.Path);
+        var manifest = await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
         Assert.Equal(8000, manifest["bindings"]!["http"]!["targetPort"]!.GetValue<int>());
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         Assert.Equal(
             """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","8000","server.ts"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
@@ -354,11 +354,11 @@ public class AddDenoAppTests
     [Fact]
     public async Task VerifyDockerfile_ServeDefaultEndpointAvoidsExistingDefaultPort()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: tempDir.Path).WithResourceCleanUp(true);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
 
-        var appDir1 = Path.Combine(tempDir.Path, "js1");
-        var appDir2 = Path.Combine(tempDir.Path, "js2");
+        var appDir1 = Path.Combine(workspace.Path, "js1");
+        var appDir2 = Path.Combine(workspace.Path, "js2");
         Directory.CreateDirectory(appDir1);
         Directory.CreateDirectory(appDir2);
 
@@ -370,9 +370,9 @@ public class AddDenoAppTests
         var httpEndpoint = denoApp2.Resource.GetEndpoint("http");
         Assert.Equal(8001, httpEndpoint.EndpointAnnotation.TargetPort);
 
-        await ManifestUtils.GetManifest(denoApp2.Resource, tempDir.Path);
+        await ManifestUtils.GetManifest(denoApp2.Resource, workspace.Path);
 
-        var dockerfileContents = File.ReadAllText(Path.Combine(tempDir.Path, "js2.Dockerfile"));
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js2.Dockerfile"));
         Assert.Equal(
             """ENTRYPOINT ["deno","serve","-A","--host","0.0.0.0","--port","8001","server.ts"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
@@ -381,12 +381,12 @@ public class AddDenoAppTests
     [Fact]
     public void AddDenoApp_DoesNotAddDenoPackageManagerWhenNoManifest()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "main.ts"), "console.log('hi');");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "main.ts"), "console.log('hi');");
 
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddDenoApp("denoapp", tempDir.Path, "main.ts");
+        builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
         using var app = builder.Build();
 
@@ -403,12 +403,12 @@ public class AddDenoAppTests
     [Fact]
     public void AddDenoApp_AddsDenoPackageManagerWhenPackageJsonExists()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "package.json"), "{}");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "package.json"), "{}");
 
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddDenoApp("denoapp", tempDir.Path, "main.ts");
+        builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
         using var app = builder.Build();
 
@@ -430,12 +430,12 @@ public class AddDenoAppTests
     [Fact]
     public void AddDenoApp_AddsDenoPackageManagerWhenDenoJsonExists()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "deno.json"), "{}");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "deno.json"), "{}");
 
         var builder = DistributedApplication.CreateBuilder();
 
-        builder.AddDenoApp("denoapp", tempDir.Path, "main.ts");
+        builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
         using var app = builder.Build();
 
@@ -452,11 +452,11 @@ public class AddDenoAppTests
     [Fact]
     public async Task AddDenoApp_DirectFile_ProducesRunDashAArgs()
     {
-        using var tempDir = new TestTempDirectory();
-        File.WriteAllText(Path.Combine(tempDir.Path, "main.ts"), "console.log('hi');");
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        File.WriteAllText(Path.Combine(workspace.Path, "main.ts"), "console.log('hi');");
 
         var builder = DistributedApplication.CreateBuilder();
-        builder.AddDenoApp("denoapp", tempDir.Path, "main.ts");
+        builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
         using var app = builder.Build();
 
@@ -799,10 +799,10 @@ public class AddDenoAppTests
     [Fact]
     public void AddDenoApp_UsesDenoCommand()
     {
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         var builder = DistributedApplication.CreateBuilder();
-        var denoApp = builder.AddDenoApp("denoapp", tempDir.Path, "main.ts");
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
         Assert.Equal("deno", denoApp.Resource.Command);
     }
@@ -929,9 +929,9 @@ public class AddDenoAppTests
     public void DenoApp_WithVSCodeDebugging_AddsSupportsDebuggingAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var denoApp = builder.AddDenoApp("denoapp", tempDir.Path, "main.ts");
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
         var annotation = denoApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.NotNull(annotation);
@@ -942,9 +942,9 @@ public class AddDenoAppTests
     public void DenoApp_WithVSCodeDebugging_DoesNotAddAnnotationInPublishMode()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var denoApp = builder.AddDenoApp("denoapp", tempDir.Path, "main.ts");
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
         var annotation = denoApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
         Assert.Null(annotation);
@@ -954,9 +954,9 @@ public class AddDenoAppTests
     public void DenoApp_WithRunScript_AddsSupportsDebuggingAnnotation()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var denoApp = builder.AddDenoApp("denoapp", tempDir.Path, "main.ts")
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
             .WithRunScript("dev");
 
         var annotation = denoApp.Resource.Annotations.OfType<SupportsDebuggingAnnotation>().SingleOrDefault();
@@ -968,29 +968,29 @@ public class AddDenoAppTests
     public void DenoApp_DirectFile_ProducesDenoRuntimeExecutable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
-        var denoApp = builder.AddDenoApp("denoapp", tempDir.Path, "main.ts");
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts");
 
         var launchConfig = InvokeLaunchConfigurationAnnotator(denoApp.Resource);
 
         Assert.Equal("deno", launchConfig.Type);
         Assert.Equal("deno", launchConfig.RuntimeExecutable);
         Assert.Equal("direct", launchConfig.LaunchMethod);
-        Assert.Equal(Path.GetFullPath("main.ts", tempDir.Path), launchConfig.ScriptPath);
+        Assert.Equal(Path.GetFullPath("main.ts", workspace.Path), launchConfig.ScriptPath);
     }
 
     [Fact]
     public void DenoApp_WithRunScriptAndPackageManager_ProducesDenoRuntimeExecutable()
     {
         using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
-        using var tempDir = new TestTempDirectory();
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
 
         // AddDenoApp automatically calls WithDeno() when a deno.json exists, which makes the run-script a
         // package-manager invocation (deno task dev).
-        File.WriteAllText(Path.Combine(tempDir.Path, "deno.json"), "{}");
+        File.WriteAllText(Path.Combine(workspace.Path, "deno.json"), "{}");
 
-        var denoApp = builder.AddDenoApp("denoapp", tempDir.Path, "main.ts")
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
             .WithRunScript("dev");
 
         var launchConfig = InvokeLaunchConfigurationAnnotator(denoApp.Resource);

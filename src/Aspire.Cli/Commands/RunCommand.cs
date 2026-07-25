@@ -12,6 +12,7 @@ using Aspire.Cli.Configuration;
 using Aspire.Cli.Diagnostics;
 using Aspire.Cli.DotNet;
 using Aspire.Cli.Interaction;
+using Aspire.Cli.Processes;
 using Aspire.Cli.Profiling;
 using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
@@ -86,6 +87,12 @@ internal sealed class RunCommand : BaseCommand
     // caused DCP to fall back to its internal 6s SIGKILL deadline because the kernel was
     // silently dropping the CTRL_C_EVENT.
     internal static readonly TimeSpan s_gracefulShutdownBudget = TimeSpan.FromSeconds(5);
+
+    // Detached-start children do not have a parent process left to finish cleanup after they exit.
+    // Give the AppHost run task enough time to consume the full graceful budget, escalate to kill,
+    // and drain the signaler so the child does not recreate the process leak that the backstop is
+    // meant to prevent.
+    private static readonly TimeSpan s_detachedAppHostTeardownTimeout = s_gracefulShutdownBudget + TimeSpan.FromSeconds(3);
 
     // Guest AppHosts can bring up the temporary server/backchannel and then fail immediately
     // afterward when the guest startup process hits a syntax, pre-execute, or model validation
@@ -206,6 +213,9 @@ internal sealed class RunCommand : BaseCommand
 
         AppHostProjectContext? context = null;
         Activity? runActivity = null;
+        LauncherLivenessMonitor? launcherMonitor = null;
+        Task<int>? runTask = null;
+        CancellationTokenSource? runCts = null;
 
         try
         {
@@ -292,13 +302,31 @@ internal sealed class RunCommand : BaseCommand
             }
 
             // Start the project run as a pending task - we'll handle UX while it runs
-            Task<int> pendingRun;
             var startupTimeout = TimeSpan.FromSeconds(timeoutSeconds);
             var startupStartTimestamp = _timeProvider.GetTimestamp();
-            using var runCancellationTokenSource = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+            runCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+
+            // When this is a detached child, watch the foreground launcher during startup. If the launcher
+            // is killed before the app is ready, cancel the run so the AppHost tree is torn down instead of leaking.
+            // The monitor is disarmed as soon as the AppHost backchannel is established (see
+            // onBackchannelEstablished below); from that point the AppHost's own orphan detector anchors to
+            // this child, so the launcher's normal exit after observing readiness must not affect us.
+            Func<ValueTask>? onBackchannelEstablished = null;
+            if (IsDetachedStartChild())
+            {
+                // Use launcher monitor to ensure that if the launcher fails or is killed,
+                // the child process(es) are not leaked.
+                launcherMonitor = LauncherLivenessMonitor.StartIfConfigured(_configuration, runCts, _timeProvider, _logger);
+                if (launcherMonitor is { } armedMonitor)
+                {
+                    // Disarm at the earliest safe point. DisposeAsync is idempotent.
+                    onBackchannelEstablished = () => armedMonitor.DisposeAsync();
+                }
+            }
+
             using (_profilingTelemetry.StartRunAppHostStartProject(project.LanguageId, noBuild, waitForDebugger))
             {
-                pendingRun = project.RunAsync(context, runCancellationTokenSource.Token);
+                runTask = project.RunAsync(context, runCts.Token);
             }
 
             // Wait for the build to complete first (project handles its own build status spinners)
@@ -312,7 +340,7 @@ internal sealed class RunCommand : BaseCommand
                 catch (TimeoutException)
                 {
                     runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                    await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun, cancellationToken).ConfigureAwait(false);
+                    await CancelAppHostStartupAsync(runCts, runTask, cancellationToken).ConfigureAwait(false);
                     return CreateStartupTimeoutResult(timeoutSeconds);
                 }
 
@@ -326,7 +354,7 @@ internal sealed class RunCommand : BaseCommand
                 {
                     InteractionService.DisplayLines(outputCollector.GetLines());
                 }
-                return CommandResult.Failure(await pendingRun, InteractionServiceStrings.ProjectCouldNotBeBuilt);
+                return CommandResult.Failure(await runTask, InteractionServiceStrings.ProjectCouldNotBeBuilt);
             }
             var appHostStartupOutputStartIndex = context.OutputCollector?.GetLines().Count() ?? 0;
 
@@ -345,8 +373,9 @@ internal sealed class RunCommand : BaseCommand
                 try
                 {
                     startup = await WaitForAppHostStartupAsync(
-                        pendingRun,
+                        runTask,
                         backchannelCompletionSource,
+                        onBackchannelEstablished,
                         logCaptureCancellationSource,
                         context.OutputCollector,
                         appHostStartupOutputStartIndex,
@@ -357,7 +386,7 @@ internal sealed class RunCommand : BaseCommand
                 catch (TimeoutException)
                 {
                     runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "startup_timeout");
-                    await CancelAppHostStartupAsync(runCancellationTokenSource, pendingRun, cancellationToken).ConfigureAwait(false);
+                    await CancelAppHostStartupAsync(runCts, runTask, cancellationToken).ConfigureAwait(false);
                     return CreateStartupTimeoutResult(timeoutSeconds);
                 }
 
@@ -400,7 +429,7 @@ internal sealed class RunCommand : BaseCommand
                 var profileStopRequested = false;
                 if (captureProfile)
                 {
-                    profileStopRequested = await RequestAppHostStopForProfileAsync(backchannel, pendingRun, captureProfileDelay, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
+                    profileStopRequested = await RequestAppHostStopForProfileAsync(backchannel, runTask, captureProfileDelay, _profilingTelemetry, cancellationToken).ConfigureAwait(false);
                 }
                 else if (!isRemoteEnvironment)
                 {
@@ -488,7 +517,7 @@ internal sealed class RunCommand : BaseCommand
                         pendingLogCapture = Task.CompletedTask;
                     }
 
-                    var exitCode = await pendingRun;
+                    var exitCode = await runTask;
                     lifetimeActivity.SetProcessExitCode(exitCode);
 
                     // Capture mode intentionally turns a long-running AppHost startup into a finite command.
@@ -512,7 +541,7 @@ internal sealed class RunCommand : BaseCommand
                         : CommandResult.FromExitCode(exitCode);
                 }
             }
-            catch (OperationCanceledException ex) when (ex.CancellationToken == runCancellationTokenSource.Token && cancellationToken.IsCancellationRequested)
+            catch (OperationCanceledException ex) when (ex.CancellationToken == runCts.Token && cancellationToken.IsCancellationRequested)
             {
                 runActivity?.SetTag(TelemetryConstants.Tags.ErrorType, "canceled");
 
@@ -595,6 +624,28 @@ internal sealed class RunCommand : BaseCommand
         }
         finally
         {
+            if (IsDetachedStartChild() && runTask is { IsCompleted: false } detachedAppHostRun)
+            {
+                // If the runTask is still running here, that is an abnormal exit. 
+                // Cancel the run and wait for the AppHost to teardown so we don't leak child processes.
+                try
+                {
+                    runCts?.Cancel();
+                    // CancellationToken.None is deliberate: root token is already cancelled.
+                    await detachedAppHostRun.WaitAsync(s_detachedAppHostTeardownTimeout, _timeProvider, CancellationToken.None).ConfigureAwait(false);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Detached child timed out or failed while awaiting AppHost teardown during early exit.");
+                }
+            }
+
+            if (launcherMonitor is not null)
+            {
+                await launcherMonitor.DisposeAsync().ConfigureAwait(false);
+            }
+
+            runCts?.Dispose();
             runActivity?.Dispose();
         }
     }
@@ -696,6 +747,7 @@ internal sealed class RunCommand : BaseCommand
     private async Task<AppHostStartupResult> WaitForAppHostStartupAsync(
         Task<int> pendingRun,
         TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
+        Func<ValueTask>? onBackchannelEstablished,
         CancellationTokenSource logCaptureCancellationSource,
         OutputCollector? outputCollector,
         int appHostStartupOutputStartIndex,
@@ -704,7 +756,7 @@ internal sealed class RunCommand : BaseCommand
         CancellationToken cancellationToken)
     {
         using var startupCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
-        var happyPathTask = RunStartupHappyPathAsync(backchannelCompletionSource, logCaptureCancellationSource, pendingRun, startupStartTimestamp, startupTimeout, startupCts.Token);
+        var happyPathTask = RunStartupHappyPathAsync(backchannelCompletionSource, onBackchannelEstablished, logCaptureCancellationSource, pendingRun, startupStartTimestamp, startupTimeout, startupCts.Token);
 
         // Race the startup readiness signal against the AppHost system task. The AppHost
         // system is owned by the project and tears itself down (via an internal escalation
@@ -783,6 +835,7 @@ internal sealed class RunCommand : BaseCommand
 
     private async Task<AppHostStartupResult> RunStartupHappyPathAsync(
         TaskCompletionSource<IAppHostCliBackchannel> backchannelCompletionSource,
+        Func<ValueTask>? onBackchannelEstablished,
         CancellationTokenSource logCaptureCancellationSource,
         Task<int> pendingRun,
         long startupStartTimestamp,
@@ -796,6 +849,11 @@ internal sealed class RunCommand : BaseCommand
                 RunCommandStrings.ConnectingToAppHost,
                 async () => await backchannelCompletionSource.Task.WaitAsync(GetRemainingStartupTimeout(startupStartTimestamp, startupTimeout), _timeProvider, cancellationToken).ConfigureAwait(false));
             waitForBackchannelActivity.SetAppHostBackchannelConnected(true);
+        }
+
+        if (onBackchannelEstablished is not null)
+        {
+            await onBackchannelEstablished().ConfigureAwait(false);
         }
 
         // Start log capture early so any output produced while we wait for dashboard URLs is

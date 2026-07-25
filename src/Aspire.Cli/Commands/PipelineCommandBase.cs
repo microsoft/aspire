@@ -5,6 +5,7 @@ using System.CommandLine;
 using System.Diagnostics;
 using System.Globalization;
 using System.Text;
+using System.Text.Json;
 using Aspire.Cli.Backchannel;
 using Aspire.Cli.Configuration;
 using Aspire.Cli.DotNet;
@@ -14,6 +15,7 @@ using Aspire.Cli.Projects;
 using Aspire.Cli.Resources;
 using Aspire.Cli.Utils;
 using Aspire.Cli.Utils.Markdown;
+using Aspire.Dashboard.Utils;
 using Aspire.Hosting;
 using Microsoft.Extensions.Configuration;
 using Microsoft.Extensions.Logging;
@@ -884,7 +886,7 @@ internal abstract class PipelineCommandBase : BaseCommand
                 // Build the prompt text based on number of inputs
                 var promptText = BuildPromptText(input, inputs.Count, activity.Data.StatusText, activity.Data);
 
-                result = await HandleSingleInputAsync(input, promptText, cancellationToken);
+                result = await HandleSingleInputAsync(input, promptText, backchannel, cancellationToken);
             }
             else
             {
@@ -893,6 +895,7 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             answers[i] = new PublishingPromptInputAnswer
             {
+                Name = input.Name,
                 Value = result
             };
         }
@@ -901,12 +904,13 @@ internal abstract class PipelineCommandBase : BaseCommand
         await backchannel.CompletePromptResponseAsync(activity.Data.Id, answers, cancellationToken);
     }
 
-    private async Task<string?> HandleSingleInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
+    private async Task<string?> HandleSingleInputAsync(PublishingPromptInput input, string promptText, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
     {
-        if (!Enum.TryParse<InputType>(input.InputType, ignoreCase: true, out var inputType))
+        // The wire format uses hyphens (e.g. "secret-text") but the enum uses PascalCase (SecretText).
+        var normalizedType = input.InputType.Replace("-", "", StringComparison.Ordinal);
+        if (!Enum.TryParse<InputType>(normalizedType, ignoreCase: true, out var inputType))
         {
-            // Fallback to text if unknown type
-            inputType = InputType.Text;
+            throw new InvalidOperationException($"Unsupported input type: {input.InputType}");
         }
 
         // Display any validation errors.
@@ -918,7 +922,7 @@ internal abstract class PipelineCommandBase : BaseCommand
             }
         }
 
-        return inputType switch
+        var result = inputType switch
         {
             InputType.Text => await InteractionService.PromptForStringAsync(
                 promptText,
@@ -939,8 +943,12 @@ internal abstract class PipelineCommandBase : BaseCommand
 
             InputType.Number => await HandleNumberInputAsync(input, promptText, cancellationToken),
 
-            _ => await InteractionService.PromptForStringAsync(promptText, binding: PromptBinding.CreateDefault(input.Value), required: input.Required, cancellationToken: cancellationToken)
+            InputType.File => await HandleFileInputAsync(input, promptText, backchannel, cancellationToken),
+
+            _ => throw new InvalidOperationException($"Unsupported input type: {input.InputType}"),
         };
+
+        return result;
     }
 
     private async Task<string?> HandleSelectInputAsync(PublishingPromptInput input, string promptText, CancellationToken cancellationToken)
@@ -995,6 +1003,120 @@ internal abstract class PipelineCommandBase : BaseCommand
             validator: Validator,
             required: input.Required,
             cancellationToken: cancellationToken);
+    }
+
+    private async Task<string?> HandleFileInputAsync(PublishingPromptInput input, string promptText, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
+    {
+        ValidationResult Validator(string value)
+        {
+            if (string.IsNullOrWhiteSpace(value))
+            {
+                return ValidationResult.Success();
+            }
+
+            string fullPath;
+            try
+            {
+                fullPath = Path.GetFullPath(value);
+            }
+            catch (Exception ex) when (ex is ArgumentException or NotSupportedException or PathTooLongException)
+            {
+                return ValidationResult.Error("Please enter a valid file path.");
+            }
+
+            if (!File.Exists(fullPath))
+            {
+                return ValidationResult.Error("File does not exist.");
+            }
+
+            if (input.MaxFileSize is { } maxSize)
+            {
+                var fileInfo = new FileInfo(fullPath);
+                if (fileInfo.Length > maxSize)
+                {
+                    return ValidationResult.Error($"'{Path.GetFileName(fullPath)}' exceeds the maximum size of {FormatHelpers.FormatFileSize(maxSize)}.");
+                }
+            }
+
+            if (!string.IsNullOrEmpty(input.FileFilter))
+            {
+                var fileName = Path.GetFileName(fullPath);
+                var filters = input.FileFilter.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+                // Only validate against extension filters (e.g. ".pem", ".tar.gz"), skip MIME type patterns (e.g. "image/*").
+                var extensionFilters = filters.Where(f => f.StartsWith('.'));
+                if (extensionFilters.Any() && !extensionFilters.Any(f => fileName.EndsWith(f, StringComparison.OrdinalIgnoreCase)))
+                {
+                    return ValidationResult.Error($"'{Path.GetFileName(fullPath)}' does not match the accepted file types ({input.FileFilter}).");
+                }
+            }
+
+            return ValidationResult.Success();
+        }
+
+        if (input.AllowMultipleFiles)
+        {
+            // Prompt for files repeatedly until the user provides an empty value.
+            var filePaths = new List<string>();
+
+            while (true)
+            {
+                var filePrompt = filePaths.Count == 0
+                    ? promptText
+                    : $"{promptText} (enter to finish)";
+
+                var value = await InteractionService.PromptForFilePathAsync(
+                    filePrompt,
+                    validator: Validator,
+                    required: filePaths.Count == 0 && input.Required,
+                    cancellationToken: cancellationToken);
+
+                if (string.IsNullOrWhiteSpace(value))
+                {
+                    break;
+                }
+
+                filePaths.Add(Path.GetFullPath(value));
+            }
+
+            return await UploadFilesAsync(filePaths, backchannel, cancellationToken);
+        }
+
+        var singleValue = await InteractionService.PromptForFilePathAsync(
+            promptText,
+            binding: PromptBinding.CreateDefault(input.Value),
+            validator: Validator,
+            required: input.Required,
+            cancellationToken: cancellationToken);
+
+        if (string.IsNullOrWhiteSpace(singleValue))
+        {
+            return string.Empty;
+        }
+
+        return await UploadFilesAsync([Path.GetFullPath(singleValue)], backchannel, cancellationToken);
+    }
+
+    private static async Task<string> UploadFilesAsync(List<string> filePaths, IAppHostCliBackchannel backchannel, CancellationToken cancellationToken)
+    {
+        if (filePaths.Count == 0)
+        {
+            return string.Empty;
+        }
+
+        var fileRefs = new List<FileReferenceDto>(filePaths.Count);
+
+        foreach (var filePath in filePaths)
+        {
+            var fullPath = Path.GetFullPath(filePath);
+            var fileName = Path.GetFileName(fullPath);
+
+            // Upload the file to the AppHost and collect the reference.
+            // Matching the same format the dashboard uses: [{"Id":"...","Name":"..."}]
+            var uploadResponse = await backchannel.UploadFileAsync(fullPath, fileName, cancellationToken);
+            fileRefs.Add(new FileReferenceDto { Id = uploadResponse.FileId, Name = fileName });
+        }
+
+        return JsonSerializer.Serialize(fileRefs.ToArray(), BackchannelJsonSerializerContext.Default.FileReferenceDtoArray);
     }
 
     private static bool ParseBooleanValue(string? value)

@@ -12,7 +12,7 @@ namespace Infrastructure.Tests;
 /// </summary>
 public class SplitTestMatrixByDepsTests : IDisposable
 {
-    private readonly TestTempDirectory _tempDir = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _scriptPath;
     private readonly string _githubOutputFile;
     private readonly ITestOutputHelper _output;
@@ -20,12 +20,13 @@ public class SplitTestMatrixByDepsTests : IDisposable
     public SplitTestMatrixByDepsTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _scriptPath = Path.Combine(RepoRoot.Path, "eng", "scripts", "split-test-matrix-by-deps.ps1");
-        _githubOutputFile = Path.Combine(_tempDir.Path, "github_output.txt");
+        _githubOutputFile = Path.Combine(_workspace.Path, "github_output.txt");
         File.WriteAllText(_githubOutputFile, "");
     }
 
-    public void Dispose() => _tempDir.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     [Fact]
     [RequiresTools(["pwsh"])]
@@ -202,7 +203,7 @@ public class SplitTestMatrixByDepsTests : IDisposable
         var matrixJson = BuildMatrixJson(
             new { name = "FromFile", shortname = "ff", runs_on = "ubuntu-latest" });
 
-        var matrixFile = Path.Combine(_tempDir.Path, "matrix.json");
+        var matrixFile = Path.Combine(_workspace.Path, "matrix.json");
         File.WriteAllText(matrixFile, matrixJson);
 
         var result = await RunScript(allTestsMatrixFile: matrixFile);
@@ -231,7 +232,7 @@ public class SplitTestMatrixByDepsTests : IDisposable
     [RequiresTools(["pwsh"])]
     public async Task FailsWhenMatrixFileNotFound()
     {
-        var nonExistentFile = Path.Combine(_tempDir.Path, "nonexistent.json");
+        var nonExistentFile = Path.Combine(_workspace.Path, "nonexistent.json");
 
         using var cmd = new PowerShellCommand(_scriptPath, _output)
             .WithTimeout(TimeSpan.FromMinutes(2))
@@ -258,7 +259,7 @@ public class SplitTestMatrixByDepsTests : IDisposable
         if (!string.IsNullOrEmpty(allTestsMatrix))
         {
             // Write JSON to a temp file to avoid command-line quoting issues
-            var tempMatrixFile = Path.Combine(_tempDir.Path, $"matrix_input_{Guid.NewGuid():N}.json");
+            var tempMatrixFile = Path.Combine(_workspace.Path, $"matrix_input_{Guid.NewGuid():N}.json");
             File.WriteAllText(tempMatrixFile, allTestsMatrix);
             args.Add("-AllTestsMatrixFile");
             args.Add($"\"{tempMatrixFile}\"");

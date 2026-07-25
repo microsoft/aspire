@@ -2,7 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Cli.Bundles;
-using Aspire.Cli.Tests.Utils;
 using Aspire.Cli.Utils;
 using Aspire.Shared;
 
@@ -28,7 +27,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void VersionMarker_WriteAndRead_Roundtrips()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
         BundleService.WriteVersionMarker(dir, "13.2.0-dev");
@@ -39,7 +38,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void VersionMarker_ReturnsNull_WhenMissing()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         Assert.Null(BundleService.ReadVersionMarker(workspace.WorkspaceRoot.FullName));
     }
 
@@ -74,7 +73,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void GetCurrentVersion_ChangesWhenCliBinaryChanges()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var processPath = Path.Combine(workspace.WorkspaceRoot.FullName, "aspire");
         File.WriteAllText(processPath, "old");
         File.SetLastWriteTimeUtc(processPath, new DateTime(2026, 1, 1, 0, 0, 0, DateTimeKind.Utc));
@@ -120,7 +119,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsVersionedLayoutValid_RequiresManagedExecutableAndDcpDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
         Assert.False(BundleService.IsVersionedLayoutValid(dir));
@@ -142,7 +141,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void IsVersionedLayoutValid_RequiresDcpDirectory()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
         CreateFakeBundleLayout(dir);
 
@@ -153,7 +152,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void TryCleanupStaleVersions_RemovesNonActiveVersionsAndStaleTempDirs()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var versionsRoot = Path.Combine(workspace.WorkspaceRoot.FullName, BundleService.VersionsDirectoryName);
         Directory.CreateDirectory(versionsRoot);
 
@@ -174,7 +173,7 @@ public class BundleServiceTests(ITestOutputHelper outputHelper)
     [Fact]
     public void CaptureLinkTargets_ReturnsNullForMissingAndRealDirectories()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var dir = workspace.WorkspaceRoot.FullName;
 
         // bundle/ does not exist → null entry.

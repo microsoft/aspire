@@ -317,7 +317,7 @@ public class FoundryExtensionsTests
         var advisorAgent = builder.AddProject<Project>("advisoragent", launchProfileName: null)
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent)
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -349,7 +349,7 @@ public class FoundryExtensionsTests
             .AddProject("my-project");
 
         var advisorAgent = builder.AddProject<Project>("advisor-agent", launchProfileName: null)
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -387,7 +387,7 @@ public class FoundryExtensionsTests
             {
                 context.EnvironmentVariables["WEATHER_HEALTH_URL"] = ReferenceExpression.Create($"{weatherAgent.GetEndpoint("http")}/health");
             })
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -428,7 +428,7 @@ public class FoundryExtensionsTests
             {
                 context.EnvironmentVariables["WEATHER_HOST_AND_PORT"] = weatherAgent.GetEndpoint("http").Property(EndpointProperty.HostAndPort);
             })
-            .AsHostedAgent(project);
+            .AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);
@@ -468,7 +468,7 @@ public class FoundryExtensionsTests
             .WithReference(weatherAgent)
             .WaitFor(weatherAgent);
 
-        advisorAgent.AsHostedAgent(project);
+        advisorAgent.AsHostedAgent(project, HostedAgentProtocol.Responses, "2.0.0");
 
         using var app = builder.Build();
         await AzureManifestUtils.ExecuteBeforeStartHooksAsync(app, default);

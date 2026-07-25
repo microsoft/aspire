@@ -48,6 +48,12 @@ public interface IDashboardClient : IAsyncDisposable
     string ApplicationName { get; }
 
     /// <summary>
+    /// Gets the minimum dashboard version required by the connected AppHost,
+    /// or <see langword="null"/> if not yet known.
+    /// </summary>
+    string? MinRequiredVersion { get; }
+
+    /// <summary>
     /// Gets the current set of resources and a stream of updates.
     /// </summary>
     /// <remarks>
@@ -87,6 +93,8 @@ public interface IDashboardClient : IAsyncDisposable
     IAsyncEnumerable<IReadOnlyList<ResourceLogLine>> GetConsoleLogs(string resourceName, CancellationToken cancellationToken);
 
     Task<ResourceCommandResponseViewModel> ExecuteResourceCommandAsync(string resourceName, string resourceType, CommandViewModel command, ExecuteResourceCommandOptions options, CancellationToken cancellationToken);
+
+    Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken);
 }
 
 /// <summary>

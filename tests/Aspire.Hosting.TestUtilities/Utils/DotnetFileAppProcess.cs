@@ -12,9 +12,9 @@ internal static class DotnetFileAppProcess
     public static string ExecutablePath { get; } = Environment.GetEnvironmentVariable("DOTNET_HOST_PATH") ?? "dotnet";
     public static string ResolvedExecutablePath { get; } = PathLookupHelper.FindFullPathFromPath(ExecutablePath) ?? ExecutablePath;
 
-    public static string WriteApp(TestTempDirectory directory, string fileName, string content)
+    public static string WriteApp(string directoryPath, string fileName, string content)
     {
-        var appPath = Path.Combine(directory.Path, fileName);
+        var appPath = Path.Combine(directoryPath, fileName);
         File.WriteAllText(appPath, content);
 
         return appPath;

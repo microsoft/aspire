@@ -19,7 +19,7 @@ namespace Aspire.Cli.Tests.Projects;
 
 public class AppHostServerProjectTests(ITestOutputHelper outputHelper) : IDisposable
 {
-    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(outputHelper);
+    private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
     public void Dispose()
     {

@@ -34,7 +34,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Order_Is100()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         Assert.Equal(100, CreateMigration(workspace).Order);
     }
@@ -42,7 +42,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public void Id_IsTypeScriptAppHostMts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         Assert.Equal("typescript-apphost-mts", CreateMigration(workspace).Id);
     }
@@ -50,7 +50,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithLegacyAppHost_ReturnsDescriptor()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostPath = Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts");
         await File.WriteAllTextAsync(appHostPath, "import { createBuilder } from './.modules/aspire.js';");
 
@@ -66,7 +66,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithModernAppHost_ReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(
             Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"),
             "import { createBuilder } from './.aspire/modules/aspire.mjs';");
@@ -79,7 +79,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithBothAppHosts_ReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.ts"), "// legacy");
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.mts"), "// modern");
 
@@ -91,7 +91,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithNonTypeScriptAppHost_ReturnsNull()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         await File.WriteAllTextAsync(Path.Combine(workspace.WorkspaceRoot.FullName, "apphost.cs"), "// csharp");
 
         var descriptor = await CreateMigration(workspace).DetectAsync(MigrationContext.CurrentDirectory, CancellationToken.None);
@@ -102,7 +102,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task DetectAsync_WithSelectedLegacyAppHostOutsideWorkingDirectory_ReturnsDescriptor()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "external-apphost"));
         await WriteLegacyLayoutAsync(appHostDirectory);
         var appHostPath = Path.Combine(appHostDirectory.FullName, "apphost.ts");
@@ -205,7 +205,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_WithLegacyAppHost_MigratesToMts()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot;
         await WriteLegacyLayoutAsync(root);
 
@@ -225,7 +225,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_WithSelectedLegacyAppHostOutsideWorkingDirectory_MigratesSelectedAppHost()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var appHostDirectory = Directory.CreateDirectory(Path.Combine(workspace.WorkspaceRoot.FullName, "external-apphost"));
         await WriteLegacyLayoutAsync(appHostDirectory);
 
@@ -243,7 +243,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_WithJsoncTsConfig_RewritesIncludes()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot;
         await WriteLegacyLayoutAsync(
             root,
@@ -268,7 +268,7 @@ public class TypeScriptAppHostMigrationTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task ApplyAsync_RunTwice_SecondRunIsNoOp()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var root = workspace.WorkspaceRoot;
         await WriteLegacyLayoutAsync(root);
 

@@ -133,6 +133,12 @@
   <data name="ConsoleLogsNoLogsFound" xml:space="preserve">
     <value>No logs found</value>
   </data>
+  <data name="ConsoleLogsNoLogsMatchFilter" xml:space="preserve">
+    <value>No logs match the filter</value>
+  </data>
+  <data name="ConsoleLogsTextFilter" xml:space="preserve">
+    <value>Console logs filter</value>
+  </data>
   <data name="ConsoleLogsWatchingLogs" xml:space="preserve">
     <value>Watching logs...</value>
   </data>
@@ -186,47 +192,21 @@
   <data name="TerminalToolbarDecreaseFontSize" xml:space="preserve">
     <value>Decrease font size</value>
   </data>
-  <data name="TerminalToolbarFontSize" xml:space="preserve">
-    <value>Terminal font size</value>
-  </data>
   <data name="TerminalToolbarIncreaseFontSize" xml:space="preserve">
     <value>Increase font size</value>
   </data>
   <data name="TerminalToolbarGridSize" xml:space="preserve">
-    <value>Terminal grid size</value>
+    <value>Terminal dimensions</value>
   </data>
   <data name="TerminalToolbarGridSizeAuto" xml:space="preserve">
-    <value>Auto</value>
+    <value>Fit</value>
   </data>
-  <data name="TerminalToolbarCurrentGrid" xml:space="preserve">
-    <value>Current terminal grid</value>
+  <data name="ConsoleLogsViewConsoleOption" xml:space="preserve">
+    <value>Console logs</value>
+    <comment>Option in the View dropdown that shows the resource's console logs.</comment>
   </data>
-  <data name="TerminalToolbarPrimaryLabel" xml:space="preserve">
-    <value>Primary</value>
-  </data>
-  <data name="TerminalToolbarConnectingLabel" xml:space="preserve">
-    <value>Connecting…</value>
-  </data>
-  <data name="TerminalToolbarTakeControlLabel" xml:space="preserve">
-    <value>Take control</value>
-  </data>
-  <data name="TerminalToolbarPrimaryTitle" xml:space="preserve">
-    <value>This tab owns primary input on the terminal session.</value>
-  </data>
-  <data name="TerminalToolbarNoPrimaryTitle" xml:space="preserve">
-    <value>No client currently owns primary input. Click to take it.</value>
-  </data>
-  <data name="TerminalToolbarViewerTitle" xml:space="preserve">
-    <value>Another client owns primary input. Click to take control.</value>
-  </data>
-  <data name="TerminalToolbarConnectingTitle" xml:space="preserve">
-    <value>Connecting to the terminal session…</value>
-  </data>
-  <data name="TerminalHeader" xml:space="preserve">
+  <data name="ConsoleLogsViewTerminalOption" xml:space="preserve">
     <value>Terminal</value>
-  </data>
-  <data name="TerminalPageTitle" xml:space="preserve">
-    <value>{0} terminal</value>
-    <comment>{0} is an application name</comment>
+    <comment>Option in the View dropdown that shows the resource's interactive terminal.</comment>
   </data>
 </root>

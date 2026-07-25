@@ -15,7 +15,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_Help_Works()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -30,7 +30,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_RequiresResourceArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -45,7 +45,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_AcceptsResourceArgument()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -59,7 +59,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_AcceptsProjectOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -73,7 +73,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_AcceptsStatusOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -87,7 +87,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_AcceptsTimeoutOption()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -104,7 +104,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [InlineData("down")]
     public async Task WaitCommand_AcceptsAllStatusValues(string status)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -121,7 +121,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [InlineData("Down")]
     public async Task WaitCommand_StatusIsCaseInsensitive(string status)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -135,7 +135,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_ResourceNotFound_ReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -165,7 +165,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_ResourceRunning_WaitForUp_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -190,7 +190,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_ResourceHealthy_WaitForHealthy_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -215,7 +215,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_Timeout_ReturnsTimeoutExitCode()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -245,7 +245,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_ResourceExited_WaitForDown_ReturnsSuccess()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {
@@ -270,7 +270,7 @@ public class WaitCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task WaitCommand_ResourceFailedToStart_WaitForUp_ReturnsFailure()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
 
         var backchannel = new TestAppHostAuxiliaryBackchannel
         {

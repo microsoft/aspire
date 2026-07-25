@@ -22,10 +22,14 @@ public sealed class PersistentVolumeClaimSpecV1
     /// <remarks>
     /// The DataSource property is used to specify the reference to an existing resource
     /// that serves as the source for the volume. This can be used, for example, to populate
-    /// a PVC using data from an existing snapshot or another volume object.
+    /// a PVC using data from an existing snapshot or another volume object. Defaults to
+    /// <see langword="null"/> so the property is omitted from the serialized YAML when no
+    /// data source has been configured. Eagerly initializing this to <c>new()</c> would
+    /// otherwise emit an invalid empty <c>dataSource: {}</c> mapping that Kubernetes
+    /// rejects on apply.
     /// </remarks>
     [YamlMember(Alias = "dataSource")]
-    public TypedLocalObjectReferenceV1 DataSource { get; set; } = new();
+    public TypedLocalObjectReferenceV1? DataSource { get; set; }
 
     /// <summary>
     /// Gets or sets the name of the storage class required by the PersistentVolumeClaim.
@@ -87,9 +91,13 @@ public sealed class PersistentVolumeClaimSpecV1
     /// The referenced resource should match the type specified, and the reference includes
     /// details such as kind, name, namespace, and API group of the object.
     /// This enables integration with external or heterogeneous resources in a Kubernetes environment.
+    /// Defaults to <see langword="null"/> so the property is omitted from the serialized YAML
+    /// when no data source reference has been configured. Eagerly initializing this to
+    /// <c>new()</c> would otherwise emit an invalid empty <c>dataSourceRef: {}</c> mapping
+    /// that Kubernetes rejects on apply.
     /// </remarks>
     [YamlMember(Alias = "dataSourceRef")]
-    public TypedObjectReferenceV1 DataSourceRef { get; set; } = new();
+    public TypedObjectReferenceV1? DataSourceRef { get; set; }
 
     /// <summary>
     /// Gets or sets the label selector used to filter Kubernetes resources.
@@ -98,10 +106,14 @@ public sealed class PersistentVolumeClaimSpecV1
     /// The <c>Selector</c> property allows the specification of a set of filtering criteria using labels.
     /// It supports exact matches with key-value pairs (MatchLabels) as well as more complex filtering rules
     /// using label selector requirements (MatchExpressions). This property is commonly used to dynamically
-    /// select resources like pods or volumes in Kubernetes deployments.
+    /// select resources like pods or volumes in Kubernetes deployments. Defaults to
+    /// <see langword="null"/> so the property is omitted from the serialized YAML when no
+    /// selector has been configured. Eagerly initializing this to <c>new()</c> would
+    /// otherwise emit an invalid empty <c>selector: {}</c> mapping that Kubernetes rejects
+    /// on apply.
     /// </remarks>
     [YamlMember(Alias = "selector")]
-    public LabelSelectorV1 Selector { get; set; } = new();
+    public LabelSelectorV1? Selector { get; set; }
 
     /// <summary>
     /// Defines the access modes for a Persistent Volume Claim.

@@ -13,6 +13,11 @@ public abstract class TelemetryFilter : IEquatable<TelemetryFilter>
 {
     public bool Enabled { get; set; } = true;
 
+    // Returns true when this filter uses negative matching (e.g. NotEqual, NotContains).
+    // Negative filters require ALL spans in a trace to satisfy the condition for the trace
+    // to pass, rather than the default ANY-span semantics used by positive filters.
+    internal virtual bool IsNegativeFilter => false;
+
     public abstract bool Equals(TelemetryFilter? other);
 
     public abstract IEnumerable<OtlpLogEntry> Apply(IEnumerable<OtlpLogEntry> input);
@@ -27,6 +32,8 @@ public class FieldTelemetryFilter : TelemetryFilter
     public string? FallbackField { get; set; }
     public FilterCondition Condition { get; set; }
     public string Value { get; set; } = default!;
+
+    internal override bool IsNegativeFilter => Condition is FilterCondition.NotEqual or FilterCondition.NotContains;
 
     private string DebuggerDisplayText => $"{Field} {ConditionToString(Condition, null)} {Value}";
 
@@ -262,8 +269,13 @@ public class FieldTelemetryFilter : TelemetryFilter
         else
         {
             // And — both values must satisfy the not-equal/not-contains condition.
-            // When Value2 is null (most fields only have one value), Value1 alone is sufficient.
-            if (fieldValues.Value1 != null && IsMatch(fieldValues.Value1, Value, Condition, fieldType))
+            // When the field is absent (Value1 is null), the span trivially satisfies the
+            // negative condition — a span without the field cannot contain/equal the value.
+            if (fieldValues.Value1 is null)
+            {
+                return true;
+            }
+            if (IsMatch(fieldValues.Value1, Value, Condition, fieldType))
             {
                 if (fieldValues.Value2 is null || IsMatch(fieldValues.Value2, Value, Condition, fieldType))
                 {

@@ -205,7 +205,11 @@ internal sealed class AppHostServerSession : IAppHostServerSession
                     serverEnvironmentVariables,
                     additionalArgs: null,
                     debug: _debug,
-                    runControl: new AppHostServerRunControl(_isolateConsole, _gracefulShutdownSignaler, _shutdownService)).ConfigureAwait(false);
+                    runControl: new AppHostServerRunControl(
+                        IsolateConsole: _isolateConsole,
+                        KillOnParentExit: _isolateConsole,
+                        GracefulShutdownSignaler: _gracefulShutdownSignaler,
+                        ShutdownService: _shutdownService)).ConfigureAwait(false);
             }
             catch (Exception ex)
             {

@@ -12,7 +12,7 @@ using Yarp.ReverseProxy.LoadBalancing;
 
 namespace Aspire.Hosting.Yarp.Tests;
 
-public class YarpConfigGeneratorTests()
+public class YarpConfigGeneratorTests(ITestOutputHelper outputHelper)
 {
     #region Routes and Clusters configs
     private readonly List<RouteConfig> _validRoutes =
@@ -263,8 +263,8 @@ public class YarpConfigGeneratorTests()
     [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
     public async Task GenerateEnvVariablesConfigurationDockerCompose()
     {
-        using var tempDir = new TestTempDirectory();
-        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, tempDir.Path);
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, workspace.Path);
 
         builder.AddDockerComposeEnvironment("docker-compose").WithDashboard(db => db.WithHostPort(18888));
 
@@ -289,7 +289,7 @@ public class YarpConfigGeneratorTests()
         var app = builder.Build();
         app.Run();
 
-        var composeFile = Path.Combine(tempDir.Path, "docker-compose.yaml");
+        var composeFile = Path.Combine(workspace.Path, "docker-compose.yaml");
         Assert.True(File.Exists(composeFile), "Docker Compose file was not created.");
 
         var content = await File.ReadAllTextAsync(composeFile);

@@ -3,12 +3,19 @@ import test from "node:test";
 
 import { dayMs, personalPickActions } from "./constants.mjs";
 import {
+  actorIdentityKey,
   computeCommunityItems,
   computeFocusExclusionItems,
   computeFocusItems,
   createAttentionBuckets,
   createDeveloperPullRequestCounts,
+  createFocusIssueBuckets,
   createForMeItems,
+  createIssueSignals,
+  filterCheckFailureRules,
+  isChecksFailing,
+  shouldHideFromSharedPullRequestLists,
+  visibleCheckState,
 } from "./model.mjs";
 
 // The review-mode engine consumes the *normalized* PR shape produced by
@@ -36,7 +43,20 @@ function makePr(overrides = {}) {
     viewerApproved: false,
     ...(overrides.review ?? {}),
   };
-  const checks = { state: "success", failureCount: 0, completedAt: null, ...(overrides.checks ?? {}) };
+  // Mirrors the engine-shaped ChecksStatus normalizePr() emits: the lean list-level query
+  // yields zeroed per-check detail, so failingChecks defaults empty and the counts are 0.
+  const checks = {
+    state: "success",
+    totalCount: 0,
+    successCount: 0,
+    failureCount: 0,
+    pendingCount: 0,
+    neutralCount: 0,
+    skippedCount: 0,
+    completedAt: null,
+    failingChecks: [],
+    ...(overrides.checks ?? {}),
+  };
   return {
     repository: "microsoft/aspire",
     number: 1,
@@ -174,4 +194,123 @@ test("createDeveloperPullRequestCounts attributes open PRs to core-team members 
   // The "_microsoft" alias attributes to the canonical core-team login.
   assert.equal(byActor.get("IEvangelist"), 1);
   assert.equal(byActor.has("randocontributor"), false);
+});
+
+function isoAgoIssue(ms) {
+  return new Date(Date.now() - ms).toISOString();
+}
+
+function makeIssue(overrides = {}) {
+  return {
+    repository: "microsoft/aspire",
+    number: 1,
+    title: "Test issue",
+    url: "https://github.com/microsoft/aspire/issues/1",
+    author: "octo",
+    authorType: "User",
+    authorAvatarUrl: null,
+    createdAt: isoAgoIssue(2 * dayMs),
+    updatedAt: isoAgoIssue(dayMs),
+    milestone: null,
+    labels: [],
+    assignees: [],
+    isMine: false,
+    assignedToMe: false,
+    ...overrides,
+  };
+}
+
+test("visibleCheckState and isChecksFailing honor non-blocking check rules", () => {
+  const normalFailure = makePr({ repository: "microsoft/aspire", checks: { state: "failure", totalCount: 2, failureCount: 2 } });
+  assert.equal(visibleCheckState(normalFailure), "failure");
+  assert.equal(isChecksFailing(normalFailure), true);
+
+  // aspire-1p reports a bare aggregate "failure" before per-check detail is fetched. With a
+  // non-blocking rule for that repo and zero per-check detail, it is indeterminate, not red.
+  const aggregateFailure = makePr({ repository: "devdiv-microsoft/aspire-1p", checks: { state: "failure" } });
+  assert.equal(visibleCheckState(aggregateFailure), "unknown");
+  assert.equal(isChecksFailing(aggregateFailure), false);
+
+  // A failure whose only failing check matches the rule downgrades to success (nothing pending).
+  const nonBlockingOnly = makePr({
+    repository: "devdiv-microsoft/aspire-1p",
+    checks: { state: "failure", totalCount: 1, failureCount: 1, failingChecks: [{ name: "GitOps/GitHubPop" }] },
+  });
+  assert.equal(visibleCheckState(nonBlockingOnly), "success");
+  assert.equal(isChecksFailing(nonBlockingOnly), false);
+});
+
+test("filterCheckFailureRules drops rules missing a repository, label, or concrete matcher", () => {
+  const valid = { repository: "devdiv-microsoft/aspire-1p", label: "proof of presence", checkNames: ["GitOps/GitHubPop"], checkNameContains: [] };
+  const containsOnly = { repository: "org/repo", label: "informational", checkNames: [], checkNameContains: ["proof of presence"] };
+  const noMatchers = { repository: "org/repo", label: "informational", checkNames: [], checkNameContains: [] };
+  const noRepo = { repository: "", label: "informational", checkNames: ["x"], checkNameContains: [] };
+  const noLabel = { repository: "org/repo", label: "", checkNames: ["x"], checkNameContains: [] };
+
+  // A rule with no concrete matcher would otherwise mark every aggregate failure on its
+  // repo non-blocking, hiding all red CI. Only rules that actually name a check survive.
+  assert.deepEqual(filterCheckFailureRules([valid, containsOnly, noMatchers, noRepo, noLabel]), [valid, containsOnly]);
+  assert.deepEqual(filterCheckFailureRules([]), []);
+  assert.deepEqual(filterCheckFailureRules(undefined), []);
+});
+
+test("shouldHideFromSharedPullRequestLists hides drafts, conflicts, and needs-author-action PRs", () => {
+  assert.equal(shouldHideFromSharedPullRequestLists(makePr()), false);
+  assert.equal(shouldHideFromSharedPullRequestLists(makePr({ draft: true })), true);
+  assert.equal(shouldHideFromSharedPullRequestLists(makePr({ mergeableState: "dirty" })), true);
+  assert.equal(shouldHideFromSharedPullRequestLists(makePr({ labels: ["needs-author-action"] })), true);
+});
+
+test("actorIdentityKey attributes a Copilot-authored PR to its human owner", () => {
+  assert.equal(actorIdentityKey("davidfowl/copilot"), "davidfowl");
+  assert.equal(actorIdentityKey("IEvangelist_microsoft"), "ievangelistmicrosoft");
+
+  const counts = createDeveloperPullRequestCounts([makePr({ number: 60, author: "davidfowl/copilot" })]);
+  const byActor = new Map(counts.map((c) => [c.actor, c.openPullRequestCount]));
+  assert.equal(byActor.get("davidfowl"), 1);
+});
+
+test("createFocusIssueBuckets groups regression, CTI team, afscrome finds, and my issues", () => {
+  const regression = makeIssue({ number: 1, labels: ["regression"] });
+  const cti = makeIssue({ number: 2, title: "Flaky [aspiree2e] run" });
+  const afscrome = makeIssue({ number: 3, author: "afscrome" });
+  const mine = makeIssue({ number: 4, assignees: ["octo"] });
+  const other = makeIssue({ number: 5 });
+
+  const buckets = createFocusIssueBuckets([regression, cti, afscrome, mine, other], "octo");
+  const byLabel = new Map(buckets.map((b) => [b.label, b.issues.map((i) => i.number)]));
+
+  assert.deepEqual(byLabel.get("Regression"), [1]);
+  assert.deepEqual(byLabel.get("CTI team"), [2]);
+  assert.deepEqual(byLabel.get("afscrome finds"), [3]);
+  assert.deepEqual(byLabel.get("My issues"), [4]);
+  // Issue 5 matches no focus definition, so no bucket surfaces it.
+  assert.equal(buckets.some((b) => b.issues.some((i) => i.number === 5)), false);
+
+  // Without a login the per-viewer "My issues" lane is omitted.
+  const withoutLogin = createFocusIssueBuckets([mine], undefined);
+  assert.equal(withoutLogin.find((b) => b.label === "My issues"), undefined);
+});
+
+test("createIssueSignals leads with the highest-priority action pill", () => {
+  const releaseBlocking = makeIssue({ number: 1, labels: ["blocking-release"] });
+  assert.equal(createIssueSignals(releaseBlocking)[0].label, "Blocking release");
+
+  const regression = makeIssue({ number: 2, labels: ["regression"] });
+  assert.equal(createIssueSignals(regression)[0].label, "Regression");
+
+  const unowned = makeIssue({ number: 3, assignees: [] });
+  assert.equal(createIssueSignals(unowned)[0].label, "Unowned");
+
+  const owned = makeIssue({ number: 4, assignees: ["octo"] });
+  assert.equal(createIssueSignals(owned)[0].label, "Needs validation");
+
+  // Pills are capped at 7 even with many labels.
+  const noisy = makeIssue({ number: 5, milestone: "13.4", labels: ["a", "b", "c", "d", "e"] });
+  assert.ok(createIssueSignals(noisy).length <= 7);
+
+  // The precise GraphQL __typename === "Bot" fast-path earns a bot pill even when the
+  // login has no "bot" substring (normalizeIssue now carries authorType for issues).
+  const botTyped = makeIssue({ number: 6, author: "dependa", authorType: "Bot" });
+  assert.ok(createIssueSignals(botTyped).some((s) => s.label === "bot"));
 });

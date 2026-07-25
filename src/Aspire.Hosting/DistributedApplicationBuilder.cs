@@ -414,6 +414,7 @@ public class DistributedApplicationBuilder : IDistributedApplicationBuilder
         _innerBuilder.Services.AddSingleton<AuxiliaryBackchannelService>();
         _innerBuilder.Services.AddHostedService<AuxiliaryBackchannelService>(sp => sp.GetRequiredService<AuxiliaryBackchannelService>());
         _innerBuilder.Services.AddSingleton<AppHostRpcTarget>();
+        _innerBuilder.Services.AddSingleton<IFileUploadStore, Dashboard.FileUploadStore>();
 
         ConfigureHealthChecks();
 

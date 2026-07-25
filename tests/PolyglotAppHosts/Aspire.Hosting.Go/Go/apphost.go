@@ -45,7 +45,9 @@ func main() {
 
 	// Go app with headless Delve server for remote debugging (GoLand / VS Code attach)
 	debugService := builder.AddGoApp("debug-service", "../go-debug-service").
-		WithDelveServer(&aspire.WithDelveServerOptions{Port: aspire.Float64Ptr(2345)})
+		WithDelveServer(&aspire.WithDelveServerOptions{
+			Port: aspire.Float64Ptr(2345),
+		})
 	if err = debugService.Err(); err != nil {
 		log.Fatal(aspire.FormatError(err))
 	}

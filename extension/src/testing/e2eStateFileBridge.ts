@@ -549,6 +549,13 @@ async function executeE2eControlCommand(
       markStarted();
       return await vscode.env.clipboard.readText();
     }
+    case 'openFile': {
+      const filePath = getE2eRunPath(command.filePath);
+      markStarted();
+      const document = await vscode.workspace.openTextDocument(vscode.Uri.file(filePath));
+      await vscode.window.showTextDocument(document, { preview: false });
+      return getActiveEditorInfo();
+    }
     case 'openWorkspaceFolder': {
       const folderPath = getE2eWorkspaceFolderPath(command.folderPath);
       markStarted();
@@ -1078,6 +1085,23 @@ function getE2eWorkspaceFolderPath(folderPath: unknown): string {
   }
 
   return folderPath;
+}
+
+function getE2eRunPath(filePath: unknown): string {
+  if (typeof filePath !== 'string' || filePath.length === 0 || !path.isAbsolute(filePath)) {
+    throw new Error('Aspire extension E2E openFile requires an absolute file path.');
+  }
+
+  if (!fs.existsSync(filePath) || !fs.statSync(filePath).isFile()) {
+    throw new Error(`Aspire extension E2E openFile requires an existing file: ${filePath}`);
+  }
+
+  const runRoot = process.env.ASPIRE_EXTENSION_E2E_RUN_ROOT;
+  if (typeof runRoot !== 'string' || runRoot.length === 0 || !isPathWithinDirectory(filePath, runRoot)) {
+    throw new Error('Aspire extension E2E openFile can only open files inside the configured E2E run root.');
+  }
+
+  return filePath;
 }
 
 function getE2eBreakpointLine(line: unknown): number {

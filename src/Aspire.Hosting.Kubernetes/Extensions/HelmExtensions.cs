@@ -11,7 +11,6 @@ internal static partial class HelmExtensions
     private const string StatefulSetKey = "statefulset";
     private const string ServiceKey = "service";
     private const string PvcKey = "pvc";
-    private const string PvKey = "pv";
     private const string ValuesSegment = ".Values";
     public const string ParametersKey = "parameters";
     public const string SecretsKey = "secrets";
@@ -74,9 +73,6 @@ internal static partial class HelmExtensions
 
     public static string ToPvcName(this string resourceName, string volumeName)
         => $"{resourceName.ToKubernetesResourceName()}-{volumeName}-{PvcKey}";
-
-    public static string ToPvName(this string resourceName, string volumeName)
-        => $"{resourceName.ToKubernetesResourceName()}-{volumeName}-{PvKey}";
 
     public static bool ContainsHelmExpression(this string value)
         => ExpressionPattern().IsMatch(value);

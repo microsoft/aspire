@@ -23,7 +23,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithHelpReturnsZero()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -45,7 +45,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [InlineData("Pretty")]
     public void ParsesFormatOptionWithoutErrors(string format)
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -58,7 +58,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithNonexistentCsprojReturnsFailedToFindProject()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -73,7 +73,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithEmptyPackageNameReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -88,7 +88,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithEmptyVersionReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -103,7 +103,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithInvalidVersionFormatReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -118,7 +118,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithInvalidArgumentFormatReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -133,7 +133,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ParsesValidPackageFormatWithoutErrors()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -146,7 +146,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ParsesMultipleMixedArgumentsWithoutErrors()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -159,7 +159,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ParsesOutputDirectoryOptionWithoutErrors()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -172,7 +172,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithOutputAndOutputDirectoryReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -187,7 +187,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithOutputDirectoryWithoutCiFormatReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -202,7 +202,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithOutputDirectoryWithoutIntegrationsReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -217,7 +217,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public void ParsesPreReleaseVersionWithoutErrors()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 
@@ -230,7 +230,7 @@ public class SdkDumpCommandTests(ITestOutputHelper outputHelper)
     [Fact]
     public async Task SdkDumpWithDoubleAtSignReturnsInvalidCommand()
     {
-        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var workspace = TemporaryWorkspace.CreateForCli(outputHelper);
         var services = CliTestHelper.CreateServiceCollection(workspace, outputHelper);
         using var provider = services.BuildServiceProvider();
 

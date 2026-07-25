@@ -2,16 +2,8 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Text.RegularExpressions;
-using Aspire.Dashboard.Configuration;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Markdown;
 using Aspire.Dashboard.Model.Markdown;
-using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
-using Aspire.Dashboard.Tests.Integration.Playwright.Infrastructure;
-using Aspire.Dashboard.Tests.Model;
-using Aspire.Tests.Shared.DashboardModel;
-using Aspire.Tests.Shared.Telemetry;
 using Markdig;
 using Xunit;
 
@@ -156,6 +148,24 @@ public class MarkdownProcessorTests
         // Assert
         Assert.Contains("language-csharp", html);
         Assert.Contains("</code>", html);
+    }
+
+    [Fact]
+    public void ToHtml_FencedCodeBlock_CopyButtonHasLocalizedAccessibleName()
+    {
+        var processor = CreateMarkdownProcessor();
+
+        var markdown =
+            """
+            ```csharp
+            Console.WriteLine("Hello");
+            ```
+            """;
+
+        var html = processor.ToHtml(markdown, inCompleteDocument: true);
+
+        var copyButton = Regex.Match(html, """<button[^>]* (?<accessibleName>aria-label="[^"]+")[^>]*>""");
+        Assert.Equal("aria-label=\"Localized:GridValueCopyToClipboard\"", copyButton.Groups["accessibleName"].Value);
     }
 
     [Fact]
@@ -337,44 +347,6 @@ public class MarkdownProcessorTests
 
         // Assert
         Assert.Equal(expected, html.Trim(), ignoreLineEndingDifferences: true);
-    }
-
-    [Theory]
-    [InlineData("frontend")]
-    [InlineData("frontend-abcxyz")]
-    [InlineData("**frontend-abcxyz**")]
-    [InlineData("*_frontend-abcxyz_*")]
-    public void ToHtml_ResourceCode_ConvertedToLink(string code)
-    {
-        // Arrange
-        var dashboardClient = new MockDashboardClient(resources: [ModelTestHelpers.CreateResource(resourceName: "frontend-abcxyz", displayName: "frontend")]);
-        var context = CreateAssistantChatDataContext(dashboardClient: dashboardClient);
-        var processor = CreateMarkdownProcessor(extensions: [new AspireEnrichmentExtension(new AspireEnrichmentOptions { DataContext = context })]);
-
-        var markdown =
-            $"""
-            Test: `{code}`
-            """;
-
-        // Act
-        var html = processor.ToHtml(markdown, inCompleteDocument: true);
-
-        // Assert
-        Assert.Contains("""
-            href="/?resource=frontend-abcxyz"
-            """, html.Trim());
-    }
-
-    internal static AssistantChatDataContext CreateAssistantChatDataContext(TelemetryRepository? telemetryRepository = null, IDashboardClient? dashboardClient = null)
-    {
-        var context = new AssistantChatDataContext(
-            telemetryRepository ?? TelemetryTestHelpers.CreateRepository(),
-            dashboardClient ?? new MockDashboardClient(),
-            [],
-            new TestStringLocalizer<Dashboard.Resources.AIAssistant>(),
-            new TestOptionsMonitor<DashboardOptions>(new DashboardOptions()));
-
-        return context;
     }
 
     internal static MarkdownProcessor CreateMarkdownProcessor(HashSet<string>? safeUrlSchemes = null, List<IMarkdownExtension>? extensions = null)

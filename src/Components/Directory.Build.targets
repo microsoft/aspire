@@ -6,6 +6,7 @@
   PackageId.targets file which brings the ConfigurationSchema.json file into the Json Schema.
   -->
   <PropertyGroup>
+    <ConfigurationSchemaGeneratorEnabled Condition="'$(ConfigurationSchemaGeneratorEnabled)' == ''">true</ConfigurationSchemaGeneratorEnabled>
     <ConfigurationSchemaPath>$(MSBuildProjectDirectory)\ConfigurationSchema.json</ConfigurationSchemaPath>
     <ConfigurationSchemaExists Condition="Exists('$(ConfigurationSchemaPath)')">true</ConfigurationSchemaExists>
   </PropertyGroup>
@@ -30,15 +31,15 @@
   <!--
   Logic for generating and comparing the ConfigurationSchema.json file
   -->
-  <PropertyGroup>
+  <PropertyGroup Condition="'$(ConfigurationSchemaGeneratorEnabled)' == 'true'">
     <TargetsTriggeredByCompilation Condition="'$(DesignTimeBuild)' != 'true'">$(TargetsTriggeredByCompilation);GenerateConfigurationSchema</TargetsTriggeredByCompilation>
 
     <ConfigurationSchemaGeneratorProjectPath>$(RepoRoot)src\Tools\ConfigurationSchemaGenerator\ConfigurationSchemaGenerator.csproj</ConfigurationSchemaGeneratorProjectPath>
-    <ConfigurationSchemaGeneratorRspPath>$(IntermediateOutputPath)$(AsemblyName).configschema.rsp</ConfigurationSchemaGeneratorRspPath>
+    <ConfigurationSchemaGeneratorRspPath>$(IntermediateOutputPath)$(AssemblyName).configschema.rsp</ConfigurationSchemaGeneratorRspPath>
     <GeneratedConfigurationSchemaOutputPath>$(IntermediateOutputPath)ConfigurationSchema.json</GeneratedConfigurationSchemaOutputPath>
   </PropertyGroup>
 
-  <ItemGroup>
+  <ItemGroup Condition="'$(ConfigurationSchemaGeneratorEnabled)' == 'true'">
     <!-- ensure the config generator is built -->
     <ProjectReference Include="$(ConfigurationSchemaGeneratorProjectPath)"
                       Private="false"
@@ -85,7 +86,6 @@
                   @(ReferencePathWithRefAssemblies)"
           Outputs="$(GeneratedConfigurationSchemaOutputPath)">
     <PropertyGroup>
-
       <GeneratorCommandLine>"$(DotNetTool)" exec "$(ConfigurationSchemaGeneratorPath)"</GeneratorCommandLine>
       <GeneratorCommandLine>$(GeneratorCommandLine) @"$(ConfigurationSchemaGeneratorRspPath)"</GeneratorCommandLine>
     </PropertyGroup>
@@ -93,7 +93,7 @@
     <Exec Command="$(GeneratorCommandLine)" />
 
     <ItemGroup>
-      <FileWrites Include="$(GeneratedConfigurationSchemaOutputPath)" Condition="Exists('$(GeneratedConfigurationSchemaOutputPath)')"/>
+      <FileWrites Include="$(GeneratedConfigurationSchemaOutputPath)" Condition="Exists('$(GeneratedConfigurationSchemaOutputPath)')" />
     </ItemGroup>
   </Target>
 

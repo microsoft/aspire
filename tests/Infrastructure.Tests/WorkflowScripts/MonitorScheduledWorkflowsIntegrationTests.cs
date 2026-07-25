@@ -26,7 +26,7 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
     private const string WatchedFile = "generate-api-diffs.yml";
     private const string Marker = "<!-- automation-broken:generate-api-diffs.yml -->";
 
-    private readonly TestTempDirectory _tempDirectory = new();
+    private readonly TemporaryWorkspace _workspace;
     private readonly string _repoRoot;
     private readonly string _harnessPath;
     private readonly ITestOutputHelper _output;
@@ -34,11 +34,12 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
     public MonitorScheduledWorkflowsIntegrationTests(ITestOutputHelper output)
     {
         _output = output;
+        _workspace = TemporaryWorkspace.Create(output);
         _repoRoot = RepoRoot.Path;
         _harnessPath = Path.Combine(_repoRoot, "tests", "Infrastructure.Tests", "WorkflowScripts", "monitor-scheduled-workflows.integration.harness.js");
     }
 
-    public void Dispose() => _tempDirectory.Dispose();
+    public void Dispose() => _workspace.Dispose();
 
     // `id` is the stable run identifier the runner uses as the comment dedup key.
     private static object FailingRun(int id = 9, int runNumber = 9, string? updatedAt = null) => new
@@ -388,7 +389,7 @@ public sealed class MonitorScheduledWorkflowsIntegrationTests : IDisposable
 
     private async Task<MonitorResult> InvokeAsync(object scenario)
     {
-        var requestPath = Path.Combine(_tempDirectory.Path, $"{Guid.NewGuid():N}.json");
+        var requestPath = Path.Combine(_workspace.Path, $"{Guid.NewGuid():N}.json");
         await File.WriteAllTextAsync(requestPath, JsonSerializer.Serialize(scenario, s_requestOptions));
 
         using var command = new NodeCommand(_output, "monitor-scheduled-workflows-integration");
