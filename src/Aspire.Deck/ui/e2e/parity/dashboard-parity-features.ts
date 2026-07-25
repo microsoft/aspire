@@ -146,7 +146,7 @@ const featureDefinitions = {
     ["CMD-DYNAMIC-001", "/", "Dependent argument choices load asynchronously when prerequisite values change.", "commands", "covered", "CMD-DYNAMIC-001"],
     ["CMD-LIVE-VALIDATION-001", "/", "Inputs can request server validation while values change.", "commands", "covered", "CMD-LIVE-VALIDATION-001"],
     ["CMD-VALIDATION-001", "/", "Field-level and form-level validation errors are announced and rendered.", "commands", "covered", "CMD-VALIDATION-001"],
-    ["CMD-MANY-INPUTS-001", "/", "Large command forms remain scrollable and submit every input value.", "commands", "covered", "CMD-MANY-INPUTS-001"],
+    ["CMD-MANY-INPUTS-001", "/", "Large command forms remain scrollable and submit every input value; file inputs preserve filters, size/count limits, upload errors, and AppHost file references.", "commands", "covered", "CMD-MANY-INPUTS-001; HTTP-INTERACTION-001; DashboardBackendApplicationTests.FileInputUpload_AndResponseUseSameResourceServiceSession"],
     ["CMD-MESSAGEBOX-001", "/", "Confirmation and message-box interactions support primary, secondary, dismiss, and intent.", "commands", "covered", "CMD-MESSAGEBOX-001"],
     ["CMD-NOTIFICATION-001", "/", "Interaction notifications support semantic intent, links, actions, and non-dismissible state.", "commands", "covered", "CMD-NOTIFICATION-001"],
     ["CMD-MARKDOWN-001", "/", "Interaction messages and field descriptions opt into sanitized Markdown rendering.", "commands", "covered", "TK-MARKDOWN-001; CMD-MARKDOWN-001"],

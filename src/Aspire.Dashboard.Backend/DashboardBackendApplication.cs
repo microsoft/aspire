@@ -384,6 +384,9 @@ internal static class DashboardBackendApplication
                 DashboardBackendJsonSerializerContext.Default.DashboardInteractionArray);
         });
         app.MapPost($"{DashboardApiContract.VersionOneBasePath}/interactions/respond", RespondToInteractionAsync);
+        app.MapPost(
+            $"{DashboardApiContract.VersionOneBasePath}/interactions/{{interactionId:int}}/inputs/{{inputName}}/files",
+            UploadInteractionFileAsync);
 
         // Older React bundles use these unversioned routes when served by the standalone
         // backend. Keep the aliases, but route them into the same direct resource-service
@@ -400,6 +403,9 @@ internal static class DashboardBackendApplication
                 DashboardBackendJsonSerializerContext.Default.DashboardInteractionArray);
         });
         app.MapPost("/api/deck/interactions/respond", RespondToInteractionAsync);
+        app.MapPost(
+            "/api/deck/interactions/{interactionId:int}/inputs/{inputName}/files",
+            UploadInteractionFileAsync);
         app.MapPost("/api/deck/commands/execute", ExecuteCommandAsync);
 
         // Keep the SPA fallback last so versioned API and SignalR routes always win. Unknown
@@ -452,6 +458,97 @@ internal static class DashboardBackendApplication
             return await interactionService.RespondAsync(request, context.RequestAborted).ConfigureAwait(false)
                 ? Results.NoContent()
                 : Results.NotFound();
+        }
+
+        static async Task<IResult> UploadInteractionFileAsync(
+            int interactionId,
+            string inputName,
+            HttpContext context,
+            IDashboardInteractionService interactionService)
+        {
+            if (interactionId <= 0
+                || string.IsNullOrWhiteSpace(inputName)
+                || !context.Request.Headers.TryGetValue("X-Aspire-File-Name", out var fileNameHeader))
+            {
+                return Results.BadRequest();
+            }
+            string fileName;
+            try
+            {
+                // Browser fetch headers are restricted to ByteString values. React percent-encodes
+                // the UTF-8 filename so names such as "résumé.txt" survive the HTTP-to-gRPC bridge.
+                fileName = Uri.UnescapeDataString(fileNameHeader.ToString());
+            }
+            catch (UriFormatException)
+            {
+                return Results.BadRequest();
+            }
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return Results.BadRequest();
+            }
+            if (!interactionService.TryGetFileUploadLimit(interactionId, inputName, out var maximumSize))
+            {
+                return Results.NotFound();
+            }
+            if (context.Request.ContentLength > maximumSize)
+            {
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            }
+
+            // Kestrel's default body limit is lower than the AppHost file-input ceiling. Raise it
+            // only to the authoritative limit advertised for this pending interaction input.
+            var maximumBodySize = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+            if (maximumBodySize is { IsReadOnly: false })
+            {
+                maximumBodySize.MaxRequestBodySize = maximumSize;
+            }
+
+            try
+            {
+                var response = await interactionService.UploadFileAsync(
+                    interactionId,
+                    inputName,
+                    fileName,
+                    context.Request.Body,
+                    context.Request.ContentLength,
+                    context.RequestAborted).ConfigureAwait(false);
+                return response is null
+                    ? Results.NotFound()
+                    : Results.Json(
+                        response,
+                        DashboardBackendJsonSerializerContext.Default.DashboardInteractionFileUploadResponse);
+            }
+            catch (DashboardInteractionFileTooLargeException)
+            {
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            }
+            catch (DashboardInteractionFileUploadLimitException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status429TooManyRequests);
+            }
+            catch (InvalidDataException ex)
+            {
+                return Results.BadRequest(ex.Message);
+            }
+            catch (Grpc.Core.RpcException ex) when (ex.StatusCode is Grpc.Core.StatusCode.ResourceExhausted)
+            {
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            }
+            catch (Grpc.Core.RpcException ex) when (ex.StatusCode is Grpc.Core.StatusCode.InvalidArgument)
+            {
+                return Results.BadRequest(ex.Status.Detail);
+            }
+            catch (Grpc.Core.RpcException ex) when (ex.StatusCode is Grpc.Core.StatusCode.Unavailable)
+            {
+                return Results.Text(
+                    "The AppHost resource service is unavailable.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+            catch (DashboardResourceServiceUnavailableException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
         }
 
         static bool TryCreateTraceQuery(

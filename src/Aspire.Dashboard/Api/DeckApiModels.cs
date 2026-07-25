@@ -159,12 +159,19 @@ internal sealed record DeckInteractionInput(
     int MaxLength,
     bool AllowCustomChoice,
     bool Disabled,
-    bool UpdateStateOnChange);
+    bool UpdateStateOnChange,
+    string FileFilter,
+    bool AllowMultipleFiles,
+    long MaxFileSize);
 
 internal sealed record DeckRespondInteractionRequest(
     int InteractionId,
     string Action,
     Dictionary<string, string>? Values);
+
+internal sealed record DeckInteractionFileUploadResponse(
+    string FileId,
+    string FileName);
 
 internal sealed record DeckMetricSummary(
     string Name,

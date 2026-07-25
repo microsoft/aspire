@@ -395,6 +395,93 @@ public static class DashboardEndpointsBuilder
             return responded ? Results.NoContent() : Results.NotFound();
         });
 
+        group.MapPost("/interactions/{interactionId:int}/inputs/{inputName}/files", async (
+            int interactionId,
+            string inputName,
+            HttpContext httpContext,
+            DeckInteractionService interactionService) =>
+        {
+            if (interactionId <= 0
+                || string.IsNullOrWhiteSpace(inputName)
+                || !httpContext.Request.Headers.TryGetValue("X-Aspire-File-Name", out var fileNameHeader))
+            {
+                return Results.BadRequest();
+            }
+            string fileName;
+            try
+            {
+                // Browser fetch headers are restricted to ByteString values. React percent-encodes
+                // the UTF-8 filename so names such as "résumé.txt" survive the HTTP-to-gRPC bridge.
+                fileName = Uri.UnescapeDataString(fileNameHeader.ToString());
+            }
+            catch (UriFormatException)
+            {
+                return Results.BadRequest();
+            }
+            if (string.IsNullOrWhiteSpace(fileName))
+            {
+                return Results.BadRequest();
+            }
+            if (!interactionService.TryGetFileUploadLimit(interactionId, inputName, out var maximumSize))
+            {
+                return Results.NotFound();
+            }
+            if (httpContext.Request.ContentLength > maximumSize)
+            {
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            }
+
+            // Match the authoritative maximum advertised by this pending AppHost input rather than
+            // applying a process-wide upload relaxation to unrelated dashboard endpoints.
+            var maximumBodySize = httpContext.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+            if (maximumBodySize is { IsReadOnly: false })
+            {
+                maximumBodySize.MaxRequestBodySize = maximumSize;
+            }
+
+            try
+            {
+                var response = await interactionService.UploadFileAsync(
+                    interactionId,
+                    inputName,
+                    fileName,
+                    httpContext.Request.Body,
+                    httpContext.Request.ContentLength,
+                    httpContext.RequestAborted).ConfigureAwait(false);
+                return response is null
+                    ? Results.NotFound()
+                    : Results.Json(
+                        response,
+                        DeckApiJsonSerializerContext.Default.DeckInteractionFileUploadResponse);
+            }
+            catch (DeckInteractionFileTooLargeException)
+            {
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            }
+            catch (DeckInteractionFileUploadLimitException ex)
+            {
+                return Results.Text(ex.Message, statusCode: StatusCodes.Status429TooManyRequests);
+            }
+            catch (InvalidOperationException ex)
+            {
+                return Results.BadRequest(ex.Message);
+            }
+            catch (Grpc.Core.RpcException ex) when (ex.StatusCode is Grpc.Core.StatusCode.ResourceExhausted)
+            {
+                return Results.StatusCode(StatusCodes.Status413PayloadTooLarge);
+            }
+            catch (Grpc.Core.RpcException ex) when (ex.StatusCode is Grpc.Core.StatusCode.InvalidArgument)
+            {
+                return Results.BadRequest(ex.Status.Detail);
+            }
+            catch (Grpc.Core.RpcException ex) when (ex.StatusCode is Grpc.Core.StatusCode.Unavailable)
+            {
+                return Results.Text(
+                    "The AppHost resource service is unavailable.",
+                    statusCode: StatusCodes.Status503ServiceUnavailable);
+            }
+        });
+
         group.MapPost("/commands/execute", async (HttpContext httpContext, IDashboardClient dashboardClient) =>
         {
             var request = await httpContext.Request.ReadFromJsonAsync(

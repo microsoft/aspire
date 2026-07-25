@@ -998,7 +998,10 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                     "maxLength": 80,
                     "allowCustomChoice": false,
                     "disabled": false,
-                    "updateStateOnChange": false
+                    "updateStateOnChange": false,
+                    "fileFilter": "",
+                    "allowMultipleFiles": false,
+                    "maxFileSize": 104857600
                   },
                   {
                     "name": "flavor",
@@ -1017,7 +1020,10 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
                     "maxLength": 0,
                     "allowCustomChoice": false,
                     "disabled": false,
-                    "updateStateOnChange": true
+                    "updateStateOnChange": true,
+                    "fileFilter": "",
+                    "allowMultipleFiles": false,
+                    "maxFileSize": 104857600
                   }
                 ],
                 "linkText": "",

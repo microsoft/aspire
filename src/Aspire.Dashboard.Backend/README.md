@@ -10,13 +10,13 @@ The backend currently implements version discovery plus the `configuration`, com
 `shell`, `culture`, `authentication`, `manage-data`, read-only `resources` snapshot, SignalR
 `resources-live`, resource `commands`, resource-scoped console backlog/live, structured-log
 backlog/live/clear, trace backlog/live/filter/clear, metric summary/series/clear, versioned
-interaction polling/response, and direct interactive terminal capabilities.
+interaction polling/response/file upload, and direct interactive terminal capabilities.
 Resources, commands, and interactions use one long-lived AppHost resource-service connection.
-Interaction state and response traffic are bounded, and the backend restores an optimistically
-removed prompt when delivery fails so the user can retry. In side-by-side mode, React reads those
-capabilities from this host. BrowserToken and OpenID Connect use the existing dashboard as one
-authoritative cookie/identity service while both processes coexist; the AOT host exposes only
-same-origin versioned shell, culture, and sign-out routes and authorization-gates its direct
+Interaction state, response traffic, and file uploads are bounded, and the backend restores an
+optimistically removed prompt when delivery fails so the user can retry. In side-by-side mode,
+React reads those capabilities from this host. BrowserToken and OpenID Connect use the existing
+dashboard as one authoritative cookie/identity service while both processes coexist; the AOT host
+exposes only same-origin versioned shell, culture, and sign-out routes and authorization-gates its direct
 capabilities against that session. Versioned Manage Data operations stream to the existing
 telemetry repository without exposing its legacy routes to the browser. A version must not
 advertise a capability until its complete black-box behavior passes the 157-feature parity inventory in
@@ -103,9 +103,12 @@ The host exposes:
   authoritative resource-service session resolves the socket path server-side, and that sensitive
   path is omitted from resource JSON. The published executable also bundles the shared terminal,
   xterm, and font assets so this capability does not request files from the legacy dashboard.
-- `GET /api/dashboard/v1/interactions` and `POST /api/dashboard/v1/interactions/respond` for
-  command inputs, validation updates, message boxes, and notifications owned directly through the
-  shared AppHost resource-service session.
+- `GET /api/dashboard/v1/interactions`, `POST /api/dashboard/v1/interactions/respond`, and
+  `POST /api/dashboard/v1/interactions/{interactionId}/inputs/{inputName}/files` for command
+  inputs, bounded streaming file uploads, validation updates, message boxes, and notifications
+  owned directly through the shared AppHost resource-service session. File size is enforced while
+  streaming, successful uploads are capped at 100 per interaction, and at most four uploads run
+  concurrently.
 
 `DashboardBackend__LegacyDashboardUrl` must identify the existing dashboard's loopback base URL.
 Telemetry and console proxies forward the incoming dashboard cookie or authorization header so the

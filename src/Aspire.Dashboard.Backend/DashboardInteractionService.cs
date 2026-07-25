@@ -11,6 +11,16 @@ internal interface IDashboardInteractionService
 {
     DashboardInteraction[] GetInteractions();
 
+    bool TryGetFileUploadLimit(int interactionId, string inputName, out long maximumSize);
+
+    ValueTask<DashboardInteractionFileUploadResponse?> UploadFileAsync(
+        int interactionId,
+        string inputName,
+        string fileName,
+        Stream fileStream,
+        long? expectedSize,
+        CancellationToken cancellationToken);
+
     ValueTask<bool> RespondAsync(
         DashboardRespondInteractionRequest request,
         CancellationToken cancellationToken);
@@ -20,13 +30,17 @@ internal sealed class DashboardInteractionService(
     IDashboardResourceServiceConnection resourceServiceConnection,
     ILogger<DashboardInteractionService> logger) : BackgroundService, IDashboardInteractionService
 {
+    private const long DefaultMaximumFileSize = 100 * 1024 * 1024;
     private const int MaximumPendingInteractions = 256;
+    private const int MaximumUploadedFilesPerInteraction = 100;
     private const int ResponseBufferCapacity = 64;
 
     private readonly object _lock = new();
     private readonly Dictionary<int, WatchInteractionsResponseUpdate> _interactions = [];
     private readonly List<int> _interactionOrder = [];
     private readonly Dictionary<int, DashboardPendingInteractionResponse> _terminalResponsesInFlight = [];
+    private readonly Dictionary<int, int> _uploadedFileCounts = [];
+    private readonly SemaphoreSlim _fileUploadSlots = new(4, 4);
     private readonly SemaphoreSlim _responseOrder = new(1, 1);
     private readonly Channel<DashboardPendingInteractionResponse> _responses =
         Channel.CreateBounded<DashboardPendingInteractionResponse>(new BoundedChannelOptions(ResponseBufferCapacity)
@@ -43,6 +57,81 @@ internal sealed class DashboardInteractionService(
             return _interactionOrder
                 .Select(interactionId => MapInteraction(_interactions[interactionId]))
                 .ToArray();
+        }
+    }
+
+    public bool TryGetFileUploadLimit(int interactionId, string inputName, out long maximumSize)
+    {
+        lock (_lock)
+        {
+            var input = FindFileInput(interactionId, inputName);
+            if (input is null)
+            {
+                maximumSize = 0;
+                return false;
+            }
+
+            maximumSize = GetMaximumFileSize(input);
+            return true;
+        }
+    }
+
+    public async ValueTask<DashboardInteractionFileUploadResponse?> UploadFileAsync(
+        int interactionId,
+        string inputName,
+        string fileName,
+        Stream fileStream,
+        long? expectedSize,
+        CancellationToken cancellationToken)
+    {
+        long maximumSize;
+        lock (_lock)
+        {
+            var input = FindFileInput(interactionId, inputName);
+            if (input is null)
+            {
+                return null;
+            }
+
+            maximumSize = GetMaximumFileSize(input);
+            if (expectedSize is { } size && size > maximumSize)
+            {
+                throw new DashboardInteractionFileTooLargeException(maximumSize);
+            }
+
+            var uploadCount = _uploadedFileCounts.GetValueOrDefault(interactionId);
+            if (uploadCount >= MaximumUploadedFilesPerInteraction)
+            {
+                throw new DashboardInteractionFileUploadLimitException(MaximumUploadedFilesPerInteraction);
+            }
+            _uploadedFileCounts[interactionId] = uploadCount + 1;
+        }
+
+        var uploadSlotAcquired = false;
+        try
+        {
+            await _fileUploadSlots.WaitAsync(cancellationToken).ConfigureAwait(false);
+            uploadSlotAcquired = true;
+
+            var fileId = await resourceServiceConnection.UploadFileAsync(
+                fileStream,
+                fileName,
+                maximumSize,
+                expectedSize,
+                cancellationToken).ConfigureAwait(false);
+            return new DashboardInteractionFileUploadResponse(fileId, fileName);
+        }
+        catch
+        {
+            ReleaseFileUploadReservation(interactionId);
+            throw;
+        }
+        finally
+        {
+            if (uploadSlotAcquired)
+            {
+                _fileUploadSlots.Release();
+            }
         }
     }
 
@@ -198,6 +287,39 @@ internal sealed class DashboardInteractionService(
     {
         _interactions.Remove(interactionId);
         _interactionOrder.Remove(interactionId);
+        _uploadedFileCounts.Remove(interactionId);
+    }
+
+    private InteractionInput? FindFileInput(int interactionId, string inputName)
+    {
+        if (!_interactions.TryGetValue(interactionId, out var interaction)
+            || interaction.InputsDialog is not { } inputsDialog)
+        {
+            return null;
+        }
+
+        return inputsDialog.InputItems.FirstOrDefault(
+            input => input.InputType is InputType.File
+                && string.Equals(input.Name, inputName, StringComparison.Ordinal));
+    }
+
+    private static long GetMaximumFileSize(InteractionInput input) =>
+        input.MaxFileSize > 0 ? input.MaxFileSize : DefaultMaximumFileSize;
+
+    private void ReleaseFileUploadReservation(int interactionId)
+    {
+        lock (_lock)
+        {
+            var uploadCount = _uploadedFileCounts.GetValueOrDefault(interactionId);
+            if (uploadCount <= 1)
+            {
+                _uploadedFileCounts.Remove(interactionId);
+            }
+            else
+            {
+                _uploadedFileCounts[interactionId] = uploadCount - 1;
+            }
+        }
     }
 
     private void CompleteTerminalResponse(DashboardPendingInteractionResponse? response)
@@ -343,6 +465,7 @@ internal sealed class DashboardInteractionService(
                 InputType.Choice => "choice",
                 InputType.Boolean => "boolean",
                 InputType.Number => "number",
+                InputType.File => "file",
                 _ => "text"
             },
             Required: input.Required,
@@ -354,8 +477,16 @@ internal sealed class DashboardInteractionService(
             MaxLength: input.MaxLength,
             AllowCustomChoice: input.AllowCustomChoice,
             Disabled: input.Disabled || input.Loading,
-            UpdateStateOnChange: input.UpdateStateOnChange);
+            UpdateStateOnChange: input.UpdateStateOnChange,
+            FileFilter: input.FileFilter,
+            AllowMultipleFiles: input.AllowMultipleFiles,
+            MaxFileSize: GetMaximumFileSize(input));
     }
+}
+
+internal sealed class DashboardInteractionFileUploadLimitException(int maximumFileCount)
+    : Exception($"No more than {maximumFileCount} files can be uploaded for one interaction.")
+{
 }
 
 internal sealed class DashboardPendingInteractionResponse(

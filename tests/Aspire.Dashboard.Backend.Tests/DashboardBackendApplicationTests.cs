@@ -448,7 +448,10 @@ public class DashboardBackendApplicationTests
                     100,
                     false,
                     false,
-                    true)
+                    true,
+                    "",
+                    false,
+                    100 * 1024 * 1024)
             ],
             "",
             "");
@@ -470,7 +473,7 @@ public class DashboardBackendApplicationTests
         getResponse.EnsureSuccessStatusCode();
         Assert.Equal("no-store", getResponse.Headers.CacheControl?.ToString());
         Assert.Equal(
-            "[{\"interactionId\":42,\"kind\":\"inputsDialog\",\"title\":\"Set parameter\",\"message\":\"Provide a value.\",\"primaryButtonText\":\"Apply\",\"secondaryButtonText\":\"Cancel\",\"showSecondaryButton\":true,\"showDismiss\":true,\"enableMessageMarkdown\":false,\"intent\":\"none\",\"inputs\":[{\"name\":\"value\",\"label\":\"Value\",\"placeholder\":\"Enter a value\",\"inputType\":\"text\",\"required\":true,\"options\":[],\"value\":\"initial\",\"validationErrors\":[],\"description\":\"\",\"enableDescriptionMarkdown\":false,\"maxLength\":100,\"allowCustomChoice\":false,\"disabled\":false,\"updateStateOnChange\":true}],\"linkText\":\"\",\"linkUrl\":\"\"}]",
+            "[{\"interactionId\":42,\"kind\":\"inputsDialog\",\"title\":\"Set parameter\",\"message\":\"Provide a value.\",\"primaryButtonText\":\"Apply\",\"secondaryButtonText\":\"Cancel\",\"showSecondaryButton\":true,\"showDismiss\":true,\"enableMessageMarkdown\":false,\"intent\":\"none\",\"inputs\":[{\"name\":\"value\",\"label\":\"Value\",\"placeholder\":\"Enter a value\",\"inputType\":\"text\",\"required\":true,\"options\":[],\"value\":\"initial\",\"validationErrors\":[],\"description\":\"\",\"enableDescriptionMarkdown\":false,\"maxLength\":100,\"allowCustomChoice\":false,\"disabled\":false,\"updateStateOnChange\":true,\"fileFilter\":\"\",\"allowMultipleFiles\":false,\"maxFileSize\":104857600}],\"linkText\":\"\",\"linkUrl\":\"\"}]",
             await getResponse.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
 
         using var postResponse = await client.PostAsJsonAsync(
@@ -498,6 +501,126 @@ public class DashboardBackendApplicationTests
         Assert.Equal(
             new DashboardExecuteCommandRequest("db-connection-string", "set-parameter"),
             commandExecutor.Request);
+    }
+
+    [Theory]
+    [InlineData("/api/dashboard/v1/interactions/42/inputs/certificate/files")]
+    [InlineData("/api/deck/interactions/42/inputs/certificate/files")]
+    public async Task InteractionFileUpload_StreamsDecodedFileToPendingInput(string path)
+    {
+        var interaction = new DashboardInteraction(
+            InteractionId: 42,
+            Kind: "inputsDialog",
+            Title: "Upload certificate",
+            Message: "",
+            PrimaryButtonText: "Apply",
+            SecondaryButtonText: "Cancel",
+            ShowSecondaryButton: true,
+            ShowDismiss: true,
+            EnableMessageMarkdown: false,
+            Intent: "none",
+            Inputs:
+            [
+                new DashboardInteractionInput(
+                    Name: "certificate",
+                    Label: "Certificate",
+                    Placeholder: "",
+                    InputType: "file",
+                    Required: true,
+                    Options: [],
+                    Value: "",
+                    ValidationErrors: [],
+                    Description: "",
+                    EnableDescriptionMarkdown: false,
+                    MaxLength: 0,
+                    AllowCustomChoice: false,
+                    Disabled: false,
+                    UpdateStateOnChange: false,
+                    FileFilter: ".pem",
+                    AllowMultipleFiles: false,
+                    MaxFileSize: 1024)
+            ],
+            LinkText: "",
+            LinkUrl: "");
+        var interactionService = new TestInteractionService([interaction]);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardInteractionService>(interactionService);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var content = new ByteArrayContent("certificate-data"u8.ToArray());
+        content.Headers.TryAddWithoutValidation("X-Aspire-File-Name", "r%C3%A9sum%C3%A9.pem");
+        using var response = await app.GetTestClient().PostAsync(
+            path,
+            content,
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(
+            "{\"fileId\":\"file-42\",\"fileName\":\"r\\u00E9sum\\u00E9.pem\"}",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+        Assert.Equal(42, interactionService.UploadedInteractionId);
+        Assert.Equal("certificate", interactionService.UploadedInputName);
+        Assert.Equal("résumé.pem", interactionService.UploadedFileName);
+        Assert.Equal("certificate-data"u8.ToArray(), interactionService.UploadedBytes);
+        Assert.Equal(16, interactionService.UploadedExpectedSize);
+    }
+
+    [Fact]
+    public async Task InteractionFileUpload_RejectsBodyLargerThanPendingInputLimit()
+    {
+        var interaction = new DashboardInteraction(
+            42,
+            "inputsDialog",
+            "Upload certificate",
+            "",
+            "Apply",
+            "Cancel",
+            true,
+            true,
+            false,
+            "none",
+            [
+                new DashboardInteractionInput(
+                    "certificate",
+                    "Certificate",
+                    "",
+                    "file",
+                    true,
+                    [],
+                    "",
+                    [],
+                    "",
+                    false,
+                    0,
+                    false,
+                    false,
+                    false,
+                    ".pem",
+                    false,
+                    4)
+            ],
+            "",
+            "");
+        var interactionService = new TestInteractionService([interaction]);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardInteractionService>(interactionService);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var content = new ByteArrayContent("oversized"u8.ToArray());
+        content.Headers.TryAddWithoutValidation("X-Aspire-File-Name", "certificate.pem");
+        using var response = await app.GetTestClient().PostAsync(
+            "/api/dashboard/v1/interactions/42/inputs/certificate/files",
+            content,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.RequestEntityTooLarge, response.StatusCode);
+        Assert.Null(interactionService.UploadedFileName);
     }
 
     [Fact]
@@ -891,6 +1014,74 @@ public class DashboardBackendApplicationTests
         var commandResponse = await commandTask;
         Assert.NotNull(commandResponse);
         Assert.Equal("succeeded", commandResponse.Kind);
+        await interactionService.StopAsync(TestContext.Current.CancellationToken);
+    }
+
+    [Fact]
+    public async Task FileInputUpload_AndResponseUseSameResourceServiceSession()
+    {
+        var connection = new TestResourceServiceConnection(isConfigured: true);
+        using var interactionService = new DashboardInteractionService(
+            connection,
+            NullLogger<DashboardInteractionService>.Instance);
+        await interactionService.StartAsync(TestContext.Current.CancellationToken);
+
+        var interaction = new WatchInteractionsResponseUpdate
+        {
+            InteractionId = 23,
+            Title = "Upload certificate",
+            InputsDialog = new InteractionInputsDialog()
+        };
+        interaction.InputsDialog.InputItems.Add(new InteractionInput
+        {
+            Name = "certificate",
+            Label = "Certificate",
+            InputType = InputType.File,
+            Required = true,
+            FileFilter = ".pem",
+            AllowMultipleFiles = true,
+            MaxFileSize = 1024
+        });
+        await connection.InteractionUpdates.Writer.WriteAsync(
+            interaction,
+            TestContext.Current.CancellationToken);
+
+        await WaitUntilAsync(() => interactionService.GetInteractions().Length is 1);
+        var input = Assert.Single(Assert.Single(interactionService.GetInteractions()).Inputs);
+        Assert.Equal("file", input.InputType);
+        Assert.Equal(".pem", input.FileFilter);
+        Assert.True(input.AllowMultipleFiles);
+        Assert.Equal(1024, input.MaxFileSize);
+        Assert.True(interactionService.TryGetFileUploadLimit(23, "certificate", out var maximumSize));
+        Assert.Equal(1024, maximumSize);
+
+        await using var file = new MemoryStream("cert"u8.ToArray());
+        var upload = await interactionService.UploadFileAsync(
+            23,
+            "certificate",
+            "certificate.pem",
+            file,
+            expectedSize: 4,
+            TestContext.Current.CancellationToken);
+
+        Assert.NotNull(upload);
+        Assert.Equal("file-1", upload.FileId);
+        Assert.Equal("certificate.pem", connection.UploadedFileName);
+        Assert.Equal("cert"u8.ToArray(), connection.UploadedBytes);
+        Assert.Equal(1024, connection.UploadMaximumSize);
+        Assert.Equal(4, connection.UploadExpectedSize);
+
+        const string fileReference = "[{\"Id\":\"file-1\",\"Name\":\"certificate.pem\"}]";
+        Assert.True(await interactionService.RespondAsync(
+            new DashboardRespondInteractionRequest(
+                23,
+                "submit",
+                new Dictionary<string, string> { ["certificate"] = fileReference }),
+            TestContext.Current.CancellationToken));
+        var response = await connection.InteractionResponses.Reader.ReadAsync(
+            TestContext.Current.CancellationToken);
+        Assert.Equal(fileReference, Assert.Single(response.InputsDialog.InputItems).Value);
+
         await interactionService.StopAsync(TestContext.Current.CancellationToken);
     }
 
@@ -1865,8 +2056,46 @@ public class DashboardBackendApplicationTests
     private sealed class TestInteractionService(DashboardInteraction[] interactions) : IDashboardInteractionService
     {
         public DashboardRespondInteractionRequest? Request { get; private set; }
+        public int? UploadedInteractionId { get; private set; }
+        public string? UploadedInputName { get; private set; }
+        public string? UploadedFileName { get; private set; }
+        public byte[]? UploadedBytes { get; private set; }
+        public long? UploadedExpectedSize { get; private set; }
 
         public DashboardInteraction[] GetInteractions() => interactions;
+
+        public bool TryGetFileUploadLimit(int interactionId, string inputName, out long maximumSize)
+        {
+            var input = interactions
+                .SingleOrDefault(interaction => interaction.InteractionId == interactionId)?
+                .Inputs
+                .FirstOrDefault(input => input.InputType == "file" && input.Name == inputName);
+            maximumSize = input?.MaxFileSize ?? 0;
+            return input is not null;
+        }
+
+        public async ValueTask<DashboardInteractionFileUploadResponse?> UploadFileAsync(
+            int interactionId,
+            string inputName,
+            string fileName,
+            Stream fileStream,
+            long? expectedSize,
+            CancellationToken cancellationToken)
+        {
+            if (!TryGetFileUploadLimit(interactionId, inputName, out _))
+            {
+                return null;
+            }
+
+            UploadedInteractionId = interactionId;
+            UploadedInputName = inputName;
+            UploadedFileName = fileName;
+            UploadedExpectedSize = expectedSize;
+            using var bytes = new MemoryStream();
+            await fileStream.CopyToAsync(bytes, cancellationToken);
+            UploadedBytes = bytes.ToArray();
+            return new DashboardInteractionFileUploadResponse("file-42", fileName);
+        }
 
         public ValueTask<bool> RespondAsync(
             DashboardRespondInteractionRequest request,
@@ -1885,6 +2114,10 @@ public class DashboardBackendApplicationTests
         public Channel<WatchInteractionsResponseUpdate> InteractionUpdates { get; } = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
         public Channel<WatchInteractionsRequestUpdate> InteractionResponses { get; } = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
         public ResourceCommandRequest? CommandRequest { get; private set; }
+        public string? UploadedFileName { get; private set; }
+        public byte[]? UploadedBytes { get; private set; }
+        public long? UploadMaximumSize { get; private set; }
+        public long? UploadExpectedSize { get; private set; }
         public Func<ResourceCommandRequest, CancellationToken, ValueTask<ResourceCommandResponse>>? CommandHandler { get; set; }
         public ResourceCommandResponse CommandResponse { get; set; } = new()
         {
@@ -1911,6 +2144,22 @@ public class DashboardBackendApplicationTests
             return CommandHandler is null
                 ? ValueTask.FromResult(CommandResponse)
                 : CommandHandler(request, cancellationToken);
+        }
+
+        public async ValueTask<string> UploadFileAsync(
+            Stream fileStream,
+            string fileName,
+            long maximumSize,
+            long? expectedSize,
+            CancellationToken cancellationToken)
+        {
+            UploadedFileName = fileName;
+            UploadMaximumSize = maximumSize;
+            UploadExpectedSize = expectedSize;
+            using var bytes = new MemoryStream();
+            await fileStream.CopyToAsync(bytes, cancellationToken);
+            UploadedBytes = bytes.ToArray();
+            return "file-1";
         }
 
         public async Task RunInteractionSessionAsync(

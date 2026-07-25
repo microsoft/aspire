@@ -7,6 +7,7 @@ import type {
   ConsoleLogEvent,
   DeckConfig,
   ExecuteCommandArgs,
+  InteractionFileUploadResponse,
   InteractionInfo,
   LogRecordSummary,
   MetricSummary,
@@ -334,6 +335,35 @@ function onInteractions(callback: (interactions: InteractionInfo[]) => void): Un
       window.clearTimeout(timer);
     }
   };
+}
+
+async function uploadInteractionFile(
+  interactionId: number,
+  inputName: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<InteractionFileUploadResponse> {
+  const response = await fetch(
+    `/api/deck/interactions/${interactionId}/inputs/${encodeURIComponent(inputName)}/files`,
+    {
+      method: "POST",
+      cache: "no-store",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": file.type || "application/octet-stream",
+        "X-Aspire-File-Name": encodeURIComponent(file.name),
+      },
+      body: file,
+      signal,
+    },
+  );
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `Deck API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  return await response.json() as InteractionFileUploadResponse;
 }
 
 async function streamConsoleLogs(
@@ -690,6 +720,7 @@ export const httpBackend = {
   },
   onApphosts,
   onInteractions,
+  uploadInteractionFile,
   respondInteraction(interactionId: number, action: string, values: Record<string, string>): Promise<void> {
     return postNoContent("interactions/respond", { interactionId, action, values });
   },

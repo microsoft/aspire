@@ -18,6 +18,7 @@ import type {
   DeckConfig,
   CommandResponse,
   ExecuteCommandArgs,
+  InteractionFileUploadResponse,
   InteractionInfo,
   MetricSeriesQuery,
   MetricSeriesResponse,
@@ -723,6 +724,39 @@ async function respondInteraction(
   await response.arrayBuffer();
 }
 
+async function uploadInteractionFile(
+  interactionId: number,
+  inputName: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<InteractionFileUploadResponse> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(interactionsCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise interactions.");
+  }
+
+  const response = await fetch(
+    `${version.basePath}/interactions/${interactionId}/inputs/${encodeURIComponent(inputName)}/files`,
+    {
+      method: "POST",
+      credentials: "same-origin",
+      headers: {
+        Accept: "application/json",
+        "Content-Type": file.type || "application/octet-stream",
+        "X-Aspire-File-Name": encodeURIComponent(file.name),
+      },
+      body: file,
+      signal,
+    },
+  );
+  if (!response.ok) {
+    const detail = await response.text();
+    throw new Error(detail || `Dashboard API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  return await response.json() as InteractionFileUploadResponse;
+}
+
 function isResourcesEvent(value: unknown): value is ResourcesEvent {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -1323,6 +1357,7 @@ export const nativeBackend = {
   subscribeConsoleLogs,
   subscribeInteractions,
   respondInteraction,
+  uploadInteractionFile,
   getStructuredLogs,
   refreshStructuredLogs,
   clearStructuredLogs,

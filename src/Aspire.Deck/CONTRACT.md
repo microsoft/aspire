@@ -65,7 +65,7 @@ configured. Servers without that authority omit `shell`, `culture`, `authenticat
 | `console-logs` | Capability marker for resource console output | `ConsoleLogEvent` |
 | `console-logs-live` | SignalR hub at `{basePath}/console-logs/live` | `ConsoleLogEvent` server stream |
 | `terminal` | WebSocket at `{basePath}/terminal?resource={displayName}&replica={index}` | Binary HMP1 frames |
-| `interactions` | `GET {basePath}/interactions`; `POST {basePath}/interactions/respond` | `InteractionInfo[]`; no content |
+| `interactions` | `GET {basePath}/interactions`; `POST {basePath}/interactions/respond`; `POST {basePath}/interactions/{interactionId}/inputs/{inputName}/files` | `InteractionInfo[]`; no content; `InteractionFileUploadResponse` |
 
 ```ts
 export interface DashboardConfiguration {
@@ -117,6 +117,18 @@ resource-service channel. Responses are queued in order with a bounded buffer; t
 remove the prompt optimistically and restore it at its original position if delivery fails.
 Reconnects receive the AppHost's current pending interactions before live updates. The unversioned
 command and interaction aliases used by older React bundles enter this same direct session.
+
+File inputs add `fileFilter`, `allowMultipleFiles`, and the effective AppHost `maxFileSize` to the
+interaction payload. The browser streams each selected file as the request body to
+`POST {basePath}/interactions/{interactionId}/inputs/{inputName}/files`, with its percent-encoded
+UTF-8 name in `X-Aspire-File-Name`. The backend accepts uploads only for an exact pending file
+input, enforces its size while streaming, permits at most 100 successful uploads per interaction,
+and limits the process to four concurrent AppHost uploads. The upload and interaction response use
+the same authenticated resource-service client and channel. A successful upload returns
+`{ fileId, fileName }`; submit/update values encode the accepted files as
+`[{"Id":"...","Name":"..."}]`, which the AppHost resolves from its file store. Canceling or
+replacing the interaction aborts in-flight browser uploads, failed uploads block submit, and AOT
+mode never falls back to an unversioned file route after `interactions` is advertised.
 
 The read-only `structured-logs` response contains `{ totalCount, data }`, where `data` is the OTLP
 JSON resource-log tree used by the existing dashboard. The AOT host obtains the backlog from the
@@ -188,7 +200,10 @@ is not part of the contract.
 The ASP.NET Core dashboard backend exposes the same config, resource, command, and interaction
 shapes through `GET /api/deck/config`, `GET /api/deck/resources`,
 `POST /api/deck/commands/execute`, `GET /api/deck/interactions`, and
-`POST /api/deck/interactions/respond`. Structured logs are streamed through
+`POST /api/deck/interactions/respond`. File interactions use
+`POST /api/deck/interactions/{interactionId}/inputs/{inputName}/files` with the same body, header,
+limits, response, and authoritative dashboard-client session as the versioned route. Structured
+logs are streamed through
 `GET /api/deck/telemetry/logs?follow=true` and cleared through
 `DELETE /api/deck/telemetry/logs` with an optional `resource` query parameter. Traces use
 the equivalent `GET`/`DELETE /api/deck/telemetry/spans` routes.
@@ -481,7 +496,7 @@ export interface AppHostInfo {
 
 // --- Interactions (command inputs / prompts) ---
 export type InteractionKind = "inputsDialog" | "messageBox" | "notification" | "complete";
-export type InteractionInputType = "text" | "secretText" | "choice" | "boolean" | "number";
+export type InteractionInputType = "text" | "secretText" | "choice" | "boolean" | "number" | "file";
 
 export interface InteractionInputInfo {
   name: string;
@@ -493,10 +508,19 @@ export interface InteractionInputInfo {
   value: string;                 // server-provided current value
   validationErrors: string[];    // shown inline under the field
   description: string;
+  enableDescriptionMarkdown: boolean;
   maxLength: number;             // 0 = unlimited
   allowCustomChoice: boolean;    // choice inputs may accept a free value
   disabled: boolean;
   updateStateOnChange: boolean;  // re-validate via deck_respond_interaction("update") on change
+  fileFilter: string;            // browser accept filter for file inputs
+  allowMultipleFiles: boolean;
+  maxFileSize: number;           // effective AppHost ceiling in bytes
+}
+
+export interface InteractionFileUploadResponse {
+  fileId: string;
+  fileName: string;
 }
 
 export interface InteractionInfo {

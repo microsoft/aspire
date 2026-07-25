@@ -26,6 +26,13 @@ internal interface IDashboardResourceServiceConnection
         ResourceCommandRequest request,
         CancellationToken cancellationToken);
 
+    ValueTask<string> UploadFileAsync(
+        Stream fileStream,
+        string fileName,
+        long maximumSize,
+        long? expectedSize,
+        CancellationToken cancellationToken);
+
     Task RunInteractionSessionAsync(
         ChannelReader<DashboardPendingInteractionResponse> responses,
         Func<WatchInteractionsResponseUpdate, ValueTask> onUpdate,
@@ -127,6 +134,62 @@ internal sealed class DashboardResourceServiceConnection : IDashboardResourceSer
             request,
             _headers,
             cancellationToken: cancellationToken).ResponseAsync.ConfigureAwait(false);
+    }
+
+    public async ValueTask<string> UploadFileAsync(
+        Stream fileStream,
+        string fileName,
+        long maximumSize,
+        long? expectedSize,
+        CancellationToken cancellationToken)
+    {
+        using var call = GetClient().UploadFile(
+            _headers,
+            cancellationToken: cancellationToken);
+
+        const int chunkSize = 64 * 1024;
+        var buffer = new byte[chunkSize];
+        var isFirst = true;
+        long totalBytesRead = 0;
+
+        int bytesRead;
+        while ((bytesRead = await fileStream.ReadAsync(buffer, cancellationToken).ConfigureAwait(false)) > 0)
+        {
+            totalBytesRead += bytesRead;
+            if (totalBytesRead > maximumSize)
+            {
+                throw new DashboardInteractionFileTooLargeException(maximumSize);
+            }
+            if (expectedSize is not null && totalBytesRead > expectedSize)
+            {
+                throw new InvalidDataException(
+                    $"File \"{fileName}\" exceeded its declared size of {expectedSize} bytes.");
+            }
+
+            var chunk = new UploadFileChunk
+            {
+                Data = Google.Protobuf.ByteString.CopyFrom(buffer, 0, bytesRead)
+            };
+            if (isFirst)
+            {
+                chunk.FileName = fileName;
+            }
+
+            await call.RequestStream.WriteAsync(chunk, cancellationToken).ConfigureAwait(false);
+            isFirst = false;
+        }
+
+        // The AppHost accepts empty files when their first and only chunk carries the filename.
+        if (isFirst)
+        {
+            await call.RequestStream.WriteAsync(
+                new UploadFileChunk { FileName = fileName },
+                cancellationToken).ConfigureAwait(false);
+        }
+
+        await call.RequestStream.CompleteAsync().ConfigureAwait(false);
+        var response = await call.ResponseAsync.ConfigureAwait(false);
+        return response.FileId;
     }
 
     public async Task RunInteractionSessionAsync(
@@ -298,4 +361,10 @@ internal sealed class DashboardResourceServiceConnection : IDashboardResourceSer
         _channel?.Dispose();
         _handler?.Dispose();
     }
+}
+
+internal sealed class DashboardInteractionFileTooLargeException(long maximumSize)
+    : Exception($"The uploaded file exceeds the maximum size of {maximumSize} bytes.")
+{
+    public long MaximumSize { get; } = maximumSize;
 }

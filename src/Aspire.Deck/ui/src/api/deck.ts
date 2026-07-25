@@ -20,6 +20,7 @@ import type {
   ConsoleLogEvent,
   DeckConfig,
   ExecuteCommandArgs,
+  InteractionFileUploadResponse,
   InteractionInfo,
   Resource,
   ResourcesEvent,
@@ -312,6 +313,29 @@ export function respondInteraction(interactionId: number, action: string, values
   }
   mockBackend.respondInteraction(interactionId, action, values);
   return Promise.resolve();
+}
+
+export function uploadInteractionFile(
+  interactionId: number,
+  inputName: string,
+  file: File,
+  signal?: AbortSignal,
+): Promise<InteractionFileUploadResponse> {
+  if (isTauri()) {
+    return Promise.reject(new Error("File interaction inputs require the dashboard HTTP backend."));
+  }
+  if (isHttpBackend()) {
+    if (isAotBackend()) {
+      return nativeBackend.hasCapability("interactions").then((supported) => {
+        if (!supported) {
+          throw new Error("Dashboard API version 1 does not advertise complete interaction support.");
+        }
+        return nativeBackend.uploadInteractionFile(interactionId, inputName, file, signal);
+      });
+    }
+    return httpBackend.uploadInteractionFile(interactionId, inputName, file, signal);
+  }
+  return mockBackend.uploadInteractionFile(interactionId, inputName, file, signal);
 }
 
 export function getTelemetrySummary(): Promise<TelemetrySummary> {

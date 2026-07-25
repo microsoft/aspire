@@ -181,12 +181,19 @@ internal sealed record DashboardInteractionInput(
     int MaxLength,
     bool AllowCustomChoice,
     bool Disabled,
-    bool UpdateStateOnChange);
+    bool UpdateStateOnChange,
+    string FileFilter,
+    bool AllowMultipleFiles,
+    long MaxFileSize);
 
 internal sealed record DashboardRespondInteractionRequest(
     int InteractionId,
     string Action,
     Dictionary<string, string>? Values);
+
+internal sealed record DashboardInteractionFileUploadResponse(
+    string FileId,
+    string FileName);
 
 internal sealed record DashboardStructuredLogsSnapshot(
     int TotalCount,

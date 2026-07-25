@@ -88,7 +88,7 @@
 | CMD-DYNAMIC-001 | commands | `/` | commands | covered | CMD-DYNAMIC-001 | Dependent argument choices load asynchronously when prerequisite values change. |
 | CMD-LIVE-VALIDATION-001 | commands | `/` | commands | covered | CMD-LIVE-VALIDATION-001 | Inputs can request server validation while values change. |
 | CMD-VALIDATION-001 | commands | `/` | commands | covered | CMD-VALIDATION-001 | Field-level and form-level validation errors are announced and rendered. |
-| CMD-MANY-INPUTS-001 | commands | `/` | commands | covered | CMD-MANY-INPUTS-001 | Large command forms remain scrollable and submit every input value. |
+| CMD-MANY-INPUTS-001 | commands | `/` | commands | covered | CMD-MANY-INPUTS-001; HTTP-INTERACTION-001; DashboardBackendApplicationTests.FileInputUpload_AndResponseUseSameResourceServiceSession | Large command forms remain scrollable and submit every input value; file inputs preserve filters, size/count limits, upload errors, and AppHost file references. |
 | CMD-MESSAGEBOX-001 | commands | `/` | commands | covered | CMD-MESSAGEBOX-001 | Confirmation and message-box interactions support primary, secondary, dismiss, and intent. |
 | CMD-NOTIFICATION-001 | commands | `/` | commands | covered | CMD-NOTIFICATION-001 | Interaction notifications support semantic intent, links, actions, and non-dismissible state. |
 | CMD-MARKDOWN-001 | commands | `/` | commands | covered | TK-MARKDOWN-001; CMD-MARKDOWN-001 | Interaction messages and field descriptions opt into sanitized Markdown rendering. |

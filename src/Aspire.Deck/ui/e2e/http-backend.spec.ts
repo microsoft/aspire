@@ -423,6 +423,9 @@ test(`${features("AOT-CONTRACT-001")} keeps parameter commands and interactions 
       allowCustomChoice: false,
       disabled: false,
       updateStateOnChange: false,
+      fileFilter: "",
+      allowMultipleFiles: false,
+      maxFileSize: 0,
     }],
     linkText: "",
     linkUrl: "",
@@ -496,6 +499,103 @@ test(`${features("AOT-CONTRACT-001")} keeps parameter commands and interactions 
     interactionId: 42,
     action: "submit",
     values: { value: "stress-secret" },
+  });
+});
+
+test(`${features("AOT-CONTRACT-001", "HTTP-INTERACTION-001")} uploads file inputs and responds only through the negotiated AOT interaction capability`, async ({ page }) => {
+  const inputInteraction: InteractionInfo = {
+    interactionId: 43,
+    kind: "inputsDialog",
+    title: "Upload certificate",
+    message: "Choose the certificate used by the command.",
+    primaryButtonText: "Apply",
+    secondaryButtonText: "Cancel",
+    showSecondaryButton: true,
+    showDismiss: true,
+    enableMessageMarkdown: false,
+    intent: "none",
+    inputs: [{
+      name: "certificate",
+      label: "Certificate",
+      placeholder: "",
+      inputType: "file",
+      required: true,
+      options: [],
+      value: "",
+      validationErrors: [],
+      description: "PEM certificate.",
+      enableDescriptionMarkdown: false,
+      maxLength: 0,
+      allowCustomChoice: false,
+      disabled: false,
+      updateStateOnChange: false,
+      fileFilter: ".pem",
+      allowMultipleFiles: false,
+      maxFileSize: 1024,
+    }],
+    linkText: "",
+    linkUrl: "",
+  };
+  let interactions: InteractionInfo[] = [inputInteraction];
+  let uploadRequests = 0;
+  let legacyInteractionRequests = 0;
+  let interactionResponse: unknown;
+
+  await page.unroute("**/api/deck/interactions");
+  await page.route("**/api/dashboard", async (route) => route.fulfill({
+    json: {
+      product: "Aspire.Dashboard",
+      versions: [{
+        version: 1,
+        basePath: "/api/dashboard/v1",
+        capabilities: ["configuration", "resources", "interactions"],
+      }],
+    },
+  }));
+  await page.route("**/api/dashboard/v1/config", async (route) => route.fulfill({
+    json: { ...config, applicationName: "Stress AOT", dashboardVersion: "13.5.0-aot" },
+  }));
+  await page.route("**/api/dashboard/v1/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/dashboard/v1/interactions", async (route) => route.fulfill({ json: interactions }));
+  await page.route("**/api/dashboard/v1/interactions/43/inputs/certificate/files", async (route) => {
+    uploadRequests++;
+    expect(route.request().headers()["x-aspire-file-name"]).toBe("r%C3%A9sum%C3%A9.pem");
+    expect(route.request().postDataBuffer()?.toString()).toBe("certificate-data");
+    await route.fulfill({ json: { fileId: "aot-file-1", fileName: "résumé.pem" } });
+  });
+  await page.route("**/api/dashboard/v1/interactions/respond", async (route) => {
+    interactionResponse = route.request().postDataJSON();
+    interactions = [];
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/api/deck/interactions**", async (route) => {
+    legacyInteractionRequests++;
+    await route.fulfill({ status: 500 });
+  });
+
+  await page.goto("/?backend=aot");
+  const dialog = page.getByRole("dialog", { name: "Upload certificate" });
+  const fileInput = dialog.getByRole("button", { name: "Certificate", exact: true });
+  await fileInput.setInputFiles({
+    name: "résumé.pem",
+    mimeType: "application/x-pem-file",
+    buffer: Buffer.from("certificate-data"),
+  });
+  await expect(dialog.getByRole("list", { name: "Uploaded files for Certificate" })).toContainText("résumé.pem");
+  const responseCompleted = page.waitForEvent("requestfinished", (request) =>
+    request.url().endsWith("/api/dashboard/v1/interactions/respond"));
+  await dialog.getByRole("button", { name: "Apply", exact: true }).click();
+  await responseCompleted;
+
+  await expect(dialog).toHaveCount(0);
+  expect(uploadRequests).toBe(1);
+  expect(legacyInteractionRequests).toBe(0);
+  expect(interactionResponse).toEqual({
+    interactionId: 43,
+    action: "submit",
+    values: {
+      certificate: "[{\"Id\":\"aot-file-1\",\"Name\":\"résumé.pem\"}]",
+    },
   });
 });
 
@@ -1781,6 +1881,7 @@ test(`${features("HTTP-COMMAND-001", "HTTP-COMMAND-OUTCOMES-001")} executes reso
 test(`${features("HTTP-INTERACTION-001")} submits every command input type through the HTTP backend`, async ({ page }, testInfo) => {
   let interactions: InteractionInfo[] = [];
   let interactionResponse: unknown;
+  let interactionResponseRequests = 0;
   let completeCommand: () => void = () => undefined;
   const commandCompleted = new Promise<void>((resolve) => {
     completeCommand = resolve;
@@ -1801,32 +1902,44 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
         name: "message", label: "Message", placeholder: "Hello", inputType: "text", required: true,
         options: [], value: "", validationErrors: [], description: "Text **value** to echo.",
         enableDescriptionMarkdown: true, maxLength: 80, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
       },
       {
         name: "repeat", label: "Repeat", placeholder: "", inputType: "number", required: true,
         options: [], value: "1", validationErrors: [], description: "Number of repetitions.",
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
       },
       {
         name: "shout", label: "Shout", placeholder: "", inputType: "boolean", required: false,
         options: [], value: "false", validationErrors: [], description: "Uppercase the message.",
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
       },
       {
         name: "locked", label: "Locked option", placeholder: "", inputType: "boolean", required: false,
         options: [], value: "true", validationErrors: [], description: "Controlled by the AppHost.",
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: true, updateStateOnChange: false,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
       },
       {
         name: "flavor", label: "Flavor", placeholder: "Choose a flavor", inputType: "choice", required: false,
         options: [["vanilla", "Vanilla"], ["chocolate", "Chocolate"]], value: "vanilla",
         validationErrors: [], description: "Select a flavor.", enableDescriptionMarkdown: false,
         maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
       },
       {
         name: "secret", label: "Secret", placeholder: "Optional secret", inputType: "secretText", required: false,
         options: [], value: "", validationErrors: [], description: "The result only reports its length.",
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
+      },
+      {
+        name: "certificate", label: "Certificate", placeholder: "", inputType: "file", required: true,
+        options: [], value: "", validationErrors: [], description: "Certificate to inspect.",
+        enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        fileFilter: ".pem", allowMultipleFiles: false, maxFileSize: 1024,
       },
     ],
     linkText: "",
@@ -1844,10 +1957,16 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
     await route.fulfill({ json: interactions });
   });
   await page.route("**/api/deck/interactions/respond", async (route) => {
+    interactionResponseRequests++;
     interactionResponse = route.request().postDataJSON();
     interactions = [];
     await route.fulfill({ status: 204 });
     completeCommand();
+  });
+  await page.route("**/api/deck/interactions/42/inputs/certificate/files", async (route) => {
+    expect(route.request().headers()["x-aspire-file-name"]).toBe("r%C3%A9sum%C3%A9.pem");
+    expect(route.request().postDataBuffer()?.toString()).toBe("certificate-data");
+    await route.fulfill({ json: { fileId: "legacy-file-1", fileName: "résumé.pem" } });
   });
   await page.route("**/api/deck/commands/execute", async (route) => {
     interactions = [interaction];
@@ -1868,6 +1987,7 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
   const locked = dialog.getByRole("checkbox", { name: "Locked option" });
   const flavor = dialog.getByRole("combobox", { name: "Flavor" });
   const secret = dialog.getByLabel("Secret", { exact: true });
+  const certificate = dialog.getByRole("button", { name: "Certificate", exact: true });
   await expect(dialog.locator(".interaction-message strong")).toHaveText("command");
   await expect(message).toHaveAttribute("placeholder", "Hello");
   await expect(message).toHaveAttribute("maxlength", "80");
@@ -1882,6 +2002,7 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
   await expect(flavor).toHaveAttribute("placeholder", "Choose a flavor");
   await expect(secret).toHaveAttribute("type", "password");
   await expect(secret).toHaveAttribute("autocomplete", "new-password");
+  await expect(certificate).toHaveAttribute("accept", ".pem");
   await dialog.getByRole("button", { name: "Reveal secret" }).click();
   await expect(secret).toHaveAttribute("type", "text");
   await dialog.getByRole("button", { name: "Hide secret" }).click();
@@ -1896,6 +2017,23 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
   await page.getByRole("option", { name: "Chocolate", exact: true }).click();
   await expect(flavor).toHaveValue("Chocolate");
   await secret.fill("s3cr3t");
+  await certificate.setInputFiles({
+    name: "too-large.pem",
+    mimeType: "application/x-pem-file",
+    buffer: Buffer.alloc(1025),
+  });
+  await expect(dialog).toContainText("too-large.pem: Exceeds the maximum size of 1 KB.");
+  await dialog.getByRole("button", { name: "Run", exact: true }).click();
+  await page.evaluate(() => new Promise<void>((resolve) => requestAnimationFrame(() => resolve())));
+  expect(interactionResponseRequests).toBe(0);
+  await expect(dialog).toBeVisible();
+
+  await certificate.setInputFiles({
+    name: "résumé.pem",
+    mimeType: "application/x-pem-file",
+    buffer: Buffer.from("certificate-data"),
+  });
+  await expect(dialog.getByRole("list", { name: "Uploaded files for Certificate" })).toContainText("résumé.pem");
   await testInfo.attach("http-command-inputs.png", {
     body: await page.screenshot({ animations: "disabled", fullPage: true }),
     contentType: "image/png",
@@ -1907,6 +2045,7 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
 
   await expect(dialog).toHaveCount(0);
   await expect(page.getByRole("status")).toHaveText("Echo arguments succeeded");
+  expect(interactionResponseRequests).toBe(1);
   expect(interactionResponse).toEqual({
     interactionId: 42,
     action: "submit",
@@ -1917,6 +2056,7 @@ test(`${features("HTTP-INTERACTION-001")} submits every command input type throu
       locked: "true",
       flavor: "chocolate",
       secret: "s3cr3t",
+      certificate: "[{\"Id\":\"legacy-file-1\",\"Name\":\"résumé.pem\"}]",
     },
   });
 });

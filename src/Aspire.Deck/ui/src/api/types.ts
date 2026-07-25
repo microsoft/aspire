@@ -416,7 +416,7 @@ export interface AppHostInfo {
 
 // --- Interactions (command inputs / prompts) ---
 export type InteractionKind = "inputsDialog" | "messageBox" | "notification" | "complete";
-export type InteractionInputType = "text" | "secretText" | "choice" | "boolean" | "number";
+export type InteractionInputType = "text" | "secretText" | "choice" | "boolean" | "number" | "file";
 
 export interface InteractionInputInfo {
   name: string;
@@ -433,6 +433,14 @@ export interface InteractionInputInfo {
   allowCustomChoice: boolean;
   disabled: boolean;
   updateStateOnChange: boolean;
+  fileFilter: string;
+  allowMultipleFiles: boolean;
+  maxFileSize: number;
+}
+
+export interface InteractionFileUploadResponse {
+  fileId: string;
+  fileName: string;
 }
 
 export interface InteractionInfo {

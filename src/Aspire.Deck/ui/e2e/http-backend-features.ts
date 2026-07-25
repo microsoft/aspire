@@ -17,7 +17,7 @@ export const httpBackendFeatures = {
   "HTTP-RECONNECT-001": "A backend outage exposes an explicit retry action with and without a retained resource snapshot.",
   "HTTP-COMMAND-001": "HTTP mode executes a live resource command through the dashboard backend.",
   "HTTP-COMMAND-OUTCOMES-001": "HTTP commands distinguish successful, cancelled, failed, and transport-error outcomes.",
-  "HTTP-INTERACTION-001": "HTTP mode round-trips resource command input interactions through the dashboard backend.",
+  "HTTP-INTERACTION-001": "HTTP mode round-trips every resource command input type, including same-session file uploads, through the dashboard backend.",
   "HTTP-CONSOLE-001": "HTTP mode replays and streams resource console output from the dashboard backend.",
   "HTTP-CONSOLE-CONTROLS-001": "HTTP console output supports parsed timestamps, UTC display, wrapping, and exact text download.",
   "HTTP-CONSOLE-VIRTUALIZATION-001": "HTTP console keeps a bounded DOM while preserving full-stream geometry and stable line numbers.",

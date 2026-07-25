@@ -12,6 +12,7 @@ import type {
   DeckConfig,
   ExecuteCommandArgs,
   InteractionInfo,
+  InteractionFileUploadResponse,
   InteractionInputInfo,
   LogRecordSummary,
   MetricKind,
@@ -956,23 +957,27 @@ class MockBackend {
         name: "replicas", label: "Replicas", placeholder: "1-10", inputType: "number", required: true,
         options: [], value: values.replicas ?? "1", validationErrors: errs("replicas"), description: "Number of instances to run.",
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: true,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
       },
       {
         name: "tier", label: "Tier", placeholder: "", inputType: "choice", required: true,
         options: [["standard", "Standard"], ["premium", "Premium"]], value: tier,
         validationErrors: errs("tier"), description: "Compute **tier** for the replicas. See the [scaling guide](https://example.com/scaling).",
         enableDescriptionMarkdown: true, maxLength: 0, allowCustomChoice: true, disabled: false, updateStateOnChange: true,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
       },
       {
         name: "region", label: "Region", placeholder: regionLoading ? "Loading regions…" : "Select a region",
         inputType: "choice", required: true, options: regionLoading ? [] : regionOptions,
         value: regionLoading ? "" : region, validationErrors: errs("region"), description: "Available regions depend on the selected tier.",
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: regionLoading, updateStateOnChange: false,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
       },
       {
         name: "drain", label: "Drain connections before scaling down", placeholder: "", inputType: "boolean",
         required: false, options: [], value: values.drain ?? "true", validationErrors: [], description: "",
         enableDescriptionMarkdown: false, maxLength: 0, allowCustomChoice: false, disabled: false, updateStateOnChange: false,
+        fileFilter: "", allowMultipleFiles: false, maxFileSize: 0,
       },
     ];
     return {
@@ -1012,6 +1017,9 @@ class MockBackend {
         allowCustomChoice: false,
         disabled: false,
         updateStateOnChange: false,
+        fileFilter: "",
+        allowMultipleFiles: false,
+        maxFileSize: 0,
       }],
       linkText: "",
       linkUrl: "",
@@ -1034,6 +1042,9 @@ class MockBackend {
       allowCustomChoice: false,
       disabled: false,
       updateStateOnChange: false,
+      fileFilter: "",
+      allowMultipleFiles: false,
+      maxFileSize: 0,
     }));
     return {
       interactionId: 3,
@@ -1196,6 +1207,18 @@ class MockBackend {
     // cancel / dismiss
     this.dialog = null;
     this.emitInteractions();
+  }
+
+  uploadInteractionFile(
+    interactionId: number,
+    inputName: string,
+    file: File,
+    _signal?: AbortSignal,
+  ): Promise<InteractionFileUploadResponse> {
+    return Promise.resolve({
+      fileId: `mock-${interactionId}-${inputName}-${file.name}`,
+      fileName: file.name,
+    });
   }
 
   onResources(cb: (e: ResourcesEvent) => void): Unsubscribe {

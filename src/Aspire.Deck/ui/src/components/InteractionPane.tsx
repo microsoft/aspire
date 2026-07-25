@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { InteractionInfo, InteractionInputInfo } from "../api/types";
-import { openExternal, respondInteraction } from "../api/deck";
+import { openExternal, respondInteraction, uploadInteractionFile } from "../api/deck";
 import { CloseIcon, ComboBox, MarkdownContent, SecretInput } from "../toolkit";
 
 // Side pane (like the resource details drawer) that renders a blocking interaction
@@ -13,13 +13,19 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
   const idRef = useRef(interaction.interactionId);
   const interactionRef = useRef(interaction);
   const updateRef = useRef<Promise<void>>(Promise.resolve());
+  const valuesRef = useRef(values);
+  const fileUploadRef = useRef<Promise<void>>(Promise.resolve());
+  const fileUploadAbortRef = useRef<AbortController | null>(null);
+  const fileUploadErrorsRef = useRef<Record<string, boolean>>({});
 
   // Reset local values only when a brand-new interaction arrives — not on the
   // validation updates that re-send the same interaction id with new errors.
   useEffect(() => {
     if (idRef.current !== interaction.interactionId) {
       idRef.current = interaction.interactionId;
-      setValues(initValues(interaction));
+      const next = initValues(interaction);
+      valuesRef.current = next;
+      setValues(next);
     } else {
       const previousInputs = new Map(interactionRef.current.inputs.map((input) => [input.name, input]));
       setValues((current) => {
@@ -32,16 +38,33 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
             ? initialInputValue(input)
             : current[input.name] ?? initialInputValue(input);
         }
+        valuesRef.current = next;
         return next;
       });
     }
     interactionRef.current = interaction;
   }, [interaction]);
 
-  const close = () => void respondInteraction(interaction.interactionId, "cancel", {});
+  useEffect(() => {
+    const abortController = new AbortController();
+    fileUploadAbortRef.current = abortController;
+    fileUploadRef.current = Promise.resolve();
+    updateRef.current = Promise.resolve();
+    fileUploadErrorsRef.current = {};
+    return () => abortController.abort();
+  }, [interaction.interactionId]);
+
+  const close = () => {
+    fileUploadAbortRef.current?.abort();
+    void fileUploadRef.current
+      .catch(() => undefined)
+      .then(() => updateRef.current.catch(() => undefined))
+      .then(() => respondInteraction(interaction.interactionId, "cancel", {}));
+  };
 
   function setValue(name: string, value: string, updateOnChange: boolean) {
-    const next = { ...values, [name]: value };
+    const next = { ...valuesRef.current, [name]: value };
+    valuesRef.current = next;
     setValues(next);
     if (updateOnChange) {
       // Dynamic input updates and the terminal submit must reach the AppHost in order.
@@ -50,6 +73,63 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
         .catch(() => undefined)
         .then(() => respondInteraction(interaction.interactionId, "update", next));
     }
+  }
+
+  function queueFileUpload(input: InteractionInputInfo, files: File[]): Promise<FileSelectionResult> {
+    const interactionId = interaction.interactionId;
+    const signal = fileUploadAbortRef.current?.signal;
+    const queued = fileUploadRef.current
+      .catch(() => undefined)
+      .then(async () => {
+        const successful: UploadedFile[] = [];
+        const errors: string[] = [];
+        fileUploadErrorsRef.current = { ...fileUploadErrorsRef.current, [input.name]: false };
+        const selectedFiles = input.allowMultipleFiles ? files.slice(0, 100) : files.slice(0, 1);
+        if (files.length > selectedFiles.length) {
+          errors.push(input.allowMultipleFiles
+            ? "No more than 100 files can be selected at once."
+            : "Only one file can be selected.");
+        }
+
+        for (const file of selectedFiles) {
+          if (input.maxFileSize > 0 && file.size > input.maxFileSize) {
+            errors.push(`${file.name}: Exceeds the maximum size of ${formatFileSize(input.maxFileSize)}.`);
+            continue;
+          }
+
+          try {
+            const uploaded = await uploadInteractionFile(interactionId, input.name, file, signal);
+            successful.push({ Id: uploaded.fileId, Name: uploaded.fileName });
+          } catch (error) {
+            if (signal?.aborted) {
+              return { successful: [], errors: [] };
+            }
+            errors.push(`${file.name}: ${error instanceof Error ? error.message : "Upload failed."}`);
+          }
+        }
+
+        // An AppHost update can replace the dialog while an HTTP upload is in flight. Never let
+        // that stale completion mutate the next interaction, even if it reuses the same input name.
+        if (signal?.aborted || idRef.current !== interactionId) {
+          return { successful: [], errors: [] };
+        }
+
+        fileUploadErrorsRef.current = {
+          ...fileUploadErrorsRef.current,
+          [input.name]: errors.length > 0,
+        };
+        setValue(
+          input.name,
+          successful.length > 0 ? JSON.stringify(successful) : "",
+          input.updateStateOnChange,
+        );
+        return { successful, errors };
+      });
+
+    // A later submit awaits every selection in order. Individual file failures are returned as
+    // validation messages, so this chain remains usable for a subsequent retry.
+    fileUploadRef.current = queued.then(() => undefined);
+    return queued;
   }
 
   const isInputs = interaction.kind === "inputsDialog";
@@ -86,8 +166,12 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
               className="interaction-form"
               onSubmit={async (e) => {
                 e.preventDefault();
+                await fileUploadRef.current;
+                if (Object.values(fileUploadErrorsRef.current).some(Boolean)) {
+                  return;
+                }
                 await updateRef.current.catch(() => undefined);
-                await respondInteraction(interaction.interactionId, "submit", values);
+                await respondInteraction(interaction.interactionId, "submit", valuesRef.current);
               }}
             >
               {validationErrors.length > 0 ? (
@@ -102,10 +186,11 @@ export function InteractionPane({ interaction }: { interaction: InteractionInfo 
               ) : null}
               {interaction.inputs.map((input) => (
                 <InputField
-                  key={input.name}
+                  key={`${interaction.interactionId}:${input.name}`}
                   input={input}
                   value={values[input.name] ?? input.value}
                   onChange={(v) => setValue(input.name, v, input.updateStateOnChange)}
+                  onFilesSelected={(files) => queueFileUpload(input, files)}
                 />
               ))}
 
@@ -152,12 +237,18 @@ function InputField({
   input,
   value,
   onChange,
+  onFilesSelected,
 }: {
   input: InteractionInputInfo;
   value: string;
   onChange: (value: string) => void;
+  onFilesSelected: (files: File[]) => Promise<FileSelectionResult>;
 }) {
-  const hasErrors = input.validationErrors.length > 0;
+  const [uploading, setUploading] = useState(false);
+  const [uploadedFiles, setUploadedFiles] = useState<UploadedFile[]>([]);
+  const [uploadErrors, setUploadErrors] = useState<string[]>([]);
+  const errors = [...input.validationErrors, ...uploadErrors];
+  const hasErrors = errors.length > 0;
   const fieldId = `int-${input.name}`;
   const descriptionId = input.description ? `${fieldId}-description` : undefined;
   const errorId = hasErrors ? `${fieldId}-errors` : undefined;
@@ -182,9 +273,42 @@ function InputField({
         <>
           <label className="field__label" htmlFor={fieldId}>
             {input.label}
-            {input.required ? <span className="field__required"> *</span> : null}
+            {input.required ? <span className="field__required" aria-hidden="true"> *</span> : null}
           </label>
-          {input.inputType === "choice" ? (
+          {input.inputType === "file" ? (
+            <>
+              <input
+                id={fieldId}
+                className="input interaction-file-input"
+                type="file"
+                accept={input.fileFilter || undefined}
+                multiple={input.allowMultipleFiles}
+                required={input.required}
+                disabled={input.disabled || uploading}
+                aria-invalid={hasErrors || undefined}
+                aria-describedby={describedBy}
+                onChange={async (event) => {
+                  const files = Array.from(event.target.files ?? []);
+                  setUploading(true);
+                  setUploadedFiles([]);
+                  setUploadErrors([]);
+                  try {
+                    const result = await onFilesSelected(files);
+                    setUploadedFiles(result.successful);
+                    setUploadErrors(result.errors);
+                  } finally {
+                    setUploading(false);
+                  }
+                }}
+              />
+              {uploading ? <div className="field__status" role="status">Uploading…</div> : null}
+              {uploadedFiles.length > 0 ? (
+                <ul className="interaction-file-list" aria-label={`Uploaded files for ${input.label}`}>
+                  {uploadedFiles.map((file) => <li key={file.Id}>{file.Name}</li>)}
+                </ul>
+              ) : null}
+            </>
+          ) : input.inputType === "choice" ? (
             <ComboBox
               id={fieldId}
               value={value}
@@ -235,11 +359,27 @@ function InputField({
       ) : null}
       {hasErrors ? (
         <div id={errorId} className="field__errors">
-          {input.validationErrors.map((err, i) => <div key={i} className="field__error">{err}</div>)}
+          {errors.map((err, i) => <div key={i} className="field__error">{err}</div>)}
         </div>
       ) : null}
     </div>
   );
+}
+
+interface UploadedFile {
+  Id: string;
+  Name: string;
+}
+
+interface FileSelectionResult {
+  successful: UploadedFile[];
+  errors: string[];
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${Math.round(bytes / (1024 * 1024))} MB`;
 }
 
 function toIntent(intent: InteractionInfo["intent"]): "error" | "warning" | "success" | "info" {

@@ -17,6 +17,7 @@ namespace Aspire.Dashboard.Backend;
 [JsonSerializable(typeof(DashboardCommandResponse))]
 [JsonSerializable(typeof(DashboardInteraction[]))]
 [JsonSerializable(typeof(DashboardRespondInteractionRequest))]
+[JsonSerializable(typeof(DashboardInteractionFileUploadResponse))]
 [JsonSerializable(typeof(DashboardStructuredLogsSnapshot))]
 [JsonSerializable(typeof(DashboardStructuredLogsEvent))]
 [JsonSerializable(typeof(DashboardTraceSnapshot))]

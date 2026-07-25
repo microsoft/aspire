@@ -144,12 +144,15 @@ ASPIRE_DASHBOARD_AOT_URL=http://127.0.0.1:18889 \
   npm run dev -- --host 127.0.0.1
 ```
 
-Open `http://127.0.0.1:1430/?backend=aot`. Version discovery and configuration use the new host;
-resources arrive as an authoritative snapshot followed by live changes over SignalR, resource-scoped
-console backlog and live output use a versioned SignalR stream, and resource commands use the versioned
-backend. Traces, metrics, interactions, authentication, and terminals remain on the existing dashboard until their
-versioned capabilities independently pass the parity inventory. The `resources` HTTP snapshot route
-remains a compatibility fallback for a version 1 host that does not advertise `resources-live`.
+Open `http://127.0.0.1:1430/?backend=aot`. Version discovery, configuration, authenticated shell,
+culture, sign-out, and Manage Data use explicit versioned capabilities. Resources arrive as an
+authoritative snapshot followed by live changes over SignalR. Resource commands, command
+interactions (including same-session file uploads), console backlog/live output, structured logs,
+traces, metrics, clear operations, and terminal traffic use their advertised versioned routes.
+During side-by-side convergence, the AOT host still reaches the existing dashboard internally for
+the authoritative identity and telemetry repository; the React browser does not use `/api/deck`
+for an advertised capability. The `resources` HTTP snapshot route remains a compatibility fallback
+for a version 1 host that does not advertise `resources-live`.
 
 For the production topology, publish `src/Aspire.Dashboard.Backend` instead. Publishing runs this
 UI's locked npm build and embeds `dist` into the Native AOT executable. Opening the executable's
