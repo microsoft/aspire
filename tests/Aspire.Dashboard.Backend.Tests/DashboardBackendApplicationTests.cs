@@ -5,6 +5,7 @@ using System.Net;
 using System.Net.Http.Json;
 using System.Net.Sockets;
 using System.Runtime.CompilerServices;
+using System.Text;
 using System.Text.Json;
 using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
@@ -56,7 +57,7 @@ public class DashboardBackendApplicationTests
 
         response.EnsureSuccessStatusCode();
         Assert.Equal(
-            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"shell\",\"culture\",\"authentication\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"terminal\",\"interactions\"]}]}",
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"shell\",\"culture\",\"authentication\",\"manage-data\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"terminal\",\"interactions\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -252,6 +253,94 @@ public class DashboardBackendApplicationTests
                 "login?t=browser-token"
             ],
             legacyApiProxy.Paths);
+        Assert.Equal(0, legacyApiProxy.AuthorizationCallCount);
+    }
+
+    [Fact]
+    public async Task ManageDataRoutes_ProxyInventoryBinaryExportImportAndRemove()
+    {
+        var bodies = new Dictionary<string, string>();
+        string? importedFileName = null;
+        var legacyApiProxy = new TestLegacyApiProxy(isConfigured: true)
+        {
+            ProxyHandler = async (context, path) =>
+            {
+                if (context.Request.ContentLength is > 0)
+                {
+                    using var reader = new StreamReader(context.Request.Body, leaveOpen: true);
+                    bodies[path] = await reader.ReadToEndAsync(TestContext.Current.CancellationToken);
+                }
+
+                switch (path)
+                {
+                    case "api/deck/manage-data":
+                        context.Response.ContentType = "application/json";
+                        await context.Response.WriteAsync(
+                            "{\"resources\":[],\"isImportEnabled\":true}",
+                            TestContext.Current.CancellationToken);
+                        break;
+                    case "api/deck/manage-data/export":
+                        context.Response.ContentType = "application/zip";
+                        context.Response.Headers.ContentDisposition =
+                            "attachment; filename*=UTF-8''aspire-telemetry-export-test.zip";
+                        await context.Response.Body.WriteAsync("PK-test"u8.ToArray(), TestContext.Current.CancellationToken);
+                        break;
+                    case "api/deck/manage-data/import":
+                        importedFileName = context.Request.Headers["X-Aspire-File-Name"];
+                        context.Response.StatusCode = StatusCodes.Status204NoContent;
+                        break;
+                    case "api/deck/manage-data/remove":
+                        context.Response.StatusCode = StatusCodes.Status204NoContent;
+                        break;
+                }
+            }
+        };
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+        using var client = app.GetTestClient();
+
+        using var inventoryResponse = await client.GetAsync(
+            DashboardApiContract.ManageDataPath,
+            TestContext.Current.CancellationToken);
+        using var exportResponse = await client.PostAsync(
+            $"{DashboardApiContract.ManageDataPath}/export",
+            new StringContent(
+                "{\"resources\":[{\"resourceName\":\"frontend\",\"dataTypes\":[\"Traces\"]}]}",
+                Encoding.UTF8,
+                "application/json"),
+            TestContext.Current.CancellationToken);
+        using var importContent = new StringContent("{}", Encoding.UTF8, "application/json");
+        importContent.Headers.Add("X-Aspire-File-Name", "telemetry.json");
+        using var importResponse = await client.PostAsync(
+            $"{DashboardApiContract.ManageDataPath}/import",
+            importContent,
+            TestContext.Current.CancellationToken);
+        using var removeResponse = await client.PostAsync(
+            $"{DashboardApiContract.ManageDataPath}/remove",
+            new StringContent(
+                "{\"resources\":[{\"resourceName\":\"frontend\",\"dataTypes\":[\"Metrics\"]}]}",
+                Encoding.UTF8,
+                "application/json"),
+            TestContext.Current.CancellationToken);
+
+        inventoryResponse.EnsureSuccessStatusCode();
+        exportResponse.EnsureSuccessStatusCode();
+        Assert.Equal("application/zip", exportResponse.Content.Headers.ContentType?.MediaType);
+        Assert.Equal(
+            "aspire-telemetry-export-test.zip",
+            exportResponse.Content.Headers.ContentDisposition?.FileNameStar);
+        Assert.True((await exportResponse.Content.ReadAsByteArrayAsync(
+            TestContext.Current.CancellationToken)).AsSpan().StartsWith("PK"u8));
+        Assert.Equal(HttpStatusCode.NoContent, importResponse.StatusCode);
+        Assert.Equal(HttpStatusCode.NoContent, removeResponse.StatusCode);
+        Assert.Equal("telemetry.json", importedFileName);
+        Assert.Equal("{}", bodies["api/deck/manage-data/import"]);
+        Assert.Contains("\"Traces\"", bodies["api/deck/manage-data/export"]);
+        Assert.Contains("\"Metrics\"", bodies["api/deck/manage-data/remove"]);
         Assert.Equal(0, legacyApiProxy.AuthorizationCallCount);
     }
 

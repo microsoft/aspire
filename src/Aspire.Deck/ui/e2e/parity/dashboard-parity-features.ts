@@ -77,7 +77,7 @@ const featureDefinitions = {
     ["SHELL-THEME-001", "/", "System, light, and dark theme selection is persisted.", "shell", "covered", "APP-THEME-001; APP-SETTINGS-001"],
     ["SHELL-LANGUAGE-001", "/", "The dashboard language can be selected and applied.", "shell", "covered", "AOT-SHELL-001; HTTP-LANGUAGE-001; GlobalizationHelpersTests.ResolveSetCultureToAcceptedCultureAsync_MatchRequestToResult"],
     ["SHELL-TIME-FORMAT-001", "/", "System, 12-hour, and 24-hour time formatting can be selected.", "shell", "covered", "APP-TIME-FORMAT-001"],
-    ["SHELL-MANAGE-DATA-001", "/", "Resource logs and telemetry can be inspected, exported, imported, and cleared.", "manage-data", "covered", "HTTP-MANAGE-DATA-001; DeckApiTests.ManageData_InventoryExportImportAndRemoveUseDeckContract"],
+    ["SHELL-MANAGE-DATA-001", "/", "Resource logs and telemetry can be inspected, exported, imported, and cleared.", "manage-data", "covered", "AOT-MANAGE-DATA-001; HTTP-MANAGE-DATA-001; DeckApiTests.ManageData_InventoryExportImportAndRemoveUseDeckContract"],
     ["SHELL-USER-001", "/", "Authenticated user profile and sign-out behavior are available when configured.", "user", "covered", "AOT-SHELL-001; HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
     ["SHELL-AUTH-001", "/login", "Browser-token and OpenID Connect login flows protect the frontend.", "auth", "covered", "AOT-SHELL-001; HTTP-AUTH-001; DeckApiTests.AuthenticateBridge_BrowserTokenChallengePreservesAotReturnUrl; BrowserTokenAuthenticationTests; FrontendOpenIdConnectAuthTests"],
     ["SHELL-RECONNECT-001", "/", "A lost dashboard circuit or backend connection exposes reconnect and recovery UI.", "reconnect", "covered", "HTTP-RECOVERY-001; HTTP-RECONNECT-001"],

@@ -137,6 +137,11 @@ export function retryBackendConnection(): void {
 }
 
 export function getManageData(): Promise<ManageDataResponse> {
+  if (isAotBackend()) {
+    return nativeBackend.hasCapability("manage-data").then((supported) => (
+      supported ? nativeBackend.getManageData() : httpBackend.getManageData()
+    ));
+  }
   if (isHttpBackend()) {
     return httpBackend.getManageData();
   }
@@ -144,6 +149,11 @@ export function getManageData(): Promise<ManageDataResponse> {
 }
 
 export function exportManageData(request: ManageDataRequest): Promise<ManageDataExport> {
+  if (isAotBackend()) {
+    return nativeBackend.hasCapability("manage-data").then((supported) => (
+      supported ? nativeBackend.exportManageData(request) : httpBackend.exportManageData(request)
+    ));
+  }
   if (isHttpBackend()) {
     return httpBackend.exportManageData(request);
   }
@@ -151,6 +161,11 @@ export function exportManageData(request: ManageDataRequest): Promise<ManageData
 }
 
 export function importManageData(file: File): Promise<void> {
+  if (isAotBackend()) {
+    return nativeBackend.hasCapability("manage-data").then((supported) => (
+      supported ? nativeBackend.importManageData(file) : httpBackend.importManageData(file)
+    ));
+  }
   if (isHttpBackend()) {
     return httpBackend.importManageData(file);
   }
@@ -159,6 +174,11 @@ export function importManageData(file: File): Promise<void> {
 }
 
 export function removeManageData(request: ManageDataRequest): Promise<void> {
+  if (isAotBackend()) {
+    return nativeBackend.hasCapability("manage-data").then((supported) => (
+      supported ? nativeBackend.removeManageData(request) : httpBackend.removeManageData(request)
+    ));
+  }
   if (isHttpBackend()) {
     return httpBackend.removeManageData(request);
   }

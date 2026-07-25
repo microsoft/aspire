@@ -7,19 +7,19 @@ It is intentionally additive: `Aspire.Dashboard` remains the default Blazor dash
 to host the existing `/api/deck` transport.
 
 The backend currently implements version discovery plus the `configuration`, complete authenticated
-`shell`, `culture`, `authentication`, read-only `resources` snapshot, SignalR `resources-live`,
-resource `commands`, resource-scoped console backlog/live, structured-log backlog/live/clear, trace
-backlog/live/filter/clear, metric summary/series/clear, versioned interaction polling/response, and
-direct interactive terminal capabilities.
+`shell`, `culture`, `authentication`, `manage-data`, read-only `resources` snapshot, SignalR
+`resources-live`, resource `commands`, resource-scoped console backlog/live, structured-log
+backlog/live/clear, trace backlog/live/filter/clear, metric summary/series/clear, versioned
+interaction polling/response, and direct interactive terminal capabilities.
 Resources, commands, and interactions use one long-lived AppHost resource-service connection.
 Interaction state and response traffic are bounded, and the backend restores an optimistically
 removed prompt when delivery fails so the user can retry. In side-by-side mode, React reads those
 capabilities from this host. BrowserToken and OpenID Connect use the existing dashboard as one
 authoritative cookie/identity service while both processes coexist; the AOT host exposes only
 same-origin versioned shell, culture, and sign-out routes and authorization-gates its direct
-capabilities against that session. Remaining data-management operations are delegated to the
-existing dashboard. A version must not advertise a capability until its
-complete black-box behavior passes the 157-feature parity inventory in
+capabilities against that session. Versioned Manage Data operations stream to the existing
+telemetry repository without exposing its legacy routes to the browser. A version must not
+advertise a capability until its complete black-box behavior passes the 157-feature parity inventory in
 `src/Aspire.Deck/ui/e2e/parity`.
 
 The host targets .NET 10 because SignalR server trimming and Native AOT support begins in .NET 9.
@@ -76,6 +76,8 @@ The host exposes:
 - `GET /api/dashboard/v1/culture` to apply a supported language and return its persisted culture
   cookie to a local redirect.
 - `POST /api/dashboard/v1/authentication/logout` for same-origin sign-out.
+- `GET /api/dashboard/v1/manage-data` plus `POST` to `/export`, `/import`, and `/remove` for
+  authenticated inventory, binary export, bounded telemetry import, and destructive removal.
 - `GET /api/dashboard/v1/resources` for the current AppHost resource snapshot.
 - `/api/dashboard/v1/resources/live` for the SignalR `WatchResources` server stream. Each
   subscription receives an authoritative snapshot followed by incremental upserts and deletes.
@@ -108,10 +110,11 @@ The host exposes:
 `DashboardBackend__LegacyDashboardUrl` must identify the existing dashboard's loopback base URL.
 Telemetry and console proxies forward the incoming dashboard cookie or authorization header so the
 legacy dashboard continues to own OTLP storage for unfinished capabilities during this migration
-slice. Shell, culture, login/token/OIDC callback, and logout proxy routes preserve the browser-facing
-Host; the resulting cookie is therefore shared by hostname without exposing the internal legacy
-port. Direct command, interaction, resource, SignalR, and terminal routes do not proxy their
-operation, but they validate the request against that authoritative identity session first.
+slice. Shell, culture, Manage Data, login/token/OIDC callback, and logout proxy routes preserve the
+browser-facing Host; the resulting cookie is therefore shared by hostname without exposing the
+internal legacy port. Direct command, interaction, resource, SignalR, and terminal routes do not
+proxy their operation, but they validate the request against that authoritative identity session
+first.
 
 All HTTP and SignalR JSON uses camel-case names and an explicit `JsonSerializerContext`. New
 contract payloads must be registered with source generation so Native AOT never depends on

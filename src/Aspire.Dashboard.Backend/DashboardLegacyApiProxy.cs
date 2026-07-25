@@ -33,6 +33,13 @@ internal sealed class DashboardLegacyApiProxy(IConfiguration configuration) : ID
             {
                 request.Content.Headers.TryAddWithoutValidation("Content-Type", context.Request.ContentType);
             }
+            if (context.Request.ContentLength is { } contentLength)
+            {
+                // Preserve a known length so the legacy import endpoint can reject an oversized
+                // upload before either process reads or buffers its body. Chunked requests remain
+                // chunked and are bounded by both Kestrel request limits.
+                request.Content.Headers.ContentLength = contentLength;
+            }
         }
 
         var credentials = DashboardRequestCredentials.From(context.Request);
@@ -57,15 +64,31 @@ internal sealed class DashboardLegacyApiProxy(IConfiguration configuration) : ID
             request.Headers.TryAddWithoutValidation("X-Aspire-File-Name", fileName.ToArray());
         }
 
-        using var response = await s_client.SendAsync(
-            request,
-            HttpCompletionOption.ResponseHeadersRead,
-            context.RequestAborted).ConfigureAwait(false);
-        context.Response.StatusCode = (int)response.StatusCode;
-        CopyHeader(response.Headers, context.Response.Headers);
-        CopyHeader(response.Content.Headers, context.Response.Headers);
-        context.Response.Headers.Remove("transfer-encoding");
-        await response.Content.CopyToAsync(context.Response.Body, context.RequestAborted).ConfigureAwait(false);
+        HttpResponseMessage response;
+        try
+        {
+            response = await s_client.SendAsync(
+                request,
+                HttpCompletionOption.ResponseHeadersRead,
+                context.RequestAborted).ConfigureAwait(false);
+        }
+        catch (HttpRequestException ex)
+        {
+            context.Response.StatusCode = StatusCodes.Status503ServiceUnavailable;
+            await context.Response.WriteAsync(
+                $"The existing dashboard service is unavailable: {ex.Message}",
+                context.RequestAborted).ConfigureAwait(false);
+            return;
+        }
+
+        using (response)
+        {
+            context.Response.StatusCode = (int)response.StatusCode;
+            CopyHeader(response.Headers, context.Response.Headers);
+            CopyHeader(response.Content.Headers, context.Response.Headers);
+            context.Response.Headers.Remove("transfer-encoding");
+            await response.Content.CopyToAsync(context.Response.Body, context.RequestAborted).ConfigureAwait(false);
+        }
     }
 
     public async Task<bool> AuthorizeAsync(HttpContext context)

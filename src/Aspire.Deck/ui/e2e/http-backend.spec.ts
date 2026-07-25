@@ -11,6 +11,7 @@ const allowUnavailableResponses = new WeakSet<Page>();
 const allowInterceptedImportAbort = new WeakSet<Page>();
 const allowNavigationAbort = new WeakSet<Page>();
 const allowMetricSeriesAbort = new WeakSet<Page>();
+const allowViteLoginFetchFailure = new WeakSet<Page>();
 
 function features(...ids: HttpBackendFeatureId[]): string {
   for (const id of ids) {
@@ -77,7 +78,8 @@ test.beforeEach(async ({ page }) => {
   browserErrors.set(page, errors);
   page.on("console", (message) => {
     if (message.type() === "error") {
-      errors.push(`console: ${message.text()}`);
+      const location = message.location().url;
+      errors.push(`console: ${message.text()}${location ? ` (${location})` : ""}`);
     }
   });
   page.on("pageerror", (error) => errors.push(`page: ${error.message}`));
@@ -104,19 +106,32 @@ test.afterEach(async ({ page }) => {
     ? errors.filter((error) => !error.startsWith("console: Failed to load resource: the server responded with a status of 503"))
     : errors;
   const filtered = allowInterceptedImportAbort.has(page)
-    ? unexpected.filter((error) => !error.includes("/api/deck/manage-data/import (net::ERR_ABORTED)"))
+    ? unexpected.filter((error) => !error.includes("manage-data/import (net::ERR_ABORTED)"))
     : unexpected;
   const navigationFiltered = allowNavigationAbort.has(page)
     ? filtered.filter((error) =>
-        error !== "console: Failed to load resource: the server responded with a status of 404 (Not Found)"
+        !error.startsWith("console: Failed to load resource: the server responded with a status of 404 (Not Found)")
         && !(error.includes("/login?returnUrl=") && error.endsWith("(net::ERR_ABORTED)"))
         && !(error.includes("/api/deck/config") && error.endsWith("(net::ERR_ABORTED)"))
         && !(error.includes("/api/deck/interactions") && error.endsWith("(net::ERR_ABORTED)")))
     : filtered;
-  const telemetryFiltered = allowMetricSeriesAbort.has(page)
-    ? navigationFiltered.filter((error) =>
-        !(error.includes("/api/deck/telemetry/metrics/series?") && error.endsWith("(net::ERR_ABORTED)")))
+  const expectedViteLoginFailures = navigationFiltered.filter((error) =>
+    error.startsWith("console: Failed to load resource: the server responded with a status of 500 (Internal Server Error)")
+    && error.includes("http://127.0.0.1:1430/login?returnUrl="));
+  if (allowViteLoginFetchFailure.has(page)) {
+    // A fetch follows the mocked 302 before the React code transfers it into a
+    // document navigation. Vite deliberately returns 500 for JSON-accepting SPA
+    // fallback requests; the immediately following routed document request proves
+    // the browser transfer itself. Keep this allowance exact and single-use.
+    expect(expectedViteLoginFailures, "Expected one Vite login fetch fallback").toHaveLength(1);
+  }
+  const loginFiltered = allowViteLoginFetchFailure.has(page)
+    ? navigationFiltered.filter((error) => !expectedViteLoginFailures.includes(error))
     : navigationFiltered;
+  const telemetryFiltered = allowMetricSeriesAbort.has(page)
+    ? loginFiltered.filter((error) =>
+        !(error.includes("/api/deck/telemetry/metrics/series?") && error.endsWith("(net::ERR_ABORTED)")))
+    : loginFiltered;
   expect(telemetryFiltered, "Unexpected browser errors").toEqual([]);
 });
 
@@ -1240,14 +1255,16 @@ test(`${features("HTTP-SHELL-UNSECURED-001")} warns about unsecured endpoints an
 test(`${features("HTTP-AUTH-001")} transfers an authentication challenge to the dashboard login flow`, async ({ page }) => {
   // Full-page login navigation intentionally cancels in-flight startup requests.
   allowNavigationAbort.add(page);
+  allowViteLoginFetchFailure.add(page);
   await page.route("**/api/deck/config", async (route) => route.fulfill({
     status: 302,
     headers: { Location: "/login?returnUrl=%2Fapi%2Fdeck%2Fconfig" },
   }));
-  await page.route("**/api/deck/resources", async (route) => route.fulfill({
-    status: 302,
-    headers: { Location: "/login?returnUrl=%2Fapi%2Fdeck%2Fresources" },
-  }));
+  // Only one startup request needs to challenge. Two simultaneous mocked redirects
+  // race while the full-page login replaces the document, and Chromium reports the
+  // canceled secondary route as a synthetic 500. Resource challenge behavior is
+  // covered independently by DeckApiTests.GetResources_BrowserTokenAuthWithoutCookie_RedirectsToLogin.
+  await page.route("**/api/deck/resources", async (route) => route.fulfill({ json: [] }));
   await page.route("**/login?*", async (route) => route.fulfill({
     contentType: "text/html",
     body: "<!doctype html><title>Dashboard login</title><h1>Log in to Aspire</h1>",
@@ -1496,6 +1513,109 @@ test(`${features("HTTP-MANAGE-DATA-001")} manages dashboard data through the HTT
   ]);
   await drawer.getByRole("button", { name: "Close manage data" }).click();
   await expect(drawer).toBeHidden();
+});
+
+test(`${features("AOT-MANAGE-DATA-001")} keeps Manage Data on its advertised versioned capability`, async ({ page }) => {
+  allowInterceptedImportAbort.add(page);
+  const requests: Array<{ operation: string; body: unknown }> = [];
+  let legacyManageDataRequests = 0;
+  let removed = false;
+
+  await page.route("**/api/dashboard", async (route) => route.fulfill({
+    json: {
+      product: "Aspire.Dashboard",
+      versions: [{
+        version: 1,
+        basePath: "/api/dashboard/v1",
+        capabilities: ["configuration", "shell", "manage-data", "resources"],
+      }],
+    },
+  }));
+  await page.route("**/api/dashboard/v1/shell", async (route) => route.fulfill({ json: config }));
+  await page.route("**/api/dashboard/v1/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/dashboard/v1/manage-data", async (route) => route.fulfill({
+    json: {
+      resources: [{
+        name: resource.name,
+        displayName: resource.displayName,
+        dataTypes: removed ? ["ResourceDetails", "ConsoleLogs"] : ["ResourceDetails", "ConsoleLogs", "StructuredLogs", "Traces", "Metrics"],
+      }],
+      isImportEnabled: true,
+    },
+  }));
+  await page.route("**/api/dashboard/v1/manage-data/export", async (route) => {
+    requests.push({ operation: "export", body: route.request().postDataJSON() });
+    await route.fulfill({
+      contentType: "application/zip",
+      headers: { "Content-Disposition": "attachment; filename*=UTF-8''aspire-aot-export-test.zip" },
+      body: "PK-aot-test-archive",
+    });
+  });
+  await page.route("**/api/dashboard/v1/manage-data/import", async (route) => {
+    requests.push({
+      operation: "import",
+      body: {
+        fileName: route.request().headers()["x-aspire-file-name"],
+        contentType: route.request().headers()["content-type"],
+        content: route.request().postDataBuffer()?.toString("utf8"),
+      },
+    });
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/api/dashboard/v1/manage-data/remove", async (route) => {
+    requests.push({ operation: "remove", body: route.request().postDataJSON() });
+    removed = true;
+    await route.fulfill({ status: 204 });
+  });
+  await page.route("**/api/deck/manage-data*", async (route) => {
+    legacyManageDataRequests++;
+    await route.fulfill({ status: 500 });
+  });
+
+  await page.goto("/?backend=aot");
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("dialog", { name: "Settings" }).getByRole("button", { name: "Manage data" }).click();
+  const drawer = page.getByRole("dialog", { name: "Manage data" });
+  await expect(drawer.getByRole("checkbox", { name: "Select all data", exact: true })).toBeChecked();
+  await expect(drawer.getByText("5 selected")).toBeVisible();
+
+  const downloadPromise = page.waitForEvent("download");
+  await drawer.getByRole("button", { name: "Export" }).click();
+  const download = await downloadPromise;
+  expect(download.suggestedFilename()).toBe("aspire-aot-export-test.zip");
+
+  const importResponse = page.waitForResponse("**/api/dashboard/v1/manage-data/import");
+  await drawer.getByLabel("Import telemetry file").setInputFiles({
+    name: "telemetry.json",
+    mimeType: "application/json",
+    buffer: Buffer.from('{"resourceLogs":[]}'),
+  });
+  await importResponse;
+
+  await drawer.getByRole("button", { name: "Remove" }).click();
+  await expect(drawer).not.toContainText("Structured logs");
+  await expect(drawer).not.toContainText("Traces");
+  await expect(drawer).not.toContainText("Metrics");
+
+  expect(requests).toEqual([
+    {
+      operation: "export",
+      body: { resources: [{ resourceName: resource.name, dataTypes: ["ResourceDetails", "ConsoleLogs", "StructuredLogs", "Traces", "Metrics", "Resource"] }] },
+    },
+    {
+      operation: "import",
+      body: {
+        fileName: "telemetry.json",
+        contentType: "application/json",
+        content: '{"resourceLogs":[]}',
+      },
+    },
+    {
+      operation: "remove",
+      body: { resources: [{ resourceName: resource.name, dataTypes: ["ResourceDetails", "ConsoleLogs", "StructuredLogs", "Traces", "Metrics", "Resource"] }] },
+    },
+  ]);
+  expect(legacyManageDataRequests).toBe(0);
 });
 
 test(`${features("HTTP-RESOURCE-VIRTUALIZATION-001")} virtualizes a 1000-resource inventory`, async ({ page }) => {

@@ -65,6 +65,7 @@ internal static class DashboardLegacyAuthentication
         // twice or consume a streaming request body before it reaches its actual handler.
         return path.Equals(DashboardApiContract.ShellPath)
             || path.Equals(DashboardApiContract.CulturePath)
-            || path.Equals(DashboardApiContract.AuthenticationLogoutPath);
+            || path.Equals(DashboardApiContract.AuthenticationLogoutPath)
+            || path.StartsWithSegments(DashboardApiContract.ManageDataPath);
     }
 }

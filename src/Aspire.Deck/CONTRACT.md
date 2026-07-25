@@ -33,14 +33,15 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "shell", "culture", "authentication", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "structured-logs-clear", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "terminal", "interactions"]
+      "capabilities": ["configuration", "shell", "culture", "authentication", "manage-data", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "structured-logs-clear", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "terminal", "interactions"]
     }
   ]
 }
 ```
 
-Version 1 currently defines twenty capabilities when the side-by-side legacy authority is
-configured. Servers without that authority omit `shell`, `culture`, and `authentication`:
+Version 1 currently defines twenty-one capabilities when the side-by-side legacy authority is
+configured. Servers without that authority omit `shell`, `culture`, `authentication`, and
+`manage-data`:
 
 | Capability | Route | Response |
 | --- | --- | --- |
@@ -48,6 +49,7 @@ configured. Servers without that authority omit `shell`, `culture`, and `authent
 | `shell` | `GET {basePath}/shell` | `DeckConfig` |
 | `culture` | `GET {basePath}/culture?language={name}&redirectUrl={localUrl}` | Redirect and culture cookie |
 | `authentication` | `POST {basePath}/authentication/logout` | Dashboard sign-out response |
+| `manage-data` | `GET/POST {basePath}/manage-data[/export\|/import\|/remove]` | Inventory JSON, ZIP export, telemetry import, or removal response |
 | `resources` | `GET {basePath}/resources` | `Resource[]` |
 | `resources-live` | SignalR hub at `{basePath}/resources/live` | `ResourcesEvent` server stream |
 | `commands` | `POST {basePath}/commands/execute` | `CommandResponse` |
@@ -93,6 +95,13 @@ application data and remain anonymous. No authentication result is cached or dup
 and resulting culture cookie without exposing an unversioned browser route. `authentication`
 submits sign-out with `POST`; React retains the legacy paths only for compatibility with older AOT
 servers that do not advertise these capabilities.
+
+`manage-data` keeps the inventory, selected signal mapping, export filename/content-disposition,
+ZIP bytes, import filename/media type/body, 100 MB ceiling, import availability, and destructive
+remove operation within one authenticated versioned surface. The AOT host streams these operations
+to the existing telemetry repository while the processes coexist. It does not deserialize or
+buffer the server-side payload, and it advertises the capability only when that repository is
+configured and can authorize the same browser session.
 
 The `resources` response uses the transport-neutral `Resource` shape documented below. It is a
 complete point-in-time snapshot, returned with `Cache-Control: no-store`. It remains the fallback

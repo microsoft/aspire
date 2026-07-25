@@ -56,6 +56,7 @@ internal static class DashboardBackendApplication
                 capabilities.Add(DashboardApiContract.ShellCapability);
                 capabilities.Add(DashboardApiContract.CultureCapability);
                 capabilities.Add(DashboardApiContract.AuthenticationCapability);
+                capabilities.Add(DashboardApiContract.ManageDataCapability);
             }
             capabilities.AddRange(
             [
@@ -126,6 +127,49 @@ internal static class DashboardBackendApplication
             IDashboardLegacyApiProxy legacyApiProxy) =>
         {
             await legacyApiProxy.ProxyAsync(context, "authentication/logout").ConfigureAwait(false);
+        });
+
+        app.MapGet(DashboardApiContract.ManageDataPath, async (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            await legacyApiProxy.ProxyAsync(context, "api/deck/manage-data").ConfigureAwait(false);
+        });
+        app.MapPost($"{DashboardApiContract.ManageDataPath}/export", async (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            await legacyApiProxy.ProxyAsync(context, "api/deck/manage-data/export").ConfigureAwait(false);
+        });
+        app.MapPost($"{DashboardApiContract.ManageDataPath}/import", async (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            // Match the existing dashboard's 100 MB import ceiling. Kestrel's default request
+            // limit is smaller, so the sidecar must raise its own limit before streaming the
+            // body to the authoritative telemetry import service.
+            const long maximumFileSize = 100 * 1024 * 1024;
+            var maximumBodySize = context.Features.Get<Microsoft.AspNetCore.Http.Features.IHttpMaxRequestBodySizeFeature>();
+            if (maximumBodySize is { IsReadOnly: false })
+            {
+                maximumBodySize.MaxRequestBodySize = maximumFileSize;
+            }
+            if (context.Request.ContentLength is > maximumFileSize)
+            {
+                context.Response.StatusCode = StatusCodes.Status400BadRequest;
+                await context.Response.WriteAsync(
+                    "The import file exceeds the 100 MB limit.",
+                    context.RequestAborted).ConfigureAwait(false);
+                return;
+            }
+
+            await legacyApiProxy.ProxyAsync(context, "api/deck/manage-data/import").ConfigureAwait(false);
+        });
+        app.MapPost($"{DashboardApiContract.ManageDataPath}/remove", async (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            await legacyApiProxy.ProxyAsync(context, "api/deck/manage-data/remove").ConfigureAwait(false);
         });
 
         app.MapMethods("/login", [HttpMethods.Get, HttpMethods.Post], async (

@@ -22,6 +22,9 @@ import type {
   MetricSeriesQuery,
   MetricSeriesResponse,
   MetricSummary,
+  ManageDataExport,
+  ManageDataRequest,
+  ManageDataResponse,
   Resource,
   ResourcesEvent,
   LogRecordSummary,
@@ -40,6 +43,7 @@ const configurationCapability = "configuration";
 const shellCapability = "shell";
 const cultureCapability = "culture";
 const authenticationCapability = "authentication";
+const manageDataCapability = "manage-data";
 const resourcesCapability = "resources";
 const resourceStreamCapability = "resources-live";
 const commandsCapability = "commands";
@@ -348,6 +352,22 @@ async function deleteNoContent(path: string): Promise<void> {
   await response.arrayBuffer();
 }
 
+async function postNoContent(path: string, body: unknown): Promise<void> {
+  const response = await fetch(path, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/json", "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  transferAuthenticationRedirect(response);
+  if (!response.ok) {
+    throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  await response.arrayBuffer();
+}
+
 function transferAuthenticationRedirect(response: Response): void {
   if (!response.redirected) return;
 
@@ -393,6 +413,20 @@ function isDeckConfig(value: unknown): value is DeckConfig {
       || config.agentHelpMarkdown === null
       || typeof config.agentHelpMarkdown === "string")
     && (config.isAssistantEnabled === undefined || typeof config.isAssistantEnabled === "boolean");
+}
+
+function isManageDataResponse(value: unknown): value is ManageDataResponse {
+  if (typeof value !== "object" || value === null) return false;
+  const response = value as Partial<ManageDataResponse>;
+  return typeof response.isImportEnabled === "boolean"
+    && Array.isArray(response.resources)
+    && response.resources.every((resource) =>
+      typeof resource === "object"
+      && resource !== null
+      && typeof resource.name === "string"
+      && typeof resource.displayName === "string"
+      && Array.isArray(resource.dataTypes)
+      && resource.dataTypes.every((dataType) => typeof dataType === "string"));
 }
 
 function isVersion(value: unknown): value is DashboardApiVersion {
@@ -498,6 +532,80 @@ async function getSignOutPath(): Promise<string | null> {
   return version.capabilities.includes(authenticationCapability)
     ? `${version.basePath}/authentication/logout`
     : null;
+}
+
+async function getManageData(): Promise<ManageDataResponse> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(manageDataCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise the manage-data capability.");
+  }
+
+  const payload = await requestJson(`${version.basePath}/manage-data`);
+  if (!isManageDataResponse(payload)) {
+    throw new Error("Dashboard API manage-data inventory returned an incompatible payload.");
+  }
+
+  return payload;
+}
+
+async function exportManageData(request: ManageDataRequest): Promise<ManageDataExport> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(manageDataCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise the manage-data capability.");
+  }
+
+  const response = await fetch(`${version.basePath}/manage-data/export`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: { Accept: "application/zip", "Content-Type": "application/json" },
+    body: JSON.stringify(request),
+  });
+  transferAuthenticationRedirect(response);
+  if (!response.ok) {
+    throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  const disposition = response.headers.get("Content-Disposition") ?? "";
+  const encodedName = /filename\*=UTF-8''([^;]+)/i.exec(disposition)?.[1];
+  const quotedName = /filename="([^"]+)"/i.exec(disposition)?.[1];
+  return {
+    fileName: encodedName ? decodeURIComponent(encodedName) : quotedName ?? "aspire-telemetry-export.zip",
+    blob: await response.blob(),
+  };
+}
+
+async function importManageData(file: File): Promise<void> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(manageDataCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise the manage-data capability.");
+  }
+
+  const response = await fetch(`${version.basePath}/manage-data/import`, {
+    method: "POST",
+    cache: "no-store",
+    credentials: "same-origin",
+    headers: {
+      "Content-Type": file.type || "application/octet-stream",
+      "X-Aspire-File-Name": file.name,
+    },
+    body: await file.arrayBuffer(),
+  });
+  transferAuthenticationRedirect(response);
+  if (!response.ok) {
+    throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
+  }
+
+  await response.arrayBuffer();
+}
+
+async function removeManageData(request: ManageDataRequest): Promise<void> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(manageDataCapability)) {
+    throw new Error("Dashboard API version 1 does not advertise the manage-data capability.");
+  }
+
+  await postNoContent(`${version.basePath}/manage-data/remove`, request);
 }
 
 function getConfig(): Promise<DeckConfig> {
@@ -1202,6 +1310,10 @@ export const nativeBackend = {
   hasCapability,
   getCultureUrl,
   getSignOutPath,
+  getManageData,
+  exportManageData,
+  importManageData,
+  removeManageData,
   getTerminalWebSocketUrl,
   listResources,
   executeCommand,
