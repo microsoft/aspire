@@ -31,7 +31,12 @@ public sealed partial class SqliteTelemetryRepository
             ORDER BY t.first_span_timestamp_ticks, t.trace_id
             LIMIT @Count OFFSET @StartIndex;
             """, query.Parameters).AsList();
-        var traces = records.Select(record => MaterializeTrace(connection, record.TraceId)!).ToList();
+        var traces = new List<OtlpTrace>(records.Count);
+        foreach (var batch in records.Chunk(MaxTraceBatchSize))
+        {
+            var tracesById = MaterializeTraces(connection, batch.Select(record => record.TraceId).ToArray());
+            traces.AddRange(batch.Select(record => tracesById[record.TraceId]));
+        }
         return new GetTracesResponse
         {
             PagedResult = new PagedResult<OtlpTrace>
@@ -588,6 +593,11 @@ public sealed partial class SqliteTelemetryRepository
 
     private OtlpTrace? MaterializeTrace(SqliteConnection connection, string traceId, IDbTransaction? transaction = null)
     {
+        return MaterializeTraces(connection, [traceId], transaction).GetValueOrDefault(traceId);
+    }
+
+    private Dictionary<string, OtlpTrace> MaterializeTraces(SqliteConnection connection, IReadOnlyList<string> traceIds, IDbTransaction? transaction = null)
+    {
         var records = connection.Query<SpanRecord>("""
             SELECT
                 s.trace_id AS TraceId,
@@ -620,33 +630,38 @@ public sealed partial class SqliteTelemetryRepository
             JOIN telemetry_resources r ON r.resource_id = s.resource_id
             JOIN telemetry_scopes sc ON sc.scope_id = s.scope_id
             LEFT JOIN telemetry_resources pr ON pr.resource_id = s.uninstrumented_peer_resource_id
-            WHERE s.trace_id = @TraceId
-            ORDER BY s.start_time_ticks, s.span_id;
-            """, new { TraceId = traceId }, transaction).AsList();
+            WHERE s.trace_id IN @TraceIds
+            ORDER BY s.trace_id, s.start_time_ticks, s.span_id;
+            """, new { TraceIds = traceIds }, transaction).AsList();
         if (records.Count == 0)
         {
-            return null;
+            return new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
         }
 
         var spanAttributes = connection.Query<TraceOwnedAttributeRecord>("""
-            SELECT span_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+            SELECT trace_id AS TraceId, span_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
             FROM telemetry_span_attributes
-            WHERE trace_id = @TraceId
-            ORDER BY span_id, ordinal;
-            """, new { TraceId = traceId }, transaction).ToLookup(record => record.OwnerId);
+            WHERE trace_id IN @TraceIds
+            ORDER BY trace_id, span_id, ordinal;
+            """, new { TraceIds = traceIds }, transaction).ToLookup(record => (record.TraceId, record.OwnerId));
         var eventRecords = connection.Query<SpanEventRecord>("""
-            SELECT event_id AS EventId, span_id AS SpanId, event_name AS EventName, event_time_ticks AS EventTimeTicks
+            SELECT trace_id AS TraceId, event_id AS EventId, span_id AS SpanId, event_name AS EventName, event_time_ticks AS EventTimeTicks
             FROM telemetry_span_events
-            WHERE trace_id = @TraceId
-            ORDER BY span_id, ordinal;
-            """, new { TraceId = traceId }, transaction).AsList();
-        var eventAttributes = connection.Query<TextOwnedAttributeRecord>("""
-            SELECT event_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
-            FROM telemetry_span_event_attributes
-            WHERE event_id IN @Ids
-            ORDER BY event_id, ordinal;
-            """, new { Ids = eventRecords.Select(record => record.EventId).ToArray() }, transaction).ToLookup(record => record.OwnerId);
-        var events = eventRecords.ToLookup(record => record.SpanId);
+            WHERE trace_id IN @TraceIds
+            ORDER BY trace_id, span_id, ordinal;
+            """, new { TraceIds = traceIds }, transaction).AsList();
+        var eventAttributeRecords = new List<TextOwnedAttributeRecord>();
+        foreach (var eventIdBatch in eventRecords.Select(record => record.EventId).Chunk(MaxSpanDetailBatchSize))
+        {
+            eventAttributeRecords.AddRange(connection.Query<TextOwnedAttributeRecord>("""
+                SELECT event_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+                FROM telemetry_span_event_attributes
+                WHERE event_id IN @Ids
+                ORDER BY event_id, ordinal;
+                """, new { Ids = eventIdBatch }, transaction));
+        }
+        var eventAttributes = eventAttributeRecords.ToLookup(record => record.OwnerId);
+        var events = eventRecords.ToLookup(record => (record.TraceId, record.SpanId));
         var linkRecords = connection.Query<SpanLinkRecord>("""
             SELECT
                 link_id AS LinkId,
@@ -656,53 +671,65 @@ public sealed partial class SqliteTelemetryRepository
                 target_span_id AS SpanId,
                 trace_state AS TraceState
             FROM telemetry_span_links
-            WHERE source_trace_id = @TraceId OR target_trace_id = @TraceId
+            WHERE source_trace_id IN @TraceIds OR target_trace_id IN @TraceIds
             ORDER BY link_id;
-            """, new { TraceId = traceId }, transaction).AsList();
-        var linkAttributes = connection.Query<LongOwnedAttributeRecord>("""
-            SELECT link_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
-            FROM telemetry_span_link_attributes
-            WHERE link_id IN @Ids
-            ORDER BY link_id, ordinal;
-            """, new { Ids = linkRecords.Select(record => record.LinkId).ToArray() }, transaction).ToLookup(record => record.OwnerId);
-        var outgoingLinks = linkRecords.Where(record => record.SourceTraceId == traceId).ToLookup(record => record.SourceSpanId);
-        var incomingLinks = linkRecords.Where(record => record.TraceId == traceId).ToLookup(record => record.SpanId);
-
-        var trace = new OtlpTrace(Convert.FromHexString(traceId), new DateTime(records[0].LastUpdatedTimestampTicks, DateTimeKind.Utc));
-        foreach (var record in records)
+            """, new { TraceIds = traceIds }, transaction).AsList();
+        var linkAttributeRecords = new List<LongOwnedAttributeRecord>();
+        foreach (var linkIdBatch in linkRecords.Select(record => record.LinkId).Chunk(MaxSpanDetailBatchSize))
         {
-            var (_, view, scope) = GetCachedTelemetryMetadata(record.ResourceId, record.ResourceViewId, record.ScopeId, CachedTelemetryType.Traces);
-
-            var modelSpan = new OtlpSpan(view, trace, scope)
-            {
-                SpanId = record.SpanId,
-                ParentSpanId = record.ParentSpanId,
-                Name = record.Name,
-                Kind = (OtlpSpanKind)record.Kind,
-                StartTime = new DateTime(record.StartTimeTicks, DateTimeKind.Utc),
-                EndTime = new DateTime(record.EndTimeTicks, DateTimeKind.Utc),
-                Status = (OtlpSpanStatusCode)record.Status,
-                StatusMessage = record.StatusMessage,
-                State = record.State,
-                Attributes = ToPairs(spanAttributes[record.SpanId]),
-                Events = [],
-                Links = outgoingLinks[record.SpanId].Select(CreateLink).ToList(),
-                BackLinks = incomingLinks[record.SpanId].Select(CreateLink).ToList()
-            };
-            if (record.PeerResourceId is not null)
-            {
-                modelSpan.SetUninstrumentedPeer(GetCachedResource(record.PeerResourceId.Value));
-            }
-            modelSpan.Events.AddRange(events[record.SpanId].Select(spanEvent => new OtlpSpanEvent(modelSpan)
-            {
-                InternalId = Guid.Parse(spanEvent.EventId),
-                Name = spanEvent.EventName,
-                Time = new DateTime(spanEvent.EventTimeTicks, DateTimeKind.Utc),
-                Attributes = ToPairs(eventAttributes[spanEvent.EventId])
-            }));
-            trace.AddSpan(modelSpan, skipLastUpdatedDate: true);
+            linkAttributeRecords.AddRange(connection.Query<LongOwnedAttributeRecord>("""
+                SELECT link_id AS OwnerId, attribute_key AS AttributeKey, attribute_value AS AttributeValue
+                FROM telemetry_span_link_attributes
+                WHERE link_id IN @Ids
+                ORDER BY link_id, ordinal;
+                """, new { Ids = linkIdBatch }, transaction));
         }
-        return trace;
+        var linkAttributes = linkAttributeRecords.ToLookup(record => record.OwnerId);
+        var outgoingLinks = linkRecords.ToLookup(record => (record.SourceTraceId, record.SourceSpanId));
+        var incomingLinks = linkRecords.ToLookup(record => (record.TraceId, record.SpanId));
+
+        var traces = new Dictionary<string, OtlpTrace>(StringComparer.Ordinal);
+        foreach (var traceRecords in records.GroupBy(record => record.TraceId, StringComparer.Ordinal))
+        {
+            var traceId = traceRecords.Key;
+            var firstRecord = traceRecords.First();
+            var trace = new OtlpTrace(Convert.FromHexString(traceId), new DateTime(firstRecord.LastUpdatedTimestampTicks, DateTimeKind.Utc));
+            foreach (var record in traceRecords)
+            {
+                var (_, view, scope) = GetCachedTelemetryMetadata(record.ResourceId, record.ResourceViewId, record.ScopeId, CachedTelemetryType.Traces);
+
+                var modelSpan = new OtlpSpan(view, trace, scope)
+                {
+                    SpanId = record.SpanId,
+                    ParentSpanId = record.ParentSpanId,
+                    Name = record.Name,
+                    Kind = (OtlpSpanKind)record.Kind,
+                    StartTime = new DateTime(record.StartTimeTicks, DateTimeKind.Utc),
+                    EndTime = new DateTime(record.EndTimeTicks, DateTimeKind.Utc),
+                    Status = (OtlpSpanStatusCode)record.Status,
+                    StatusMessage = record.StatusMessage,
+                    State = record.State,
+                    Attributes = ToPairs(spanAttributes[(traceId, record.SpanId)]),
+                    Events = [],
+                    Links = outgoingLinks[(traceId, record.SpanId)].Select(CreateLink).ToList(),
+                    BackLinks = incomingLinks[(traceId, record.SpanId)].Select(CreateLink).ToList()
+                };
+                if (record.PeerResourceId is not null)
+                {
+                    modelSpan.SetUninstrumentedPeer(GetCachedResource(record.PeerResourceId.Value));
+                }
+                modelSpan.Events.AddRange(events[(traceId, record.SpanId)].Select(spanEvent => new OtlpSpanEvent(modelSpan)
+                {
+                    InternalId = Guid.Parse(spanEvent.EventId),
+                    Name = spanEvent.EventName,
+                    Time = new DateTime(spanEvent.EventTimeTicks, DateTimeKind.Utc),
+                    Attributes = ToPairs(eventAttributes[spanEvent.EventId])
+                }));
+                trace.AddSpan(modelSpan, skipLastUpdatedDate: true);
+            }
+            traces.Add(traceId, trace);
+        }
+        return traces;
 
         OtlpSpanLink CreateLink(SpanLinkRecord link)
         {
@@ -766,6 +793,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed class TraceOwnedAttributeRecord : AttributeRecord
     {
+        public required string TraceId { get; init; }
         public required string OwnerId { get; init; }
     }
 
@@ -781,6 +809,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private sealed class SpanEventRecord
     {
+        public required string TraceId { get; init; }
         public required string EventId { get; init; }
         public required string SpanId { get; init; }
         public required string EventName { get; init; }

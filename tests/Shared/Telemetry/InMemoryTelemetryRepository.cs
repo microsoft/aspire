@@ -28,13 +28,6 @@ namespace Aspire.Dashboard.Otlp.Storage;
 
 public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, ITelemetryRepositoryWriter
 {
-    internal const int MaxResourceViewCount = TelemetryRepositoryLimits.MaxResourceViewCount;
-    internal const int MaxInstrumentCount = TelemetryRepositoryLimits.MaxInstrumentCount;
-    internal const int MaxScopeCount = TelemetryRepositoryLimits.MaxScopeCount;
-    internal const int MaxDimensionCount = TelemetryRepositoryLimits.MaxDimensionCount;
-    internal const int MaxKnownAttributeValueCount = TelemetryRepositoryLimits.MaxKnownAttributeValueCount;
-    internal const int MaxKnownAttributeValuesPerKey = TelemetryRepositoryLimits.MaxKnownAttributeValuesPerKey;
-
     private readonly PauseManager _pauseManager;
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
     private readonly ILogger _logger;
@@ -56,7 +49,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
     private readonly ConcurrentDictionary<ResourceKey, ResourceEntry> _resources = new();
 
     private readonly ReaderWriterLockSlim _logsLock = new();
-    // Bounded by MaxScopeCount. Cleared when all logs are cleared.
+    // Bounded by TelemetryRepositoryLimits.MaxScopeCount. Cleared when all logs are cleared.
     private readonly Dictionary<string, OtlpScope> _logScopes = new();
     private readonly CircularBuffer<OtlpLogEntry> _logs;
     // Bounded by _resources count * MaxAttributeCount. Cleared per-resource or when all logs are cleared.
@@ -66,7 +59,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
     private readonly Dictionary<ResourceKey, int> _resourceUnviewedErrorLogs = new();
 
     private readonly ReaderWriterLockSlim _tracesLock = new();
-    // Bounded by MaxScopeCount. Cleared when all traces are cleared.
+    // Bounded by TelemetryRepositoryLimits.MaxScopeCount. Cleared when all traces are cleared.
     private readonly Dictionary<string, OtlpScope> _traceScopes = new();
     private readonly CircularBuffer<OtlpTrace> _traces;
     // Not explicitly capped per add — bounded only by the sum of span links across in-buffer traces.
@@ -2659,9 +2652,9 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
     private sealed record ResourceEntry(OtlpResource Resource)
     {
         public ReaderWriterLockSlim MetricsLock { get; } = new();
-        // Bounded by MaxScopeCount. Cleared when metrics are cleared.
+        // Bounded by TelemetryRepositoryLimits.MaxScopeCount. Cleared when metrics are cleared.
         public Dictionary<string, OtlpScope> Meters { get; } = [];
-        // Bounded by MaxInstrumentCount. Cleared when metrics are cleared.
+        // Bounded by TelemetryRepositoryLimits.MaxInstrumentCount. Cleared when metrics are cleared.
         public Dictionary<OtlpInstrumentKey, InMemoryInstrument> Instruments { get; } = [];
     }
 }

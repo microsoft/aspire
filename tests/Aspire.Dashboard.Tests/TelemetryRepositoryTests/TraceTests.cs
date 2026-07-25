@@ -1246,7 +1246,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         var expectedTraces = new List<(string TraceId, DateTime StartTime)>();
 
         // Act
-        for (var i = 0; i < 2000; i++)
+        for (var i = 0; i < MaxTraceCount * 3; i++)
         {
             var traceNumber = i + 1;
             var traceId = traceNumber.ToString(CultureInfo.InvariantCulture);

@@ -104,76 +104,59 @@ public sealed partial class SqliteTelemetryRepository
         List<PendingLog> logs,
         List<OtlpLogEntry> addedLogs)
     {
-        foreach (var logBatch in logs.Chunk(MaxLogBatchSize))
-        {
-            var sql = new StringBuilder();
-            var parameters = new DynamicParameters();
-            for (var index = 0; index < logBatch.Length; index++)
+        var logIds = SqliteBatchInsert.BatchInsertRows(
+            connection,
+            transaction,
+            logs,
+            MaxLogBatchSize,
+            "telemetry_logs",
+            [
+                "resource_id", "resource_view_id", "scope_id", "timestamp_ticks", "flags", "severity",
+                "severity_name", "severity_number", "message", "span_id", "trace_id", "parent_id", "original_format", "event_name"
+            ],
+            "log_id",
+            static (pendingLog, parameters) =>
             {
-                var pendingLog = logBatch[index];
                 var log = pendingLog.Log;
-                sql.Append(CultureInfo.InvariantCulture, $$"""
-                    INSERT INTO telemetry_logs (
-                        resource_id, resource_view_id, scope_id, timestamp_ticks, flags, severity,
-                        severity_name, severity_number, message, span_id, trace_id, parent_id,
-                        original_format, event_name)
-                    VALUES (
-                        @ResourceId{{index}}, @ResourceViewId{{index}}, @ScopeId{{index}}, @TimestampTicks{{index}}, @Flags{{index}}, @Severity{{index}},
-                        @SeverityName{{index}}, @SeverityNumber{{index}}, @Message{{index}}, @SpanId{{index}}, @TraceId{{index}}, @ParentId{{index}},
-                        @OriginalFormat{{index}}, @EventName{{index}})
-                    RETURNING log_id;
-                    """);
-                parameters.Add($"ResourceId{index}", pendingLog.ResourceId);
-                parameters.Add($"ResourceViewId{index}", pendingLog.ResourceViewId);
-                parameters.Add($"ScopeId{index}", pendingLog.ScopeId);
-                parameters.Add($"TimestampTicks{index}", log.TimeStamp.Ticks);
-                parameters.Add($"Flags{index}", (long)log.Flags);
-                parameters.Add($"Severity{index}", (int)log.Severity);
-                parameters.Add($"SeverityName{index}", log.Severity.ToString());
-                parameters.Add($"SeverityNumber{index}", log.SeverityNumber);
-                parameters.Add($"Message{index}", log.Message);
-                parameters.Add($"SpanId{index}", log.SpanId);
-                parameters.Add($"TraceId{index}", log.TraceId);
-                parameters.Add($"ParentId{index}", log.ParentId);
-                parameters.Add($"OriginalFormat{index}", log.OriginalFormat);
-                parameters.Add($"EventName{index}", log.EventName);
-            }
+                parameters[0].Value = pendingLog.ResourceId;
+                parameters[1].Value = pendingLog.ResourceViewId;
+                parameters[2].Value = pendingLog.ScopeId;
+                parameters[3].Value = log.TimeStamp.Ticks;
+                parameters[4].Value = (long)log.Flags;
+                parameters[5].Value = (int)log.Severity;
+                parameters[6].Value = log.Severity.ToString();
+                parameters[7].Value = log.SeverityNumber;
+                parameters[8].Value = log.Message;
+                parameters[9].Value = log.SpanId;
+                parameters[10].Value = log.TraceId;
+                parameters[11].Value = log.ParentId;
+                parameters[12].Value = log.OriginalFormat ?? (object)DBNull.Value;
+                parameters[13].Value = log.EventName ?? (object)DBNull.Value;
+            });
 
-            var logIds = new long[logBatch.Length];
-            // Keep one RETURNING result set per log in a single command so each generated ID maps
-            // deterministically to its source log without relying on SQLite RETURNING row order.
-            using (var reader = connection.QueryMultiple(sql.ToString(), parameters, transaction))
-            {
-                for (var index = 0; index < logBatch.Length; index++)
-                {
-                    logIds[index] = reader.ReadSingle<long>();
-                }
-            }
-
-            InsertLogAttributes(connection, transaction, logBatch, logIds);
-            for (var index = 0; index < logBatch.Length; index++)
-            {
-                var log = logBatch[index].Log;
-                addedLogs.Add(new OtlpLogEntry(
-                    logIds[index],
-                    log.TimeStamp,
-                    log.Flags,
-                    log.Severity,
-                    log.SeverityNumber,
-                    log.Message,
-                    log.SpanId,
-                    log.TraceId,
-                    log.ParentId,
-                    log.OriginalFormat,
-                    log.ResourceView,
-                    log.Scope,
-                    log.Attributes,
-                    log.EventName));
-            }
+        InsertLogAttributes(connection, transaction, logs, logIds);
+        for (var i = 0; i < logs.Count; i++)
+        {
+            var log = logs[i].Log;
+            addedLogs.Add(new OtlpLogEntry(
+                logIds[i],
+                log.TimeStamp,
+                log.Flags,
+                log.Severity,
+                log.SeverityNumber,
+                log.Message,
+                log.SpanId,
+                log.TraceId,
+                log.ParentId,
+                log.OriginalFormat,
+                log.ResourceView,
+                log.Scope,
+                log.Attributes,
+                log.EventName));
         }
     }
 
-    private static void InsertLogAttributes(SqliteConnection connection, IDbTransaction transaction, PendingLog[] logs, long[] logIds)
+    private static void InsertLogAttributes(SqliteConnection connection, IDbTransaction transaction, List<PendingLog> logs, List<int> logIds)
     {
         var attributes = logs
             .SelectMany((pendingLog, logIndex) => pendingLog.Log.Attributes.Select((attribute, ordinal) => (LogId: logIds[logIndex], Ordinal: ordinal, Attribute: attribute)))

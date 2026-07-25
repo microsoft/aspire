@@ -15,7 +15,8 @@ internal static class SqliteBatchInsert
         IDbTransaction transaction,
         int rowCount,
         string tableName,
-        IReadOnlyList<string> columnNames)
+        IReadOnlyList<string> columnNames,
+        string? returningColumnName = null)
     {
         var command = connection.CreateCommand();
         command.Transaction = (DbTransaction)transaction;
@@ -47,6 +48,11 @@ internal static class SqliteBatchInsert
             }
             sql.Append(')');
         }
+        if (returningColumnName is not null)
+        {
+            sql.Append("\nRETURNING ");
+            sql.Append(returningColumnName);
+        }
         sql.Append(';');
         command.CommandText = sql.ToString();
         command.Prepare();
@@ -70,12 +76,59 @@ internal static class SqliteBatchInsert
             bindRowParameters);
     }
 
+    internal static List<int> BatchInsertRows<T>(
+        DbConnection connection,
+        IDbTransaction transaction,
+        IReadOnlyList<T> data,
+        int batchSize,
+        string tableName,
+        IReadOnlyList<string> columnNames,
+        string returningColumnName,
+        BindRowParameters<T> bindRowParameters)
+    {
+        var generatedIds = new List<int>(data.Count);
+        BatchInsertRows(
+            data,
+            batchSize,
+            columnNames.Count,
+            rowCount => CreateBatchInsertCommand(connection, transaction, rowCount, tableName, columnNames, returningColumnName),
+            bindRowParameters,
+            command =>
+            {
+                using var reader = command.ExecuteReader();
+                while (reader.Read())
+                {
+                    generatedIds.Add(reader.GetInt32(0));
+                }
+            });
+        if (generatedIds.Count != data.Count)
+        {
+            throw new InvalidOperationException($"The batch insert returned {generatedIds.Count} generated IDs; expected {data.Count}.");
+        }
+
+        // SQLite doesn't guarantee RETURNING row order. Generated IDs increase with the input rows,
+        // so sorting restores source-row order before callers correlate IDs by index.
+        generatedIds.Sort();
+        return generatedIds;
+    }
+
     internal static void BatchInsertRows<T>(
         IReadOnlyList<T> data,
         int batchSize,
         int parametersPerRow,
         Func<int, DbCommand> commandFactory,
         BindRowParameters<T> bindRowParameters)
+    {
+        BatchInsertRows(data, batchSize, parametersPerRow, commandFactory, bindRowParameters, static command => command.ExecuteNonQuery());
+    }
+
+    private static void BatchInsertRows<T>(
+        IReadOnlyList<T> data,
+        int batchSize,
+        int parametersPerRow,
+        Func<int, DbCommand> commandFactory,
+        BindRowParameters<T> bindRowParameters,
+        Action<DbCommand> executeCommand)
     {
         DbCommand? command = null;
         DbParameter[] parameters = [];
@@ -103,7 +156,7 @@ internal static class SqliteBatchInsert
                         parameters.AsSpan(rowIndex * parametersPerRow, parametersPerRow));
                 }
 
-                command.ExecuteNonQuery();
+                executeCommand(command);
             }
         }
         finally

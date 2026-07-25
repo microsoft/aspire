@@ -575,6 +575,12 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         Assert.Equal(LogLevel.Warning, failureLog.LogLevel);
         Assert.Equal($"Failed to switch to dashboard run '{incompatibleRunId}'.", failureLog.Message);
         Assert.Same(exception, failureLog.Exception);
+
+        // Failed run selection must clear the SQLite connection pool so the historical database
+        // is no longer locked and its run directory can be deleted, especially on Windows.
+        var incompatibleRunDirectory = Path.GetDirectoryName(incompatibleDatabasePath)!;
+        Directory.Delete(incompatibleRunDirectory, recursive: true);
+        Assert.False(Directory.Exists(incompatibleRunDirectory));
     }
 
     [Fact]

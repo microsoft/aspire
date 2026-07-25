@@ -121,6 +121,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
             }
             catch (Exception exception)
             {
+                historicalDatabase?.ClearPool();
                 historicalDatabase?.Dispose();
                 historicalRunLease.Dispose();
                 _logger.LogWarning(exception, "Failed to switch to dashboard run '{RunId}'.", selectedRun.RunId);
@@ -148,6 +149,7 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
     {
         _historicalTelemetryRepository?.Dispose();
         (_historicalResourceRepository as IDisposable)?.Dispose();
+        _historicalDatabase?.ClearPool();
         _historicalDatabase?.Dispose();
         _historicalDatabase = null;
         _historicalRunLease?.Dispose();
