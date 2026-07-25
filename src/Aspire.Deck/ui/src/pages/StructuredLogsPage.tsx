@@ -10,7 +10,6 @@ import { dateFromUnixNano, formatTimeWithMillis, shortId } from "../lib/format";
 import { logFilterFields, matchesTelemetryFilters, parseTelemetryFilters, telemetryFieldNames, type TelemetryFilter } from "../lib/telemetryFilters";
 import {
   Badge,
-  Button,
   CommandMenu,
   DataTable,
   NamedIcon,
@@ -83,7 +82,6 @@ export function StructuredLogsPage({
   onFilterRouteChange,
   onSelectedLogChange,
   onNavigateToTrace,
-  onExplainErrors,
 }: {
   routeSpanId: string | null;
   routeResourceName: string | null;
@@ -96,7 +94,6 @@ export function StructuredLogsPage({
   onFilterRouteChange: (state: LogFilterRouteState) => void;
   onSelectedLogChange: (logId: string | null) => void;
   onNavigateToTrace: (traceId: string, spanId: string | null) => void;
-  onExplainErrors?: (prompt: string) => void;
 }) {
   const telemetry = useTelemetry();
   const [pausedSnapshot, setPausedSnapshot] = useState<TelemetrySummary | null>(null);
@@ -181,19 +178,6 @@ export function StructuredLogsPage({
       return true;
     });
   }, [effectiveQuery, filters, logs, selectedResource, selectedSeverity]);
-  const errorLogs = useMemo(() => filtered.filter((log) => log.severityNumber >= 17), [filtered]);
-
-  const explainErrors = (): void => {
-    if (onExplainErrors === undefined || errorLogs.length === 0) return;
-    const context = errorLogs.slice(0, 20).map((log) => ({
-      resourceName: log.resourceName,
-      severity: log.severity,
-      message: log.body,
-      traceId: log.traceId,
-      spanId: log.spanId,
-    }));
-    onExplainErrors(`Explain the errors in the currently filtered structured logs. Identify likely causes and concrete next steps.\n\n${JSON.stringify(context, null, 2)}`);
-  };
 
   const columns: Column<LogRecordSummary>[] = [
     {
@@ -331,9 +315,6 @@ export function StructuredLogsPage({
           onValueChange={(value) => updateRoute({ severity: value })}
         />
         <StructuredFilterControl filters={filters} fields={filterFields} onChange={(next) => updateRoute({ filters: next })} />
-        <Button disabled={onExplainErrors === undefined || errorLogs.length === 0} onClick={explainErrors}>
-          <NamedIcon name="BrainCircuit" size={16} /> Explain errors
-        </Button>
         <div className="page__header-spacer" />
         <Switch
           className="structured-logs__pause"
