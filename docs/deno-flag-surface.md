@@ -86,16 +86,16 @@ the same resource.
 ### 5. `--watch` / `--watch-hmr` in published containers
 
 Watch/HMR are run-mode developer conveniences. The value is honored for the run-mode command line and
-is also reflected in the generated Dockerfile entrypoint for fidelity, but file-watching has no useful
-meaning in an immutable published container image and should be treated as run-mode only.
+is intentionally omitted from the generated Dockerfile entrypoint because file-watching has no useful
+meaning in an immutable published container image.
 
 ### 6. `deno task` permission flags
 
 For `deno task`, permissions are defined by the task's own command inside `deno.json`, not on the
 `deno task` invocation. `WithDenoTask(...)` therefore intentionally does **not** emit permission flags
 (`--allow-*`/`--deny-*`); configure them in the task definition. Resolution flags (`--config`,
-`--import-map`, `--lock`, `--node-modules-dir`) and `--unstable-*` are still emitted because they are
-valid `deno task` options.
+`--lock`, `--node-modules-dir`) and `--unstable-*` are still emitted because they are valid
+`deno task` options; `--import-map` is intentionally omitted because Deno rejects it on `deno task`.
 
 ### 7. Interactive / TTY-oriented flags
 

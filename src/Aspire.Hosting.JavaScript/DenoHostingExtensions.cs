@@ -230,10 +230,12 @@ public static partial class JavaScriptHostingExtensions
         if (hmr)
         {
             annotation.WatchHmr = true;
+            annotation.Watch = false;
         }
         else
         {
             annotation.Watch = true;
+            annotation.WatchHmr = false;
         }
 
         return builder;

@@ -131,7 +131,7 @@ public class AddDenoAppTests
         Assert.Contains("ENV DENO_DIR=/deno-dir", dockerfileContents);
         // ...and the populated cache copied into the runtime stage.
         Assert.Contains("COPY --from=build /deno-dir /deno-dir", dockerfileContents);
-        // GAP #3: NODE_ENV must be set for Deno's npm-compatibility mode, mirroring the Bun publish block.
+        // NODE_ENV must be set for Deno's npm-compatibility mode, mirroring the Bun publish block.
         Assert.Contains("ENV NODE_ENV=production", dockerfileContents);
     }
 
@@ -648,6 +648,30 @@ public class AddDenoAppTests
             a => Assert.Equal("run", a),
             a => Assert.Equal("--watch-hmr", a),
             a => Assert.Equal("--inspect-wait", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoWatch_RepeatedCallsEmitOnlyLastWatchMode()
+    {
+        var watchArgs = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll(false)
+            .WithDenoWatch(hmr: true)
+            .WithDenoWatch());
+
+        Assert.Collection(watchArgs,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--watch", a),
+            a => Assert.Equal("main.ts", a));
+
+        var hmrArgs = await GetDenoArgsAsync(d => d
+            .WithDenoAllowAll(false)
+            .WithDenoWatch()
+            .WithDenoWatch(hmr: true));
+
+        Assert.Collection(hmrArgs,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("--watch-hmr", a),
             a => Assert.Equal("main.ts", a));
     }
 
