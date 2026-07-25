@@ -411,8 +411,7 @@ function isDeckConfig(value: unknown): value is DeckConfig {
     && (config.isAgentHelpEnabled === undefined || typeof config.isAgentHelpEnabled === "boolean")
     && (config.agentHelpMarkdown === undefined
       || config.agentHelpMarkdown === null
-      || typeof config.agentHelpMarkdown === "string")
-    && (config.isAssistantEnabled === undefined || typeof config.isAssistantEnabled === "boolean");
+      || typeof config.agentHelpMarkdown === "string");
 }
 
 function isManageDataResponse(value: unknown): value is ManageDataResponse {

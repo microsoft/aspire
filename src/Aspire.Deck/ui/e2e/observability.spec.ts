@@ -205,6 +205,7 @@ test(`${features("CONSOLE-ROUTE-001")} restores console resource and display opt
 
 test(`${features("LOG-LIST-001", "LOG-FILTER-001", "LOG-SEVERITY-001", "LOG-LIVE-001")} lists, filters, and updates structured logs`, async ({ page }) => {
   await navigationButton(page, "Structured Logs").click();
+  await expect(page.getByRole("button", { name: "Explain errors" })).toHaveCount(0);
 
   const table = page.getByRole("table");
   await expect(table.getByRole("columnheader")).toHaveText([
@@ -487,6 +488,7 @@ test(`${features("LOG-STRUCTURED-FILTER-001", "LOG-FILTER-COUNT-001", "LOG-ROUTE
 
 test(`${features("TRACE-LIST-001", "TRACE-LIVE-001", "TRACE-COLLAPSE-001", "TRACE-TREE-001", "TRACE-EXPAND-001", "TRACE-DETAILS-001", "TRACE-ERROR-001")} explores trace waterfalls and span details`, async ({ page }) => {
   await navigationButton(page, "Traces").click();
+  await expect(page.getByRole("button", { name: "Explain errors" })).toHaveCount(0);
 
   const traces = page.locator(".wf__trace");
   await expect.poll(() => traces.count()).toBeGreaterThanOrEqual(4);

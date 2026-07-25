@@ -1838,7 +1838,7 @@ table.data tbody tr.selected {
   text-decoration: none;
 }
 
-/* Active state for an icon button (e.g. the assistant toggle when its pane is open). */
+/* Active state for an icon button when its associated pane is open. */
 .icon-btn--active {
   background: var(--accent-soft);
   color: var(--accent);

@@ -76,6 +76,9 @@ function formatLegacyCoverage(coverage: (typeof dashboardParityFeatures)[number]
   if (coverage === "not-applicable") {
     return "N/A (React enhancement)";
   }
+  if (coverage === "removed") {
+    return "Removed upstream";
+  }
 
   return coverage ?? "PENDING";
 }

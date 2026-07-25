@@ -18,7 +18,6 @@ export interface DeckConfig {
   cultures?: DeckCulture[];
   isAgentHelpEnabled?: boolean;
   agentHelpMarkdown?: string | null;
-  isAssistantEnabled?: boolean;
 }
 
 // Versioned ASP.NET backend discovery types. Keep these aligned with the
@@ -67,31 +66,6 @@ export interface DeckUser {
 export interface DeckCulture {
   name: string;
   displayName: string;
-}
-
-export interface AssistantModel {
-  family: string;
-  displayName: string;
-}
-
-export interface AssistantInfo {
-  models: AssistantModel[];
-}
-
-export interface AssistantMessage {
-  role: "user" | "assistant" | "system";
-  content: string;
-}
-
-export interface AssistantChatRequest {
-  messages: AssistantMessage[];
-  model: string | null;
-}
-
-export interface AssistantEvent {
-  type: "start" | "content" | "complete" | "error";
-  content: string | null;
-  message: string | null;
 }
 
 export type ManageDataType = "ResourceDetails" | "ConsoleLogs" | "StructuredLogs" | "Traces" | "Metrics" | "Resource";

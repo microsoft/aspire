@@ -82,6 +82,7 @@ test(`${features("APP-BROWSER-001", "APP-SHELL-001", "APP-CONNECTION-001")} rend
   `);
   await expect(navigationButton(page, "Resources")).toHaveAttribute("aria-current", "page");
   await expect(page.getByRole("banner").locator(".topbar__app")).toHaveText("TestShop");
+  await expect(page.getByRole("banner").getByRole("button", { name: "Assistant" })).toHaveCount(0);
   await expect(page.getByTitle("Resources: Connected")).toBeVisible();
   await expect(page.getByTitle("OTLP gRPC: Connected")).toBeVisible();
   await expect(page.getByTitle("OTLP HTTP: Connected")).toBeVisible();
@@ -226,31 +227,6 @@ test(`${features("APP-TIME-FORMAT-001")} applies and persists the selected time 
   await page.reload();
   settings = await openSettings();
   await expect(settings.getByRole("group", { name: "Time format" }).getByRole("radio", { name: "24-hour" })).toBeChecked();
-});
-
-test(`${features("APP-ASSISTANT-001")} controls the assistant conversation lifecycle`, async ({ page }) => {
-  await page.getByRole("banner").getByRole("button", { name: "Assistant" }).click();
-  const assistant = page.getByRole("dialog", { name: "Assistant" });
-  await expect(assistant).toBeVisible();
-  await expect(assistant).toContainText("Ask the assistant to investigate your distributed application.");
-
-  const initialWidth = (await assistant.boundingBox())!.width;
-  await assistant.getByRole("button", { name: "Expand assistant" }).click();
-  await expect.poll(async () => (await assistant.boundingBox())!.width).toBeGreaterThan(initialWidth);
-  await assistant.getByRole("button", { name: "Collapse assistant" }).click();
-
-  await assistant.getByLabel("Message the assistant").fill("Inspect the resources");
-  await assistant.getByRole("button", { name: "Send" }).click();
-  await expect(assistant.getByRole("button", { name: "Stop" })).toBeVisible();
-  await assistant.getByRole("button", { name: "Stop" }).click();
-  await expect(assistant.getByRole("button", { name: "Send" })).toBeVisible();
-  await expect(assistant.getByRole("log", { name: "Assistant conversation" })).toContainText("Inspect the resources");
-
-  await assistant.getByRole("button", { name: "New chat" }).click();
-  await expect(assistant).toContainText("Ask the assistant to investigate your distributed application.");
-  await expect(assistant.getByText("Inspect the resources", { exact: true })).toHaveCount(0);
-  await assistant.getByRole("button", { name: "Close assistant" }).click();
-  await expect(assistant).toBeHidden();
 });
 
 test(`${features("APP-ROUTES-001")} restores page routes and browser history`, async ({ page }) => {
@@ -973,7 +949,7 @@ test(`${features("APP-RESPONSIVE-001")} keeps core workflows usable on mobile`, 
   await expect(page.getByRole("main").locator(".table-wrap")).toBeVisible();
 
   const banner = page.getByRole("banner");
-  const headerActions = ["Help", "AI agents", "Assistant", "Notifications 1", "Toggle theme", "Settings"];
+  const headerActions = ["Help", "AI agents", "Notifications 1", "Toggle theme", "Settings"];
   for (const name of headerActions) {
     const action = banner.getByRole("button", { name });
     await expect(action).toBeVisible();
@@ -1001,12 +977,6 @@ test(`${features("APP-RESPONSIVE-001")} keeps core workflows usable on mobile`, 
   overlay = page.getByRole("dialog", { name: "AI agents" });
   await assertMobileOverlay(overlay);
   await overlay.getByRole("button", { name: "Close AI agents" }).click();
-
-  await banner.getByRole("button", { name: "Assistant" }).click();
-  overlay = page.getByRole("dialog", { name: "Assistant" });
-  await assertMobileOverlay(overlay);
-  await expect(overlay.getByLabel("Message the assistant")).toBeVisible();
-  await overlay.getByRole("button", { name: "Close assistant" }).click();
 
   await banner.getByRole("button", { name: "Notifications 1" }).click();
   overlay = page.getByRole("dialog", { name: "Notification center" });

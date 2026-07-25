@@ -72,7 +72,7 @@ The host exposes:
 - `GET /api/dashboard` for version and capability discovery.
 - `GET /api/dashboard/v1/config` for the version 1 configuration capability.
 - `GET /api/dashboard/v1/shell` for complete authenticated shell configuration, including endpoint
-  warnings, user/profile, culture, agent guidance, and assistant availability.
+  warnings, user/profile, culture, and agent guidance.
 - `GET /api/dashboard/v1/culture` to apply a supported language and return its persisted culture
   cookie to a local redirect.
 - `POST /api/dashboard/v1/authentication/logout` for same-origin sign-out.

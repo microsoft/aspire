@@ -9,15 +9,13 @@ export type DashboardArea =
   | "metrics";
 
 export type ReactParityStatus = "covered" | "partial" | "missing";
-export type LegacyCoverage = LegacyScenario | "not-applicable";
+export type LegacyCoverage = LegacyScenario | "not-applicable" | "removed";
 
 export type LegacyScenario =
   | "shell"
   | "user"
   | "unsecured"
   | "auth"
-  | "assistant"
-  | "explain-errors"
   | "reconnect"
   | "manage-data"
   | "resources"
@@ -70,7 +68,7 @@ const featureDefinitions = {
     ["SHELL-HELP-001", "/", "Help opens with documentation and keyboard shortcut reference content.", "shell", "covered", "APP-HELP-001"],
     ["SHELL-KEYBOARD-001", "/", "Page navigation, panel, help, and settings keyboard shortcuts work.", "shell", "covered", "APP-KEYBOARD-001"],
     ["SHELL-AGENTS-001", "/", "The AI agents entry point appears when enabled.", "shell", "covered", "AOT-SHELL-001; HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
-    ["SHELL-ASSISTANT-001", "/", "The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses.", "assistant", "covered", "APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled"],
+    ["SHELL-ASSISTANT-001", "/", "The retired AI assistant is not advertised or rendered after its removal from current main.", "removed", "covered", "0a1a54a360; APP-SHELL-001; AOT-SHELL-001"],
     ["SHELL-NOTIFICATIONS-001", "/", "Active notifications render intent, actions, links, and dismiss behavior.", "shell", "covered", "APP-NOTIFICATION-001; CMD-NOTIFICATION-001"],
     ["SHELL-NOTIFICATION-CENTER-001", "/", "The notification center opens and preserves notification history.", "shell", "covered", "APP-NOTIFICATION-CENTER-001"],
     ["SHELL-SETTINGS-001", "/", "Settings opens from the top bar and reports dashboard/runtime versions.", "shell", "covered", "AOT-SHELL-001; APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract"],
@@ -191,7 +189,7 @@ const featureDefinitions = {
     ["LOG-ACTIONS-001", "/structuredlogs", "Per-log actions expose details, text/JSON visualizers, copy, and related navigation.", "structured-logs", "covered", "LOG-ACTIONS-001; LOG-TRACE-LINK-001; HTTP-STRUCTURED-LOG-DETAILS-001; STRESS-STRUCTURED-LOG-DETAILS-001"],
     ["LOG-TRACE-LINK-001", "/structuredlogs", "Trace IDs deep-link to the matching trace and span.", "structured-logs", "covered", "LOG-TRACE-LINK-001; TRACE-DETAIL-ROUTE-001"],
     ["LOG-GENAI-001", "/structuredlogs", "GenAI log records open the dedicated GenAI visualizer.", "structured-log-genai", "covered", "LOG-GENAI-001"],
-    ["LOG-EXPLAIN-001", "/structuredlogs", "Explain errors summarizes current error logs through the assistant.", "explain-errors", "covered", "LOG-EXPLAIN-001"],
+    ["LOG-EXPLAIN-001", "/structuredlogs", "The retired Explain errors assistant action remains absent after its removal from current main.", "removed", "covered", "0a1a54a360; LOG-LIST-001"],
     ["LOG-ROUTE-001", "/structuredlogs/resource/{name}", "Resource selection, filters, and selected log are deep-linkable and restorable.", "structured-log-session", "covered", "LOG-ROUTE-001"],
   ],
   traces: [
@@ -214,7 +212,7 @@ const featureDefinitions = {
     ["TRACE-EVENTS-001", "/traces/detail/{traceId}", "Span events and exception details preserve timestamps and attributes.", "trace-details", "covered", "TRACE-EVENTS-001; HTTP-TRACES-001"],
     ["TRACE-LINKS-001", "/traces/detail/{traceId}", "Span links navigate to related traces and preserve link attributes.", "trace-details", "covered", "TRACE-LINKS-001; HTTP-TRACES-001"],
     ["TRACE-GENAI-001", "/traces/detail/{traceId}", "GenAI spans and traces open the dedicated GenAI visualizer.", "trace-genai", "covered", "TRACE-GENAI-001"],
-    ["TRACE-EXPLAIN-001", "/traces", "Explain errors summarizes current failed traces through the assistant.", "explain-errors", "covered", "TRACE-EXPLAIN-001"],
+    ["TRACE-EXPLAIN-001", "/traces", "The retired Explain errors assistant action remains absent after its removal from current main.", "removed", "covered", "0a1a54a360; TRACE-LIST-001"],
     ["TRACE-SESSION-001", "/traces", "Resource, type, filters, and selection are deep-linkable and restorable.", "trace-session", "covered", "TRACE-SESSION-001; TRACE-DETAIL-ROUTE-001"],
   ],
   metrics: [

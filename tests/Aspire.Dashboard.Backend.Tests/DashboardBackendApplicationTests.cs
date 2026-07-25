@@ -178,7 +178,7 @@ public class DashboardBackendApplicationTests
                 Assert.Equal("api/deck/config", path);
                 context.Response.ContentType = "application/json";
                 await context.Response.WriteAsync(
-                    "{\"applicationName\":\"Stress\",\"resourceServiceUrl\":null,\"otlpGrpcUrl\":null,\"otlpHttpUrl\":null,\"version\":\"13.5.0\",\"runtimeVersion\":\".NET 10\",\"frontendAuthMode\":\"OpenIdConnect\",\"user\":{\"name\":\"Ada Lovelace\",\"username\":\"ada\"},\"culture\":\"en\",\"cultures\":[{\"name\":\"en\",\"displayName\":\"English\"}],\"isAgentHelpEnabled\":true,\"agentHelpMarkdown\":\"Help\",\"isAssistantEnabled\":true}",
+                    "{\"applicationName\":\"Stress\",\"resourceServiceUrl\":null,\"otlpGrpcUrl\":null,\"otlpHttpUrl\":null,\"version\":\"13.5.0\",\"runtimeVersion\":\".NET 10\",\"frontendAuthMode\":\"OpenIdConnect\",\"user\":{\"name\":\"Ada Lovelace\",\"username\":\"ada\"},\"culture\":\"en\",\"cultures\":[{\"name\":\"en\",\"displayName\":\"English\"}],\"isAgentHelpEnabled\":true,\"agentHelpMarkdown\":\"Help\"}",
                     TestContext.Current.CancellationToken);
             }
         };

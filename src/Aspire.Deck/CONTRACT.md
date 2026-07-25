@@ -78,7 +78,7 @@ export interface DashboardConfiguration {
 `configuration` remains the small, independently runnable identity contract understood by older
 AOT clients. `shell` is advertised only when the host can return the complete authenticated
 `DeckConfig`: application identity and versions, endpoint-security warnings, authentication mode
-and user profile, current and available cultures, AI-agent guidance, and assistant availability.
+and user profile, current and available cultures, and AI-agent guidance.
 React never combines partial shell state from two sessions.
 
 During side-by-side convergence, BrowserToken and OpenID Connect remain one authoritative identity
