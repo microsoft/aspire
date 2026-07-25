@@ -2,6 +2,7 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
+#pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
@@ -250,6 +251,28 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             """ENTRYPOINT ["deno","task","--config","deno.json","--lock","deno.lock","--node-modules-dir=auto","start","--my-arg"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_PublishAsPackageScriptWithDenoDoesNotRequireProductionInstallArgs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"tasks":{"build":"deno run -A build.ts","start":"deno run -A main.ts"}}""");
+
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithDeno()
+            .WithBuildScript("build")
+            .PublishAsPackageScript("start", "-- --port $PORT");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        await Verify(dockerfileContents);
+        Assert.Equal("""ENTRYPOINT ["sh","-c","exec deno task start -- --port $PORT"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
     [Fact]
@@ -593,6 +616,65 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             arg => Assert.Equal("--config", arg),
             arg => Assert.Equal("deno.json", arg),
             arg => Assert.Equal("main.ts", arg));
+    }
+
+    [Fact]
+    public void WithDenoAllowNet_NullBuilderThrowsArgumentNullException()
+    {
+        IResourceBuilder<DenoAppResource> builder = null!;
+
+        var exception = Assert.Throws<ArgumentNullException>(() => builder.WithDenoAllowNet());
+
+        Assert.Equal("builder", exception.ParamName);
+    }
+
+    [Fact]
+    public void WithDenoInstallFalseDoesNotCreateInstallerWhenNoneExists()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
+            .WithDeno(install: false);
+
+        using var app = builder.Build();
+        var appModel = app.Services.GetRequiredService<DistributedApplicationModel>();
+
+        Assert.Empty(appModel.Resources.OfType<JavaScriptInstallerResource>());
+    }
+
+    [Fact]
+    public void WithDenoInstallTrueCreatesInstaller()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var app = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
+            .WithDeno(install: true);
+
+        using var distributedApplication = builder.Build();
+        var appModel = distributedApplication.Services.GetRequiredService<DistributedApplicationModel>();
+        var installer = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+
+        Assert.False(installer.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
+        Assert.Contains(app.Resource.Annotations.OfType<WaitAnnotation>(), wait => wait.Resource == installer);
+    }
+
+    [Fact]
+    public void WithDenoInstallFalseDisablesExistingInstaller()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var app = builder.AddJavaScriptApp("js", workspace.Path)
+            .WithDeno(install: false);
+
+        using var distributedApplication = builder.Build();
+        var appModel = distributedApplication.Services.GetRequiredService<DistributedApplicationModel>();
+        var installer = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+
+        Assert.True(installer.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
+        Assert.DoesNotContain(app.Resource.Annotations.OfType<WaitAnnotation>(), wait => wait.Resource == installer);
     }
 
     // Helper: build a Deno resource, apply the given flag configuration, and evaluate the emitted argument list.

@@ -38,6 +38,8 @@ public static partial class JavaScriptHostingExtensions
         bool deny,
         string[] values)
     {
+        ArgumentNullException.ThrowIfNull(builder);
+
         var annotation = GetOrAddDenoAnnotation(builder);
         annotation.Permissions.Add(new DenoPermission
         {
@@ -56,6 +58,10 @@ public static partial class JavaScriptHostingExtensions
     /// drop to least-privilege and grant only the explicit permissions configured via the granular
     /// <c>WithDenoAllow*</c> methods.
     /// </summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="enabled">Whether to emit <c>-A</c>/<c>--allow-all</c>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowAll(this IResourceBuilder<DenoAppResource> builder, bool enabled = true)
     {
@@ -66,82 +72,146 @@ public static partial class JavaScriptHostingExtensions
 
     // ---- Granular permissions ---------------------------------------------------------------
 
-    /// <summary>Grants <c>--allow-net</c>, optionally scoped to the supplied hosts (<c>--allow-net=host1,host2</c>).</summary>
+    /// <summary>Grants <c>--allow-net</c>, optionally scoped to the supplied hosts.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="hosts">The host names, IP addresses, or host:port pairs to allow. When empty, all network access is allowed.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowNet(this IResourceBuilder<DenoAppResource> builder, params string[] hosts)
         => AddDenoPermission(builder, DenoPermissionKind.Net, deny: false, hosts);
 
     /// <summary>Denies <c>--deny-net</c>, optionally scoped to the supplied hosts.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="hosts">The host names, IP addresses, or host:port pairs to deny. When empty, all network access is denied.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoDenyNet(this IResourceBuilder<DenoAppResource> builder, params string[] hosts)
         => AddDenoPermission(builder, DenoPermissionKind.Net, deny: true, hosts);
 
     /// <summary>Grants <c>--allow-read</c>, optionally scoped to the supplied paths.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="paths">The file system paths to allow. When empty, all read access is allowed.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowRead(this IResourceBuilder<DenoAppResource> builder, params string[] paths)
         => AddDenoPermission(builder, DenoPermissionKind.Read, deny: false, paths);
 
     /// <summary>Denies <c>--deny-read</c>, optionally scoped to the supplied paths.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="paths">The file system paths to deny. When empty, all read access is denied.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoDenyRead(this IResourceBuilder<DenoAppResource> builder, params string[] paths)
         => AddDenoPermission(builder, DenoPermissionKind.Read, deny: true, paths);
 
     /// <summary>Grants <c>--allow-write</c>, optionally scoped to the supplied paths.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="paths">The file system paths to allow. When empty, all write access is allowed.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowWrite(this IResourceBuilder<DenoAppResource> builder, params string[] paths)
         => AddDenoPermission(builder, DenoPermissionKind.Write, deny: false, paths);
 
     /// <summary>Denies <c>--deny-write</c>, optionally scoped to the supplied paths.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="paths">The file system paths to deny. When empty, all write access is denied.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoDenyWrite(this IResourceBuilder<DenoAppResource> builder, params string[] paths)
         => AddDenoPermission(builder, DenoPermissionKind.Write, deny: true, paths);
 
     /// <summary>Grants <c>--allow-run</c>, optionally scoped to the supplied programs.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="programs">The executable names or paths to allow. When empty, all subprocess execution is allowed.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowRun(this IResourceBuilder<DenoAppResource> builder, params string[] programs)
         => AddDenoPermission(builder, DenoPermissionKind.Run, deny: false, programs);
 
     /// <summary>Denies <c>--deny-run</c>, optionally scoped to the supplied programs.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="programs">The executable names or paths to deny. When empty, all subprocess execution is denied.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoDenyRun(this IResourceBuilder<DenoAppResource> builder, params string[] programs)
         => AddDenoPermission(builder, DenoPermissionKind.Run, deny: true, programs);
 
     /// <summary>Grants <c>--allow-env</c>, optionally scoped to the supplied variable names.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="variables">The environment variable names to allow. When empty, all environment access is allowed.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowEnv(this IResourceBuilder<DenoAppResource> builder, params string[] variables)
         => AddDenoPermission(builder, DenoPermissionKind.Env, deny: false, variables);
 
     /// <summary>Denies <c>--deny-env</c>, optionally scoped to the supplied variable names.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="variables">The environment variable names to deny. When empty, all environment access is denied.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoDenyEnv(this IResourceBuilder<DenoAppResource> builder, params string[] variables)
         => AddDenoPermission(builder, DenoPermissionKind.Env, deny: true, variables);
 
     /// <summary>Grants <c>--allow-import</c>, optionally scoped to the supplied import hosts.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="hosts">The import hosts to allow. When empty, all remote imports are allowed.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowImport(this IResourceBuilder<DenoAppResource> builder, params string[] hosts)
         => AddDenoPermission(builder, DenoPermissionKind.Import, deny: false, hosts);
 
     /// <summary>Denies <c>--deny-import</c>, optionally scoped to the supplied import hosts.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="hosts">The import hosts to deny. When empty, all remote imports are denied.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoDenyImport(this IResourceBuilder<DenoAppResource> builder, params string[] hosts)
         => AddDenoPermission(builder, DenoPermissionKind.Import, deny: true, hosts);
 
     /// <summary>Grants <c>--allow-sys</c>, optionally scoped to the supplied APIs.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="apis">The system information APIs to allow. When empty, all system information access is allowed.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowSys(this IResourceBuilder<DenoAppResource> builder, params string[] apis)
         => AddDenoPermission(builder, DenoPermissionKind.Sys, deny: false, apis);
 
     /// <summary>Denies <c>--deny-sys</c>, optionally scoped to the supplied APIs.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="apis">The system information APIs to deny. When empty, all system information access is denied.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoDenySys(this IResourceBuilder<DenoAppResource> builder, params string[] apis)
         => AddDenoPermission(builder, DenoPermissionKind.Sys, deny: true, apis);
 
     /// <summary>Grants <c>--allow-ffi</c>, optionally scoped to the supplied libraries.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="libraries">The native libraries to allow. When empty, all FFI access is allowed.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoAllowFfi(this IResourceBuilder<DenoAppResource> builder, params string[] libraries)
         => AddDenoPermission(builder, DenoPermissionKind.Ffi, deny: false, libraries);
 
     /// <summary>Denies <c>--deny-ffi</c>, optionally scoped to the supplied libraries.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="libraries">The native libraries to deny. When empty, all FFI access is denied.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoDenyFfi(this IResourceBuilder<DenoAppResource> builder, params string[] libraries)
         => AddDenoPermission(builder, DenoPermissionKind.Ffi, deny: true, libraries);
@@ -149,6 +219,10 @@ public static partial class JavaScriptHostingExtensions
     // ---- Config / resolution flags ----------------------------------------------------------
 
     /// <summary>Sets <c>--config &lt;file&gt;</c> (path to a <c>deno.json</c>/<c>deno.jsonc</c>).</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="configFile">The Deno configuration file path.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoConfig(this IResourceBuilder<DenoAppResource> builder, string configFile)
     {
@@ -159,6 +233,10 @@ public static partial class JavaScriptHostingExtensions
     }
 
     /// <summary>Sets <c>--import-map &lt;file&gt;</c>.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="importMapFile">The import map file path.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoImportMap(this IResourceBuilder<DenoAppResource> builder, string importMapFile)
     {
@@ -169,6 +247,10 @@ public static partial class JavaScriptHostingExtensions
     }
 
     /// <summary>Sets <c>--lock &lt;file&gt;</c>.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="lockFile">The lockfile path.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoLock(this IResourceBuilder<DenoAppResource> builder, string lockFile)
     {
@@ -181,6 +263,9 @@ public static partial class JavaScriptHostingExtensions
     }
 
     /// <summary>Sets <c>--no-lock</c>, disabling lockfile use.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoNoLock(this IResourceBuilder<DenoAppResource> builder)
     {
@@ -195,6 +280,10 @@ public static partial class JavaScriptHostingExtensions
     /// Sets <c>--node-modules-dir</c>, optionally with a mode (<c>none</c>|<c>auto</c>|<c>manual</c>) emitted as
     /// <c>--node-modules-dir=&lt;mode&gt;</c>.
     /// </summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="mode">The node_modules mode. When <see langword="null"/> or empty, emits <c>--node-modules-dir</c> without a value.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoNodeModulesDir(this IResourceBuilder<DenoAppResource> builder, string? mode = null)
     {
@@ -211,6 +300,10 @@ public static partial class JavaScriptHostingExtensions
     /// Adds one or more <c>--unstable-*</c> flags. Each feature may be supplied bare (for example <c>"kv"</c>,
     /// <c>"worker-options"</c>, <c>"sloppy-imports"</c>) or fully qualified (<c>"--unstable-kv"</c>).
     /// </summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="features">The unstable feature names or fully-qualified <c>--unstable-*</c> flags to emit.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoUnstable(this IResourceBuilder<DenoAppResource> builder, params string[] features)
     {
@@ -232,6 +325,10 @@ public static partial class JavaScriptHostingExtensions
     // ---- Watch / inspect --------------------------------------------------------------------
 
     /// <summary>Enables <c>--watch</c> (or <c>--watch-hmr</c> when <paramref name="hmr"/> is <see langword="true"/>).</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="hmr">Whether to emit <c>--watch-hmr</c> instead of <c>--watch</c>.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoWatch(this IResourceBuilder<DenoAppResource> builder, bool hmr = false)
     {
@@ -252,16 +349,28 @@ public static partial class JavaScriptHostingExtensions
     }
 
     /// <summary>Enables <c>--inspect</c>, optionally at <paramref name="hostPort"/> (for example <c>127.0.0.1:9229</c>).</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="hostPort">The optional inspector host:port value.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoInspect(this IResourceBuilder<DenoAppResource> builder, string? hostPort = null)
         => SetDenoInspect(builder, DenoInspectMode.Inspect, hostPort);
 
     /// <summary>Enables <c>--inspect-brk</c> (break on first statement), optionally at <paramref name="hostPort"/>.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="hostPort">The optional inspector host:port value.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoInspectBrk(this IResourceBuilder<DenoAppResource> builder, string? hostPort = null)
         => SetDenoInspect(builder, DenoInspectMode.InspectBrk, hostPort);
 
     /// <summary>Enables <c>--inspect-wait</c> (wait for a debugger before running), optionally at <paramref name="hostPort"/>.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="hostPort">The optional inspector host:port value.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoInspectWait(this IResourceBuilder<DenoAppResource> builder, string? hostPort = null)
         => SetDenoInspect(builder, DenoInspectMode.InspectWait, hostPort);
@@ -278,6 +387,9 @@ public static partial class JavaScriptHostingExtensions
     // ---- Modes ------------------------------------------------------------------------------
 
     /// <summary>Selects the <c>deno run &lt;entrypoint&gt;</c> mode (the default).</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoRun(this IResourceBuilder<DenoAppResource> builder)
     {
@@ -293,6 +405,10 @@ public static partial class JavaScriptHostingExtensions
     /// Selects the <c>deno task &lt;taskName&gt;</c> mode, running a task defined in <c>deno.json</c> instead of a
     /// script entrypoint. Permissions are defined by the task itself and are not emitted for this mode.
     /// </summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="taskName">The name of the task in <c>deno.json</c> to run.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoTask(this IResourceBuilder<DenoAppResource> builder, string taskName)
     {
@@ -306,6 +422,9 @@ public static partial class JavaScriptHostingExtensions
     }
 
     /// <summary>Selects the <c>deno serve &lt;entrypoint&gt;</c> mode for serving an HTTP entrypoint.</summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoServe(this IResourceBuilder<DenoAppResource> builder)
     {
@@ -323,6 +442,10 @@ public static partial class JavaScriptHostingExtensions
     /// Appends arguments passed to the script AFTER the entrypoint. Deno forwards everything after the entrypoint
     /// to the running program.
     /// </summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="args">The script arguments to append after the entrypoint or task name.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoScriptArgs(this IResourceBuilder<DenoAppResource> builder, params string[] args)
     {
@@ -337,6 +460,10 @@ public static partial class JavaScriptHostingExtensions
     /// full parity with <c>AddExecutable("name", "deno", workdir, args...)</c> for any flag not covered by a
     /// dedicated <c>WithDeno*</c> method.
     /// </summary>
+    /// <param name="builder">The Deno app resource builder.</param>
+    /// <param name="args">The runtime arguments to append before the entrypoint or task name.</param>
+    /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
+    /// <ats-returns>The resource builder.</ats-returns>
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoRuntimeArgs(this IResourceBuilder<DenoAppResource> builder, params string[] args)
     {

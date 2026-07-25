@@ -1550,6 +1550,24 @@ public static partial class JavaScriptHostingExtensions
                             case JavaScriptPublishMode.PackageScript:
                             {
                                 var runtimeImage = GetPackageScriptRuntimeImage(appDirectory, dockerfileContext.Services, baseImageAnnotation, packageManager, baseImage);
+                                var runCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
+                                    ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}"
+                                    : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName} {publishMode.RunScriptArguments}";
+
+                                if (packageManager.ExecutableName == "deno")
+                                {
+                                    var denoRuntimeStage = dockerfileContext.Builder
+                                        .From(runtimeImage, "runtime")
+                                        .WorkDir("/app")
+                                        .CopyFrom("build", "/app", "/app");
+
+                                    packageManager.InitializeDockerRuntimeStage?.Invoke(denoRuntimeStage);
+
+                                    denoRuntimeStage
+                                        .Env("NODE_ENV", "production")
+                                        .Entrypoint(["sh", "-c", $"exec {runCommand}"]);
+                                    break;
+                                }
 
                                 // Production dependencies stage for optimized image
                                 var prodDepsStage = dockerfileContext.Builder
@@ -1590,10 +1608,6 @@ public static partial class JavaScriptHostingExtensions
                                 }
 
                                 // Runtime stage: copy build output then overlay prod deps
-                                var runCommand = string.IsNullOrWhiteSpace(publishMode.RunScriptArguments)
-                                    ? $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName}"
-                                    : $"{packageManager.ExecutableName} {packageManager.ScriptCommand ?? "run"} {publishMode.ScriptName} {publishMode.RunScriptArguments}";
-
                                 var runtimeStage = dockerfileContext.Builder
                                     .From(runtimeImage, "runtime")
                                     .WorkDir("/app")
@@ -2267,6 +2281,10 @@ public static partial class JavaScriptHostingExtensions
         {
             AddInstaller(resource, install);
         }
+        else
+        {
+            DisableExistingInstaller(resource);
+        }
 
         return resource;
     }
@@ -2649,14 +2667,7 @@ public static partial class JavaScriptHostingExtensions
                 // Installer already exists, update its configuration based on install parameter
                 if (!install)
                 {
-                    // Remove wait annotation if install is false
-                    resource.Resource.Annotations.OfType<WaitAnnotation>()
-                        .Where(w => w.Resource == existingResource.Resource)
-                        .ToList()
-                        .ForEach(w => resource.Resource.Annotations.Remove(w));
-
-                    // Add WithExplicitStart to the existing installer
-                    existingResource.WithExplicitStart();
+                    DisableInstaller(resource, existingResource);
                 }
                 return;
             }
@@ -2700,6 +2711,31 @@ public static partial class JavaScriptHostingExtensions
 
             resource.WithAnnotation(new JavaScriptPackageInstallerAnnotation(installer));
         }
+    }
+
+    private static void DisableExistingInstaller<TResource>(IResourceBuilder<TResource> resource) where TResource : JavaScriptAppResource
+    {
+        if (!resource.ApplicationBuilder.ExecutionContext.IsRunMode)
+        {
+            return;
+        }
+
+        var installerName = $"{resource.Resource.Name}-installer";
+        resource.ApplicationBuilder.TryCreateResourceBuilder<JavaScriptInstallerResource>(installerName, out var existingResource);
+        if (existingResource is not null)
+        {
+            DisableInstaller(resource, existingResource);
+        }
+    }
+
+    private static void DisableInstaller<TResource>(IResourceBuilder<TResource> resource, IResourceBuilder<JavaScriptInstallerResource> installer) where TResource : JavaScriptAppResource
+    {
+        resource.Resource.Annotations.OfType<WaitAnnotation>()
+            .Where(w => w.Resource == installer.Resource)
+            .ToList()
+            .ForEach(w => resource.Resource.Annotations.Remove(w));
+
+        installer.WithExplicitStart();
     }
 
     private static string GetDefaultBaseImage(string appDirectory, string defaultSuffix, IServiceProvider serviceProvider)
