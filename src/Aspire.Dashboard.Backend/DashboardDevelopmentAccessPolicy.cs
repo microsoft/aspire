@@ -13,10 +13,12 @@ internal static class DashboardDevelopmentAccessPolicy
         return app.Use(async (context, next) =>
         {
             // This migration host exposes the same raw resource values that the authenticated
-            // dashboard uses for explicit secret reveal. Until frontend authentication moves to
-            // this host, accept only local connections and browser origins so an accidental
-            // 0.0.0.0 binding or a hostile website cannot read the development API.
-            if (!IsLoopback(context.Connection.LocalIpAddress) || !IsAllowedOrigin(context.Request.Headers.Origin))
+            // dashboard uses for explicit secret reveal. Keep loopback connection and browser
+            // origin restrictions as defense in depth around the delegated BrowserToken/OIDC
+            // session, so an accidental 0.0.0.0 binding or hostile website cannot reach it.
+            if (!IsLoopback(context.Connection.LocalIpAddress)
+                || !IsAllowedHost(context.Request.Host.Host)
+                || !IsAllowedOrigin(context.Request.Headers.Origin))
             {
                 context.Response.StatusCode = StatusCodes.Status403Forbidden;
                 return;
@@ -53,12 +55,17 @@ internal static class DashboardDevelopmentAccessPolicy
             return false;
         }
 
-        if (string.Equals(origin.Host, "localhost", StringComparison.OrdinalIgnoreCase)
-            || origin.Host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase))
+        return IsAllowedHost(origin.Host);
+    }
+
+    internal static bool IsAllowedHost(string host)
+    {
+        if (string.Equals(host, "localhost", StringComparison.OrdinalIgnoreCase)
+            || host.EndsWith(".localhost", StringComparison.OrdinalIgnoreCase))
         {
             return true;
         }
 
-        return IPAddress.TryParse(origin.DnsSafeHost, out var address) && IsLoopback(address);
+        return IPAddress.TryParse(host, out var address) && IsLoopback(address);
     }
 }

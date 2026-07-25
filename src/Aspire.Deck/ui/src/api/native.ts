@@ -37,6 +37,9 @@ import {
 const dashboardProduct = "Aspire.Dashboard";
 const discoveryPath = "/api/dashboard";
 const configurationCapability = "configuration";
+const shellCapability = "shell";
+const cultureCapability = "culture";
+const authenticationCapability = "authentication";
 const resourcesCapability = "resources";
 const resourceStreamCapability = "resources-live";
 const commandsCapability = "commands";
@@ -59,6 +62,7 @@ const supportedVersions = new Set([1]);
 
 let negotiatedVersion: Promise<DashboardApiVersion> | null = null;
 let configuration: Promise<DeckConfig> | null = null;
+let authenticationRedirectStarted = false;
 const structuredLogListeners = new Set<(logs: NativeStructuredLogs) => void>();
 const structuredLogKeys = new Map<string, true>();
 const structuredLogRestartListeners = new Set<() => void>();
@@ -305,6 +309,7 @@ async function requestJson(path: string): Promise<unknown> {
     credentials: "same-origin",
     headers: { Accept: "application/json" },
   });
+  transferAuthenticationRedirect(response);
   if (!response.ok) {
     throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
   }
@@ -320,6 +325,7 @@ async function postJson(path: string, body: unknown): Promise<unknown> {
     headers: { Accept: "application/json", "Content-Type": "application/json" },
     body: JSON.stringify(body),
   });
+  transferAuthenticationRedirect(response);
   if (!response.ok) {
     throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
   }
@@ -334,11 +340,59 @@ async function deleteNoContent(path: string): Promise<void> {
     credentials: "same-origin",
     headers: { Accept: "application/json" },
   });
+  transferAuthenticationRedirect(response);
   if (!response.ok) {
     throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
   }
 
   await response.arrayBuffer();
+}
+
+function transferAuthenticationRedirect(response: Response): void {
+  if (!response.redirected) return;
+
+  const redirectUrl = new URL(response.url);
+  if (redirectUrl.origin === window.location.origin
+      && (redirectUrl.pathname === "/login" || redirectUrl.pathname.startsWith("/authentication/"))) {
+    if (!authenticationRedirectStarted) {
+      authenticationRedirectStarted = true;
+      window.location.assign(`${redirectUrl.pathname}${redirectUrl.search}${redirectUrl.hash}`);
+    }
+    throw new Error("Dashboard authentication is required.");
+  }
+}
+
+function isDeckConfig(value: unknown): value is DeckConfig {
+  if (typeof value !== "object" || value === null) return false;
+  const config = value as Partial<DeckConfig>;
+  return (typeof config.applicationName === "string" || config.applicationName === null)
+    && (typeof config.resourceServiceUrl === "string" || config.resourceServiceUrl === null)
+    && (typeof config.otlpGrpcUrl === "string" || config.otlpGrpcUrl === null)
+    && (typeof config.otlpHttpUrl === "string" || config.otlpHttpUrl === null)
+    && typeof config.version === "string"
+    && (config.runtimeVersion === undefined || typeof config.runtimeVersion === "string")
+    && (config.isTelemetryEndpointUnsecured === undefined || typeof config.isTelemetryEndpointUnsecured === "boolean")
+    && (config.isApiEndpointUnsecured === undefined || typeof config.isApiEndpointUnsecured === "boolean")
+    && (config.frontendAuthMode === undefined || typeof config.frontendAuthMode === "string")
+    && (config.user === undefined
+      || config.user === null
+      || (typeof config.user === "object"
+        && config.user !== null
+        && typeof config.user.name === "string"
+        && (typeof config.user.username === "string" || config.user.username === null)))
+    && (config.culture === undefined || typeof config.culture === "string")
+    && (config.cultures === undefined
+      || (Array.isArray(config.cultures)
+        && config.cultures.every((culture) =>
+          typeof culture === "object"
+          && culture !== null
+          && typeof culture.name === "string"
+          && typeof culture.displayName === "string")))
+    && (config.isAgentHelpEnabled === undefined || typeof config.isAgentHelpEnabled === "boolean")
+    && (config.agentHelpMarkdown === undefined
+      || config.agentHelpMarkdown === null
+      || typeof config.agentHelpMarkdown === "string")
+    && (config.isAssistantEnabled === undefined || typeof config.isAssistantEnabled === "boolean");
 }
 
 function isVersion(value: unknown): value is DashboardApiVersion {
@@ -404,6 +458,14 @@ function getNegotiatedVersion(): Promise<DashboardApiVersion> {
 
 async function loadConfig(): Promise<DeckConfig> {
   const version = await getNegotiatedVersion();
+  if (version.capabilities.includes(shellCapability)) {
+    const shell = await requestJson(`${version.basePath}/shell`);
+    if (!isDeckConfig(shell)) {
+      throw new Error("Dashboard API shell configuration returned an incompatible payload.");
+    }
+    return shell;
+  }
+
   const payload = await requestJson(`${version.basePath}/config`) as Partial<DashboardConfiguration>;
   if (typeof payload.applicationName !== "string"
       || typeof payload.dashboardVersion !== "string"
@@ -419,6 +481,23 @@ async function loadConfig(): Promise<DeckConfig> {
     version: payload.dashboardVersion,
     runtimeVersion: payload.runtimeVersion,
   };
+}
+
+async function getCultureUrl(language: string, redirectUrl: string): Promise<string | null> {
+  const version = await getNegotiatedVersion();
+  if (!version.capabilities.includes(cultureCapability)) {
+    return null;
+  }
+
+  const query = new URLSearchParams({ language, redirectUrl });
+  return `${version.basePath}/culture?${query}`;
+}
+
+async function getSignOutPath(): Promise<string | null> {
+  const version = await getNegotiatedVersion();
+  return version.capabilities.includes(authenticationCapability)
+    ? `${version.basePath}/authentication/logout`
+    : null;
 }
 
 function getConfig(): Promise<DeckConfig> {
@@ -1121,6 +1200,8 @@ function subscribeConsoleLogs(
 export const nativeBackend = {
   getConfig,
   hasCapability,
+  getCultureUrl,
+  getSignOutPath,
   getTerminalWebSocketUrl,
   listResources,
   executeCommand,

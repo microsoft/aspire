@@ -1,4 +1,5 @@
 import type { DeckConfig } from "../api/types";
+import { changeCulture } from "../api/deck";
 import type { ThemeChoice } from "../lib/theme";
 import type { TimeFormatChoice } from "../lib/timeFormat";
 import { Button, Dialog, NamedIcon, Select } from "../toolkit";
@@ -85,7 +86,7 @@ export function SettingsDialog({
             onValueChange={(culture) => {
               if (culture === config.culture) return;
               const redirectUrl = `${window.location.pathname}${window.location.search}`;
-              window.location.assign(`/api/set-language?language=${encodeURIComponent(culture)}&redirectUrl=${encodeURIComponent(redirectUrl)}`);
+              void changeCulture(culture, redirectUrl);
             }}
           />
           <div className="settings-subtext">The page reloads when the language changes.</div>

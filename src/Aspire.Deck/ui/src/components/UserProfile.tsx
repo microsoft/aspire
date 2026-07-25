@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import type { DeckUser } from "../api/types";
+import { signOut } from "../api/deck";
 
 function getInitials(name: string): string {
   return name
@@ -54,9 +55,9 @@ export function UserProfile({ user }: { user: DeckUser }) {
               {user.username ? <div className="user-profile__username">{user.username}</div> : null}
             </div>
           </div>
-          <form className="user-profile__signout" action="/authentication/logout" method="post">
-            <button className="btn btn--ghost" type="submit" role="menuitem">Sign out</button>
-          </form>
+          <div className="user-profile__signout">
+            <button className="btn btn--ghost" type="button" role="menuitem" onClick={() => void signOut()}>Sign out</button>
+          </div>
         </div>
       ) : null}
     </div>

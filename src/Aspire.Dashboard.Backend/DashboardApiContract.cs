@@ -10,6 +10,9 @@ internal static class DashboardApiContract
     public const string DiscoveryPath = "/api/dashboard";
     public const string VersionOneBasePath = "/api/dashboard/v1";
     public const string ConfigurationCapability = "configuration";
+    public const string ShellCapability = "shell";
+    public const string CultureCapability = "culture";
+    public const string AuthenticationCapability = "authentication";
     public const string ResourcesCapability = "resources";
     public const string ResourceStreamCapability = "resources-live";
     public const string CommandsCapability = "commands";
@@ -31,6 +34,9 @@ internal static class DashboardApiContract
     public const string TraceStreamPath = $"{VersionOneBasePath}/traces/live";
     public const string ConsoleLogStreamPath = $"{VersionOneBasePath}/console-logs/live";
     public const string TerminalPath = $"{VersionOneBasePath}/terminal";
+    public const string ShellPath = $"{VersionOneBasePath}/shell";
+    public const string CulturePath = $"{VersionOneBasePath}/culture";
+    public const string AuthenticationLogoutPath = $"{VersionOneBasePath}/authentication/logout";
 }
 
 internal sealed record DashboardApiDiscovery(

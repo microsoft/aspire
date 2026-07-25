@@ -42,35 +42,48 @@ internal static class DashboardBackendApplication
 
         var app = builder.Build();
         app.UseDashboardDevelopmentAccessPolicy();
+        app.UseDashboardLegacyAuthentication();
         app.UseWebSockets();
 
-        app.MapGet(DashboardApiContract.DiscoveryPath, () =>
+        app.MapGet(DashboardApiContract.DiscoveryPath, (IDashboardLegacyApiProxy legacyApiProxy) =>
         {
+            var capabilities = new List<string>
+            {
+                DashboardApiContract.ConfigurationCapability
+            };
+            if (legacyApiProxy.IsConfigured)
+            {
+                capabilities.Add(DashboardApiContract.ShellCapability);
+                capabilities.Add(DashboardApiContract.CultureCapability);
+                capabilities.Add(DashboardApiContract.AuthenticationCapability);
+            }
+            capabilities.AddRange(
+            [
+                DashboardApiContract.ResourcesCapability,
+                DashboardApiContract.ResourceStreamCapability,
+                DashboardApiContract.CommandsCapability,
+                DashboardApiContract.StructuredLogsCapability,
+                DashboardApiContract.StructuredLogStreamCapability,
+                DashboardApiContract.StructuredLogClearCapability,
+                DashboardApiContract.TracesCapability,
+                DashboardApiContract.TraceStreamCapability,
+                DashboardApiContract.TraceClearCapability,
+                DashboardApiContract.MetricsCapability,
+                DashboardApiContract.MetricSeriesCapability,
+                DashboardApiContract.MetricClearCapability,
+                DashboardApiContract.ConsoleLogsCapability,
+                DashboardApiContract.ConsoleLogStreamCapability,
+                DashboardApiContract.TerminalCapability,
+                DashboardApiContract.InteractionsCapability
+            ]);
+
             var discovery = new DashboardApiDiscovery(
                 DashboardApiContract.Product,
                 [
                     new DashboardApiVersion(
                         DashboardApiContract.CurrentVersion,
                         DashboardApiContract.VersionOneBasePath,
-                        [
-                            DashboardApiContract.ConfigurationCapability,
-                            DashboardApiContract.ResourcesCapability,
-                            DashboardApiContract.ResourceStreamCapability,
-                            DashboardApiContract.CommandsCapability,
-                            DashboardApiContract.StructuredLogsCapability,
-                            DashboardApiContract.StructuredLogStreamCapability,
-                            DashboardApiContract.StructuredLogClearCapability,
-                            DashboardApiContract.TracesCapability,
-                            DashboardApiContract.TraceStreamCapability,
-                            DashboardApiContract.TraceClearCapability,
-                            DashboardApiContract.MetricsCapability,
-                            DashboardApiContract.MetricSeriesCapability,
-                            DashboardApiContract.MetricClearCapability,
-                            DashboardApiContract.ConsoleLogsCapability,
-                            DashboardApiContract.ConsoleLogStreamCapability,
-                            DashboardApiContract.TerminalCapability,
-                            DashboardApiContract.InteractionsCapability
-                        ])
+                        [.. capabilities])
                 ]);
 
             return Results.Json(
@@ -90,6 +103,53 @@ internal static class DashboardBackendApplication
             return Results.Json(
                 configuration,
                 DashboardBackendJsonSerializerContext.Default.DashboardConfiguration);
+        });
+
+        app.MapGet(DashboardApiContract.ShellPath, async (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            await legacyApiProxy.ProxyAsync(context, "api/deck/config").ConfigureAwait(false);
+        });
+
+        app.MapGet(DashboardApiContract.CulturePath, async (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            await legacyApiProxy.ProxyAsync(
+                context,
+                $"api/set-language{context.Request.QueryString}").ConfigureAwait(false);
+        });
+
+        app.MapPost(DashboardApiContract.AuthenticationLogoutPath, async (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            await legacyApiProxy.ProxyAsync(context, "authentication/logout").ConfigureAwait(false);
+        });
+
+        app.MapMethods("/login", [HttpMethods.Get, HttpMethods.Post], async (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            await legacyApiProxy.ProxyAsync(
+                context,
+                $"login{context.Request.QueryString}").ConfigureAwait(false);
+        });
+        app.MapPost("/api/validatetoken", async (
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            await legacyApiProxy.ProxyAsync(context, "api/validatetoken").ConfigureAwait(false);
+        });
+        app.MapMethods("/authentication/{**path}", [HttpMethods.Get, HttpMethods.Post], async (
+            string? path,
+            HttpContext context,
+            IDashboardLegacyApiProxy legacyApiProxy) =>
+        {
+            await legacyApiProxy.ProxyAsync(
+                context,
+                $"authentication/{path}{context.Request.QueryString}").ConfigureAwait(false);
         });
 
         app.MapGet($"{DashboardApiContract.VersionOneBasePath}/resources", async (

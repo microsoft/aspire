@@ -102,6 +102,32 @@ export function getConfig(): Promise<DeckConfig> {
   return Promise.resolve(mockBackend.getConfig());
 }
 
+export async function changeCulture(language: string, redirectUrl: string): Promise<void> {
+  let path = `/api/set-language?${new URLSearchParams({ language, redirectUrl })}`;
+  if (isAotBackend()) {
+    // Older AOT bundles predate the explicit culture capability. Preserve their
+    // side-by-side compatibility while current hosts keep browser traffic versioned.
+    path = await nativeBackend.getCultureUrl(language, redirectUrl) ?? path;
+  }
+  window.location.assign(path);
+}
+
+export async function signOut(): Promise<void> {
+  let path = "/authentication/logout";
+  if (isAotBackend()) {
+    // Authentication remains one authoritative dashboard session. Current AOT hosts
+    // advertise the versioned endpoint; the old path is retained only for older hosts.
+    path = await nativeBackend.getSignOutPath() ?? path;
+  }
+
+  const form = document.createElement("form");
+  form.method = "post";
+  form.action = path;
+  form.hidden = true;
+  document.body.append(form);
+  form.submit();
+}
+
 export function retryBackendConnection(): void {
   if (isHttpBackend()) {
     httpBackend.retryConnection();

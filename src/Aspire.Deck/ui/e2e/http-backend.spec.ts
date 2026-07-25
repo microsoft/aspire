@@ -206,6 +206,112 @@ test(`${features("AOT-CONTRACT-001")} reads resources from the negotiated AOT ca
   expect(legacyResourceRequests).toBe(0);
 });
 
+test(`${features("AOT-SHELL-001")} keeps shell metadata, culture, and sign-out on versioned capabilities`, async ({ page }) => {
+  allowNavigationAbort.add(page);
+  let culture = "en";
+  let shellRequests = 0;
+  let versionedCultureRequests = 0;
+  let versionedLogoutMethod: string | null = null;
+  let legacyShellRequests = 0;
+  let legacyCultureRequests = 0;
+  let legacyLogoutRequests = 0;
+
+  await page.route("**/api/dashboard", async (route) => route.fulfill({
+    json: {
+      product: "Aspire.Dashboard",
+      versions: [{
+        version: 1,
+        basePath: "/api/dashboard/v1",
+        capabilities: ["configuration", "shell", "culture", "authentication", "resources"],
+      }],
+    },
+  }));
+  await page.route("**/api/dashboard/v1/shell", async (route) => {
+    shellRequests++;
+    await route.fulfill({
+      json: {
+        ...config,
+        version: "13.5.0-aot",
+        runtimeVersion: ".NET 10.0.0",
+        frontendAuthMode: "OpenIdConnect",
+        user: { name: "Ada Lovelace", username: "ada@example.com" },
+        culture,
+        cultures: [
+          { name: "en", displayName: "English" },
+          { name: "fr", displayName: "Français" },
+        ],
+        isTelemetryEndpointUnsecured: true,
+        isApiEndpointUnsecured: true,
+        isAgentHelpEnabled: true,
+        agentHelpMarkdown: "Versioned agent help",
+        isAssistantEnabled: true,
+      } satisfies DeckConfig,
+    });
+  });
+  await page.route("**/api/dashboard/v1/resources", async (route) => route.fulfill({ json: [resource] }));
+  await page.route("**/api/dashboard/v1/culture?*", async (route) => {
+    versionedCultureRequests++;
+    const url = new URL(route.request().url());
+    culture = url.searchParams.get("language") ?? culture;
+    await route.fulfill({
+      status: 302,
+      headers: {
+        Location: url.searchParams.get("redirectUrl") ?? "/",
+        "Set-Cookie": `.AspNetCore.Culture=c%3D${culture}%7Cuic%3D${culture}; Path=/; SameSite=Lax`,
+      },
+    });
+  });
+  await page.route("**/api/dashboard/v1/authentication/logout", async (route) => {
+    versionedLogoutMethod = route.request().method();
+    await route.fulfill({
+      contentType: "text/html",
+      body: "<!doctype html><title>Signed out</title><h1>Signed out from AOT</h1>",
+    });
+  });
+  await page.route("**/api/deck/config", async (route) => {
+    legacyShellRequests++;
+    await route.fulfill({ json: config });
+  });
+  await page.route("**/api/set-language?*", async (route) => {
+    legacyCultureRequests++;
+    await route.fulfill({ status: 500 });
+  });
+  await page.route(/^http:\/\/127\.0\.0\.1:1430\/authentication\/logout$/, async (route) => {
+    legacyLogoutRequests++;
+    await route.fulfill({ status: 500 });
+  });
+
+  await page.goto("/?backend=aot");
+  await expect(page.getByRole("navigation")).toContainText("Aspire Deck 13.5.0-aot");
+  const profile = page.getByRole("button", { name: "User profile for Ada Lovelace" });
+  await expect(profile).toHaveText("AL");
+  await expect(page.getByRole("region", { name: "System notifications" })).toContainText("Endpoint is unsecured");
+  await page.getByRole("banner").getByRole("button", { name: "AI agents" }).click();
+  const agentHelp = page.getByRole("dialog", { name: "AI agents" });
+  await expect(agentHelp).toContainText("Versioned agent help");
+  await agentHelp.getByRole("button", { name: "Close AI agents" }).click();
+
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  await page.getByRole("dialog", { name: "Settings" }).getByLabel("Language").selectOption("fr");
+  await expect.poll(() => versionedCultureRequests).toBe(1);
+  await expect(page).toHaveURL(/\?backend=aot$/);
+  await page.getByRole("banner").getByRole("button", { name: "Settings" }).click();
+  const reloadedSettings = page.getByRole("dialog", { name: "Settings" });
+  await expect(reloadedSettings.getByLabel("Language")).toHaveValue("fr");
+  await reloadedSettings.getByRole("button", { name: "Close" }).click();
+
+  await page.getByRole("button", { name: "User profile for Ada Lovelace" }).click();
+  await page.getByRole("menuitem", { name: "Sign out" }).click();
+  await expect(page).toHaveURL(/\/api\/dashboard\/v1\/authentication\/logout$/);
+  await expect(page.getByRole("heading", { name: "Signed out from AOT" })).toBeVisible();
+
+  expect(shellRequests).toBeGreaterThanOrEqual(2);
+  expect(versionedLogoutMethod).toBe("POST");
+  expect(legacyShellRequests).toBe(0);
+  expect(legacyCultureRequests).toBe(0);
+  expect(legacyLogoutRequests).toBe(0);
+});
+
 test(`${features("AOT-CONTRACT-001")} executes commands through the negotiated AOT capability`, async ({ page }) => {
   let aotCommandRequests = 0;
   let legacyCommandRequests = 0;

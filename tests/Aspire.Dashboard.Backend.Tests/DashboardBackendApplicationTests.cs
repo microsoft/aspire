@@ -10,6 +10,7 @@ using System.Threading.Channels;
 using Aspire.DashboardService.Proto.V1;
 using Aspire.Shared;
 using Google.Protobuf.WellKnownTypes;
+using Microsoft.AspNetCore.Http;
 using Microsoft.AspNetCore.Http.Connections;
 using Microsoft.AspNetCore.SignalR.Client;
 using Microsoft.AspNetCore.TestHost;
@@ -35,6 +36,27 @@ public class DashboardBackendApplicationTests
         response.EnsureSuccessStatusCode();
         Assert.Equal(
             "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"terminal\",\"interactions\"]}]}",
+            await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
+    }
+
+    [Fact]
+    public async Task Discovery_AdvertisesDelegatedShellAndAuthenticationOnlyWhenLegacyDashboardIsConfigured()
+    {
+        var legacyApiProxy = new TestLegacyApiProxy(isConfigured: true);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            DashboardApiContract.DiscoveryPath,
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        Assert.Equal(
+            "{\"product\":\"Aspire.Dashboard\",\"versions\":[{\"version\":1,\"basePath\":\"/api/dashboard/v1\",\"capabilities\":[\"configuration\",\"shell\",\"culture\",\"authentication\",\"resources\",\"resources-live\",\"commands\",\"structured-logs\",\"structured-logs-live\",\"structured-logs-clear\",\"traces\",\"traces-live\",\"traces-clear\",\"metrics\",\"metrics-series\",\"metrics-clear\",\"console-logs\",\"console-logs-live\",\"terminal\",\"interactions\"]}]}",
             await response.Content.ReadAsStringAsync(TestContext.Current.CancellationToken));
     }
 
@@ -71,6 +93,23 @@ public class DashboardBackendApplicationTests
         using var response = await client.SendAsync(request, TestContext.Current.CancellationToken);
 
         response.EnsureSuccessStatusCode();
+    }
+
+    [Theory]
+    [InlineData("example.com")]
+    [InlineData("192.168.1.10")]
+    public async Task DevelopmentAccessPolicy_RejectsNonLoopbackBrowserHost(string host)
+    {
+        await using var app = DashboardBackendApplication.Build([], builder => builder.WebHost.UseTestServer());
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var request = new HttpRequestMessage(HttpMethod.Get, DashboardApiContract.DiscoveryPath);
+        request.Headers.Host = host;
+        using var response = await app.GetTestClient().SendAsync(
+            request,
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Forbidden, response.StatusCode);
     }
 
     [Theory]
@@ -126,6 +165,94 @@ public class DashboardBackendApplicationTests
         Assert.Equal(
             AssemblyVersionHelper.GetDisplayVersion(typeof(DashboardBackendApplication).Assembly),
             document.RootElement.GetProperty("dashboardVersion").GetString());
+    }
+
+    [Fact]
+    public async Task GetShellConfiguration_UsesAuthenticatedLegacySessionWithoutADeckBrowserRoute()
+    {
+        var legacyApiProxy = new TestLegacyApiProxy(isConfigured: true)
+        {
+            ProxyHandler = async (context, path) =>
+            {
+                Assert.Equal("api/deck/config", path);
+                context.Response.ContentType = "application/json";
+                await context.Response.WriteAsync(
+                    "{\"applicationName\":\"Stress\",\"resourceServiceUrl\":null,\"otlpGrpcUrl\":null,\"otlpHttpUrl\":null,\"version\":\"13.5.0\",\"runtimeVersion\":\".NET 10\",\"frontendAuthMode\":\"OpenIdConnect\",\"user\":{\"name\":\"Ada Lovelace\",\"username\":\"ada\"},\"culture\":\"en\",\"cultures\":[{\"name\":\"en\",\"displayName\":\"English\"}],\"isAgentHelpEnabled\":true,\"agentHelpMarkdown\":\"Help\",\"isAssistantEnabled\":true}",
+                    TestContext.Current.CancellationToken);
+            }
+        };
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            DashboardApiContract.ShellPath,
+            TestContext.Current.CancellationToken);
+
+        response.EnsureSuccessStatusCode();
+        using var document = JsonDocument.Parse(await response.Content.ReadAsStreamAsync(TestContext.Current.CancellationToken));
+        Assert.Equal("OpenIdConnect", document.RootElement.GetProperty("frontendAuthMode").GetString());
+        Assert.Equal("Ada Lovelace", document.RootElement.GetProperty("user").GetProperty("name").GetString());
+        Assert.Equal(0, legacyApiProxy.AuthorizationCallCount);
+    }
+
+    [Fact]
+    public async Task DirectVersionedRoutes_TransferLegacyAuthenticationChallenge()
+    {
+        var legacyApiProxy = new TestLegacyApiProxy(isConfigured: true, isAuthorized: false);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var response = await app.GetTestClient().GetAsync(
+            $"{DashboardApiContract.VersionOneBasePath}/resources?view=all",
+            TestContext.Current.CancellationToken);
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal("/login?returnUrl=%2Fapi%2Fdashboard%2Fv1%2Fresources%3Fview%3Dall", response.Headers.Location?.OriginalString);
+        Assert.Equal("/api/dashboard/v1/resources?view=all", legacyApiProxy.AuthorizationReturnUrl);
+        Assert.Equal(1, legacyApiProxy.AuthorizationCallCount);
+    }
+
+    [Fact]
+    public async Task CultureLogoutAndLogin_ProxySameOriginLegacyRoutes()
+    {
+        var legacyApiProxy = new TestLegacyApiProxy(isConfigured: true);
+        await using var app = DashboardBackendApplication.Build([], builder =>
+        {
+            builder.WebHost.UseTestServer();
+            builder.Services.AddSingleton<IDashboardLegacyApiProxy>(legacyApiProxy);
+        });
+        await app.StartAsync(TestContext.Current.CancellationToken);
+
+        using var cultureResponse = await app.GetTestClient().GetAsync(
+            $"{DashboardApiContract.CulturePath}?language=fr&redirectUrl=%2Fmetrics",
+            TestContext.Current.CancellationToken);
+        using var logoutResponse = await app.GetTestClient().PostAsync(
+            DashboardApiContract.AuthenticationLogoutPath,
+            content: null,
+            TestContext.Current.CancellationToken);
+        using var loginResponse = await app.GetTestClient().GetAsync(
+            "/login?t=browser-token",
+            TestContext.Current.CancellationToken);
+
+        cultureResponse.EnsureSuccessStatusCode();
+        logoutResponse.EnsureSuccessStatusCode();
+        loginResponse.EnsureSuccessStatusCode();
+        Assert.Equal(
+            [
+                "api/set-language?language=fr&redirectUrl=%2Fmetrics",
+                "authentication/logout",
+                "login?t=browser-token"
+            ],
+            legacyApiProxy.Paths);
+        Assert.Equal(0, legacyApiProxy.AuthorizationCallCount);
     }
 
     [Fact]
@@ -1581,6 +1708,41 @@ public class DashboardBackendApplicationTests
             return assets.TryGetValue(path, out var content)
                 ? new MemoryStream(System.Text.Encoding.UTF8.GetBytes(content))
                 : null;
+        }
+    }
+
+    private sealed class TestLegacyApiProxy(bool isConfigured, bool isAuthorized = true) : IDashboardLegacyApiProxy
+    {
+        public bool IsConfigured { get; } = isConfigured;
+        public int AuthorizationCallCount { get; private set; }
+        public string? AuthorizationReturnUrl { get; private set; }
+        public List<string> Paths { get; } = [];
+        public Func<HttpContext, string, Task>? ProxyHandler { get; init; }
+
+        public async Task ProxyAsync(HttpContext context, string path)
+        {
+            Paths.Add(path);
+            if (ProxyHandler is not null)
+            {
+                await ProxyHandler(context, path);
+                return;
+            }
+
+            context.Response.StatusCode = StatusCodes.Status204NoContent;
+        }
+
+        public Task<bool> AuthorizeAsync(HttpContext context)
+        {
+            AuthorizationCallCount++;
+            AuthorizationReturnUrl = $"{context.Request.PathBase}{context.Request.Path}{context.Request.QueryString}";
+            if (!isAuthorized)
+            {
+                context.Response.StatusCode = StatusCodes.Status302Found;
+                context.Response.Headers.Location =
+                    $"/login?returnUrl={Uri.EscapeDataString(AuthorizationReturnUrl)}";
+            }
+
+            return Task.FromResult(isAuthorized);
         }
     }
 

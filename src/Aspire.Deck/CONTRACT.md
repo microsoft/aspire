@@ -33,17 +33,21 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "structured-logs-clear", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "terminal", "interactions"]
+      "capabilities": ["configuration", "shell", "culture", "authentication", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "structured-logs-clear", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "terminal", "interactions"]
     }
   ]
 }
 ```
 
-Version 1 currently defines seventeen capabilities:
+Version 1 currently defines twenty capabilities when the side-by-side legacy authority is
+configured. Servers without that authority omit `shell`, `culture`, and `authentication`:
 
 | Capability | Route | Response |
 | --- | --- | --- |
 | `configuration` | `GET {basePath}/config` | `DashboardConfiguration` |
+| `shell` | `GET {basePath}/shell` | `DeckConfig` |
+| `culture` | `GET {basePath}/culture?language={name}&redirectUrl={localUrl}` | Redirect and culture cookie |
+| `authentication` | `POST {basePath}/authentication/logout` | Dashboard sign-out response |
 | `resources` | `GET {basePath}/resources` | `Resource[]` |
 | `resources-live` | SignalR hub at `{basePath}/resources/live` | `ResourcesEvent` server stream |
 | `commands` | `POST {basePath}/commands/execute` | `CommandResponse` |
@@ -68,6 +72,27 @@ export interface DashboardConfiguration {
   runtimeVersion: string;
 }
 ```
+
+`configuration` remains the small, independently runnable identity contract understood by older
+AOT clients. `shell` is advertised only when the host can return the complete authenticated
+`DeckConfig`: application identity and versions, endpoint-security warnings, authentication mode
+and user profile, current and available cultures, AI-agent guidance, and assistant availability.
+React never combines partial shell state from two sessions.
+
+During side-by-side convergence, BrowserToken and OpenID Connect remain one authoritative identity
+session in the existing dashboard. The AOT host preserves the browser-facing Host while delegating
+login, token validation, OIDC callback, logout, and culture operations, so cookies remain on the
+same hostname and redirects remain on the AOT origin. Before serving the React root or a direct
+versioned resource, telemetry, SignalR, interaction, command, or terminal route, the AOT host asks
+that authority to authenticate the original local return URL. The authority returns `204` for an
+authorized request or the exact cookie/OIDC challenge. OIDC callback-shaped root requests are
+streamed back to the authority for code/state processing. Assets and version discovery contain no
+application data and remain anonymous. No authentication result is cached or duplicated.
+
+`culture` forwards the requested supported language, browser `Accept-Language`, local redirect,
+and resulting culture cookie without exposing an unversioned browser route. `authentication`
+submits sign-out with `POST`; React retains the legacy paths only for compatibility with older AOT
+servers that do not advertise these capabilities.
 
 The `resources` response uses the transport-neutral `Resource` shape documented below. It is a
 complete point-in-time snapshot, returned with `Cache-Control: no-store`. It remains the fallback

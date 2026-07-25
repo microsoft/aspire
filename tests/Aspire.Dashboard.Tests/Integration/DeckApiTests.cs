@@ -297,6 +297,60 @@ public class DeckApiTests(ITestOutputHelper testOutputHelper)
         Assert.Equal("/login?returnUrl=%2Fapi%2Fdeck%2Fresources", response.Headers.Location?.PathAndQuery);
     }
 
+    [Fact]
+    public async Task AuthenticateBridge_BrowserTokenChallengePreservesAotReturnUrl()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper, config =>
+        {
+            config[DashboardConfigNames.DashboardFrontendAuthModeName.ConfigKey] = FrontendAuthMode.BrowserToken.ToString();
+            config[DashboardConfigNames.DashboardFrontendBrowserTokenName.ConfigKey] = "TestKey123!";
+        });
+        await app.StartAsync().DefaultTimeout();
+
+        using var handler = new SocketsHttpHandler { AllowAutoRedirect = false };
+        using var httpClient = new HttpClient(handler)
+        {
+            BaseAddress = new Uri($"http://{app.FrontendSingleEndPointAccessor().EndPoint}")
+        };
+        using var response = await httpClient.GetAsync(
+            "/api/dashboard/authenticate?returnUrl=%2Fapi%2Fdashboard%2Fv1%2Fresources%3Fview%3Dall").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.Redirect, response.StatusCode);
+        Assert.Equal(
+            "/login?returnUrl=%2Fapi%2Fdashboard%2Fv1%2Fresources%3Fview%3Dall",
+            response.Headers.Location?.PathAndQuery);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("https://example.com/")]
+    [InlineData("//example.com/")]
+    [InlineData("/\\example.com/")]
+    public async Task AuthenticateBridge_RejectsNonLocalReturnUrl(string returnUrl)
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var response = await httpClient.GetAsync(
+            $"/api/dashboard/authenticate?returnUrl={Uri.EscapeDataString(returnUrl)}").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.BadRequest, response.StatusCode);
+    }
+
+    [Fact]
+    public async Task AuthenticateBridge_UnsecuredSessionReturnsNoContent()
+    {
+        await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
+        await app.StartAsync().DefaultTimeout();
+
+        using var httpClient = IntegrationTestHelpers.CreateHttpClient($"http://{app.FrontendSingleEndPointAccessor().EndPoint}");
+        using var response = await httpClient.GetAsync(
+            "/api/dashboard/authenticate?returnUrl=%2F").DefaultTimeout();
+
+        Assert.Equal(HttpStatusCode.NoContent, response.StatusCode);
+    }
+
     [Theory]
     [InlineData(CommandResultFormat.Text, "text")]
     [InlineData(CommandResultFormat.Json, "json")]

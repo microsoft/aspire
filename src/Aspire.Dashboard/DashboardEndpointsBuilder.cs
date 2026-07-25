@@ -5,6 +5,7 @@ using System.Globalization;
 using System.Runtime.InteropServices;
 using System.Text.Json;
 using Aspire.Dashboard.Api;
+using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
@@ -15,8 +16,10 @@ using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
 using Aspire.Shared.ConsoleLogs;
 using Humanizer;
+using Microsoft.AspNetCore.Authentication;
 using Microsoft.AspNetCore.Authentication.Cookies;
 using Microsoft.AspNetCore.Authentication.OpenIdConnect;
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Localization;
@@ -34,6 +37,33 @@ public static class DashboardEndpointsBuilder
 
     public static void MapDashboardApi(this IEndpointRouteBuilder endpoints, DashboardOptions dashboardOptions)
     {
+        endpoints.MapGet("/api/dashboard/authenticate", async (
+            string? returnUrl,
+            HttpContext httpContext,
+            IAuthorizationService authorizationService) =>
+        {
+            if (!IsLocalReturnUrl(returnUrl))
+            {
+                return Results.BadRequest();
+            }
+
+            var authentication = await httpContext.AuthenticateAsync(
+                FrontendCompositeAuthenticationDefaults.AuthenticationScheme).ConfigureAwait(false);
+            if (authentication.Succeeded)
+            {
+                httpContext.User = authentication.Principal;
+                var authorization = await authorizationService.AuthorizeAsync(
+                    httpContext.User,
+                    resource: null,
+                    FrontendAuthorizationDefaults.PolicyName).ConfigureAwait(false);
+                return authorization.Succeeded ? Results.NoContent() : Results.Forbid();
+            }
+
+            return Results.Challenge(
+                new AuthenticationProperties { RedirectUri = returnUrl },
+                [FrontendCompositeAuthenticationDefaults.AuthenticationScheme]);
+        }).AllowAnonymous().SkipStatusCodePages();
+
         IEndpointConventionBuilder builder;
         if (dashboardOptions.Frontend.AuthMode == FrontendAuthMode.BrowserToken)
         {
@@ -101,6 +131,18 @@ public static class DashboardEndpointsBuilder
             return Results.LocalRedirect(redirectUrl);
         }).SkipStatusCodePages();
 
+        static bool IsLocalReturnUrl(string? returnUrl)
+        {
+            // Match ASP.NET Core's local redirect rules. In particular, protocol-relative and
+            // slash-backslash values must not become an authentication redirect target.
+            return !string.IsNullOrEmpty(returnUrl)
+                && ((returnUrl[0] == '/'
+                        && (returnUrl.Length == 1 || (returnUrl[1] != '/' && returnUrl[1] != '\\')))
+                    || (returnUrl.Length > 1
+                        && returnUrl[0] == '~'
+                        && returnUrl[1] == '/'
+                        && (returnUrl.Length == 2 || (returnUrl[2] != '/' && returnUrl[2] != '\\'))));
+        }
     }
 
     public static void MapDeckApi(this IEndpointRouteBuilder endpoints)

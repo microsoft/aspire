@@ -15,19 +15,19 @@
 | SHELL-REPO-001 | shell | `/` | shell | covered | APP-REPOSITORY-001 | The Aspire repository link is available from the top bar. |
 | SHELL-HELP-001 | shell | `/` | shell | covered | APP-HELP-001 | Help opens with documentation and keyboard shortcut reference content. |
 | SHELL-KEYBOARD-001 | shell | `/` | shell | covered | APP-KEYBOARD-001 | Page navigation, panel, help, and settings keyboard shortcuts work. |
-| SHELL-AGENTS-001 | shell | `/` | shell | covered | HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | The AI agents entry point appears when enabled. |
+| SHELL-AGENTS-001 | shell | `/` | shell | covered | AOT-SHELL-001; HTTP-AI-AGENTS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | The AI agents entry point appears when enabled. |
 | SHELL-ASSISTANT-001 | shell | `/` | assistant | covered | APP-ASSISTANT-001; HTTP-ASSISTANT-001; DeckApiTests.AssistantEndpoints_ReturnNotFoundWhenAssistantIsDisabled | The AI assistant opens, closes, expands, starts a new chat, and sends or stops responses. |
 | SHELL-NOTIFICATIONS-001 | shell | `/` | shell | covered | APP-NOTIFICATION-001; CMD-NOTIFICATION-001 | Active notifications render intent, actions, links, and dismiss behavior. |
 | SHELL-NOTIFICATION-CENTER-001 | shell | `/` | shell | covered | APP-NOTIFICATION-CENTER-001 | The notification center opens and preserves notification history. |
-| SHELL-SETTINGS-001 | shell | `/` | shell | covered | APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Settings opens from the top bar and reports dashboard/runtime versions. |
+| SHELL-SETTINGS-001 | shell | `/` | shell | covered | AOT-SHELL-001; APP-SETTINGS-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Settings opens from the top bar and reports dashboard/runtime versions. |
 | SHELL-THEME-001 | shell | `/` | shell | covered | APP-THEME-001; APP-SETTINGS-001 | System, light, and dark theme selection is persisted. |
-| SHELL-LANGUAGE-001 | shell | `/` | shell | covered | HTTP-LANGUAGE-001; GlobalizationHelpersTests.ResolveSetCultureToAcceptedCultureAsync_MatchRequestToResult | The dashboard language can be selected and applied. |
+| SHELL-LANGUAGE-001 | shell | `/` | shell | covered | AOT-SHELL-001; HTTP-LANGUAGE-001; GlobalizationHelpersTests.ResolveSetCultureToAcceptedCultureAsync_MatchRequestToResult | The dashboard language can be selected and applied. |
 | SHELL-TIME-FORMAT-001 | shell | `/` | shell | covered | APP-TIME-FORMAT-001 | System, 12-hour, and 24-hour time formatting can be selected. |
 | SHELL-MANAGE-DATA-001 | shell | `/` | manage-data | covered | HTTP-MANAGE-DATA-001; DeckApiTests.ManageData_InventoryExportImportAndRemoveUseDeckContract | Resource logs and telemetry can be inspected, exported, imported, and cleared. |
-| SHELL-USER-001 | shell | `/` | user | covered | HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Authenticated user profile and sign-out behavior are available when configured. |
-| SHELL-AUTH-001 | shell | `/login` | auth | covered | HTTP-AUTH-001; DeckApiTests.GetResources_BrowserTokenAuthWithoutCookie_RedirectsToLogin; BrowserTokenAuthenticationTests; FrontendOpenIdConnectAuthTests | Browser-token and OpenID Connect login flows protect the frontend. |
+| SHELL-USER-001 | shell | `/` | user | covered | AOT-SHELL-001; HTTP-USER-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | Authenticated user profile and sign-out behavior are available when configured. |
+| SHELL-AUTH-001 | shell | `/login` | auth | covered | AOT-SHELL-001; HTTP-AUTH-001; DeckApiTests.AuthenticateBridge_BrowserTokenChallengePreservesAotReturnUrl; BrowserTokenAuthenticationTests; FrontendOpenIdConnectAuthTests | Browser-token and OpenID Connect login flows protect the frontend. |
 | SHELL-RECONNECT-001 | shell | `/` | reconnect | covered | HTTP-RECOVERY-001; HTTP-RECONNECT-001 | A lost dashboard circuit or backend connection exposes reconnect and recovery UI. |
-| SHELL-UNSECURED-001 | shell | `/` | unsecured | covered | HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
+| SHELL-UNSECURED-001 | shell | `/` | unsecured | covered | AOT-SHELL-001; HTTP-SHELL-UNSECURED-001; DeckApiTests.GetConfig_ReturnsDeckConfigContract | An unsecured telemetry/API endpoint warning is visible with supporting guidance. |
 | SHELL-NOTFOUND-001 | shell | `/error/404` | shell | covered | APP-NOTFOUND-001 | Unknown routes render a dedicated not-found experience. |
 | SHELL-ERROR-001 | shell | `/error` | shell | covered | APP-ERROR-001 | Unhandled errors render a recoverable error experience. |
 | SHELL-RESPONSIVE-001 | shell | `/` | shell | covered | APP-RESPONSIVE-001; OBS-RESPONSIVE-001; STRESS-RESPONSIVE-001 | Navigation, header actions, pages, and overlays remain usable on mobile. |
