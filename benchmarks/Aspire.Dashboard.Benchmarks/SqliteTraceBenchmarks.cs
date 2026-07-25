@@ -6,6 +6,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.ServiceClient;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
@@ -31,19 +32,21 @@ public class SqliteTraceBenchmarks
     private const int GeneratedSpanCount = 10_000;
 
     private string _temporaryDirectory = null!;
+    private DashboardSqliteDatabase _database = null!;
     private SqliteTelemetryRepository _repository = null!;
     private RepeatedField<ResourceSpans> _appendResourceSpans = null!;
     private long _appendIndex;
 
     [GlobalSetup]
-    public void Setup()
+    public async Task Setup()
     {
         _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-trace-benchmark-").FullName;
-        _repository = CreateRepository(Path.Combine(_temporaryDirectory, "dashboard.db"));
+        _database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "dashboard.db"));
+        _repository = CreateRepository(_database);
 
         var resourceSpans = LoadResourceSpans();
         var context = new AddContext();
-        _repository.AddTraces(context, resourceSpans);
+        await _repository.AddTracesAsync(context, resourceSpans);
         if (context.FailureCount != 0)
         {
             throw new InvalidOperationException($"Failed to ingest {context.FailureCount} benchmark spans.");
@@ -56,6 +59,8 @@ public class SqliteTraceBenchmarks
     public void Cleanup()
     {
         _repository.Dispose();
+        _database.ClearPool();
+        _database.Dispose();
         Directory.Delete(_temporaryDirectory, recursive: true);
     }
 
@@ -74,12 +79,12 @@ public class SqliteTraceBenchmarks
     }
 
     [Benchmark(Description = "SQLite: append one span to large trace")]
-    public int AppendSpan()
+    public async Task<int> AppendSpan()
     {
         var appendSpan = _appendResourceSpans[0].ScopeSpans[0].Spans[0];
         appendSpan.SpanId = ByteString.CopyFrom(BitConverter.GetBytes(long.MaxValue - Interlocked.Increment(ref _appendIndex)));
         var context = new AddContext();
-        _repository.AddTraces(context, _appendResourceSpans);
+        await _repository.AddTracesAsync(context, _appendResourceSpans);
         return context.SuccessCount;
     }
 
@@ -161,10 +166,10 @@ public class SqliteTraceBenchmarks
         ];
     }
 
-    private static SqliteTelemetryRepository CreateRepository(string databasePath)
+    private static SqliteTelemetryRepository CreateRepository(DashboardSqliteDatabase database)
     {
         return new SqliteTelemetryRepository(
-            databasePath,
+            database,
             NullLoggerFactory.Instance,
             Options.Create(new DashboardOptions
             {

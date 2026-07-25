@@ -287,6 +287,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         // keyed service from DashboardClient rather than the scoped SelectedDashboardClient.
         builder.Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey,
             (services, _) => services.GetRequiredService<DashboardClient>());
+        builder.Services.AddSingleton<DashboardDataSourcePool>();
         builder.Services.AddScoped<DashboardDataSource>();
         builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
         builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();
@@ -317,15 +318,11 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddGrpc();
         builder.Services.AddSingleton<DashboardRunStore>();
         builder.Services.AddSingleton<IDashboardRunStore>(services => services.GetRequiredService<DashboardRunStore>());
-        builder.Services.AddSingleton(services => new DashboardSqliteDatabase(
-            services.GetRequiredService<DashboardRunStore>().DatabasePath));
         builder.Services.AddSingleton<IRepositoryFactory>(services => new RepositoryFactory(services));
-        builder.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<IRepositoryFactory>()
-            .CreateTelemetryRepository(services.GetRequiredService<DashboardSqliteDatabase>()));
+        builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.TelemetryRepository);
         builder.Services.AddSingleton<ITelemetryRepositoryWriter>(services =>
             (ITelemetryRepositoryWriter)services.GetRequiredService<ITelemetryRepository>());
-        builder.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<IRepositoryFactory>()
-            .CreateResourceRepository(services.GetRequiredService<DashboardSqliteDatabase>()));
+        builder.Services.AddSingleton(services => services.GetRequiredService<DashboardDataSourcePool>().Current.ResourceRepository);
         builder.Services.AddSingleton<IResourceRepositoryWriter>(services =>
             (IResourceRepositoryWriter)services.GetRequiredService<IResourceRepository>());
         builder.Services.AddTransient<StructuredLogsViewModel>();

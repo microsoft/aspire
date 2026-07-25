@@ -2,20 +2,18 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.Tests.Shared;
 using Microsoft.Extensions.Logging;
 using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 
 namespace Aspire.Dashboard.Tests.TelemetryRepositoryTests;
 
-public abstract class TelemetryRepositoryTestBase : IDisposable
+public abstract class TelemetryRepositoryTestBase
 {
-    private readonly List<ITelemetryRepository> _repositories = [];
-    private readonly List<string> _temporaryDirectories = [];
-
     protected abstract bool UseSqlite { get; }
 
-    protected ITelemetryRepository CreateRepository(
+    protected RepositoryTestContext CreateRepository(
         int? maxMetricsCount = null,
         int? maxAttributeCount = null,
         int? maxAttributeLength = null,
@@ -42,22 +40,34 @@ public abstract class TelemetryRepositoryTestBase : IDisposable
         outgoingPeerResolvers ??= [];
         var options = Options.Create(new global::Aspire.Dashboard.Configuration.DashboardOptions { TelemetryLimits = telemetryLimits });
 
-        ITelemetryRepository repository;
         if (UseSqlite)
         {
             var temporaryDirectory = Directory.CreateTempSubdirectory("aspire-tests-dashboard-telemetry-").FullName;
-            _temporaryDirectories.Add(temporaryDirectory);
-            var sqliteRepository = new SqliteTelemetryRepository(
-                Path.Combine(temporaryDirectory, "dashboard.db"),
-                loggerFactory,
-                options,
-                pauseManager,
-                outgoingPeerResolvers);
+            SqliteRepositoryTestContext<SqliteTelemetryRepository> context;
+            try
+            {
+                context = SqliteRepositoryTestHelpers.CreateTelemetryRepository(
+                    Path.Combine(temporaryDirectory, "dashboard.db"),
+                    pooling: true,
+                    loggerFactory: loggerFactory,
+                    dashboardOptions: options,
+                    pauseManager: pauseManager,
+                    outgoingPeerResolvers: outgoingPeerResolvers);
+            }
+            catch
+            {
+                Directory.Delete(temporaryDirectory, recursive: true);
+                throw;
+            }
+
+            var sqliteRepository = context.Repository;
             if (subscriptionMinExecuteInterval is not null)
             {
                 sqliteRepository.SubscriptionMinExecuteInterval = subscriptionMinExecuteInterval.Value;
             }
-            repository = sqliteRepository;
+            return new RepositoryTestContext(
+                sqliteRepository,
+                new TemporaryDirectoryRepositoryContext(context, temporaryDirectory));
         }
         else
         {
@@ -66,23 +76,31 @@ public abstract class TelemetryRepositoryTestBase : IDisposable
             {
                 inMemoryRepository._subscriptionMinExecuteInterval = subscriptionMinExecuteInterval.Value;
             }
-            repository = inMemoryRepository;
+            return new RepositoryTestContext(inMemoryRepository, inMemoryRepository);
         }
-
-        _repositories.Add(repository);
-        return repository;
     }
 
-    public void Dispose()
+    protected sealed class RepositoryTestContext(
+        ITelemetryRepository repository,
+        IDisposable owner) : IDisposable
     {
-        foreach (var repository in _repositories)
-        {
-            repository.Dispose();
-        }
+        public ITelemetryRepository Repository { get; } = repository;
 
-        foreach (var temporaryDirectory in _temporaryDirectories)
+        public void Dispose() => owner.Dispose();
+    }
+
+    private sealed class TemporaryDirectoryRepositoryContext(IDisposable repositoryContext, string temporaryDirectory) : IDisposable
+    {
+        public void Dispose()
         {
-            Directory.Delete(temporaryDirectory, recursive: true);
+            try
+            {
+                repositoryContext.Dispose();
+            }
+            finally
+            {
+                Directory.Delete(temporaryDirectory, recursive: true);
+            }
         }
     }
 }

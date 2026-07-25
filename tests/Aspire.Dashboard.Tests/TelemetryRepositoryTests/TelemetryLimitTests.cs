@@ -19,7 +19,8 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddTraces_ExceedsResourceLimit_ReportsFailure()
     {
-        var repository = CreateRepository(maxResourceCount: 3);
+        using var repositoryContext = CreateRepository(maxResourceCount: 3);
+        var repository = repositoryContext.Repository;
 
         for (var i = 0; i < 3; i++)
         {
@@ -70,7 +71,8 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddTraces_ExistingResourceAfterLimitReached_Succeeds()
     {
-        var repository = CreateRepository(maxResourceCount: 2);
+        using var repositoryContext = CreateRepository(maxResourceCount: 2);
+        var repository = repositoryContext.Repository;
 
         // Add 2 resources to fill up the limit.
         for (var i = 0; i < 2; i++)
@@ -119,7 +121,8 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddMetrics_ExceedsInstrumentLimit_ReportsFailure()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Fill instruments up to the limit.
         var metrics = new RepeatedField<Metric>();
@@ -183,7 +186,8 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddLogs_ExceedsResourceLimit_FailureCountIsLogRecordCount()
     {
-        var repository = CreateRepository(maxResourceCount: 1);
+        using var repositoryContext = CreateRepository(maxResourceCount: 1);
+        var repository = repositoryContext.Repository;
 
         // Fill the single resource slot.
         var setupContext = new AddContext();
@@ -244,7 +248,8 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddMetrics_ExceedsResourceLimit_FailureCountIsDataPointCount()
     {
-        var repository = CreateRepository(maxResourceCount: 1);
+        using var repositoryContext = CreateRepository(maxResourceCount: 1);
+        var repository = repositoryContext.Repository;
 
         // Fill the single resource slot.
         var setupContext = new AddContext();
@@ -306,7 +311,8 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddTraces_ExceedsResourceLimit_FailureCountIsSpanCount()
     {
-        var repository = CreateRepository(maxResourceCount: 1);
+        using var repositoryContext = CreateRepository(maxResourceCount: 1);
+        var repository = repositoryContext.Repository;
 
         // Fill the single resource slot.
         var setupContext = new AddContext();
@@ -365,7 +371,8 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddLogs_ExceedsScopeLimit_ReportsFailure()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Fill scopes up to the limit.
         var scopeLogs = new RepeatedField<ResourceLogs>();
@@ -413,7 +420,8 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddTraces_ExceedsScopeLimit_ReportsFailure()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Fill scopes up to the limit.
         var rs = new ResourceSpans { Resource = CreateResource() };
@@ -458,7 +466,8 @@ public abstract class TelemetryLimitTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddMetrics_ExceedsScopeLimit_ReportsFailure()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Fill scopes up to the limit.
         var rm = new ResourceMetrics { Resource = CreateResource() };

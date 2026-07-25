@@ -20,11 +20,14 @@ using Xunit;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class ResourceMenuBuilderTests
+public sealed class ResourceMenuBuilderTests : IDisposable
 {
     private static readonly DateTime s_testTime = new(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
     private readonly IconResolver _iconResolver = new IconResolver(NullLogger<IconResolver>.Instance);
     private readonly DashboardDialogService _dialogService;
+    private readonly List<DashboardDataSource> _dataSources = [];
+    private readonly List<DashboardDataSourcePool> _databasePools = [];
+    private readonly List<DirectoryInfo> _temporaryDirectories = [];
 
     public ResourceMenuBuilderTests()
     {
@@ -41,14 +44,40 @@ public sealed class ResourceMenuBuilderTests
         IDashboardClient? dashboardClient = null)
     {
         dashboardClient ??= new TestDashboardClient();
+        var temporaryDirectory = Directory.CreateTempSubdirectory();
+        _temporaryDirectories.Add(temporaryDirectory);
+        var runStore = new TestDashboardRunStore(databasePath: Path.Combine(temporaryDirectory.FullName, "dashboard.db"));
+        var dataSourcePool = TestDashboardDataSource.CreatePool(repository, dashboardClient, runStore);
+        var dataSource = TestDashboardDataSource.Create(runStore, dataSourcePool);
+        _databasePools.Add(dataSourcePool);
+        _dataSources.Add(dataSource);
+
         return new ResourceMenuBuilder(
             new TestNavigationManager(),
-            TestDashboardDataSource.Create(repository, dashboardClient),
+            dataSource,
             new TestStringLocalizer<ControlsStrings>(),
             new TestStringLocalizer<Resources.Resources>(),
             _iconResolver,
             _dialogService,
             dashboardClient);
+    }
+
+    public void Dispose()
+    {
+        foreach (var dataSource in _dataSources)
+        {
+            dataSource.Dispose();
+        }
+
+        foreach (var databasePool in _databasePools)
+        {
+            databasePool.Dispose();
+        }
+
+        foreach (var temporaryDirectory in _temporaryDirectories)
+        {
+            temporaryDirectory.Delete(recursive: true);
+        }
     }
 
     [Fact]

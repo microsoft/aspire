@@ -10,15 +10,23 @@ namespace Aspire.Dashboard.Tests.Shared;
 internal static class TestDashboardDataSource
 {
     public static DashboardDataSource Create(
-        ITelemetryRepository telemetryRepository,
-        IResourceRepository resourceRepository)
+        IDashboardRunStore runStore,
+        DashboardDataSourcePool dataSourcePool)
     {
         return new DashboardDataSource(
-            new TestDashboardRunStore(),
-            telemetryRepository,
-            resourceRepository,
-            new TestRepositoryFactory(telemetryRepository, resourceRepository),
-            NullLogger<DashboardDataSource>.Instance);
+            runStore,
+            NullLogger<DashboardDataSource>.Instance,
+            dataSourcePool);
+    }
+
+    public static DashboardDataSourcePool CreatePool(
+        ITelemetryRepository telemetryRepository,
+        IResourceRepository resourceRepository,
+        IDashboardRunStore runStore)
+    {
+        return new DashboardDataSourcePool(
+            runStore,
+            new TestRepositoryFactory(telemetryRepository, resourceRepository));
     }
 
     private sealed class TestRepositoryFactory(
@@ -32,10 +40,11 @@ internal static class TestDashboardDataSource
 
 internal sealed class TestDashboardRunStore(
     IReadOnlyList<DashboardRunDescriptor>? runs = null,
-    Func<DashboardRunDescriptor, IDisposable?>? tryAcquireRunLease = null) : IDashboardRunStore
+    Func<DashboardRunDescriptor, IDisposable?>? tryAcquireRunLease = null,
+    string? databasePath = null) : IDashboardRunStore
 {
     private readonly IReadOnlyList<DashboardRunDescriptor> _runs = runs ??
-        [new("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", string.Empty, IsCurrent: true)];
+        [new("current", DashboardRunStore.SchemaVersion, DateTimeOffset.UnixEpoch, null, false, "TestApp", databasePath ?? string.Empty, IsCurrent: true)];
 
     public bool SupportsRunSelection => _runs.Any(run => !run.IsCurrent);
 

@@ -159,7 +159,13 @@ internal static class FluentUISetupHelpers
         var options = context.Services.GetRequiredService<IOptions<DashboardOptions>>();
         var outgoingPeerResolvers = context.Services.GetServices<IOutgoingPeerResolver>();
 
-        using var writer = new SqliteTelemetryRepository(databasePath, loggerFactory, options, new PauseManager(), outgoingPeerResolvers);
+        using var database = new DashboardSqliteDatabase(databasePath, pooling: false);
+        using var writer = new SqliteTelemetryRepository(
+            database,
+            loggerFactory,
+            options,
+            new PauseManager(),
+            outgoingPeerResolvers);
         await seed(writer);
     }
 
@@ -176,22 +182,25 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<BrowserTimeProvider>(browserTimeProvider ?? new TestTimeProvider());
         context.Services.AddSingleton(_ => TemporaryWorkspace.Create(
             global::Xunit.TestContext.Current.TestOutputHelper ?? throw new InvalidOperationException("An active test output helper is required.")));
-        context.Services.AddSingleton<SqliteTelemetryRepository>(services =>
+        context.Services.AddSingleton(services =>
         {
             var databasePath = Path.Combine(services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
+            var configuration = services.GetService<TelemetryRepositoryConfiguration>();
+            return new DashboardSqliteDatabase(databasePath, readOnly: configuration?.ReadOnly == true, pooling: false);
+        });
+        context.Services.AddSingleton<SqliteTelemetryRepository>(services =>
+        {
             var loggerFactory = services.GetRequiredService<ILoggerFactory>();
             var options = services.GetRequiredService<IOptions<DashboardOptions>>();
             var pauseManager = services.GetRequiredService<PauseManager>();
             var outgoingPeerResolvers = services.GetServices<IOutgoingPeerResolver>();
-            var configuration = services.GetService<TelemetryRepositoryConfiguration>();
 
             return new SqliteTelemetryRepository(
-                databasePath,
+                services.GetRequiredService<DashboardSqliteDatabase>(),
                 loggerFactory,
                 options,
                 pauseManager,
-                outgoingPeerResolvers,
-                readOnly: configuration?.ReadOnly == true);
+                outgoingPeerResolvers);
         });
         context.Services.AddSingleton<ITelemetryRepository>(services => services.GetRequiredService<SqliteTelemetryRepository>());
         context.Services.AddSingleton<ITelemetryRepositoryWriter>(services => services.GetRequiredService<SqliteTelemetryRepository>());
@@ -199,11 +208,13 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<IDialogService, DialogService>();
         context.Services.AddSingleton<ILocalStorage>(localStorage ?? new TestLocalStorage());
         context.Services.AddSingleton<ISessionStorage>(sessionStorage ?? new TestSessionStorage());
-        context.Services.AddSingleton<IDashboardRunStore>(dashboardRunStore ?? new TestDashboardRunStore());
+        context.Services.AddSingleton<IDashboardRunStore>(services => dashboardRunStore ?? new TestDashboardRunStore(
+            databasePath: Path.Combine(services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db")));
         context.Services.AddSingleton<IDashboardRunSelection, TestDashboardRunSelection>();
         context.Services.AddSingleton<IDashboardClient, TestDashboardClient>();
         context.Services.AddSingleton<IResourceRepository>(services => services.GetRequiredService<IDashboardClient>());
         context.Services.AddSingleton<IRepositoryFactory, TestRepositoryFactory>();
+        context.Services.AddSingleton<DashboardDataSourcePool>();
         context.Services.AddScoped<DashboardDataSource>();
         context.Services.AddSingleton<ShortcutManager>();
         context.Services.AddSingleton<LibraryConfiguration>();
@@ -229,7 +240,8 @@ internal static class FluentUISetupHelpers
 
     internal sealed class TestDashboardRunStore(
         IReadOnlyList<DashboardRunDescriptor>? runs = null,
-        bool supportsRunSelection = true) : IDashboardRunStore
+        bool supportsRunSelection = true,
+        string? databasePath = null) : IDashboardRunStore
     {
         private readonly IReadOnlyList<DashboardRunDescriptor> _runs = runs ??
             [
@@ -240,7 +252,7 @@ internal static class FluentUISetupHelpers
                 EndedAtUtc: null,
                 CleanShutdown: false,
                 ApplicationName: "TestApp",
-                DatabasePath: string.Empty,
+                DatabasePath: databasePath ?? string.Empty,
                 IsCurrent: true)
             ];
 

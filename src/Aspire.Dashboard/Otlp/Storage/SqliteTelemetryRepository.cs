@@ -24,7 +24,6 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
     private readonly PauseManager _pauseManager;
     private readonly IReadOnlyList<IOutgoingPeerResolver> _outgoingPeerResolvers;
     private readonly List<IDisposable> _outgoingPeerSubscriptions = [];
-    private readonly bool _ownsDatabase;
     private int _disposed;
 
     private static string CreateContainsLikePattern(string value) => $"%{EscapeLikePattern(value)}%";
@@ -43,19 +42,15 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
 
     internal ActivitySource SqlActivitySource => _database.ActivitySource;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SqliteTelemetryRepository"/> class.
+    /// </summary>
+    /// <param name="database">The dashboard database used to persist telemetry.</param>
+    /// <param name="loggerFactory">The logger factory.</param>
+    /// <param name="dashboardOptions">The dashboard options.</param>
+    /// <param name="pauseManager">The telemetry pause manager.</param>
+    /// <param name="outgoingPeerResolvers">The resolvers used to identify outgoing peer resources.</param>
     public SqliteTelemetryRepository(
-        string databasePath,
-        ILoggerFactory loggerFactory,
-        IOptions<DashboardOptions> dashboardOptions,
-        PauseManager pauseManager,
-        IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers,
-        bool readOnly = false)
-        : this(new DashboardSqliteDatabase(databasePath, readOnly), loggerFactory, dashboardOptions, pauseManager, outgoingPeerResolvers)
-    {
-        _ownsDatabase = true;
-    }
-
-    internal SqliteTelemetryRepository(
         DashboardSqliteDatabase database,
         ILoggerFactory loggerFactory,
         IOptions<DashboardOptions> dashboardOptions,
@@ -245,11 +240,6 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
             subscription.Dispose();
         }
         DisposeWatchers();
-        _database.ClearPool();
-        if (_ownsDatabase)
-        {
-            _database.Dispose();
-        }
     }
 
 }

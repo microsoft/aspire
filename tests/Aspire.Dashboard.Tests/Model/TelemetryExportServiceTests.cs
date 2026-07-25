@@ -25,16 +25,20 @@ using static Aspire.Tests.Shared.Telemetry.TelemetryTestHelpers;
 
 namespace Aspire.Dashboard.Tests.Model;
 
-public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelper)
+public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelper) : IDisposable
 {
     private static readonly DateTime s_testTime = new(2024, 1, 15, 10, 30, 0, DateTimeKind.Utc);
+    private readonly List<DashboardDataSource> _dataSources = [];
+    private readonly List<DashboardDataSourcePool> _databasePools = [];
+    private readonly List<DirectoryInfo> _temporaryDirectories = [];
 
     [Fact]
     public async Task ConvertLogsToOtlpJson_SingleLog_ReturnsCorrectStructure()
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -102,7 +106,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -141,7 +146,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -223,7 +229,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -261,7 +268,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -340,7 +348,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -384,7 +393,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -434,7 +444,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -517,7 +528,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddMetricsAsync(addContext, new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
         {
@@ -599,7 +611,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddMetricsAsync(addContext, new RepeatedField<OpenTelemetry.Proto.Metrics.V1.ResourceMetrics>()
         {
@@ -681,7 +694,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var exportService = await CreateExportServiceAsync(repository);
 
         // Add test data for three resources
@@ -743,7 +757,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
 
         // Add logs
@@ -786,7 +801,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         const int logCount = 40_000;
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var logRecords = new RepeatedField<LogRecord>();
         for (var index = 0; index < logCount; index++)
         {
@@ -835,7 +851,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         const int traceCount = 10_000;
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var spans = new RepeatedField<Span>();
         for (var index = 0; index < traceCount; index++)
         {
@@ -886,7 +903,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
 
         // Add logs for only one resource
@@ -946,7 +964,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
 
         const string japaneseMessage = "これはテストログメッセージです"; // "This is a test log message"
@@ -1030,7 +1049,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -1068,7 +1088,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -1121,7 +1142,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -1182,7 +1204,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
@@ -1223,7 +1246,8 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
     {
         // Arrange
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
-        using var repository = CreateRepository(workspace.Path);
+        using var repositoryContext = CreateRepository(workspace.Path);
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
@@ -1255,13 +1279,19 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
         Assert.Single(data.ResourceLogs[0].ScopeLogs![0].LogRecords!);
     }
 
-    private static async Task<TelemetryExportService> CreateExportServiceAsync(ITelemetryRepository repository, bool isDashboardClientEnabled = true)
+    private async Task<TelemetryExportService> CreateExportServiceAsync(ITelemetryRepository repository, bool isDashboardClientEnabled = true)
     {
         var dashboardClient = new TestDashboardClient(isEnabled: isDashboardClientEnabled);
         var sessionStorage = new TestSessionStorage();
         var consoleLogsManager = new ConsoleLogsManager(sessionStorage);
         await consoleLogsManager.EnsureInitializedAsync();
-        var dataSource = TestDashboardDataSource.Create(repository, dashboardClient);
+        var temporaryDirectory = Directory.CreateTempSubdirectory();
+        _temporaryDirectories.Add(temporaryDirectory);
+        var runStore = new TestDashboardRunStore(databasePath: Path.Combine(temporaryDirectory.FullName, "dashboard.db"));
+        var dataSourcePool = TestDashboardDataSource.CreatePool(repository, dashboardClient, runStore);
+        var dataSource = TestDashboardDataSource.Create(runStore, dataSourcePool);
+        _databasePools.Add(dataSourcePool);
+        _dataSources.Add(dataSource);
         var consoleLogsFetcher = new ConsoleLogsFetcher(dataSource, dashboardClient, consoleLogsManager);
         return new TelemetryExportService(dataSource, consoleLogsFetcher, dashboardClient);
     }
@@ -1333,17 +1363,34 @@ public sealed class TelemetryExportServiceTests(ITestOutputHelper testOutputHelp
         });
     }
 
-    private static SqliteTelemetryRepository CreateRepository(string workspacePath)
+    private static SqliteRepositoryTestContext<SqliteTelemetryRepository> CreateRepository(
+        string workspacePath)
     {
-        return new SqliteTelemetryRepository(
+        var context = SqliteRepositoryTestHelpers.CreateTelemetryRepository(
             Path.Combine(workspacePath, "dashboard.db"),
-            NullLoggerFactory.Instance,
-            Options.Create(new DashboardOptions
+            dashboardOptions: Options.Create(new DashboardOptions
             {
                 TelemetryLimits = new TelemetryLimitOptions { MaxLogCount = 40_000 }
-            }),
-            new PauseManager(),
-            []);
+            }));
+        return context;
+    }
+
+    public void Dispose()
+    {
+        foreach (var dataSource in _dataSources)
+        {
+            dataSource.Dispose();
+        }
+
+        foreach (var databasePool in _databasePools)
+        {
+            databasePool.Dispose();
+        }
+
+        foreach (var temporaryDirectory in _temporaryDirectories)
+        {
+            temporaryDirectory.Delete(recursive: true);
+        }
     }
 
     [Fact]

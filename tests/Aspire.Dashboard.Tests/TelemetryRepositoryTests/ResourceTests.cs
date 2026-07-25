@@ -16,7 +16,8 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResourceByCompositeName()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddResource(repository, "app2");
         await AddResource(repository, "app1");
@@ -58,7 +59,8 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResources_WithNameAndNoKey()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddResource(repository, "app2");
         await AddResource(repository, "app1", instanceId: "123");
@@ -96,7 +98,8 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResources_Order()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddResource(repository, "app2");
         await AddResource(repository, "app1", instanceId: "def");
@@ -128,7 +131,8 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResourceName_GuidInstanceId_Shorten()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
         var guid1 = "19572b19-d1c0-4a51-98b4-fcc2658f73d3";
         var guid2 = "f66e2b1e-f420-4a22-a067-8dd2f6fcda86";
 
@@ -150,7 +154,8 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResourceName_Version7GuidInstanceId_ShortenedNamesDiffer()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Version 7 GUIDs created close in time share the same leading characters.
         var guid1 = "01890a5d-ac96-774b-bcce-b302099a8057";

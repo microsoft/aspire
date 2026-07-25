@@ -17,36 +17,25 @@ internal interface IDashboardRunSelection
 public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 {
     private readonly IDashboardRunStore _runStore;
-    private readonly ITelemetryRepository _currentTelemetryRepository;
-    private readonly IResourceRepository _currentResourceRepository;
-    private readonly IRepositoryFactory _repositoryFactory;
     private readonly ILogger<DashboardDataSource> _logger;
+    private readonly DashboardDataSourcePool _dataSourcePool;
 
-    private ITelemetryRepository? _historicalTelemetryRepository;
-    private IResourceRepository? _historicalResourceRepository;
-    private DashboardSqliteDatabase? _historicalDatabase;
-    private IDisposable? _historicalRunLease;
+    private DashboardDataSourcePool.Lease? _historicalDataSourceLease;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="DashboardDataSource"/> class.
     /// </summary>
     /// <param name="runStore">The store that provides available dashboard runs.</param>
-    /// <param name="currentTelemetryRepository">The telemetry repository for the current dashboard run.</param>
-    /// <param name="currentResourceRepository">The resource repository for the current dashboard run.</param>
-    /// <param name="repositoryFactory">The factory used to create repositories for historical dashboard runs.</param>
     /// <param name="logger">The logger used to record dashboard run selection.</param>
+    /// <param name="dataSourcePool">The caller-owned pool that provides dashboard run data sources.</param>
     public DashboardDataSource(
         IDashboardRunStore runStore,
-        ITelemetryRepository currentTelemetryRepository,
-        IResourceRepository currentResourceRepository,
-        IRepositoryFactory repositoryFactory,
-        ILogger<DashboardDataSource> logger)
+        ILogger<DashboardDataSource> logger,
+        DashboardDataSourcePool dataSourcePool)
     {
         _runStore = runStore;
-        _currentTelemetryRepository = currentTelemetryRepository;
-        _currentResourceRepository = currentResourceRepository;
-        _repositoryFactory = repositoryFactory;
         _logger = logger;
+        _dataSourcePool = dataSourcePool;
 
         SelectRun(runId: null);
     }
@@ -90,14 +79,22 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
         }
 
         var previousRun = SelectedRun;
-        DisposeHistoricalRepositories();
-        _historicalTelemetryRepository = null;
-        _historicalResourceRepository = null;
+        DisposeHistoricalDataSource();
 
         if (!selectedRun.IsCurrent)
         {
-            var historicalRunLease = _runStore.TryAcquireRunLease(selectedRun);
-            if (historicalRunLease is null)
+            DashboardDataSourcePool.Lease? historicalDataSourceLease;
+            try
+            {
+                historicalDataSourceLease = _dataSourcePool.TryAcquire(selectedRun);
+            }
+            catch (Exception exception)
+            {
+                _logger.LogWarning(exception, "Failed to switch to dashboard run '{RunId}'.", selectedRun.RunId);
+                throw;
+            }
+
+            if (historicalDataSourceLease is null)
             {
                 _logger.LogWarning("Failed to switch to dashboard run '{RunId}' because it is no longer available.", selectedRun.RunId);
                 SelectCurrentRun(currentRun);
@@ -105,30 +102,9 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
                 return;
             }
 
-            DashboardSqliteDatabase? historicalDatabase = null;
-            try
-            {
-                historicalDatabase = new DashboardSqliteDatabase(selectedRun.DatabasePath, readOnly: true);
-                if (!historicalDatabase.ValidateSchemaVersion(selectedRun.SchemaVersion))
-                {
-                    throw new InvalidOperationException(
-                        $"Dashboard database for run '{selectedRun.RunId}' does not match run metadata schema version '{selectedRun.SchemaVersion}'.");
-                }
-                _historicalTelemetryRepository = _repositoryFactory.CreateTelemetryRepository(historicalDatabase);
-                _historicalResourceRepository = _repositoryFactory.CreateResourceRepository(historicalDatabase);
-                _historicalDatabase = historicalDatabase;
-                _historicalRunLease = historicalRunLease;
-            }
-            catch (Exception exception)
-            {
-                historicalDatabase?.ClearPool();
-                historicalDatabase?.Dispose();
-                historicalRunLease.Dispose();
-                _logger.LogWarning(exception, "Failed to switch to dashboard run '{RunId}'.", selectedRun.RunId);
-                throw;
-            }
-            TelemetryRepository = _historicalTelemetryRepository;
-            ResourceRepository = _historicalResourceRepository;
+            _historicalDataSourceLease = historicalDataSourceLease;
+            TelemetryRepository = historicalDataSourceLease.TelemetryRepository;
+            ResourceRepository = historicalDataSourceLease.ResourceRepository;
             IsReadOnly = true;
         }
         else
@@ -142,24 +118,20 @@ public sealed class DashboardDataSource : IDashboardRunSelection, IDisposable
 
     public void Dispose()
     {
-        DisposeHistoricalRepositories();
+        DisposeHistoricalDataSource();
     }
 
-    private void DisposeHistoricalRepositories()
+    private void DisposeHistoricalDataSource()
     {
-        _historicalTelemetryRepository?.Dispose();
-        (_historicalResourceRepository as IDisposable)?.Dispose();
-        _historicalDatabase?.ClearPool();
-        _historicalDatabase?.Dispose();
-        _historicalDatabase = null;
-        _historicalRunLease?.Dispose();
-        _historicalRunLease = null;
+        _historicalDataSourceLease?.Dispose();
+        _historicalDataSourceLease = null;
     }
 
     private void SelectCurrentRun(DashboardRunDescriptor currentRun)
     {
-        TelemetryRepository = _currentTelemetryRepository;
-        ResourceRepository = _currentResourceRepository;
+        var currentDataSource = _dataSourcePool.Current;
+        TelemetryRepository = currentDataSource.TelemetryRepository;
+        ResourceRepository = currentDataSource.ResourceRepository;
         IsReadOnly = false;
         SelectedRun = currentRun;
     }

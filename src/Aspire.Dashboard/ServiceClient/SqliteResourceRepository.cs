@@ -18,7 +18,6 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     private readonly DashboardSqliteDatabase _database;
     private readonly IKnownPropertyLookup _knownPropertyLookup;
     private readonly ILogger _logger;
-    private readonly bool _ownsDatabase;
     private readonly object _stateLock = new();
     private readonly Dictionary<string, ResourceViewModel> _resources = new(StringComparers.ResourceName);
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _resourceChannels = [];
@@ -26,17 +25,13 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
     private readonly Dictionary<string, int> _lastConsoleLogLineNumbers = new(StringComparers.ResourceName);
     private int _disposed;
 
+    /// <summary>
+    /// Initializes a new instance of the <see cref="SqliteResourceRepository"/> class.
+    /// </summary>
+    /// <param name="database">The dashboard database used to persist resources and console logs.</param>
+    /// <param name="knownPropertyLookup">The lookup for known resource properties.</param>
+    /// <param name="loggerFactory">The logger factory.</param>
     public SqliteResourceRepository(
-        string databasePath,
-        IKnownPropertyLookup knownPropertyLookup,
-        ILoggerFactory loggerFactory,
-        bool readOnly = false)
-        : this(new DashboardSqliteDatabase(databasePath, readOnly), knownPropertyLookup, loggerFactory)
-    {
-        _ownsDatabase = true;
-    }
-
-    internal SqliteResourceRepository(
         DashboardSqliteDatabase database,
         IKnownPropertyLookup knownPropertyLookup,
         ILoggerFactory loggerFactory)
@@ -486,11 +481,6 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
                 channel.Writer.TryComplete();
             }
 
-            _database.ClearPool();
-            if (_ownsDatabase)
-            {
-                _database.Dispose();
-            }
         }
     }
 

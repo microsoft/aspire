@@ -27,7 +27,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     {
         // Arrange
         var pauseManager = new PauseManager();
-        var repository = CreateRepository(pauseManager: pauseManager);
+        using var repositoryContext = CreateRepository(pauseManager: pauseManager);
+        var repository = repositoryContext.Repository;
         using var subscription = repository.OnNewLogs(resourceKey: null, SubscriptionType.Other, () => Task.CompletedTask);
 
         // Act and assert
@@ -204,7 +205,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task ClearSelectedSignals_ClearsSelectedDataTypes_ForSpecificResources()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddTestData(repository, "resource1", "123");
         await AddTestData(repository, "resource2", "456");
@@ -257,7 +259,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task ClearSelectedSignals_OtherResourcesRemainUnaffected()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddTestData(repository, "resource1", "111");
         await AddTestData(repository, "resource2", "222");
@@ -295,7 +298,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task ClearSelectedSignals_ResourceRemovedWhenAllDataTypesCleared()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddTestData(repository, "resource1", "123");
 
@@ -330,7 +334,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task ClearSelectedSignals_PartialClear_ResourceNotRemoved()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddTestData(repository, "resource1", "123");
 
@@ -362,7 +367,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task WatchSpansAsync_ReturnsExistingSpans_ThenNewSpans()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Add initial span
         await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
@@ -442,7 +448,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task WatchSpansAsync_CanBeCancelled()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
         using var cts = new CancellationTokenSource();
         var watchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -480,7 +487,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task WatchLogsAsync_ReturnsExistingLogs_ThenNewLogs()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Add initial log
         await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -559,7 +567,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task WatchLogsAsync_CanBeCancelled()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
         using var cts = new CancellationTokenSource();
         var watchStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -597,7 +606,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task WatchSpansAsync_ReturnsExistingSpans_OrderedByStartTime()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Add spans with non-chronological start times across different traces
         await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
@@ -687,7 +697,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task WatchSpansAsync_ReturnsExistingSpans_OrderedByStartTime_AcrossTracesWithOverlappingTimes()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Add two traces with multiple spans that overlap in time.
         // Trace1 starts earlier but has a span that is later than Trace2's spans.
@@ -766,7 +777,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task WatchSpansAsync_FiltersById_WhenResourceKeyProvided()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Add spans for two different resources
         await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
@@ -827,7 +839,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetTraces_MultipleResourceKeys_ReturnsMatchingTracesOnly()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddTestData(repository, "resource1", "inst1");
         await AddTestData(repository, "resource2", "inst2");
@@ -848,7 +861,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetSpans_MultipleResourceKeys_ReturnsMatchingSpansOnly()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddTestData(repository, "service1", "inst1");
         await AddTestData(repository, "service2", "inst2");
@@ -872,7 +886,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task WatchSpansAsync_MultipleResourceKeys_FiltersCorrectly()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddTestData(repository, "service1", "inst1");
         await AddTestData(repository, "service2", "inst2");
@@ -903,7 +918,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task WatchLogsAsync_MultipleResourceKeys_FiltersCorrectly()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await AddTestData(repository, "service1", "inst1");
         await AddTestData(repository, "service2", "inst2");
@@ -935,7 +951,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task WatchLogsAsync_FiltersAppliedWhenPushing()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Create a filter that matches only logs containing "match"
         var filters = new List<TelemetryFilter>
@@ -1026,7 +1043,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     public async Task WatchLogsAsync_SeverityFilterApplied()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Create a filter for Error and above
         var filters = new List<TelemetryFilter>
@@ -1119,7 +1137,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task WatchLogsAsync_TextFragmentsFilterApplied()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Add initial logs — one matches text fragments, one doesn't
         await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
@@ -1203,7 +1222,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task WatchLogsAsync_DisabledFiltersAreIgnored()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Create two filters: one enabled (matches "match"), one disabled (excludes everything)
         var filters = new List<TelemetryFilter>
@@ -1300,7 +1320,8 @@ public abstract class TelemetryRepositoryTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task WatchSpansAsync_DisabledFiltersAreIgnored()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Create two filters: one enabled (matches span name containing "span1"), one disabled
         var filters = new List<TelemetryFilter>

@@ -33,7 +33,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -95,7 +96,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetLogSummaries_ReturnsPageData()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
@@ -256,7 +258,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetLogsFieldValues_AllFieldsMatchMaterializedLogs()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
         await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
         {
@@ -313,7 +316,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_NoBody_EmptyMessage()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -354,7 +358,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_MultipleOutOfOrder()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -416,7 +421,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_Error_UnviewedCount()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -491,7 +497,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_Error_UnviewedCount_WithReadSubscriptionAll()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
         using var subscription = repository.OnNewLogs(resourceKey: null, SubscriptionType.Read, () => Task.CompletedTask);
 
         // Act
@@ -543,7 +550,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_Error_UnviewedCount_WithReadSubscriptionOneApp()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
         using var subscription = repository.OnNewLogs(resourceKey: new ResourceKey("TestService", "1"), SubscriptionType.Read, () => Task.CompletedTask);
 
         // Act
@@ -596,7 +604,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_Error_UnviewedCount_WithNonReadSubscription()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
         using var subscription = repository.OnNewLogs(resourceKey: null, SubscriptionType.Other, () => Task.CompletedTask);
 
         // Act
@@ -633,7 +642,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public void GetLogs_UnknownResource()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var logs = repository.GetLogs(new GetLogsContext
@@ -652,7 +662,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public void GetLogPropertyKeys_UnknownResource()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var propertyKeys = repository.GetLogPropertyKeys(new ResourceKey("TestService", "UnknownResource"));
@@ -665,7 +676,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task Subscriptions_AddLog()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         var newResourcesTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         repository.OnNewResources(() =>
@@ -749,7 +761,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task Unsubscribe()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         var onNewResourcesCalled = false;
         var subscription = repository.OnNewResources(() =>
@@ -789,7 +802,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         var asyncLocal = new AsyncLocal<string>();
         asyncLocal.Value = "CustomValue";
 
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
         var subscription = repository.OnNewResources(() =>
@@ -834,7 +848,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_AttributeLimits_LimitsApplied()
     {
         // Arrange
-        var repository = CreateRepository(maxAttributeCount: 5, maxAttributeLength: 16);
+        using var repositoryContext = CreateRepository(maxAttributeCount: 5, maxAttributeLength: 16);
+        var repository = repositoryContext.Repository;
 
         // Act
         var attributes = new List<KeyValuePair<string, string>>
@@ -924,7 +939,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         var minExecuteInterval = CallbackThrottler.DefaultMinExecuteInterval;
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
         var logger = loggerFactory.CreateLogger(nameof(LogTests));
-        var repository = CreateRepository(subscriptionMinExecuteInterval: minExecuteInterval, loggerFactory: loggerFactory);
+        using var repositoryContext = CreateRepository(subscriptionMinExecuteInterval: minExecuteInterval, loggerFactory: loggerFactory);
+        var repository = repositoryContext.Repository;
         var stopwatch = new Stopwatch();
 
         var callCount = 0;
@@ -998,7 +1014,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task FilterLogs_With_Message_Returns_CorrectLog()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -1047,7 +1064,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     [InlineData("!")]
     public async Task FilterLogs_WithLikeMetacharacter_TreatsValueAsLiteral(string fragment)
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
         var expectedMessage = $"matches-{fragment}-literal";
         await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
@@ -1085,7 +1103,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task FilterLogs_With_EventName_Returns_CorrectLog()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -1132,7 +1151,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_MultipleResources_SameInstanceId_CreateMultipleResources()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -1231,7 +1251,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task GetLogs_MultipleInstances()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -1320,7 +1341,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task RemoveLogs_All()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
         await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
@@ -1385,7 +1407,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task RemoveLogs_SelectedResource()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
         await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
@@ -1459,7 +1482,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task RemoveLogs_MultipleSelectedResources()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
         await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
@@ -1525,7 +1549,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_ObservedUnixTimeNanos()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -1566,7 +1591,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_EventName_FromLogRecordField()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -1607,7 +1633,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_EventName_FromLegacyAttribute()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -1650,7 +1677,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_EventName_FieldTakesPrecedenceOverAttribute()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -1692,7 +1720,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_EventName_NullWhenNotSet()
     {
         // Arrange
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
@@ -1732,7 +1761,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetLogs_DisabledFiltersAreIgnored()
     {
-        var repository = CreateRepository();
+        using var repositoryContext = CreateRepository();
+        var repository = repositoryContext.Repository;
 
         await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
@@ -1801,7 +1831,8 @@ public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTest
     {
         const int logCount = 1_100;
         var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        using var repositoryContext = CreateRepository();
+        var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
         var logRecords = new RepeatedField<LogRecord>();
         for (var index = 0; index < logCount; index++)
         {
@@ -1864,7 +1895,8 @@ public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTest
     [Fact]
     public async Task AddLogs_LargeAttributeBatchesRoundTripAcrossResources()
     {
-        var repository = Assert.IsType<SqliteTelemetryRepository>(CreateRepository());
+        using var repositoryContext = CreateRepository();
+        var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
         var context = new AddContext();
         var attributes = Enumerable.Range(0, 128)
             .Select(index => KeyValuePair.Create($"key-{index}", $"value-{index}"))

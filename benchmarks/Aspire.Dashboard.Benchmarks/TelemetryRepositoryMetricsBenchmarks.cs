@@ -7,6 +7,7 @@ using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Model;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
+using Aspire.Dashboard.ServiceClient;
 using BenchmarkDotNet.Attributes;
 using BenchmarkDotNet.Configs;
 using BenchmarkDotNet.Diagnosers;
@@ -39,6 +40,7 @@ public class TelemetryRepositoryMetricsBenchmarks
     private static readonly ResourceKey s_metricResourceKey = new("benchmark-app", "benchmark-instance");
 
     private string _temporaryDirectory = null!;
+    private DashboardSqliteDatabase _database = null!;
     private SqliteTelemetryRepository _queryRepository = null!;
     private IReadOnlyList<MetricDimensionCursor> _incrementalCursors = null!;
 
@@ -46,31 +48,32 @@ public class TelemetryRepositoryMetricsBenchmarks
     public int DimensionCount { get; set; }
 
     [GlobalSetup(Target = nameof(GetMetricsLongDuration))]
-    public void SetupMetrics() => Setup(isHistogram: false);
+    public Task SetupMetrics() => SetupAsync(isHistogram: false);
 
     [GlobalSetup(Target = nameof(GetHistogramMetricsLongDuration))]
-    public void SetupHistogramMetrics() => Setup(isHistogram: true);
+    public Task SetupHistogramMetrics() => SetupAsync(isHistogram: true);
 
     [GlobalSetup(Target = nameof(GetMetricsLongDurationRollup))]
-    public void SetupMetricsRollup() => Setup(isHistogram: false);
+    public Task SetupMetricsRollup() => SetupAsync(isHistogram: false);
 
     [GlobalSetup(Target = nameof(GetHistogramMetricsLongDurationRollup))]
-    public void SetupHistogramMetricsRollup() => Setup(isHistogram: true);
+    public Task SetupHistogramMetricsRollup() => SetupAsync(isHistogram: true);
 
     [GlobalSetup(Target = nameof(GetMetricsIncrementalRollup))]
-    public void SetupMetricsIncrementalRollup() => SetupIncremental(isHistogram: false, MetricInstrumentName);
+    public Task SetupMetricsIncrementalRollup() => SetupIncrementalAsync(isHistogram: false, MetricInstrumentName);
 
     [GlobalSetup(Target = nameof(GetHistogramMetricsIncrementalRollup))]
-    public void SetupHistogramMetricsIncrementalRollup() => SetupIncremental(isHistogram: true, HistogramMetricInstrumentName);
+    public Task SetupHistogramMetricsIncrementalRollup() => SetupIncrementalAsync(isHistogram: true, HistogramMetricInstrumentName);
 
-    private void Setup(bool isHistogram)
+    private async Task SetupAsync(bool isHistogram)
     {
         _temporaryDirectory = Directory.CreateTempSubdirectory("aspire-dashboard-metrics-benchmark-").FullName;
-        _queryRepository = CreateRepository(Path.Combine(_temporaryDirectory, "query.db"));
+        _database = new DashboardSqliteDatabase(Path.Combine(_temporaryDirectory, "query.db"));
+        _queryRepository = CreateRepository(_database);
         var addContext = new AddContext();
         foreach (var batch in CreateLongDurationMetricBatches(DimensionCount, isHistogram))
         {
-            _queryRepository.AddMetrics(addContext, batch);
+            await _queryRepository.AddMetricsAsync(addContext, batch);
         }
         if (addContext.FailureCount > 0)
         {
@@ -78,9 +81,9 @@ public class TelemetryRepositoryMetricsBenchmarks
         }
     }
 
-    private void SetupIncremental(bool isHistogram, string instrumentName)
+    private async Task SetupIncrementalAsync(bool isHistogram, string instrumentName)
     {
-        Setup(isHistogram);
+        await SetupAsync(isHistogram);
         var instrument = GetLongDurationInstrument(instrumentName, s_metricDataPointInterval);
         _incrementalCursors = instrument.Dimensions.Select(dimension =>
         {
@@ -97,6 +100,8 @@ public class TelemetryRepositoryMetricsBenchmarks
     public void Cleanup()
     {
         _queryRepository.Dispose();
+        _database.ClearPool();
+        _database.Dispose();
         Directory.Delete(_temporaryDirectory, recursive: true);
     }
 
@@ -173,10 +178,10 @@ public class TelemetryRepositoryMetricsBenchmarks
         }) ?? throw new InvalidOperationException($"Unable to find the benchmark metric '{instrumentName}'.");
     }
 
-    private static SqliteTelemetryRepository CreateRepository(string databasePath)
+    private static SqliteTelemetryRepository CreateRepository(DashboardSqliteDatabase database)
     {
         return new SqliteTelemetryRepository(
-            databasePath,
+            database,
             NullLoggerFactory.Instance,
             Options.Create(new DashboardOptions()),
             new PauseManager(),
