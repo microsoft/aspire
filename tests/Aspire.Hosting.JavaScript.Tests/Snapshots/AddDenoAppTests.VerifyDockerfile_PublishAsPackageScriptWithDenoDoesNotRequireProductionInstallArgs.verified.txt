@@ -1,11 +1,11 @@
-﻿FROM denoland/deno:2 AS build
+﻿FROM denoland/deno:2.9.0 AS build
 WORKDIR /app
 COPY deno.json ./
 RUN --mount=type=cache,target=/deno-dir deno install
 COPY . .
 RUN deno task build
 
-FROM denoland/deno:2 AS runtime
+FROM denoland/deno:2.9.0 AS runtime
 WORKDIR /app
 COPY --from=build /app /app
 ENV NODE_ENV=production

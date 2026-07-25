@@ -773,9 +773,9 @@ public static partial class JavaScriptHostingExtensions
             });
 
     // The default Docker image used for AddDenoApp build and runtime stages.
-    // Pinned to the major version tag to keep generated Dockerfiles deterministic
-    // while still picking up patch updates. The official image provides a non-root `deno` user.
-    private const string DefaultDenoImage = "denoland/deno:2";
+    // Pin to a concrete tag because denoland/deno does not publish floating major tags.
+    // The official image provides a non-root `deno` user.
+    private const string DefaultDenoImage = "denoland/deno:2.9.0";
 
     // Default .dockerignore content emitted alongside the generated Deno Dockerfile using
     // BuildKit's per-Dockerfile ignore convention. The runtime stage copies source from the
@@ -825,7 +825,7 @@ public static partial class JavaScriptHostingExtensions
     ///
     /// If the application directory contains a <c>package.json</c>, <c>deno.json</c>, or <c>deno.jsonc</c> file, Deno will
     /// be added as the default package manager. When publishing to a container, the default base image is
-    /// <c>denoland/deno:2</c> for both the build and runtime stages.
+    /// <c>denoland/deno:2.9.0</c> for both the build and runtime stages.
     /// </remarks>
     /// <example>
     /// Add a Deno app to the application model:
@@ -845,6 +845,7 @@ public static partial class JavaScriptHostingExtensions
         ArgumentException.ThrowIfNullOrEmpty(scriptPath);
 
         appDirectory = Path.GetFullPath(appDirectory, builder.AppHostDirectory);
+        ValidateDenoScriptPath(scriptPath, appDirectory);
         var resource = new DenoAppResource(name, "deno", appDirectory);
 
         var resourceBuilder = builder.AddResource(resource)
@@ -1045,8 +1046,8 @@ public static partial class JavaScriptHostingExtensions
             // SDK), this is the headline Deno hosting win. The instrumentation is resilient to an unavailable
             // collector, so it is safe to enable unconditionally.
             //
-            // No `--unstable-otel` flag is emitted: native OTel is STABLE on the Deno versions the pinned
-            // `denoland/deno:2` tag resolves to. Verified empirically on Deno 2.9.0 (2026-07) — `OTEL_DENO=true`
+            // No `--unstable-otel` flag is emitted: native OTel is STABLE on the pinned Deno 2.9.0 image.
+            // Verified empirically on Deno 2.9.0 (2026-07) — `OTEL_DENO=true`
             // alone activates and exports traces/metrics/logs; `--unstable-otel` is no longer listed by
             // `deno run --help=unstable` and is only a backward-compat no-op. OTEL_DENO accepts only the literal
             // "true"/"false" (not "1"), which is what we emit.
@@ -1078,6 +1079,30 @@ public static partial class JavaScriptHostingExtensions
 
                 return Task.CompletedTask;
             });
+
+    private static void ValidateDenoScriptPath(string scriptPath, string appDirectory)
+    {
+        if (Path.IsPathRooted(scriptPath) || IsWindowsFullyQualifiedPath(scriptPath))
+        {
+            throw new ArgumentException("The script path must be relative to the Deno application directory.", nameof(scriptPath));
+        }
+
+        var fullScriptPath = Path.GetFullPath(scriptPath, appDirectory);
+        var relativeScriptPath = Path.GetRelativePath(appDirectory, fullScriptPath);
+        if (relativeScriptPath == ".." ||
+            relativeScriptPath.StartsWith(".." + Path.DirectorySeparatorChar, StringComparison.Ordinal) ||
+            relativeScriptPath.StartsWith(".." + Path.AltDirectorySeparatorChar, StringComparison.Ordinal) ||
+            Path.IsPathRooted(relativeScriptPath))
+        {
+            throw new ArgumentException("The script path must resolve inside the Deno application directory.", nameof(scriptPath));
+        }
+    }
+
+    private static bool IsWindowsFullyQualifiedPath(string path) =>
+        path.Length >= 3 &&
+        char.IsAsciiLetter(path[0]) &&
+        path[1] == ':' &&
+        (path[2] == '\\' || path[2] == '/');
 
     /// <summary>
     /// Adds a JavaScript application resource to the distributed application using the specified app directory and
@@ -2225,7 +2250,7 @@ public static partial class JavaScriptHostingExtensions
     /// <remarks>
     /// Package scripts are run through Deno's task runner (<c>deno task &lt;name&gt;</c>) rather than <c>run</c>.
     /// Publishing to a container requires Deno to be present in the build image. This method configures a Deno build
-    /// image (<c>denoland/deno:2</c>) when one is not already specified.
+    /// image (<c>denoland/deno:2.9.0</c>) when one is not already specified.
     /// </remarks>
     /// <ats-remarks />
     /// <example>

@@ -4,10 +4,12 @@
 #pragma warning disable ASPIREDOCKERFILEBUILDER001 // Type is for evaluation purposes only
 #pragma warning disable ASPIREJAVASCRIPT001 // Type is for evaluation purposes only
 
+using System.Diagnostics;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.Dcp.Model;
 using Aspire.Hosting.Tests.Utils;
 using Aspire.Hosting.Utils;
+using Aspire.TestUtilities;
 using Microsoft.Extensions.DependencyInjection;
 
 namespace Aspire.Hosting.JavaScript.Tests;
@@ -450,6 +452,21 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.Equal(
             """ENTRYPOINT ["deno","serve","-A","--cached-only","--host","0.0.0.0","--port","8000","server.ts"]""",
             GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public void WithDenoServe_DoesNotPinRunModeDefaultTargetPort()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "server.ts")
+            .WithDenoServe();
+
+        Assert.Null(denoApp.Resource.GetEndpoint("http").EndpointAnnotation.TargetPort);
     }
 
     [Fact]
@@ -1051,6 +1068,71 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.Throws<ArgumentException>(() => builder.AddDenoApp("denoapp", ".", ""));
     }
 
+    [Theory]
+    [InlineData("/tmp/main.ts")]
+    [InlineData("../main.ts")]
+    [InlineData("sub/../../main.ts")]
+    [InlineData("C:\\temp\\main.ts")]
+    public void AddDenoApp_ThrowsForScriptPathOutsideAppDirectory(string scriptPath)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        var builder = DistributedApplication.CreateBuilder();
+
+        var exception = Assert.Throws<ArgumentException>(() => builder.AddDenoApp("denoapp", workspace.Path, scriptPath));
+
+        Assert.Equal("scriptPath", exception.ParamName);
+    }
+
+    [Fact]
+    [RequiresFeature(TestFeature.Docker | TestFeature.DockerPluginBuildx)]
+    [OuterloopTest("Builds and runs a Docker image to verify the generated Deno Dockerfile serves HTTP")]
+    public async Task VerifyDenoDockerfileBuildsAndRunsHttpEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "deno-app");
+        Directory.CreateDirectory(appDir);
+        await File.WriteAllTextAsync(Path.Combine(appDir, "main.ts"), """
+            const port = Number(Deno.env.get("PORT") ?? "8000");
+            Deno.serve({ hostname: "0.0.0.0", port }, () => new Response("deno runtime ok"));
+            """, TestContext.Current.CancellationToken);
+
+        var denoApp = builder.AddDenoApp("deno-app", appDir, "main.ts");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
+
+        var dockerfilePath = Path.Combine(workspace.Path, "deno-app.Dockerfile");
+        Assert.True(File.Exists(dockerfilePath), $"Dockerfile should exist at {dockerfilePath}");
+
+        var imageName = $"aspire-deno-runtime-test-{Guid.NewGuid():N}";
+        string? containerId = null;
+
+        try
+        {
+            var buildResult = await RunDockerCommandAsync($"build --network=host -t {imageName} -f \"{dockerfilePath}\" .", appDir);
+            Assert.True(buildResult.ExitCode == 0, $"Docker build failed with exit code {buildResult.ExitCode}.\nStdout: {buildResult.Stdout}\nStderr: {buildResult.Stderr}");
+
+            var runResult = await RunDockerCommandAsync($"run --rm -d -e PORT=8000 -p 127.0.0.1::8000 {imageName}", appDir);
+            Assert.True(runResult.ExitCode == 0, $"Docker run failed with exit code {runResult.ExitCode}.\nStdout: {runResult.Stdout}\nStderr: {runResult.Stderr}");
+            containerId = runResult.Stdout.Trim();
+
+            var portResult = await RunDockerCommandAsync($"port {containerId} 8000/tcp", appDir);
+            Assert.True(portResult.ExitCode == 0, $"Docker port failed with exit code {portResult.ExitCode}.\nStdout: {portResult.Stdout}\nStderr: {portResult.Stderr}");
+
+            await WaitForHttpTextAsync($"http://{portResult.Stdout.Trim()}", "deno runtime ok");
+        }
+        finally
+        {
+            if (!string.IsNullOrEmpty(containerId))
+            {
+                await RunDockerCommandAsync($"rm -f {containerId}", appDir);
+            }
+
+            await RunDockerCommandAsync($"rmi {imageName}", appDir);
+        }
+    }
+
     [Fact]
     public async Task AddDenoApp_ConfiguresCertificateTrustForAppendScope()
     {
@@ -1261,6 +1343,58 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
     private static string GetDockerfileLine(string dockerfileContents, string prefix)
         => dockerfileContents.Split('\n').Select(line => line.TrimEnd('\r')).Single(line => line.StartsWith(prefix, StringComparison.Ordinal));
+
+    private static async Task<(int ExitCode, string Stdout, string Stderr)> RunDockerCommandAsync(string arguments, string workingDirectory)
+    {
+        var processStartInfo = new ProcessStartInfo
+        {
+            FileName = "docker",
+            Arguments = arguments,
+            WorkingDirectory = workingDirectory,
+            RedirectStandardOutput = true,
+            RedirectStandardError = true,
+            UseShellExecute = false,
+            CreateNoWindow = true
+        };
+
+        using var process = Process.Start(processStartInfo);
+        Assert.NotNull(process);
+
+        var stdoutTask = process.StandardOutput.ReadToEndAsync(TestContext.Current.CancellationToken);
+        var stderrTask = process.StandardError.ReadToEndAsync(TestContext.Current.CancellationToken);
+
+        await process.WaitForExitAsync(TestContext.Current.CancellationToken);
+
+        return (process.ExitCode, await stdoutTask, await stderrTask);
+    }
+
+    private static async Task WaitForHttpTextAsync(string url, string expectedText)
+    {
+        using var httpClient = new HttpClient();
+        string? lastError = null;
+
+        for (var attempt = 0; attempt < 120; attempt++)
+        {
+            try
+            {
+                var response = await httpClient.GetStringAsync(url, TestContext.Current.CancellationToken);
+                if (response.Contains(expectedText, StringComparison.Ordinal))
+                {
+                    return;
+                }
+
+                lastError = $"Response did not contain '{expectedText}': {response}";
+            }
+            catch (Exception ex) when (ex is HttpRequestException or TaskCanceledException)
+            {
+                lastError = ex.Message;
+            }
+
+            await Task.Delay(500, TestContext.Current.CancellationToken);
+        }
+
+        throw new TimeoutException($"Timed out waiting for {url} to return '{expectedText}'. Last error: {lastError ?? "<none>"}");
+    }
 
 #pragma warning restore ASPIREEXTENSION001 // Type is for evaluation purposes only
 }

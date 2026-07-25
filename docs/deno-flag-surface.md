@@ -129,10 +129,9 @@ relying on interactive permission prompts.
   Deno's Node-compatibility mode — `npm:` resolution and package.json `exports` conditions — behaves
   like the Node/Bun variants.
 - **Native OpenTelemetry.** `OTEL_DENO=true` is exported by default and flows to the OTLP endpoint
-  configured by `WithOtlpExporter`. Native OTel is **stable** on the Deno versions the pinned
-  `denoland/deno:2` tag resolves to (verified on Deno 2.9.0), so **no `--unstable-otel` flag is
-  emitted** — the env var alone activates trace/metric/log export. The run-mode command and the
-  published container entrypoint stay consistent.
+  configured by `WithOtlpExporter`. Native OTel is **stable** on the pinned Deno 2.9.0 image, so
+  **no `--unstable-otel` flag is emitted** — the env var alone activates trace/metric/log export.
+  The run-mode command and the published container entrypoint stay consistent.
 
 ## Escape hatch
 

@@ -1,6 +1,6 @@
 // Aspire TypeScript AppHost — exercises the Aspire.Hosting.JavaScript `AddDenoApp` API.
 // Run with: aspire run
-// Publish with: aspire publish (emits Docker Compose + Dockerfiles using denoland/deno:2)
+// Publish with: aspire publish (emits Docker Compose + Dockerfiles using denoland/deno:2.9.0)
 
 import { createBuilder } from './.aspire/modules/aspire.mjs';
 

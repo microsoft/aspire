@@ -444,7 +444,12 @@ public static partial class JavaScriptHostingExtensions
         annotation.Mode = DenoCommandMode.Serve;
         annotation.ModeSet = true;
         builder.WithHttpEndpoint(env: "PORT");
-        return builder.WithEndpoint("http", e => e.TargetPort ??= GetNextDenoServeDefaultPort(builder), createIfNotExists: false);
+        if (builder.ApplicationBuilder.ExecutionContext.IsPublishMode)
+        {
+            builder.WithEndpoint("http", e => e.TargetPort ??= GetNextDenoServeDefaultPort(builder), createIfNotExists: false);
+        }
+
+        return builder;
     }
 
     // ---- Script / raw args ------------------------------------------------------------------
