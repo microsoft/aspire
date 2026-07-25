@@ -6,9 +6,6 @@ import {
   type ISubscription,
 } from "@microsoft/signalr";
 import type {
-  AssistantChatRequest,
-  AssistantEvent,
-  AssistantInfo,
   ConnectionStatus,
   ConsoleLogEvent,
   DashboardApiDiscovery,
@@ -33,7 +30,6 @@ import type {
   LogRecordSummary,
   SpanSummary,
 } from "./types";
-import { readNdjson } from "./ndjson";
 import {
   getLogRecordSummaries,
   getSpanSummaries,
@@ -48,7 +44,6 @@ const shellCapability = "shell";
 const cultureCapability = "culture";
 const authenticationCapability = "authentication";
 const manageDataCapability = "manage-data";
-const assistantCapability = "assistant";
 const resourcesCapability = "resources";
 const resourceStreamCapability = "resources-live";
 const commandsCapability = "commands";
@@ -434,28 +429,6 @@ function isManageDataResponse(value: unknown): value is ManageDataResponse {
       && resource.dataTypes.every((dataType) => typeof dataType === "string"));
 }
 
-function isAssistantInfo(value: unknown): value is AssistantInfo {
-  if (typeof value !== "object" || value === null) return false;
-  const info = value as Partial<AssistantInfo>;
-  return Array.isArray(info.models)
-    && info.models.every((model) =>
-      typeof model === "object"
-      && model !== null
-      && typeof model.family === "string"
-      && typeof model.displayName === "string");
-}
-
-function isAssistantEvent(value: unknown): value is AssistantEvent {
-  if (typeof value !== "object" || value === null) return false;
-  const event = value as Partial<AssistantEvent>;
-  return (event.type === "start"
-      || event.type === "content"
-      || event.type === "complete"
-      || event.type === "error")
-    && (typeof event.content === "string" || event.content === null)
-    && (typeof event.message === "string" || event.message === null);
-}
-
 function isVersion(value: unknown): value is DashboardApiVersion {
   if (typeof value !== "object" || value === null) {
     return false;
@@ -633,51 +606,6 @@ async function removeManageData(request: ManageDataRequest): Promise<void> {
   }
 
   await postNoContent(`${version.basePath}/manage-data/remove`, request);
-}
-
-async function getAssistantInfo(): Promise<AssistantInfo> {
-  const version = await getNegotiatedVersion();
-  if (!version.capabilities.includes(assistantCapability)) {
-    throw new Error("Dashboard API version 1 does not advertise the assistant capability.");
-  }
-
-  const payload = await requestJson(`${version.basePath}/assistant/info`);
-  if (!isAssistantInfo(payload)) {
-    throw new Error("Dashboard API assistant info returned an incompatible payload.");
-  }
-
-  return payload;
-}
-
-async function streamAssistantChat(
-  request: AssistantChatRequest,
-  onEvent: (event: AssistantEvent) => void,
-  signal: AbortSignal,
-): Promise<void> {
-  const version = await getNegotiatedVersion();
-  if (!version.capabilities.includes(assistantCapability)) {
-    throw new Error("Dashboard API version 1 does not advertise the assistant capability.");
-  }
-
-  const response = await fetch(`${version.basePath}/assistant/chat`, {
-    method: "POST",
-    cache: "no-store",
-    credentials: "same-origin",
-    headers: { Accept: "application/x-ndjson", "Content-Type": "application/json" },
-    body: JSON.stringify(request),
-    signal,
-  });
-  transferAuthenticationRedirect(response);
-  if (!response.ok || !response.body) {
-    throw new Error(`Dashboard API request failed with ${response.status} ${response.statusText}.`);
-  }
-
-  await readNdjson<unknown>(response.body, (event) => {
-    if (!isAssistantEvent(event)) {
-      throw new Error("Dashboard API assistant stream returned an incompatible event.");
-    }
-    onEvent(event);
-  });
 }
 
 function getConfig(): Promise<DeckConfig> {
@@ -1386,8 +1314,6 @@ export const nativeBackend = {
   exportManageData,
   importManageData,
   removeManageData,
-  getAssistantInfo,
-  streamAssistantChat,
   getTerminalWebSocketUrl,
   listResources,
   executeCommand,

@@ -66,7 +66,6 @@ internal static class DashboardLegacyAuthentication
         return path.Equals(DashboardApiContract.ShellPath)
             || path.Equals(DashboardApiContract.CulturePath)
             || path.Equals(DashboardApiContract.AuthenticationLogoutPath)
-            || path.StartsWithSegments(DashboardApiContract.ManageDataPath)
-            || path.StartsWithSegments(DashboardApiContract.AssistantPath);
+            || path.StartsWithSegments(DashboardApiContract.ManageDataPath);
     }
 }

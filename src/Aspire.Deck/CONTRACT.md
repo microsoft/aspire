@@ -33,15 +33,15 @@ The first discovery response is:
     {
       "version": 1,
       "basePath": "/api/dashboard/v1",
-      "capabilities": ["configuration", "shell", "culture", "authentication", "manage-data", "assistant", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "structured-logs-clear", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "terminal", "interactions"]
+      "capabilities": ["configuration", "shell", "culture", "authentication", "manage-data", "resources", "resources-live", "commands", "structured-logs", "structured-logs-live", "structured-logs-clear", "traces", "traces-live", "traces-clear", "metrics", "metrics-series", "metrics-clear", "console-logs", "console-logs-live", "terminal", "interactions"]
     }
   ]
 }
 ```
 
-Version 1 currently defines twenty-two capabilities when the side-by-side legacy authority is
+Version 1 currently defines twenty-one capabilities when the side-by-side legacy authority is
 configured. Servers without that authority omit `shell`, `culture`, `authentication`, and
-`manage-data`, and `assistant`:
+`manage-data`:
 
 | Capability | Route | Response |
 | --- | --- | --- |
@@ -50,7 +50,6 @@ configured. Servers without that authority omit `shell`, `culture`, `authenticat
 | `culture` | `GET {basePath}/culture?language={name}&redirectUrl={localUrl}` | Redirect and culture cookie |
 | `authentication` | `POST {basePath}/authentication/logout` | Dashboard sign-out response |
 | `manage-data` | `GET/POST {basePath}/manage-data[/export\|/import\|/remove]` | Inventory JSON, ZIP export, telemetry import, or removal response |
-| `assistant` | `GET {basePath}/assistant/info`; `POST {basePath}/assistant/chat` | Model inventory or ordered NDJSON assistant events |
 | `resources` | `GET {basePath}/resources` | `Resource[]` |
 | `resources-live` | SignalR hub at `{basePath}/resources/live` | `ResourcesEvent` server stream |
 | `commands` | `POST {basePath}/commands/execute` | `CommandResponse` |
@@ -103,14 +102,6 @@ remove operation within one authenticated versioned surface. The AOT host stream
 to the existing telemetry repository while the processes coexist. It does not deserialize or
 buffer the server-side payload, and it advertises the capability only when that repository is
 configured and can authorize the same browser session.
-
-`assistant` returns the available model family/display-name pairs and accepts the complete selected
-model plus conversation history. Chat responses retain the legacy `start`, ordered `content`,
-`complete`, and `error` NDJSON event contract, `no-store`/no-buffering headers, the 10 MB assistant
-response ceiling, and tool access to current resources, console logs, traces, and structured logs.
-The browser abort signal cancels the proxy request and the linked assistant operation; stopped
-responses do not synthesize a final event. Disabled and unavailable assistants preserve their
-`404` and `503` responses.
 
 The `resources` response uses the transport-neutral `Resource` shape documented below. It is a
 complete point-in-time snapshot, returned with `Cache-Control: no-store`. It remains the fallback

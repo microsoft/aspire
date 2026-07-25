@@ -1427,66 +1427,6 @@ test(`${features("HTTP-ASSISTANT-001")} streams an assistant response from the b
   });
 });
 
-test(`${features("AOT-ASSISTANT-001")} streams assistant chat only through its versioned capability`, async ({ page }) => {
-  let chatRequest: unknown;
-  let legacyAssistantRequests = 0;
-  await page.route("**/api/dashboard", async (route) => route.fulfill({
-    json: {
-      product: "Aspire.Dashboard",
-      versions: [{
-        version: 1,
-        basePath: "/api/dashboard/v1",
-        capabilities: ["configuration", "shell", "assistant", "resources"],
-      }],
-    },
-  }));
-  await page.route("**/api/dashboard/v1/shell", async (route) => route.fulfill({
-    json: { ...config, isAssistantEnabled: true } satisfies DeckConfig,
-  }));
-  await page.route("**/api/dashboard/v1/resources", async (route) => route.fulfill({ json: [resource] }));
-  await page.route("**/api/dashboard/v1/assistant/info", async (route) => route.fulfill({
-    json: {
-      models: [
-        { family: "gpt-5.4", displayName: "GPT-5.4" },
-        { family: "gpt-4.1", displayName: "GPT-4.1" },
-      ],
-    },
-  }));
-  await page.route("**/api/dashboard/v1/assistant/chat", async (route) => {
-    chatRequest = route.request().postDataJSON();
-    await route.fulfill({
-      contentType: "application/x-ndjson",
-      headers: { "Cache-Control": "no-store", "X-Accel-Buffering": "no" },
-      body: [
-        { type: "start", content: null, message: null },
-        { type: "content", content: "Resource stress-api ", message: null },
-        { type: "content", content: "is healthy.", message: null },
-        { type: "complete", content: null, message: null },
-      ].map((event) => JSON.stringify(event)).join("\n") + "\n",
-    });
-  });
-  await page.route("**/api/deck/assistant/*", async (route) => {
-    legacyAssistantRequests++;
-    await route.fulfill({ status: 500 });
-  });
-
-  await page.goto("/?backend=aot");
-  await page.getByRole("banner").getByRole("button", { name: "Assistant" }).click();
-  const assistant = page.getByRole("dialog", { name: "Assistant" });
-  await expect(assistant.getByLabel("Assistant model")).toHaveValue("gpt-5.4");
-  await assistant.getByLabel("Message the assistant").fill("Inspect the resource");
-  await assistant.getByRole("button", { name: "Send" }).click();
-
-  const conversation = assistant.getByRole("log", { name: "Assistant conversation" });
-  await expect(conversation).toContainText("YouInspect the resource");
-  await expect(conversation).toContainText("AssistantResource stress-api is healthy.");
-  expect(chatRequest).toEqual({
-    messages: [{ role: "user", content: "Inspect the resource" }],
-    model: "gpt-5.4",
-  });
-  expect(legacyAssistantRequests).toBe(0);
-});
-
 test(`${features("HTTP-MANAGE-DATA-001")} manages dashboard data through the HTTP backend`, async ({ page }) => {
   // Chromium reports an intercepted file upload as aborted after Playwright fulfills
   // it, even though the response and payload complete. The real 204 endpoint is

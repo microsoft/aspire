@@ -14,7 +14,6 @@ internal static class DashboardApiContract
     public const string CultureCapability = "culture";
     public const string AuthenticationCapability = "authentication";
     public const string ManageDataCapability = "manage-data";
-    public const string AssistantCapability = "assistant";
     public const string ResourcesCapability = "resources";
     public const string ResourceStreamCapability = "resources-live";
     public const string CommandsCapability = "commands";
@@ -40,7 +39,6 @@ internal static class DashboardApiContract
     public const string CulturePath = $"{VersionOneBasePath}/culture";
     public const string AuthenticationLogoutPath = $"{VersionOneBasePath}/authentication/logout";
     public const string ManageDataPath = $"{VersionOneBasePath}/manage-data";
-    public const string AssistantPath = $"{VersionOneBasePath}/assistant";
 }
 
 internal sealed record DashboardApiDiscovery(

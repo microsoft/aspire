@@ -57,7 +57,6 @@ internal static class DashboardBackendApplication
                 capabilities.Add(DashboardApiContract.CultureCapability);
                 capabilities.Add(DashboardApiContract.AuthenticationCapability);
                 capabilities.Add(DashboardApiContract.ManageDataCapability);
-                capabilities.Add(DashboardApiContract.AssistantCapability);
             }
             capabilities.AddRange(
             [
@@ -171,19 +170,6 @@ internal static class DashboardBackendApplication
             IDashboardLegacyApiProxy legacyApiProxy) =>
         {
             await legacyApiProxy.ProxyAsync(context, "api/deck/manage-data/remove").ConfigureAwait(false);
-        });
-
-        app.MapGet($"{DashboardApiContract.AssistantPath}/info", async (
-            HttpContext context,
-            IDashboardLegacyApiProxy legacyApiProxy) =>
-        {
-            await legacyApiProxy.ProxyAsync(context, "api/deck/assistant/info").ConfigureAwait(false);
-        });
-        app.MapPost($"{DashboardApiContract.AssistantPath}/chat", async (
-            HttpContext context,
-            IDashboardLegacyApiProxy legacyApiProxy) =>
-        {
-            await legacyApiProxy.ProxyAsync(context, "api/deck/assistant/chat").ConfigureAwait(false);
         });
 
         app.MapMethods("/login", [HttpMethods.Get, HttpMethods.Post], async (
