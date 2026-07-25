@@ -31,9 +31,9 @@ public sealed class MockDashboardClient : IDashboardClient
         }.ToDictionary(),
         state: KnownResourceState.Running);
 
-    private readonly List<ResourceViewModel>? _resources;
+    private readonly IReadOnlyList<ResourceViewModel>? _resources;
 
-    public MockDashboardClient(List<ResourceViewModel>? resources = null)
+    public MockDashboardClient(IReadOnlyList<ResourceViewModel>? resources = null)
     {
         _resources = resources;
     }
@@ -54,7 +54,7 @@ public sealed class MockDashboardClient : IDashboardClient
     public Task<ResourceViewModelSubscription> SubscribeResourcesAsync(CancellationToken cancellationToken)
     {
         return Task.FromResult(new ResourceViewModelSubscription(
-            [TestResource1],
+            [.. (_resources ?? [TestResource1])],
             Test()
         ));
     }
