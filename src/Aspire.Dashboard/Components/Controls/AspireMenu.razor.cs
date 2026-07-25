@@ -5,10 +5,11 @@ using Aspire.Dashboard.Model;
 using Microsoft.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components;
 using Microsoft.FluentUI.AspNetCore.Components.Utilities;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components;
 
-public partial class AspireMenu : FluentComponentBase
+public partial class AspireMenu : FluentComponentBase, IAsyncDisposable
 {
     private FluentMenu? _menu;
 
@@ -32,6 +33,22 @@ public partial class AspireMenu : FluentComponentBase
 
     [Parameter]
     public required IReadOnlyList<MenuButtonItem> Items { get; set; }
+
+    /// <summary>
+    /// Gets or sets a value indicating whether focus should return to <see cref="Anchor"/> after a menu item is clicked.
+    /// </summary>
+    /// <remarks>
+    /// Use this only for button-anchored menus where <see cref="Anchor"/> identifies the element that opened the menu.
+    /// Do not enable it for cursor-positioned or context menus where <see cref="Anchor"/> is only used for positioning.
+    /// </remarks>
+    [Parameter]
+    public bool RestoreFocusOnItemClick { get; set; }
+
+    [Inject]
+    public required IJSRuntime JS { get; init; }
+
+    [Inject]
+    public required IServiceProvider ServiceProvider { get; init; }
 
     // Each menu item is approximately 32px tall, plus 16px padding for the menu container.
     private const int EstimatedItemHeight = 32;
@@ -89,11 +106,7 @@ public partial class AspireMenu : FluentComponentBase
                 .AddStyle("min-width", "64px")
                 .Build();
 
-            Open = true;
-            if (OpenChanged.HasDelegate)
-            {
-                await OpenChanged.InvokeAsync(Open);
-            }
+            await SetOpenAsync(true);
 
             StateHasChanged();
         }
@@ -105,15 +118,43 @@ public partial class AspireMenu : FluentComponentBase
         {
             await onClick();
         }
-        Open = false;
+        await SetOpenAsync(false);
+
+        if (RestoreFocusOnItemClick && !string.IsNullOrEmpty(Anchor))
+        {
+            await JS.InvokeVoidAsync("focusElement", Anchor);
+        }
     }
 
-    private Task OnOpenChanged(bool open)
+    private async Task OnOpenChanged(bool open)
+    {
+        await SetOpenAsync(open);
+    }
+
+    private async Task SetOpenAsync(bool open)
     {
         Open = open;
 
-        return OpenChanged.HasDelegate
-            ? OpenChanged.InvokeAsync(open)
-            : Task.CompletedTask;
+        if (OpenChanged.HasDelegate)
+        {
+            await OpenChanged.InvokeAsync(open);
+        }
+    }
+
+    public ValueTask DisposeAsync()
+    {
+        if (_menu is { } menu)
+        {
+            // Remove this workaround once FluentMenu unregisters itself: https://github.com/microsoft/aspire/issues/18852
+            if (ServiceProvider.GetService<IMenuService>() is { } menuService)
+            {
+                menuService.Remove(menu);
+                menuService.OnMenuUpdated();
+            }
+
+            _menu = null;
+        }
+
+        return ValueTask.CompletedTask;
     }
 }

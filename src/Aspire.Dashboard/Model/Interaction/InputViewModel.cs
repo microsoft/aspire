@@ -2,12 +2,25 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
+using System.Text.Encodings.Web;
+using System.Text.Json;
+using System.Text.Json.Serialization;
 using Aspire.DashboardService.Proto.V1;
 
 namespace Aspire.Dashboard.Model.Interaction;
 
 public sealed class InputViewModel
 {
+    // Fallback maximum upload size matching the server's default (100 MB).
+    // In practice the server always sends a MaxFileSize value for file inputs,
+    // so this constant is only used as a defensive safety net.
+    internal const long DefaultMaxUploadedFileBytes = 100 * 1024 * 1024;
+
+    private static readonly InteractionJsonSerializerContext s_jsonSerializerContext = new(new JsonSerializerOptions
+    {
+        Encoder = JavaScriptEncoder.UnsafeRelaxedJsonEscaping
+    });
+
     public InteractionInput Input { get; private set; } = default!;
 
     public InputViewModel(InteractionInput input)
@@ -109,6 +122,23 @@ public sealed class InputViewModel
     // Used to track secret text visibility state
     public bool IsSecretTextVisible { get; set; }
 
+    // Successful uploads are serialized into Input.Value because the AppHost resolves these opaque
+    // IDs on the same resource-service session that owns the interaction response.
+    public List<FileReferenceViewModel> FileReferences { get; } = [];
+
+    public void SetFileReferences(IEnumerable<FileReferenceViewModel> files)
+    {
+        FileReferences.Clear();
+        FileReferences.AddRange(files);
+        var successfulReferences = FileReferences.Where(f => f.Id is not null).ToList();
+
+        // Use an empty string rather than "[]" so required-field validation rejects an upload where
+        // every selected file failed.
+        Input.Value = successfulReferences.Count > 0
+            ? JsonSerializer.Serialize(successfulReferences, s_jsonSerializerContext.ListFileReferenceViewModel)
+            : string.Empty;
+    }
+
     private static bool OptionsEqual(List<SelectViewModel<string>> existing, List<SelectViewModel<string>> incoming)
     {
         if (existing.Count != incoming.Count)
@@ -138,3 +168,15 @@ public sealed class InputViewModel
         return (current.Loading && !incoming.Loading) || current.Disabled || incoming.Disabled;
     }
 }
+
+public sealed class FileReferenceViewModel
+{
+    public string? Id { get; set; }
+    public required string Name { get; set; }
+
+    [JsonIgnore]
+    public string? ErrorMessage { get; set; }
+}
+
+[JsonSerializable(typeof(List<FileReferenceViewModel>))]
+internal sealed partial class InteractionJsonSerializerContext : JsonSerializerContext;

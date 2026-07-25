@@ -751,8 +751,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         Assert.Empty(cut.Instance._logEntries.GetEntries());
 
         logger.LogInformation("Pause logs.");
-        var pauseResumeButton = cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("fluent-button");
-        pauseResumeButton.Click();
+        cut.FindComponent<PauseIncomingDataSwitch>().WaitForElement("button").Click();
         cut.WaitForAssertion(() => Assert.True(pauseManager.ConsoleLogsPaused));
 
         logger.LogInformation("Wait for pause log.");
@@ -782,7 +781,7 @@ public partial class ConsoleLogsTests : DashboardTestContext
         // - the pause line has been replaced with pause details
         // - the log viewer shows the new log
         // - the log viewer does not show the discarded log
-        pauseResumeButton.Click();
+        cut.FindComponent<PauseIncomingDataSwitch>().Find("button").Click();
         cut.WaitForAssertion(() => Assert.False(pauseManager.ConsoleLogsPaused));
 
         logger.LogInformation("Assert that pause log has expected content.");

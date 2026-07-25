@@ -70,7 +70,11 @@
         </div>
     </div>
 
-    <div class="page__body" id="traces-page-body-id">
+    <div class="page__body"
+         id="tracesScrollContainer"
+         tabindex="0"
+         role="region"
+         aria-label="@Loc[nameof(Dashboard.Resources.Traces.TracesHeader)]">
         <div class="table-wrap virtualized-table-wrap">
             <table class="data traces-table">
                 <thead>

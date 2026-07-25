@@ -865,6 +865,42 @@ namespace Aspire.Dashboard.Resources {
         }
 
         /// <summary>
+        ///   Looks up a localized string similar to Exceeds the maximum size of {0}.
+        /// </summary>
+        public static string InteractionFileExceedsMaxSize {
+            get {
+                return ResourceManager.GetString("InteractionFileExceedsMaxSize", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Choose a file.
+        /// </summary>
+        public static string InteractionFilePlaceholder {
+            get {
+                return ResourceManager.GetString("InteractionFilePlaceholder", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Choose files.
+        /// </summary>
+        public static string InteractionFilePlaceholderMultiple {
+            get {
+                return ResourceManager.GetString("InteractionFilePlaceholderMultiple", resourceCulture);
+            }
+        }
+
+        /// <summary>
+        ///   Looks up a localized string similar to Upload failed.
+        /// </summary>
+        public static string InteractionFileUploadFailed {
+            get {
+                return ResourceManager.GetString("InteractionFileUploadFailed", resourceCulture);
+            }
+        }
+
+        /// <summary>
         ///   Looks up a localized string similar to All data.
         /// </summary>
         public static string ManageDataAllDataCheckboxLabel {

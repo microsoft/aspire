@@ -17,11 +17,14 @@ using Microsoft.AspNetCore.Components;
 using Microsoft.AspNetCore.Components.Web.Virtualization;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
+using Microsoft.JSInterop;
 
 namespace Aspire.Dashboard.Components.Pages;
 
 public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlState<Traces.TracesPageViewModel, Traces.TracesPageState>
 {
+    private const string ScrollContainerId = "tracesScrollContainer";
+
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
 
     private int _totalItemsCount;
@@ -77,6 +80,9 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     [Inject]
     public required ITelemetryErrorRecorder ErrorRecorder { get; init; }
 
+    [Inject]
+    public required IJSRuntime JS { get; init; }
+
     [CascadingParameter]
     public required ViewportInformation ViewportInformation { get; set; }
 
@@ -87,6 +93,16 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     [Parameter]
     [SupplyParameterFromQuery(Name = "filters")]
     public string? SerializedFilters { get; set; }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender)
+        {
+            // Focus the scroll container without showing the focus ring. The container is a large
+            // content area where a visible focus indicator would be visually noisy on initial load.
+            await JS.InvokeVoidAsync("focusElement", ScrollContainerId, true);
+        }
+    }
 
     private string GetNameTooltip(OtlpTrace trace)
     {

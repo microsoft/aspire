@@ -12,6 +12,7 @@ using Aspire.Dashboard.Telemetry;
 using Aspire.Dashboard.Tests;
 using Bunit;
 using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.Logging.Abstractions;
 using Microsoft.Extensions.Options;
 using Microsoft.FluentUI.AspNetCore.Components;
 
@@ -135,6 +136,15 @@ internal static class FluentUISetupHelpers
         buttonModule.SetupVoid("updateProxy", _ => true);
     }
 
+    public static void SetupFluentInputFile(TestContext context)
+    {
+        var inputFileModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/InputFile/FluentInputFile.razor.js"));
+        inputFileModule.SetupVoid("attachClickHandler", _ => true);
+        inputFileModule.SetupVoid("detachClickHandler", _ => true);
+        var dropZoneReference = inputFileModule.SetupModule("initializeFileDropZone", _ => true);
+        dropZoneReference.SetupVoid("dispose", _ => true);
+    }
+
     public static void SetupFluentCombobox(TestContext context)
     {
         var comboboxModule = context.JSInterop.SetupModule(GetFluentFile("./_content/Microsoft.FluentUI.AspNetCore.Components/Components/List/FluentCombobox.razor.js"));
@@ -167,6 +177,7 @@ internal static class FluentUISetupHelpers
         context.Services.AddSingleton<ThemeManager>(themeManager ?? new ThemeManager(new TestThemeResolver()));
         context.Services.AddSingleton<GlobalState>();
         context.Services.AddSingleton<DimensionManager>();
+        context.Services.AddSingleton(new IconResolver(NullLogger<IconResolver>.Instance));
         context.Services.AddSingleton(TimeProvider.System);
         context.Services.AddSingleton<INotificationService, NotificationService>();
         context.Services.AddScoped<DashboardDialogService>();

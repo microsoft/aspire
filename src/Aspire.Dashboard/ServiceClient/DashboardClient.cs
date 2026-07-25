@@ -16,7 +16,9 @@ using Aspire.Hosting;
 using Grpc.Core;
 using Grpc.Net.Client;
 using Grpc.Net.Client.Configuration;
+using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
+using DashboardResources = Aspire.Dashboard.Resources.Resources;
 using ResourceCommandResponseKind = Aspire.Dashboard.Model.ResourceCommandResponseKind;
 
 namespace Aspire.Dashboard.ServiceClient;
@@ -57,6 +59,7 @@ internal sealed class DashboardClient : IDashboardClient
     private readonly ILoggerFactory _loggerFactory;
     private readonly IKnownPropertyLookup _knownPropertyLookup;
     private readonly DashboardOptions _dashboardOptions;
+    private readonly IStringLocalizer<DashboardResources> _loc;
     private readonly ILogger<DashboardClient> _logger;
 
     private ImmutableHashSet<Channel<IReadOnlyList<ResourceViewModelChange>>> _outgoingResourceChannels = [];
@@ -85,11 +88,13 @@ internal sealed class DashboardClient : IDashboardClient
         IConfiguration configuration,
         IOptions<DashboardOptions> dashboardOptions,
         IKnownPropertyLookup knownPropertyLookup,
+        IStringLocalizer<DashboardResources> loc,
         Action<SocketsHttpHandler>? configureHttpHandler = null)
     {
         _loggerFactory = loggerFactory;
         _knownPropertyLookup = knownPropertyLookup;
         _dashboardOptions = dashboardOptions.Value;
+        _loc = loc;
 
         // Take a copy of the token and always use it to avoid race between disposal of CTS and usage of token.
         _clientCancellationToken = _cts.Token;
@@ -964,11 +969,23 @@ internal sealed class DashboardClient : IDashboardClient
 
             return response.ToViewModel();
         }
-        catch (RpcException ex)
+        catch (OperationCanceledException) when (cancellationToken.IsCancellationRequested)
         {
-            _logger.LogError(ex, "Error executing command \"{CommandName}\" on resource \"{ResourceName}\": {StatusCode}", command.Name, resourceName, ex.StatusCode);
-
-            var errorMessage = ex.StatusCode == StatusCode.Unimplemented ? "Command not implemented" : "Unknown error. See logs for details";
+            return new ResourceCommandResponseViewModel()
+            {
+                Kind = ResourceCommandResponseKind.Cancelled
+            };
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && cancellationToken.IsCancellationRequested)
+        {
+            return new ResourceCommandResponseViewModel()
+            {
+                Kind = ResourceCommandResponseKind.Cancelled
+            };
+        }
+        catch (RpcException ex) when (ex.StatusCode == StatusCode.Cancelled && _clientCancellationToken.IsCancellationRequested)
+        {
+            var errorMessage = _loc[nameof(DashboardResources.ResourceCommandAppHostDisconnected)];
 
             return new ResourceCommandResponseViewModel()
             {
@@ -977,6 +994,71 @@ internal sealed class DashboardClient : IDashboardClient
                 Message = errorMessage
             };
         }
+        catch (RpcException ex)
+        {
+            _logger.LogError(ex, "Error executing command \"{CommandName}\" on resource \"{ResourceName}\": {StatusCode}", command.Name, resourceName, ex.StatusCode);
+
+            var errorMessage = ex.StatusCode switch
+            {
+                StatusCode.Unimplemented => "Command not implemented",
+                StatusCode.Unavailable => _loc[nameof(DashboardResources.ResourceCommandAppHostDisconnected)],
+                _ => "Unknown error. See logs for details"
+            };
+
+            return new ResourceCommandResponseViewModel()
+            {
+                Kind = ResourceCommandResponseKind.Failed,
+                ErrorMessage = errorMessage,
+                Message = errorMessage
+            };
+        }
+    }
+
+    public async Task<string> UploadFileAsync(Stream fileStream, string fileName, long expectedSize, CancellationToken cancellationToken)
+    {
+        EnsureInitialized();
+
+        using var combinedTokens = CancellationTokenSource.CreateLinkedTokenSource(_clientCancellationToken, cancellationToken);
+        using var call = _client!.UploadFile(headers: _headers, cancellationToken: combinedTokens.Token);
+
+        const int chunkSize = 64 * 1024;
+        var buffer = new byte[chunkSize];
+        var isFirst = true;
+        long totalBytesRead = 0;
+
+        int bytesRead;
+        while ((bytesRead = await fileStream.ReadAsync(buffer, combinedTokens.Token).ConfigureAwait(false)) > 0)
+        {
+            totalBytesRead += bytesRead;
+            if (totalBytesRead > expectedSize)
+            {
+                throw new InvalidOperationException($"File '{fileName}' exceeded the expected size of {expectedSize} bytes.");
+            }
+
+            var chunk = new UploadFileChunk
+            {
+                Data = Google.Protobuf.ByteString.CopyFrom(buffer, 0, bytesRead)
+            };
+
+            if (isFirst)
+            {
+                chunk.FileName = fileName;
+            }
+
+            await call.RequestStream.WriteAsync(chunk, combinedTokens.Token).ConfigureAwait(false);
+            isFirst = false;
+        }
+
+        // An empty file still needs a first chunk so the AppHost receives its filename.
+        if (isFirst)
+        {
+            await call.RequestStream.WriteAsync(new UploadFileChunk { FileName = fileName }, combinedTokens.Token).ConfigureAwait(false);
+        }
+
+        await call.RequestStream.CompleteAsync().ConfigureAwait(false);
+
+        var response = await call.ResponseAsync.ConfigureAwait(false);
+        return response.FileId;
     }
 
     public async ValueTask DisposeAsync()

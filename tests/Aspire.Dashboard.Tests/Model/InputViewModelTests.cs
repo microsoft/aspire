@@ -387,4 +387,54 @@ public class InputViewModelTests
 
         Assert.Equal("local", viewModel.Value);
     }
+
+    [Fact]
+    public void InputViewModel_File_SetFileReferencesSerializesSuccessfulReferences()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.File
+        };
+        var viewModel = new InputViewModel(input);
+
+        viewModel.SetFileReferences([
+            new FileReferenceViewModel { Id = "abc123", Name = "readme.txt" },
+            new FileReferenceViewModel { Name = "failed.txt", ErrorMessage = "Upload failed" }
+        ]);
+
+        Assert.Collection(
+            viewModel.FileReferences,
+            fileReference =>
+            {
+                Assert.Equal("abc123", fileReference.Id);
+                Assert.Equal("readme.txt", fileReference.Name);
+                Assert.Null(fileReference.ErrorMessage);
+            },
+            fileReference =>
+            {
+                Assert.Null(fileReference.Id);
+                Assert.Equal("failed.txt", fileReference.Name);
+                Assert.Equal("Upload failed", fileReference.ErrorMessage);
+            });
+        Assert.Equal("[{\"Id\":\"abc123\",\"Name\":\"readme.txt\"}]", viewModel.Value);
+    }
+
+    [Fact]
+    public void InputViewModel_File_AllFailedReferencesKeepRequiredValueEmpty()
+    {
+        var input = new InteractionInput
+        {
+            Label = "Select File",
+            InputType = InputType.File,
+            Required = true
+        };
+        var viewModel = new InputViewModel(input);
+
+        viewModel.SetFileReferences([
+            new FileReferenceViewModel { Name = "failed.txt", ErrorMessage = "Upload failed" }
+        ]);
+
+        Assert.Equal(string.Empty, viewModel.Value);
+    }
 }

@@ -165,6 +165,44 @@
                                        aria-describedby="@input.DescriptionId" />
                             </InteractionInputField>
                             break;
+                        case InputType.File:
+                            var inputId = $"{_fieldIds[localItem]}-FileUploadButton";
+                            <InteractionInputField ForId="@inputId"
+                                                   InputViewModel="@localItem"
+                                                   MarkdownProcessor="@_markdownProcessor"
+                                                   Context="input">
+                                <FluentInputFile DragDropZoneVisible="false"
+                                                 Mode="InputFileMode.Stream"
+                                                 AnchorId="@inputId"
+                                                 Accept="@input.ViewModel.Input.FileFilter"
+                                                 Multiple="@input.ViewModel.Input.AllowMultipleFiles"
+                                                 MaximumFileSize="@GetMaxFileSize(input.ViewModel)"
+                                                 OnInputFileChange="@(args => OnInputFileChangeAsync(input.ViewModel, args))" />
+                                @if (input.ViewModel.FileReferences.Any(f => f.Id is not null))
+                                {
+                                    <div class="uploaded-files-list">
+                                        @foreach (var fileReference in input.ViewModel.FileReferences.Where(f => f.Id is not null))
+                                        {
+                                            <div class="uploaded-file-container">
+                                                <FluentIcon Icon="Icons.Filled.Size16.Document"
+                                                            Style="vertical-align: text-bottom;"
+                                                            Color="Color.Accent" />
+                                                <span>@fileReference.Name</span>
+                                            </div>
+                                        }
+                                    </div>
+                                }
+                                else
+                                {
+                                    <FluentButton Id="@inputId"
+                                                  Appearance="Appearance.Accent"
+                                                  IconStart="@(new Icons.Regular.Size16.FolderOpen())"
+                                                  aria-label="@input.ViewModel.Input.Label">
+                                        @GetFileButtonText(input.ViewModel)
+                                    </FluentButton>
+                                }
+                            </InteractionInputField>
+                            break;
                         default:
                             @* Ignore unexpected InputTypes *@
                             break;

@@ -265,7 +265,7 @@ internal sealed class TelemetryApiService(
             return true;
         }
 
-        if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey) || resourceKey is null)
+        if (!TryResolveResourceForTelemetry(resources, resourceName, out var resourceKey) || resourceKey is null)
         {
             return false;
         }
@@ -293,7 +293,7 @@ internal sealed class TelemetryApiService(
             return true;
         }
 
-        if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey) || resourceKey is null)
+        if (!TryResolveResourceForTelemetry(resources, resourceName, out var resourceKey) || resourceKey is null)
         {
             return false;
         }
@@ -321,7 +321,7 @@ internal sealed class TelemetryApiService(
             return true;
         }
 
-        if (!AIHelpers.TryResolveResourceForTelemetry(resources, resourceName, out _, out var resourceKey) || resourceKey is null)
+        if (!TryResolveResourceForTelemetry(resources, resourceName, out var resourceKey) || resourceKey is null)
         {
             return false;
         }

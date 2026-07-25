@@ -49,6 +49,16 @@ public partial class AspireMenuButton : FluentComponentBase
     [Parameter]
     public bool HideIcon { get; set; }
 
+    /// <summary>
+    /// Gets or sets a value indicating whether focus should return to this menu button after a menu item is clicked.
+    /// </summary>
+    /// <remarks>
+    /// Use this for button-anchored menus because the underlying menu anchor is the element that opened the menu.
+    /// Do not use this behavior for cursor-positioned or context menus where the anchor is only used for positioning.
+    /// </remarks>
+    [Parameter]
+    public bool RestoreFocusOnItemClick { get; set; }
+
     private string? IconStyle => IconColorStyle is null ? null : $"color: {IconColorStyle};";
 
     // Map the Fluent Appearance parameter (kept for call-site compatibility) onto the native Deck

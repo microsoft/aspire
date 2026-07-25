@@ -52,9 +52,24 @@
         <target state="translated">折疊子資源</target>
         <note />
       </trans-unit>
+      <trans-unit id="ResourceCommandAppHostDisconnected">
+        <source>The AppHost disconnected while executing the command. Restart the AppHost and try again.</source>
+        <target state="new">The AppHost disconnected while executing the command. Restart the AppHost and try again.</target>
+        <note />
+      </trans-unit>
+      <trans-unit id="ResourceCommandCancel">
+        <source>Cancel</source>
+        <target state="new">Cancel</target>
+        <note />
+      </trans-unit>
       <trans-unit id="ResourceCommandCanceled">
         <source>"{0}" canceled</source>
         <target state="new">"{0}" canceled</target>
+        <note>{0} is the display name of the command.</note>
+      </trans-unit>
+      <trans-unit id="ResourceCommandCanceling">
+        <source>"{0}" canceling...</source>
+        <target state="new">"{0}" canceling...</target>
         <note>{0} is the display name of the command.</note>
       </trans-unit>
       <trans-unit id="ResourceCommandFailed">

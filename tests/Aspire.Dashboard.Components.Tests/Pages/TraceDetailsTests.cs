@@ -593,7 +593,7 @@ public partial class TraceDetailsTests : DashboardTestContext
     }
 
     [Fact]
-    public void ToggleCollapse_SpanStateChanges()
+    public async Task ToggleCollapse_SpanStateChanges()
     {
         // Arrange
         SetupTraceDetailsServices();
@@ -642,7 +642,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         // Act and assert
 
         // Collapse the middle span
-        cut.FindAll(".main-grid-expand-button")[1].Click();
+        await cut.InvokeAsync(() => cut.FindAll(".main-grid-expand-button")[1].Click());
 
         cut.WaitForAssertion(() =>
         {
@@ -654,7 +654,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         // Collapse the parent span
-        cut.FindAll(".main-grid-expand-button")[0].Click();
+        await cut.InvokeAsync(() => cut.FindAll(".main-grid-expand-button")[0].Click());
         cut.WaitForAssertion(() =>
         {
             var expandContainers = cut.FindAll(".main-grid-expand-container");
@@ -664,7 +664,7 @@ public partial class TraceDetailsTests : DashboardTestContext
         });
 
         // Expand the parent span, we should now see the same two containers as before
-        cut.FindAll(".main-grid-expand-button")[0].Click();
+        await cut.InvokeAsync(() => cut.FindAll(".main-grid-expand-button")[0].Click());
         cut.WaitForAssertion(() =>
         {
             var expandContainers = cut.FindAll(".main-grid-expand-container");
