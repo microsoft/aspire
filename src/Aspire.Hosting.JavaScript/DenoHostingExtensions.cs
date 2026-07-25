@@ -284,6 +284,11 @@ public static partial class JavaScriptHostingExtensions
     /// <param name="mode">The node_modules mode. When <see langword="null"/> or empty, emits <c>--node-modules-dir</c> without a value.</param>
     /// <returns>A reference to the <see cref="IResourceBuilder{T}"/>.</returns>
     /// <ats-returns>The resource builder.</ats-returns>
+    /// <remarks>
+    /// The generated Deno Dockerfile publisher does not support <c>manual</c> mode because it excludes local
+    /// <c>node_modules</c> from the build context. Use <c>auto</c> or provide a custom Dockerfile for that mode.
+    /// </remarks>
+    /// <ats-remarks />
     [AspireExport]
     public static IResourceBuilder<DenoAppResource> WithDenoNodeModulesDir(this IResourceBuilder<DenoAppResource> builder, string? mode = null)
     {
@@ -714,6 +719,16 @@ public static partial class JavaScriptHostingExtensions
         }
 
         return [.. entrypoint];
+    }
+
+    private static void ThrowIfUnsupportedDenoDockerfileOptions(IResource resource)
+    {
+        if (resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var deno) &&
+            deno.NodeModulesDirSet &&
+            string.Equals(deno.NodeModulesDirMode, "manual", StringComparison.OrdinalIgnoreCase))
+        {
+            throw new InvalidOperationException("WithDenoNodeModulesDir(\"manual\") is not supported by generated Deno Dockerfiles because node_modules is excluded from the build context. Use \"auto\" or provide a custom Dockerfile.");
+        }
     }
 
     private static string BuildDenoCacheCommand(IResource resource, string scriptPath, string workingDirectory)

@@ -295,6 +295,20 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyDockerfile_ManualNodeModulesDirThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var denoApp = builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
+            .WithDenoNodeModulesDir("manual");
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => ManifestUtils.GetManifest(denoApp.Resource, workspace.Path));
+
+        Assert.Equal("WithDenoNodeModulesDir(\"manual\") is not supported by generated Deno Dockerfiles because node_modules is excluded from the build context. Use \"auto\" or provide a custom Dockerfile.", exception.Message);
+    }
+
+    [Fact]
     public async Task VerifyDockerfile_CacheUsesUnstableFlags()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

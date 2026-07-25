@@ -38,6 +38,7 @@ public static partial class JavaScriptHostingExtensions
     private const string NodeHelpLink = "https://nodejs.org/en/download/";
     private const string NpmHelpLink = "https://docs.npmjs.com/downloading-and-installing-node-js-and-npm";
     private const string BunHelpLink = "https://bun.sh/docs/installation";
+    private const string DenoHelpLink = "https://docs.deno.com/runtime/getting_started/installation/";
     private const string YarnHelpLink = "https://yarnpkg.com/getting-started/install";
     private const string PnpmHelpLink = "https://pnpm.io/installation";
 
@@ -408,6 +409,7 @@ public static partial class JavaScriptHostingExtensions
         "node" => NodeHelpLink,
         "npm" => NpmHelpLink,
         "bun" => BunHelpLink,
+        "deno" => DenoHelpLink,
         "yarn" => YarnHelpLink,
         "pnpm" => PnpmHelpLink,
         // Unknown/custom package manager: no specific install help link.
@@ -923,6 +925,8 @@ public static partial class JavaScriptHostingExtensions
                         dockerfileBuildAnnotation.BuildContextIgnoreContent ??= DefaultDenoBuildContextIgnoreContent;
                     }
 
+                    ThrowIfUnsupportedDenoDockerfileOptions(dockerfileContext.Resource);
+
                     // Deno ships its own runtime, so both stages default to the same Deno image. Unlike the Bun
                     // variant there is no separate production-dependency install stage: Deno caches remote and
                     // npm dependencies under DENO_DIR. Direct run/serve entrypoints pre-populate that cache in
@@ -1025,7 +1029,7 @@ public static partial class JavaScriptHostingExtensions
 
     private static IResourceBuilder<TResource> WithDenoDefaults<TResource>(this IResourceBuilder<TResource> builder) where TResource : JavaScriptAppResource =>
         builder.WithOtlpExporter()
-            .WithRequiredCommand("deno", "https://docs.deno.com/runtime/getting_started/installation/")
+            .WithRequiredCommandsFromPackageManager("deno")
             // Deno has first-class, built-in OpenTelemetry support. Setting OTEL_DENO=true enables automatic export
             // of traces, metrics, and logs to the OTLP endpoint configured by WithOtlpExporter, with no
             // application-level SDK required. Unlike the Node/Bun variants (which need an in-process OpenTelemetry
@@ -2260,8 +2264,7 @@ public static partial class JavaScriptHostingExtensions
 
         resource
             .WithAnnotation(packageManager)
-            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]))
-            .WithRequiredCommand("deno", "https://docs.deno.com/runtime/getting_started/installation/");
+            .WithAnnotation(new JavaScriptInstallCommandAnnotation(["install", .. installArgs]));
 
         if (!resource.Resource.TryGetLastAnnotation<DockerfileBaseImageAnnotation>(out _))
         {

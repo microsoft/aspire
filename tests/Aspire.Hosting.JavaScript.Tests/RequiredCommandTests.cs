@@ -162,6 +162,32 @@ public class RequiredCommandTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task AddDenoApp_WithDenoJson_RequiresOnlyDenoWithoutDuplicates()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        File.WriteAllText(Path.Combine(workspace.Path, "deno.json"), "{}");
+
+        var app = builder.AddDenoApp("app", workspace.Path, "server.ts");
+
+        Assert.Equal(["deno"], await GetRequiredCommandsAsync(builder, app.Resource));
+    }
+
+    [Fact]
+    public async Task AddDenoApp_WithRunScript_WithNpm_DoesNotRequireDeno()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create();
+
+        var app = builder.AddDenoApp("app", workspace.Path, "server.ts")
+            .WithRunScript("start")
+            .WithNpm();
+
+        Assert.Equal(["node", "npm"], await GetRequiredCommandsAsync(builder, app.Resource));
+    }
+
+    [Fact]
     public async Task AddBunApp_WithNpm_RequiresBunNodeAndNpm()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
