@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
@@ -21,14 +19,10 @@ public sealed class StructuredLogMenuBuilder
     private const DeckIconName ViewDetailsIcon = DeckIconName.Info;
     private const DeckIconName MessageOpenIcon = DeckIconName.External;
     private const DeckIconName BracesIcon = DeckIconName.Braces;
-    private const DeckIconName GitHubCopilotIcon = DeckIconName.Sparkle;
 
     private readonly IStringLocalizer<StructuredLogs> _loc;
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
-    private readonly IStringLocalizer<AIAssistant> _aiAssistantLoc;
-    private readonly IStringLocalizer<AIPrompts> _aiPromptsLoc;
     private readonly DashboardDialogService _dialogService;
-    private readonly IAIContextProvider _aiContextProvider;
 
     /// <summary>
     /// Initializes a new instance of the <see cref="StructuredLogMenuBuilder"/> class.
@@ -36,17 +30,11 @@ public sealed class StructuredLogMenuBuilder
     public StructuredLogMenuBuilder(
         IStringLocalizer<StructuredLogs> loc,
         IStringLocalizer<ControlsStrings> controlsLoc,
-        IStringLocalizer<AIAssistant> aiAssistantLoc,
-        IStringLocalizer<AIPrompts> aiPromptsLoc,
-        DashboardDialogService dialogService,
-        IAIContextProvider aiContextProvider)
+        DashboardDialogService dialogService)
     {
         _loc = loc;
         _controlsLoc = controlsLoc;
-        _aiAssistantLoc = aiAssistantLoc;
-        _aiPromptsLoc = aiPromptsLoc;
         _dialogService = dialogService;
-        _aiContextProvider = aiContextProvider;
     }
 
     /// <summary>
@@ -106,21 +94,5 @@ public sealed class StructuredLogMenuBuilder
             }
         });
 
-        if (_aiContextProvider.Enabled)
-        {
-            menuItems.Add(new MenuButtonItem
-            {
-                Text = _aiAssistantLoc[nameof(AIAssistant.MenuTextAskGitHubCopilot)],
-                Icon = GitHubCopilotIcon,
-                OnClick = async () =>
-                {
-                    await _aiContextProvider.LaunchAssistantSidebarAsync(
-                        promptContext => PromptContextsBuilder.AnalyzeLogEntry(
-                            promptContext,
-                            _aiPromptsLoc.GetString(nameof(AIPrompts.PromptAnalyzeLogEntry), logEntry.InternalId),
-                            logEntry)).ConfigureAwait(false);
-                }
-            });
-        }
     }
 }

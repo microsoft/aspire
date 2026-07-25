@@ -2,13 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
@@ -28,7 +25,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 {
     private SelectViewModel<ResourceTypeDetails> _allResource = default!;
 
-    private ExplainErrorsButton? _explainErrorsButton;
     private int _totalItemsCount;
     private List<OtlpResource> _resources = default!;
     private List<SelectViewModel<ResourceTypeDetails>> _resourceViewModels = default!;
@@ -39,7 +35,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     private string? _elementIdBeforeDetailsViewOpened;
     private string _filter = string.Empty;
     private Virtualize<OtlpLogEntry>? _logsGrid;
-    private AIContext? _aiContext;
 
     public string BasePath => DashboardUrls.StructuredLogsBasePath;
     public string SessionStorageKey => BrowserStorageKeys.StructuredLogsPageState;
@@ -77,9 +72,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
     [Inject]
     public required PauseManager PauseManager { get; init; }
-
-    [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
 
     [Inject]
     public required ComponentTelemetryContextProvider TelemetryContextProvider { get; init; }
@@ -140,9 +132,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
             StateHasChanged();
         }
 
-        _explainErrorsButton?.UpdateHasErrors(ViewModel.HasErrors());
-        _aiContext?.ContextHasChanged();
-
         TelemetryRepository.MarkViewedErrorLogs(ViewModel.ResourceKey);
 
         // Virtualize caps the rendered window itself; the total count drives the scroll height.
@@ -177,7 +166,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-        _aiContext = CreateAIContext();
 
         if (!string.IsNullOrEmpty(TraceId))
         {
@@ -225,25 +213,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         }));
     }
 
-    private AIContext CreateAIContext()
-    {
-        return AIContextProvider.AddNew(nameof(StructuredLogs), c =>
-        {
-            c.BuildIceBreakers = (builder, context) =>
-            {
-                var application = _resources?.SingleOrDefault(a => a.ResourceKey == PageViewModel.SelectedResource.Id?.GetResourceKey());
-                if (application != null)
-                {
-                    builder.StructuredLogs(context, application, ViewModel.GetLogs, ViewModel.HasErrors(), () => ViewModel.GetErrorLogs(int.MaxValue));
-                }
-                else
-                {
-                    builder.StructuredLogs(context, ViewModel.GetLogs, ViewModel.HasErrors(), () => ViewModel.GetErrorLogs(int.MaxValue));
-                }
-            };
-        });
-    }
-
     protected override async Task OnParametersSetAsync()
     {
         if (await this.InitializeViewModelAsync())
@@ -253,8 +222,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
 
         UpdateSubscription();
         UpdateTelemetryProperties();
-
-        _aiContext?.ContextHasChanged();
 
         if (LogEntryId is not null)
         {
@@ -339,15 +306,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
         _elementIdBeforeDetailsViewOpened = null;
     }
 
-    private async Task ExplainErrorsAsync()
-    {
-        await AIContextProvider.LaunchAssistantSidebarAsync(
-            promptContext => PromptContextsBuilder.ErrorStructuredLogs(
-                promptContext,
-                AIPromptsLoc[nameof(AIPrompts.PromptErrorsStructuredLogs)],
-                () => ViewModel.GetErrorLogs(count: int.MaxValue)));
-    }
-
     private async Task OpenFilterAsync(FieldTelemetryFilter? entry)
     {
         await FilterHelpers.OpenFilterAsync(
@@ -425,7 +383,6 @@ public partial class StructuredLogs : IComponentWithTelemetry, IPageWithSessionA
     public void Dispose()
     {
         _cts.Cancel();
-        _aiContext?.Dispose();
         _resourcesSubscription?.Dispose();
         _logsSubscription?.Dispose();
         TelemetryContext.Dispose();

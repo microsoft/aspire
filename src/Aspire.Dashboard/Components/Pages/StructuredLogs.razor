@@ -12,7 +12,6 @@
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<Dialogs> DialogsLoc
-@inject IStringLocalizer<AIPrompts> AIPromptsLoc
 
 <PageTitle>
     <ApplicationName
@@ -61,8 +60,6 @@
         }
 
         <div class="page__header-spacer"></div>
-
-        <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@ViewModel.HasErrors()" />
 
         <SignalsActionsDisplay HandleClearSignal="@ClearStructureLogs"
                               IsPaused="@PauseManager.AreStructuredLogsPaused(out _)"

@@ -3,8 +3,6 @@
 
 using Aspire.Dashboard.Components.Deck;
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Resources;
 using Aspire.Dashboard.Utils;
@@ -24,7 +22,6 @@ public sealed class ResourceMenuBuilder
     private const DeckIconName TracesIcon = DeckIconName.Traces;
     private const DeckIconName MetricsIcon = DeckIconName.Metrics;
     private const DeckIconName LinkIcon = DeckIconName.Link;
-    private const DeckIconName GitHubCopilotIcon = DeckIconName.Sparkle;
     private const DeckIconName ToolboxIcon = DeckIconName.Toolbox;
     private const DeckIconName LinkMultipleIcon = DeckIconName.Link;
     private const DeckIconName BracesIcon = DeckIconName.Braces;
@@ -32,11 +29,8 @@ public sealed class ResourceMenuBuilder
 
     private readonly NavigationManager _navigationManager;
     private readonly TelemetryRepository _telemetryRepository;
-    private readonly IAIContextProvider _aiContextProvider;
     private readonly IStringLocalizer<ControlsStrings> _controlLoc;
     private readonly IStringLocalizer<Resources.Resources> _loc;
-    private readonly IStringLocalizer<Resources.AIAssistant> _aiAssistantLoc;
-    private readonly IStringLocalizer<Resources.AIPrompts> _aiPromptsLoc;
     private readonly DashboardDialogService _dialogService;
 
     /// <summary>
@@ -45,20 +39,14 @@ public sealed class ResourceMenuBuilder
     public ResourceMenuBuilder(
         NavigationManager navigationManager,
         TelemetryRepository telemetryRepository,
-        IAIContextProvider aiContextProvider,
         IStringLocalizer<ControlsStrings> controlLoc,
         IStringLocalizer<Resources.Resources> loc,
-        IStringLocalizer<Resources.AIAssistant> aiAssistantLoc,
-        IStringLocalizer<Resources.AIPrompts> aiPromptsLoc,
         DashboardDialogService dialogService)
     {
         _navigationManager = navigationManager;
         _telemetryRepository = telemetryRepository;
-        _aiContextProvider = aiContextProvider;
         _controlLoc = controlLoc;
         _loc = loc;
-        _aiAssistantLoc = aiAssistantLoc;
-        _aiPromptsLoc = aiPromptsLoc;
         _dialogService = dialogService;
     }
 
@@ -137,23 +125,6 @@ public sealed class ResourceMenuBuilder
                         ContainsSecret = true,
                         FixedFormat = DashboardUIHelpers.PropertiesFormat
                     }).ConfigureAwait(false);
-                }
-            });
-        }
-
-        if (_aiContextProvider.Enabled)
-        {
-            menuItems.Add(new MenuButtonItem
-            {
-                Text = _aiAssistantLoc[nameof(AIAssistant.MenuTextAskGitHubCopilot)],
-                Icon = GitHubCopilotIcon,
-                OnClick = async () =>
-                {
-                    await _aiContextProvider.LaunchAssistantSidebarAsync(
-                        promptContext => PromptContextsBuilder.AnalyzeResource(
-                            promptContext,
-                            _aiPromptsLoc.GetString(nameof(AIPrompts.PromptAnalyzeResource), resource.Name),
-                            resource)).ConfigureAwait(false);
                 }
             });
         }

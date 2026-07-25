@@ -9,8 +9,6 @@ using Aspire.Dashboard.Authentication;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Ghcp;
 using Aspire.Dashboard.Otlp.Storage;
 using Aspire.Dashboard.Utils;
 using Aspire.Otlp.Serialization;
@@ -24,7 +22,6 @@ using Microsoft.AspNetCore.Localization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.Extensions.Localization;
 using Microsoft.Extensions.Options;
-using Microsoft.Extensions.AI;
 
 namespace Aspire.Dashboard;
 
@@ -156,8 +153,7 @@ public static class DashboardEndpointsBuilder
             IDashboardClient dashboardClient,
             IOptionsMonitor<DashboardOptions> options,
             IStringLocalizer<Resources.Login> loginLocalizer,
-            IStringLocalizer<Resources.Dialogs> dialogsLocalizer,
-            IAIContextProvider aiContextProvider) =>
+            IStringLocalizer<Resources.Dialogs> dialogsLocalizer) =>
         {
             var dashboardOptions = options.CurrentValue;
             DeckUser? user = null;
@@ -214,8 +210,7 @@ public static class DashboardEndpointsBuilder
                 Culture: currentCulture.Name,
                 Cultures: [.. GlobalizationHelpers.OrderedLocalizedCultures.Select(culture => new DeckCulture(culture.Name, culture.NativeName.Humanize()))],
                 IsAgentHelpEnabled: isAgentHelpEnabled,
-                AgentHelpMarkdown: agentHelpMarkdown,
-                IsAssistantEnabled: aiContextProvider.Enabled);
+                AgentHelpMarkdown: agentHelpMarkdown);
 
             return Results.Json(config, DeckApiJsonSerializerContext.Default.DeckConfig);
         });
@@ -372,107 +367,6 @@ public static class DashboardEndpointsBuilder
             }
 
             return Results.NoContent();
-        });
-
-        group.MapGet("/assistant/info", async (
-            IAIContextProvider aiContextProvider,
-            CancellationToken cancellationToken) =>
-        {
-            if (!aiContextProvider.Enabled)
-            {
-                return Results.NotFound();
-            }
-
-            var info = await aiContextProvider.GetInfoAsync(cancellationToken).ConfigureAwait(false);
-            if (info.State != GhcpState.Enabled)
-            {
-                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-            }
-
-            var models = info.Models?
-                .Where(model => !string.IsNullOrWhiteSpace(model.Family))
-                .Select(model => new DeckAssistantModel(model.Family!, model.DisplayName ?? model.Name ?? model.Family!))
-                .ToArray() ?? [];
-            return Results.Json(new DeckAssistantInfo(models), DeckApiJsonSerializerContext.Default.DeckAssistantInfo);
-        });
-
-        group.MapPost("/assistant/chat", async (
-            HttpContext httpContext,
-            IAIContextProvider aiContextProvider,
-            ChatClientFactory chatClientFactory,
-            AssistantChatDataContext dataContext) =>
-        {
-            if (!aiContextProvider.Enabled)
-            {
-                return Results.NotFound();
-            }
-
-            var request = await httpContext.Request.ReadFromJsonAsync(
-                DeckApiJsonSerializerContext.Default.DeckAssistantChatRequest,
-                httpContext.RequestAborted).ConfigureAwait(false);
-            if (request is null || request.Messages.Length == 0)
-            {
-                return Results.BadRequest();
-            }
-
-            var info = await aiContextProvider.GetInfoAsync(httpContext.RequestAborted).ConfigureAwait(false);
-            if (info.State != GhcpState.Enabled)
-            {
-                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-            }
-            var model = info.Models?.FirstOrDefault(candidate =>
-                string.Equals(candidate.Family, request.Model, StringComparison.OrdinalIgnoreCase))
-                ?? info.Models?.FirstOrDefault(candidate => !string.IsNullOrWhiteSpace(candidate.Family));
-            if (model?.Family is null)
-            {
-                return Results.StatusCode(StatusCodes.Status503ServiceUnavailable);
-            }
-
-            httpContext.Response.ContentType = "application/x-ndjson";
-            httpContext.Response.Headers.CacheControl = "no-store";
-            httpContext.Response.Headers["X-Accel-Buffering"] = "no";
-            await httpContext.Response.StartAsync(httpContext.RequestAborted).ConfigureAwait(false);
-            await WriteAssistantEventAsync(httpContext, new DeckAssistantEvent("start", null, null)).ConfigureAwait(false);
-
-            var messages = request.Messages.Select(message => new ChatMessage(
-                message.Role switch
-                {
-                    "assistant" => ChatRole.Assistant,
-                    "system" => ChatRole.System,
-                    _ => ChatRole.User
-                },
-                message.Content)).ToList();
-            var tools = new AIFunction[]
-            {
-                AIFunctionFactory.Create(dataContext.GetResourceGraphAsync),
-                AIFunctionFactory.Create(dataContext.GetConsoleLogsAsync),
-                AIFunctionFactory.Create(dataContext.GetTraceAsync),
-                AIFunctionFactory.Create(dataContext.GetStructuredLogsAsync),
-                AIFunctionFactory.Create(dataContext.GetTracesAsync),
-                AIFunctionFactory.Create(dataContext.GetTraceStructuredLogsAsync)
-            };
-            using var responseCancellation = CancellationTokenSource.CreateLinkedTokenSource(httpContext.RequestAborted);
-            try
-            {
-                await AIHelpers.ExecuteStreamingCallAsync(
-                    chatClientFactory.CreateClient(model.Family),
-                    messages,
-                    content => WriteAssistantEventAsync(httpContext, new DeckAssistantEvent("content", content, null)),
-                    _ => Task.CompletedTask,
-                    10 * 1024 * 1024,
-                    tools,
-                    responseCancellation).ConfigureAwait(false);
-                await WriteAssistantEventAsync(httpContext, new DeckAssistantEvent("complete", null, null)).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException) when (httpContext.RequestAborted.IsCancellationRequested)
-            {
-                // Stopping a response closes the browser request; there is no final event to write.
-            }
-            catch (Exception ex)
-            {
-                await WriteAssistantEventAsync(httpContext, new DeckAssistantEvent("error", null, ex.Message)).ConfigureAwait(false);
-            }
-            return Results.Empty;
         });
 
         group.MapGet("/interactions", (HttpContext httpContext, DeckInteractionService interactionService) =>
@@ -952,23 +846,16 @@ public static class DashboardEndpointsBuilder
 
     private static string GetAgentDashboardUrl(DashboardOptions options)
     {
-        var baseUrl = Aspire.Dashboard.Model.Assistant.AIHelpers.GetDashboardUrl(options)?.TrimEnd('/') ?? "http://localhost:18888";
+        var frontendEndpoints = options.Frontend.GetEndpointAddresses();
+        var baseUrl = (options.Frontend.PublicUrl
+            ?? frontendEndpoints.FirstOrDefault(endpoint => string.Equals(endpoint.Scheme, "https", StringComparison.Ordinal))?.ToString()
+            ?? frontendEndpoints.FirstOrDefault(endpoint => string.Equals(endpoint.Scheme, "http", StringComparison.Ordinal))?.ToString()
+            ?? "http://localhost:18888").TrimEnd('/');
         return options.Api.AuthMode is ApiAuthMode.ApiKey &&
                options.Frontend.AuthMode is FrontendAuthMode.BrowserToken &&
                options.Frontend.BrowserToken is { } token
             ? $"{baseUrl}/login?t={token}"
             : baseUrl;
-    }
-
-    private static async Task WriteAssistantEventAsync(HttpContext httpContext, DeckAssistantEvent assistantEvent)
-    {
-        await JsonSerializer.SerializeAsync(
-            httpContext.Response.Body,
-            assistantEvent,
-            DeckApiJsonSerializerContext.Default.DeckAssistantEvent,
-            httpContext.RequestAborted).ConfigureAwait(false);
-        await httpContext.Response.WriteAsync("\n", httpContext.RequestAborted).ConfigureAwait(false);
-        await httpContext.Response.Body.FlushAsync(httpContext.RequestAborted).ConfigureAwait(false);
     }
 
     private static async Task StreamDeckConsoleLogsAsync(

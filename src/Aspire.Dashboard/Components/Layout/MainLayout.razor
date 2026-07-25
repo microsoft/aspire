@@ -1,7 +1,6 @@
 ﻿@using Aspire.Dashboard.Components.CustomIcons
 @using Aspire.Dashboard.Components.Interactions
 @using Aspire.Dashboard.Components.Dialogs
-@using Aspire.Dashboard.Model.Assistant
 @using Aspire.Dashboard.Resources
 @inject IStringLocalizer<Dialogs> DialogsLoc
 @inherits LayoutComponentBase
@@ -14,20 +13,13 @@
             <DeckSidebar />
         </div>
         <div class="app__topbar">
-            <DeckTopBar IsAiAssistantEnabled="AIContextProvider.Enabled"
-                        IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
-                        IsAssistantActive="@(AIContextProvider.AssistantChatViewModel is not null && AIContextProvider.ShowAssistantSidebarDialog)"
+            <DeckTopBar IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
                         OnHelp="@ToggleHelpPaneAsync"
                         OnAIAgents="@LaunchAIAgentsAsync"
-                        OnAssistant="@(() => LaunchAssistantAsync())"
                         OnNotifications="@LaunchNotificationsAsync"
                         OnSettings="@ToggleSettingsPaneAsync" />
         </div>
         <main class="app__content">
-            @if (AIContextProvider.AssistantChatViewModel is {} vm && AIContextProvider.ShowAssistantSidebarDialog)
-            {
-                <Aspire.Dashboard.Components.Dialogs.AssistantSidebarDialog Content="@(new AssistantDialogViewModel { Chat = vm, ReturnFocusElementId = _assistantReturnFocusElementId })" />
-            }
             @Body
             @if (_showSettingsPane)
             {
@@ -78,12 +70,10 @@ else
 
         <MobileNavMenu
             IsNavMenuOpen="_isNavMenuOpen"
-            IsAIEnabled="@AIContextProvider.Enabled"
             CloseNavMenu="@CloseMobileNavMenu"
             LaunchHelpAsync="@LaunchHelpAsync"
             LaunchAIAgentsAsync="@LaunchAIAgentsAsync"
             IsAgentHelpEnabled="@(Options.CurrentValue.UI.DisableAgentHelp != true)"
-            LaunchAIAssistantAsync="@LaunchAssistantAsync"
             LaunchNotificationsAsync="@LaunchNotificationsAsync"
             LaunchSettingsAsync="@LaunchSettingsAsync" />
 

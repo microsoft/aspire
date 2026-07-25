@@ -2,13 +2,10 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using System.Globalization;
-using Aspire.Dashboard.Components.Controls;
 using Aspire.Dashboard.Components.Dialogs;
 using Aspire.Dashboard.Configuration;
 using Aspire.Dashboard.Extensions;
 using Aspire.Dashboard.Model;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Model.Otlp;
 using Aspire.Dashboard.Otlp.Model;
@@ -27,7 +24,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 {
     private SelectViewModel<ResourceTypeDetails> _allResource = null!;
 
-    private ExplainErrorsButton? _explainErrorsButton;
     private int _totalItemsCount;
     private bool _hasLoaded;
     private List<SelectViewModel<SpanType>> _spanTypes = default!;
@@ -37,7 +33,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     private Subscription? _tracesSubscription;
     private string _filter = string.Empty;
     private Virtualize<OtlpTrace>? _tracesList;
-    private AIContext? _aiContext;
 
     public string SessionStorageKey => BrowserStorageKeys.TracesPageState;
     public string BasePath => DashboardUrls.TracesBasePath;
@@ -72,9 +67,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     [Inject]
     public required ISessionStorage SessionStorage { get; set; }
-
-    [Inject]
-    public required IAIContextProvider AIContextProvider { get; init; }
 
     [Inject]
     public required PauseManager PauseManager { get; init; }
@@ -121,7 +113,7 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     // Bridges Blazor's Virtualize with the telemetry repository's paged trace data. The repository
     // streams traces lazily (up to the configured max), so the provider is invoked as the user
-    // scrolls. Side effects (limit message, total count, AI context) mirror the previous data grid.
+    // scrolls. Side effects (limit message and total count) mirror the previous data grid.
     private async ValueTask<ItemsProviderResult<OtlpTrace>> GetVirtualizedData(ItemsProviderRequest request)
     {
         TracesViewModel.StartIndex = request.StartIndex;
@@ -143,9 +135,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
             // Telemetry could have been cleared from the dashboard. Automatically remove full message on data update.
             message.Close();
         }
-
-        _explainErrorsButton?.UpdateHasErrors(TracesViewModel.HasErrors());
-        _aiContext?.ContextHasChanged();
 
         // Refresh the header subtitle and empty state once the count is known. Done via InvokeAsync
         // because the provider runs during Virtualize's render pass.
@@ -177,7 +166,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
     protected override void OnInitialized()
     {
         TelemetryContextProvider.Initialize(TelemetryContext);
-        _aiContext = CreateAIContext();
 
         _allResource = new SelectViewModel<ResourceTypeDetails> { Id = null, Name = ControlsStringsLoc[name: nameof(ControlsStrings.LabelAll)] };
         _spanTypes = SpanType.CreateKnownSpanTypes(ControlsStringsLoc);
@@ -201,7 +189,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         TracesViewModel.ResourceKey = PageViewModel.SelectedResource.Id?.GetResourceKey();
         UpdateSubscription();
 
-        _aiContext?.ContextHasChanged();
     }
 
     private void UpdateResources()
@@ -273,7 +260,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
 
     public void Dispose()
     {
-        _aiContext?.Dispose();
         _resourcesSubscription?.Dispose();
         _tracesSubscription?.Dispose();
     }
@@ -361,15 +347,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
         await RefreshDataAsync();
     }
 
-    private async Task ExplainErrorsAsync()
-    {
-        await AIContextProvider.LaunchAssistantSidebarAsync(
-            promptContext => PromptContextsBuilder.ErrorTraces(
-                promptContext,
-                AIPromptsLoc[nameof(AIPrompts.PromptErrorTraces)],
-                () => TracesViewModel.GetErrorTraces(count: int.MaxValue)));
-    }
-
     private Task ClearTraces(ResourceKey? key)
     {
         TelemetryRepository.ClearTraces(key);
@@ -428,25 +405,6 @@ public partial class Traces : IComponentWithTelemetry, IPageWithSessionAndUrlSta
                 }
                 return latestTrace.Spans.Where(span => GenAIHelpers.HasGenAIAttribute(span.Attributes)).ToList();
             });
-    }
-
-    private AIContext CreateAIContext()
-    {
-        return AIContextProvider.AddNew(nameof(Traces), c =>
-        {
-            c.BuildIceBreakers = (builder, context) =>
-            {
-                var resource = _resources?.SingleOrDefault(a => a.ResourceKey == PageViewModel.SelectedResource.Id?.GetResourceKey());
-                if (resource != null)
-                {
-                    builder.Traces(context, resource, TracesViewModel.GetTraces, TracesViewModel.HasErrors(), () => TracesViewModel.GetErrorTraces(int.MaxValue));
-                }
-                else
-                {
-                    builder.Traces(context, TracesViewModel.GetTraces, TracesViewModel.HasErrors(), () => TracesViewModel.GetErrorTraces(int.MaxValue));
-                }
-            };
-        });
     }
 
     public class TracesPageViewModel

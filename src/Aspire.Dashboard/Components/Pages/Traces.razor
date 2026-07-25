@@ -6,7 +6,6 @@
 @inject IStringLocalizer<Dashboard.Resources.Traces> Loc
 @inject IStringLocalizer<StructuredFiltering> FilterLoc
 @inject IStringLocalizer<ControlsStrings> ControlsStringsLoc
-@inject IStringLocalizer<AIPrompts> AIPromptsLoc
 @inject IStringLocalizer<Dialogs> DialogsLoc
 
 @implements IDisposable
@@ -63,8 +62,6 @@
                                       Title="@FilterLoc[nameof(StructuredFiltering.Filters)]" />
                 </FluentCounterBadge>
             }
-
-            <ExplainErrorsButton @ref="_explainErrorsButton" OnClick="ExplainErrorsAsync" HasErrors="@TracesViewModel.HasErrors()" />
 
             <SignalsActionsDisplay HandleClearSignal="@ClearTraces"
                                    IsPaused="@PauseManager.AreTracesPaused(out _)"

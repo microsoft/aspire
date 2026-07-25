@@ -17,8 +17,7 @@ internal sealed record DeckConfig(
     string Culture,
     DeckCulture[] Cultures,
     bool IsAgentHelpEnabled,
-    string? AgentHelpMarkdown,
-    bool IsAssistantEnabled);
+    string? AgentHelpMarkdown);
 
 internal sealed record DeckUser(
     string Name,
@@ -27,26 +26,6 @@ internal sealed record DeckUser(
 internal sealed record DeckCulture(
     string Name,
     string DisplayName);
-
-internal sealed record DeckAssistantInfo(
-    DeckAssistantModel[] Models);
-
-internal sealed record DeckAssistantModel(
-    string Family,
-    string DisplayName);
-
-internal sealed record DeckAssistantChatRequest(
-    DeckAssistantMessage[] Messages,
-    string? Model);
-
-internal sealed record DeckAssistantMessage(
-    string Role,
-    string Content);
-
-internal sealed record DeckAssistantEvent(
-    string Type,
-    string? Content,
-    string? Message);
 
 internal sealed record DeckManageDataResponse(
     DeckManageDataResource[] Resources,

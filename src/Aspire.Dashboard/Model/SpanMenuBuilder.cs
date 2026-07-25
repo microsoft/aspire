@@ -2,8 +2,6 @@
 // The .NET Foundation licenses this file to you under the MIT license.
 
 using Aspire.Dashboard.Components.Dialogs;
-using Aspire.Dashboard.Model.Assistant;
-using Aspire.Dashboard.Model.Assistant.Prompts;
 using Aspire.Dashboard.Model.GenAI;
 using Aspire.Dashboard.Otlp.Model;
 using Aspire.Dashboard.Otlp.Storage;
@@ -22,15 +20,11 @@ public sealed class SpanMenuBuilder
 {
     private const DeckIconName ViewDetailsIcon = DeckIconName.Info;
     private const DeckIconName StructuredLogsIcon = DeckIconName.Logs;
-    private const DeckIconName GitHubCopilotIcon = DeckIconName.Sparkle;
     private const DeckIconName GenAIIcon = DeckIconName.Sparkle;
     private const DeckIconName BracesIcon = DeckIconName.Braces;
 
     private readonly IStringLocalizer<ControlsStrings> _controlsLoc;
-    private readonly IStringLocalizer<AIAssistant> _aiAssistantLoc;
-    private readonly IStringLocalizer<AIPrompts> _aiPromptsLoc;
     private readonly NavigationManager _navigationManager;
-    private readonly IAIContextProvider _aiContextProvider;
     private readonly DashboardDialogService _dialogService;
     private readonly TelemetryRepository _telemetryRepository;
     private readonly IOutgoingPeerResolver[] _outgoingPeerResolvers;
@@ -40,19 +34,13 @@ public sealed class SpanMenuBuilder
     /// </summary>
     public SpanMenuBuilder(
         IStringLocalizer<ControlsStrings> controlsLoc,
-        IStringLocalizer<AIAssistant> aiAssistantLoc,
-        IStringLocalizer<AIPrompts> aiPromptsLoc,
         NavigationManager navigationManager,
-        IAIContextProvider aiContextProvider,
         DashboardDialogService dialogService,
         TelemetryRepository telemetryRepository,
         IEnumerable<IOutgoingPeerResolver> outgoingPeerResolvers)
     {
         _controlsLoc = controlsLoc;
-        _aiAssistantLoc = aiAssistantLoc;
-        _aiPromptsLoc = aiPromptsLoc;
         _navigationManager = navigationManager;
-        _aiContextProvider = aiContextProvider;
         _dialogService = dialogService;
         _telemetryRepository = telemetryRepository;
         _outgoingPeerResolvers = outgoingPeerResolvers.ToArray();
@@ -122,21 +110,5 @@ public sealed class SpanMenuBuilder
             }
         });
 
-        if (_aiContextProvider.Enabled)
-        {
-            menuItems.Add(new MenuButtonItem
-            {
-                Text = _aiAssistantLoc[nameof(AIAssistant.MenuTextAskGitHubCopilot)],
-                Icon = GitHubCopilotIcon,
-                OnClick = async () =>
-                {
-                    await _aiContextProvider.LaunchAssistantSidebarAsync(
-                        promptContext => PromptContextsBuilder.AnalyzeSpan(
-                            promptContext,
-                            _aiPromptsLoc.GetString(nameof(AIPrompts.PromptAnalyzeSpan), OtlpHelpers.ToShortenedId(span.SpanId)),
-                            span)).ConfigureAwait(false);
-                }
-            });
-        }
     }
 }

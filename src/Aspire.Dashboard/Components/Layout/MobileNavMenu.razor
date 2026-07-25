@@ -44,9 +44,6 @@
     public required bool IsNavMenuOpen { get; set; }
 
     [Parameter, EditorRequired]
-    public required bool IsAIEnabled { get; set; }
-
-    [Parameter, EditorRequired]
     public required Action CloseNavMenu { get; set; }
 
     [Parameter, EditorRequired]
@@ -57,9 +54,6 @@
 
     [Parameter, EditorRequired]
     public required bool IsAgentHelpEnabled { get; set; }
-
-    [Parameter, EditorRequired]
-    public required Func<Task> LaunchAIAssistantAsync { get; set; }
 
     [Parameter, EditorRequired]
     public required Func<Task> LaunchNotificationsAsync { get; set; }
