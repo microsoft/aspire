@@ -451,6 +451,7 @@ public static partial class JavaScriptHostingExtensions
         annotation.Mode = DenoCommandMode.Run;
         annotation.ModeSet = true;
         annotation.TaskName = null;
+        RemoveDenoServeEndpoint(builder, annotation);
         return builder;
     }
 
@@ -471,7 +472,26 @@ public static partial class JavaScriptHostingExtensions
         annotation.Mode = DenoCommandMode.Task;
         annotation.ModeSet = true;
         annotation.TaskName = taskName;
+        RemoveDenoServeEndpoint(builder, annotation);
         return builder;
+    }
+
+    /// <summary>
+    /// Withdraws the endpoint <see cref="WithDenoServe(IResourceBuilder{DenoAppResource})"/> created when a later
+    /// mode selector wins, so only <c>deno serve</c> publishes an HTTP binding.
+    /// </summary>
+    /// <remarks>
+    /// Only the tracked instance is removed. An endpoint the caller added themselves (for example
+    /// <c>WithHttpEndpoint</c> before selecting a mode) is left alone, because withdrawing it would silently
+    /// discard explicit configuration.
+    /// </remarks>
+    private static void RemoveDenoServeEndpoint(IResourceBuilder<DenoAppResource> builder, DenoCommandLineAnnotation annotation)
+    {
+        if (annotation.ServeEndpoint is { } endpoint)
+        {
+            builder.Resource.Annotations.Remove(endpoint);
+            annotation.ServeEndpoint = null;
+        }
     }
 
     /// <summary>Selects the <c>deno serve &lt;entrypoint&gt;</c> mode for serving an HTTP entrypoint.</summary>
@@ -490,6 +510,13 @@ public static partial class JavaScriptHostingExtensions
         {
             builder.WithEndpoint("http", e => e.TargetPort ??= GetNextDenoServeDefaultPort(builder), createIfNotExists: false);
         }
+
+        // Remember the endpoint so switching modes later can withdraw it. Without this, chaining
+        // WithDenoServe().WithDenoTask("worker") runs the task while still publishing an HTTP binding and
+        // injecting PORT, so service discovery advertises an endpoint nothing listens on.
+        annotation.ServeEndpoint = builder.Resource.Annotations
+            .OfType<EndpointAnnotation>()
+            .LastOrDefault(e => string.Equals(e.Name, "http", StringComparisons.EndpointAnnotationName));
 
         return builder;
     }
@@ -1036,6 +1063,74 @@ public static partial class JavaScriptHostingExtensions
         }
     }
 
+    // Raw runtime flags that "deno cache" accepts AND that govern module resolution, so omitting them from the
+    // build-time cache step changes what gets downloaded (or whether the download can happen at all).
+    //
+    // Verified against Deno 2.9.0 by running "deno cache <flag> m.ts": permission, inspector, watch, and
+    // --cached-only flags are rejected outright ("error: unexpected argument"), so the forwarding set has to be an
+    // allowlist. Forwarding deno.RuntimeArgs wholesale would break "docker build" for the very common "-A".
+    //
+    // Two behaviors that shape the split below, both verified on 2.9.0:
+    //  * --frozen fails with "the argument '--frozen[=<BOOLEAN>]' cannot be used multiple times", so flags that
+    //    BuildDenoCacheCommand already emits are never forwarded. Raw duplicates of the managed resolution flags
+    //    (--config/--import-map/--lock/--no-lock/--node-modules-dir) are unreachable here because
+    //    ThrowIfRuntimeArgsConflictWithManagedFlags rejects them earlier whenever the managed setter was used.
+    //  * Despite "--lock [<FILE>]" being documented as an optional value, clap consumes the following token:
+    //    "deno cache --lock m.ts" fails with "the following required arguments were not provided: <file>...".
+    //    A bare trailing --lock would therefore swallow the entrypoint, so it is only forwarded with a value.
+    private static readonly string[] s_denoCacheValueFlags =
+        ["--cert", "--conditions", "--config", "-c", "--import-map", "--lock", "--minimum-dependency-age"];
+
+    private static readonly string[] s_denoCacheStandaloneFlags =
+        [
+            "--no-remote", "--no-npm", "--no-config", "--no-lock", "--vendor", "--allow-import", "-I",
+            "--deny-import", "--allow-scripts", "--node-modules-dir", "--node-modules-linker", "--env-file"
+        ];
+
+    private static IEnumerable<string> GetCacheCompatibleRuntimeArgs(List<string> runtimeArgs)
+    {
+        for (var index = 0; index < runtimeArgs.Count; index++)
+        {
+            var arg = runtimeArgs[index];
+            var name = arg.AsSpan();
+            var separator = name.IndexOf('=');
+            var hasInlineValue = separator >= 0;
+            if (hasInlineValue)
+            {
+                name = name[..separator];
+            }
+
+            var nameText = name.ToString();
+            if (Array.IndexOf(s_denoCacheStandaloneFlags, nameText) >= 0)
+            {
+                yield return arg;
+                continue;
+            }
+
+            if (Array.IndexOf(s_denoCacheValueFlags, nameText) < 0)
+            {
+                // Anything else is a run-time concern (permissions, inspector, watch) that "deno cache" rejects,
+                // or a bare value belonging to such a flag. Either way it must not reach the cache command.
+                continue;
+            }
+
+            if (hasInlineValue)
+            {
+                yield return arg;
+                continue;
+            }
+
+            // Only forward the space-separated spelling when the value is actually present, so a trailing flag
+            // cannot consume the entrypoint that BuildDenoCacheCommand appends after these arguments.
+            if (index + 1 < runtimeArgs.Count && !runtimeArgs[index + 1].StartsWith('-'))
+            {
+                yield return arg;
+                yield return runtimeArgs[index + 1];
+                index++;
+            }
+        }
+    }
+
     private static string BuildDenoCacheCommand(IResource resource, string scriptPath, string workingDirectory)
     {
         var args = new List<string> { "deno", "cache" };
@@ -1052,6 +1147,7 @@ public static partial class JavaScriptHostingExtensions
             }
 
             args.AddRange(GetResolutionFlags(deno, includeImportMap: deno.Mode != DenoCommandMode.Task));
+            args.AddRange(GetCacheCompatibleRuntimeArgs(deno.RuntimeArgs));
             args.AddRange(deno.UnstableFlags);
             if (ShouldUseFrozenLock(deno, workingDirectory))
             {

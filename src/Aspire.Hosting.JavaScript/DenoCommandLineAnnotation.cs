@@ -95,6 +95,12 @@ internal sealed class DenoCommandLineAnnotation : IResourceAnnotation
     /// <summary>Whether a fluent mode method explicitly selected <see cref="Mode"/>.</summary>
     public bool ModeSet { get; set; }
 
+    /// <summary>
+    /// The endpoint <c>WithDenoServe</c> created, tracked so a later mode selector can remove that endpoint
+    /// without disturbing endpoints the caller configured themselves.
+    /// </summary>
+    public EndpointAnnotation? ServeEndpoint { get; set; }
+
     /// <summary>The task name to invoke when <see cref="Mode"/> is <see cref="DenoCommandMode.Task"/>.</summary>
     public string? TaskName { get; set; }
 

@@ -285,6 +285,73 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public async Task VerifyDockerfile_CachePropagatesResolutionGoverningRuntimeArgs()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "main.ts"), "console.log(1);");
+
+        var app = builder.AddDenoApp("js", appDir, "main.ts")
+            // --cert is required to fetch a private HTTPS module and --no-remote forbids network resolution.
+            // Both are honoured by `deno cache`, so dropping them either breaks `docker build` or silently
+            // ignores the caller's policy at build time.
+            .WithDenoRuntimeArgs("--allow-net", "--cert", "ca.pem", "--no-remote", "--vendor=true");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        // --allow-net is a run-only permission that `deno cache` rejects outright, so it must not be forwarded.
+        Assert.Equal(
+            "RUN deno cache --cert ca.pem --no-remote --vendor=true main.ts",
+            GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_CacheOmitsRuntimeArgsDenoCacheRejects()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "main.ts"), "console.log(1);");
+
+        var app = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoRuntimeArgs("-A", "--allow-read", "/data", "--cached-only");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        // Forwarding these would fail the build: `deno cache -A` reports "error: unexpected argument".
+        // "/data" is a bare value belonging to --allow-read and must not leak through as a module to cache.
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal("RUN deno cache main.ts", GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_CacheOmitsTrailingValueFlagThatWouldSwallowTheEntrypoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "main.ts"), "console.log(1);");
+
+        var app = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoRuntimeArgs("--lock");
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        // `deno cache --lock main.ts` consumes main.ts as the lock file and then fails with
+        // "the following required arguments were not provided: <file>...", so a bare trailing --lock is dropped.
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal("RUN deno cache main.ts", GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+    }
+
+    [Fact]
     public async Task VerifyDockerfile_BuildScriptWithSpacesIsQuotedForDeno()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);
@@ -731,6 +798,62 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
             .WithDenoServe();
 
         Assert.Null(denoApp.Resource.GetEndpoint("http").EndpointAnnotation.TargetPort);
+    }
+
+    [Theory]
+    [InlineData("task")]
+    [InlineData("run")]
+    public void WithDenoServe_WithdrawsHttpEndpointWhenAnotherModeWins(string finalMode)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "server.ts").WithDenoServe();
+        _ = finalMode == "task" ? denoApp.WithDenoTask("worker") : denoApp.WithDenoRun();
+
+        // A non-serve mode does not bind HTTP, so leaving the endpoint behind would advertise a binding through
+        // service discovery for a process that never listens, and would still inject PORT.
+        Assert.Empty(denoApp.Resource.Annotations.OfType<EndpointAnnotation>());
+    }
+
+    [Fact]
+    public void WithDenoServe_RestoresHttpEndpointWhenServeWinsAgain()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "server.ts")
+            .WithDenoServe()
+            .WithDenoTask("worker")
+            .WithDenoServe();
+
+        var endpoint = Assert.Single(denoApp.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal("http", endpoint.Name);
+        Assert.Equal("PORT", endpoint.TargetPortEnvironmentVariable);
+    }
+
+    [Fact]
+    public void WithDenoTask_KeepsCallerConfiguredHttpEndpoint()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        // The endpoint here is the caller's, not one WithDenoServe created, so switching modes must not remove it.
+        var denoApp = builder.AddDenoApp("js", appDir, "server.ts")
+            .WithHttpEndpoint(name: "api")
+            .WithDenoTask("worker");
+
+        var endpoint = Assert.Single(denoApp.Resource.Annotations.OfType<EndpointAnnotation>());
+        Assert.Equal("api", endpoint.Name);
     }
 
     [Fact]
