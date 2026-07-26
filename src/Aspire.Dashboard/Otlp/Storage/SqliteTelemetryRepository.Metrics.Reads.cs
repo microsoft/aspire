@@ -174,6 +174,96 @@ public sealed partial class SqliteTelemetryRepository
             throw new ArgumentOutOfRangeException(nameof(dataPointInterval), interval, "The metric data point interval must be greater than zero.");
         }
 
+        var dimensions = GetMetricDimensions(
+            connection,
+            instruments,
+            dimensionFilters,
+            knownAttributeValues,
+            out hasOverflow);
+        if (dimensions.Count == 0)
+        {
+            return [];
+        }
+
+        var results = dimensions
+            .Select(dimension => dimension.Scope)
+            .ToList();
+        if (startTime is null || endTime is null)
+        {
+            return results;
+        }
+
+        var queryParameters = new DynamicParameters();
+        queryParameters.Add("EndTicks", endTime.Value.Ticks);
+        queryParameters.Add("PointIntervalTicks", dataPointInterval?.Ticks ?? 0);
+        var dimensionQueryRangesCteSql = CreateMetricDimensionQueryRangesCte(
+            dimensions,
+            dimensionCursors,
+            startTime,
+            queryParameters);
+        var metricPointsCteSql = dataPointInterval is null ? FullFidelityMetricPointsCteSql : s_rolledUpMetricPointsCteSql;
+        var pointRecords = connection.Query<MetricPointDataRecord>($"""
+            WITH {dimensionQueryRangesCteSql},
+            {metricPointsCteSql}
+            SELECT
+                p.point_id AS PointId,
+                p.dimension_id AS DimensionId,
+                p.point_type AS PointType,
+                p.start_time_ticks AS StartTimeTicks,
+                p.end_time_ticks AS EndTimeTicks,
+                p.repeat_count AS RepeatCount,
+                p.integer_value AS IntegerValue,
+                p.double_value AS DoubleValue,
+                p.histogram_sum AS HistogramSum,
+                p.histogram_count AS HistogramCount,
+                stored.bucket_counts AS BucketCounts,
+                stored.explicit_bounds AS ExplicitBounds
+            FROM rolled_up_metric_points p
+            JOIN telemetry_metric_points stored ON stored.point_id = p.point_id
+            ORDER BY p.dimension_id, p.start_time_ticks, p.point_id;
+            """, queryParameters).AsList();
+        var points = pointRecords.ToLookup(record => record.DimensionId);
+        var exemplars = includeExemplars
+            ? MaterializeMetricExemplars(
+                connection,
+                dimensionQueryRangesCteSql,
+                queryParameters,
+                dataPointInterval,
+                pointRecords,
+                populateExemplarAttributes)
+            : Array.Empty<KeyValuePair<long, MetricsExemplar>>().ToLookup(pair => pair.Key, pair => pair.Value);
+
+        for (var dimensionIndex = 0; dimensionIndex < dimensions.Count; dimensionIndex++)
+        {
+            var dimensionId = dimensions[dimensionIndex].DimensionId;
+            var dimension = results[dimensionIndex];
+            foreach (var point in points[dimensionId])
+            {
+                MetricValueBase value = point.PointType switch
+                {
+                    LongPointType => new MetricValue<long>(point.IntegerValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
+                    DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
+                    HistogramPointType => CreateHistogramValue(point),
+                    _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
+                };
+                if (point.PointType != HistogramPointType)
+                {
+                    value.Count = checked((ulong)point.RepeatCount);
+                }
+                value.Exemplars.AddRange(exemplars[point.PointId]);
+                dimension.Values.Add(value);
+            }
+        }
+        return results;
+    }
+
+    private List<StoredMetricDimension> GetMetricDimensions(
+        SqliteConnection connection,
+        IReadOnlyList<CachedInstrument> instruments,
+        IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters,
+        Dictionary<string, List<string?>> knownAttributeValues,
+        out bool hasOverflow)
+    {
         var dimensionRecords = connection.Query<MetricDimensionAttributeRecord>("""
             SELECT
                 d.dimension_id AS DimensionId,
@@ -214,87 +304,14 @@ public sealed partial class SqliteTelemetryRepository
             .ToLookup(record => record.OwnerId);
         PopulateKnownAttributeValues(dimensionIds, attributes, knownAttributeValues);
 
-        var selectedDimensionIds = dimensionIds
+        return dimensionIds
             .Where(dimensionId => MatchesDimensionFilters(attributes[dimensionId], dimensionFilters))
-            .ToArray();
-        if (selectedDimensionIds.Length == 0)
-        {
-            return [];
-        }
-
-        var results = selectedDimensionIds
-            .Select(dimensionId => new DimensionScope(
-                _otlpContext.Options.MaxMetricsCount,
-                attributes[dimensionId].Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray()))
+            .Select(dimensionId => new StoredMetricDimension(
+                dimensionId,
+                new DimensionScope(
+                    _otlpContext.Options.MaxMetricsCount,
+                    attributes[dimensionId].Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue)).ToArray())))
             .ToList();
-        if (startTime is null || endTime is null)
-        {
-            return results;
-        }
-
-        var queryParameters = new DynamicParameters();
-        queryParameters.Add("EndTicks", endTime.Value.Ticks);
-        queryParameters.Add("PointIntervalTicks", dataPointInterval?.Ticks ?? 0);
-        var dimensionQueryRangesCteSql = CreateMetricDimensionQueryRangesCte(
-            selectedDimensionIds,
-            attributes,
-            dimensionCursors,
-            startTime,
-            queryParameters);
-        var metricPointsCteSql = dataPointInterval is null ? FullFidelityMetricPointsCteSql : s_rolledUpMetricPointsCteSql;
-        var pointRecords = connection.Query<MetricPointDataRecord>($"""
-            WITH {dimensionQueryRangesCteSql},
-            {metricPointsCteSql}
-            SELECT
-                p.point_id AS PointId,
-                p.dimension_id AS DimensionId,
-                p.point_type AS PointType,
-                p.start_time_ticks AS StartTimeTicks,
-                p.end_time_ticks AS EndTimeTicks,
-                p.repeat_count AS RepeatCount,
-                p.integer_value AS IntegerValue,
-                p.double_value AS DoubleValue,
-                p.histogram_sum AS HistogramSum,
-                p.histogram_count AS HistogramCount,
-                stored.bucket_counts AS BucketCounts,
-                stored.explicit_bounds AS ExplicitBounds
-            FROM rolled_up_metric_points p
-            JOIN telemetry_metric_points stored ON stored.point_id = p.point_id
-            ORDER BY p.dimension_id, p.start_time_ticks, p.point_id;
-            """, queryParameters).AsList();
-        var points = pointRecords.ToLookup(record => record.DimensionId);
-        var exemplars = includeExemplars
-            ? MaterializeMetricExemplars(
-                connection,
-                dimensionQueryRangesCteSql,
-                queryParameters,
-                dataPointInterval,
-                pointRecords,
-                populateExemplarAttributes)
-            : Array.Empty<KeyValuePair<long, MetricsExemplar>>().ToLookup(pair => pair.Key, pair => pair.Value);
-
-        for (var dimensionIndex = 0; dimensionIndex < selectedDimensionIds.Length; dimensionIndex++)
-        {
-            var dimensionId = selectedDimensionIds[dimensionIndex];
-            var dimension = results[dimensionIndex];
-            foreach (var point in points[dimensionId])
-            {
-                MetricValueBase value = point.PointType switch
-                {
-                    LongPointType => new MetricValue<long>(point.IntegerValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
-                    DoublePointType => new MetricValue<double>(point.DoubleValue!.Value, new DateTime(point.StartTimeTicks, DateTimeKind.Utc), new DateTime(point.EndTimeTicks, DateTimeKind.Utc)),
-                    HistogramPointType => CreateHistogramValue(point),
-                    _ => throw new InvalidOperationException($"Unknown metric point type '{point.PointType}'.")
-                };
-                if (point.PointType != HistogramPointType)
-                {
-                    value.Count = checked((ulong)point.RepeatCount);
-                }
-                value.Exemplars.AddRange(exemplars[point.PointId]);
-                dimension.Values.Add(value);
-            }
-        }
-        return results;
     }
 
     private static bool IsOverflowDimension(IEnumerable<OwnedAttributeRecord> attributes)
@@ -306,26 +323,23 @@ public sealed partial class SqliteTelemetryRepository
     }
 
     private static string CreateMetricDimensionQueryRangesCte(
-        IReadOnlyList<long> selectedDimensionIds,
-        ILookup<long, OwnedAttributeRecord> attributes,
+        IReadOnlyList<StoredMetricDimension> dimensions,
         IReadOnlyList<MetricDimensionCursor> dimensionCursors,
         DateTime? defaultStartTime,
         DynamicParameters queryParameters)
     {
         var sql = new StringBuilder("metric_dimension_query_ranges(dimension_id, start_time_ticks) AS (VALUES ");
-        for (var i = 0; i < selectedDimensionIds.Count; i++)
+        for (var i = 0; i < dimensions.Count; i++)
         {
             if (i > 0)
             {
                 sql.Append(", ");
             }
 
-            var dimensionId = selectedDimensionIds[i];
-            var dimensionAttributes = attributes[dimensionId];
+            var dimension = dimensions[i];
             var cursor = dimensionCursors.FirstOrDefault(cursor =>
-                cursor.Attributes.Length == dimensionAttributes.Count() &&
-                cursor.Attributes.SequenceEqual(dimensionAttributes.Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue))));
-            queryParameters.Add($"DimensionId{i}", dimensionId);
+                cursor.Attributes.SequenceEqual(dimension.Scope.Attributes));
+            queryParameters.Add($"DimensionId{i}", dimension.DimensionId);
             queryParameters.Add($"DimensionStartTicks{i}", cursor?.StartTime.Ticks ?? defaultStartTime?.Ticks ?? 0);
             sql.Append(CultureInfo.InvariantCulture, $"(@DimensionId{i}, @DimensionStartTicks{i})");
         }
@@ -489,6 +503,8 @@ public sealed partial class SqliteTelemetryRepository
         public required string SpanId { get; init; }
         public required string TraceId { get; init; }
     }
+
+    private sealed record StoredMetricDimension(long DimensionId, DimensionScope Scope);
 
     private readonly record struct MetricPointKey(long DimensionId, int PointType, long StartTimeTicks);
 }
