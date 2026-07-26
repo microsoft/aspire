@@ -875,6 +875,66 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         return await ArgumentEvaluator.GetArgumentListAsync(denoResource);
     }
 
+    [Theory]
+    [InlineData("--port", "3000")]
+    [InlineData("--port=3000", null)]
+    [InlineData("--host", "127.0.0.1")]
+    [InlineData("--host=127.0.0.1", null)]
+    public async Task WithDenoServe_RuntimeArgsOverridingHostOrPort_Throws(string flag, string? value)
+    {
+        // Deno rejects a repeated --host/--port ("cannot be used multiple times"), and serve mode always emits
+        // the managed pair, so the resource would fail to start with a raw Deno parser error.
+        string[] runtimeArgs = value is null ? [flag] : [flag, value];
+
+        var ex = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => GetDenoArgsAsync(d => d.WithDenoServe().WithDenoRuntimeArgs(runtimeArgs)));
+
+        Assert.Equal(
+            $"The argument '{flag}' cannot be configured with WithDenoRuntimeArgs because WithDenoServe already emits --host and --port from the resource's endpoint, and Deno rejects those arguments when they are supplied more than once. Configure the endpoint instead, for example WithHttpEndpoint(port: 5005).",
+            ex.Message);
+    }
+
+    [Fact]
+    public async Task WithDenoServe_UnrelatedRuntimeArgsArePreserved()
+    {
+        var args = await GetDenoArgsAsync(d => d
+            .WithDenoServe()
+            .WithHttpEndpoint(targetPort: 5173)
+            .WithDenoRuntimeArgs("--parallel"), entrypoint: "server.ts");
+
+        // Runtime args are appended after the managed --host/--port pair, before the entrypoint.
+        Assert.Collection(args,
+            a => Assert.Equal("serve", a),
+            a => Assert.Equal("-A", a),
+            a => Assert.Equal("--host", a),
+            a => Assert.Equal("localhost", a),
+            a => Assert.Equal("--port", a),
+            a => Assert.Equal("5173", a),
+            a => Assert.Equal("--parallel", a),
+            a => Assert.Equal("server.ts", a));
+    }
+
+    [Fact]
+    public async Task WithDenoWatch_HmrAndPlainAreMutuallyExclusive()
+    {
+        // Deno rejects "--watch-hmr" combined with "--watch", so only the last selection may be emitted.
+        var hmrLast = await GetDenoArgsAsync(d => d.WithDenoWatch().WithDenoWatch(hmr: true));
+
+        Assert.Collection(hmrLast,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("-A", a),
+            a => Assert.Equal("--watch-hmr", a),
+            a => Assert.Equal("main.ts", a));
+
+        var plainLast = await GetDenoArgsAsync(d => d.WithDenoWatch(hmr: true).WithDenoWatch());
+
+        Assert.Collection(plainLast,
+            a => Assert.Equal("run", a),
+            a => Assert.Equal("-A", a),
+            a => Assert.Equal("--watch", a),
+            a => Assert.Equal("main.ts", a));
+    }
+
     [Fact]
     public async Task WithDenoAllowAll_False_DropsBlanketGrant()
     {
@@ -1198,11 +1258,14 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         var deno = builder.AddDenoApp("deno", workspace.WorkspaceRoot.FullName, "main.ts");
 
         var ex = Assert.Throws<ArgumentException>(() => deno.WithDenoAllowRead("data,secret"));
-        Assert.Contains("--allow-read", ex.Message);
-        Assert.Contains("cannot contain a comma", ex.Message);
+        Assert.Equal(
+            "The value 'data,secret' cannot contain a comma. Deno separates --allow-read values with commas and provides no way to escape them, so this value would be interpreted as multiple permissions. Pass each value as a separate argument. (Parameter 'values')",
+            ex.Message);
 
         var denyEx = Assert.Throws<ArgumentException>(() => deno.WithDenoDenyNet("a.example,b.example"));
-        Assert.Contains("--deny-net", denyEx.Message);
+        Assert.Equal(
+            "The value 'a.example,b.example' cannot contain a comma. Deno separates --deny-net values with commas and provides no way to escape them, so this value would be interpreted as multiple permissions. Pass each value as a separate argument. (Parameter 'values')",
+            denyEx.Message);
 
         // Separate arguments remain the supported way to express multiple values.
         deno.WithDenoAllowRead("data", "secret");

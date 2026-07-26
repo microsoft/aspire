@@ -597,6 +597,12 @@ public static partial class JavaScriptHostingExtensions
 
         if (deno.Mode == DenoCommandMode.Serve && serveEndpointArguments is not null)
         {
+            // Deno rejects a repeated --host/--port ("the argument '--port <port>' cannot be used multiple
+            // times", verified on 2.9.0), so a caller-supplied value here would make the resource fail to start
+            // with a clap error that says nothing about Aspire. Serve mode always emits the managed pair below,
+            // so surface the conflict with actionable guidance instead.
+            ThrowIfServeEndpointArgumentsAreOverridden(deno.RuntimeArgs);
+
             args.Add("--host");
             args.Add(serveEndpointArguments.Host);
             args.Add("--port");
@@ -699,14 +705,34 @@ public static partial class JavaScriptHostingExtensions
         }
     }
 
+    private static void ThrowIfServeEndpointArgumentsAreOverridden(IEnumerable<string> runtimeArgs)
+    {
+        foreach (var arg in runtimeArgs)
+        {
+            // Both spellings reach Deno's parser: "--port 3000" (separate value) and "--port=3000".
+            var name = arg.AsSpan();
+            var separator = name.IndexOf('=');
+            if (separator >= 0)
+            {
+                name = name[..separator];
+            }
+
+            if (name.Equals("--host", StringComparison.Ordinal) || name.Equals("--port", StringComparison.Ordinal))
+            {
+                throw new InvalidOperationException($"The argument '{arg}' cannot be configured with {nameof(WithDenoRuntimeArgs)} because {nameof(WithDenoServe)} already emits --host and --port from the resource's endpoint, and Deno rejects those arguments when they are supplied more than once. Configure the endpoint instead, for example WithHttpEndpoint(port: 5005).");
+            }
+        }
+    }
+
     private static void AppendWatchFlags(List<object> args, DenoCommandLineAnnotation deno)
     {
+        // Deno rejects "--watch-hmr" combined with "--watch", so these must stay mutually exclusive.
+        // WithDenoWatch already clears the other flag; the else-if keeps that invariant local to the emitter.
         if (deno.WatchHmr)
         {
             args.Add("--watch-hmr");
         }
-
-        if (deno.Watch)
+        else if (deno.Watch)
         {
             args.Add("--watch");
         }
