@@ -40,11 +40,6 @@ public sealed partial class SqliteResourceRepository : IResourceRepository, IRes
         _knownPropertyLookup = knownPropertyLookup;
         _logger = loggerFactory.CreateLogger<SqliteResourceRepository>();
 
-        if (!database.IsReadOnly)
-        {
-            database.InitializeSchema();
-        }
-
         LoadResources();
     }
 

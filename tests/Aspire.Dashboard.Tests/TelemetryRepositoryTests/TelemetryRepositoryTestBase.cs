@@ -13,7 +13,7 @@ public abstract class TelemetryRepositoryTestBase
 {
     protected abstract bool UseSqlite { get; }
 
-    protected RepositoryTestContext CreateRepository(
+    protected async Task<RepositoryTestContext> CreateRepositoryAsync(
         int? maxMetricsCount = null,
         int? maxAttributeCount = null,
         int? maxAttributeLength = null,
@@ -46,7 +46,7 @@ public abstract class TelemetryRepositoryTestBase
             SqliteRepositoryTestContext<SqliteTelemetryRepository> context;
             try
             {
-                context = SqliteRepositoryTestHelpers.CreateTelemetryRepository(
+                context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(
                     Path.Combine(temporaryDirectory, "dashboard.db"),
                     pooling: true,
                     loggerFactory: loggerFactory,

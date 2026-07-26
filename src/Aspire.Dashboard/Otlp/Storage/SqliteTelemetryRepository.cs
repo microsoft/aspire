@@ -68,7 +68,6 @@ public sealed partial class SqliteTelemetryRepository : ITelemetryRepository, IT
 
         if (!database.IsReadOnly)
         {
-            database.InitializeSchema();
             foreach (var resolver in _outgoingPeerResolvers)
             {
                 _outgoingPeerSubscriptions.Add(resolver.OnPeerChanges(async () =>

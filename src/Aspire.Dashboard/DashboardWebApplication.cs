@@ -288,6 +288,7 @@ public sealed class DashboardWebApplication : IAsyncDisposable
         builder.Services.AddKeyedSingleton<IDashboardClient>(DashboardClient.LiveAppHostServiceKey,
             (services, _) => services.GetRequiredService<DashboardClient>());
         builder.Services.AddSingleton<DashboardDataSourcePool>();
+        builder.Services.AddHostedService<DashboardDataSourceInitializer>();
         builder.Services.AddScoped<DashboardDataSource>();
         builder.Services.AddScoped<IDashboardRunSelection>(services => services.GetRequiredService<DashboardDataSource>());
         builder.Services.AddScoped<IDashboardClient, SelectedDashboardClient>();

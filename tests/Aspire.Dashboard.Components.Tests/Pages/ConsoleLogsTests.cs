@@ -383,7 +383,9 @@ public partial class ConsoleLogsTests : DashboardTestContext
             {
                 liveSubscriptionTcs.TrySetResult(resourceName);
                 return liveConsoleLogsChannel;
-            });
+            },
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [testResource]);
         var currentResourceRepository = new TestDashboardClient(
             isEnabled: true,
             consoleLogsChannelProvider: _ =>

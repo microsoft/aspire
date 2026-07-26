@@ -51,6 +51,7 @@ public class StartupTests(ITestOutputHelper testOutputHelper)
         await using var app = IntegrationTestHelpers.CreateDashboardWebApplication(testOutputHelper);
 
         var databasePool = app.Services.GetRequiredService<DashboardDataSourcePool>();
+        await databasePool.InitializeAsync(CancellationToken.None);
         var currentRun = app.Services.GetRequiredService<IDashboardRunStore>().GetRuns().Single(run => run.IsCurrent);
         var telemetryRepository = Assert.IsType<SqliteTelemetryRepository>(app.Services.GetRequiredService<ITelemetryRepository>());
 

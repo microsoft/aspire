@@ -121,11 +121,12 @@ public sealed class DashboardSqliteDatabase : IDisposable
     /// <summary>
     /// Initializes the dashboard database schema when it has not already been initialized.
     /// </summary>
-    public void InitializeSchema()
+    /// <param name="cancellationToken">The token to monitor for cancellation requests.</param>
+    public async Task InitializeSchemaAsync(CancellationToken cancellationToken = default)
     {
         EnsureWritable("Historical dashboard data is read-only.");
 
-        using (WriteLock.Lock())
+        using (await WriteLock.LockAsync(cancellationToken).ConfigureAwait(false))
         {
             if (_schemaInitialized)
             {
@@ -133,6 +134,10 @@ public sealed class DashboardSqliteDatabase : IDisposable
             }
 
             using var connection = OpenConnection();
+            // WAL and synchronous=NORMAL provide the best balance between performance and data protection for dashboard telemetry.
+            // WAL appends writes sequentially and allows readers to continue while a writer commits. NORMAL avoids syncing the WAL
+            // after every commit while preserving database consistency, although a power loss can discard the most recent transactions.
+            // See https://sqlite.org/wal.html and https://sqlite.org/pragma.html#pragma_synchronous.
             connection.Execute("PRAGMA journal_mode = WAL; PRAGMA synchronous = NORMAL;");
 
             var schemaTableExists = connection.QuerySingle<long>("""

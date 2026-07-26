@@ -21,21 +21,19 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
         {
             using var repositoryContext = CreateRepository(workspace.Path);
-            var repository = repositoryContext.Repository;
-            var writer = (IResourceRepositoryWriter)repository;
+            var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
             await writer.ReplaceResourcesAsync([resource]);
 
-            AssertResource(Assert.Single(repository.GetResources()), resource, replicaIndex: 1);
+            AssertResource(Assert.Single(repositoryContext.Repository.GetResources()), resource, replicaIndex: 1);
 
             var updated = resource.Clone();
             updated.State = "Running";
             await writer.ApplyChangesAsync([new WatchResourcesChange { Upsert = updated }]);
-            Assert.Equal("Running", repository.GetResource(resource.Name)!.State);
+            Assert.Equal("Running", repositoryContext.Repository.GetResource(resource.Name)!.State);
         }
 
         using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
-        var historicalRepository = historicalContext.Repository;
-        AssertResource(Assert.Single(historicalRepository.GetResources()), resource, replicaIndex: 1, state: "Running");
+        AssertResource(Assert.Single(historicalContext.Repository.GetResources()), resource, replicaIndex: 1, state: "Running");
     }
 
     [Fact]
@@ -43,9 +41,8 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         using var repositoryContext = CreateRepository(workspace.Path);
-        var repository = repositoryContext.Repository;
-        var writer = (IResourceRepositoryWriter)repository;
-        var subscription = await repository.SubscribeResourcesAsync(CancellationToken.None);
+        var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
+        var subscription = await repositoryContext.Repository.SubscribeResourcesAsync(CancellationToken.None);
         Assert.Empty(subscription.InitialState);
 
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
@@ -59,7 +56,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         await writer.ApplyChangesAsync([new WatchResourcesChange { Delete = new ResourceDeletion { ResourceName = resource.Name } }]);
         Assert.True(await enumerator.MoveNextAsync().AsTask().DefaultTimeout());
         Assert.Equal(ResourceViewModelChangeType.Delete, Assert.Single(enumerator.Current).ChangeType);
-        Assert.Empty(repository.GetResources());
+        Assert.Empty(repositoryContext.Repository.GetResources());
     }
 
     [Fact]
@@ -67,11 +64,10 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         using var repositoryContext = CreateRepository(workspace.Path);
-        var repository = repositoryContext.Repository;
-        var writer = (IResourceRepositoryWriter)repository;
+        var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
         await writer.ReplaceResourcesAsync([CreateResource("api", "api"), CreateResource("worker", "worker")]);
 
-        var subscription = await repository.SubscribeResourcesAsync(CancellationToken.None);
+        var subscription = await repositoryContext.Repository.SubscribeResourcesAsync(CancellationToken.None);
         Assert.Equal(2, subscription.InitialState.Length);
         using var cts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
         await using var enumerator = subscription.Subscription.GetAsyncEnumerator(cts.Token);
@@ -99,8 +95,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         {
             using var repositoryContext = CreateRepository(workspace.Path);
-            var repository = repositoryContext.Repository;
-            var writer = (IResourceRepositoryWriter)repository;
+            var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
             await writer.AddConsoleLogsAsync("api", [
                 new ConsoleLogLine { LineNumber = 2, Text = "second", IsStdErr = true },
                 new ConsoleLogLine { LineNumber = 1, Text = "first" }
@@ -113,16 +108,14 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
         {
             using var restartedRepositoryContext = CreateRepository(workspace.Path);
-            var restartedRepository = restartedRepositoryContext.Repository;
-            await ((IResourceRepositoryWriter)restartedRepository).AddConsoleLogsAsync(
+            await ((IResourceRepositoryWriter)restartedRepositoryContext.Repository).AddConsoleLogsAsync(
                 "api",
                 [new ConsoleLogLine { LineNumber = 1, Text = "first-after-restart" }]);
         }
 
         using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
-        var historicalRepository = historicalContext.Repository;
         var batches = new List<IReadOnlyList<global::Aspire.Dashboard.Model.ResourceLogLine>>();
-        await foreach (var batch in historicalRepository.GetConsoleLogs("api", CancellationToken.None))
+        await foreach (var batch in historicalContext.Repository.GetConsoleLogs("api", CancellationToken.None))
         {
             batches.Add(batch);
         }
@@ -144,14 +137,12 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
         {
             using var repositoryContext = CreateRepository(workspace.Path);
-            var repository = repositoryContext.Repository;
-            await ((IResourceRepositoryWriter)repository).AddConsoleLogsAsync("api", logLines);
+            await ((IResourceRepositoryWriter)repositoryContext.Repository).AddConsoleLogsAsync("api", logLines);
         }
 
         using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
-        var historicalRepository = historicalContext.Repository;
         var batches = new List<IReadOnlyList<global::Aspire.Dashboard.Model.ResourceLogLine>>();
-        await foreach (var batch in historicalRepository.GetConsoleLogs("api", CancellationToken.None))
+        await foreach (var batch in historicalContext.Repository.GetConsoleLogs("api", CancellationToken.None))
         {
             batches.Add(batch);
         }
@@ -170,16 +161,14 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
         {
             using var repositoryContext = CreateRepository(workspace.Path);
-            var repository = repositoryContext.Repository;
-            await ((IResourceRepositoryWriter)repository).ReplaceResourcesAsync(resources);
+            await ((IResourceRepositoryWriter)repositoryContext.Repository).ReplaceResourcesAsync(resources);
         }
 
         using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
-        var historicalRepository = historicalContext.Repository;
         var expected = resources
             .OrderBy(resource => resource.Name)
             .Select(resource => (resource.Name, resource.DisplayName));
-        var actual = historicalRepository.GetResources()
+        var actual = historicalContext.Repository.GetResources()
             .OrderBy(resource => resource.Name)
             .Select(resource => (resource.Name, resource.DisplayName));
         Assert.Equal(expected, actual);
@@ -191,32 +180,30 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         {
             using var repositoryContext = CreateRepository(workspace.Path);
-            var repository = repositoryContext.Repository;
-            var writer = (IResourceRepositoryWriter)repository;
+            var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
             await writer.ReplaceResourcesAsync([CreateResource("api", "api"), CreateResource("worker", "worker")]);
-            Assert.False(repository.GetResource("api")!.ConsoleLogsLoaded);
+            Assert.False(repositoryContext.Repository.GetResource("api")!.ConsoleLogsLoaded);
 
             await writer.MarkConsoleLogsLoadedAsync("api");
 
             var readQueries = await CaptureSqlQueriesAsync(() =>
             {
-                Assert.True(repository.GetResource("api")!.ConsoleLogsLoaded);
+                Assert.True(repositoryContext.Repository.GetResource("api")!.ConsoleLogsLoaded);
                 return Task.CompletedTask;
             });
             Assert.Empty(readQueries);
-            Assert.False(repository.GetResource("worker")!.ConsoleLogsLoaded);
+            Assert.False(repositoryContext.Repository.GetResource("worker")!.ConsoleLogsLoaded);
 
             await writer.ApplyChangesAsync([new WatchResourcesChange { Upsert = CreateResource("api", "api") }]);
-            Assert.True(repository.GetResource("api")!.ConsoleLogsLoaded);
+            Assert.True(repositoryContext.Repository.GetResource("api")!.ConsoleLogsLoaded);
 
             await writer.ReplaceResourcesAsync([CreateResource("api", "api"), CreateResource("worker", "worker")]);
-            Assert.True(repository.GetResource("api")!.ConsoleLogsLoaded);
+            Assert.True(repositoryContext.Repository.GetResource("api")!.ConsoleLogsLoaded);
         }
 
         using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
-        var historicalRepository = historicalContext.Repository;
-        Assert.True(historicalRepository.GetResource("api")!.ConsoleLogsLoaded);
-        Assert.False(historicalRepository.GetResource("worker")!.ConsoleLogsLoaded);
+        Assert.True(historicalContext.Repository.GetResource("api")!.ConsoleLogsLoaded);
+        Assert.False(historicalContext.Repository.GetResource("worker")!.ConsoleLogsLoaded);
     }
 
     [Fact]
@@ -329,8 +316,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
         {
             using var repositoryContext = CreateRepository(workspace.Path);
-            var repository = repositoryContext.Repository;
-            await ((IResourceRepositoryWriter)repository).ReplaceResourcesAsync([resource]);
+            await ((IResourceRepositoryWriter)repositoryContext.Repository).ReplaceResourcesAsync([resource]);
         }
 
         using (var connection = new SqliteConnection($"Data Source={GetDatabasePath(workspace.Path)};Mode=ReadOnly;Pooling=False"))
@@ -346,8 +332,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         }
 
         using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
-        var historicalRepository = historicalContext.Repository;
-        var actual = Assert.Single(historicalRepository.GetResources());
+        var actual = Assert.Single(historicalContext.Repository.GetResources());
         Assert.Equal("Running", actual.State);
         Assert.Equal("success", actual.StateStyle);
         Assert.Equal(DateTime.UnixEpoch.AddMinutes(1), actual.StartTimeStamp);
@@ -405,13 +390,11 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
         {
             using var repositoryContext = CreateRepository(workspace.Path);
-            var repository = repositoryContext.Repository;
-            await ((IResourceRepositoryWriter)repository).ReplaceResourcesAsync([resource]);
+            await ((IResourceRepositoryWriter)repositoryContext.Repository).ReplaceResourcesAsync([resource]);
         }
 
         using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
-        var historicalRepository = historicalContext.Repository;
-        var actual = Assert.Single(historicalRepository.GetResources());
+        var actual = Assert.Single(historicalContext.Repository.GetResources());
         Assert.Collection(actual.Urls,
             url => AssertUrl(url, "http", "Online store (http)", "http://frontend-testshop.dev.localhost:5266/", isInternal: false),
             url => AssertUrl(url, "http", "Online store (http)", "http://localhost:5266/", isInternal: true),
@@ -440,13 +423,11 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
         {
             using var repositoryContext = CreateRepository(workspace.Path);
-            var repository = repositoryContext.Repository;
-            await ((IResourceRepositoryWriter)repository).ReplaceResourcesAsync(resources);
+            await ((IResourceRepositoryWriter)repositoryContext.Repository).ReplaceResourcesAsync(resources);
         }
 
         using var historicalContext = CreateRepository(workspace.Path, readOnly: true);
-        var historicalRepository = historicalContext.Repository;
-        var actualResources = historicalRepository.GetResources().OrderBy(resource => resource.Name).ToList();
+        var actualResources = historicalContext.Repository.GetResources().OrderBy(resource => resource.Name).ToList();
         Assert.Collection(actualResources,
             resource => AssertResourceChildren(resource, "api-value"),
             resource => AssertResourceChildren(resource, "worker-value"));
@@ -457,8 +438,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
     {
         using var workspace = TemporaryWorkspace.Create(testOutputHelper);
         using var repositoryContext = CreateRepository(workspace.Path);
-        var repository = repositoryContext.Repository;
-        var writer = (IResourceRepositoryWriter)repository;
+        var writer = (IResourceRepositoryWriter)repositoryContext.Repository;
 
         var replaceQueries = await CaptureSqlQueriesAsync(() => writer.ReplaceResourcesAsync([
             CreateResourceWithChildren("api", "API", "api-value"),
@@ -472,7 +452,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
         ]));
         AssertBatchedResourceQueries(applyQueries);
 
-        var resources = repository.GetResources().OrderBy(resource => resource.Name).ToArray();
+        var resources = repositoryContext.Repository.GetResources().OrderBy(resource => resource.Name).ToArray();
         Assert.Collection(resources,
             resource => AssertResourceChildren(resource, "api-updated"),
             resource => AssertResourceChildren(resource, "worker-updated"));
@@ -540,8 +520,7 @@ public sealed class SqliteResourceRepositoryTests(ITestOutputHelper testOutputHe
 
         {
             using var repositoryContext = CreateRepository(workspace.Path);
-            var repository = repositoryContext.Repository;
-            await ((IResourceRepositoryWriter)repository).ReplaceResourcesAsync([resource]);
+            await ((IResourceRepositoryWriter)repositoryContext.Repository).ReplaceResourcesAsync([resource]);
         }
 
         using var connection = new SqliteConnection($"Data Source={databasePath};Pooling=False");

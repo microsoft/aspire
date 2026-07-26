@@ -136,6 +136,9 @@ public sealed class DashboardDataSourcePool : IDisposable
         }
     }
 
+    internal Task InitializeAsync(CancellationToken cancellationToken) =>
+        Current.Database.InitializeSchemaAsync(cancellationToken);
+
     private void Release(Entry entry)
     {
         lock (_lock)
@@ -262,4 +265,11 @@ public sealed class DashboardDataSourcePool : IDisposable
             }
         }
     }
+}
+
+internal sealed class DashboardDataSourceInitializer(DashboardDataSourcePool dataSourcePool) : IHostedService
+{
+    public Task StartAsync(CancellationToken cancellationToken) => dataSourcePool.InitializeAsync(cancellationToken);
+
+    public Task StopAsync(CancellationToken cancellationToken) => Task.CompletedTask;
 }

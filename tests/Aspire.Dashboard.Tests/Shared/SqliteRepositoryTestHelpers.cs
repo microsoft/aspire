@@ -12,7 +12,7 @@ namespace Aspire.Dashboard.Tests.Shared;
 
 internal static class SqliteRepositoryTestHelpers
 {
-    public static SqliteRepositoryTestContext<SqliteTelemetryRepository> CreateTelemetryRepository(
+    public static async Task<SqliteRepositoryTestContext<SqliteTelemetryRepository>> CreateTelemetryRepositoryAsync(
         string databasePath,
         bool readOnly = false,
         bool pooling = false,
@@ -24,6 +24,11 @@ internal static class SqliteRepositoryTestHelpers
         var database = new DashboardSqliteDatabase(databasePath, readOnly, pooling);
         try
         {
+            if (!readOnly)
+            {
+                await database.InitializeSchemaAsync();
+            }
+
             var repository = new SqliteTelemetryRepository(
                 database,
                 loggerFactory ?? NullLoggerFactory.Instance,
@@ -50,6 +55,11 @@ internal static class SqliteRepositoryTestHelpers
         var database = new DashboardSqliteDatabase(databasePath, readOnly, pooling);
         try
         {
+            if (!readOnly)
+            {
+                database.InitializeSchemaAsync().GetAwaiter().GetResult();
+            }
+
             var repository = new SqliteResourceRepository(
                 database,
                 knownPropertyLookup,

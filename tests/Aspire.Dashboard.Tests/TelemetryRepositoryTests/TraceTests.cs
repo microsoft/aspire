@@ -44,12 +44,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -72,7 +71,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -81,7 +80,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.False(resource.UninstrumentedPeer);
             });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -101,10 +100,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetTraceSummaries_ReturnsPageData()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -177,8 +175,8 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             ]
         };
 
-        var summaries = repository.GetTraceSummaries(request);
-        var traces = repository.GetTraces(request);
+        var summaries = repositoryContext.Repository.GetTraceSummaries(request);
+        var traces = repositoryContext.Repository.GetTraces(request);
 
         Assert.Equal(traces.PagedResult.TotalItemCount, summaries.PagedResult.TotalItemCount);
         Assert.Equal(traces.MaxDuration, summaries.MaxDuration);
@@ -204,7 +202,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal(0, resource.ErroredSpans);
             });
 
-        var emptyPage = repository.GetTraceSummaries(new GetTracesRequest
+        var emptyPage = repositoryContext.Repository.GetTraceSummaries(new GetTracesRequest
         {
             ResourceKeys = request.ResourceKeys,
             StartIndex = 10,
@@ -221,9 +219,8 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetTraceSummaries_LateParent_PreservesResourceOrder()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -246,7 +243,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 }
             }
         ]);
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -269,14 +266,14 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         ]);
 
-        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        var summary = Assert.Single(repositoryContext.Repository.GetTraceSummaries(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
             Count = 10,
             Filters = []
         }).PagedResult.Items);
-        var trace = Assert.IsType<OtlpTrace>(repository.GetTrace(summary.TraceId));
+        var trace = Assert.IsType<OtlpTrace>(repositoryContext.Repository.GetTrace(summary.TraceId));
 
         Assert.Equal(
             TraceHelpers.GetOrderedResources(trace).Select(resource => resource.Resource.ResourceKey),
@@ -290,10 +287,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetTraceSummaries_SameOrderTime_UninstrumentedPeerAfterInstrumentedResource()
     {
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: _ => ("dashboard.db", null));
-        using var repositoryContext = CreateRepository(
+        using var repositoryContext = await CreateRepositoryAsync(
             outgoingPeerResolvers: [outgoingPeerResolver]);
-        var repository = repositoryContext.Repository;
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -318,7 +314,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         ]);
 
-        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        var summary = Assert.Single(repositoryContext.Repository.GetTraceSummaries(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -342,9 +338,8 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetTraceSummaries_IncrementalAppend_UpdatesSummaryValues()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -366,7 +361,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 }
             }
         ]);
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -392,7 +387,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         ]);
 
-        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        var summary = Assert.Single(repositoryContext.Repository.GetTraceSummaries(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -424,12 +419,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         var testSink = new TestSink();
         var factory = LoggerFactory.Create(b => b.AddProvider(new TestLoggerProvider(testSink)));
 
-        using var repositoryContext = CreateRepository(loggerFactory: factory);
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync(loggerFactory: factory);
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -451,7 +445,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(1, addContext.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -459,7 +453,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -477,12 +471,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_MultipleSpansLoop_Reject()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -506,7 +499,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(1, addContext.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -514,7 +507,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -531,9 +524,8 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddTraces_CircularReferenceAcrossIngestionCalls_Reject()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -554,7 +546,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         var context = new AddContext();
-        await repository.AsWriter().AddTracesAsync(context, new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(context, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -574,7 +566,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         Assert.Equal(1, context.FailureCount);
-        var trace = Assert.Single(repository.GetTraces(new GetTracesRequest
+        var trace = Assert.Single(repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -590,12 +582,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_DuplicateTraceIds_Reject()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -619,7 +610,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(1, addContext.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -627,7 +618,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -645,12 +636,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_Scope_Multiple()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -668,7 +658,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 }
             }
         });
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -690,7 +680,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -698,7 +688,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -723,12 +713,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_Traces_MultipleOutOrOrder()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext1 = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext1, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext1, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -748,7 +737,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext1.FailureCount);
 
         var addContext2 = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext2, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext2, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -767,7 +756,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
         Assert.Equal(0, addContext2.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -775,7 +764,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var traces1 = repository.GetTraces(new GetTracesRequest
+        var traces1 = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -797,7 +786,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             });
 
         var addContext3 = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext3, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext3, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -816,7 +805,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
         Assert.Equal(0, addContext3.FailureCount);
 
-        var traces2 = repository.GetTraces(new GetTracesRequest
+        var traces2 = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -844,11 +833,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_Spans_MultipleOutOrOrder()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -871,7 +859,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -897,11 +885,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_SpanEvents_ReturnData()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -940,7 +927,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -974,11 +961,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_SpanLinks_ReturnData()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1017,7 +1003,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1060,12 +1046,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetTraces_ReturnCopies()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext1 = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext1, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext1, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1084,7 +1069,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         });
 
-        var traces1 = repository.GetTraces(new GetTracesRequest
+        var traces1 = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1099,7 +1084,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 AssertId("1-1", trace.RootSpan!.SpanId);
             });
 
-        var traces2 = repository.GetTraces(new GetTracesRequest
+        var traces2 = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1109,8 +1094,8 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.NotSame(traces1.PagedResult.Items[0], traces2.PagedResult.Items[0]);
         Assert.NotSame(traces1.PagedResult.Items[0].Spans[0].Trace, traces2.PagedResult.Items[0].Spans[0].Trace);
 
-        var trace1 = repository.GetTrace(GetHexId("1"))!;
-        var trace2 = repository.GetTrace(GetHexId("1"))!;
+        var trace1 = repositoryContext.Repository.GetTrace(GetHexId("1"))!;
+        var trace2 = repositoryContext.Repository.GetTrace(GetHexId("1"))!;
         Assert.NotSame(trace1, trace2);
         Assert.NotSame(trace1.Spans[0].Trace, trace2.Spans[0].Trace);
     }
@@ -1119,8 +1104,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_AttributeAndEventLimits_LimitsApplied()
     {
         // Arrange
-        using var repositoryContext = CreateRepository(maxAttributeCount: 5, maxAttributeLength: 16, maxSpanEventCount: 5);
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync(maxAttributeCount: 5, maxAttributeLength: 16, maxSpanEventCount: 5);
 
         var attributes = new List<KeyValuePair<string, string>>();
         for (var i = 0; i < 10; i++)
@@ -1137,7 +1121,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1159,7 +1143,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -1167,7 +1151,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -1214,12 +1198,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_Links_BacklinksPopulated()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
-        await AddTrace(repository, "1", s_testTime);
-        var traces = repository.GetTraces(new GetTracesRequest
+        await AddTrace(repositoryContext.Repository, "1", s_testTime);
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1258,8 +1241,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     {
         // Arrange
         const int MaxTraceCount = 10;
-        using var repositoryContext = CreateRepository(maxTraceCount: MaxTraceCount);
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync(maxTraceCount: MaxTraceCount);
 
         var testTime = s_testTime.AddDays(1);
         var expectedTraces = new List<(string TraceId, DateTime StartTime)>();
@@ -1276,7 +1258,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
             try
             {
-                await AddTrace(repository, traceId, startTime);
+                await AddTrace(repositoryContext.Repository, traceId, startTime);
             }
             catch (Exception ex)
             {
@@ -1285,7 +1267,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         }
 
         // Assert
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -1293,7 +1275,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -1369,12 +1351,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_MultipleRootSpans_RootSpanIsEarliestWithoutParent()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1398,7 +1379,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1419,12 +1400,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetTraces_MultipleInstances()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1468,7 +1448,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         var resourceKey = new ResourceKey("resource1", InstanceId: null);
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1485,7 +1465,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 AssertId("2", trace.TraceId);
             });
 
-        var propertyKeys = repository.GetTracePropertyKeys(resourceKey)!;
+        var propertyKeys = repositoryContext.Repository.GetTracePropertyKeys(resourceKey)!;
         Assert.Collection(propertyKeys,
             s => Assert.Equal("key-1", s),
             s => Assert.Equal("key-2", s));
@@ -1494,13 +1474,12 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task AddTraces_MissingAndEmptyInstanceIdsAreDistinct()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
         var missingInstanceIdResource = CreateResource(name: "resource", instanceId: "placeholder");
         missingInstanceIdResource.Attributes.Remove(missingInstanceIdResource.Attributes.Single(attribute => attribute.Key == OtlpResource.SERVICE_INSTANCE_ID));
         var addContext = new AddContext();
 
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -1529,7 +1508,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         Assert.Equal(0, addContext.FailureCount);
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Equal(2, resources.Count);
         Assert.Contains(resources, resource => resource.ResourceKey == new ResourceKey("resource", InstanceId: null));
         Assert.Contains(resources, resource => resource.ResourceKey == new ResourceKey("resource", InstanceId: string.Empty));
@@ -1538,10 +1517,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetTraceFieldValues_AllFieldsMatchMaterializedTraces()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -1562,8 +1540,8 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
         Assert.Equal(0, addContext.FailureCount);
 
-        var resource = Assert.Single(repository.GetResources());
-        var traces = repository.GetTraces(new GetTracesRequest
+        var resource = Assert.Single(repositoryContext.Repository.GetResources());
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
@@ -1574,7 +1552,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         foreach (var field in KnownTraceFields.AllFields.Append("custom"))
         {
             var expected = OtlpSpan.GetFieldValuesFromTraces(traces, field);
-            var actual = repository.GetTraceFieldValues(field);
+            var actual = repositoryContext.Repository.GetTraceFieldValues(field);
             Assert.Equal(expected.Count, actual.Count);
             foreach (var (value, count) in expected)
             {
@@ -1582,19 +1560,18 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         }
 
-        Assert.Empty(repository.GetTraceFieldValues(KnownTraceFields.DurationField));
-        Assert.Empty(repository.GetTraceFieldValues(KnownTraceFields.TimestampField));
+        Assert.Empty(repositoryContext.Repository.GetTraceFieldValues(KnownTraceFields.DurationField));
+        Assert.Empty(repositoryContext.Repository.GetTraceFieldValues(KnownTraceFields.TimestampField));
     }
 
     [Fact]
     public async Task GetTraces_AttributeFilters()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1627,7 +1604,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         var resourceKey = new ResourceKey("resource1", InstanceId: null);
 
         // Act 1
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1645,7 +1622,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             });
 
         // Act 2
-        traces = repository.GetTraces(new GetTracesRequest
+        traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1663,7 +1640,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             });
 
         // Act 3
-        traces = repository.GetTraces(new GetTracesRequest
+        traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1691,12 +1668,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     {
         // Arrange
         var outgoingPeerResolver = new TestOutgoingPeerResolver();
-        using var repositoryContext = CreateRepository(
+        using var repositoryContext = await CreateRepositoryAsync(
             outgoingPeerResolvers: [outgoingPeerResolver]);
-        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1717,7 +1693,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         var resourceKey = new ResourceKey("resource1", InstanceId: null);
 
         // Act 1
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1732,7 +1708,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.Empty(traces.PagedResult.Items);
 
         // Act 2
-        traces = repository.GetTraces(new GetTracesRequest
+        traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1754,11 +1730,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetTraces_FiltersPagingAndMaxDuration_ComputedFromAllMatchingTraces()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1787,7 +1762,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // dynamic field filters, known duration filters, paging, total count, and max
         // duration must all be computed from the same filtered trace set. MaxDuration
         // intentionally comes from all matching traces, not just the returned page.
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [new ResourceKey("resource1", InstanceId: null)],
             StartIndex = 1,
@@ -1816,11 +1791,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // start to latest span end), not individual span durations. A trace with a 100ms
         // root span containing a 5ms child span should match "> 50ms" (trace is 100ms)
         // but NOT "< 10ms" (even though the child span is only 5ms).
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1847,7 +1821,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         var resourceKey = new ResourceKey("resource1", InstanceId: null);
 
         // Duration filter "> 50ms" should match because trace duration is 100ms.
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1859,7 +1833,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Duration filter "< 10ms" should NOT match because trace duration is 100ms,
         // even though the child span is only 5ms.
-        traces = repository.GetTraces(new GetTracesRequest
+        traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1874,11 +1848,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetTraces_NotEqualFilter_NonMatchingValue_ReturnsTrace()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1897,7 +1870,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         // Act - filter for key1 != "other_value" should return the trace since key1 is "value1"
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [new ResourceKey("resource1", InstanceId: null)],
             StartIndex = 0,
@@ -1919,8 +1892,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_OutOfOrder_FullName()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
         var request = new GetTracesRequest
         {
             ResourceKeys = [new ResourceKey("TestService", "TestId")],
@@ -1931,7 +1903,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Act 1
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1952,11 +1924,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         // Assert 1
-        var trace = Assert.Single(repository.GetTraces(request).PagedResult.Items);
+        var trace = Assert.Single(repositoryContext.Repository.GetTraces(request).PagedResult.Items);
         Assert.Equal("TestService: Test span. Id: 1-3", trace.FullName);
 
         // Act 2
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -1977,11 +1949,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         // Assert 2
-        trace = Assert.Single(repository.GetTraces(request).PagedResult.Items);
+        trace = Assert.Single(repositoryContext.Repository.GetTraces(request).PagedResult.Items);
         Assert.Equal("TestService: Test span. Id: 1-2", trace.FullName);
 
         // Act 3
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2002,11 +1974,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         // Assert 3
-        trace = Assert.Single(repository.GetTraces(request).PagedResult.Items);
+        trace = Assert.Single(repositoryContext.Repository.GetTraces(request).PagedResult.Items);
         Assert.Equal("TestService: Test span. Id: 1-1", trace.FullName);
 
         // Act 4
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2027,7 +1999,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         // Assert 4
-        trace = Assert.Single(repository.GetTraces(request).PagedResult.Items);
+        trace = Assert.Single(repositoryContext.Repository.GetTraces(request).PagedResult.Items);
         Assert.Equal("TestService: Test span. Id: 1-1", trace.FullName);
     }
 
@@ -2035,12 +2007,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_SameResourceDifferentProperties_MultipleResourceViews()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2093,7 +2064,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         // Spans belong to the same resource
-        var resource = Assert.Single(repository.GetResources());
+        var resource = Assert.Single(repositoryContext.Repository.GetResources());
         Assert.Equal("TestService", resource.ResourceName);
         Assert.Equal("TestId", resource.InstanceId);
 
@@ -2129,7 +2100,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                     });
             });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resource.ResourceKey],
             StartIndex = 0,
@@ -2185,11 +2156,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task RemoveTraces_All()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2242,12 +2212,12 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        await repository.AsWriter().ClearTracesAsync();
+        await repositoryContext.Repository.AsWriter().ClearTracesAsync();
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -2264,11 +2234,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task RemoveTraces_SelectedResource()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2321,12 +2290,12 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        await repository.AsWriter().ClearTracesAsync(new ResourceKey("resource1", "123"));
+        await repositoryContext.Repository.AsWriter().ClearTracesAsync(new ResourceKey("resource1", "123"));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -2370,11 +2339,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task RemoveTraces_MultipleSelectedResources()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2427,12 +2395,12 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        await repository.AsWriter().ClearTracesAsync(new ResourceKey("resource1", null));
+        await repositoryContext.Repository.AsWriter().ClearTracesAsync(new ResourceKey("resource1", null));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -2459,11 +2427,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task RemoveTraces_SelectedResource_SpansFromDifferentTrace()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2519,12 +2486,12 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        await repository.AsWriter().ClearTracesAsync(new ResourceKey("resource1", null));
+        await repositoryContext.Repository.AsWriter().ClearTracesAsync(new ResourceKey("resource1", null));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -2552,13 +2519,12 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     {
         // Arrange
         var outgoingPeerResolver = new TestOutgoingPeerResolver();
-        using var repositoryContext = CreateRepository(
+        using var repositoryContext = await CreateRepositoryAsync(
             outgoingPeerResolvers: [outgoingPeerResolver]);
-        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2581,7 +2547,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var resources = repository.GetResources(includeUninstrumentedPeers: true);
+        var resources = repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true);
         Assert.Collection(resources,
             resource =>
             {
@@ -2598,7 +2564,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         var uninstrumentedPeerApp = resources.Single(a => a.UninstrumentedPeer);
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [uninstrumentedPeerApp.ResourceKey],
             StartIndex = 0,
@@ -2620,7 +2586,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestPeer", s.UninstrumentedPeer.ResourceName);
             });
 
-        var serviceNames = repository.GetTraceFieldValues(KnownResourceFields.ServiceNameField);
+        var serviceNames = repositoryContext.Repository.GetTraceFieldValues(KnownResourceFields.ServiceNameField);
         Assert.Equal(2, serviceNames["TestService"]);
         Assert.Equal(1, serviceNames["TestPeer"]);
     }
@@ -2644,13 +2610,12 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 return (null, null);
             }
         });
-        using var repositoryContext = CreateRepository(
+        using var repositoryContext = await CreateRepositoryAsync(
             outgoingPeerResolvers: [outgoingPeerResolver]);
-        var repository = repositoryContext.Repository;
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2673,7 +2638,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var resources = repository.GetResources(includeUninstrumentedPeers: true);
+        var resources = repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true);
         Assert.Collection(resources,
             resource =>
             {
@@ -2682,7 +2647,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 Assert.False(resource.UninstrumentedPeer);
             });
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -2706,7 +2671,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         matchPeer = true;
         await outgoingPeerResolver.InvokePeerChanges();
 
-        resources = repository.GetResources(includeUninstrumentedPeers: true);
+        resources = repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true);
         Assert.Collection(resources,
             resource =>
             {
@@ -2723,7 +2688,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         var uninstrumentedPeerApp = resources.Single(a => a.UninstrumentedPeer);
 
-        traces = repository.GetTraces(new GetTracesRequest
+        traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [uninstrumentedPeerApp.ResourceKey],
             StartIndex = 0,
@@ -2750,12 +2715,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task AddTraces_NameOnlyPeerResolver_PersistsUninstrumentedPeer()
     {
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: _ => ("Browser Link", null));
-        using var repositoryContext = CreateRepository(
+        using var repositoryContext = await CreateRepositoryAsync(
             outgoingPeerResolvers: [outgoingPeerResolver]);
-        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -2781,11 +2745,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         Assert.Equal(0, addContext.FailureCount);
-        var peerResource = Assert.Single(repository.GetResources(includeUninstrumentedPeers: true), resource => resource.UninstrumentedPeer);
+        var peerResource = Assert.Single(repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true), resource => resource.UninstrumentedPeer);
         Assert.Equal("Browser Link", peerResource.ResourceName);
         Assert.Null(peerResource.InstanceId);
 
-        var trace = Assert.IsType<OtlpTrace>(repository.GetTrace(GetHexId("1")));
+        var trace = Assert.IsType<OtlpTrace>(repositoryContext.Repository.GetTrace(GetHexId("1")));
         var span = Assert.Single(trace.Spans);
         Assert.Equal(peerResource.ResourceKey, span.UninstrumentedPeer?.ResourceKey);
     }
@@ -2795,12 +2759,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     {
         var matchPeer = false;
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: _ => matchPeer ? ("Browser Link", null) : (null, null));
-        using var repositoryContext = CreateRepository(
+        using var repositoryContext = await CreateRepositoryAsync(
             outgoingPeerResolvers: [outgoingPeerResolver]);
-        var repository = repositoryContext.Repository;
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -2826,14 +2789,14 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         Assert.Equal(0, addContext.FailureCount);
-        Assert.Null(Assert.Single(repository.GetTrace(GetHexId("1"))!.Spans).UninstrumentedPeer);
+        Assert.Null(Assert.Single(repositoryContext.Repository.GetTrace(GetHexId("1"))!.Spans).UninstrumentedPeer);
 
         matchPeer = true;
         await outgoingPeerResolver.InvokePeerChanges();
 
-        var peerResource = Assert.Single(repository.GetResources(includeUninstrumentedPeers: true), resource => resource.UninstrumentedPeer);
+        var peerResource = Assert.Single(repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true), resource => resource.UninstrumentedPeer);
         Assert.Equal("Browser Link", peerResource.ResourceName);
-        var span = Assert.Single(repository.GetTrace(GetHexId("1"))!.Spans);
+        var span = Assert.Single(repositoryContext.Repository.GetTrace(GetHexId("1"))!.Spans);
         Assert.Equal(peerResource.ResourceKey, span.UninstrumentedPeer?.ResourceKey);
     }
 
@@ -2843,11 +2806,10 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Arrange
         var resource = ModelTestHelpers.CreateResource(resourceName: "test-abc-def", displayName: "test");
         var outgoingPeerResolver = new TestOutgoingPeerResolver(onResolve: attributes => (resource.Name, resource));
-        using var repositoryContext = CreateRepository(
+        using var repositoryContext = await CreateRepositoryAsync(
             outgoingPeerResolvers: [outgoingPeerResolver]);
-        var repository = repositoryContext.Repository;
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2867,7 +2829,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         });
 
-        var resources = repository.GetResources(includeUninstrumentedPeers: true);
+        var resources = repositoryContext.Repository.GetResources(includeUninstrumentedPeers: true);
         Assert.Collection(resources,
             resource =>
             {
@@ -2887,10 +2849,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_ReturnsAllSpans()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2912,7 +2873,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -2929,10 +2890,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_FilterByTraceId_ReturnsMatchingSpans()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2954,7 +2914,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -2972,10 +2932,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_FilterByHasError_ReturnsErrorSpansOnly()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -2996,7 +2955,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3014,10 +2973,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_FilterByHasErrorFalse_ReturnsNonErrorSpansOnly()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -3038,7 +2996,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3057,10 +3015,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [InlineData(FilterCondition.NotEqual, "2")]
     public async Task GetTraces_StatusFilter_ReturnsMatchingTraces(FilterCondition condition, params string[] expectedTraceIds)
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -3082,7 +3039,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         });
 
-        var result = repository.GetTraces(new GetTracesRequest
+        var result = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3110,10 +3067,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_FilterByResource_ReturnsMatchingSpans()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -3147,11 +3103,11 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         });
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         var serviceA = resources.Single(r => r.ResourceName == "service-a");
 
         // Act
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [serviceA.ResourceKey],
             StartIndex = 0,
@@ -3168,10 +3124,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_FilterByDuration_ReturnsMatchingSpans()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -3194,7 +3149,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act - filter for spans with duration >= 100000ms (100s)
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3219,10 +3174,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_FilterByTextFragments_ReturnsMatchingSpans()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -3243,7 +3197,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3262,9 +3216,8 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [InlineData(KnownTraceFields.StatusField, "Error")]
     public async Task GetSpans_FilterByKindOrStatusText_ReturnsMatchingSpans(string field, string value)
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -3297,7 +3250,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
             }
         ]);
 
-        var fieldResult = repository.GetSpans(new GetSpansRequest
+        var fieldResult = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3312,7 +3265,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
                 }
             ]
         });
-        var textResult = repository.GetSpans(new GetSpansRequest
+        var textResult = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3331,10 +3284,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_Pagination_ReturnsCorrectPage()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -3356,7 +3308,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act - get second page (skip 1, take 1)
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 1,
@@ -3374,10 +3326,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_CombinedFilters_ReturnsMatchingSpans()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -3399,7 +3350,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act - filter for error spans with "example.com" text
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3415,14 +3366,13 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetSpans_EmptyRepository_ReturnsEmpty()
+    public async Task GetSpans_EmptyRepository_ReturnsEmpty()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3439,10 +3389,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_UnknownResource_ReturnsEmpty()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -3462,7 +3411,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [ResourceKey.Create("nonexistent", "unknown")],
             StartIndex = 0,
@@ -3482,13 +3431,12 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     public async Task GetSpans_TraceIdPrefixLength_MatchesShortenedIds(string traceIdFilter, int expectedCount)
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Use a trace ID whose hex representation is "747261636531" (UTF-8 bytes of "trace1")
         var traceId = Encoding.UTF8.GetString(Convert.FromHexString("747261636531"));
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>()
         {
             new ResourceSpans
             {
@@ -3509,7 +3457,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3525,10 +3473,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetSpans_DisabledFiltersAreIgnored()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -3549,7 +3496,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         });
 
         // Enabled filter matches span name containing "span1", disabled filter would exclude everything
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3584,10 +3531,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Verifies that a "not contains" filter on the trace Name field excludes the trace
         // when ANY span's name contains the filtered text, even if other spans in the same
         // trace do not contain it. This is the fix for https://github.com/microsoft/aspire/issues/18684.
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -3613,7 +3559,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Filter: Name not contains "1-1" — the root span's name is "Test span. Id: 1-1" which
         // contains "1-1", so the trace should be excluded even though the child span doesn't match.
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -3637,10 +3583,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     {
         // Verifies that a "not contains" filter includes the trace when none of its spans'
         // names contain the filtered text.
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -3664,7 +3609,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Filter: Name not contains "NONEXISTENT" — no span name contains this text,
         // so the trace should be included.
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -3689,10 +3634,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     {
         // Verifies that a "not equal" filter excludes the trace when ANY span's field value
         // equals the filtered text.
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -3716,7 +3660,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Filter: Name != "Test span. Id: 1-1" — the root span matches exactly, so the trace
         // should be excluded even though the child span doesn't match.
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -3741,10 +3685,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Verifies that combining a positive filter with a negative filter works correctly:
         // the trace must have at least one span matching the positive filter AND all spans
         // must satisfy the negative filter.
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -3803,7 +3746,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Positive: attribute env contains "prod"
         // Negative: name not contains "1-1" (excludes trace 1 because root span name matches)
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -3828,10 +3771,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Verifies that a negative filter on an attribute field does NOT exclude a trace
         // just because some spans lack the attribute. A span without the field trivially
         // satisfies "not contains X" — it cannot contain the value.
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -3859,7 +3801,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         // Filter: http.method not contains "GET" — span 1-1 has POST (passes), span 1-2
         // has no http.method (trivially passes). The trace should be included.
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -3884,10 +3826,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     {
         // Verifies that a trace is excluded when one span has the attribute and violates
         // the negative condition, even though another span lacks the attribute entirely.
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -3913,7 +3854,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
 
         var resourceKey = new ResourceKey("service1", InstanceId: null);
 
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -3937,10 +3878,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
     {
         // Verifies that span-level negative filtering correctly includes spans that lack the
         // filtered attribute. A span without the field trivially satisfies "not contains X".
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -3969,7 +3909,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Span 1-1 has GET → excluded
         // Span 1-2 has POST → included (POST doesn't contain GET)
         // Span 1-3 has no http.method → included (absent field trivially satisfies "not contains")
-        var result = repository.GetSpans(new GetSpansRequest
+        var result = repositoryContext.Repository.GetSpans(new GetSpansRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -3996,10 +3936,9 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // Verifies that the non-optimized MatchesFilters path (used for date/numeric fields)
         // correctly applies ALL-span semantics for negative filters. A timestamp NotEqual
         // filter excludes a trace when any span's timestamp matches the filter value.
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -4044,7 +3983,7 @@ public abstract class TraceTests : TelemetryRepositoryTestBase
         // CreateOptimizedTraceFilters falls through to the non-optimized path.
         // Filter: Timestamp != "1970-01-01T00:00:00Z" — span 1-1 violates this (its timestamp
         // equals the filter value), so trace 1 is excluded. Trace 2 passes.
-        var traces = repository.GetTraces(new GetTracesRequest
+        var traces = repositoryContext.Repository.GetTraces(new GetTracesRequest
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -4078,9 +4017,8 @@ public sealed class SqliteTraceTests : TraceTests
     public async Task AddTraces_CircularReferenceAcrossPersistedAndIncomingSpans_Reject()
     {
         var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -4105,7 +4043,7 @@ public sealed class SqliteTraceTests : TraceTests
         ]);
 
         var context = new AddContext();
-        await repository.AsWriter().AddTracesAsync(context,
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(context,
         [
             new ResourceSpans
             {
@@ -4137,7 +4075,7 @@ public sealed class SqliteTraceTests : TraceTests
 
         Assert.Equal(1, context.SuccessCount);
         Assert.Equal(1, context.FailureCount);
-        var trace = Assert.IsType<OtlpTrace>(repository.GetTrace(GetHexId("1")));
+        var trace = Assert.IsType<OtlpTrace>(repositoryContext.Repository.GetTrace(GetHexId("1")));
         Assert.Collection(trace.Spans,
             span => AssertId("1-1", span.SpanId),
             span => AssertId("1-2", span.SpanId));
@@ -4147,9 +4085,8 @@ public sealed class SqliteTraceTests : TraceTests
     public async Task GetTraceSummaries_EqualStartTime_MatchesMaterializedTrace()
     {
         var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -4167,7 +4104,7 @@ public sealed class SqliteTraceTests : TraceTests
                 }
             }
         ]);
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -4186,8 +4123,8 @@ public sealed class SqliteTraceTests : TraceTests
             }
         ]);
 
-        var trace = Assert.IsType<OtlpTrace>(repository.GetTrace(GetHexId("1")));
-        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        var trace = Assert.IsType<OtlpTrace>(repositoryContext.Repository.GetTrace(GetHexId("1")));
+        var summary = Assert.Single(repositoryContext.Repository.GetTraceSummaries(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -4204,9 +4141,8 @@ public sealed class SqliteTraceTests : TraceTests
     {
         const int appendedSpanCount = 8_192;
         var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -4246,11 +4182,11 @@ public sealed class SqliteTraceTests : TraceTests
         }
 
         var context = new AddContext();
-        await repository.AsWriter().AddTracesAsync(context, [resourceSpans]);
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(context, [resourceSpans]);
 
         Assert.Equal(appendedSpanCount, context.SuccessCount);
         Assert.Equal(0, context.FailureCount);
-        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        var summary = Assert.Single(repositoryContext.Repository.GetTraceSummaries(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -4264,9 +4200,8 @@ public sealed class SqliteTraceTests : TraceTests
     public async Task GetTraceSummaries_AfterResourceDeletion_DeletesAffectedTraces()
     {
         var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        await repository.AsWriter().AddTracesAsync(new AddContext(),
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(new AddContext(),
         [
             new ResourceSpans
             {
@@ -4316,15 +4251,15 @@ public sealed class SqliteTraceTests : TraceTests
             }
         ]);
 
-        await repository.AsWriter().ClearSelectedSignalsAsync(new Dictionary<string, HashSet<AspireDataType>>
+        await repositoryContext.Repository.AsWriter().ClearSelectedSignalsAsync(new Dictionary<string, HashSet<AspireDataType>>
         {
             [new ResourceKey("frontend", "TestId").GetCompositeName()] = [AspireDataType.Resource]
         });
 
-        Assert.Null(repository.GetTrace(GetHexId("1")));
-        Assert.NotNull(repository.GetTrace(GetHexId("2")));
+        Assert.Null(repositoryContext.Repository.GetTrace(GetHexId("1")));
+        Assert.NotNull(repositoryContext.Repository.GetTrace(GetHexId("2")));
 
-        var summary = Assert.Single(repository.GetTraceSummaries(new GetTracesRequest
+        var summary = Assert.Single(repositoryContext.Repository.GetTraceSummaries(new GetTracesRequest
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -4348,7 +4283,7 @@ public sealed class SqliteTraceTests : TraceTests
     [Fact]
     public async Task AddTraces_BatchesSpansAndDetailsAcrossResources()
     {
-        using var repositoryContext = CreateRepository();
+        using var repositoryContext = await CreateRepositoryAsync();
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
         await repository.AsWriter().AddTracesAsync(new AddContext(), new RepeatedField<ResourceSpans>
         {
@@ -4444,7 +4379,7 @@ public sealed class SqliteTraceTests : TraceTests
     public async Task AddTraces_LargeSpanAndAttributeBatchesRoundTrip()
     {
         const int spanCount = 101;
-        using var repositoryContext = CreateRepository();
+        using var repositoryContext = await CreateRepositoryAsync();
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
         var resourceSpans = new ResourceSpans
         {
@@ -4484,7 +4419,7 @@ public sealed class SqliteTraceTests : TraceTests
     [Fact]
     public async Task GetTraceSummaries_UsesPersistedResourceSummaries()
     {
-        using var repositoryContext = CreateRepository();
+        using var repositoryContext = await CreateRepositoryAsync();
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
         var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
         await repository.AsWriter().AddTracesAsync(new AddContext(),

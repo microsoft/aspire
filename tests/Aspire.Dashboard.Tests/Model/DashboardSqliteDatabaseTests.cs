@@ -22,10 +22,10 @@ public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHel
     private readonly TemporaryWorkspace _workspace = TemporaryWorkspace.Create(testOutputHelper);
 
     [Fact]
-    public void InitializeSchema_HistogramValuesUseBlobStorage()
+    public async Task InitializeSchema_HistogramValuesUseBlobStorage()
     {
         using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
-        database.InitializeSchema();
+        await database.InitializeSchemaAsync();
         using var connection = database.OpenConnection();
 
         var histogramCountColumnType = connection.QuerySingle<string>("SELECT type FROM pragma_table_info('telemetry_metric_points') WHERE name = 'histogram_count';");
@@ -43,6 +43,7 @@ public sealed class DashboardSqliteDatabaseTests(ITestOutputHelper testOutputHel
     public async Task RepositoryWrites_ShareDatabaseWriteLock()
     {
         using var database = new DashboardSqliteDatabase(Path.Combine(_workspace.Path, "dashboard.db"), pooling: false);
+        await database.InitializeSchemaAsync();
         using var telemetryRepository = new SqliteTelemetryRepository(
             database,
             NullLoggerFactory.Instance,

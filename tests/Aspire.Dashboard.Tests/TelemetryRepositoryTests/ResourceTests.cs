@@ -16,14 +16,13 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResourceByCompositeName()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await AddResource(repository, "app2");
-        await AddResource(repository, "app1");
+        await AddResource(repositoryContext.Repository, "app2");
+        await AddResource(repositoryContext.Repository, "app1");
 
         // Act 1
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
 
         // Assert 1
         Assert.Collection(resources,
@@ -39,9 +38,9 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
             });
 
         // Act 2
-        var app1 = repository.GetResourceByCompositeName("app1-TestId");
-        var app2 = repository.GetResourceByCompositeName("APP2-TESTID");
-        var notFound = repository.GetResourceByCompositeName("APP2_TESTID");
+        var app1 = repositoryContext.Repository.GetResourceByCompositeName("app1-TestId");
+        var app2 = repositoryContext.Repository.GetResourceByCompositeName("APP2-TESTID");
+        var notFound = repositoryContext.Repository.GetResourceByCompositeName("APP2_TESTID");
 
         // Assert 2
         Assert.NotNull(app1);
@@ -59,15 +58,14 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResources_WithNameAndNoKey()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await AddResource(repository, "app2");
-        await AddResource(repository, "app1", instanceId: "123");
-        await AddResource(repository, "app1", instanceId: "456");
+        await AddResource(repositoryContext.Repository, "app2");
+        await AddResource(repositoryContext.Repository, "app1", instanceId: "123");
+        await AddResource(repositoryContext.Repository, "app1", instanceId: "456");
 
         // Act 1
-        var resources1 = repository.GetResources(new ResourceKey("app1", InstanceId: null));
+        var resources1 = repositoryContext.Repository.GetResources(new ResourceKey("app1", InstanceId: null));
 
         // Assert 1
         Assert.Collection(resources1,
@@ -83,7 +81,7 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
             });
 
         // Act 2
-        var resources2 = repository.GetResources(new ResourceKey("app2", InstanceId: null));
+        var resources2 = repositoryContext.Repository.GetResources(new ResourceKey("app2", InstanceId: null));
 
         // Assert 2
         Assert.Collection(resources2,
@@ -98,15 +96,14 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResources_Order()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await AddResource(repository, "app2");
-        await AddResource(repository, "app1", instanceId: "def");
-        await AddResource(repository, "app1", instanceId: "abc");
+        await AddResource(repositoryContext.Repository, "app2");
+        await AddResource(repositoryContext.Repository, "app1", instanceId: "def");
+        await AddResource(repositoryContext.Repository, "app1", instanceId: "abc");
 
         // Act
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
 
         // Assert
         Assert.Collection(resources,
@@ -131,16 +128,15 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResourceName_GuidInstanceId_Shorten()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
         var guid1 = "19572b19-d1c0-4a51-98b4-fcc2658f73d3";
         var guid2 = "f66e2b1e-f420-4a22-a067-8dd2f6fcda86";
 
-        await AddResource(repository, "app1", guid1);
-        await AddResource(repository, "app1", guid2);
+        await AddResource(repositoryContext.Repository, "app1", guid1);
+        await AddResource(repositoryContext.Repository, "app1", guid2);
 
         // Act
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
 
         var instance1Name = OtlpHelpers.GetResourceName(resources[0], resources);
         var instance2Name = OtlpHelpers.GetResourceName(resources[1], resources);
@@ -154,18 +150,17 @@ public abstract class ResourceTests : TelemetryRepositoryTestBase
     public async Task GetResourceName_Version7GuidInstanceId_ShortenedNamesDiffer()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Version 7 GUIDs created close in time share the same leading characters.
         var guid1 = "01890a5d-ac96-774b-bcce-b302099a8057";
         var guid2 = "01890a5d-ac96-7768-a3e2-34c4a0e9f6ad";
 
-        await AddResource(repository, "app1", guid1);
-        await AddResource(repository, "app1", guid2);
+        await AddResource(repositoryContext.Repository, "app1", guid1);
+        await AddResource(repositoryContext.Repository, "app1", guid2);
 
         // Act
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
 
         var instance1 = Assert.Single(resources, r => r.InstanceId == guid1);
         var instance2 = Assert.Single(resources, r => r.InstanceId == guid2);

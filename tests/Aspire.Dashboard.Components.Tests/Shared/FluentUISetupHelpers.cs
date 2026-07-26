@@ -160,6 +160,7 @@ internal static class FluentUISetupHelpers
         var outgoingPeerResolvers = context.Services.GetServices<IOutgoingPeerResolver>();
 
         using var database = new DashboardSqliteDatabase(databasePath, pooling: false);
+        await database.InitializeSchemaAsync();
         using var writer = new SqliteTelemetryRepository(
             database,
             loggerFactory,
@@ -186,7 +187,12 @@ internal static class FluentUISetupHelpers
         {
             var databasePath = Path.Combine(services.GetRequiredService<TemporaryWorkspace>().Path, "dashboard.db");
             var configuration = services.GetService<TelemetryRepositoryConfiguration>();
-            return new DashboardSqliteDatabase(databasePath, readOnly: configuration?.ReadOnly == true, pooling: false);
+            var database = new DashboardSqliteDatabase(databasePath, readOnly: configuration?.ReadOnly == true, pooling: false);
+            if (!database.IsReadOnly)
+            {
+                database.InitializeSchemaAsync().GetAwaiter().GetResult();
+            }
+            return database;
         });
         context.Services.AddSingleton<SqliteTelemetryRepository>(services =>
         {

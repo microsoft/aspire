@@ -33,12 +33,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -57,7 +56,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -65,7 +64,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -88,7 +87,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                     });
             });
 
-        var propertyKeys = repository.GetLogPropertyKeys(resources[0].ResourceKey)!;
+        var propertyKeys = repositoryContext.Repository.GetLogPropertyKeys(resources[0].ResourceKey)!;
         Assert.Collection(propertyKeys,
             s => Assert.Equal("Log", s));
     }
@@ -96,10 +95,9 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetLogSummaries_ReturnsPageData()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
         var addContext = new AddContext();
-        await repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
+        await repositoryContext.Repository.AsWriter().AddTracesAsync(addContext, new RepeatedField<ResourceSpans>
         {
             new ResourceSpans
             {
@@ -122,7 +120,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                 }
             }
         });
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -184,8 +182,8 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             Count = 10,
             Filters = []
         };
-        var summaries = repository.GetLogSummaries(context);
-        var logs = repository.GetLogs(context);
+        var summaries = repositoryContext.Repository.GetLogSummaries(context);
+        var logs = repositoryContext.Repository.GetLogs(context);
 
         Assert.Equal(logs.TotalItemCount, summaries.TotalItemCount);
         Assert.Equal(logs.IsFull, summaries.IsFull);
@@ -216,7 +214,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                 Assert.False(summary.HasGenAI);
             });
 
-        var filtered = repository.GetLogSummaries(new GetLogsContext
+        var filtered = repositoryContext.Repository.GetLogSummaries(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -234,7 +232,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         Assert.Equal("direct", Assert.Single(filtered.Items).Message);
         Assert.Equal(1, filtered.TotalItemCount);
 
-        var emptyPage = repository.GetLogSummaries(new GetLogsContext
+        var emptyPage = repositoryContext.Repository.GetLogSummaries(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 10,
@@ -244,7 +242,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         Assert.Empty(emptyPage.Items);
         Assert.Equal(3, emptyPage.TotalItemCount);
 
-        var emptyLogsPage = repository.GetLogs(new GetLogsContext
+        var emptyLogsPage = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 10,
@@ -258,10 +256,9 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetLogsFieldValues_AllFieldsMatchMaterializedLogs()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -282,7 +279,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -300,7 +297,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                 .Where(value => value is not null)
                 .GroupBy(value => value!, StringComparers.OtlpAttribute)
                 .ToDictionary(group => group.Key, group => group.Count(), StringComparers.OtlpAttribute);
-            var actual = repository.GetLogsFieldValues(field);
+            var actual = repositoryContext.Repository.GetLogsFieldValues(field);
             Assert.True(expected.Count == actual.Count, $"Field '{field}' expected {expected.Count} values but found {actual.Count}.");
             foreach (var (value, count) in expected)
             {
@@ -309,19 +306,18 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             }
         }
 
-        Assert.Empty(repository.GetLogsFieldValues(KnownStructuredLogFields.TimestampField));
+        Assert.Empty(repositoryContext.Repository.GetLogsFieldValues(KnownStructuredLogFields.TimestampField));
     }
 
     [Fact]
     public async Task AddLogs_NoBody_EmptyMessage()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -340,7 +336,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -358,12 +354,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_MultipleOutOfOrder()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -393,7 +388,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -421,12 +416,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_Error_UnviewedCount()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -468,7 +462,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var unviewedCounts1 = repository.GetResourceUnviewedErrorLogsCount();
+        var unviewedCounts1 = repositoryContext.Repository.GetResourceUnviewedErrorLogsCount();
 
         Assert.True(unviewedCounts1.TryGetValue(new ResourceKey("TestService", "1"), out var unviewedCount1));
         Assert.Equal(2, unviewedCount1);
@@ -476,18 +470,18 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         Assert.True(unviewedCounts1.TryGetValue(new ResourceKey("TestService", "2"), out var unviewedCount2));
         Assert.Equal(1, unviewedCount2);
 
-        repository.MarkViewedErrorLogs(new ResourceKey("TestService", "1"));
+        repositoryContext.Repository.MarkViewedErrorLogs(new ResourceKey("TestService", "1"));
 
-        var unviewedCounts2 = repository.GetResourceUnviewedErrorLogsCount();
+        var unviewedCounts2 = repositoryContext.Repository.GetResourceUnviewedErrorLogsCount();
 
         Assert.False(unviewedCounts2.TryGetValue(new ResourceKey("TestService", "1"), out _));
 
         Assert.True(unviewedCounts2.TryGetValue(new ResourceKey("TestService", "2"), out unviewedCount2));
         Assert.Equal(1, unviewedCount2);
 
-        repository.MarkViewedErrorLogs(null);
+        repositoryContext.Repository.MarkViewedErrorLogs(null);
 
-        var unviewedCounts3 = repository.GetResourceUnviewedErrorLogsCount();
+        var unviewedCounts3 = repositoryContext.Repository.GetResourceUnviewedErrorLogsCount();
 
         Assert.False(unviewedCounts3.TryGetValue(new ResourceKey("TestService", "1"), out _));
         Assert.False(unviewedCounts3.TryGetValue(new ResourceKey("TestService", "2"), out _));
@@ -497,13 +491,12 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_Error_UnviewedCount_WithReadSubscriptionAll()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        using var subscription = repository.OnNewLogs(resourceKey: null, SubscriptionType.Read, () => Task.CompletedTask);
+        using var repositoryContext = await CreateRepositoryAsync();
+        using var subscription = repositoryContext.Repository.OnNewLogs(resourceKey: null, SubscriptionType.Read, () => Task.CompletedTask);
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -540,7 +533,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var unviewedCounts = repository.GetResourceUnviewedErrorLogsCount();
+        var unviewedCounts = repositoryContext.Repository.GetResourceUnviewedErrorLogsCount();
 
         Assert.False(unviewedCounts.TryGetValue(new ResourceKey("TestService", "1"), out _));
         Assert.False(unviewedCounts.TryGetValue(new ResourceKey("TestService", "2"), out _));
@@ -550,13 +543,12 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_Error_UnviewedCount_WithReadSubscriptionOneApp()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        using var subscription = repository.OnNewLogs(resourceKey: new ResourceKey("TestService", "1"), SubscriptionType.Read, () => Task.CompletedTask);
+        using var repositoryContext = await CreateRepositoryAsync();
+        using var subscription = repositoryContext.Repository.OnNewLogs(resourceKey: new ResourceKey("TestService", "1"), SubscriptionType.Read, () => Task.CompletedTask);
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -593,7 +585,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var unviewedCounts = repository.GetResourceUnviewedErrorLogsCount();
+        var unviewedCounts = repositoryContext.Repository.GetResourceUnviewedErrorLogsCount();
 
         Assert.False(unviewedCounts.TryGetValue(new ResourceKey("TestService", "1"), out _));
         Assert.True(unviewedCounts.TryGetValue(new ResourceKey("TestService", "2"), out var unviewedCount));
@@ -604,13 +596,12 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_Error_UnviewedCount_WithNonReadSubscription()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
-        using var subscription = repository.OnNewLogs(resourceKey: null, SubscriptionType.Other, () => Task.CompletedTask);
+        using var repositoryContext = await CreateRepositoryAsync();
+        using var subscription = repositoryContext.Repository.OnNewLogs(resourceKey: null, SubscriptionType.Other, () => Task.CompletedTask);
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -632,21 +623,20 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var unviewedCounts = repository.GetResourceUnviewedErrorLogsCount();
+        var unviewedCounts = repositoryContext.Repository.GetResourceUnviewedErrorLogsCount();
 
         Assert.True(unviewedCounts.TryGetValue(new ResourceKey("TestService", "1"), out var unviewedCount));
         Assert.Equal(1, unviewedCount);
     }
 
     [Fact]
-    public void GetLogs_UnknownResource()
+    public async Task GetLogs_UnknownResource()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [new ResourceKey("TestService", "UnknownResource")],
             StartIndex = 0,
@@ -659,14 +649,13 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     }
 
     [Fact]
-    public void GetLogPropertyKeys_UnknownResource()
+    public async Task GetLogPropertyKeys_UnknownResource()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
-        var propertyKeys = repository.GetLogPropertyKeys(new ResourceKey("TestService", "UnknownResource"));
+        var propertyKeys = repositoryContext.Repository.GetLogPropertyKeys(new ResourceKey("TestService", "UnknownResource"));
 
         // Assert
         Assert.Empty(propertyKeys);
@@ -676,11 +665,10 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task Subscriptions_AddLog()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var newResourcesTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        repository.OnNewResources(() =>
+        repositoryContext.Repository.OnNewResources(() =>
         {
             newResourcesTcs.TrySetResult();
             return Task.CompletedTask;
@@ -688,7 +676,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act 1
         var addContext1 = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext1, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext1, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -708,7 +696,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext1.FailureCount);
         await newResourcesTcs.Task.DefaultTimeout();
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -718,14 +706,14 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act 2
         var newLogsTcs = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
-        repository.OnNewLogs(resources[0].ResourceKey, SubscriptionType.Read, () =>
+        repositoryContext.Repository.OnNewLogs(resources[0].ResourceKey, SubscriptionType.Read, () =>
         {
             newLogsTcs.TrySetResult();
             return Task.CompletedTask;
         });
 
         var addContext2 = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext2, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext2, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -746,7 +734,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert 2
         Assert.Equal(0, addContext2.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -761,11 +749,10 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task Unsubscribe()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var onNewResourcesCalled = false;
-        var subscription = repository.OnNewResources(() =>
+        var subscription = repositoryContext.Repository.OnNewResources(() =>
         {
             onNewResourcesCalled = true;
             return Task.CompletedTask;
@@ -774,7 +761,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -802,11 +789,10 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         var asyncLocal = new AsyncLocal<string>();
         asyncLocal.Value = "CustomValue";
 
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var tcs = new TaskCompletionSource<string>(TaskCreationOptions.RunContinuationsAsynchronously);
-        var subscription = repository.OnNewResources(() =>
+        var subscription = repositoryContext.Repository.OnNewResources(() =>
         {
             tcs.SetResult(asyncLocal.Value);
             return Task.CompletedTask;
@@ -819,7 +805,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             task = Task.Run(async () =>
             {
                 var addContext = new AddContext();
-                await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+                await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
                 {
                     new ResourceLogs
                     {
@@ -848,8 +834,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_AttributeLimits_LimitsApplied()
     {
         // Arrange
-        using var repositoryContext = CreateRepository(maxAttributeCount: 5, maxAttributeLength: 16);
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync(maxAttributeCount: 5, maxAttributeLength: 16);
 
         // Act
         var attributes = new List<KeyValuePair<string, string>>
@@ -864,7 +849,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         }
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -883,7 +868,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -891,7 +876,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                 Assert.Equal("TestId", resource.InstanceId);
             });
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -939,13 +924,12 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         var minExecuteInterval = CallbackThrottler.DefaultMinExecuteInterval;
         var loggerFactory = IntegrationTestHelpers.CreateLoggerFactory(_testOutputHelper);
         var logger = loggerFactory.CreateLogger(nameof(LogTests));
-        using var repositoryContext = CreateRepository(subscriptionMinExecuteInterval: minExecuteInterval, loggerFactory: loggerFactory);
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync(subscriptionMinExecuteInterval: minExecuteInterval, loggerFactory: loggerFactory);
         var stopwatch = new Stopwatch();
 
         var callCount = 0;
         var resultChannel = Channel.CreateUnbounded<int>();
-        var subscription = repository.OnNewLogs(resourceKey: null, SubscriptionType.Read, async () =>
+        var subscription = repositoryContext.Repository.OnNewLogs(resourceKey: null, SubscriptionType.Read, async () =>
         {
             if (!stopwatch.IsRunning)
             {
@@ -963,7 +947,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Act
         var addContext = new AddContext();
         logger.LogInformation("Writing log 1");
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -985,7 +969,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         logger.LogInformation("Received log 1 callback");
 
         logger.LogInformation("Writing log 2");
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1014,12 +998,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task FilterLogs_With_Message_Returns_CorrectLog()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1038,10 +1021,10 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             }
         });
 
-        var resourceKey = repository.GetResources().First().ResourceKey;
+        var resourceKey = repositoryContext.Repository.GetResources().First().ResourceKey;
 
         // Assert
-        Assert.Empty(repository.GetLogs(new GetLogsContext
+        Assert.Empty(repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1049,7 +1032,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = "does_not_contain" }]
         }).Items);
 
-        Assert.Single(repository.GetLogs(new GetLogsContext
+        Assert.Single(repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1064,10 +1047,9 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     [InlineData("!")]
     public async Task FilterLogs_WithLikeMetacharacter_TreatsValueAsLiteral(string fragment)
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
         var expectedMessage = $"matches-{fragment}-literal";
-        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1087,9 +1069,9 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             }
         });
 
-        var result = repository.GetLogs(new GetLogsContext
+        var result = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
-            ResourceKeys = [repository.GetResources().Single().ResourceKey],
+            ResourceKeys = [repositoryContext.Repository.GetResources().Single().ResourceKey],
             StartIndex = 0,
             Count = int.MaxValue,
             Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = nameof(OtlpLogEntry.Message), Value = fragment }]
@@ -1103,12 +1085,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task FilterLogs_With_EventName_Returns_CorrectLog()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1127,10 +1108,10 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             }
         });
 
-        var resourceKey = repository.GetResources().First().ResourceKey;
+        var resourceKey = repositoryContext.Repository.GetResources().First().ResourceKey;
 
         // Assert
-        Assert.Empty(repository.GetLogs(new GetLogsContext
+        Assert.Empty(repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1138,7 +1119,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             Filters = [new FieldTelemetryFilter { Condition = FilterCondition.Contains, Field = KnownStructuredLogFields.EventNameField, Value = "does_not_contain" }]
         }).Items);
 
-        Assert.Single(repository.GetLogs(new GetLogsContext
+        Assert.Single(repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1151,12 +1132,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_MultipleResources_SameInstanceId_CreateMultipleResources()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1187,7 +1167,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var resources = repository.GetResources();
+        var resources = repositoryContext.Repository.GetResources();
         Assert.Collection(resources,
             resource =>
             {
@@ -1200,7 +1180,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                 Assert.Equal("computer-name", resource.InstanceId);
             });
 
-        var logs1 = repository.GetLogs(new GetLogsContext
+        var logs1 = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resources[0].ResourceKey],
             StartIndex = 0,
@@ -1223,7 +1203,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                     });
             });
 
-        var logs2 = repository.GetLogs(new GetLogsContext
+        var logs2 = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resources[1].ResourceKey],
             StartIndex = 0,
@@ -1251,12 +1231,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task GetLogs_MultipleInstances()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1300,7 +1279,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         Assert.Equal(0, addContext.FailureCount);
 
         var resourceKey = new ResourceKey("resource1", InstanceId: null);
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [resourceKey],
             StartIndex = 0,
@@ -1331,7 +1310,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
                     });
             });
 
-        var propertyKeys = repository.GetLogPropertyKeys(resourceKey)!;
+        var propertyKeys = repositoryContext.Repository.GetLogPropertyKeys(resourceKey)!;
         Assert.Collection(propertyKeys,
             s => Assert.Equal("key-1", s),
             s => Assert.Equal("key-2", s));
@@ -1341,11 +1320,10 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task RemoveLogs_All()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1386,12 +1364,12 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        await repository.AsWriter().ClearStructuredLogsAsync();
+        await repositoryContext.Repository.AsWriter().ClearStructuredLogsAsync();
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1407,11 +1385,10 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task RemoveLogs_SelectedResource()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1452,12 +1429,12 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        await repository.AsWriter().ClearStructuredLogsAsync(new ResourceKey("resource1", "123"));
+        await repositoryContext.Repository.AsWriter().ClearStructuredLogsAsync(new ResourceKey("resource1", "123"));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1482,11 +1459,10 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task RemoveLogs_MultipleSelectedResources()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1527,12 +1503,12 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         });
 
         // Act
-        await repository.AsWriter().ClearStructuredLogsAsync(new ResourceKey("resource1", null));
+        await repositoryContext.Repository.AsWriter().ClearStructuredLogsAsync(new ResourceKey("resource1", null));
 
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1549,12 +1525,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_ObservedUnixTimeNanos()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1573,7 +1548,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1591,12 +1566,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_EventName_FromLogRecordField()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1615,7 +1589,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1633,12 +1607,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_EventName_FromLegacyAttribute()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1657,7 +1630,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1677,12 +1650,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_EventName_FieldTakesPrecedenceOverAttribute()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1701,7 +1673,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1720,12 +1692,11 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     public async Task AddLogs_EventName_NullWhenNotSet()
     {
         // Arrange
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
         // Act
         var addContext = new AddContext();
-        await repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(addContext, new RepeatedField<ResourceLogs>()
         {
             new ResourceLogs
             {
@@ -1744,7 +1715,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
         // Assert
         Assert.Equal(0, addContext.FailureCount);
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1761,10 +1732,9 @@ public abstract class LogTests : TelemetryRepositoryTestBase
     [Fact]
     public async Task GetLogs_DisabledFiltersAreIgnored()
     {
-        using var repositoryContext = CreateRepository();
-        var repository = repositoryContext.Repository;
+        using var repositoryContext = await CreateRepositoryAsync();
 
-        await repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+        await repositoryContext.Repository.AsWriter().AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
         {
             new ResourceLogs
             {
@@ -1803,7 +1773,7 @@ public abstract class LogTests : TelemetryRepositoryTestBase
             }
         };
 
-        var logs = repository.GetLogs(new GetLogsContext
+        var logs = repositoryContext.Repository.GetLogs(new GetLogsContext
         {
             ResourceKeys = [],
             StartIndex = 0,
@@ -1831,7 +1801,7 @@ public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTest
     {
         const int logCount = 1_100;
         var testTime = new DateTime(1970, 1, 1, 0, 0, 0, DateTimeKind.Utc);
-        using var repositoryContext = CreateRepository();
+        using var repositoryContext = await CreateRepositoryAsync();
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
         var logRecords = new RepeatedField<LogRecord>();
         for (var index = 0; index < logCount; index++)
@@ -1895,7 +1865,7 @@ public sealed class SqliteLogTests(ITestOutputHelper testOutputHelper) : LogTest
     [Fact]
     public async Task AddLogs_LargeAttributeBatchesRoundTripAcrossResources()
     {
-        using var repositoryContext = CreateRepository();
+        using var repositoryContext = await CreateRepositoryAsync();
         var repository = Assert.IsType<SqliteTelemetryRepository>(repositoryContext.Repository);
         var context = new AddContext();
         var attributes = Enumerable.Range(0, 128)

@@ -122,7 +122,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void NoneMode_UsesTemporaryDatabaseAndDeletesItOnDispose()
+    public async Task NoneMode_UsesTemporaryDatabaseAndDeletesItOnDispose()
     {
         var options = CreateOptions(persistenceMode: DashboardPersistenceMode.None);
         string runDirectory;
@@ -133,7 +133,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             runDirectory = runStore.RunDirectory;
             databasePath = runStore.DatabasePath;
             using var database = new DashboardSqliteDatabase(databasePath, pooling: false);
-            database.InitializeSchema();
+            await database.InitializeSchemaAsync();
 
             Assert.False(runStore.SupportsRunSelection);
             Assert.False(runDirectory.StartsWith(_workspace.Path, StringComparison.OrdinalIgnoreCase));
@@ -149,7 +149,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     [InlineData(DashboardPersistenceMode.None)]
     [InlineData(DashboardPersistenceMode.Run)]
     [InlineData(DashboardPersistenceMode.Resume)]
-    public void ServiceProviderDisposal_ReleasesDatabaseAndDeletesTemporaryRunDirectory(DashboardPersistenceMode persistenceMode)
+    public async Task ServiceProviderDisposal_ReleasesDatabaseAndDeletesTemporaryRunDirectory(DashboardPersistenceMode persistenceMode)
     {
         var options = CreateOptions($"Dispose-{Guid.NewGuid():N}", persistenceMode);
         var services = new ServiceCollection()
@@ -170,10 +170,9 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             using (var serviceProvider = services.BuildServiceProvider())
             {
                 var runStore = serviceProvider.GetRequiredService<DashboardRunStore>();
-                // Creating the current lease after the run store makes DI dispose the data source pool first.
-                // Initializing the schema leaves a physical connection in the SQLite provider pool to be cleared.
-                var database = serviceProvider.GetRequiredService<DashboardDataSourcePool>().Current.Database;
-                database.InitializeSchema();
+                // Starting the pool creates its current lease after the run store, so DI disposes the pool first.
+                // Schema initialization leaves a physical connection in the SQLite provider pool to be cleared.
+                await serviceProvider.GetRequiredService<DashboardDataSourcePool>().InitializeAsync(CancellationToken.None);
                 runDirectory = runStore.RunDirectory;
             }
 
@@ -218,12 +217,12 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void NoneMode_DoesNotDeleteActiveTemporaryDirectories()
+    public async Task NoneMode_DoesNotDeleteActiveTemporaryDirectories()
     {
         var options = CreateOptions(persistenceMode: DashboardPersistenceMode.None);
         using var activeRunStore = CreateRunStore(options);
         using var database = new DashboardSqliteDatabase(activeRunStore.DatabasePath, pooling: false);
-        database.InitializeSchema();
+        await database.InitializeSchemaAsync();
 
         using var secondRunStore = CreateRunStore(options);
 
@@ -270,7 +269,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void ResumeMode_ReusesApplicationDatabaseWithoutRunSelection()
+    public async Task ResumeMode_ReusesApplicationDatabaseWithoutRunSelection()
     {
         var options = CreateOptions("My Dashboard", DashboardPersistenceMode.Resume);
         string firstDatabasePath;
@@ -278,7 +277,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using (var firstRunStore = CreateRunStore(options))
         {
             firstDatabasePath = firstRunStore.DatabasePath;
-            new DashboardSqliteDatabase(firstDatabasePath).InitializeSchema();
+            using var database = new DashboardSqliteDatabase(firstDatabasePath);
+            await database.InitializeSchemaAsync();
         }
 
         var testSink = new TestSink();
@@ -309,7 +309,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void ResumeMode_DeletesIncompatibleDatabase()
+    public async Task ResumeMode_DeletesIncompatibleDatabase()
     {
         var options = CreateOptions(persistenceMode: DashboardPersistenceMode.Resume);
         string databasePath;
@@ -334,7 +334,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             testSink.Writes,
             write => write.Message == $"Existing dashboard database at '{databasePath}' is incompatible with schema version {DashboardRunStore.SchemaVersion} and will be replaced.");
         Assert.Equal(LogLevel.Information, incompatibleLog.LogLevel);
-        new DashboardSqliteDatabase(databasePath).InitializeSchema();
+        using var database = new DashboardSqliteDatabase(databasePath);
+        await database.InitializeSchemaAsync();
         Assert.True(DashboardSqliteDatabase.IsCompatible(databasePath));
     }
 
@@ -371,7 +372,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void GetRuns_ReturnsCurrentThenCompletedHistoricalRun()
+    public async Task GetRuns_ReturnsCurrentThenCompletedHistoricalRun()
     {
         var options = CreateOptions();
         string historicalRunId;
@@ -379,13 +380,11 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using (var historicalRunStore = CreateRunStore(options))
         {
             historicalRunId = historicalRunStore.RunId;
-            using var telemetryContext = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
-            var telemetryRepository = telemetryContext.Repository;
+            using var telemetryContext = await CreateTelemetryRepositoryAsync(historicalRunStore.DatabasePath, options);
         }
 
         using var currentRunStore = CreateRunStore(options);
-        using var currentTelemetryContext = CreateTelemetryRepository(currentRunStore.DatabasePath, options);
-        var currentTelemetryRepository = currentTelemetryContext.Repository;
+        using var currentTelemetryContext = await CreateTelemetryRepositoryAsync(currentRunStore.DatabasePath, options);
 
         Assert.Collection(
             currentRunStore.GetRuns(),
@@ -415,7 +414,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void GetRuns_ExcludesRunOwnedByAnotherDashboard()
+    public async Task GetRuns_ExcludesRunOwnedByAnotherDashboard()
     {
         var options = CreateOptions();
         string historicalRunId;
@@ -423,16 +422,13 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using (var historicalRunStore = CreateRunStore(options))
         {
             historicalRunId = historicalRunStore.RunId;
-            using var historicalTelemetryContext = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
-            var historicalTelemetryRepository = historicalTelemetryContext.Repository;
+            using var historicalTelemetryContext = await CreateTelemetryRepositoryAsync(historicalRunStore.DatabasePath, options);
         }
 
         using var activeRunStore = CreateRunStore(options);
-        using var activeTelemetryContext = CreateTelemetryRepository(activeRunStore.DatabasePath, options);
-        var activeTelemetryRepository = activeTelemetryContext.Repository;
+        using var activeTelemetryContext = await CreateTelemetryRepositoryAsync(activeRunStore.DatabasePath, options);
         using var currentRunStore = CreateRunStore(options);
-        using var currentTelemetryContext = CreateTelemetryRepository(currentRunStore.DatabasePath, options);
-        var currentTelemetryRepository = currentTelemetryContext.Repository;
+        using var currentTelemetryContext = await CreateTelemetryRepositoryAsync(currentRunStore.DatabasePath, options);
 
         Assert.Collection(
             currentRunStore.GetRuns(),
@@ -503,7 +499,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void SelectedHistoricalRun_HoldsLeaseUntilSelectionChanges()
+    public async Task SelectedHistoricalRun_HoldsLeaseUntilSelectionChanges()
     {
         var options = CreateOptions();
         string historicalRunId;
@@ -513,8 +509,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         {
             historicalRunId = historicalRunStore.RunId;
             historicalRunDirectory = historicalRunStore.RunDirectory;
-            using var historicalTelemetryContext = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
-            var historicalTelemetryRepository = historicalTelemetryContext.Repository;
+            using var historicalTelemetryContext = await CreateTelemetryRepositoryAsync(historicalRunStore.DatabasePath, options);
         }
 
         using var currentRunStore = CreateRunStore(options);
@@ -551,7 +546,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
     }
 
     [Fact]
-    public void SelectedHistoricalRun_SharesDatabaseAcrossDataSources()
+    public async Task SelectedHistoricalRun_SharesDatabaseAcrossDataSources()
     {
         var options = CreateOptions();
         string historicalRunId;
@@ -559,8 +554,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using (var historicalRunStore = CreateRunStore(options))
         {
             historicalRunId = historicalRunStore.RunId;
-            using var historicalTelemetryContext = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
-            var historicalTelemetryRepository = historicalTelemetryContext.Repository;
+            using var historicalTelemetryContext = await CreateTelemetryRepositoryAsync(historicalRunStore.DatabasePath, options);
         }
 
         using var currentRunStore = CreateRunStore(options);
@@ -760,9 +754,8 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         using (var historicalRunStore = CreateRunStore(options))
         {
             historicalRunId = historicalRunStore.RunId;
-            using var telemetryContext = CreateTelemetryRepository(historicalRunStore.DatabasePath, options);
-            var telemetryRepository = telemetryContext.Repository;
-            await telemetryRepository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
+            using var telemetryContext = await CreateTelemetryRepositoryAsync(historicalRunStore.DatabasePath, options);
+            await telemetryContext.Repository.AddLogsAsync(new AddContext(), new RepeatedField<ResourceLogs>
             {
                 new ResourceLogs
                 {
@@ -778,8 +771,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
                 }
             });
             using var resourceContext = CreateResourceRepository(historicalRunStore.DatabasePath);
-            var resourceRepository = resourceContext.Repository;
-            await ((IResourceRepositoryWriter)resourceRepository).ReplaceResourcesAsync([new Resource
+            await ((IResourceRepositoryWriter)resourceContext.Repository).ReplaceResourcesAsync([new Resource
             {
                 Name = "api",
                 DisplayName = "API",
@@ -920,11 +912,11 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
         });
     }
 
-    private static SqliteRepositoryTestContext<SqliteTelemetryRepository> CreateTelemetryRepository(
+    private static async Task<SqliteRepositoryTestContext<SqliteTelemetryRepository>> CreateTelemetryRepositoryAsync(
         string databasePath,
         IOptions<DashboardOptions> options)
     {
-        var context = SqliteRepositoryTestHelpers.CreateTelemetryRepository(
+        var context = await SqliteRepositoryTestHelpers.CreateTelemetryRepositoryAsync(
             databasePath,
             pooling: true,
             dashboardOptions: options);
@@ -958,6 +950,7 @@ public sealed class DashboardDataSourceTests(ITestOutputHelper testOutputHelper)
             _databasePools.Add(dataSourcePool);
         }
 
+        dataSourcePool.InitializeAsync(CancellationToken.None).GetAwaiter().GetResult();
         return new DashboardDataSource(
             runStore,
             logger ?? NullLogger<DashboardDataSource>.Instance,
