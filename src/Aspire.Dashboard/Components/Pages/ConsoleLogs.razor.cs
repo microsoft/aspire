@@ -610,16 +610,24 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
         // no-terminal case.
         if (_selectedResourceHasTerminal)
         {
+            // Mark the active view with a checkmark so the picker indicates the
+            // current selection. MenuButtonItem has no built-in checked/radio
+            // state, so we surface it via the leading icon — the same start-slot
+            // checkmark other menus use (e.g. GenAIVisualizerDialog). The icon
+            // gutter is always reserved by FluentMenuItem, so the unchecked item's
+            // text stays aligned with the checked one.
             _logsMenuItems.Add(new()
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Console)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewConsoleOption)],
+                Icon = _activeView == ConsoleLogsView.Console ? new Icons.Regular.Size16.Checkmark() : null,
             });
 
             _logsMenuItems.Add(new()
             {
                 OnClick = () => HandleViewChangedAsync(nameof(ConsoleLogsView.Terminal)),
                 Text = Loc[nameof(Dashboard.Resources.ConsoleLogs.ConsoleLogsViewTerminalOption)],
+                Icon = _activeView == ConsoleLogsView.Terminal ? new Icons.Regular.Size16.Checkmark() : null,
             });
 
             _logsMenuItems.Add(new()
@@ -1403,6 +1411,7 @@ public sealed partial class ConsoleLogs : ComponentBase, IComponentWithTelemetry
     // by ConsoleLogsTests.
     internal ConsoleLogsView ActiveViewForTest => _activeView;
     internal Task HandleViewChangedForTestAsync(string? newView) => HandleViewChangedAsync(newView);
+    internal IReadOnlyList<MenuButtonItem> LogsMenuItemsForTest => _logsMenuItems;
 
     private Task TerminalFontMinusAsync()
     {

@@ -90,6 +90,53 @@ public partial class ConsoleLogsTests
     }
 
     [Fact]
+    public async Task TerminalResource_ViewPicker_MarksActiveViewWithCheckmark()
+    {
+        var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
+        var resourceChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceViewModelChange>>();
+        var terminalResource = CreateTerminalResource("terminal-resource", replicaIndex: 0, replicaCount: 1, state: KnownResourceState.Running);
+        var dashboardClient = new TestDashboardClient(
+            isEnabled: true,
+            consoleLogsChannelProvider: _ => consoleLogsChannel,
+            resourceChannelProvider: () => resourceChannel,
+            initialResources: [terminalResource]);
+
+        SetupConsoleLogsServices(dashboardClient);
+        SetupTerminalViewJsInterop();
+
+        var navigationManager = Services.GetRequiredService<NavigationManager>();
+        navigationManager.NavigateTo(DashboardUrls.ConsoleLogsUrl(resource: "terminal-resource"));
+
+        var dimensionManager = Services.GetRequiredService<DimensionManager>();
+        var viewport = new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false);
+        dimensionManager.InvokeOnViewportInformationChanged(viewport);
+
+        var cut = RenderComponent<Components.Pages.ConsoleLogs>(builder =>
+        {
+            builder.Add(p => p.ResourceName, "terminal-resource");
+            builder.Add(p => p.ViewportInformation, viewport);
+        });
+
+        var instance = cut.Instance;
+        cut.WaitForState(() => instance.PageViewModel.SelectedResource.Id?.InstanceId == terminalResource.Name);
+        cut.WaitForState(() => cut.FindComponents<TerminalView>().Count > 0);
+
+        // The view-toggle items are the first two entries in the menu, added in
+        // Console-then-Terminal order (see UpdateMenuButtons). The live resource
+        // defaults to Terminal, so only the Terminal item carries the checkmark.
+        // Assert via Icon.Name so the test doesn't need the Icons icon package.
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Terminal);
+        Assert.Null(instance.LogsMenuItemsForTest[0].Icon);
+        Assert.Equal("Checkmark", instance.LogsMenuItemsForTest[1].Icon?.Name);
+
+        // Switching to Console moves the checkmark to the Console item.
+        await cut.InvokeAsync(() => instance.HandleViewChangedForTestAsync(nameof(ConsoleLogs.ConsoleLogsView.Console)));
+        cut.WaitForState(() => instance.ActiveViewForTest == ConsoleLogs.ConsoleLogsView.Console);
+        Assert.Equal("Checkmark", instance.LogsMenuItemsForTest[0].Icon?.Name);
+        Assert.Null(instance.LogsMenuItemsForTest[1].Icon);
+    }
+
+    [Fact]
     public async Task TerminalResource_NotLive_Selected_RendersBothViews_DefaultsToConsole()
     {
         var consoleLogsChannel = Channel.CreateUnbounded<IReadOnlyList<ResourceLogLine>>();
