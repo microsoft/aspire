@@ -176,7 +176,13 @@ builder.Build().Run();
                   "done && " +
                   "if [ \"$failed\" -ne 0 ]; then echo \"❌ One or more endpoint checks failed\"; exit 1; fi");
             await auto.EnterAsync();
-            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(5));
+            // The in-terminal verification loop above retries each ACA endpoint up to 18 times with
+            // `curl --max-time 30` + `sleep 10`, so a single slow-to-warm endpoint can keep the loop
+            // running for ~12 minutes (18 * (30s + 10s)) before it either succeeds or fails fast via
+            // `exit 1`. The outer success-prompt wait must exceed that budget; a 5-minute wait would
+            // abandon a still-running (and often eventually-successful) loop and fail the test even
+            // though the deployment is healthy. This was the cause of consistent FrontDoor timeouts.
+            await auto.WaitForSuccessPromptAsync(counter, TimeSpan.FromMinutes(15));
 
             // Step 11: Exit terminal
             await auto.TypeAsync("exit");
