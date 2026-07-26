@@ -1188,6 +1188,27 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
     }
 
     [Fact]
+    public void AddDenoApp_PermissionValueContainingComma_Throws()
+    {
+        // Deno splits permission values on commas with no escape syntax, so a comma-containing value would
+        // silently become several permissions - denying the requested one and granting unrelated ones.
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+
+        var builder = DistributedApplication.CreateBuilder();
+        var deno = builder.AddDenoApp("deno", workspace.WorkspaceRoot.FullName, "main.ts");
+
+        var ex = Assert.Throws<ArgumentException>(() => deno.WithDenoAllowRead("data,secret"));
+        Assert.Contains("--allow-read", ex.Message);
+        Assert.Contains("cannot contain a comma", ex.Message);
+
+        var denyEx = Assert.Throws<ArgumentException>(() => deno.WithDenoDenyNet("a.example,b.example"));
+        Assert.Contains("--deny-net", denyEx.Message);
+
+        // Separate arguments remain the supported way to express multiple values.
+        deno.WithDenoAllowRead("data", "secret");
+    }
+
+    [Fact]
     public void AddDenoApp_UsesDenoCommand()
     {
         using var workspace = TemporaryWorkspace.Create(outputHelper);

@@ -45,13 +45,30 @@ public static partial class JavaScriptHostingExtensions
     {
         ArgumentNullException.ThrowIfNull(builder);
 
-        var annotation = GetOrAddDenoAnnotation(builder);
-        annotation.Permissions.Add(new DenoPermission
+        values ??= [];
+        var permission = new DenoPermission
         {
             Kind = kind,
             Deny = deny,
-            Values = values ?? [],
-        });
+            Values = values,
+        };
+
+        // Deno delimits permission values with commas and offers no escape syntax, so a single value containing a
+        // comma silently becomes several permissions. Verified on Deno 2.9.0: `--allow-read=data,secret` intended as
+        // one directory named "data,secret" instead grants `data` and `secret` separately, so the requested path is
+        // denied while unrelated paths are granted. Reject it here rather than emit a command line that means
+        // something other than what the caller asked for.
+        foreach (var value in values)
+        {
+            if (value is not null && value.Contains(','))
+            {
+                var flag = permission.Deny ? $"--deny-{permission.Name}" : $"--allow-{permission.Name}";
+                throw new ArgumentException($"The value '{value}' cannot contain a comma. Deno separates {flag} values with commas and provides no way to escape them, so this value would be interpreted as multiple permissions. Pass each value as a separate argument.", nameof(values));
+            }
+        }
+
+        var annotation = GetOrAddDenoAnnotation(builder);
+        annotation.Permissions.Add(permission);
         return builder;
     }
 

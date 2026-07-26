@@ -69,11 +69,18 @@ unscoped `WithDenoAllowEnv()`.
 
 ### 3. `deno serve --port` / `--host`
 
-`deno serve` has its own `--port`/`--host` flags, but Aspire allocates the port and communicates it
-via the injected `PORT` environment variable and endpoint annotations. Passing `--port` (through
-`WithDenoRuntimeArgs`) overrides Aspire's allocation and desyncs the endpoint the dashboard/service
-discovery advertise from the port the process actually binds. Bind to the injected `PORT` env var
-instead; `WithDenoServe()` deliberately exposes no port method.
+`WithDenoServe()` allocates an endpoint and emits the matching `--host`/`--port` arguments itself, because
+a `deno serve` handler cannot choose its own address — it exports a `fetch` handler and Deno owns the
+listener. Verified on Deno 2.9.0: `PORT=9911 deno serve -A s.ts` still binds `0.0.0.0:8000`, so a serve
+entrypoint does not read `PORT` and must be told the port on the command line.
+
+Passing `--port`/`--host` again through `WithDenoRuntimeArgs` appends a duplicate flag after the managed
+one and desyncs the endpoint the dashboard and service discovery advertise from the port the process
+actually binds. To change the port, configure the endpoint (for example `WithHttpEndpoint(port: 5005)`)
+and let `WithDenoServe()` project it; `WithDenoServe()` deliberately exposes no port method of its own.
+
+The injected `PORT` environment variable remains relevant for `deno run` entrypoints, which create their
+own listener (`Deno.serve({ port: Number(Deno.env.get("PORT")) }, ...)`).
 
 ### 4. `--inspect*` versus Aspire/VS Code debugging
 
