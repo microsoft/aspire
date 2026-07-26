@@ -44,6 +44,10 @@ public static partial class JavaScriptHostingExtensions
     private const string DenoDefaultUser = "deno";
     private const string DenoDefaultUserAndGroup = "deno:deno";
 
+    // Deno's dependency store. Pinned to a known path so multi-stage builds can copy it from the
+    // build stage into the runtime stage. See https://docs.deno.com/runtime/reference/docker/.
+    private const string DenoCacheDirectory = "/deno-dir";
+
     // npm/yarn/pnpm are Node CLIs: whether they install packages or launch the app's run script, they spawn
     // node, so node must be on PATH too. bun is a full Node replacement and needs no node.
     private static readonly string[] s_nodeBasedPackageManagers = ["npm", "yarn", "pnpm"];
@@ -1635,6 +1639,18 @@ public static partial class JavaScriptHostingExtensions
                                         denoRuntimeStage.CopyFrom("build", "/app", "/app");
                                     }
 
+                                    // Carry the populated dependency store across stages so the container does not
+                                    // re-download dependencies on first run.
+                                    denoRuntimeStage.Env("DENO_DIR", DenoCacheDirectory);
+                                    if (usesDefaultDenoRuntimeImage)
+                                    {
+                                        denoRuntimeStage.CopyFrom("build", DenoCacheDirectory, DenoCacheDirectory, DenoDefaultUserAndGroup);
+                                    }
+                                    else
+                                    {
+                                        denoRuntimeStage.CopyFrom("build", DenoCacheDirectory, DenoCacheDirectory);
+                                    }
+
                                     packageManager.InitializeDockerRuntimeStage?.Invoke(denoRuntimeStage);
 
                                     denoRuntimeStage
@@ -1645,7 +1661,13 @@ public static partial class JavaScriptHostingExtensions
                                         denoRuntimeStage.User(DenoDefaultUser);
                                     }
 
-                                    denoRuntimeStage.Entrypoint(["sh", "-c", $"exec {runCommand}"]);
+                                    // Exec form (no `sh -c`) so the container also works with shell-less Deno
+                                    // runtime images such as denoland/deno:*-distroless.
+                                    denoRuntimeStage.Entrypoint(BuildDenoPackageScriptEntrypoint(
+                                        packageManager.ExecutableName,
+                                        packageManager.ScriptCommand ?? "run",
+                                        publishMode.ScriptName!,
+                                        publishMode.RunScriptArguments));
                                     break;
                                 }
 
@@ -2326,11 +2348,18 @@ public static partial class JavaScriptHostingExtensions
             }
         }
 
-        var packageManager = new JavaScriptPackageManagerAnnotation("deno", runScriptCommand: "task", cacheMount: "/deno-dir")
+        var packageManager = new JavaScriptPackageManagerAnnotation("deno", runScriptCommand: "task")
         {
             // Deno's task runner forwards script arguments without requiring the `--` separator.
             CommandSeparator = null,
             ResolvePackageScriptRuntimeImage = buildImage => buildImage,
+            // Deliberately no BuildKit cache mount. For npm/bun/pnpm the mount only holds a download cache
+            // while the resolved dependencies still land in /app/node_modules, so discarding the mount at the
+            // end of the build is harmless. For Deno, DENO_DIR *is* the dependency store, so mounting it would
+            // leave the runtime image with no dependencies and force a re-download on first run. Instead the
+            // cache is written into the build stage layer and copied into the runtime stage, which is what
+            // Deno's own Docker guidance recommends. See https://docs.deno.com/runtime/reference/docker/.
+            InitializeDockerBuildStage = stage => stage.Env("DENO_DIR", DenoCacheDirectory),
         };
 
         if (packageFilesSourcePattern.Length > 0)

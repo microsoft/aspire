@@ -277,7 +277,9 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
         await Verify(dockerfileContents);
-        Assert.Equal("COPY --from=build --chown=deno:deno /app /app", GetDockerfileLine(dockerfileContents, "COPY --from=build"));
+        Assert.Equal("COPY --from=build --chown=deno:deno /app /app", GetDockerfileLine(dockerfileContents, "COPY --from=build --chown=deno:deno /app"));
+        // Deno's dependency store must travel to the runtime stage or the container re-downloads on first run.
+        Assert.Equal("COPY --from=build --chown=deno:deno /deno-dir /deno-dir", GetDockerfileLine(dockerfileContents, "COPY --from=build --chown=deno:deno /deno-dir"));
         Assert.Equal("USER deno", GetDockerfileLine(dockerfileContents, "USER"));
         Assert.Equal("""ENTRYPOINT ["sh","-c","exec deno task start -- --port $PORT"]""", GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
@@ -300,8 +302,35 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         await ManifestUtils.GetManifest(app.Resource, workspace.Path);
 
         var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
-        Assert.Equal("COPY --from=build /app /app", GetDockerfileLine(dockerfileContents, "COPY --from=build"));
+        Assert.Equal("COPY --from=build /app /app", GetDockerfileLine(dockerfileContents, "COPY --from=build /app"));
+        Assert.Equal("COPY --from=build /deno-dir /deno-dir", GetDockerfileLine(dockerfileContents, "COPY --from=build /deno-dir"));
         Assert.DoesNotContain(dockerfileContents.Split(Environment.NewLine), line => line.StartsWith("USER ", StringComparison.Ordinal));
+        // Distroless images have no /bin/sh, so the entrypoint must be exec form.
+        Assert.Equal(
+            """ENTRYPOINT ["deno","task","start"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_PublishAsPackageScriptWithPlainArgumentsUsesExecForm()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+        File.WriteAllText(Path.Combine(appDir, "deno.json"), """{"tasks":{"start":"deno run -A main.ts"}}""");
+
+        var app = builder.AddJavaScriptApp("js", appDir)
+            .WithDeno()
+            .PublishAsPackageScript("start", """-- --port 8080 --name "my app" """);
+
+        await ManifestUtils.GetManifest(app.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","task","start","--","--port","8080","--name","my app"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
     }
 
     [Fact]

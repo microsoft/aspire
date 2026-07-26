@@ -1,7 +1,9 @@
 // Licensed to the .NET Foundation under one or more agreements.
 // The .NET Foundation licenses this file to you under the MIT license.
 
+using System.Buffers;
 using System.Globalization;
+using System.Text;
 using Aspire.Hosting.ApplicationModel;
 using Aspire.Hosting.JavaScript;
 
@@ -901,6 +903,116 @@ public static partial class JavaScriptHostingExtensions
             or '/'
             or ':'
             or '=';
+
+    /// <summary>
+    /// Builds the ENTRYPOINT for a Deno package-script container.
+    /// </summary>
+    /// <remarks>
+    /// Exec form is preferred because Deno runtime images can be shell-less (for example
+    /// <c>denoland/deno:2.1-distroless</c>), where a <c>["sh", "-c", ...]</c> entrypoint fails to start.
+    /// Arguments that rely on the shell (for example <c>"-- --port $PORT"</c>) cannot be expressed in exec
+    /// form, so those keep the shell entrypoint and therefore require a shell-capable runtime image.
+    /// </remarks>
+    internal static string[] BuildDenoPackageScriptEntrypoint(string executableName, string scriptCommand, string scriptName, string? runScriptArguments)
+    {
+        if (RequiresShellForDenoRunScriptArguments(runScriptArguments))
+        {
+            var runCommand = $"{executableName} {scriptCommand} {scriptName} {runScriptArguments}";
+            return ["sh", "-c", $"exec {runCommand}"];
+        }
+
+        List<string> entrypoint = [executableName, scriptCommand, scriptName];
+        entrypoint.AddRange(TokenizeDenoRunScriptArguments(runScriptArguments));
+        return [.. entrypoint];
+    }
+
+    // Exec form performs no shell interpretation, so anything that depends on the shell - variable
+    // expansion, command substitution, globbing, redirection, or operators - must keep the `sh -c` form.
+    private static bool RequiresShellForDenoRunScriptArguments(string? runScriptArguments) =>
+        runScriptArguments is not null && runScriptArguments.AsSpan().IndexOfAny(s_denoShellMetacharacters) >= 0;
+
+    private static readonly SearchValues<char> s_denoShellMetacharacters =
+        SearchValues.Create("$`|&;<>*?~()");
+
+    /// <summary>
+    /// Splits a free-form run-script argument string into individual argv entries.
+    /// </summary>
+    /// <remarks>
+    /// <c>PublishAsPackageScript(runScriptArguments: ...)</c> takes a single string because it mirrors what a
+    /// developer would type in a shell. An exec-form ENTRYPOINT needs a real argument vector, so the string is
+    /// tokenized here using POSIX-shell word-splitting rules:
+    /// <code>
+    /// --port 8080          -> ["--port", "8080"]
+    /// --name 'my app'      -> ["--name", "my app"]
+    /// --path "/a b"        -> ["--path", "/a b"]
+    /// --msg "say \"hi\""   -> ["--msg", "say \"hi\""]
+    /// </code>
+    /// Inputs that need actual shell behavior never reach this method; see
+    /// <see cref="RequiresShellForDenoRunScriptArguments"/>.
+    /// </remarks>
+    private static List<string> TokenizeDenoRunScriptArguments(string? runScriptArguments)
+    {
+        var tokens = new List<string>();
+        if (string.IsNullOrWhiteSpace(runScriptArguments))
+        {
+            return tokens;
+        }
+
+        var current = new StringBuilder();
+        var hasToken = false;
+        var quote = '\0';
+
+        for (var index = 0; index < runScriptArguments.Length; index++)
+        {
+            var c = runScriptArguments[index];
+
+            if (quote == '\0' && char.IsWhiteSpace(c))
+            {
+                if (hasToken)
+                {
+                    tokens.Add(current.ToString());
+                    current.Clear();
+                    hasToken = false;
+                }
+
+                continue;
+            }
+
+            if (quote == '\0' && c is '\'' or '"')
+            {
+                quote = c;
+                // An empty quoted argument ("" or '') is still an argument.
+                hasToken = true;
+                continue;
+            }
+
+            if (quote != '\0' && c == quote)
+            {
+                quote = '\0';
+                continue;
+            }
+
+            // Backslash escapes only apply inside double quotes and outside quotes, matching POSIX shells.
+            // Inside single quotes every character is literal.
+            if (c == '\\' && quote != '\'' && index + 1 < runScriptArguments.Length)
+            {
+                index++;
+                current.Append(runScriptArguments[index]);
+                hasToken = true;
+                continue;
+            }
+
+            current.Append(c);
+            hasToken = true;
+        }
+
+        if (hasToken)
+        {
+            tokens.Add(current.ToString());
+        }
+
+        return tokens;
+    }
 
     private static bool ShouldUseFrozenLock(DenoCommandLineAnnotation deno, string workingDirectory)
     {
