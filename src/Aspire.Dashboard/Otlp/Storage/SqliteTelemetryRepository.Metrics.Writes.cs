@@ -145,19 +145,19 @@ public sealed partial class SqliteTelemetryRepository
             case Metric.DataOneofCase.Gauge:
                 foreach (var point in metric.Gauge.DataPoints)
                 {
-                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, cachedScope.Scope.Scope, point, ingestionState, pointBatch);
+                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, point, ingestionState, pointBatch);
                 }
                 break;
             case Metric.DataOneofCase.Sum:
                 foreach (var point in metric.Sum.DataPoints)
                 {
-                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, cachedScope.Scope.Scope, point, ingestionState, pointBatch);
+                    AddNumberMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, point, ingestionState, pointBatch);
                 }
                 break;
             case Metric.DataOneofCase.Histogram:
                 foreach (var point in metric.Histogram.DataPoints)
                 {
-                    AddHistogramMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, cachedScope.Scope.Scope, point, ingestionState, pointBatch);
+                    AddHistogramMetricPoint(connection, transaction, context, cachedInstrument.InstrumentId, point, ingestionState, pointBatch);
                 }
                 break;
         }
@@ -168,14 +168,13 @@ public sealed partial class SqliteTelemetryRepository
         IDbTransaction transaction,
         AddContext context,
         long instrumentId,
-        OtlpScope scope,
         NumberDataPoint point,
         MetricIngestionState ingestionState,
         MetricPointBatch pointBatch)
     {
         try
         {
-            var dimension = GetOrAddMetricDimension(connection, transaction, instrumentId, scope, point.Attributes, ingestionState);
+            var dimension = GetOrAddMetricDimension(connection, transaction, instrumentId, point.Attributes, ingestionState);
             var pointType = point.ValueCase switch
             {
                 NumberDataPoint.ValueOneofCase.AsInt => LongPointType,
@@ -244,7 +243,6 @@ public sealed partial class SqliteTelemetryRepository
         IDbTransaction transaction,
         AddContext context,
         long instrumentId,
-        OtlpScope scope,
         HistogramDataPoint point,
         MetricIngestionState ingestionState,
         MetricPointBatch pointBatch)
@@ -252,7 +250,7 @@ public sealed partial class SqliteTelemetryRepository
         try
         {
             OtlpHelpers.ValidateHistogramDataPoint(point);
-            var dimension = GetOrAddMetricDimension(connection, transaction, instrumentId, scope, point.Attributes, ingestionState);
+            var dimension = GetOrAddMetricDimension(connection, transaction, instrumentId, point.Attributes, ingestionState);
             var pendingLatest = dimension.PendingPoint;
             var latest = dimension.LatestPoint;
             var latestPointType = pendingLatest?.PointType ?? latest?.PointType;
@@ -412,14 +410,11 @@ public sealed partial class SqliteTelemetryRepository
         SqliteConnection connection,
         IDbTransaction transaction,
         long instrumentId,
-        OtlpScope scope,
         RepeatedField<KeyValue> pointAttributes,
         MetricIngestionState ingestionState)
     {
-        KeyValuePair<string, string>[]? temporaryAttributes = null;
-        OtlpHelpers.CopyKeyValuePairs(pointAttributes, scope.Attributes, _otlpContext, out var copyCount, ref temporaryAttributes);
-        Array.Sort(temporaryAttributes, 0, copyCount, MetricAttributeComparer.Instance);
-        var attributes = temporaryAttributes.AsSpan(0, copyCount).ToArray();
+        var attributes = pointAttributes.ToKeyValuePairs(_otlpContext);
+        Array.Sort(attributes, MetricAttributeComparer.Instance);
         var attributeHash = GetMetricDimensionAttributeHash(attributes);
         var cacheKey = (instrumentId, attributeHash);
         if (ingestionState.LoadedDimensionInstruments.Add(instrumentId))
@@ -514,11 +509,6 @@ public sealed partial class SqliteTelemetryRepository
             attribute.Key,
             attribute.Value)));
 
-        if (pointAttributes.Count == 1 && pointAttributes[0].Key == "otel.metric.overflow" && pointAttributes[0].Value.GetString() == "true")
-        {
-            connection.Execute("UPDATE telemetry_metric_instruments SET has_overflow = 1 WHERE instrument_id = @InstrumentId;", new { InstrumentId = instrumentId }, transaction);
-            MarkCachedInstrumentHasOverflow(instrumentId);
-        }
         candidates.Add(dimension);
         ingestionState.DimensionCounts[instrumentId] = dimensionCount + 1;
         return dimension;

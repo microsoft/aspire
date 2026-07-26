@@ -1796,9 +1796,6 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
 
         try
         {
-            // Temporary attributes array to use when adding metrics to the instruments.
-            KeyValuePair<string, string>[]? tempAttributes = null;
-
             foreach (var scopeMetric in scopeMetrics)
             {
                 if (!OtlpHelpers.TryGetOrAddScope(resourceEntry.Meters, scopeMetric.Scope, _otlpContext, TelemetryType.Metrics, out var scope))
@@ -1856,7 +1853,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                         continue;
                     }
 
-                    AddMetrics(instrument, metric, context, ref tempAttributes);
+                    AddMetrics(instrument, metric, context);
                 }
             }
         }
@@ -1866,7 +1863,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         }
     }
 
-    private void AddMetrics(InMemoryInstrument instrument, Metric metric, AddContext context, ref KeyValuePair<string, string>[]? tempAttributes)
+    private void AddMetrics(InMemoryInstrument instrument, Metric metric, AddContext context)
     {
         switch (metric.DataCase)
         {
@@ -1875,7 +1872,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                 {
                     try
                     {
-                        instrument.FindScope(dataPoint.Attributes, ref tempAttributes).AddPointValue(dataPoint, _otlpContext);
+                        instrument.FindScope(dataPoint.Attributes).AddPointValue(dataPoint, _otlpContext);
                         context.SuccessCount++;
                     }
                     catch (Exception ex)
@@ -1890,7 +1887,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                 {
                     try
                     {
-                        instrument.FindScope(dataPoint.Attributes, ref tempAttributes).AddPointValue(dataPoint, _otlpContext);
+                        instrument.FindScope(dataPoint.Attributes).AddPointValue(dataPoint, _otlpContext);
                         context.SuccessCount++;
                     }
                     catch (Exception ex)
@@ -1905,7 +1902,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                 {
                     try
                     {
-                        instrument.FindScope(dataPoint.Attributes, ref tempAttributes).AddHistogramValue(dataPoint, _otlpContext);
+                        instrument.FindScope(dataPoint.Attributes).AddHistogramValue(dataPoint, _otlpContext);
                         context.SuccessCount++;
                     }
                     catch (Exception ex)
@@ -2524,7 +2521,7 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
         public Dictionary<string, List<string?>> KnownAttributeValues { get; } = [];
         public bool HasOverflow { get; set; }
 
-        public DimensionScope FindScope(RepeatedField<KeyValue> attributes, ref KeyValuePair<string, string>[]? tempAttributes)
+        public DimensionScope FindScope(RepeatedField<KeyValue> attributes)
         {
             // See https://github.com/open-telemetry/opentelemetry-specification/blob/main/specification/metrics/sdk.md#overflow-attribute
             // Inspect attributes before they're merged with parent attributes. "otel.metric.overflow" should be the only attribute.
@@ -2533,14 +2530,10 @@ public sealed partial class InMemoryTelemetryRepository : ITelemetryRepository, 
                 HasOverflow = true;
             }
 
-            // We want to find the dimension scope that matches the attributes, but we don't want to allocate.
-            // Copy values to a temporary reusable array.
-            //
-            // A meter can have attributes. Merge these with the data point attributes when creating a dimension.
-            OtlpHelpers.CopyKeyValuePairs(attributes, Summary.Parent.Attributes, Context, out var copyCount, ref tempAttributes);
-            Array.Sort(tempAttributes, 0, copyCount, KeyValuePairComparer.Instance);
-
-            var comparableAttributes = tempAttributes.AsMemory(0, copyCount);
+            var pointAttributes = attributes.ToKeyValuePairs(Context);
+            Array.Sort(pointAttributes, KeyValuePairComparer.Instance);
+            KeyValuePair<string, string>[] mergedAttributes = [.. pointAttributes, .. Summary.Parent.Attributes];
+            var comparableAttributes = mergedAttributes.AsMemory();
 
             // Can't use CollectionsMarshal.GetValueRefOrAddDefault here because comparableAttributes is a view over mutable data.
             // Need to add dimensions using durable attributes instance after scope is created.

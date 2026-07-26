@@ -119,7 +119,7 @@ public sealed partial class SqliteTelemetryRepository
         var knownAttributeValues = new Dictionary<string, List<string?>>();
         var dimensions = MaterializeMetricDimensions(
             connection,
-            instruments.Select(instrument => instrument.InstrumentId).ToArray(),
+            instruments,
             request.StartTime,
             request.EndTime,
             request.DimensionFilters,
@@ -127,13 +127,14 @@ public sealed partial class SqliteTelemetryRepository
             request.DataPointInterval,
             request.IncludeExemplars,
             request.PopulateExemplarAttributes,
-            knownAttributeValues);
+            knownAttributeValues,
+            out var hasOverflow);
         return new OtlpInstrumentData
         {
             Summary = instruments[0].Summary,
             Dimensions = dimensions,
             KnownAttributeValues = knownAttributeValues,
-            HasOverflow = instruments.Any(instrument => instrument.HasOverflow)
+            HasOverflow = hasOverflow
         };
     }
 
@@ -157,7 +158,7 @@ public sealed partial class SqliteTelemetryRepository
 
     private List<DimensionScope> MaterializeMetricDimensions(
         SqliteConnection connection,
-        IReadOnlyList<long> instrumentIds,
+        IReadOnlyList<CachedInstrument> instruments,
         DateTime? startTime,
         DateTime? endTime,
         IReadOnlyDictionary<string, IReadOnlyList<string?>> dimensionFilters,
@@ -165,7 +166,8 @@ public sealed partial class SqliteTelemetryRepository
         TimeSpan? dataPointInterval,
         bool includeExemplars,
         bool populateExemplarAttributes,
-        Dictionary<string, List<string?>> knownAttributeValues)
+        Dictionary<string, List<string?>> knownAttributeValues,
+        out bool hasOverflow)
     {
         if (dataPointInterval is { } interval && interval <= TimeSpan.Zero)
         {
@@ -175,15 +177,16 @@ public sealed partial class SqliteTelemetryRepository
         var dimensionRecords = connection.Query<MetricDimensionAttributeRecord>("""
             SELECT
                 d.dimension_id AS DimensionId,
+                d.instrument_id AS InstrumentId,
                 a.attribute_key AS AttributeKey,
                 a.attribute_value AS AttributeValue
             FROM telemetry_metric_dimensions d
             LEFT JOIN telemetry_metric_dimension_attributes a ON a.dimension_id = d.dimension_id
             WHERE d.instrument_id IN @InstrumentIds
             ORDER BY d.dimension_id, a.ordinal;
-            """, new { InstrumentIds = instrumentIds }).AsList();
+            """, new { InstrumentIds = instruments.Select(instrument => instrument.InstrumentId) }).AsList();
         var dimensionIds = dimensionRecords.Select(record => record.DimensionId).Distinct().ToArray();
-        var attributes = dimensionRecords
+        var pointAttributes = dimensionRecords
             .Where(record => record.AttributeKey is not null)
             .Select(record => new OwnedAttributeRecord
             {
@@ -191,6 +194,23 @@ public sealed partial class SqliteTelemetryRepository
                 AttributeKey = record.AttributeKey!,
                 AttributeValue = record.AttributeValue!
             })
+            .ToLookup(record => record.OwnerId);
+        hasOverflow = dimensionIds.Any(dimensionId => IsOverflowDimension(pointAttributes[dimensionId]));
+        var instrumentsById = instruments.ToDictionary(instrument => instrument.InstrumentId);
+        var instrumentIdsByDimensionId = dimensionRecords
+            .DistinctBy(record => record.DimensionId)
+            .ToDictionary(record => record.DimensionId, record => record.InstrumentId);
+        // Dimension rows store only point attributes. Scope attributes are stored once with the scope and merged here for display and filtering.
+        var attributes = dimensionIds
+            .SelectMany(dimensionId => pointAttributes[dimensionId]
+                .Select(attribute => KeyValuePair.Create(attribute.AttributeKey, attribute.AttributeValue))
+                .Concat(instrumentsById[instrumentIdsByDimensionId[dimensionId]].Summary.Parent.Attributes)
+                .Select(attribute => new OwnedAttributeRecord
+                {
+                    OwnerId = dimensionId,
+                    AttributeKey = attribute.Key,
+                    AttributeValue = attribute.Value
+                }))
             .ToLookup(record => record.OwnerId);
         PopulateKnownAttributeValues(dimensionIds, attributes, knownAttributeValues);
 
@@ -275,6 +295,14 @@ public sealed partial class SqliteTelemetryRepository
             }
         }
         return results;
+    }
+
+    private static bool IsOverflowDimension(IEnumerable<OwnedAttributeRecord> attributes)
+    {
+        using var enumerator = attributes.GetEnumerator();
+        return enumerator.MoveNext() &&
+            enumerator.Current is { AttributeKey: "otel.metric.overflow", AttributeValue: "true" } &&
+            !enumerator.MoveNext();
     }
 
     private static string CreateMetricDimensionQueryRangesCte(
@@ -445,6 +473,7 @@ public sealed partial class SqliteTelemetryRepository
     private sealed class MetricDimensionAttributeRecord
     {
         public required long DimensionId { get; init; }
+        public required long InstrumentId { get; init; }
         public string? AttributeKey { get; init; }
         public string? AttributeValue { get; init; }
     }

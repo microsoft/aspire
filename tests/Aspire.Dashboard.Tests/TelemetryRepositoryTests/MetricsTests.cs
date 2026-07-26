@@ -196,12 +196,17 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         var dimensionAttributes = instrument.Dimensions.Single().Attributes;
         Assert.Collection(dimensionAttributes,
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key0", "01234"), p),
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key1", "0123456789"), p),
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key2", "012345678901234"), p),
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key3", "0123456789012345"), p),
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key4", "0123456789012345"), p),
             p => Assert.Equal(KeyValuePair.Create("Meter_Key0", "01234"), p),
             p => Assert.Equal(KeyValuePair.Create("Meter_Key1", "0123456789"), p),
             p => Assert.Equal(KeyValuePair.Create("Meter_Key2", "012345678901234"), p),
             p => Assert.Equal(KeyValuePair.Create("Meter_Key3", "0123456789012345"), p),
             p => Assert.Equal(KeyValuePair.Create("Meter_Key4", "0123456789012345"), p));
-        Assert.Equal(5, instrument.KnownAttributeValues.Count);
+        Assert.Equal(10, instrument.KnownAttributeValues.Count);
     }
 
     [Fact]
@@ -272,12 +277,52 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
 
         var dimensionAttributes = instrument.Dimensions.Single().Attributes;
         Assert.Collection(dimensionAttributes,
-            p => Assert.Equal(KeyValuePair.Create("Meter_Key0", "01234"), p),
             p => Assert.Equal(KeyValuePair.Create("Metric_Key0", "01234"), p),
             p => Assert.Equal(KeyValuePair.Create("Metric_Key1", "0123456789"), p),
             p => Assert.Equal(KeyValuePair.Create("Metric_Key2", "012345678901234"), p),
-            p => Assert.Equal(KeyValuePair.Create("Metric_Key3", "0123456789012345"), p));
-        Assert.Equal(5, instrument.KnownAttributeValues.Count);
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key3", "0123456789012345"), p),
+            p => Assert.Equal(KeyValuePair.Create("Metric_Key4", "0123456789012345"), p),
+            p => Assert.Equal(KeyValuePair.Create("Meter_Key0", "01234"), p));
+        Assert.Equal(6, instrument.KnownAttributeValues.Count);
+    }
+
+    [Fact]
+    public async Task Metrics_ScopeAttributesAreMergedIntoDimensionsOnRead()
+    {
+        using var repositoryContext = await CreateRepositoryAsync();
+        await repositoryContext.Repository.AsWriter().AddMetricsAsync(new AddContext(), new RepeatedField<ResourceMetrics>
+        {
+            new ResourceMetrics
+            {
+                Resource = CreateResource(),
+                ScopeMetrics =
+                {
+                    new ScopeMetrics
+                    {
+                        Scope = CreateScope("TestMeter", attributes: [KeyValuePair.Create("scope-key", "scope-value")]),
+                        Metrics =
+                        {
+                            CreateSumMetric("requests", s_testTime, attributes: [KeyValuePair.Create("point-key", "point-value")])
+                        }
+                    }
+                }
+            }
+        });
+
+        var resource = Assert.Single(repositoryContext.Repository.GetResources());
+        var instrument = repositoryContext.Repository.GetInstrument(new GetInstrumentRequest
+        {
+            ResourceKey = resource.ResourceKey,
+            MeterName = "TestMeter",
+            InstrumentName = "requests",
+            StartTime = DateTime.MinValue,
+            EndTime = DateTime.MaxValue
+        });
+
+        Assert.NotNull(instrument);
+        Assert.Equal(
+            [KeyValuePair.Create("point-key", "point-value"), KeyValuePair.Create("scope-key", "scope-value")],
+            Assert.Single(instrument.Dimensions).Attributes);
     }
 
     [Fact]
@@ -1266,10 +1311,11 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
                 {
                     new ScopeMetrics
                     {
-                        Scope = CreateScope(name: "test-meter"),
+                        Scope = CreateScope(name: "test-meter", attributes: [KeyValuePair.Create("meter", "value")]),
                         Metrics =
                         {
-                            CreateSumMetric(metricName: "test", startTime: s_testTime.AddMinutes(1), attributes: [KeyValuePair.Create("otel.metric.overflow", "true")])
+                            CreateSumMetric(metricName: "test", startTime: s_testTime.AddMinutes(1), attributes: [KeyValuePair.Create("otel.metric.overflow", "true")]),
+                            CreateSumMetric(metricName: "test", startTime: s_testTime.AddMinutes(2), attributes: [KeyValuePair.Create("dimension", "visible")])
                         }
                     },
                     new ScopeMetrics
@@ -1277,7 +1323,14 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
                         Scope = CreateScope(name: "test-meter2"),
                         Metrics =
                         {
-                            CreateSumMetric(metricName: "test", startTime: s_testTime.AddMinutes(1))
+                            CreateSumMetric(
+                                metricName: "test",
+                                startTime: s_testTime.AddMinutes(1),
+                                attributes:
+                                [
+                                    KeyValuePair.Create("otel.metric.overflow", "true"),
+                                    KeyValuePair.Create("other", "value")
+                                ])
                         }
                     }
                 }
@@ -1293,11 +1346,16 @@ public abstract class MetricsTests : TelemetryRepositoryTestBase
             InstrumentName = "test",
             MeterName = "test-meter",
             StartTime = DateTime.MinValue,
-            EndTime = DateTime.MaxValue
+            EndTime = DateTime.MaxValue,
+            DimensionFilters = new Dictionary<string, IReadOnlyList<string?>>
+            {
+                ["dimension"] = ["visible"]
+            }
         });
 
         Assert.NotNull(instrument1);
         Assert.True(instrument1.HasOverflow);
+        Assert.Single(instrument1.Dimensions);
 
         var instrument2 = repositoryContext.Repository.GetInstrument(new GetInstrumentRequest
         {

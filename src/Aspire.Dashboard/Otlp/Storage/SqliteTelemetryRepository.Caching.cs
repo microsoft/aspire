@@ -24,7 +24,6 @@ public sealed partial class SqliteTelemetryRepository
     private readonly Dictionary<long, CachedResource> _cachedResourcesById = [];
     private readonly Dictionary<string, CachedScope> _cachedScopesByName = new(StringComparer.Ordinal);
     private readonly Dictionary<long, CachedScope> _cachedScopesById = [];
-    private readonly Dictionary<long, CachedInstrument> _cachedInstrumentsById = [];
     private bool _cachePopulated;
 
     private CachedResource GetOrAddCachedResource(
@@ -324,8 +323,7 @@ public sealed partial class SqliteTelemetryRepository
                 Description = metric.Description,
                 Unit = metric.Unit,
                 InstrumentType = (int)MapMetricType(metric.DataCase),
-                AggregationTemporality = (int)MapAggregationTemporality(metric),
-                HasOverflow = false
+                AggregationTemporality = (int)MapAggregationTemporality(metric)
             };
             resource.InstrumentCount++;
             _metricIngestionState.LoadedDimensionInstruments.Add(instrumentId);
@@ -409,8 +407,7 @@ public sealed partial class SqliteTelemetryRepository
                         Description = metric.Description,
                         Unit = metric.Unit,
                         InstrumentType = (int)MapMetricType(metric.DataCase),
-                        AggregationTemporality = (int)MapAggregationTemporality(metric),
-                        HasOverflow = false
+                        AggregationTemporality = (int)MapAggregationTemporality(metric)
                     });
                     _metricIngestionState.LoadedDimensionInstruments.Add(insertedRecord.InstrumentId);
                     _metricIngestionState.DimensionCounts[insertedRecord.InstrumentId] = 0;
@@ -420,7 +417,7 @@ public sealed partial class SqliteTelemetryRepository
         }
     }
 
-    private void EnsureCachedInstrumentsLoaded(
+    private static void EnsureCachedInstrumentsLoaded(
         SqliteConnection connection,
         IDbTransaction transaction,
         CachedResource resource,
@@ -440,8 +437,7 @@ public sealed partial class SqliteTelemetryRepository
                 description AS Description,
                 unit AS Unit,
                 instrument_type AS InstrumentType,
-                aggregation_temporality AS AggregationTemporality,
-                has_overflow AS HasOverflow
+                aggregation_temporality AS AggregationTemporality
             FROM telemetry_metric_instruments
             WHERE resource_id = @ResourceId AND scope_id = @ScopeId;
             """, new
@@ -535,8 +531,7 @@ public sealed partial class SqliteTelemetryRepository
                     description AS Description,
                     unit AS Unit,
                     instrument_type AS InstrumentType,
-                    aggregation_temporality AS AggregationTemporality,
-                    has_overflow AS HasOverflow
+                    aggregation_temporality AS AggregationTemporality
                 FROM telemetry_metric_instruments
                 ORDER BY instrument_id;
                 """);
@@ -666,7 +661,7 @@ public sealed partial class SqliteTelemetryRepository
         return resourceScope;
     }
 
-    private CachedInstrument AddCachedInstrument(CachedResource resource, CachedResourceScope resourceScope, CachedInstrumentRecord record)
+    private static CachedInstrument AddCachedInstrument(CachedResource resource, CachedResourceScope resourceScope, CachedInstrumentRecord record)
     {
         if (!resourceScope.Instruments.TryGetValue(record.InstrumentName, out var instrument))
         {
@@ -681,10 +676,8 @@ public sealed partial class SqliteTelemetryRepository
                     AggregationTemporality = (OtlpAggregationTemporality)record.AggregationTemporality,
                     Parent = resourceScope.Scope.Scope,
                     ResourceView = resource.ViewsById[record.ResourceViewId].View
-                },
-                record.HasOverflow);
+                });
             resourceScope.Instruments.Add(record.InstrumentName, instrument);
-            _cachedInstrumentsById.Add(record.InstrumentId, instrument);
         }
         return instrument;
     }
@@ -714,17 +707,6 @@ public sealed partial class SqliteTelemetryRepository
                 .SelectMany(scope => scope.Instruments.Values)
                 .Where(instrument => string.Equals(instrument.Summary.Name, instrumentName, StringComparison.Ordinal))
                 .ToList();
-        }
-    }
-
-    private void MarkCachedInstrumentHasOverflow(long instrumentId)
-    {
-        lock (_cacheLock)
-        {
-            if (_cachedInstrumentsById.TryGetValue(instrumentId, out var instrument))
-            {
-                instrument.HasOverflow = true;
-            }
         }
     }
 
@@ -769,7 +751,6 @@ public sealed partial class SqliteTelemetryRepository
             _cachedResourcesById.Clear();
             _cachedScopesByName.Clear();
             _cachedScopesById.Clear();
-            _cachedInstrumentsById.Clear();
             _cachePopulated = false;
         }
     }
@@ -795,11 +776,10 @@ public sealed partial class SqliteTelemetryRepository
         public bool InstrumentsLoaded { get; set; }
     }
 
-    private sealed class CachedInstrument(long instrumentId, OtlpInstrumentSummary summary, bool hasOverflow)
+    private sealed class CachedInstrument(long instrumentId, OtlpInstrumentSummary summary)
     {
         public long InstrumentId { get; } = instrumentId;
         public OtlpInstrumentSummary Summary { get; } = summary;
-        public bool HasOverflow { get; set; } = hasOverflow;
     }
 
     [Flags]
@@ -865,7 +845,6 @@ public sealed partial class SqliteTelemetryRepository
         public required string Unit { get; init; }
         public required int InstrumentType { get; init; }
         public required int AggregationTemporality { get; init; }
-        public required bool HasOverflow { get; init; }
     }
 
     private sealed class InsertedInstrumentRecord

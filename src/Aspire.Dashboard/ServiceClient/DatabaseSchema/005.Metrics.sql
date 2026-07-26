@@ -12,7 +12,6 @@ CREATE TABLE IF NOT EXISTS telemetry_metric_instruments (
     instrument_type INTEGER NOT NULL,
     aggregation_temporality INTEGER NOT NULL,
     is_monotonic INTEGER NOT NULL,
-    has_overflow INTEGER NOT NULL DEFAULT 0,
     UNIQUE (resource_id, scope_id, instrument_name)
 ) STRICT;
 
