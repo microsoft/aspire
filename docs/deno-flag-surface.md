@@ -83,6 +83,13 @@ Deno's inspector manually (e.g. an external Chrome DevTools session), but the tw
 the same inspector port. Do not combine a manual `WithDenoInspectBrk()` with IDE-driven debugging on
 the same resource.
 
+IDE debugging only covers direct entrypoints (`deno run` / `deno serve`). Deno rejects runtime inspector
+flags on the `deno task` sub-command, so a task entrypoint (`WithDenoTask(...)`, or `WithRunScript(...)`
+with the default Deno package manager) cannot be launched under the debugger and the extension reports
+that debugging is unsupported for that resource. To debug a task, run its underlying script through
+`AddDenoApp(...)` with the entrypoint directly, or start the inspector inside the task definition in
+`deno.json` and attach manually.
+
 ### 5. `--watch` / `--watch-hmr` in published containers
 
 Watch/HMR are run-mode developer conveniences. The value is honored for the run-mode command line and

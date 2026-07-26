@@ -720,6 +720,7 @@ public static partial class JavaScriptHostingExtensions
         var deno = resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out var denoAnnotation) ? denoAnnotation : null;
         var runScript = resource.TryGetLastAnnotation<JavaScriptRunScriptAnnotation>(out var runScriptAnnotation) ? runScriptAnnotation : null;
         var packageManager = resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManagerAnnotation) ? packageManagerAnnotation : null;
+        var containerScriptPath = ToDenoContainerPath(scriptPath);
 
         if (deno is not null)
         {
@@ -728,7 +729,7 @@ public static partial class JavaScriptHostingExtensions
                 : null;
             entrypoint.AddRange(BuildDenoArgs(
                 deno,
-                scriptPath,
+                containerScriptPath,
                 serveEndpointArguments,
                 includeDevelopmentFlags: false,
                 includeCachedOnly: deno.Mode != DenoCommandMode.Task,
@@ -746,9 +747,10 @@ public static partial class JavaScriptHostingExtensions
             entrypoint.Add("run");
             entrypoint.Add("-A");
             entrypoint.Add("--cached-only");
-            entrypoint.Add(scriptPath);
+            entrypoint.Add(containerScriptPath);
         }
 
+        NormalizeDenoContainerPathArguments(entrypoint);
         return [.. entrypoint];
     }
 
@@ -765,6 +767,73 @@ public static partial class JavaScriptHostingExtensions
             string.Equals(deno.NodeModulesDirMode, "manual", StringComparison.OrdinalIgnoreCase))
         {
             throw new InvalidOperationException("WithDenoNodeModulesDir(\"manual\") is not supported by generated Deno Dockerfiles because node_modules is excluded from the build context. Use \"auto\" or provide a custom Dockerfile.");
+        }
+
+        if (deno is not null)
+        {
+            // The Docker build context is the app directory, so a path that is absolute or escapes the app
+            // directory is never copied into the image and would break both `deno cache` and the entrypoint.
+            ThrowIfPathEscapesDenoBuildContext(deno.ConfigFile, nameof(WithDenoConfig));
+            ThrowIfPathEscapesDenoBuildContext(deno.ImportMap, nameof(WithDenoImportMap));
+            ThrowIfPathEscapesDenoBuildContext(deno.Lock, nameof(WithDenoLock));
+        }
+    }
+
+    private static void ThrowIfPathEscapesDenoBuildContext(string? path, string methodName)
+    {
+        if (string.IsNullOrEmpty(path))
+        {
+            return;
+        }
+
+        var containerPath = ToDenoContainerPath(path);
+        if (Path.IsPathRooted(path) ||
+            IsWindowsFullyQualifiedPath(path) ||
+            containerPath == ".." ||
+            containerPath.StartsWith("../", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"The path '{path}' configured with {methodName} is outside the Deno application directory, so it is not part of the generated Dockerfile's build context. Move the file inside the application directory or provide a custom Dockerfile.");
+        }
+    }
+
+    /// <summary>
+    /// Rejects Deno-specific command-line options when a non-Deno package manager is the effective launcher.
+    /// The <c>WithDeno*</c> flags produce a Deno argument vector (for example <c>run -A --watch main.ts</c>),
+    /// which is meaningless once the command is switched to another package manager such as <c>npm</c>.
+    /// </summary>
+    private static void ThrowIfDenoOptionsConflictWithPackageManager(IResource resource)
+    {
+        if (resource.TryGetLastAnnotation<DenoCommandLineAnnotation>(out _) &&
+            resource.TryGetLastAnnotation<JavaScriptPackageManagerAnnotation>(out var packageManager) &&
+            !string.Equals(packageManager.ExecutableName, "deno", StringComparison.Ordinal))
+        {
+            throw new InvalidOperationException($"Deno command-line options configured with the WithDeno* methods cannot be combined with package manager '{packageManager.ExecutableName}' on resource '{resource.Name}'. Remove the WithDeno* options or use WithDeno().");
+        }
+    }
+
+    /// <summary>
+    /// Converts a host-relative path to the POSIX form used inside the generated Linux container stages.
+    /// </summary>
+    /// <remarks>
+    /// AppHost-configured paths use the host separator, so on Windows a nested entrypoint is configured as
+    /// <c>src\main.ts</c>. Emitting that verbatim into <c>deno cache</c> or <c>ENTRYPOINT</c> makes Linux treat
+    /// the whole string as a single file name and the container fails to start.
+    /// </remarks>
+    private static string ToDenoContainerPath(string path) => path.Replace('\\', '/');
+
+    // Deno options that Aspire emits as a separate flag/value pair where the value is a path that must be
+    // rewritten to its container form.
+    private static readonly string[] s_denoContainerPathFlags = ["--config", "--import-map", "--lock"];
+
+    private static void NormalizeDenoContainerPathArguments(List<string> args)
+    {
+        for (var index = 0; index < args.Count - 1; index++)
+        {
+            if (Array.IndexOf(s_denoContainerPathFlags, args[index]) >= 0)
+            {
+                args[index + 1] = ToDenoContainerPath(args[index + 1]);
+                index++;
+            }
         }
     }
 
@@ -799,7 +868,8 @@ public static partial class JavaScriptHostingExtensions
             args.Add("--frozen");
         }
 
-        args.Add(scriptPath);
+        args.Add(ToDenoContainerPath(scriptPath));
+        NormalizeDenoContainerPathArguments(args);
         return string.Join(' ', args.Select(QuoteDockerShellArgument));
     }
 

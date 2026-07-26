@@ -1038,6 +1038,8 @@ public static partial class JavaScriptHostingExtensions
         {
             builder.OnBeforeStart((_, _) =>
             {
+                ThrowIfDenoOptionsConflictWithPackageManager(resourceBuilder.Resource);
+
                 // Set the command to the package manager executable if a WithRunScript was configured.
                 // For the default Deno package manager this is a no-op (executable is "deno"), but it keeps the
                 // command consistent if a user opts into a different package manager.
@@ -2751,11 +2753,18 @@ public static partial class JavaScriptHostingExtensions
 
             if (existingResource is not null)
             {
-                // Installer already exists, update its configuration based on install parameter
-                if (!install)
+                // Installer already exists, update its configuration based on install parameter. Package manager
+                // methods are composable (for example `.WithDeno(install: false).WithDeno(install: true)`), so the
+                // final call has to be able to re-enable a previously disabled installer, not just disable it.
+                if (install)
+                {
+                    EnableInstaller(resource, existingResource);
+                }
+                else
                 {
                     DisableInstaller(resource, existingResource);
                 }
+
                 return;
             }
 
@@ -2823,6 +2832,21 @@ public static partial class JavaScriptHostingExtensions
             .ForEach(w => resource.Resource.Annotations.Remove(w));
 
         installer.WithExplicitStart();
+    }
+
+    private static void EnableInstaller<TResource>(IResourceBuilder<TResource> resource, IResourceBuilder<JavaScriptInstallerResource> installer) where TResource : JavaScriptAppResource
+    {
+        // Undo WithExplicitStart so the installer starts automatically again.
+        installer.Resource.Annotations.OfType<ExplicitStartupAnnotation>()
+            .ToList()
+            .ForEach(a => installer.Resource.Annotations.Remove(a));
+
+        // WaitForCompletion adds a new WaitAnnotation each time, so only restore the relationship when the
+        // previous disable removed it.
+        if (!resource.Resource.Annotations.OfType<WaitAnnotation>().Any(w => w.Resource == installer.Resource))
+        {
+            resource.WaitForCompletion(installer);
+        }
     }
 
     private static string GetDefaultBaseImage(string appDirectory, string defaultSuffix, IServiceProvider serviceProvider)

@@ -750,6 +750,88 @@ public class AddDenoAppTests(ITestOutputHelper outputHelper)
         Assert.DoesNotContain(app.Resource.Annotations.OfType<WaitAnnotation>(), wait => wait.Resource == installer);
     }
 
+    [Fact]
+    public void WithDenoInstallTrueReEnablesDisabledInstaller()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        var app = builder.AddJavaScriptApp("js", workspace.Path)
+            .WithDeno(install: false)
+            .WithDeno(install: true);
+
+        using var distributedApplication = builder.Build();
+        var appModel = distributedApplication.Services.GetRequiredService<DistributedApplicationModel>();
+        var installer = Assert.Single(appModel.Resources.OfType<JavaScriptInstallerResource>());
+
+        Assert.False(installer.TryGetLastAnnotation<ExplicitStartupAnnotation>(out _));
+        Assert.Single(app.Resource.Annotations.OfType<WaitAnnotation>(), wait => wait.Resource == installer);
+    }
+
+    [Fact]
+    public async Task DenoOptionsWithAlternatePackageManagerThrows()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Run);
+
+        builder.AddDenoApp("denoapp", workspace.Path, "main.ts")
+            .WithRunScript("start")
+            .WithNpm()
+            .WithDenoWatch();
+
+        using var app = builder.Build();
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(() => app.StartAsync());
+        Assert.Equal(
+            "Deno command-line options configured with the WithDeno* methods cannot be combined with package manager 'npm' on resource 'denoapp'. Remove the WithDeno* options or use WithDeno().",
+            exception.Message);
+    }
+
+    [Fact]
+    public async Task VerifyDockerfile_NormalizesHostPathSeparatorsForContainerPaths()
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        // Windows AppHosts configure nested paths with backslashes; the Linux build/runtime stages need POSIX form.
+        var denoApp = builder.AddDenoApp("js", appDir, @"src\main.ts")
+            .WithDenoConfig(@"config\deno.json");
+
+        await ManifestUtils.GetManifest(denoApp.Resource, workspace.Path);
+
+        var dockerfileContents = File.ReadAllText(Path.Combine(workspace.Path, "js.Dockerfile"));
+        Assert.Equal(
+            "RUN deno cache --config config/deno.json src/main.ts",
+            GetDockerfileLine(dockerfileContents, "RUN deno cache"));
+        Assert.Equal(
+            """ENTRYPOINT ["deno","run","-A","--config","config/deno.json","--cached-only","src/main.ts"]""",
+            GetDockerfileLine(dockerfileContents, "ENTRYPOINT"));
+    }
+
+    [Theory]
+    [InlineData("../shared/deno.json")]
+    [InlineData("/etc/deno.json")]
+    public async Task VerifyDockerfile_RejectsConfigPathOutsideBuildContext(string configFile)
+    {
+        using var workspace = TemporaryWorkspace.Create(outputHelper);
+        using var builder = TestDistributedApplicationBuilder.Create(DistributedApplicationOperation.Publish, outputPath: workspace.Path).WithResourceCleanUp(true);
+
+        var appDir = Path.Combine(workspace.Path, "js");
+        Directory.CreateDirectory(appDir);
+
+        var denoApp = builder.AddDenoApp("js", appDir, "main.ts")
+            .WithDenoConfig(configFile);
+
+        var exception = await Assert.ThrowsAsync<InvalidOperationException>(
+            () => ManifestUtils.GetManifest(denoApp.Resource, workspace.Path));
+        Assert.Equal(
+            $"The path '{configFile}' configured with WithDenoConfig is outside the Deno application directory, so it is not part of the generated Dockerfile's build context. Move the file inside the application directory or provide a custom Dockerfile.",
+            exception.Message);
+    }
+
     // Helper: build a Deno resource, apply the given flag configuration, and evaluate the emitted argument list.
     private static async Task<IReadOnlyList<string>> GetDenoArgsAsync(Action<IResourceBuilder<DenoAppResource>> configure, string entrypoint = "main.ts")
     {
