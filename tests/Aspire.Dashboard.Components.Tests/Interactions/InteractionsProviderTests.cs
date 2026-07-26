@@ -87,6 +87,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
         var liveRequestsChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
         var selectedInteractionsChannel = Channel.CreateUnbounded<WatchInteractionsResponseUpdate>();
         var selectedRequestsChannel = Channel.CreateUnbounded<WatchInteractionsRequestUpdate>();
+        var liveSubscriptionStarted = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var liveSubscriptionCount = 0;
         var selectedSubscriptionCount = 0;
 
@@ -95,6 +96,7 @@ public partial class InteractionsProviderTests : DashboardTestContext
             interactionChannelProvider: () =>
             {
                 Interlocked.Increment(ref liveSubscriptionCount);
+                liveSubscriptionStarted.TrySetResult();
                 return liveInteractionsChannel;
             },
             sendInteractionUpdateChannel: liveRequestsChannel);
@@ -115,12 +117,10 @@ public partial class InteractionsProviderTests : DashboardTestContext
             builder.Add(p => p.ViewportInformation, new ViewportInformation(IsDesktop: true, IsUltraLowHeight: false, IsUltraLowWidth: false));
         });
 
-        cut.WaitForAssertion(() =>
-        {
-            Assert.Same(liveDashboardClient, cut.Instance.DashboardClient);
-            Assert.Equal(1, Volatile.Read(ref liveSubscriptionCount));
-            Assert.Equal(0, Volatile.Read(ref selectedSubscriptionCount));
-        });
+        Assert.Same(liveDashboardClient, cut.Instance.DashboardClient);
+        await liveSubscriptionStarted.Task.DefaultTimeout();
+        Assert.Equal(1, Volatile.Read(ref liveSubscriptionCount));
+        Assert.Equal(0, Volatile.Read(ref selectedSubscriptionCount));
 
         var request = new WatchInteractionsRequestUpdate();
         await cut.Instance.DashboardClient.SendInteractionRequestAsync(request, CancellationToken.None);
